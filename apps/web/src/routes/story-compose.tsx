@@ -100,6 +100,7 @@ import { useStudioObjects } from '@/routes/use-studio-objects';
 import { ALL_DOORS, uploadKey, useStudioUploads } from '@/routes/use-studio-uploads';
 import { useStudioTimeline } from '@/routes/use-studio-timeline';
 import { useStudioQuickCapture } from '@/routes/use-studio-quick-capture';
+import { StudioPendingBand, useStudioPendingSend } from '@/routes/story-compose-pending';
 import { studioChrome, studioOpenTool } from '@/lib/stories/studio-focus';
 import type { StudioBackgroundEdit } from '@/lib/stories/studio-background-tools';
 import { StudioBackLayer, useStudioBackgroundTools } from '@/routes/use-studio-background-tools';
@@ -125,7 +126,8 @@ import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
  *  - **un média PRÊT n'est jamais remonté** : la publication lit son identité
  *    dans le brouillon ; seul un média EN VOL est attendu (§ 1.4) ;
  *  - **hors ligne, l'intention de publier est ARMÉE** et part seule au retour
- *    du réseau — l'écran ne promet que ce qu'il fait ;
+ *    du réseau — l'écran ne promet que ce qu'il fait ; l'auteur la RETIRE,
+ *    armée ou en vol (#10316, `story-compose-pending.tsx`) ;
  *  - **LE PLAN EST FIGÉ AU PREMIER CLIC SUR PUBLIER** (#7707, revue-correction)
  *    — `studioPublishPlan` lit le brouillon UNE fois, avant la première
  *    requête de la séquence ; tant que `publishing` est vrai, la composition
@@ -301,7 +303,6 @@ function StoryStudio({
   const [choice, setChoice] = useState<PublishChoice>({ kind: entryKind, layout: reopened?.origin.layout ?? null });
   const kind = choice.kind;
   const [publishing, setPublishing] = useState(false);
-  const [awaitingNetwork, setAwaitingNetwork] = useState(false);
   const [publishFailure, setPublishFailure] = useState<StudioPublishFailureNotice | null>(null);
   /** Où en est la séquence (#7707) — la capsule dit « Publication k/N… » dès
    * que le plan porte deux publications ou plus. */
@@ -334,6 +335,8 @@ function StoryStudio({
   /** L'envoi EN COURS — abandonné au démontage : la séquence s'arrête entre
    * deux requêtes, jamais au milieu d'une (`runStudioPublish`). */
   const sendRef = useRef<AbortController | null>(null);
+  /** La publication EN ATTENTE (#10316) — armée hors ligne ou en vol, l'auteur la retire. */
+  const pending = useStudioPendingSend({ sendRef, release: () => { setPublishing(false); setPublishProgress(null); } });
   /** Vrai dès que la publication a TOUT emporté : le brouillon est purgé, et
    * un rendu tardif (une page retirée en cours de séquence, rendue APRÈS la
    * purge) ne le réécrit plus — sans quoi le brouillon rouvert reposterait la
@@ -534,21 +537,25 @@ function StoryStudio({
     if (studioPublishRefusal(draft, chosen.kind) !== null) return;
     setChoice(chosen);
     if (!online) {
-      setAwaitingNetwork(true);
+      pending.arm();
       return;
     }
-    setAwaitingNetwork(false);
+    pending.disarm();
     setPublishing(true);
     setPublishFailure(null);
+    // Une CRÉATION se retire jusqu'à son issue, montées comprises (#10316).
+    const cancelSignal = reopened === undefined ? pending.begin() : null;
 
     const settledByPage = await settlePages(draft.pages, (pageId, door) => pendingRef.current[uploadKey(pageId, door)] ?? null);
     if (reopened !== undefined) {
       const save = studioEditSaver({ edit: reopened, api: deps.api, language, latest: latestDraft, sendRef, setPublishing, setPublishFailure, setPublishProgress, dropPublished: (ids) => dropPublishedPages(ids, reopened.origin.kind) });
       return save(settledByPage);
     }
+    if (cancelSignal === null || cancelSignal.aborted) return;
     const current = latestDraft.current;
     const plan = studioPublishPlan({ pages: current.pages, settled: settledByPage, choice: chosen });
     if (plan.kind !== 'ready') {
+      pending.settle(cancelSignal);
       setPublishing(false);
       return;
     }
@@ -566,12 +573,16 @@ function StoryStudio({
       promotedFromPost: promoted || reelAuto.autoArmed,
       alsoAsReel: armedPublishChoice(chosen, companionReelOffered({ draft: current, editing: false })).alsoAsReel === true,
       signal: send.signal,
+      requestSignal: cancelSignal,
+      keyring: pending.keyring,
       onPublished: ({ pageIds, published, total }) => {
         dropPublishedPages(pageIds, chosen.kind);
         setPublishProgress({ published, total });
       },
     });
 
+    pending.settle(cancelSignal);
+    if (cancelSignal.aborted) return;
     if (outcome.kind !== 'published') {
       setPublishProgress(null);
       setPublishing(false);
@@ -617,10 +628,10 @@ function StoryStudio({
   const publishRef = useRef(publish);
   publishRef.current = publish;
   useEffect(() => {
-    if (!online || !awaitingNetwork) return;
-    setAwaitingNetwork(false);
+    if (!online || !pending.awaitingNetwork) return;
+    pending.disarm();
     void publishRef.current();
-  }, [online, awaitingNetwork]);
+  }, [online, pending.awaitingNetwork]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** LE DOCUMENT D'APERÇU (`studio-preview.ts`) — ce qui partira, adressé en local. */
   const previewDocument = useMemo(() => studioPreviewDocument(page), [page.texts, page.background, page.overlay, page.sound, page.duration]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -664,7 +675,7 @@ function StoryStudio({
           total: String(publishProgress.total),
         })
       : translate(lang, reopened !== undefined ? 'story.studio.edit.saving' : 'story.studio.publishing')
-    : awaitingNetwork
+    : pending.awaitingNetwork
       ? translate(lang, 'story.studio.publish.waiting')
       : translate(lang, reopened !== undefined ? 'story.studio.edit.save' : publishChoiceTitleKey(armed));
 
@@ -856,11 +867,7 @@ function StoryStudio({
           ni ⋯ ni Publier ne se posent sur le dessin. La carte reste 9:16 et se
           centre dans ce qui reste ; les deux rails flottent sur ses bords. */}
       <div data-story-studio-plateau className="relative z-10 min-h-0 flex-1">
-        {!online ? (
-          <p role="status" className="glass absolute inset-x-0 top-0 z-20 px-4 py-1 text-caption" style={{ color: 'var(--color-ios-ink)' }}>
-            {translate(lang, 'story.studio.offline')}
-          </p>
-        ) : null}
+        <StudioPendingBand lang={lang} online={online} pending={pending} />
 
         {/* Frise ouverte, les portes cèdent : seul l'ÉCLAIR reste, là où il a
             ouvert le mode — le geste qui l'éteint demeure à sa place. */}
@@ -869,7 +876,7 @@ function StoryStudio({
             {animatedToggle}
           </div>
         ) : (
-          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia })}>
+          <StudioLeadingRail lang={lang} locked={publishing} onPlace={place} onAddText={addTextAndWrite} sound={!retouching} hidden={!chrome.leadingRail} {...(retouching ? {} : { onImport: importMedia, onCamera: quick.retake })}>
             {/* L'ÉCLAIR puis le CADRE, après les portes (#8713). */}
             {retouching ? null : animatedToggle}
             {page.background !== null ? (
@@ -1050,7 +1057,7 @@ function StoryStudio({
               label={publishLabel}
               disabled={!canPublish || publishing || kindRefusal !== null}
               menuDisabled={!canPublish || publishing || reopened !== undefined}
-              busy={publishing || awaitingNetwork}
+              busy={publishing || pending.awaitingNetwork}
               refusalOf={(candidate) => {
                 const refusal = studioPublishRefusal(draft, candidate);
                 return refusal === null ? null : publicationRefusalText(lang, refusal);

@@ -26,7 +26,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .futuristic, color: "#05060F", fill: "#22D3EECC"),
                 title: CallFrameTitle(source: .names, font: .futuristic, color: "#22D3EE", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#E879F9", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.hud.comite",
@@ -48,7 +49,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .futuristic, color: "#05060F", fill: "#22D3EECC"),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#22D3EE", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#E879F9", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.hud.groupe",
@@ -70,7 +72,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#05060F", fill: "#22D3EECC"),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#22D3EE", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#E879F9", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.hud.tablee",
@@ -92,7 +95,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#05060F", fill: "#22D3EECC"),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#22D3EE", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#E879F9", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.duo",
@@ -115,7 +119,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .neon, color: "#E879F9", fill: nil),
                 title: CallFrameTitle(source: .names, font: .neon, color: "#22D3EE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.comite",
@@ -138,7 +143,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .neon, color: "#E879F9", fill: nil),
                 title: CallFrameTitle(source: .group, font: .neon, color: "#22D3EE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.hologramme.groupe",
@@ -161,7 +167,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .neon, color: "#E6FBFF", fill: "#05060FCC"),
                 title: CallFrameTitle(source: .group, font: .neon, color: "#22D3EE", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.duo",
@@ -183,7 +190,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .caption, font: .futuristic, color: "#E6FBFF", fill: nil),
                 title: CallFrameTitle(source: .names, font: .futuristic, color: "#E6FBFF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#22D3EE", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.comite",
@@ -205,7 +213,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#E6FBFF", fill: "#05060FCC"),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#E6FBFF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#22D3EE", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.orbite.groupe",
@@ -227,7 +236,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .futuristic, color: "#E6FBFF", fill: "#05060FCC"),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#E6FBFF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .futuristic, color: "#22D3EE", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "futuriste.essaim.groupe",
@@ -248,7 +258,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .list, font: .futuristic, color: "#E6FBFF", fill: nil),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#E879F9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture]
         ),
         CallFrameDesign(
             id: "futuriste.essaim.tablee",
@@ -269,7 +280,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .list, font: .futuristic, color: "#E6FBFF", fill: nil),
                 title: CallFrameTitle(source: .group, font: .futuristic, color: "#E879F9", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture]
         )
     ]
 }

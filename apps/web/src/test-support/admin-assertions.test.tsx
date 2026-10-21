@@ -82,11 +82,11 @@ describe('expectNoRawIdentifiers — la garde des règles R1 et R2', () => {
   });
 });
 
-describe('adminIdentityFixture — la matrice des dix clés', () => {
+describe('adminIdentityFixture — la matrice des onze clés', () => {
   test('BIGBOSS les porte toutes', () => {
     const { role, permissions } = adminIdentityFixture({ role: 'BIGBOSS' });
     expect(role).toBe('BIGBOSS');
-    expect(Object.keys(permissions)).toHaveLength(10);
+    expect(Object.keys(permissions)).toHaveLength(11);
     expect(Object.values(permissions).every((value) => value)).toBe(true);
   });
 

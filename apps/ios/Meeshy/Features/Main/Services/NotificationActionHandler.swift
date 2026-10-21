@@ -4,62 +4,9 @@ import Combine
 import MeeshySDK
 import os
 
-private nonisolated let logger = Logger(subsystem: "me.meeshy.app", category: "push")
+private nonisolated let logger = MeeshyLog.logger(.push)
 
 // MARK: - Injection seams
-
-/// Background-task envelope around the whole action flow — iOS suspends the
-/// process the instant the delegate callback returns unless the work is
-/// covered by `beginBackgroundTask` (same hazard as the silent-push path,
-/// see `SilentPushState`).
-@MainActor
-protocol BackgroundTaskScheduling {
-    func beginTask(name: String, expirationHandler: (@Sendable () -> Void)?) -> UIBackgroundTaskIdentifier
-    func endTask(_ identifier: UIBackgroundTaskIdentifier)
-}
-
-@MainActor
-struct UIApplicationBackgroundTaskScheduler: BackgroundTaskScheduling {
-    func beginTask(name: String, expirationHandler: (@Sendable () -> Void)?) -> UIBackgroundTaskIdentifier {
-        UIApplication.shared.beginBackgroundTask(withName: name, expirationHandler: expirationHandler)
-    }
-
-    func endTask(_ identifier: UIBackgroundTaskIdentifier) {
-        guard identifier != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(identifier)
-    }
-}
-
-/// Ends the wrapped background task exactly once, from whichever fires first:
-/// the normal completion path (`defer` in `handle()`) or iOS's expiration
-/// callback when the awaited flow outlives the background window (~30 s — the
-/// action flow chains up to two 60 s-timeout REST calls, so a stalled network
-/// mechanically exceeds it). Apple: failing to end an expired task terminates
-/// the process (0x8BADF00D family) — same hazard the silent-push path guards
-/// via `SilentPushState`.
-@MainActor
-final class BackgroundTaskLease {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-    private let scheduler: BackgroundTaskScheduling
-    private var identifier: UIBackgroundTaskIdentifier = .invalid
-
-    init(scheduler: BackgroundTaskScheduling, name: String) {
-        self.scheduler = scheduler
-        self.identifier = scheduler.beginTask(name: name) { [weak self] in
-            Task { @MainActor in self?.end() }
-        }
-    }
-
-    func end() {
-        guard identifier != .invalid else { return }
-        scheduler.endTask(identifier)
-        identifier = .invalid
-    }
-}
 
 /// Slice of `OfflineQueue` the handler needs: the durable message path
 /// (kind `.sendMessage`) and the generic mutation path (`.createComment`, …).
@@ -198,7 +145,9 @@ final class NotificationActionHandler: NotificationActionHandling {
         backgroundTasks: BackgroundTaskScheduling = UIApplicationBackgroundTaskScheduler(),
         authTokenProvider: @escaping @MainActor () -> String? = { AuthManager.shared.authToken },
         applyAuthToken: @escaping @MainActor (String?) -> Void = { APIClient.shared.authToken = $0 },
-        currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        currentUserId: @escaping @MainActor () -> String? = {
+            AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
+        },
         preferredLanguage: @escaping @MainActor () -> String? = {
             AuthManager.shared.currentUser?.preferredContentLanguages.first
         },
@@ -207,6 +156,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             return user.isAnonymous != true
         },
         openNotification: @escaping @MainActor ([AnyHashable: Any]) -> Void = {
+            // iPad, fenêtre détachée devant : la cible s'ouvre dans la fenêtre principale — qui revient d'abord.
+            MainWindowRegistry.shared.bringPrimaryForwardIfHidden()
             PushNotificationManager.shared.handleNotification(userInfo: $0)
         },
         dialCallBack: @escaping @MainActor (CallBackRequest) -> Void = { request in
@@ -371,8 +322,10 @@ final class NotificationActionHandler: NotificationActionHandling {
             // #6999 — OUVRIR, c'est CONSOMMER. Le tap ne marquait rien lu : la
             // ligne restait non lue dans la cloche et le compteur ne bougeait
             // pas, pour une notification que l'utilisateur venait d'ouvrir.
-            await consumeTapped(payload)
+            // La navigation d'ABORD : la consommation attend le `markAsRead`
+            // REST, et le tap ne faisait rien tant qu'il n'était pas revenu.
             openNotification(userInfo)
+            await consumeTapped(payload)
 
         case UNNotificationDismissActionIdentifier:
             break
@@ -381,7 +334,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             await handleMarkRead(payload)
 
         case MeeshyNotificationAction.reply.rawValue:
-            await handleReply(payload, replyText: replyText)
+            await handleReply(payload, userInfo: userInfo, replyText: replyText)
 
         case MeeshyNotificationAction.comment.rawValue:
             await handleComment(payload, userInfo: userInfo, replyText: replyText)
@@ -404,14 +357,14 @@ final class NotificationActionHandler: NotificationActionHandling {
              MeeshyNotificationAction.answerCall.rawValue:
             // All of these surface the app to the relevant screen — the
             // deep-link router decides the destination based on payload.type.
-            await consumeTapped(payload)
             openNotification(userInfo)
+            await consumeTapped(payload)
 
         case MeeshyNotificationAction.openInMaps.rawValue,
              MeeshyNotificationAction.addContact.rawValue,
              MeeshyNotificationAction.joinInvite.rawValue:
-            await consumeTapped(payload)
             handleDetailAction(actionIdentifier, userInfo: userInfo)
+            await consumeTapped(payload)
 
         case MeeshyNotificationAction.declineCall.rawValue:
             // Silent decline — no navigation. The VoIP layer handles the
@@ -420,8 +373,8 @@ final class NotificationActionHandler: NotificationActionHandling {
             break
 
         default:
-            await consumeTapped(payload)
             openNotification(userInfo)
+            await consumeTapped(payload)
         }
     }
 
@@ -440,9 +393,19 @@ final class NotificationActionHandler: NotificationActionHandling {
             openNotification(userInfo)
             presentNewContact(card)
         case (MeeshyNotificationAction.joinInvite.rawValue, .invite(let invite)?):
+            // Une invitation ne mène qu'à une jointure : un lien d'e-mail
+            // glissé à sa place n'entre jamais par la voie système (#10874).
+            guard Self.isInvitation(invite.url) else { return openNotification(userInfo) }
             openDeepLink(invite.url)
         default:
             openNotification(userInfo)
+        }
+    }
+
+    static func isInvitation(_ url: URL) -> Bool {
+        switch DeepLinkParser.parse(url) {
+        case .joinLink, .chatLink: return true
+        default: return false
         }
     }
 
@@ -480,7 +443,7 @@ final class NotificationActionHandler: NotificationActionHandling {
 
     // MARK: - Durable quick reply (R2)
 
-    private func handleReply(_ payload: NotificationPayload, replyText: String?) async {
+    private func handleReply(_ payload: NotificationPayload, userInfo: [AnyHashable: Any], replyText: String?) async {
         guard let conversationId = payload.conversationId else {
             logger.warning("reply action without conversationId — ignoring")
             return
@@ -492,6 +455,10 @@ final class NotificationActionHandler: NotificationActionHandling {
         }
         guard let userId = currentUserId() else {
             logger.warning("reply action without an active user — ignoring")
+            return
+        }
+        guard NotificationReplyFailure.isAddressed(to: userId, userInfo: userInfo) else {
+            logger.warning("reply action on a notification addressed to another account — ignoring")
             return
         }
 
@@ -679,6 +646,13 @@ final class NotificationActionHandler: NotificationActionHandling {
         }
         guard isRegisteredUser() else {
             logger.warning("friend request action from an anonymous session — ignoring")
+            return
+        }
+        // La demande s'adressait à un autre compte de l'appareil : la trancher
+        // ici accepterait ou refuserait celle du compte ACTIF venue du même
+        // expéditeur.
+        guard NotificationReplyFailure.isAddressed(to: currentUserId(), userInfo: userInfo) else {
+            logger.warning("friend request action on a notification addressed to another account — ignoring")
             return
         }
 
@@ -871,112 +845,9 @@ final class NotificationActionHandler: NotificationActionHandling {
                     logger.error("Retrait de bannières non confirmé avant expiration du délai (\(identifiers.count, privacy: .public) id(s))")
                     break
                 }
-                try? await Task.sleep(for: removalConfirmationPollInterval)
+                _ = await cancellableSleep(for: removalConfirmationPollInterval)
             }
             completion?()
-        }
-    }
-}
-
-// MARK: - Delivered banners (couture système)
-
-/// Une bannière DÉJÀ LIVRÉE, réduite à ce dont le retrait a besoin : son
-/// identifiant de requête et le `userInfo` que le prédicat interroge.
-nonisolated struct DeliveredBanner: @unchecked Sendable {
-    let identifier: String
-    let userInfo: [AnyHashable: Any]
-
-    /// Le FIL sous lequel iOS a rangé la bannière — ce que la NSE pose dans
-    /// `applyThreading(to:)` (#6999).
-    ///
-    /// Le `userInfo` ne suffit pas : c'est le `threadIdentifier` qui dit ce
-    /// qu'iOS a REGROUPÉ, et une bannière peut y être rangée sans que la
-    /// charge ait porté la clé que le prédicat interroge. Interroger les deux
-    /// est strictement plus large, jamais moins.
-    let threadIdentifier: String
-
-    init(identifier: String, userInfo: [AnyHashable: Any], threadIdentifier: String = "") {
-        self.identifier = identifier
-        self.userInfo = userInfo
-        self.threadIdentifier = threadIdentifier
-    }
-}
-
-/// #3896 — seam over `UNUserNotificationCenter`'s two delivered-banner
-/// operations, abstracted at the `DeliveredBanner` boundary rather than raw
-/// `UNNotification` : `UNNotification` has no public initializer, so a test
-/// spy could never construct one to stand in for a delivered banner.
-/// `UNUserNotificationCenter` conforms via the extension below (its native
-/// `getDeliveredNotifications`/`removeDeliveredNotifications` do the real
-/// work) ; `MockUNUserNotificationCenter` (tests) is the spy that lets a test
-/// exercise `DeliveredBannerCenter.system()` — the DEFAULT closures, not just
-/// an injected substitute — without touching the real system center.
-/// `nonisolated` on every requirement AND on the conformance below — this
-/// app target compiles under `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
-/// (`apps/ios/CLAUDE.md`, App Extensions §), so an unmarked declaration here
-/// would silently become `@MainActor`-isolated and fail to compile from the
-/// genuinely `@Sendable`, actor-agnostic closures of `DeliveredBannerCenter`
-/// below (some of which run inside `Task.detached`).
-protocol UNUserNotificationCenterProviding {
-    nonisolated func getDeliveredBanners(completionHandler: @escaping @Sendable ([DeliveredBanner]) -> Void)
-    nonisolated func removeDeliveredNotifications(withIdentifiers identifiers: [String])
-}
-
-extension UNUserNotificationCenter: UNUserNotificationCenterProviding {
-    nonisolated func getDeliveredBanners(completionHandler: @escaping @Sendable ([DeliveredBanner]) -> Void) {
-        getDeliveredNotifications { notifications in
-            completionHandler(notifications.map {
-                DeliveredBanner(
-                    identifier: $0.request.identifier,
-                    userInfo: $0.request.content.userInfo,
-                    threadIdentifier: $0.request.content.threadIdentifier
-                )
-            })
-        }
-    }
-}
-
-/// Les trois gestes que le retrait de bannières fait sur `UNUserNotificationCenter` :
-/// LIRE les livrées, en RETIRER — et RELIRE pour prouver que le retrait a pris.
-///
-/// Couture explicite (mêmes clôtures injectables que le reste du handler) parce
-/// que la troisième capacité est ce qui distingue une émission d'un effet, et
-/// qu'aucun test ne peut l'observer sur le centre réel.
-nonisolated struct DeliveredBannerCenter: Sendable {
-    let delivered: @Sendable (@escaping @Sendable ([DeliveredBanner]) -> Void) -> Void
-    let remove: @Sendable ([String]) -> Void
-
-    /// `notificationCenter` is a FACTORY, not a stored value — called fresh
-    /// inside each closure, exactly like the previous `UNUserNotificationCenter
-    /// .current()` call it replaces. Preserving that shape (rather than taking
-    /// an instance parameter and capturing it) is what keeps `delivered`/
-    /// `remove` genuinely `@Sendable`: the factory closure's own capture list
-    /// is empty for the default (`UNUserNotificationCenter.current` is a type
-    /// reference, not a captured value), and a test's `{ mock }` only needs
-    /// its `MockUNUserNotificationCenter` to itself be `@unchecked Sendable`
-    /// (same pattern as `SpyBannerCenter` below) — never `UNUserNotificationCenter`
-    /// (non-Sendable) crossing the boundary.
-    ///
-    /// A function (not a stored `static let`) so a test can pass a
-    /// `MockUNUserNotificationCenter` and exercise these exact closures — the
-    /// DEFAULT wiring, not a hand-rolled substitute that could silently drift
-    /// from what production actually calls.
-    static func system(
-        notificationCenter: @escaping @Sendable () -> UNUserNotificationCenterProviding = { UNUserNotificationCenter.current() }
-    ) -> DeliveredBannerCenter {
-        DeliveredBannerCenter(
-            delivered: { completion in
-                notificationCenter().getDeliveredBanners(completionHandler: completion)
-            },
-            remove: { identifiers in
-                notificationCenter().removeDeliveredNotifications(withIdentifiers: identifiers)
-            }
-        )
-    }
-
-    func deliveredIdentifiers() async -> Set<String> {
-        await withCheckedContinuation { (continuation: CheckedContinuation<Set<String>, Never>) in
-            delivered { continuation.resume(returning: Set($0.map(\.identifier))) }
         }
     }
 }

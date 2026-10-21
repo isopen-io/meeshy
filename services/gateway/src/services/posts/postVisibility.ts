@@ -420,8 +420,12 @@ export type PostRedirectRecord = PostVisibilityRecord & {
   redirectedFrom?: RepostPassage & { readonly commentsDisabled: boolean };
 };
 
-/** Le post traversé par une redirection — ce qu'un crédit doit savoir de lui. */
-export type RepostPassage = { readonly id: string; readonly authorId: string };
+/**
+ * Le post traversé par une redirection — ce qu'un crédit doit savoir de lui.
+ * `type` range une réaction dans la série de son acte (#10389) ; absent, elle
+ * n'en fait avancer aucune.
+ */
+export type RepostPassage = { readonly id: string; readonly authorId: string; readonly type?: string | null };
 
 const POST_REDIRECT_SELECT = {
   id: true,
@@ -537,7 +541,7 @@ async function resolveRedirectTarget(
   if (isEphemeralPostType(root.type)) return post;
 
   if (root.deletedAt != null || !(await verdict(prisma, root, userId))) return null;
-  return { ...root, redirectedFrom: { id: post.id, authorId: post.authorId, commentsDisabled: post.commentsDisabled } };
+  return { ...root, redirectedFrom: { id: post.id, authorId: post.authorId, type: post.type, commentsDisabled: post.commentsDisabled } };
 }
 
 type RepostShape = {

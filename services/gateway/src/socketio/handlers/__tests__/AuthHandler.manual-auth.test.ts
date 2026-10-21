@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
@@ -46,6 +47,7 @@ const createMockPrisma = (): PrismaClient =>
       findUnique: jest.fn(),
       findMany: jest.fn().mockResolvedValue([])
     },
+    userSession: { findFirst: jest.fn(async () => liveSession()) },
     callParticipant: {
       findMany: jest.fn().mockResolvedValue([])
     }
@@ -56,7 +58,7 @@ const createMockPrisma = (): PrismaClient =>
 // ---------------------------------------------------------------------------
 
 const MOCK_USER = {
-  id: 'user-manual-123',
+  id: 'aaaaaaaaaaaaaaaaaaaab123',
   systemLanguage: 'en',
   regionalLanguage: null,
   customDestinationLanguage: null,
@@ -112,7 +114,7 @@ describe('AuthHandler.handleManualAuthentication', () => {
 
     // JWT auth is now the registered-user path: decode a verified token to the
     // user's id. Individual tests override this when they need an error path.
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: MOCK_USER.id } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: MOCK_USER.id } as any);
   });
 
   afterEach(() => {
@@ -171,6 +173,7 @@ describe('AuthHandler.handleManualAuthentication', () => {
     const mockSocket = createMockSocket();
     jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
       id: 'anon-participant-1',
+      isActive: true,
       displayName: 'Guest',
       language: 'es',
       conversationId: 'conv-anon-1'

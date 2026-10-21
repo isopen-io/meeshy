@@ -12,7 +12,7 @@ enum VisitorInvitationCopy {
         return displayName.isEmpty ? "@\(sharer.username)" : displayName
     }
 
-    /// « {nom} vous a partagé ce réel / cette publication », ou « Rejoignez
+    /// « {nom} vous a partagé ce réel / cette publication / cette story », ou « Rejoignez
     /// Meeshy » quand le lien ne nomme personne.
     static func title(kind: VisitorContentKind, sharer: TrackedLinkSharer?) -> String {
         guard let sharer else {
@@ -24,6 +24,8 @@ enum VisitorInvitationCopy {
             format = String(localized: "visitor.sharedBy.reel", defaultValue: "%@ vous a partagé ce réel", bundle: .main)
         case .post:
             format = String(localized: "visitor.sharedBy.post", defaultValue: "%@ vous a partagé cette publication", bundle: .main)
+        case .story:
+            format = String(localized: "visitor.sharedBy.story", defaultValue: "%@ vous a partagé cette story", bundle: .main)
         }
         return String(format: format, sharerName(sharer))
     }
@@ -89,6 +91,9 @@ struct VisitorContentView: View {
     @State private var state: VisitorContentState = .pending
     @State private var attempt = 0
     @State private var isCardDismissed = false
+    /// #10483 — ce que l'écran montre est compté : impression et vue au
+    /// service, vue avec sa durée à la sortie.
+    @StateObject private var reach = VisitorContentReach()
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -104,6 +109,10 @@ struct VisitorContentView: View {
         .task(id: attempt) {
             state = .pending
             state = await loader.load(request)
+            reach.stateChanged(state)
+        }
+        .onDisappear {
+            Task { await reach.left() }
         }
     }
 
@@ -115,6 +124,8 @@ struct VisitorContentView: View {
         }
     }
 
+    private var surface: VisitorContentSurface { VisitorContentSurface(state: state) }
+
     @ViewBuilder
     private var content: some View {
         switch state {
@@ -124,7 +135,7 @@ struct VisitorContentView: View {
         case .served(let post, _):
             VisitorPostReader(post: post, kind: request.kind)
         case .refused, .failed:
-            Color.clear
+            VisitorRefusedBackdrop()
         }
     }
 
@@ -132,7 +143,7 @@ struct VisitorContentView: View {
         Button(action: onClose) {
             Image(systemName: "xmark")
                 .font(.body.weight(.semibold))
-                .foregroundStyle(.primary)
+                .foregroundStyle(surface == .neutralBackdrop ? AnyShapeStyle(MeeshyColors.mediaChromeForeground) : AnyShapeStyle(.primary))
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .background(.ultraThinMaterial, in: Circle())
                 .contentShape(Rectangle())
@@ -214,35 +225,61 @@ struct VisitorInvitationCard: View {
 
     private var actions: some View {
         VStack(spacing: MeeshySpacing.sm) {
-            if case .failed = state {
-                Button(action: onRetry) {
-                    Text(VisitorInvitationCopy.retry).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
+            ForEach(VisitorInvitationAction.actions(for: state), id: \.self) { action in
+                button(for: action)
             }
+        }
+    }
+
+    @ViewBuilder
+    private func button(for action: VisitorInvitationAction) -> some View {
+        switch action {
+        case .retry:
+            Button(action: onRetry) {
+                Text(VisitorInvitationCopy.retry).frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+        case .signUp:
             Button(action: onSignUp) {
                 Text(VisitorInvitationCopy.signUp).frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .tint(MeeshyColors.brandPrimary)
             .controlSize(.large)
+        case .signIn:
             Button(action: onSignIn) {
                 Text(VisitorInvitationCopy.signIn).frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .tint(MeeshyColors.brandPrimary)
             .controlSize(.large)
-            if state.isServed {
-                Button(action: onKeepWatching) {
-                    Text(VisitorInvitationCopy.keepWatching)
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(MeeshyColors.brandPrimary)
+        case .keepWatching:
+            Button(action: onKeepWatching) {
+                Text(VisitorInvitationCopy.keepWatching)
+                    .font(.body.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: MeeshyControlSize.tapTarget)
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(MeeshyColors.brandPrimary)
         }
+    }
+}
+
+// MARK: - Le fond d'un contenu refusé (#10317, jumeau iOS de #10314)
+
+/// **Ce que l'écran visiteur montre sous la carte quand le contenu est refusé
+/// ou en panne** : le noir de média du lecteur de réels, plein écran, et rien
+/// d'autre — jamais une page claire et vide.
+///
+/// Neutre PAR CONSTRUCTION : aucune propriété, donc ni texte, ni média, ni
+/// auteur. La passerelle n'en sert d'ailleurs aucun (`anonymousPostGate`, le
+/// même 404 qu'un contenu inexistant). Décor pur, tu à VoiceOver.
+struct VisitorRefusedBackdrop: View {
+    var body: some View {
+        MeeshyColors.mediaBackdrop
+            .ignoresSafeArea()
+            .accessibilityHidden(true)
     }
 }
 
@@ -279,7 +316,7 @@ struct VisitorPostReader: View {
 
     private var author: some View {
         HStack(spacing: MeeshySpacing.sm) {
-            MeeshyAvatar(name: post.author, context: .postAuthor, avatarURL: post.authorAvatarURL)
+            MeeshyAvatar(name: post.author, context: .postAuthor, avatarURL: post.authorAvatarURL, ring: post.authorRing)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(post.author)

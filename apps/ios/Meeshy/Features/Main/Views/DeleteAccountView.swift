@@ -166,7 +166,7 @@ struct DeleteAccountView: View {
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold, design: .monospaced))
                         .foregroundColor(theme.textPrimary)
                         .textInputAutocapitalization(.characters)
-                        .disableAutocorrection(true)
+                        .autocorrectionDisabled(true)
                         .accessibilityLabel(String(localized: "account.delete.confirmation.label", defaultValue: "Phrase de confirmation", bundle: .main))
                         // Announce the match state so VoiceOver users get the same
                         // feedback the sighted checkmark conveys — otherwise the

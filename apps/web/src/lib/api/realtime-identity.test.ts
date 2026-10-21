@@ -202,3 +202,26 @@ describe('une connexion par identité — la règle que `realtime.ts` amorce (#9
     expect(announced.at(-1)).toBeNull();
   });
 });
+
+describe('la connexion sait quel COMPTE l’a ouverte (audit #10237)', () => {
+  const accountsOpened = (session: SessionState) => {
+    const accounts: (string | null)[] = [];
+    keepRealtimeConnection({
+      open: (_auth, accountId) => {
+        accounts.push(accountId);
+        return { destroy: () => undefined };
+      },
+      onChange: () => undefined,
+    }).sync(session);
+    return accounts;
+  };
+
+  test('un compte connecté ouvre la connexion en son nom', () => {
+    expect(accountsOpened(account())).toEqual(['u-1']);
+  });
+
+  test('un invité — même tenu par un compte — n’ouvre la connexion au nom d’aucun compte', () => {
+    expect(accountsOpened(guest())).toEqual([null]);
+    expect(accountsOpened(guest(account()))).toEqual([null]);
+  });
+});

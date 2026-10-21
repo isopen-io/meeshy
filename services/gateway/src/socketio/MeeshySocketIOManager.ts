@@ -37,6 +37,8 @@ import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { AdminAgentHandler } from './handlers/AdminAgentHandler';
+import { AdminMetricsHandler } from './handlers/AdminMetricsHandler';
+import { hostMetricsProbe } from '../services/admin/host-metrics-probe';
 import { AgentAdminRelay } from './AgentAdminRelay';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
@@ -274,6 +276,7 @@ export class MeeshySocketIOManager {
   private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
   private adminAgentHandler!: AdminAgentHandler;
+  private adminMetricsHandler!: AdminMetricsHandler;
   private agentAdminRelay: AgentAdminRelay | null = null;
 
   // Mapping des utilisateurs connectés
@@ -366,6 +369,13 @@ export class MeeshySocketIOManager {
         this._broadcastUserStatus(userId, isOnline, isAnonymous);
       }
     );
+    // #10575 — le battement d'un connecté passif rediffuse sa présence : sans ce
+    // câblage, il s'éteignait chez ses amis au bout de la garde anti-stale de 5 min.
+    // Un battement fini APRÈS le départ en arrière-plan ne rallume rien.
+    this.statusService.setPresenceCallback((userId, isOnline, isAnonymous) => {
+      if (isOnline && !this.authHandler.isPresent(userId)) return;
+      this._broadcastUserStatus(userId, isOnline, isAnonymous);
+    });
 
     // PRÉSENCE FIX: protéger les sockets vivants du cleanup périodique.
     // Sans ça, un client passif (pas de heartbeat depuis 30min) se voit marqué
@@ -380,15 +390,27 @@ export class MeeshySocketIOManager {
     // clients). Seul le manager tient `io` : il fournit le révocateur, résolu à
     // l'appel (`this.io` naît quelques lignes plus bas). Même mécanisme que
     // `revoke-all-sessions` et que la désactivation par un admin (`routes/admin`).
+    //
+    // #10264 — la fin de grâce n'est PAS une suppression : l'annulation rend
+    // encore le compte. Ses sockets tombent sans nommer de compte supprimé
+    // (`deletedAccountId`), que seule la purge confirmée (`COMPLETED`) émet.
     this.maintenanceService.setSessionRevoker((userId: string) =>
       disconnectRevokedSessions({
         io: this.io,
         userId,
         reason: 'logout_all_devices',
-        message: 'Your account was deleted — every session was signed out.',
+        message: 'Your account deletion grace period ended — every session was signed out.',
         onError: (err: unknown) => logger.warn('[MAINTENANCE] socket fanout failed on grace-period expiry', { err, userId }),
       })
     );
+
+    // #10440 — le balayage journalier révoque les invités d'un lien expiré par
+    // `revokeShareLinkGuests` : départ annoncé, appel et position éteints,
+    // sockets coupés. Résolus à l'appel, comme ci-dessus.
+    this.maintenanceService.setShareLinkRevocationLive({
+      resolveIO: () => this.io,
+      resolveManager: () => this,
+    });
 
     // Initialiser Socket.IO avec les types shared
     this.io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -481,6 +503,14 @@ export class MeeshySocketIOManager {
     this.adminAgentHandler = new AdminAgentHandler({
       prisma: this.prisma,
       socketToUser: this.socketToUser,
+    });
+
+    this.adminMetricsHandler = new AdminMetricsHandler({
+      io: this.io,
+      probe: hostMetricsProbe(),
+      socketToUser: this.socketToUser,
+      roleOf: (userId) => this.prisma.user.findUnique({ where: { id: userId }, select: { role: true } }).then((user) => user?.role ?? null),
+      roomSize: (room) => this.io.sockets.adapter.rooms.get(room)?.size ?? 0,
     });
 
     const reactionService = new ReactionService(prisma);
@@ -1311,11 +1341,12 @@ export class MeeshySocketIOManager {
 
   /**
    * Source de vérité runtime pour la présence : true si l'id (userId pour registered,
-   * participantId pour anonyme) est actuellement dans `connectedUsers` Map. Utilisé par
-   * les routes REST pour overrider le `isOnline` de la DB (potentiellement obsolète).
+   * participantId pour anonyme) a une socket AU PREMIER PLAN (#10575 — un onglet caché
+   * n'est pas « en ligne »). Utilisé par les routes REST pour overrider le `isOnline`
+   * de la DB (potentiellement obsolète).
    */
   public isPresenceOnline(idOrUserId: string): boolean {
-    return this.connectedUsers.has(idOrUserId);
+    return this.authHandler.isPresent(idOrUserId);
   }
 
   /**
@@ -1406,7 +1437,7 @@ export class MeeshySocketIOManager {
       if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
         const users = await this._applyPresenceVisibility(
           viewer,
-          cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) })),
+          cached.users.map(u => ({ ...u, isOnline: this.authHandler.isPresent(u.userId) })),
         );
         socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
         logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
@@ -1447,7 +1478,7 @@ export class MeeshySocketIOManager {
             if (seen.has(presenceKey)) continue;
             seen.add(presenceKey);
 
-            const isOnline = this.connectedUsers.has(presenceKey);
+            const isOnline = this.authHandler.isPresent(presenceKey);
             const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
             const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
 
@@ -1662,7 +1693,7 @@ export class MeeshySocketIOManager {
   public getPresenceForIds(ids: readonly string[]): Map<string, boolean> {
     const out = new Map<string, boolean>();
     for (const id of ids) {
-      out.set(id, this.connectedUsers.has(id));
+      out.set(id, this.authHandler.isPresent(id));
     }
     return out;
   }
@@ -1673,7 +1704,7 @@ export class MeeshySocketIOManager {
    * construire le snapshot `presence:snapshot` émis à l'auth.
    */
   public listOnlineAmong(candidateIds: readonly string[]): string[] {
-    return candidateIds.filter(id => this.connectedUsers.has(id));
+    return candidateIds.filter(id => this.authHandler.isPresent(id));
   }
 
   async initialize(): Promise<void> {
@@ -1738,6 +1769,7 @@ export class MeeshySocketIOManager {
       this.agentAdminRelay.start().catch((error) => {
         logger.error('❌ Erreur démarrage AgentAdminRelay', error);
       });
+      this.adminMetricsHandler.start();
       // ✅ FIX BUG #3: SUPPRIMER le polling périodique
       // Le système utilise maintenant uniquement les événements Socket.IO (connect/disconnect)
       // et le broadcast de statut lors de ces événements
@@ -1874,6 +1906,11 @@ export class MeeshySocketIOManager {
         this.statusHandler.handleTypingStop(socket, data).catch((error) => logger.error('[TYPING_STOP] Error:', error));
       });
 
+      // #10575 — un onglet caché ou une app en arrière-plan n'est plus « en ligne ».
+      socket.on(CLIENT_EVENTS.PRESENCE_APP_STATE, (data?: { foreground?: unknown }) => {
+        this.authHandler.handleAppState(socket, data).catch((error) => logger.error('[PRESENCE_APP_STATE] Error:', error));
+      });
+
       socket.on(CLIENT_EVENTS.HEARTBEAT, (data?: { clientTime?: number }) => {
         this.authHandler.handleHeartbeat(socket, data).catch((error) => logger.error('[HEARTBEAT] Error:', error));
       });
@@ -1896,6 +1933,14 @@ export class MeeshySocketIOManager {
           logger.error('[ADMIN_AGENT_UNSUBSCRIBE] Error:', error);
           callback?.({ success: false, error: 'Internal server error' });
         }
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE, (data, ack) => {
+        this.adminMetricsHandler.handleSubscribe(socket, data, ack).catch((error) => logger.error('[ADMIN_METRICS_SUBSCRIBE] Error:', error));
+      });
+
+      socket.on(CLIENT_EVENTS.ADMIN_METRICS_UNSUBSCRIBE, () => {
+        try { this.adminMetricsHandler.handleUnsubscribe(socket); } catch (error) { logger.error('[ADMIN_METRICS_UNSUBSCRIBE] Error:', error); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
@@ -3064,7 +3109,7 @@ export class MeeshySocketIOManager {
             normalizedId,
             message,
             broadcastPayload,
-            resolvedSenderId,
+            resolvedSenderId, quotedDeaths: sealedQuote,
             ...(sealedKeys.length > 0
               ? { payloadForReader: (key: string) => sealedQuoteVariant(sealedQuote, key, broadcastPayload) }
               : {}),
@@ -3374,6 +3419,7 @@ export class MeeshySocketIOManager {
     this.io.engine?.close();
     const steps: ReadonlyArray<() => unknown> = [
       () => this.agentAdminRelay?.stop(),
+      () => this.adminMetricsHandler?.stop(),
       () => this.translationService.close(),
       // Minuteries des partages de position : sinon la boucle vit 8 h de plus.
       () => this.locationHandler.dispose(),

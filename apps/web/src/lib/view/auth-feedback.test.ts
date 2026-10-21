@@ -7,6 +7,8 @@ import {
   placeSignupFailure,
   resolveForgotPasswordOutcome,
   resolveResetPasswordOutcome,
+  resetTokenProvenSpent,
+  resetTokenRequiresSecondFactor,
   resolveResetTokenState,
   resolveVerifyEmailOutcome,
   type ForgotPasswordData,
@@ -272,6 +274,15 @@ describe('resolveVerifyEmailOutcome — code faux ET code expiré rendent le MÊ
     expect(result).toEqual({ kind: 'verified' });
   });
 
+  test('un défi de SECOND FACTEUR ⇒ second-factor (#10474) : ni célébration ni connexion annoncée', () => {
+    const result = resolveVerifyEmailOutcome({
+      ok: true,
+      data: { verified: true, requires2FA: true, twoFactorToken: 'tf', user: { id: 'u', username: 'ada' } },
+      status: 200,
+    });
+    expect(result).toEqual({ kind: 'second-factor' });
+  });
+
   test('une réponse qui porte une session ⇒ signed-in (#8034) : l’écran quitte la vérification', () => {
     const result = resolveVerifyEmailOutcome({
       ok: true,
@@ -326,7 +337,7 @@ describe('resolveResetPasswordOutcome — un reset NE CONNECTE personne', () => 
     expect(resolveResetPasswordOutcome({ ok: true, data: { message: 'ok' }, status: 200 })).toEqual({ kind: 'reset' });
   });
 
-  test('400 (jeton invalide/expiré en pratique) ⇒ invalid-token', () => {
+  test('400 qui NOMME le jeton ⇒ invalid-token', () => {
     expect(resolveResetPasswordOutcome(failure({ status: 400, error: 'Invalid or expired reset token' }))).toEqual({
       kind: 'invalid-token',
     });
@@ -341,5 +352,57 @@ describe('resolveResetPasswordOutcome — un reset NE CONNECTE personne', () => 
     expect(result.kind).toBe('failed');
     expect((result as { message: string }).message).not.toBe('Server error');
     expect((result as { message: string }).message).toContain('500');
+  });
+});
+
+/**
+ * #10866 — un refus de l'envoi n'est plus « lien invalide » par défaut : le
+ * `code` de la passerelle tranche, et le texte historique tient lieu de code
+ * pour une passerelle qui ne le sert pas encore (déploiements décalés).
+ */
+describe('resolveResetPasswordOutcome — chaque refus garde sa raison (#10866)', () => {
+  const cases: ReadonlyArray<readonly [string, string, string]> = [
+    ['RESET_TOKEN_INVALID', 'Invalid or expired reset token', 'invalid-token'],
+    ['RESET_PASSWORD_WEAK', 'Password requirements: score too low', 'weak-password'],
+    ['RESET_PASSWORD_REUSED', 'Password was used recently. Please choose a different password.', 'reused-password'],
+    ['TWO_FACTOR_REQUIRED', '2FA code required', 'second-factor-required'],
+    ['TWO_FACTOR_INVALID', 'Invalid 2FA code', 'second-factor-invalid'],
+    ['TWO_FACTOR_ATTEMPTS_EXHAUSTED', 'Too many invalid 2FA codes. Please request a new reset link.', 'attempts-exhausted'],
+    ['ACCOUNT_LOCKED', 'Account is locked. Please contact support.', 'account-locked'],
+  ];
+
+  for (const [code, error, kind] of cases) {
+    test(`code ${code} ⇒ ${kind}`, () => {
+      expect(resolveResetPasswordOutcome(failure({ status: 400, error, code })).kind).toBe(kind);
+    });
+    test(`sans code, le texte « ${error.slice(0, 24)}… » ⇒ ${kind}`, () => {
+      expect(resolveResetPasswordOutcome(failure({ status: 400, error })).kind).toBe(kind);
+    });
+  }
+
+  test('un 400 qui ne nomme rien de connu n’est PAS « lien invalide »', () => {
+    const outcome = resolveResetPasswordOutcome(failure({ status: 400, error: 'Something else' }));
+    expect(outcome.kind).toBe('failed');
+  });
+
+  test('429 ⇒ rate-limited, jamais « lien invalide »', () => {
+    expect(resolveResetPasswordOutcome(failure({ status: 429, error: 'RATE_LIMIT_EXCEEDED', retryAfter: 600 })).kind).toBe('rate-limited');
+  });
+
+  test('un lien désactivé par trop de codes faux est PROUVÉ mort ; un code faux, non', () => {
+    expect(resetTokenProvenSpent(failure({ status: 400, error: 'x', code: 'TWO_FACTOR_ATTEMPTS_EXHAUSTED' }))).toBe(true);
+    expect(resetTokenProvenSpent(failure({ status: 400, error: 'Invalid 2FA code', code: 'TWO_FACTOR_INVALID' }))).toBe(false);
+    expect(resetTokenProvenSpent(failure({ status: 400, error: 'x', code: 'RESET_TOKEN_INVALID' }))).toBe(true);
+  });
+});
+
+describe('resetTokenRequiresSecondFactor — la vérification du jeton annonce le code 2FA (#10866)', () => {
+  test('requires2FA:true sur un jeton valide ⇒ oui', () => {
+    expect(resetTokenRequiresSecondFactor({ ok: true, data: { valid: true, requires2FA: true }, status: 200 })).toBe(true);
+  });
+  test('absent, faux, ou échec ⇒ non', () => {
+    expect(resetTokenRequiresSecondFactor({ ok: true, data: { valid: true }, status: 200 })).toBe(false);
+    expect(resetTokenRequiresSecondFactor({ ok: true, data: { valid: false, requires2FA: true }, status: 200 })).toBe(false);
+    expect(resetTokenRequiresSecondFactor(failure({ status: 500 }))).toBe(false);
   });
 });

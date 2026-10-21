@@ -1,9 +1,9 @@
-import { lazy, Suspense, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { PublicationKind } from '@/lib/stories/publication-kind';
-import type { CameraEngine } from '@/lib/stories/studio-camera-engine';
-import { readFlashIntensity, writeFlashIntensity } from '@/lib/stories/studio-capture-gestures';
+import type { CameraEngine, CameraOpenResult } from '@/lib/stories/studio-camera-engine';
+import { readFlashIntensity, writeFlashIntensity } from '@/lib/stories/studio-flash-intensity';
 import { quickCaptureHintLines, quickCaptureOffered } from '@/lib/stories/studio-quick-capture';
 import type { StudioCameraIntent, StudioHoldDrag } from '@/routes/story-compose-camera';
 import type { StudioSceneCapture } from '@/routes/story-compose-scene';
@@ -11,6 +11,18 @@ import type { StudioSceneCapture } from '@/routes/story-compose-scene';
 /** LA CAMÉRA, CHARGÉE À LA DEMANDE — elle ne pèse sur le chunk du studio que
  * si l'auteur touche une scène vide. */
 const StudioCamera = lazy(() => import('@/routes/story-compose-camera').then((m) => ({ default: m.StudioCamera })));
+
+/** LE MOTEUR DE LA CAMÉRA, CHARGÉ À LA DEMANDE (#10322) — comme son écran :
+ * il ne pèse sur le chunk du studio que si l'auteur peut ouvrir la caméra.
+ * Préchargé dès qu'une scène vide l'offre, il est déjà là au geste. */
+let browserEngine: Promise<CameraEngine> | null = null;
+const loadBrowserEngine = (): Promise<CameraEngine> => {
+  browserEngine ??= import('@/lib/stories/studio-camera-engine').then((m) => m.createBrowserCameraEngine());
+  return browserEngine;
+};
+
+/** Le flux demandé au geste, et s'il a été repris par l'écran de la caméra. */
+type EarlyStream = { readonly pending: Promise<CameraOpenResult>; readonly adopted: boolean };
 
 /** `localStorage` peut LEVER à la seule lecture (données bloquées). */
 function viewerStorage(): Storage | null {
@@ -37,7 +49,7 @@ export function useStudioQuickCapture({
   kind,
   scene,
   onTake,
-  engine,
+  engine: injected,
   armsOnOpen = false,
 }: {
   readonly lang: InterfaceLanguage;
@@ -64,8 +76,47 @@ export function useStudioQuickCapture({
   const [intensity, setIntensity] = useState(() => readFlashIntensity(viewerStorage()));
   const holdDrag = useRef<StudioHoldDrag['current']>(null);
   const photo = kind !== 'REEL';
+  const [engine, setEngine] = useState<CameraEngine | null>(injected ?? null);
+  const earlyRef = useRef<EarlyStream | null>(null);
+  const engineNow = (): Promise<CameraEngine> =>
+    engine !== null
+      ? Promise.resolve(engine)
+      : loadBrowserEngine().then((loaded) => {
+          setEngine(loaded);
+          return loaded;
+        });
+
+  /* LE FLUX DEMANDÉ AU GESTE (#10307) — la caméra du téléphone s'allume
+     pendant que l'écran de la caméra se charge ; l'écran le reprend
+     (`preopened`). Un flux que personne n'a repris est relâché. */
+  const dropEarly = () => {
+    const early = earlyRef.current;
+    earlyRef.current = null;
+    if (early === null || early.adopted) return;
+    void early.pending.then((result) => {
+      if (result.ok) void engineNow().then((loaded) => loaded.release(result.stream));
+    });
+  };
+  const open = (next: StudioCameraIntent) => {
+    if (intent === null && earlyRef.current === null) {
+      const pending = engine !== null ? engine.open('environment') : engineNow().then(
+            (loaded) => loaded.open('environment'),
+            (): CameraOpenResult => ({ ok: false }),
+          );
+      earlyRef.current = { pending, adopted: false };
+    }
+    setIntent(next);
+  };
+  const preopened = (): Promise<CameraOpenResult> | null => {
+    const early = earlyRef.current;
+    if (early === null || early.adopted) return null;
+    earlyRef.current = { ...early, adopted: true };
+    return early.pending;
+  };
+  useEffect(() => dropEarly, []);
 
   const close = () => {
+    dropEarly();
     setIntent(null);
     setHolding(false);
   };
@@ -75,20 +126,25 @@ export function useStudioQuickCapture({
       ? {
           hintLines: quickCaptureHintLines(kind),
           // Le premier toucher ARME le viseur (#8711) : le second, sur lui, prend.
-          onTap: () => setIntent('arm'),
+          onTap: () => open('arm'),
           onHoldStart: () => {
             setHolding(true);
-            setIntent('hold');
+            open('hold');
           },
           onHoldEnd: () => setHolding(false),
           onHoldMove: (dx, dy) => holdDrag.current?.(dx, dy),
-          onPhoto: photo ? () => setIntent('arm') : null,
-          onFilm: () => setIntent('film'),
+          onPhoto: photo ? () => open('arm') : null,
+          onFilm: () => open('film'),
         }
       : null;
 
+  const wanted = capture !== null || intent !== null;
+  useEffect(() => {
+    if (wanted && engine === null) void engineNow().catch(() => undefined);
+  }, [wanted, engine]);
+
   const cameraLayer =
-    intent === null ? null : (
+    intent === null || engine === null ? null : (
       <Suspense fallback={null}>
         <StudioCamera
           lang={lang}
@@ -103,7 +159,8 @@ export function useStudioQuickCapture({
             writeFlashIntensity(viewerStorage(), next);
           }}
           holdDrag={holdDrag}
-          {...(engine !== undefined ? { engine } : {})}
+          engine={engine}
+          preopened={preopened}
           onTake={(file) => {
             close();
             onTake(file);
@@ -113,5 +170,5 @@ export function useStudioQuickCapture({
       </Suspense>
     );
 
-  return { capture, cameraOpen: intent !== null, cameraLayer, retake: () => setIntent('arm') };
+  return { capture, cameraOpen: intent !== null, cameraLayer, retake: () => open('arm') };
 }

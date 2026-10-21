@@ -46,7 +46,7 @@ final class CallLiveFrameSession: ObservableObject {
     private var pendingReply: Task<Void, Never>?
     /// Le cadre que l'autre montre de son côté, quand il me l'a dit (proposé, ou accepté le mien).
     private var peerFrameId: String?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-live-frame")
+    private let logger = MeeshyLog.logger(.callLiveFrame)
 
     nonisolated deinit {}
 
@@ -66,7 +66,7 @@ final class CallLiveFrameSession: ObservableObject {
             return CallCaptureIdentity.myName(displayName: user?.displayName, username: user?.username, fallback: "")
         }
         self.notify = notify ?? { FeedbackToastManager.shared.showError($0) }
-        self.wait = wait ?? { try? await Task.sleep(nanoseconds: $0) }
+        self.wait = wait ?? { _ = await cancellableSleep(for: .nanoseconds($0)) }
         subscription = (events ?? resolvedSocket.callLiveFrameEvents)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.receive(event) }

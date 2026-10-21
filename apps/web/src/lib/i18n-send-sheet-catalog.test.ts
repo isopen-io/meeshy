@@ -55,7 +55,7 @@ describe('chaque langue porte toutes les clés du français, et rien d’autre',
 describe('translateSendSheet', () => {
   test('interpole le nombre de destinataires', async () => {
     await loadSendSheetCatalog('fr');
-    expect(translateSendSheet('fr', 'sendSheet.sendCount', { count: '3' })).toBe('Envoyer (3)');
+    expect(translateSendSheet('fr', 'sendSheet.sendCount', { count: '3' })).toBe('Envoyer · 3');
     expect(translateSendSheet('fr', 'sendSheet.announce.sent', { count: '2' })).toBe('Envoyé à 2');
     expect(translateSendSheet('fr', 'sendSheet.limit.recipients', { count: '10' })).toBe('10 destinataires au plus');
   });

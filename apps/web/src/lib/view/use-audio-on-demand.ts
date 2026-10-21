@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { transcriptTranslationTracks } from '@meeshy/shared/types/attachment-audio';
 
@@ -23,6 +23,18 @@ import { NOTHING_SUPPLIED, translationOffers, withSupplied, type SuppliedAudio }
  */
 export type AudioOnDemandNotice = 'media.audio.transcribe_failed' | 'media.audio.translate_failed';
 
+/**
+ * LE PLAFOND D'UNE DEMANDE MISE EN FILE (#10629) — la passerelle répond
+ * `processing` et le résultat n'arrive que par le temps réel. S'il n'arrive
+ * pas (traducteur arrêté, socket coupée), l'attente se lève au lieu de figer
+ * le bouton, et la demande se refait. 90 s (#10759) : un plafond de SILENCE
+ * réel, jamais de latence — Whisper met ~25 s sur staging pour un vocal de
+ * 4 s, et l'ancien plafond de 20 s rendait « Transcrire » pendant que la tâche
+ * tournait encore. L'arrivée du résultat (`audio:transcription-ready`, greffé
+ * sur la pièce) lève l'attente dès qu'elle arrive.
+ */
+export const ON_DEMAND_STALL_MS = 90_000;
+
 export type AudioOnDemand = {
   readonly served: Attachment;
   /** La langue de la pièce : celle de sa transcription, sinon celle du message. */
@@ -31,6 +43,8 @@ export type AudioOnDemand = {
   readonly versions: readonly string[];
   readonly offers: readonly string[];
   readonly transcribing: boolean;
+  /** La zone « Transcrire » a un effet : pas de transcription servie, et le serveur lit le vocal. */
+  readonly canTranscribe: boolean;
   readonly pendingLanguages: readonly string[];
   /** La DERNIÈRE langue demandée dont la version vient d'arriver — la page s'y place. */
   readonly arrived: string | null;
@@ -39,21 +53,35 @@ export type AudioOnDemand = {
   readonly requestTranslation: (language: string) => void;
 };
 
+const TRANSCRIPTION_KEY = '#transcription';
+
 export function useAudioOnDemand({
   attachment,
   fallbackLanguage,
   readerLanguages,
   deps,
+  stallAfterMs = ON_DEMAND_STALL_MS,
+  transcribable = true,
 }: {
   readonly attachment: Attachment;
   readonly fallbackLanguage: string;
   readonly readerLanguages: readonly string[];
   readonly deps?: ConversationsDeps;
+  readonly stallAfterMs?: number;
+  /** Le serveur peut lire ce vocal (#10700) ; faux ⇒ « Transcrire » n'est pas offert. */
+  readonly transcribable?: boolean;
 }): AudioOnDemand {
   const [supplied, setSupplied] = useState<SuppliedAudio>(NOTHING_SUPPLIED);
   const [transcribeAsked, setTranscribeAsked] = useState(false);
   const [requested, setRequested] = useState<readonly string[]>([]);
   const [notice, setNotice] = useState<AudioOnDemandNotice | null>(null);
+  const [stalled, setStalled] = useState<readonly string[]>([]);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  const stallLater = (key: string): void => {
+    timers.current = [...timers.current, setTimeout(() => setStalled((current) => [...current.filter((k) => k !== key), key]), stallAfterMs)];
+  };
+  const unstall = (key: string): void => setStalled((current) => current.filter((k) => k !== key));
 
   const served = useMemo(() => withSupplied(attachment, supplied), [attachment, supplied]);
   const originalLanguage = served.transcription?.language ?? fallbackLanguage;
@@ -62,14 +90,16 @@ export function useAudioOnDemand({
     [originalLanguage, served.translations],
   );
   const offers = useMemo(() => translationOffers({ readerLanguages, versions }), [readerLanguages, versions]);
-  const pendingLanguages = requested.filter((code) => !versions.includes(code));
+  const pendingLanguages = requested.filter((code) => !versions.includes(code) && !stalled.includes(code));
+  const transcribing = transcribeAsked && served.transcription == null && !stalled.includes(TRANSCRIPTION_KEY);
   const arrived = [...requested].reverse().find((code) => versions.includes(code)) ?? null;
   const transport = deps ?? apiDeps;
 
   const transcribe = (): void => {
-    if (transcribeAsked && served.transcription == null) return;
+    if (transcribing) return;
     setNotice(null);
     setTranscribeAsked(true);
+    unstall(TRANSCRIPTION_KEY);
     void requestAttachmentTranscription({ ...transport, attachmentId: attachment.id }).then((result) => {
       if (!result.ok) {
         setTranscribeAsked(false);
@@ -78,12 +108,14 @@ export function useAudioOnDemand({
       }
       const transcription = result.data.transcription;
       if (transcription !== null) setSupplied((current) => ({ ...current, transcription }));
+      else stallLater(TRANSCRIPTION_KEY);
     });
   };
 
   const requestTranslation = (language: string): void => {
-    if (requested.includes(language) && !versions.includes(language)) return;
+    if (pendingLanguages.includes(language)) return;
     setNotice(null);
+    unstall(language);
     setRequested((current) => [...current.filter((code) => code !== language), language]);
     const sourceLanguage = served.transcription?.language;
     void requestAttachmentTranslation({
@@ -99,6 +131,7 @@ export function useAudioOnDemand({
       }
       const translation = result.data.translation;
       if (translation !== null) setSupplied((current) => ({ ...current, translations: { ...current.translations, [language]: translation } }));
+      else stallLater(language);
     });
   };
 
@@ -107,7 +140,8 @@ export function useAudioOnDemand({
     originalLanguage,
     versions,
     offers,
-    transcribing: transcribeAsked && served.transcription == null,
+    transcribing,
+    canTranscribe: transcribable && served.transcription == null,
     pendingLanguages,
     arrived,
     notice,

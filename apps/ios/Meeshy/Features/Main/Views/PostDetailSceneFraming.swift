@@ -53,6 +53,8 @@ nonisolated enum PostDetailSceneFraming {
         var viewport: CGSize = .zero
         /// Le haut de la scène dans cette zone, relevé AU REPOS.
         var sceneTop: CGFloat?
+        /// Le panneau des pièces du composer est ouvert (#10544).
+        var inputPanelOpen = false
 
         /// **Le haut de la scène ne se relève qu'au repos.** Pendant le
         /// défilement son cadre suit le contenu : le relever ferait changer la
@@ -62,6 +64,33 @@ nonisolated enum PostDetailSceneFraming {
             guard abs(scrollOffset) < PostDetailSceneFraming.restTolerance else { return self }
             var relevees = self
             relevees.sceneTop = minY.rounded()
+            return relevees
+        }
+
+        /// **Le panneau des pièces retient la scène comme le clavier**
+        /// (#10544). Il prend la place du clavier APRÈS avoir rendu le focus :
+        /// la zone se raccourcissait sans focus, et la scène rétrécissait.
+        func recordingInputPanel(open: Bool) -> Measures {
+            var relevees = self
+            relevees.inputPanelOpen = open
+            return relevees
+        }
+
+        /// **Le clavier ne rétrécit pas la scène** (#8647). Pendant la saisie
+        /// d'un commentaire, le clavier pousse le composer et raccourcit la zone
+        /// de défilement : relevée telle quelle, la scène se recalculait plus
+        /// petite sous les doigts. Tant que le composer a le focus — ou que son
+        /// panneau des pièces est ouvert —, la hauteur ne descend plus ; ce qui
+        /// grandit, ce qui change de largeur et la toute première mesure se
+        /// relèvent toujours.
+        func recordingViewport(_ size: CGSize, composerIsFocused: Bool) -> Measures {
+            let clavier = (composerIsFocused || inputPanelOpen)
+                && viewport.height > 0
+                && abs(size.width - viewport.width) < PostDetailSceneFraming.restTolerance
+                && size.height < viewport.height
+            guard !clavier else { return self }
+            var relevees = self
+            relevees.viewport = size
             return relevees
         }
     }

@@ -1,3 +1,5 @@
+import { useListingSessionId } from '@/lib/telemetry/listing-session';
+import { listingAt } from '@/lib/telemetry/served-listing';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
@@ -45,6 +47,7 @@ export function ProfilePostsPanel({
   const minute = useMinute();
   const { languages: readerLanguages } = useReaderLanguages();
   const [filter, setFilter] = useState<ProfilePostsFilter>('all');
+  const listingSessionId = useListingSessionId();
 
   const posts = useInfiniteQuery(
     { ...authorPostsInfiniteOptions({ ...apiDeps, authorId: authorId ?? '' }), enabled: authorId !== null && authorId !== '' },
@@ -120,10 +123,13 @@ export function ProfilePostsPanel({
       showsEmptyState({ visible: models.length, filter, hasNextPage: posts.hasNextPage }) ? (
         <ProfilePostsEmpty language={language} filter={filter} />
       ) : models.length === 0 ? null : (
-        models.map((model) => (
+        models.map((model, index) => (
           <FeedPostCard
             key={model.id}
             model={model}
+            listing={listingAt({ position: index, fallbackSource: 'profile', listingSessionId })}
+            impressionSource="profile"
+            impressionSurface="profile"
             onGesture={gestures.onGesture}
             onShare={gestures.onShare}
             onComment={gestures.onComment}

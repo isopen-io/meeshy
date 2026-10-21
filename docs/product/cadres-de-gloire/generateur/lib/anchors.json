@@ -1,0 +1,1410 @@
+{
+ "abysses-ambassadeur-1": [
+  {
+   "bird": 0,
+   "dx": -25,
+   "dy": 50.1,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 26.8,
+   "dy": 53.7,
+   "scale": 0.88
+  }
+ ],
+ "abysses-ambassadeur-5": [
+  {
+   "bird": 0,
+   "dx": -29.5,
+   "dy": 59,
+   "scale": 0.82
+  },
+  {
+   "bird": 1,
+   "dx": 25,
+   "dy": 50.1,
+   "scale": 0.88
+  }
+ ],
+ "abysses-legende-1": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 90,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 74,
+   "scale": 1
+  }
+ ],
+ "abysses-legende-4": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": -68,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 8,
+   "dy": 0,
+   "scale": 0.82
+  }
+ ],
+ "abysses-legende-5": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 74,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 62,
+   "scale": 1
+  }
+ ],
+ "abysses-mythe-b": [
+  {
+   "bird": 0,
+   "dx": -4,
+   "dy": 0,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 8,
+   "dy": 0,
+   "scale": 0.82
+  }
+ ],
+ "abysses-oracle-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 4,
+   "scale": 1
+  }
+ ],
+ "abysses-oracle-b": [
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": -50,
+   "scale": 1
+  }
+ ],
+ "abysses-oracle-c": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 72,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 70,
+   "scale": 1
+  }
+ ],
+ "abysses-orateur-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 76,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 90,
+   "scale": 1
+  }
+ ],
+ "abysses-orateur-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 82,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 84,
+   "scale": 1
+  }
+ ],
+ "egypte-ambassadeur-1": [
+  {
+   "bird": 0,
+   "dx": -12,
+   "dy": 0,
+   "scale": 0.76
+  },
+  {
+   "bird": 1,
+   "dx": 14,
+   "dy": 0,
+   "scale": 0.7
+  }
+ ],
+ "egypte-ambassadeur-2": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 70,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 40,
+   "dy": 0,
+   "scale": 0.82
+  }
+ ],
+ "egypte-ambassadeur-3": [
+  {
+   "bird": 0,
+   "dx": -24,
+   "dy": 0,
+   "scale": 0.82
+  },
+  {
+   "bird": 1,
+   "dx": 24,
+   "dy": 0,
+   "scale": 0.88
+  }
+ ],
+ "egypte-ambassadeur-5": [
+  {
+   "bird": 0,
+   "dx": -40.2,
+   "dy": 80.5,
+   "scale": 0.82
+  },
+  {
+   "bird": 1,
+   "dx": 30.4,
+   "dy": 60.8,
+   "scale": 0.94
+  }
+ ],
+ "egypte-legende-1": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 62,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 60,
+   "scale": 1
+  }
+ ],
+ "egypte-legende-2": [
+  {
+   "bird": 0,
+   "dx": -39.6,
+   "dy": 39.6,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 68,
+   "scale": 1
+  }
+ ],
+ "egypte-legende-3": [
+  {
+   "bird": 0,
+   "dx": -37.6,
+   "dy": 75.1,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 38.2,
+   "dy": 38.2,
+   "scale": 1
+  }
+ ],
+ "egypte-legende-4": [
+  {
+   "bird": 0,
+   "dx": -39.4,
+   "dy": 78.7,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 44,
+   "dy": 0,
+   "scale": 0.88
+  }
+ ],
+ "egypte-legende-5": [
+  {
+   "bird": 0,
+   "dx": -29.5,
+   "dy": 59,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 29.5,
+   "dy": 59,
+   "scale": 1
+  }
+ ],
+ "egypte-mythe-c": [
+  {
+   "bird": 0,
+   "dx": -8.9,
+   "dy": -4.5,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 12,
+   "dy": 0,
+   "scale": 0.94
+  }
+ ],
+ "egypte-oracle-a": [
+  {
+   "bird": 0,
+   "dx": -40.2,
+   "dy": 80.5,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 43.8,
+   "dy": 87.7,
+   "scale": 1
+  }
+ ],
+ "egypte-oracle-b": [
+  {
+   "bird": 0,
+   "dx": -46,
+   "dy": 0,
+   "scale": 0.82
+  },
+  {
+   "bird": 1,
+   "dx": 34,
+   "dy": 68,
+   "scale": 1
+  }
+ ],
+ "egypte-oracle-c": [
+  {
+   "bird": 0,
+   "dx": -41,
+   "dy": 41,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 46,
+   "dy": 0,
+   "scale": 0.94
+  }
+ ],
+ "egypte-orateur-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 98,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 68,
+   "scale": 1
+  }
+ ],
+ "egypte-orateur-b": [
+  {
+   "bird": 0,
+   "dx": -60,
+   "dy": 0,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 54,
+   "dy": 0,
+   "scale": 1
+  }
+ ],
+ "egypte-orateur-c": [
+  {
+   "bird": 0,
+   "dx": -24,
+   "dy": 0,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 25.5,
+   "dy": 25.5,
+   "scale": 1
+  }
+ ],
+ "moments-flamme-100": [
+  {
+   "bird": 0,
+   "dx": -16,
+   "dy": 0,
+   "scale": 0.7
+  },
+  {
+   "bird": 1,
+   "dx": 14,
+   "dy": 0,
+   "scale": 0.76
+  }
+ ],
+ "moments-flamme-7": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 82,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 66,
+   "scale": 1
+  }
+ ],
+ "moments-jour-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 68,
+   "scale": 0.82
+  },
+  {
+   "bird": 1,
+   "dx": 26.8,
+   "dy": 53.7,
+   "scale": 0.94
+  }
+ ],
+ "moments-meesh-1": [
+  {
+   "bird": 0,
+   "dx": -27.7,
+   "dy": 55.5,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 80,
+   "scale": 1
+  }
+ ],
+ "moments-meesh-10": [
+  {
+   "bird": 0,
+   "dx": -18,
+   "dy": 0,
+   "scale": 0.76
+  },
+  {
+   "bird": 1,
+   "dx": 16,
+   "dy": 0,
+   "scale": 0.88
+  }
+ ],
+ "moments-palier-galaxie": [
+  {
+   "bird": 1,
+   "dx": 2.8,
+   "dy": 2.8,
+   "scale": 1
+  }
+ ],
+ "moments-palier-lueur": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 96,
+   "scale": 0.82
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 64,
+   "scale": 0.94
+  }
+ ],
+ "moments-palier-singularite": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 50,
+   "scale": 0.82
+  }
+ ],
+ "neon-ambassadeur-1": [
+  {
+   "bird": 0,
+   "dx": -15.2,
+   "dy": 34.4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 19.7,
+   "dy": 47.4,
+   "scale": 1
+  }
+ ],
+ "neon-ambassadeur-2": [
+  {
+   "bird": 0,
+   "dx": -28.6,
+   "dy": 63.2,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 21.8,
+   "dy": 37.9,
+   "scale": 1
+  }
+ ],
+ "neon-ambassadeur-3": [
+  {
+   "bird": 0,
+   "dx": -26.8,
+   "dy": 61.7,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 21.5,
+   "dy": 48.9,
+   "scale": 1
+  }
+ ],
+ "neon-ambassadeur-4": [
+  {
+   "bird": 0,
+   "dx": -6,
+   "dy": 0,
+   "scale": 1
+  }
+ ],
+ "neon-ambassadeur-5": [
+  {
+   "bird": 0,
+   "dx": -22.8,
+   "dy": 37.1,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 13.4,
+   "dy": 34.8,
+   "scale": 1
+  }
+ ],
+ "neon-legende-1": [
+  {
+   "bird": 0,
+   "dx": -11.6,
+   "dy": 29.3,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 20,
+   "dy": 34.3,
+   "scale": 1
+  }
+ ],
+ "neon-legende-2": [
+  {
+   "bird": 0,
+   "dx": -15.2,
+   "dy": 36.4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 25.9,
+   "dy": 61.9,
+   "scale": 1
+  }
+ ],
+ "neon-legende-3": [
+  {
+   "bird": 0,
+   "dx": -25.9,
+   "dy": 59.9,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 17.9,
+   "dy": 41.8,
+   "scale": 1
+  }
+ ],
+ "neon-legende-4": [
+  {
+   "bird": 0,
+   "dx": 17,
+   "dy": 34,
+   "scale": 1
+  }
+ ],
+ "neon-legende-5": [
+  {
+   "bird": 0,
+   "dx": -17.9,
+   "dy": 43.8,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 30.7,
+   "dy": 20.2,
+   "scale": 1
+  }
+ ],
+ "neon-mythe-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 72,
+   "scale": 1
+  }
+ ],
+ "neon-mythe-b": [
+  {
+   "bird": 0,
+   "dx": -15.2,
+   "dy": 36.4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 16.1,
+   "dy": 42.2,
+   "scale": 1
+  }
+ ],
+ "neon-oracle-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 66,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 64,
+   "scale": 1
+  }
+ ],
+ "neon-oracle-c": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 58,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 2.8,
+   "dy": 36.8,
+   "scale": 1
+  }
+ ],
+ "neon-orateur-a": [
+  {
+   "bird": 0,
+   "dx": -18.1,
+   "dy": 14.1,
+   "scale": 0.827
+  },
+  {
+   "bird": 1,
+   "dx": 18.3,
+   "dy": 28.6,
+   "scale": 0.94
+  }
+ ],
+ "neon-orateur-b": [
+  {
+   "bird": 0,
+   "dx": -35.4,
+   "dy": 63.4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 17.9,
+   "dy": 43.8,
+   "scale": 1
+  }
+ ],
+ "neon-orateur-c": [
+  {
+   "bird": 0,
+   "dx": -25.9,
+   "dy": 61.9,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 46,
+   "scale": 1
+  }
+ ],
+ "nord-ambassadeur-4": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": -128,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 18,
+   "dy": 0,
+   "scale": 0.76
+  }
+ ],
+ "nord-ambassadeur-5": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 76,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 26.8,
+   "dy": 53.7,
+   "scale": 0.94
+  }
+ ],
+ "nord-legende-2": [
+  {
+   "bird": 0,
+   "dx": -15.2,
+   "dy": 30.4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 30,
+   "scale": 1
+  }
+ ],
+ "nord-legende-3": [
+  {
+   "bird": 0,
+   "dx": -52,
+   "dy": 0,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 35.8,
+   "dy": 17.9,
+   "scale": 1
+  }
+ ],
+ "nord-legende-5": [
+  {
+   "bird": 0,
+   "dx": -31.1,
+   "dy": 31.1,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 9.8,
+   "dy": 19.7,
+   "scale": 1
+  }
+ ],
+ "nord-mythe-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 36,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 26.9,
+   "dy": 26.9,
+   "scale": 1
+  }
+ ],
+ "nord-oracle-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 72,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 76,
+   "scale": 0.94
+  }
+ ],
+ "nord-orateur-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 62,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 56,
+   "scale": 1
+  }
+ ],
+ "nord-orateur-b": [
+  {
+   "bird": 0,
+   "dx": -2.8,
+   "dy": 2.8,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 0,
+   "scale": 0.94
+  }
+ ],
+ "nord-orateur-c": [
+  {
+   "bird": 0,
+   "dx": -25.9,
+   "dy": 51.9,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 52,
+   "scale": 1
+  }
+ ],
+ "olympe-ambassadeur-1": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 72,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 82,
+   "scale": 1
+  }
+ ],
+ "olympe-ambassadeur-2": [
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 4,
+   "scale": 1
+  }
+ ],
+ "olympe-ambassadeur-4": [
+  {
+   "bird": 0,
+   "dx": -10,
+   "dy": 0,
+   "scale": 0.7
+  },
+  {
+   "bird": 1,
+   "dx": 10,
+   "dy": 0,
+   "scale": 0.7
+  }
+ ],
+ "olympe-legende-1": [
+  {
+   "bird": 0,
+   "dx": -10,
+   "dy": 0,
+   "scale": 1
+  }
+ ],
+ "olympe-legende-4": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 90,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 96,
+   "scale": 1
+  }
+ ],
+ "olympe-mythe-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 96,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 84,
+   "scale": 1
+  }
+ ],
+ "olympe-mythe-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 0,
+   "scale": 0.94
+  }
+ ],
+ "olympe-oracle-a": [
+  {
+   "bird": 0,
+   "dx": -2,
+   "dy": 0,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 2,
+   "dy": 0,
+   "scale": 0.82
+  }
+ ],
+ "olympe-orateur-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 90,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 28.6,
+   "dy": 57.2,
+   "scale": 1
+  }
+ ],
+ "olympe-orateur-c": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 78,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 66,
+   "scale": 1
+  }
+ ],
+ "poses-cotes": [
+  {
+   "bird": 0,
+   "dx": -16,
+   "dy": 0,
+   "scale": 0.7
+  },
+  {
+   "bird": 1,
+   "dx": 8,
+   "dy": 0,
+   "scale": 0.7
+  }
+ ],
+ "poses-groupe": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 88,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 41.1,
+   "dy": 82.3,
+   "scale": 0.94
+  }
+ ],
+ "poses-message-cartouche": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 88,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 98,
+   "scale": 1
+  }
+ ],
+ "poses-message-parchemin": [
+  {
+   "bird": 0,
+   "dx": -16,
+   "dy": 0,
+   "scale": 0.7
+  },
+  {
+   "bird": 1,
+   "dx": 10,
+   "dy": 0,
+   "scale": 0.76
+  }
+ ],
+ "poses-pied": [
+  {
+   "bird": 0,
+   "dx": -34,
+   "dy": 68,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 98,
+   "scale": 1
+  }
+ ],
+ "poses-ruban": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 8,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 4,
+   "scale": 1
+  }
+ ],
+ "royaumes-ambassadeur-1": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 80,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 76,
+   "scale": 0.94
+  }
+ ],
+ "royaumes-ambassadeur-2": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 4.5,
+   "dy": 8.9,
+   "scale": 1
+  }
+ ],
+ "royaumes-ambassadeur-3": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 10,
+   "scale": 1
+  }
+ ],
+ "royaumes-ambassadeur-4": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 76,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 25,
+   "dy": 50.1,
+   "scale": 0.88
+  }
+ ],
+ "royaumes-ambassadeur-5": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 84,
+   "scale": 0.94
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 80,
+   "scale": 0.94
+  }
+ ],
+ "royaumes-legende-1": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 94,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 100,
+   "scale": 1
+  }
+ ],
+ "royaumes-legende-2": [
+  {
+   "bird": 0,
+   "dx": -18.4,
+   "dy": 18.4,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 18.4,
+   "dy": 18.4,
+   "scale": 1
+  }
+ ],
+ "royaumes-legende-3": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 6,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 16,
+   "scale": 1
+  }
+ ],
+ "royaumes-legende-4": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 76,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 64,
+   "scale": 1
+  }
+ ],
+ "royaumes-mythe-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 80,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 84,
+   "scale": 1
+  }
+ ],
+ "royaumes-mythe-b": [
+  {
+   "bird": 0,
+   "dx": -8,
+   "dy": 0,
+   "scale": 0.76
+  },
+  {
+   "bird": 1,
+   "dx": 8,
+   "dy": 0,
+   "scale": 0.76
+  }
+ ],
+ "royaumes-oracle-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 86,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 78,
+   "scale": 1
+  }
+ ],
+ "royaumes-oracle-c": [
+  {
+   "bird": 0,
+   "dx": -5.4,
+   "dy": -2.7,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 6,
+   "dy": 0,
+   "scale": 0.76
+  }
+ ],
+ "royaumes-orateur-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 86,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 66,
+   "scale": 1
+  }
+ ],
+ "savane-ambassadeur-1": [
+  {
+   "bird": 0,
+   "dx": -6,
+   "dy": 0,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 4,
+   "dy": 0,
+   "scale": 1
+  }
+ ],
+ "savane-legende-3": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": -102,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 8,
+   "dy": 0,
+   "scale": 0.82
+  }
+ ],
+ "savane-legende-4": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 64,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 70,
+   "scale": 1
+  }
+ ],
+ "savane-mythe-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": -70,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 4,
+   "scale": 1
+  }
+ ],
+ "savane-mythe-c": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 10,
+   "scale": 1
+  }
+ ],
+ "savane-oracle-a": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": -12,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 52,
+   "scale": 1
+  }
+ ],
+ "savane-oracle-b": [
+  {
+   "bird": 0,
+   "dx": -22,
+   "dy": 0,
+   "scale": 0.64
+  }
+ ],
+ "savane-oracle-c": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 70,
+   "scale": 0.64
+  }
+ ],
+ "savane-orateur-c": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 88,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 118,
+   "scale": 1
+  }
+ ],
+ "tresor-bourse-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 68,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 44,
+   "scale": 1
+  }
+ ],
+ "tresor-coffre-a": [
+  {
+   "bird": 0,
+   "dx": -8.5,
+   "dy": 8.5,
+   "scale": 1
+  }
+ ],
+ "tresor-coffret-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": -16,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 2,
+   "dy": 0,
+   "scale": 0.88
+  }
+ ],
+ "tresor-reserve-b": [
+  {
+   "bird": 0,
+   "dx": -34,
+   "dy": 17,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 20,
+   "scale": 1
+  }
+ ],
+ "tresor-tresor-a": [
+  {
+   "bird": 0,
+   "dx": -5.7,
+   "dy": -5.7,
+   "scale": 1
+  },
+  {
+   "bird": 1,
+   "dx": 11.3,
+   "dy": -11.3,
+   "scale": 1
+  }
+ ],
+ "tresor-tresor-b": [
+  {
+   "bird": 0,
+   "dx": 0,
+   "dy": 0,
+   "scale": 0.88
+  },
+  {
+   "bird": 1,
+   "dx": 0,
+   "dy": 0,
+   "scale": 0.94
+  }
+ ]
+}

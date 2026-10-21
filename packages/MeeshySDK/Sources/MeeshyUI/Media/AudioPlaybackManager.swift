@@ -36,6 +36,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// ConversationAudioCoordinator (app) opte pour `.content`.
     public var sessionProfile: AudioSessionProfile = .transient
 
+    /// `false` pour un moteur dont l'hôte traite lui-même les interruptions
+    /// (le `ConversationAudioCoordinator` de l'app, qui sait aussi suspendre
+    /// pour un appel Meeshy). Sinon le moteur se met en pause à une
+    /// interruption et reprend à sa fin (#11040).
+    public var respondsToSessionInterruptions = true
+    var interruptionLedger = InterruptionResumeLedger()
+    var sessionSignalCancellables = Set<AnyCancellable>()
+    /// `AVAudioSession.isOtherAudioPlaying` — injectable pour les témoins.
+    var otherAudioIsPlaying: () -> Bool = { AVAudioSession.sharedInstance().isOtherAudioPlaying }
+
     public var onPlaybackFinished: (() -> Void)?
 
     /// BUG A (round 4) — opaque permission predicate consulted BEFORE any
@@ -66,10 +76,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     private var player: AVAudioPlayer?
     private var timer: Timer? {
-        didSet { cleanupHandle.timer = timer }
+        didSet { teardown.update { $0.timer = timer } }
     }
     private var loadTask: Task<Void, Never>? {
-        didSet { cleanupHandle.loadTask = loadTask }
+        didSet { teardown.update { $0.loadTask = loadTask } }
     }
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
@@ -114,35 +124,25 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// `stop()` libère. ⚠️ Unifie le ducking : ce moteur posait `options: []`
     /// (PAS de duck) → désormais `[.duckOthers]` comme tous les autres players.
     private var sessionRequested = false {
-        didSet { cleanupHandle.sessionRequested = sessionRequested }
+        didSet { teardown.update { $0.sessionRequested = sessionRequested } }
     }
 
-    /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
-    /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
-    /// release them WITHOUT `MainActor.assumeIsolated` (a precondition crash
-    /// off-main, see lesson feedback_swift6_concurrency_pitfalls). Kept in
-    /// sync with the @MainActor stored props via their `didSet`. Marked
-    /// `nonisolated(unsafe)` because the contained operations are themselves
-    /// thread-safe and we only ever cancel/invalidate from deinit.
-    private final class CleanupHandle {
-    // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
-    // défaut) → double-free `pointer being freed was not allocated` (abrt)
-    // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
-    // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
-    nonisolated deinit {}
-        nonisolated(unsafe) var timer: Timer?
-        nonisolated(unsafe) var loadTask: Task<Void, Never>?
-        nonisolated(unsafe) var sessionRequested = false
-        /// Block-based `willResignActive` observer token. Removed in `deinit`
-        /// (thread-safe) so the lifecycle hook never outlives the engine.
-        nonisolated(unsafe) var lifecycleObserver: NSObjectProtocol?
+    /// Ressources libérées par `deinit`, qui peut tourner hors du fil principal :
+    /// `Timer.invalidate()` et `Task.cancel()` y sont sûrs, sans
+    /// `MainActor.assumeIsolated`. Tenues à jour par les `didSet` des propriétés.
+    private nonisolated struct PlaybackTeardownResources {
+        var timer: Timer?
+        var loadTask: Task<Void, Never>?
+        var sessionRequested = false
+        var lifecycleObserver: NSObjectProtocol?
     }
-    private let cleanupHandle = CleanupHandle()
+    private let teardown = TeardownBox(PlaybackTeardownResources())
 
     public override init() {
         super.init()
         PlaybackCoordinator.shared.register(self)
         observeAppLifecycle()
+        observeSessionInterruptions()
     }
 
     /// Designated init that lets callers opt out of `PlaybackCoordinator`
@@ -158,6 +158,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             PlaybackCoordinator.shared.register(self)
         }
         observeAppLifecycle()
+        observeSessionInterruptions()
     }
 
     /// Persists the current playback position when the app resigns active
@@ -166,13 +167,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// on their own paths. No-op for engines without a loaded `attachmentId`
     /// (preview/owned dummies).
     private func observeAppLifecycle() {
-        cleanupHandle.lifecycleObserver = NotificationCenter.default.addObserver(
+        let token = NotificationCenter.default.addObserver(
             forName: UIApplication.willResignActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.persistPosition() }
         }
+        teardown.update { $0.lifecycleObserver = token }
     }
 
     // MARK: - Audio session (routed through the single MediaSessionCoordinator)
@@ -214,6 +216,10 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard !Task.isCancelled else { return }
                 await playData(data)
             } catch {
+                // Chargement REMPLACÉ (un autre vocal a été choisi) : son téléchargement continue
+                // (`cancelsWithCaller: false`) et peut échouer bien plus tard — il ne parle plus au nom
+                // du suivant, ni `isLoading` ni fin de lecture (la file sautait le vocal choisi).
+                guard !Task.isCancelled else { return }
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
                 // B5 fix — notify the parent (coordinator / autoplay registry)
@@ -249,9 +255,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             await acquireSession()
             guard !Task.isCancelled else { return }
             // #7010 — `Task { }` HÉRITE du MainActor ; `AudioBytesLoader` part vraiment.
-            guard let data = await AudioBytesLoader.bytes(at: url) else {
+            let bytes = await AudioBytesLoader.bytes(at: url)
+            guard !Task.isCancelled else { return }
+            guard let data = bytes else {
                 Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): octets illisibles")
+                // Même sortie que les échecs de `play(urlString:)` et de `playData` : sans elle la session
+                // restait tenue et la file ne passait jamais au vocal suivant.
                 isLoading = false
+                currentUrl = nil
+                releaseSession()
+                onPlaybackFinished?()
                 return
             }
             await playData(data)
@@ -261,7 +274,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     /// Logger dédié — `os.Logger` subsystem `me.meeshy.app`, catégorie
     /// `audio-playback`. Permet de filtrer rapidement dans Console.app
     /// quand un preview ne déclenche aucune lecture audible.
-    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
+    private static let log = MeeshyLog.logger(.audioPlayback)
 
     /// Décodage et préparation HORS du MainActor (#9702) ; une piste changée
     /// pendant ce temps (`resetState` annule `loadTask`) n'est pas jouée.
@@ -272,6 +285,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         case .failure(let error):
             Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
             isLoading = false
+            // Même sortie que l'échec de téléchargement : sans elle la file restait sur ce vocal, le bouton
+            // lecture ne rechargeait rien et la session audio n'était jamais rendue.
+            currentUrl = nil
+            releaseSession()
+            onPlaybackFinished?()
         case .success(let box):
             let ready = box.player
             player = ready
@@ -292,6 +310,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     private func resetState() {
         player?.stop()
         player = nil
+        // Un arrêt pendant le chargement laissait la bulle sur son indicateur, la tâche annulée sortant sans le
+        // remettre.
+        if isLoading { isLoading = false }
         timer?.invalidate()
         timer = nil
         if isPlaying { isPlaying = false }
@@ -317,6 +338,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     public func stop() {
+        _ = interruptionLedger.handle(.contentReleased)
         persistPosition()
         resetState()
         currentUrl = nil
@@ -326,16 +348,22 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func togglePlayPause() {
         guard let player = player else { return }
         if player.isPlaying {
+            _ = interruptionLedger.handle(.userPaused)
             player.pause()
             isPlaying = false
             timer?.invalidate()
             stretchTracker.pause(positionMs)
             reportListenProgress(complete: false)
             persistPosition()
+            // La musique que ce son avait coupée reprend dans ≈ 3 s, sauf relance (#11039).
+            MediaSessionCoordinator.shared.releaseAfterUserPause()
         } else {
             // BUG A (round 4) — gate ONLY the resume branch. Pausing is always
             // allowed; resuming during a call must not steal the VoIP session.
             if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
+            _ = interruptionLedger.handle(.userStartedPlayback)
+            // La session a pu être rendue pendant la pause : la reprendre.
+            MediaSessionCoordinator.shared.activateContentPlayback(.audible)
             PlaybackCoordinator.shared.willStartPlaying(audio: self)
             player.rate = Float(speed.rawValue)
             player.play()
@@ -365,9 +393,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func resumeFromInterruption() {
         guard let player, !isPlaying else { return }
         if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
-        MediaSessionCoordinator.shared.activatePlaybackSync(
-            options: sessionProfile.categoryOptions
-        )
+        MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         player.rate = Float(speed.rawValue)
         player.play()
@@ -452,7 +478,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         listenStartTime = nil
         onPlaybackFinished?()
         if let url = finishedUrl {
-            Self.triggerAutoplayNext(afterUrl: url)
+            relayEndToAutoplayRegistry(finishedUrl: url)
         }
         currentUrl = nil
     }
@@ -609,18 +635,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     // call them directly. `MainActor.assumeIsolated` from a non-main thread is
     // a precondition crash (see lesson feedback_swift6_concurrency_pitfalls:
     // @MainActor deinit pitfall) and the last release can happen off-main.
-    deinit {
-        cleanupHandle.timer?.invalidate()
-        cleanupHandle.loadTask?.cancel()
-        if let observer = cleanupHandle.lifecycleObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-        // Dealloc avec session encore tenue (chemin sans `stop()` — vue
-        // détruite sans onDisappear) : sans cette libération le refcount du
-        // MediaSessionCoordinator ne retombait jamais à 0 → session audio
-        // active (ducking) pour tout le process et release() sous-compté.
-        if cleanupHandle.sessionRequested {
-            Task { await MediaSessionCoordinator.shared.release() }
+    nonisolated deinit {
+        teardown.releaseNow { resources in
+            resources.timer?.invalidate()
+            resources.loadTask?.cancel()
+            if let observer = resources.lifecycleObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            // Dealloc avec session encore tenue (chemin sans `stop()` — vue
+            // détruite sans onDisappear) : sans cette libération le refcount du
+            // MediaSessionCoordinator ne retombait jamais à 0 → session audio
+            // active (ducking) pour tout le process et release() sous-compté.
+            if resources.sessionRequested {
+                Task { await MediaSessionCoordinator.shared.release() }
+            }
         }
     }
 
@@ -646,6 +674,18 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         autoplayRegistry.removeAll { $0.id == id }
     }
 
+    /// Faux pour un moteur dont le PROPRIÉTAIRE enchaîne lui-même les pistes
+    /// (le coordinateur d'une conversation, qui suit sa file). Le registre
+    /// statique ne connaît que l'ordre d'apparition des bulles : relayer la fin
+    /// d'une piste du coordinateur y faisait repartir la bulle apparue AVANT
+    /// elle, en remontant le fil, sans regarder l'auteur (#10730).
+    public var relaysEndToAutoplayRegistry = true
+
+    func relayEndToAutoplayRegistry(finishedUrl: String) {
+        guard relaysEndToAutoplayRegistry else { return }
+        Self.triggerAutoplayNext(afterUrl: finishedUrl)
+    }
+
     private static func triggerAutoplayNext(afterUrl: String) {
         guard let idx = autoplayRegistry.firstIndex(where: { $0.url == afterUrl }) else { return }
         let next = idx - 1
@@ -654,10 +694,23 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 }
 
+// MARK: - Enregistrement (#11042)
+extension AudioPlaybackManager {
+    /// Le lecteur à baisser pendant un enregistrement : celui qui joue.
+    var audibleVolumeTarget: (any PlaybackVolumeTarget)? {
+        isPlaying ? player : nil
+    }
+}
+
 // MARK: - AVAudioPlayerDelegate
 extension AudioPlaybackManager: AVAudioPlayerDelegate {
     nonisolated public func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        // La fin d'un lecteur REMPLACÉ entre-temps (vocal B lancé avant ce saut
+        // sur le MainActor) ne termine pas B, n'avance pas la file et ne grave
+        // pas B « écouté en entier ».
+        let finished = ObjectIdentifier(player)
         Task { @MainActor in
+            guard let current = self.player, ObjectIdentifier(current) == finished else { return }
             self.handlePlaybackFinished()
         }
     }

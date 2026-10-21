@@ -43,6 +43,51 @@ public struct LoginResponseData: Decodable, Sendable {
     /// appareil, pour `POST /auth/verification/status`.
     public let pendingSessionToken: String?
 
+    /// #10518 — servi par `POST /auth/verify-email` et
+    /// `POST /auth/magic-link/validate`, avec la session comme avec le défi de
+    /// second facteur : les secondes qui restent, à l'instant de la réponse,
+    /// pour adopter ce que la preuve a rendu. Lu par `ProvenAdoptionWindow`.
+    /// Une valeur qui n'est pas un entier se lit ABSENTE : elle ne fait jamais
+    /// échouer le décodage d'une réponse dont la preuve est déjà consommée.
+    public let adoptWithinSeconds: Int?
+
+    /// #10872 — le lien n'a pas été demandé par cet appareil : AUCUNE session
+    /// n'est servie, seulement l'identité du compte qu'il ouvrirait. Lus en
+    /// tolérance : un champ illisible se lit absent.
+    public let requiresConfirmation: Bool?
+    public let account: LinkSignInAccount?
+    /// #10883 — ce que fera le oui (`intent` du fil) et l'adresse en jeu,
+    /// masquée par la passerelle. Lus en tolérance, comme les deux ci-dessus.
+    public let linkIntent: LinkSignInIntent
+    public let maskedEmail: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case user, token, sessionToken, expiresIn, requires2FA, twoFactorToken
+        case phoneOwnershipConflict, status, accountCreated, email, pendingSessionToken
+        case adoptWithinSeconds, requiresConfirmation, account
+        case linkIntent = "intent", maskedEmail
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        user = try container.decodeIfPresent(MeeshyUser.self, forKey: .user)
+        token = try container.decodeIfPresent(String.self, forKey: .token)
+        sessionToken = try container.decodeIfPresent(String.self, forKey: .sessionToken)
+        expiresIn = try container.decodeIfPresent(Int.self, forKey: .expiresIn)
+        requires2FA = try container.decodeIfPresent(Bool.self, forKey: .requires2FA)
+        twoFactorToken = try container.decodeIfPresent(String.self, forKey: .twoFactorToken)
+        phoneOwnershipConflict = try container.decodeIfPresent(Bool.self, forKey: .phoneOwnershipConflict)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        accountCreated = try container.decodeIfPresent(Bool.self, forKey: .accountCreated)
+        email = try container.decodeIfPresent(String.self, forKey: .email)
+        pendingSessionToken = try container.decodeIfPresent(String.self, forKey: .pendingSessionToken)
+        adoptWithinSeconds = try? container.decodeIfPresent(Int.self, forKey: .adoptWithinSeconds)
+        requiresConfirmation = (try? container.decodeIfPresent(Bool.self, forKey: .requiresConfirmation)) ?? nil
+        account = (try? container.decodeIfPresent(LinkSignInAccount.self, forKey: .account)) ?? nil
+        linkIntent = LinkSignInIntent(served: (try? container.decodeIfPresent(String.self, forKey: .linkIntent)) ?? nil)
+        maskedEmail = (try? container.decodeIfPresent(String.self, forKey: .maskedEmail)) ?? nil
+    }
+
     public init(
         user: MeeshyUser?,
         token: String?,
@@ -54,7 +99,12 @@ public struct LoginResponseData: Decodable, Sendable {
         status: String? = nil,
         accountCreated: Bool? = nil,
         email: String? = nil,
-        pendingSessionToken: String? = nil
+        pendingSessionToken: String? = nil,
+        adoptWithinSeconds: Int? = nil,
+        requiresConfirmation: Bool? = nil,
+        account: LinkSignInAccount? = nil,
+        linkIntent: LinkSignInIntent = .signIn,
+        maskedEmail: String? = nil
     ) {
         self.user = user
         self.token = token
@@ -67,6 +117,11 @@ public struct LoginResponseData: Decodable, Sendable {
         self.accountCreated = accountCreated
         self.email = email
         self.pendingSessionToken = pendingSessionToken
+        self.adoptWithinSeconds = adoptWithinSeconds
+        self.requiresConfirmation = requiresConfirmation
+        self.account = account
+        self.linkIntent = linkIntent
+        self.maskedEmail = maskedEmail
     }
 }
 
@@ -247,10 +302,13 @@ public enum SessionOrigin: String, Sendable, Equatable {
 public struct MagicLinkRequest: Encodable {
     public let email: String
     public let deviceFingerprint: String?
+    /// #10872 — l'empreinte du secret que cet appareil garde ; omise si `nil`.
+    public let linkDeviceHash: String?
 
-    public init(email: String, deviceFingerprint: String? = nil) {
+    public init(email: String, deviceFingerprint: String? = nil, linkDeviceHash: String? = nil) {
         self.email = email
         self.deviceFingerprint = deviceFingerprint
+        self.linkDeviceHash = linkDeviceHash
     }
 }
 
@@ -263,9 +321,15 @@ public struct MagicLinkResponse: Decodable {
 
 public struct MagicLinkValidateRequest: Encodable {
     public let token: String
+    /// #10872 — le secret gardé à la demande, et le « oui » explicite de
+    /// l'utilisateur ; tous deux omis du corps quand `nil`.
+    public let linkDeviceSecret: String?
+    public let confirm: Bool?
 
-    public init(token: String) {
+    public init(token: String, linkDeviceSecret: String? = nil, confirm: Bool? = nil) {
         self.token = token
+        self.linkDeviceSecret = linkDeviceSecret
+        self.confirm = confirm
     }
 }
 
@@ -282,10 +346,17 @@ public struct ForgotPasswordRequest: Encodable {
 public struct ResetPasswordRequest: Encodable {
     public let token: String
     public let newPassword: String
+    /// Exigé par la passerelle (`resetPasswordSchema`) — sans lui, l'envoi
+    /// partait en 400 `Invalid request data`.
+    public let confirmPassword: String
+    /// Le code 2FA d'un compte protégé (#10867) — omis du corps quand `nil`.
+    public let twoFactorCode: String?
 
-    public init(token: String, newPassword: String) {
+    public init(token: String, newPassword: String, confirmPassword: String? = nil, twoFactorCode: String? = nil) {
         self.token = token
         self.newPassword = newPassword
+        self.confirmPassword = confirmPassword ?? newPassword
+        self.twoFactorCode = twoFactorCode
     }
 }
 
@@ -484,6 +555,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     /// seulement (connexion, `/auth/me`) ; `nil` sur une passerelle antérieure.
     public let activation: UserActivation?
 
+    /// Le contour d'avatar et la bannière de design équipés (#10632), visibles des
+    /// autres. `nil` = un ancien serveur ne le sert pas : le profil se rend comme avant.
+    public let profileDecor: ServedProfileDecor?
+
     public init(
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
@@ -508,7 +583,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         voiceSampleUrl: String? = nil,
         voiceSampleDurationMs: Int? = nil,
         voiceQuality: Double? = nil,
-        activation: UserActivation? = nil
+        activation: UserActivation? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
         self.id = id
         self.username = username
@@ -548,6 +624,40 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.voiceSampleDurationMs = voiceSampleDurationMs
         self.voiceQuality = voiceQuality
         self.activation = activation
+        self.profileDecor = profileDecor
+    }
+
+    /// Le même compte avec un autre décor de profil (équipement optimiste, événement socket).
+    public func withProfileDecor(_ decor: ServedProfileDecor?) -> MeeshyUser {
+        MeeshyUser(
+            id: id, username: username, email: email,
+            firstName: firstName, lastName: lastName,
+            displayName: displayName, bio: bio,
+            avatar: avatar, avatarThumbHash: avatarThumbHash,
+            banner: banner, bannerThumbHash: bannerThumbHash,
+            role: role,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            createdAt: createdAt, updatedAt: updatedAt,
+            blockedUserIds: blockedUserIds,
+            isActive: isActive, deactivatedAt: deactivatedAt,
+            isAnonymous: isAnonymous, isMeeshyer: isMeeshyer,
+            phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            deviceLocale: deviceLocale,
+            timezone: timezone,
+            registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic,
+            voicePublic: voicePublic,
+            voiceSampleUrl: voiceSampleUrl,
+            voiceSampleDurationMs: voiceSampleDurationMs,
+            voiceQuality: voiceQuality,
+            activation: activation,
+            profileDecor: decor
+        )
     }
 
     /// Returns a new MeeshyUser with the specified profile fields replaced.
@@ -592,7 +702,8 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 

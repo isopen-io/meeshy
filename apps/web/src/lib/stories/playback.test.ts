@@ -7,7 +7,9 @@ import {
   groupForPlayback,
   hasRenderableStoryContent,
   isStoryExpired,
+  nextGroupPosition,
   nextPosition,
+  previousGroupPosition,
   previousPosition,
   resolvePlayablePosition,
   resolvePosition,
@@ -322,6 +324,51 @@ describe('nextPosition / previousPosition', () => {
 
   test('en tête du premier groupe, ne fait RIEN', () => {
     expect(previousPosition(groups, { groupIndex: idxA, storyIndex: 0 })).toBeNull();
+  });
+});
+
+/**
+ * LE GLISSÉ CHANGE D'AUTEUR (#11198) — parité iOS : le cube passe au groupe
+ * voisin, qu'on soit au début ou au milieu du groupe courant. En AVANT il entre
+ * à sa première story non vue (`landOnNextGroup`), en ARRIÈRE à sa dernière
+ * story (`landOnPreviousGroup`).
+ */
+describe('nextGroupPosition / previousGroupPosition — le glissé change d’auteur', () => {
+  const groups = groupForPlayback(
+    [
+      story({ id: 'a1', authorId: 'a', createdAt: '2026-09-13T09:00:00.000Z' }),
+      story({ id: 'a2', authorId: 'a', createdAt: '2026-09-13T10:00:00.000Z' }),
+      story({ id: 'b1', authorId: 'b', createdAt: '2026-09-13T07:00:00.000Z', isViewedByMe: true }),
+      story({ id: 'b2', authorId: 'b', createdAt: '2026-09-13T08:00:00.000Z' }),
+      story({ id: 'c1', authorId: 'c', createdAt: '2026-09-13T05:00:00.000Z', isViewedByMe: true }),
+      story({ id: 'c2', authorId: 'c', createdAt: '2026-09-13T06:00:00.000Z', isViewedByMe: true }),
+    ],
+    { viewerId: undefined },
+  );
+  const at = (authorId: string) => groups.findIndex((g) => g.authorId === authorId);
+
+  test('depuis le MILIEU d’un groupe, l’auteur suivant — à sa première story non vue', () => {
+    expect(groups.map((g) => g.authorId)).toEqual(['a', 'b', 'c']);
+    expect(nextGroupPosition(groups, { groupIndex: at('a'), storyIndex: 0 }, NOW)).toEqual({ groupIndex: at('b'), storyIndex: 1 });
+  });
+
+  test('l’auteur précédent s’ouvre à sa DERNIÈRE story, comme `landOnPreviousGroup` d’iOS', () => {
+    expect(previousGroupPosition(groups, { groupIndex: at('b'), storyIndex: 1 })).toEqual({ groupIndex: at('a'), storyIndex: 1 });
+  });
+
+  test('un auteur entièrement vu s’ouvre à sa première story non expirée', () => {
+    expect(nextGroupPosition(groups, { groupIndex: at('b'), storyIndex: 0 }, NOW)).toEqual({ groupIndex: at('c'), storyIndex: 0 });
+  });
+
+  test('aux bords de la liste, aucun voisin — le cube résiste', () => {
+    expect(nextGroupPosition(groups, { groupIndex: at('c'), storyIndex: 1 }, NOW)).toBeNull();
+    expect(previousGroupPosition(groups, { groupIndex: at('a'), storyIndex: 1 })).toBeNull();
+  });
+
+  test('la portée « un seul groupe » ne laisse aucun voisin', () => {
+    const mine = scopeToSingleGroup(groups, 'b2');
+    expect(nextGroupPosition(mine, { groupIndex: 0, storyIndex: 1 }, NOW)).toBeNull();
+    expect(previousGroupPosition(mine, { groupIndex: 0, storyIndex: 1 })).toBeNull();
   });
 });
 

@@ -57,6 +57,13 @@
  *      le conteneur qui défile, et ce conteneur verrouille l'axe horizontal
  *      sans rien cacher (`scrollWidth` égale `clientWidth`).
  *
+ * et, dans les SEPT langues, à 320, 375 et 390 px (#10124) :
+ *
+ *   6. sur chaque landing, la porte de l'en-tête (« Se connecter » — « Entrer
+ *      sans compte » a quitté la page, #10784) tient sur UNE ligne, sans rien
+ *      rogner. (La carte World Wide de `/login`, qu'on mesurait aussi, est
+ *      retirée — #10784.)
+ *
  * La démonstration ordinaire est confortable : la mesure de 1. et 2. était verte
  * sur elle pendant que « Ligue » s'écrasait lettre à lettre à côté de
  * « Améthyste · rang 30 ».
@@ -104,6 +111,8 @@ const EXEMPLES = {
   invitation: 'demande-inconnue',
   report: 'signalement-inconnu',
   concept: 'level',
+  semaine: '2026-11-02',
+  saison: '1',
 };
 
 const concretise = (pattern) =>
@@ -123,7 +132,13 @@ const SEULEMENT_PROGRESSION = process.env.PHONE_FRAME_ONLY === 'progression';
 const ADRESSES = SEULEMENT_PROGRESSION ? [] : v31Routes().map(({ url }) => concretise(url));
 const CONNEXION = SEULEMENT_PROGRESSION ? [] : ['/login', '/login?methode=password'];
 
-const DIST = new URL('../dist/', import.meta.url).pathname;
+/** `DIST=<dossier>` mesure une construction de recette, jamais `dist/` par défaut écrasé. */
+const DIST = process.env.DIST ?? new URL('../dist/', import.meta.url).pathname;
+
+/** 6. Les sept landings prérendues (`landingFiles`), dans les sept langues. */
+const LANGUES = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'];
+const LANDING_DE = (langue) => (langue === 'fr' ? '/landing' : `/${langue}`);
+const TEXTES_ENTIERS = SEULEMENT_PROGRESSION ? [] : LANGUES;
 const served = await startDistServer(DIST, { serviceWorker: false });
 const BASE = served.base;
 
@@ -132,7 +147,20 @@ const failures = [];
 const constate = (vrai, quoi) => {
   if (!vrai) failures.push(quoi);
 };
-const bilan = { mesures: 0, champs: 0, bandes: 0, progression: 0 };
+const bilan = { mesures: 0, champs: 0, bandes: 0, progression: 0, textes: 0 };
+
+/** Le relevé de 6. : pour chaque sélecteur, ses lignes de texte et s'il rogne. */
+const releveTextes = (selecteurs) =>
+  selecteurs.map((selecteur) => {
+    const el = document.querySelector(selecteur);
+    if (el === null) return { selecteur, absent: true };
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const lignes = new Set([...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) => Math.round(r.top))).size;
+    return { selecteur, absent: false, lignes, rogne: el.scrollWidth > el.clientWidth + 1, texte: (el.textContent ?? '').trim() };
+  });
+
+const PORTES_LANDING = ['.ld-bar > a[href="/login"]'];
 
 /** Le relevé, dans la page — voir le doc-comment de tête. */
 const releve = () => {
@@ -309,6 +337,37 @@ try {
     }
   }
 
+  /* 6. LE TEXTE ENTIER, DANS LES SEPT LANGUES — voir le doc-comment de tête. */
+  for (const viewport of TEXTES_ENTIERS.length === 0 ? [] : TELEPHONES) {
+    for (const langue of TEXTES_ENTIERS) {
+      const context = await ouvre(viewport);
+      await context.addInitScript(([clef, valeur]) => localStorage.setItem(clef, valeur), [LANGUAGE_KEY, langue]);
+      const page = await context.newPage();
+      for (const [adresse, selecteurs, uneLigne] of [
+        [LANDING_DE(langue), PORTES_LANDING, true],
+      ]) {
+        const tag = `${adresse} @ ${viewport.width} px, ${langue}`;
+        await page.goto(`${BASE}${adresse}`, { waitUntil: 'load' });
+        await page.waitForLoadState('networkidle').catch(() => undefined);
+        const m = await waitForValueSettled(page, releveTextes, selecteurs);
+        if (m === undefined) {
+          constate(false, `${tag} : le relevé du texte ne s'est jamais stabilisé`);
+          continue;
+        }
+        for (const t of m) {
+          if (t.absent) {
+            constate(false, `${tag} : ${t.selecteur} absent — le témoin ne mesure rien`);
+            continue;
+          }
+          bilan.textes += 1;
+          constate(!t.rogne, `${tag} : « ${t.texte} » est rogné (${t.selecteur})`);
+          if (uneLigne) constate(t.lignes === 1, `${tag} : « ${t.texte} » passe sur ${t.lignes} lignes (${t.selecteur})`);
+        }
+      }
+      await context.close();
+    }
+  }
+
   const context = await ouvre(IPHONE_SE);
   for (const adresse of CONNEXION) {
     const tag = `${adresse} @ ${IPHONE_SE.width}×${IPHONE_SE.height}`;
@@ -333,6 +392,7 @@ if (!SEULEMENT_PROGRESSION) {
   constate(bilan.bandes > 0, 'aucune bande horizontale rencontrée — l’exemption des bandes ne se prouve sur rien');
 }
 constate(bilan.progression > 0, 'aucune page de Progression mesurée aux valeurs longues');
+if (!SEULEMENT_PROGRESSION) constate(bilan.textes > 0, 'aucun texte de la landing mesuré — la mesure 6 ne mesure rien');
 
 if (failures.length > 0) {
   console.error(`\ncheck-phone-frame : ${failures.length} échec(s)`);
@@ -342,5 +402,6 @@ if (failures.length > 0) {
 console.log(
   `\ncheck-phone-frame : vert — ${ADRESSES.length} adresses × ${TELEPHONES.length} téléphones (${bilan.mesures} relevés, ${bilan.champs} champs, ${bilan.bandes} bandes) : ` +
     `aucun cadre ne défile de côté, aucun champ sous ${CHAMP_MIN_PX} px, la connexion tient dans ${IPHONE_SE.width}×${IPHONE_SE.height} ; ` +
-    `Progression aux valeurs longues : ${bilan.progression} relevés (${PROGRESSION_PAGES.length} pages), rien ne glisse ni ne dépasse.\n`,
+    `Progression aux valeurs longues : ${bilan.progression} relevés (${PROGRESSION_PAGES.length} pages), rien ne glisse ni ne dépasse ; ` +
+    `${bilan.textes} textes de la landing lus en entier dans les ${LANGUES.length} langues.\n`,
 );

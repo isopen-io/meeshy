@@ -427,7 +427,8 @@ describe('AdminPostPanel — « Retirer la publication »', () => {
     await click(host.querySelector('[data-admin-action="remove"]'));
     expect(host.querySelector('dialog h2')?.textContent).toBe('Retirer cette publication ?');
     expect(text(host, '[data-admin-confirm]')).toContain('ne permet pas de la rétablir');
-    expect(confirmer(host)?.disabled).toBe(true);
+    /* L’ADMIN trouve le motif proposé déjà écrit (#10562) : la confirmation est offerte d’emblée. */
+    expect(confirmer(host)?.disabled).toBe(false);
     mounter.type(host, '[data-admin-motive]', 'ab');
     expect(confirmer(host)?.disabled).toBe(true);
     mounter.type(host, '[data-admin-motive]', 'abc');

@@ -21,7 +21,7 @@ public protocol ContactResolveServiceProviding: Sendable {
     func updateRelation(userId: String, to relation: ContactRelation)
 }
 
-public final class ContactResolveService: ContactResolveServiceProviding, @unchecked Sendable {
+public final class ContactResolveService: ContactResolveServiceProviding, Sendable {
     public static let shared = ContactResolveService()
 
     private struct Entry {
@@ -29,16 +29,41 @@ public final class ContactResolveService: ContactResolveServiceProviding, @unche
         var storedAt: Date
     }
 
+    private struct Ledger {
+        var entries: [ContactResolveRequest: Entry] = [:]
+        var failures: [ContactResolveRequest: Date] = [:]
+        var inFlight: [ContactResolveRequest: Task<[PublicContactAccount]?, Never>] = [:]
+
+        mutating func store(_ accounts: [PublicContactAccount], for request: ContactResolveRequest, at date: Date, capacity: Int) {
+            entries[request] = Entry(accounts: accounts, storedAt: date)
+            guard entries.count > capacity,
+                  let oldest = entries.min(by: { $0.value.storedAt < $1.value.storedAt })?.key else { return }
+            entries[oldest] = nil
+        }
+
+        mutating func rewriteRelation(userId: String, to relation: ContactRelation) {
+            for (key, entry) in entries where entry.accounts.contains(where: { $0.userId == userId }) {
+                entries[key]?.accounts = entry.accounts.map { account in
+                    guard account.userId == userId else { return account }
+                    var updated = account
+                    updated.relation = relation
+                    return updated
+                }
+            }
+        }
+    }
+
+    private enum Plan {
+        case served([PublicContactAccount])
+        case await(Task<[PublicContactAccount]?, Never>)
+    }
+
     private let api: APIClientProviding
     private let freshness: TimeInterval
     private let failureBackoff: TimeInterval
     private let capacity: Int
     private let now: @Sendable () -> Date
-
-    private let lock = NSLock()
-    private var entries: [ContactResolveRequest: Entry] = [:]
-    private var failures: [ContactResolveRequest: Date] = [:]
-    private var inFlight: [ContactResolveRequest: Task<[PublicContactAccount]?, Never>] = [:]
+    private let ledger = Locked(Ledger())
 
     init(
         api: APIClientProviding = APIClient.shared,
@@ -54,8 +79,19 @@ public final class ContactResolveService: ContactResolveServiceProviding, @unche
         self.now = now
     }
 
+    /// Déconnexion / changement de compte : les relations résolues (« vous »,
+    /// « ami », « demande envoyée ») sont celles du compte sortant.
+    public func purge() {
+        let pending = ledger.mutate { state -> [Task<[PublicContactAccount]?, Never>] in
+            let running = Array(state.inFlight.values)
+            state = Ledger()
+            return running
+        }
+        pending.forEach { $0.cancel() }
+    }
+
     public func cachedAccounts(for request: ContactResolveRequest) -> [PublicContactAccount]? {
-        lock.withLock { entries[request]?.accounts }
+        ledger.read { $0.entries[request]?.accounts }
     }
 
     public func resolve(_ request: ContactResolveRequest) async -> [PublicContactAccount] {
@@ -69,61 +105,43 @@ public final class ContactResolveService: ContactResolveServiceProviding, @unche
         }
     }
 
-    private enum Plan {
-        case served([PublicContactAccount])
-        case await(Task<[PublicContactAccount]?, Never>)
-    }
-
     private func plan(for request: ContactResolveRequest) -> Plan {
-        lock.withLock {
-            let cached = entries[request]
+        let now = self.now
+        let freshness = self.freshness
+        let failureBackoff = self.failureBackoff
+        let api = self.api
+        return ledger.mutate { state -> Plan in
+            let cached = state.entries[request]
             if let cached, now().timeIntervalSince(cached.storedAt) < freshness {
                 return .served(cached.accounts)
             }
-            if let failedAt = failures[request], now().timeIntervalSince(failedAt) < failureBackoff {
+            if let failedAt = state.failures[request], now().timeIntervalSince(failedAt) < failureBackoff {
                 return .served(cached?.accounts ?? [])
             }
-            if let running = inFlight[request] { return .await(running) }
-            let api = self.api
-            let task = Task { try? await Self.fetch(request, api: api) }
-            inFlight[request] = task
+            if let running = state.inFlight[request] { return .await(running) }
+            let task = Task { try? await ContactResolveService.fetch(request, api: api) }
+            state.inFlight[request] = task
             return .await(task)
         }
     }
 
     private func settle(_ request: ContactResolveRequest, with fetched: [PublicContactAccount]?) -> [PublicContactAccount] {
-        lock.withLock {
-            inFlight[request] = nil
+        let now = self.now
+        let capacity = self.capacity
+        return ledger.mutate { state -> [PublicContactAccount] in
+            state.inFlight[request] = nil
             guard let fetched else {
-                failures[request] = now()
-                return entries[request]?.accounts ?? []
+                state.failures[request] = now()
+                return state.entries[request]?.accounts ?? []
             }
-            failures[request] = nil
-            store(fetched, for: request)
+            state.failures[request] = nil
+            state.store(fetched, for: request, at: now(), capacity: capacity)
             return fetched
         }
     }
 
     public func updateRelation(userId: String, to relation: ContactRelation) {
-        lock.withLock { rewriteRelation(userId: userId, to: relation) }
-    }
-
-    private func rewriteRelation(userId: String, to relation: ContactRelation) {
-        for (key, entry) in entries where entry.accounts.contains(where: { $0.userId == userId }) {
-            entries[key]?.accounts = entry.accounts.map { account in
-                guard account.userId == userId else { return account }
-                var updated = account
-                updated.relation = relation
-                return updated
-            }
-        }
-    }
-
-    private func store(_ accounts: [PublicContactAccount], for request: ContactResolveRequest) {
-        entries[request] = Entry(accounts: accounts, storedAt: now())
-        guard entries.count > capacity,
-              let oldest = entries.min(by: { $0.value.storedAt < $1.value.storedAt })?.key else { return }
-        entries[oldest] = nil
+        ledger.mutate { $0.rewriteRelation(userId: userId, to: relation) }
     }
 
     private static func fetch(_ request: ContactResolveRequest, api: APIClientProviding) async throws -> [PublicContactAccount] {

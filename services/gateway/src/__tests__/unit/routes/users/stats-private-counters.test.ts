@@ -62,7 +62,7 @@ function buildApp() {
       groupBy: jest.fn<any>(async () => []),
       aggregateRaw: jest.fn<any>(async () => [{ n: 0 }]),
     },
-    participant: { count: jest.fn<any>(async () => 12) },
+    participant: { findMany: jest.fn<any>(async () => [{ id: "p1" }]), count: jest.fn<any>(async () => 12) },
     friendRequest: { count: jest.fn<any>(async () => 3) },
     post: { count: jest.fn<any>(async () => 7) },
     // `$runCommandRaw` n'est plus appelé : la route délègue à

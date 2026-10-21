@@ -1,6 +1,8 @@
 import { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { mayManageTrackingLink } from './link-ownership';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
+import { servedTrackingLinkTarget } from '../../services/tracking-link-target';
 import { clickGeo } from './click-geo';
 import { logError } from '../../utils/logger';
 import {
@@ -113,6 +115,14 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return sendError(reply, 410, 'LINK_EXPIRED', { message: 'Ce lien a expiré' });
       }
 
+      // Un lien déjà créé vers un lien à jeton d'e-mail est un lien MORT, et
+      // la redirection envoie la forme JUGÉE — la sérialisation WHATWG —,
+      // jamais l'adresse brute qu'un autre analyseur lirait autrement (#10871).
+      const served = servedTrackingLinkTarget(trackingLink.originalUrl);
+      if (served === null) {
+        return sendError(reply, 410, 'LINK_INACTIVE', { message: 'Ce lien n\'est plus actif' });
+      }
+
       const ipAddress = (request.headers['x-forwarded-for'] as string)?.split(',')[0].trim() ||
                         (request.headers['x-real-ip'] as string) ||
                         request.ip;
@@ -148,7 +158,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         visitor: linkVisitorFromRequest(request)
       });
 
-      return reply.redirect(trackingLink.originalUrl);
+      return reply.redirect(served);
 
     } catch (error) {
       logError(fastify.log, 'Redirect tracking link error:', error);
@@ -307,10 +317,11 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         visitor: linkVisitorFromRequest(request),
       });
 
+      const served = servedTrackingLinkTarget(result.trackingLink.originalUrl);
       return sendSuccess(reply, {
-        originalUrl: result.trackingLink.originalUrl,
+        originalUrl: served,
         clickId: result.click.id,
-        trackingLink: result.trackingLink
+        trackingLink: { ...result.trackingLink, originalUrl: served }
       });
 
     } catch (error) {
@@ -477,7 +488,7 @@ export async function registerTrackingRoutes(fastify: FastifyInstance) {
         return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
-      if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
+      if (!mayManageTrackingLink(trackingLink, { id: userId, role: request.authContext.registeredUser!.role })) {
         return sendForbidden(reply, 'Accès non autorisé');
       }
 

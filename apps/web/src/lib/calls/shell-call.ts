@@ -1,4 +1,3 @@
-import type { DeliveryReceiptCredential } from '@/lib/notifications/delivery-receipt-credential';
 import { NOTIFICATION_CLICKED_MESSAGE } from '@/lib/notifications/tap-navigation';
 
 import { listenCallAnswerIntents } from './call-answer-intent';
@@ -19,7 +18,7 @@ import type { ActiveCall, CallPhase, CallStoreApi } from './call-store';
  *   l'appel quand il sonne dans l'app — la MÊME loi que l'intention du service
  *   worker web (`call-answer-intent.ts`) ;
  * - un appel qui quitte la sonnerie dans l'app retire la notification native ;
- * - le credential que « Refuser » utilise app tuée suit la session ;
+ * - le credential que « Refuser » utilise app tuée est posé par la coque elle-même, appels offerts ou non (`notifications/shell-credential.ts`, #10662) ;
  * - l'activité qui flotte en image dans l'image (#8144) le dit à la page, qui
  *   réduit son rendu à l'image (`pictureInPicture`) ; ses boutons micro et
  *   raccrocher reviennent à la page (`pictureInPictureAction`).
@@ -36,6 +35,8 @@ export type ShellCallSnapshot = {
   readonly video: boolean;
   readonly phase: CallPhase['kind'] | null;
   readonly micMuted: boolean;
+  /** Une vidéo est à l'écran (`pipSource`) : la mienne, celle d'un pair ou son écran partagé — l'appel flotte comme sur le web (#11346). */
+  readonly floats: boolean;
   readonly aspect: PipAspect | null;
 };
 
@@ -45,20 +46,22 @@ export type ShellCallCommand =
   | { readonly method: 'haptic'; readonly options: { readonly kind: 'connected' | 'reconnecting' | 'ended' } }
   | {
       readonly method: 'setPictureInPictureControls';
-      readonly options: { readonly micMuted: boolean; readonly aspectWidth?: number; readonly aspectHeight?: number };
+      readonly options: { readonly micMuted: boolean; readonly floats: boolean; readonly aspectWidth?: number; readonly aspectHeight?: number };
     };
 
 const LIVE_PHASES: ReadonlySet<CallPhase['kind']> = new Set(['outgoing', 'connecting', 'connected', 'reconnecting']);
 
 export function shellCallSnapshot(call: ActiveCall | null): ShellCallSnapshot {
-  if (call === null) return { active: false, video: false, phase: null, micMuted: false, aspect: null };
+  if (call === null) return { active: false, video: false, phase: null, micMuted: false, floats: false, aspect: null };
   const active = LIVE_PHASES.has(call.phase.kind);
+  const source = active ? pipSource(call) : null;
   return {
     active,
     video: call.media === 'video',
     phase: call.phase.kind,
     micMuted: call.micMuted,
-    aspect: active && call.media === 'video' ? pipAspect(pipSource(call)) : null,
+    floats: source !== null,
+    aspect: pipAspect(source),
   };
 }
 
@@ -84,10 +87,11 @@ const sameAspect = (a: PipAspect | null, b: PipAspect | null): boolean => a?.wid
 const pipControlsFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): ShellCallCommand | null => {
   if (!next.active) return null;
   const knownMuted = previous.active && previous.micMuted;
+  const knownFloats = previous.active && previous.floats;
   const knownAspect = previous.active ? previous.aspect : null;
-  if (next.micMuted === knownMuted && sameAspect(next.aspect, knownAspect)) return null;
+  if (next.micMuted === knownMuted && next.floats === knownFloats && sameAspect(next.aspect, knownAspect)) return null;
   const aspect = next.aspect === null ? {} : { aspectWidth: next.aspect.width, aspectHeight: next.aspect.height };
-  return { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted, ...aspect } };
+  return { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted, floats: next.floats, ...aspect } };
 };
 
 /** Les appels au plugin qu'impose un changement du magasin, dans l'ordre. */
@@ -109,7 +113,6 @@ export type ShellCallEnvironment = {
   readonly hangup: () => void;
   readonly store: Pick<CallStoreApi, 'getState' | 'subscribe'>;
   readonly accept: () => void;
-  readonly watchCredential: (write: (value: DeliveryReceiptCredential) => void) => () => void;
   readonly now: () => number;
 };
 
@@ -117,15 +120,6 @@ const callIdOf = (data: unknown): string | null => {
   const callId = (data as { readonly callId?: unknown } | null)?.callId;
   return typeof callId === 'string' && callId.trim() !== '' ? callId : null;
 };
-
-const credentialOptions = ({ apiBase, credential }: DeliveryReceiptCredential): ShellCredentialOptions | null => {
-  if (credential === null) return null;
-  return credential.kind === 'registered'
-    ? { apiBase, kind: 'registered', token: credential.token }
-    : { apiBase, kind: 'anonymous', token: credential.sessionToken };
-};
-
-type ShellCredentialOptions = { readonly apiBase: string; readonly kind: 'registered' | 'anonymous'; readonly token: string };
 
 export function bindShellCall(env: ShellCallEnvironment): () => void {
   let attached = true;
@@ -170,17 +164,10 @@ export function bindShellCall(env: ShellCallEnvironment): () => void {
     if (action === 'hangup') env.hangup();
   });
 
-  const stopCredential = env.watchCredential((value) => {
-    const options = credentialOptions(value);
-    if (options === null) send('clearCredential', {});
-    else send('setCredential', options);
-  });
-
   return () => {
     attached = false;
     env.pictureInPicture(false);
     stopCommands();
     stopIntents();
-    stopCredential();
   };
 }

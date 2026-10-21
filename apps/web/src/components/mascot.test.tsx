@@ -7,8 +7,9 @@ import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progr
 import type { MascotMood } from '@meeshy/shared/utils/mascot';
 
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
+import { formatGameNumber } from '@/lib/i18n-game-catalog';
 import { mascotSay } from '@/lib/view/mascot-copy';
-import { ACHIEVEMENT_COPY } from '@/lib/view/progression';
+import { achievementCopy } from '@/lib/view/progression';
 import { ProgressionBody } from '@/routes/progression';
 
 import { Mascot, MascotCoach } from './mascot';
@@ -20,32 +21,32 @@ import { Mascot, MascotCoach } from './mascot';
  */
 
 describe('mascotSay — la phrase de chaque ligne', () => {
-  test('compte les points avant la prochaine Meesh, accordés', () => {
-    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('Encore 821 points et je frappe ta prochaine Meesh.');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('Encore 1 point et je frappe ta prochaine Meesh.');
+  test('compte les étincelles avant la prochaine Meesh, accordés', () => {
+    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('821 étincelles de plus, et je frappe ta prochaine Meesh.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('1 étincelle de plus, et je frappe ta prochaine Meesh.');
   });
 
   test('invite à frapper en disant le prix', () => {
-    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Tes points sont prêts : on frappe une Meesh pour 1221 points ?');
+    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe(`Ta lumière est prête : on fige ${formatGameNumber('fr', 1221)} étincelles dans une Meesh ?`);
   });
 
   test('célèbre une frappe avec le nouveau solde', () => {
-    expect(mascotSay({ kind: 'meesh-minted', balance: 1 })).toBe('Tchak ! Une Meesh toute neuve. Tu en as 1.');
-    expect(mascotSay({ kind: 'meesh-minted', balance: 3 })).toBe('Tchak ! Une Meesh toute neuve. Tu en as 3.');
+    expect(mascotSay({ kind: 'meesh-minted', balance: 1 })).toBe('Tchak ! Une Meesh toute neuve rejoint ton héritage. Tu en as 1.');
+    expect(mascotSay({ kind: 'meesh-minted', balance: 3 })).toBe('Tchak ! Une Meesh toute neuve rejoint ton héritage. Tu en as 3.');
   });
 
   test('célèbre un niveau et nomme un succès par son titre', () => {
-    expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Niveau 3 ! On fête ça.');
+    expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Niveau 3 ! Ta lumière grandit, on fête ça.');
     expect(mascotSay({ kind: 'achievement', key: 'achievement.first_voice' })).toContain(
-      ACHIEVEMENT_COPY['achievement.first_voice'].title,
+      achievementCopy('achievement.first_voice', 'fr').title,
     );
   });
 
   test('guide, salue la série, compte vers le niveau et encourage au sommet', () => {
-    expect(mascotSay({ kind: 'first-step' })).toBe('Salut, je suis Mee ! Envoie ton premier message et je compte tes points.');
-    expect(mascotSay({ kind: 'streak', days: 4 })).toBe('4 jours d’affilée, continue comme ça !');
-    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('Encore 90 points avant le niveau 3.');
-    expect(mascotSay({ kind: 'top-level' })).toBe('Tu es au sommet. Bravo !');
+    expect(mascotSay({ kind: 'first-step' })).toBe('Salut, je suis Mee ! Envoie ton premier message et regarde jaillir tes étincelles.');
+    expect(mascotSay({ kind: 'streak', days: 4 })).toBe('Ta Flamme brûle depuis 4 jours, continue comme ça !');
+    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('90 étincelles de plus, et ta lumière atteint le niveau 3.');
+    expect(mascotSay({ kind: 'top-level' })).toBe('Ta lumière est au sommet. Bravo !');
   });
 });
 
@@ -128,7 +129,7 @@ describe('MascotCoach — la mascotte et sa bulle', () => {
     const html = renderToStaticMarkup(<MascotCoach moment={{ mood: 'ready', line: { kind: 'can-mint', mintCost: 50 } }} />);
     expect(html).toContain('role="status"');
     expect(html).toContain('aria-live="polite"');
-    expect(html).toContain('on frappe une Meesh pour 50 points');
+    expect(html).toContain('on fige 50 étincelles dans une Meesh');
   });
 });
 

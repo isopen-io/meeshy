@@ -32,6 +32,9 @@ import {
   servedOnline,
   loadMostActiveParticipants
 } from './participants-presence';
+import { isGuestViewer, sendAccountRequired } from '../../services/guests/guestMemberVisibility';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 const logger = enhancedLogger.child({ module: 'ConversationParticipantReadRoutes' });
 
 /**
@@ -133,6 +136,10 @@ export function registerParticipantReadRoutes(
       const { id } = request.params;
       const { onlineOnly, role, search, limit, cursor } = request.query;
       const authRequest = request as UnifiedAuthRequest;
+      // #10205 — un invité (session sans compte) ne lit pas la liste des membres.
+      if (authRequest.authContext?.isAuthenticated && isGuestViewer(authRequest.authContext)) {
+        return sendAccountRequired(reply, 'A Meeshy account is required to see the members of this conversation');
+      }
 
       const conversationId = await ouvrirConversationLisible({
         prisma,
@@ -268,11 +275,16 @@ export function registerParticipantReadRoutes(
       // ici — et c'est précisément parce qu'elle n'existait qu'ici que les deux
       // routes de MUTATION (invite, changement de rang) passaient un rang Prisma
       // brut sans gate. La fabrique partagée est désormais la source unique.
-      const formattedParticipants = paginatedParticipants.map(participant =>
-        serializeConversationParticipant(participant, {
-          presence: presenceFor(presenceViewer, presenceVis, participant.userId)
-        })
-      );
+      const formattedParticipants = paginatedParticipants.map(participant => {
+        const profileDecor = participantProfileDecor(startupPackIndex(), participant.user);
+        return {
+          ...serializeConversationParticipant(participant, {
+            presence: presenceFor(presenceViewer, presenceVis, participant.userId)
+          }),
+          // #10713 — le contour équipé, comme la liste et la fiche de conversation.
+          ...(profileDecor === undefined ? {} : { profileDecor })
+        };
+      });
 
       // Une page « en ligne » ne SERT que ce qu'elle montre en ligne : ce que
       // la porte vient de masquer (préférence, blocage, désactivation) en
@@ -419,6 +431,13 @@ export function registerParticipantReadRoutes(
     try {
       const { id, participantId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
+      // #10205 — un invité ne lit que SA fiche, jamais celle d'un autre.
+      const guestReadsAnother = authRequest.authContext?.isAuthenticated
+        && isGuestViewer(authRequest.authContext)
+        && participantId !== authRequest.authContext.participantId;
+      if (guestReadsAnother) {
+        return sendAccountRequired(reply, 'A Meeshy account is required to see the profile of a participant');
+      }
 
       const conversationId = await ouvrirConversationLisible({
         prisma,

@@ -11,7 +11,9 @@ final class PostCommentCardReadingTests: XCTestCase {
     private static let written = "puis [notre page](https://meeshy.me/about) et enfin [[https://meeshy.me/brut]]"
     private static let viewer = MessageCardSubject.Viewer(id: "me", displayName: "Moi")
 
-    private static func subject(post: FeedPost, target: FeedComment) -> MessageCardSubject? {
+    private static func subject(post written: FeedPost, target: FeedComment) -> MessageCardSubject? {
+        var post = written
+        post.visibility = "PUBLIC"
         let source = PostCommentCardSource.reading(post: post, target: target, thread: [], viewer: viewer)
         return PostCommentCardComposition.subject(of: source, mode: .postAndComment, showsPost: true,
                                                   title: "Fil", foldedLabel: { "+\($0)" })

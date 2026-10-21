@@ -148,6 +148,11 @@ struct ComposerSeedTarget: Identifiable {
     /// une donnée de décision (cf. `ComposerOrigin`).
     let origin: ComposerOrigin
 
+    /// **La scène ENTIÈRE d'une story** (#9994) — `nil` pour un message ou un
+    /// post, que leur `plan` suffit à semer. Quand elle est là, c'est elle que la
+    /// porte matérialise, et le plan n'en garde que la description.
+    let recomposition: StoryRecomposition?
+
     /// La pièce à poser, pour les lecteurs qui n'ont besoin que d'elle.
     /// `nil` pour un porteur sans média composable.
     var attachment: MessageAttachment? { plan.media }
@@ -156,10 +161,14 @@ struct ComposerSeedTarget: Identifiable {
     /// structure supprime le membre à membre synthétisé, et les trois fabriques
     /// ci-dessous ont besoin d'un point de passage commun — c'est lui qui rend
     /// « une cible = un plan + une origine + une identité » indissociable.
-    private init(id: String, plan: ComposableAttachment.SeedPlan, origin: ComposerOrigin) {
+    private init(id: String,
+                 plan: ComposableAttachment.SeedPlan,
+                 origin: ComposerOrigin,
+                 recomposition: StoryRecomposition? = nil) {
         self.id = id
         self.plan = plan
         self.origin = origin
+        self.recomposition = recomposition
     }
 
     init?(message: Message) {
@@ -191,15 +200,21 @@ struct ComposerSeedTarget: Identifiable {
                   origin: .socialMedia(postId: post.id, mediaId: media.id))
     }
 
-    /// **La slide d'une STORY** (#6085). `preferredLanguages` descend le Prisme
-    /// du lecteur sur le texte qui pré-remplira la description.
+    /// **La slide d'une STORY, recréée à l'identique** (#9994, après #6085).
+    ///
+    /// La cible ne passe plus par la règle « exactement une pièce » des messages
+    /// et des posts : une story n'est pas un lot de pièces jointes, c'est une
+    /// SCÈNE, et c'est la scène entière — textes posés, stickers, effets, tous
+    /// ses médias — qui part dans le composer. `preferredLanguages` descend le
+    /// Prisme du lecteur sur le texte qui pré-remplira la description.
     init?(story: StoryItem, preferredLanguages: [String]) {
-        guard let plan = ComposableAttachment.seedPlan(inStory: story,
-                                                       preferredLanguages: preferredLanguages)
+        guard let recomposition = StoryRecomposition(story: story,
+                                                     preferredLanguages: preferredLanguages)
         else { return nil }
-        self.init(id: "story/\(story.id)/\(plan.media?.id ?? "description")",
-                  plan: plan,
-                  origin: .socialMedia(postId: story.id, mediaId: plan.media?.id))
+        self.init(id: "story/\(story.id)",
+                  plan: ComposableAttachment.seedPlan(recomposingStoryWith: recomposition.description),
+                  origin: .socialMedia(postId: story.id, mediaId: nil),
+                  recomposition: recomposition)
     }
 }
 
@@ -352,7 +367,7 @@ struct MediaComposerDoor: View {
             Button(action: onDismiss) {
                 Text(MediaComposerCopy.cancel)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
@@ -430,41 +445,32 @@ struct MediaComposerDoor: View {
         }
     }
 
-    /// L'aperçu est rendu par le LECTEUR (`StoryViewerView`), pas par un
-    /// composant maison — loi 6, tenue par le même registre de rendu que le
-    /// composer. Un troisième chemin d'aperçu mentirait tôt ou tard.
+    /// L'aperçu est rendu par LE lecteur (`StoryPreviewReader`, #11197) — loi 6.
+    /// Monté ici plutôt que par `StoryPreviewReaderCover` : les hôtes de
+    /// l'aperçu sont optionnels pour cette porte.
     @ViewBuilder
     private func apercu(_ assets: StoryPreviewAssets) -> some View {
         if let preview {
-            let items = assets.slides.map { $0.toPreviewStoryItem() }
-            let group = StoryGroup(
-                id: "preview",
-                username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-                avatarColor: MeeshyColors.brandPrimaryHex,
-                stories: items
+            StoryPreviewReader(
+                assets: assets,
+                isPresented: Binding(get: { previewAssets != nil }, set: { if !$0 { previewAssets = nil } }),
+                storyViewModel: storyViewModel,
+                statusViewModel: preview.statusViewModel,
+                router: preview.router,
+                conversationList: preview.conversationList
             )
-            StoryViewerView(
-                viewModel: storyViewModel,
-                groups: [group],
-                currentGroupIndex: 0,
-                isPresented: Binding(
-                    get: { previewAssets != nil },
-                    set: { if !$0 { previewAssets = nil } }
-                ),
-                isPreviewMode: true,
-                preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-                preloadedVideoURLs: assets.videoURLs,
-                preloadedAudioURLs: assets.audioURLs
-            )
-            .environmentObject(preview.router)
-            .conversationListObject(preview.conversationList)
-            .environmentObject(preview.statusViewModel)
         }
     }
 
     private func materialise() async {
         guard case .pending = materialisation else { return }
-        guard let graine = await ComposerMediaSeeding.seed(for: target.plan, resolver: resolver) else {
+        let semee: StoryComposerSeed?
+        if let recomposition = target.recomposition {
+            semee = await StoryRecompositionSeeding.seed(for: recomposition, resolver: resolver)
+        } else {
+            semee = await ComposerMediaSeeding.seed(for: target.plan, resolver: resolver)
+        }
+        guard let graine = semee else {
             materialisation = .failed
             // `showError` porte DÉJÀ sa vibration d'erreur (`FeedbackToastManager`
             // la pose à chaque point d'entrée, parce qu'elle diffère par type de

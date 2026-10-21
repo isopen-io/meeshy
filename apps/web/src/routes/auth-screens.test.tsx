@@ -45,7 +45,7 @@ describe('LoginScreen — la marque et la version', () => {
     // sentinelle sous test). Écrire la version ici aurait recréé la copie que
     // la correction supprime.
     expect(html).toContain(`Meeshy ${__APP_VERSION__}`);
-    expect(html).toContain('Services CEO');
+    expect(html).toContain('>by services.ceo<');
   });
 
   test('les deux champs requis sont nommés, et le bouton part DÉSACTIVÉ (aucun champ rempli)', () => {
@@ -112,8 +112,11 @@ describe('WelcomeScreen', () => {
     expect(html).toContain('Se connecter');
   });
 
-  test('le pied de marque « Services CEO » est rendu', () => {
-    expect(html).toContain('Services CEO');
+  test('le pied de marque « by services.ceo » mène à la plateforme, dans un nouvel onglet (#10096)', () => {
+    expect(html).toContain('>by services.ceo<');
+    expect(html).not.toContain('Services CEO');
+    expect(html).toContain('href="https://services.ceo" target="_blank" rel="noopener noreferrer"');
+    expect(html).toContain('<span class="sr-only"> — ouvre la plateforme services.ceo dans un nouvel onglet</span>');
   });
 });
 
@@ -308,5 +311,18 @@ describe('Les pages d’accès tiennent dans UNE colonne, la puce « Fermer » c
     expect(column?.querySelector('a[aria-label="Fermer"]')?.getAttribute('href')).toBe('/login');
     expect(column?.querySelector('#signup-phone')).not.toBeNull();
     expect(strayFromAuthColumn(el)).toEqual([]);
+  });
+
+  test('la puce se nomme dans la langue de l’interface, jamais « Fermer » en anglais (#10748)', async () => {
+    await loadInterfaceCatalog('en');
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = 'en';
+    try {
+      const el = mount(<SignupScreen />);
+      expect(authColumnIn(el)?.querySelector('a[aria-label="Close"]')?.getAttribute('href')).toBe('/login');
+      expect(el.querySelector('a[aria-label="Fermer"]')).toBeNull();
+    } finally {
+      document.documentElement.lang = previous;
+    }
   });
 });

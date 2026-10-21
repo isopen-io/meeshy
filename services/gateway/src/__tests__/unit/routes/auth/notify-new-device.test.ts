@@ -1,4 +1,6 @@
+import jwt from 'jsonwebtoken';
 import { notifyIfLoginFromNewDevice } from '../../../../routes/auth/notify-new-device';
+import { verifyRevokeAllLinkToken } from '../../../../services/auth/revoke-all-link-token';
 
 /**
  * #7035 — le site UNIQUE qui décide si une connexion mérite une alerte.
@@ -67,6 +69,15 @@ describe("notifyIfLoginFromNewDevice — l'effet, pas le statut", () => {
     expect(charge.ipAddress).toBe('176.187.76.108');
     expect(typeof charge.revokeToken).toBe('string');
     expect(charge.revokeToken.length).toBeGreaterThan(0);
+  });
+
+  it("le lien de l'alerte n'est PAS un jeton d'authentification : il ne se vérifie qu'en lien (#10493)", async () => {
+    const notif = notificateur();
+    await notifyIfLoginFromNewDevice(lecteur([]), notif, 'secret', contexte());
+
+    const { revokeToken } = notif.createLoginNewDeviceNotification.mock.calls[0]![0];
+    expect(() => jwt.verify(revokeToken, 'secret')).toThrow();
+    expect(verifyRevokeAllLinkToken(revokeToken, 'secret')).toEqual({ userId: 'u-1' });
   });
 
   it('EXCLUT la session qui vient de naître — sinon aucune alerte ne partirait jamais', async () => {

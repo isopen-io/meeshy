@@ -1,0 +1,467 @@
+[
+  {
+    "slug": "essentiels",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "a848f839f0fb5758.webp",
+      "bytes": 4778,
+      "sha256": "a848f839f0fb5758c407d34313b0d204e65866285deb53f6bd7f904fafa624b6"
+    },
+    "preview": null,
+    "contract": {
+      "src": "f010d79375a95a34.json",
+      "bytes": 3001,
+      "sha256": "f010d79375a95a3415fa03d5e75704dc2735a3706292ff8a704b878b1d7047b5"
+    },
+    "strings": {
+      "fr": {
+        "src": "13d6e839e9e005b0.json",
+        "bytes": 100,
+        "sha256": "13d6e839e9e005b0d639e2c1d4da8b433e60b2cd1c37438e34cfc9b27d7c3fd1"
+      },
+      "en": {
+        "src": "f3a4e603379a2a75.json",
+        "bytes": 95,
+        "sha256": "f3a4e603379a2a75b6ceb83d5fb08c154c28e39a05dc179cd0b25391c8c74c21"
+      },
+      "es": {
+        "src": "641d2f5e081ea8e4.json",
+        "bytes": 98,
+        "sha256": "641d2f5e081ea8e4060088a3c8d841e9a4257dcbbbacab7752a378d7b5337590"
+      },
+      "pt": {
+        "src": "96d21502db6cd082.json",
+        "bytes": 97,
+        "sha256": "96d21502db6cd082e5b1c22c9b33111aea1802bd7be6c2796238a5231d851db8"
+      },
+      "de": {
+        "src": "0338da96c37fcf40.json",
+        "bytes": 100,
+        "sha256": "0338da96c37fcf4079600a9a55e70568ed3afbe74aa990564fcac9d591e4bb2b"
+      },
+      "it": {
+        "src": "956624eb23d2a34f.json",
+        "bytes": 98,
+        "sha256": "956624eb23d2a34f85ca2d3acb3f01e2c3d37fe525f2e5963f1b6d03aa57d78d"
+      },
+      "ar": {
+        "src": "358b358e63d2b1a3.json",
+        "bytes": 131,
+        "sha256": "358b358e63d2b1a366ac49faf603fb3708869f0850d94fedac63f75e5ed57d29"
+      }
+    },
+    "downloadBytes": {
+      "story": 3001,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Essentiels",
+        "description": "Les motifs et dégradés de base."
+      },
+      "en": {
+        "name": "Essentials",
+        "description": "The basic patterns and gradients."
+      },
+      "es": {
+        "name": "Esenciales",
+        "description": "Los motivos y degradados básicos."
+      },
+      "pt": {
+        "name": "Essenciais",
+        "description": "Os padrões e gradientes de base."
+      },
+      "de": {
+        "name": "Essentials",
+        "description": "Die Grundmuster und Verläufe."
+      },
+      "it": {
+        "name": "Essenziali",
+        "description": "I motivi e le sfumature di base."
+      },
+      "ar": {
+        "name": "الأساسيات",
+        "description": "الأنماط والتدرجات الأساسية."
+      }
+    }
+  },
+  {
+    "slug": "heritages",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "92a7bc919f33f358.webp",
+      "bytes": 2474,
+      "sha256": "92a7bc919f33f358fd4115b04201c4df5e6f420035bedbe8125c2155c2212b04"
+    },
+    "preview": null,
+    "contract": {
+      "src": "e2d475e3fe137f92.json",
+      "bytes": 5221,
+      "sha256": "e2d475e3fe137f92b0c75517676b66ec4435cdbb24403359619a288af9f2c4b5"
+    },
+    "strings": {
+      "fr": {
+        "src": "1766e19fcd51fba4.json",
+        "bytes": 100,
+        "sha256": "1766e19fcd51fba4b8ffda06eb2f7a7dbedfef14735bd3cd4d8cdf96632e24aa"
+      },
+      "en": {
+        "src": "f49ef99557fe8259.json",
+        "bytes": 99,
+        "sha256": "f49ef99557fe82591aba167f0d1d9264305ce7ac418a951628b38b3e16bc53be"
+      },
+      "es": {
+        "src": "1766e19fcd51fba4.json",
+        "bytes": 100,
+        "sha256": "1766e19fcd51fba4b8ffda06eb2f7a7dbedfef14735bd3cd4d8cdf96632e24aa"
+      },
+      "pt": {
+        "src": "1766e19fcd51fba4.json",
+        "bytes": 100,
+        "sha256": "1766e19fcd51fba4b8ffda06eb2f7a7dbedfef14735bd3cd4d8cdf96632e24aa"
+      },
+      "de": {
+        "src": "1766e19fcd51fba4.json",
+        "bytes": 100,
+        "sha256": "1766e19fcd51fba4b8ffda06eb2f7a7dbedfef14735bd3cd4d8cdf96632e24aa"
+      },
+      "it": {
+        "src": "1766e19fcd51fba4.json",
+        "bytes": 100,
+        "sha256": "1766e19fcd51fba4b8ffda06eb2f7a7dbedfef14735bd3cd4d8cdf96632e24aa"
+      },
+      "ar": {
+        "src": "538e01661b6231f9.json",
+        "bytes": 120,
+        "sha256": "538e01661b6231f97fcecd9a9fa62cb68d0dc3b8361382c5ee51fc66e52fbde9"
+      }
+    },
+    "downloadBytes": {
+      "story": 5221,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Héritages",
+        "description": "Des motifs venus du monde entier."
+      },
+      "en": {
+        "name": "Heritage",
+        "description": "Patterns from around the world."
+      },
+      "es": {
+        "name": "Herencias",
+        "description": "Motivos de todo el mundo."
+      },
+      "pt": {
+        "name": "Heranças",
+        "description": "Padrões do mundo inteiro."
+      },
+      "de": {
+        "name": "Erbe",
+        "description": "Muster aus aller Welt."
+      },
+      "it": {
+        "name": "Eredità",
+        "description": "Motivi da tutto il mondo."
+      },
+      "ar": {
+        "name": "الإرث",
+        "description": "أنماط من كل أنحاء العالم."
+      }
+    }
+  },
+  {
+    "slug": "nature-et-ciel",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 2,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "32613718fe89c7f0.webp",
+      "bytes": 3606,
+      "sha256": "32613718fe89c7f0ef670f3ecd21a90166e29f95d05bebed66517c65116d868e"
+    },
+    "preview": null,
+    "contract": {
+      "src": "afdedefaee2612ed.json",
+      "bytes": 12125,
+      "sha256": "afdedefaee2612eda9f9d265ac0b0a3c7b2a9f9ad8fcc4f672005c684aaaac3d"
+    },
+    "strings": {
+      "fr": {
+        "src": "4477d476715d362c.json",
+        "bytes": 121,
+        "sha256": "4477d476715d362c48af6b2f382b5db308d44d8b6594913219873aa3082a37c5"
+      },
+      "en": {
+        "src": "f0f124bcb221f6e5.json",
+        "bytes": 117,
+        "sha256": "f0f124bcb221f6e54d43dfa1ff0ab44d7319eb067a83ecfa1dcaacd1587135a1"
+      },
+      "es": {
+        "src": "ecf38c827013a078.json",
+        "bytes": 119,
+        "sha256": "ecf38c827013a0781ad95cb0d0e160eff168d0fd765b76e820396a920ec9f6e3"
+      },
+      "pt": {
+        "src": "8131d91de404217f.json",
+        "bytes": 119,
+        "sha256": "8131d91de404217f38ad589063275e01d026b0891b3ecb747dacb99d7e357c04"
+      },
+      "de": {
+        "src": "3027211dc84f08b2.json",
+        "bytes": 114,
+        "sha256": "3027211dc84f08b2bfb13043142b71440776cee5e12ac28e37e2349c771135a9"
+      },
+      "it": {
+        "src": "ec19b4140db6173b.json",
+        "bytes": 120,
+        "sha256": "ec19b4140db6173b6b2132bb1d064cd2d9568b781dee02958e74c95826614ef8"
+      },
+      "ar": {
+        "src": "a70dcb35238ec915.json",
+        "bytes": 126,
+        "sha256": "a70dcb35238ec915b26628df7b46408131d877e152cd4318ada2b18b2216de7c"
+      }
+    },
+    "downloadBytes": {
+      "story": 12125,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Nature et ciel",
+        "description": "Cartes, feuilles, treillis et étoiles."
+      },
+      "en": {
+        "name": "Nature and sky",
+        "description": "Maps, leaves, trellises and stars."
+      },
+      "es": {
+        "name": "Naturaleza y cielo",
+        "description": "Mapas, hojas, celosías y estrellas."
+      },
+      "pt": {
+        "name": "Natureza e céu",
+        "description": "Mapas, folhas, treliças e estrelas."
+      },
+      "de": {
+        "name": "Natur und Himmel",
+        "description": "Karten, Blätter, Gitter und Sterne."
+      },
+      "it": {
+        "name": "Natura e cielo",
+        "description": "Mappe, foglie, graticci e stelle."
+      },
+      "ar": {
+        "name": "الطبيعة والسماء",
+        "description": "خرائط وأوراق ومشابك ونجوم."
+      }
+    }
+  },
+  {
+    "slug": "illustrations",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 3,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4c4707803bf7a86d.webp",
+      "bytes": 1636,
+      "sha256": "4c4707803bf7a86df2dd02f00ec2693f08557ddfc7be51bf5900386651c85aa6"
+    },
+    "preview": null,
+    "contract": {
+      "src": "179c13ab945da342.json",
+      "bytes": 2366,
+      "sha256": "179c13ab945da34259a0773c80fb61c2d7b44a7cd22c1c17634a0cca27a12d55"
+    },
+    "strings": {
+      "fr": {
+        "src": "80967ca84bac8288.json",
+        "bytes": 47,
+        "sha256": "80967ca84bac828890495907d761532d920a78c164ececbc8a8b4b6655e895f5"
+      },
+      "en": {
+        "src": "80967ca84bac8288.json",
+        "bytes": 47,
+        "sha256": "80967ca84bac828890495907d761532d920a78c164ececbc8a8b4b6655e895f5"
+      },
+      "es": {
+        "src": "62a0708e9b9b556b.json",
+        "bytes": 49,
+        "sha256": "62a0708e9b9b556b06f3273409c6b099655092e35111a3cb2969378c2a83e3c3"
+      },
+      "pt": {
+        "src": "a991715662214f70.json",
+        "bytes": 49,
+        "sha256": "a991715662214f70259d430c4a537701b00152fb1efa41ebc83a85f31310f480"
+      },
+      "de": {
+        "src": "5090fd6226916e2b.json",
+        "bytes": 48,
+        "sha256": "5090fd6226916e2b4904f0aba09aba3ac09ac5ab4d1748df3d5680923cef971a"
+      },
+      "it": {
+        "src": "1cd1ba650ba8caba.json",
+        "bytes": 49,
+        "sha256": "1cd1ba650ba8cabab3fd40a31257da204516a00a2214dec0478a4dbb62450662"
+      },
+      "ar": {
+        "src": "036d43bf11bae136.json",
+        "bytes": 52,
+        "sha256": "036d43bf11bae13626c29cc0a37cd0b170c81ca7624374483f02dbba2f2058b5"
+      }
+    },
+    "downloadBytes": {
+      "story": 2366,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Illustrations",
+        "description": "Des paysages dessinés au trait."
+      },
+      "en": {
+        "name": "Illustrations",
+        "description": "Landscapes drawn in line."
+      },
+      "es": {
+        "name": "Ilustraciones",
+        "description": "Paisajes dibujados a línea."
+      },
+      "pt": {
+        "name": "Ilustrações",
+        "description": "Paisagens desenhadas a traço."
+      },
+      "de": {
+        "name": "Illustrationen",
+        "description": "Landschaften in Linien gezeichnet."
+      },
+      "it": {
+        "name": "Illustrazioni",
+        "description": "Paesaggi disegnati a tratto."
+      },
+      "ar": {
+        "name": "رسوم",
+        "description": "مناظر مرسومة بخطوط."
+      }
+    }
+  },
+  {
+    "slug": "animes",
+    "domain": "wallpaper",
+    "origin": "builtin",
+    "version": 1,
+    "order": 4,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "775660b987db12ee.webp",
+      "bytes": 806,
+      "sha256": "775660b987db12ee9b3fc4a5f53ff52e0cee6f8a63fd4aec9adafc6a90422136"
+    },
+    "preview": null,
+    "contract": {
+      "src": "05cbde79f9e17a45.json",
+      "bytes": 885,
+      "sha256": "05cbde79f9e17a45739a51adfe40b9c37d3821cfbe443d2584a9a2913aac3101"
+    },
+    "strings": {
+      "fr": {
+        "src": "719ad4e6f7f32f25.json",
+        "bytes": 38,
+        "sha256": "719ad4e6f7f32f2535eea1001c58b7442c6fc6828ff51e03056949abbc52a20f"
+      },
+      "en": {
+        "src": "7b8b8526b2726c48.json",
+        "bytes": 36,
+        "sha256": "7b8b8526b2726c48c12a8985c62495970d148918ab7ea894e7f04f3fbc257f93"
+      },
+      "es": {
+        "src": "86a14aa78f6e8226.json",
+        "bytes": 35,
+        "sha256": "86a14aa78f6e822612f0daa3bb4a697b74bf24ced30159ca9acefe78a38a2bd7"
+      },
+      "pt": {
+        "src": "f18c4ef2b98b4dd2.json",
+        "bytes": 36,
+        "sha256": "f18c4ef2b98b4dd29d463994aa9953feb5de029b6ff29a0555d6cd5de02c0066"
+      },
+      "de": {
+        "src": "848abdb881bbc607.json",
+        "bytes": 41,
+        "sha256": "848abdb881bbc607686f58da06d4abd24915d5ba889e7e8f1e7291c7438d548c"
+      },
+      "it": {
+        "src": "7b17dd59671a9292.json",
+        "bytes": 37,
+        "sha256": "7b17dd59671a92924170a2692c251e73daede565aa8476cbcf5b2799e4f8a99c"
+      },
+      "ar": {
+        "src": "35dbf701b03e058c.json",
+        "bytes": 38,
+        "sha256": "35dbf701b03e058c8025856007799028079aeb96b33d4bfd0c7d201f59babaa0"
+      }
+    },
+    "downloadBytes": {
+      "story": 885,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Animés",
+        "description": "Des fonds qui respirent doucement."
+      },
+      "en": {
+        "name": "Animated",
+        "description": "Wallpapers that breathe softly."
+      },
+      "es": {
+        "name": "Animados",
+        "description": "Fondos que respiran con suavidad."
+      },
+      "pt": {
+        "name": "Animados",
+        "description": "Fundos que respiram suavemente."
+      },
+      "de": {
+        "name": "Animiert",
+        "description": "Hintergründe, die sanft atmen."
+      },
+      "it": {
+        "name": "Animati",
+        "description": "Sfondi che respirano piano."
+      },
+      "ar": {
+        "name": "متحركة",
+        "description": "خلفيات تتنفس بهدوء."
+      }
+    }
+  }
+]

@@ -119,3 +119,26 @@ struct StickerAnimationTests {
         #expect(cadran.animation == nil)
     }
 }
+
+/// #9883 — **une vignette cesse de battre quand son mouvement est fini.**
+struct StickerAnimationSettleTests {
+
+    @Test func oneShotAnimations_settleAfterTheirPeriod() {
+        for animation in StickerAnimation.allCases where animation.isOneShot {
+            #expect(animation.settlesAfter == animation.period, "\(animation.rawValue)")
+        }
+    }
+
+    @Test func continuousAnimations_neverSettle() {
+        for animation in StickerAnimation.allCases where !animation.isOneShot {
+            #expect(animation.settlesAfter == nil, "\(animation.rawValue)")
+        }
+    }
+
+    @Test func atTheSettleInstant_theStickerIsAtRest_soAFrozenClockShowsTheRestPose() {
+        for animation in StickerAnimation.allCases {
+            guard let settle = animation.settlesAfter else { continue }
+            #expect(animation.pose(at: settle) == .identity, "\(animation.rawValue)")
+        }
+    }
+}

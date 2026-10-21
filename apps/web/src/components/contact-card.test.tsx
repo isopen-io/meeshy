@@ -247,6 +247,14 @@ describe('la fiche de verre', () => {
     ]);
   });
 
+  test('sur ordinateur, la fiche quitte le bas de l’écran pour se centrer (#10070)', async () => {
+    const { sheet } = await openSheet();
+    const frame = sheet?.querySelector('.glass-prominent')?.parentElement;
+    const classes = frame?.className.split(' ') ?? [];
+    expect(classes).toContain('items-end');
+    expect(classes).toContain('md:items-center');
+  });
+
   test('la section « Sur Meeshy » porte le profil public et ses gestes', async () => {
     const { sheet } = await openSheet();
     expect(text(sheet)).toContain('On Meeshy');

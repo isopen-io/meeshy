@@ -75,7 +75,8 @@ struct LentilleConversationRow: View {
     /// d'information, l'objet reste le même ».
     var magnification: LentilleMagnification? = nil
 
-    private var accentColorHex: String { conversation.accentColor }
+    private var palette: ConversationColorPalette { conversation.displayPalette(isDark: isDark) }
+    private var accentColorHex: String { palette.primary }
     private var accent: Color { Color(hex: accentColorHex) }
     private var textPrimary: Color { MeeshyColors.textPrimary(isDark: isDark) }
     private var textSecondary: Color { MeeshyColors.textSecondary(isDark: isDark) }
@@ -118,11 +119,17 @@ struct LentilleConversationRow: View {
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 if let magnification {
-                    LentilleMagnifiedTopLine(
-                        conversation: conversation,
-                        magnification: magnification,
-                        isDark: isDark
-                    )
+                    // Chips ENTIÈRES (#10835) : la ligne prend sa largeur
+                    // idéale et, quand la colonne est trop étroite (Split
+                    // View, Slide Over, barre latérale de l'iPad), elle défile
+                    // au lieu de comprimer — puis couper — ses pastilles.
+                    LentilleWholeChipsLine {
+                        LentilleMagnifiedTopLine(
+                            conversation: conversation,
+                            magnification: magnification,
+                            isDark: isDark
+                        )
+                    }
                 }
                 headerLine
                 line2
@@ -222,6 +229,7 @@ struct LentilleConversationRow: View {
 
             LentilleRowAvatar(
                 conversation: conversation,
+                palette: palette,
                 presenceState: effectivePresenceState,
                 isPeerHere: isPeerHere,
                 storyRingState: storyRingState,
@@ -345,20 +353,26 @@ struct LentilleConversationRow: View {
             // c'est actuellement, avec la chip du nombre d'utilisateurs qui
             // doit être actionnable » (directive 2026-08-23).
             if let magnification {
-                // Modes de lecture coupés (#6482) ⇒ pas d'encoche : elle
-                // proposerait un mode que l'ouverture ignorerait.
-                if LentilleFeatureFlag.isReadingModesEnabled {
-                    LentilleModePill(
-                        conversation: conversation,
-                        isAnonymous: magnification.isAnonymous,
-                        isDark: isDark
-                    )
-                }
-                if conversation.type != .direct {
-                    LentilleMemberCountChip(
-                        conversation: conversation,
-                        onShowParticipants: magnification.onShowParticipants
-                    )
+                // Même loi que la ligne du haut (#10835) : entières, ou qui
+                // défilent — la date complète, figée à droite, garde sa place.
+                LentilleWholeChipsLine {
+                    HStack(spacing: MeeshySpacing.xs) {
+                        // Modes de lecture coupés (#6482) ⇒ pas d'encoche : elle
+                        // proposerait un mode que l'ouverture ignorerait.
+                        if LentilleFeatureFlag.isReadingModesEnabled {
+                            LentilleModePill(
+                                conversation: conversation,
+                                isAnonymous: magnification.isAnonymous,
+                                isDark: isDark
+                            )
+                        }
+                        if conversation.type != .direct {
+                            LentilleMemberCountChip(
+                                conversation: conversation,
+                                onShowParticipants: magnification.onShowParticipants
+                            )
+                        }
+                    }
                 }
             }
 
@@ -601,6 +615,7 @@ extension LentilleConversationRow: @MainActor Equatable {
 /// (52pt, réservé au rang historique, §0).
 private struct LentilleRowAvatar: View {
     let conversation: Conversation
+    let palette: ConversationColorPalette
     let presenceState: PresenceState?
     let isPeerHere: ConversationHere
     let storyRingState: StoryRingState
@@ -647,8 +662,8 @@ private struct LentilleRowAvatar: View {
         MeeshyAvatar(
             name: conversation.name,
             context: LentilleMetrics.Avatar.context,
-            accentColor: conversation.accentColor,
-            secondaryColor: conversation.colorPalette.secondary,
+            accentColor: palette.primary,
+            secondaryColor: palette.secondary,
             avatarURL: isDirect ? conversation.participantAvatarURL : conversation.avatar,
             storyState: storyRingState,
             moodEmoji: moodStatus?.moodEmoji,
@@ -664,6 +679,9 @@ private struct LentilleRowAvatar: View {
             // verrouillé par MeeshyAvatar, pas ici).
             presenceState: presenceState,
             isHere: isDirect ? isPeerHere : .absent,
+            // LE CONTOUR DU PAIR (#10757) — même loi que `ThemedConversationRow` : l'avatar
+            // le pose dans son empreinte, l'anneau de story concentrique à l'intérieur (#10714).
+            ring: isDirect ? conversation.participantRing : nil,
             enablePulse: false,
             onTap: isDirect ? onViewProfile : onViewConversationInfo,
             onViewProfile: nil,

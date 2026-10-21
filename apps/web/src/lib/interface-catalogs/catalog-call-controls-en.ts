@@ -59,6 +59,7 @@ const en = {
   'callControls.journal.original': 'Original',
   'callControls.camera.denied': 'Camera access is denied',
   'callControls.camera.failed': 'The camera couldn’t open',
+  'callControls.camera.settings': 'Settings',
   'callControls.cameraPicker': 'Camera',
   'callControls.cameraPicker.label': 'Choose camera',
   'callControls.cameraPicker.unnamed': 'Camera {n}',

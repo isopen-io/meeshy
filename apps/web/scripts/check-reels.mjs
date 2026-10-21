@@ -372,11 +372,11 @@ try {
         new MutationObserver(() => {
           if (document.querySelector('[data-reels-skeleton]') !== null) window.__skeletonSeen = true;
         }).observe(document.body, { childList: true, subtree: true });
-        document.querySelector(`[data-feed-card="reel"] [data-feed-reel-open][href="/reels?seed=${seed}"]`)?.scrollIntoView({ block: 'center' });
+        document.querySelector(`[data-feed-card="reel"] [data-feed-reel-open][href^="/reels?seed=${seed}&"]`)?.scrollIntoView({ block: 'center' });
       }, SEED);
       const opened = Date.now();
-      await page.click(`[data-feed-reel-open][href="/reels?seed=${SEED}"]`, { position: { x: 30, y: 60 } });
-      await page.waitForURL(`**/reels?seed=${SEED}`);
+      await page.click(`[data-feed-reel-open][href^="/reels?seed=${SEED}&"]`, { position: { x: 30, y: 60 } });
+      await page.waitForURL(`**/reels?seed=${SEED}&from=feed`);
       await page.waitForSelector('[data-reel-index="0"]');
       const paintedIn = Date.now() - opened;
       check((await page.getAttribute('[data-reel-index="0"]', 'data-reel')) === SEED, `${label} : le lecteur démarre SUR le réel touché`);
@@ -772,7 +772,7 @@ try {
       const left = await players(page);
       check(left.length === 0, `${label} : le retour du navigateur quitte les Réels, aucun lecteur ne reste (${JSON.stringify(left)})`);
       check(
-        (await page.getAttribute(`[data-feed-card="reel"]:has([href="/reels?seed=${SEED}"]) [data-feed-gesture="like"]`, 'aria-pressed')) === 'true',
+        (await page.getAttribute(`[data-feed-card="reel"]:has([href^="/reels?seed=${SEED}&"]) [data-feed-gesture="like"]`, 'aria-pressed')) === 'true',
         `${label} : le Flux montre le « J'aime » posé dans les Réels`,
       );
       await page.click('[data-feed-reels]');

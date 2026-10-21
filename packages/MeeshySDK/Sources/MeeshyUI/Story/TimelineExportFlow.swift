@@ -25,7 +25,7 @@ import MeeshySDK
 // depuis le composer timeline. Elle est désormais appliquée ici, avec le même
 // atome SDK, et INDÉPENDAMMENT de l'interlude.
 
-private let timelineExportLogger = Logger(subsystem: "me.meeshy.app", category: "story-timeline-export")
+private let timelineExportLogger = MeeshyLog.logger(.storyTimelineExport)
 
 // MARK: - Timeline story export seam (test injection)
 
@@ -446,7 +446,7 @@ struct TimelineExportPreviewSheet: View {
     @State private var loopObserver: NSObjectProtocol?
     @State private var saveState: SaveState = .idle
 
-    internal enum SaveState { case idle, saving, saved, failed }
+    internal nonisolated enum SaveState: Equatable, Sendable { case idle, saving, saved, failed }
 
     init(url: URL) {
         self.url = url
@@ -496,6 +496,7 @@ struct TimelineExportPreviewSheet: View {
             loopObserver = nil
             player?.pause()
         }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .failed })
     }
 
     private var controlsOverlay: some View {
@@ -570,9 +571,6 @@ struct TimelineExportPreviewSheet: View {
                     HapticFeedback.success()
                 } else {
                     HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             }
         }

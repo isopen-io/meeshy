@@ -61,6 +61,7 @@ const expected: AppPreferences = {
   hideProfileFromSearch: true,
   acceptCallsFromNonContacts: false,
   notifyContactsOnReturn: false,
+  allowAnalytics: true,
 };
 
 const transportAnswering = (answer: ApiResult<unknown>) => {
@@ -83,6 +84,24 @@ describe('decodeAppPreferences — une PROJECTION, jamais la charge reçue', () 
     expect(decodeAppPreferences(wire({ notification: { gameEnabled: true } }))?.gameEnabled).toBe(true);
     const { gameEnabled: _served, ...withoutGame } = wire().notification;
     expect(decodeAppPreferences({ ...wire(), notification: withoutGame })?.gameEnabled).toBe(true);
+  });
+
+  test('la bascule « Analytique » est lue sous `privacy` ; ABSENTE (ancien serveur), la charge se décode toujours et la bascule reste inconnue (#10502)', () => {
+    expect(decodeAppPreferences(wire({ privacy: { allowAnalytics: false } }))?.allowAnalytics).toBe(false);
+    const { allowAnalytics: _served, ...withoutAnalytics } = wire().privacy;
+    const decoded = decodeAppPreferences({ ...wire(), privacy: withoutAnalytics });
+    expect(decoded).not.toBeNull();
+    expect(decoded !== null && 'allowAnalytics' in decoded).toBe(false);
+  });
+
+  test('une bascule « Analytique » de mauvais type rend la lecture illisible, jamais un refus ou un accord deviné', () => {
+    expect(decodeAppPreferences(wire({ privacy: { allowAnalytics: 'oui' } }))).toBeNull();
+  });
+
+  test('la lecture demande la bascule « Analytique » avec les autres', async () => {
+    const { calls, transport } = transportAnswering({ ok: true, data: wire() });
+    await loadAppPreferences({ source: 'gateway', transport });
+    expect(calls[0]?.path).toContain('privacy.allowAnalytics');
   });
 
   test('un interrupteur du jeu de mauvais type rend la lecture illisible, jamais une valeur devinée', () => {
@@ -215,6 +234,7 @@ describe('patchAppPreferences — l’écriture fusionne, et rend ce que le serv
         hideProfileFromSearch: true,
         acceptCallsFromNonContacts: false,
         notifyContactsOnReturn: false,
+        allowAnalytics: true,
       },
     });
   });

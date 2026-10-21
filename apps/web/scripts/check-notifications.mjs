@@ -182,7 +182,7 @@ try {
       page.on('pageerror', (error) => errors.push(error.message));
 
       // ------------------------------------------------ 1. la pastille sur la liste
-      await page.goto(`${BASE}/`, { waitUntil: 'load' });
+      await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
       await page.waitForSelector('.floating-menus [data-unread]').catch(() => null);
       check((await badgeOf(page)) === '3', `${label} : la pastille du bouton flottant porte le compte servi (« ${await badgeOf(page)} », « 3 » attendu)`);
       check(

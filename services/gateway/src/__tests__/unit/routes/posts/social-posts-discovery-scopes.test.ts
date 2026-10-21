@@ -212,6 +212,17 @@ async function buildApp(
   return { app, prisma };
 }
 
+/**
+ * `meta.feedRequestId` (#10501) est tiré au hasard à CHAQUE requête : deux
+ * réponses ne le partagent jamais. Les témoins de parité et d'absence
+ * d'oracle comparent tout le reste, clé à clé.
+ */
+function sansIdentifiantDePage(body: Record<string, unknown>): Record<string, unknown> {
+  const { meta, ...reste } = body;
+  const { feedRequestId: _identifiant, ...autreMeta } = (meta ?? {}) as Record<string, unknown>;
+  return { ...reste, autreMeta };
+}
+
 beforeEach(() => {
   mockGetNativeClient.mockReset();
   mockGetNativeClient.mockReturnValue(makeFakeRedis());
@@ -263,7 +274,7 @@ describe('scope=hashtag — #4346', () => {
 
     expect(historique.statusCode).toBe(200);
     expect(scope.statusCode).toBe(200);
-    expect(scope.json()).toEqual(historique.json());
+    expect(sansIdentifiantDePage(scope.json())).toEqual(sansIdentifiantDePage(historique.json()));
 
     // Le gate d'audience a bien opéré : deux posts sur trois, le FRIENDS
     // d'autrui absent — sinon la comparaison ci-dessus ne prouverait rien.
@@ -286,7 +297,7 @@ describe('scope=hashtag — #4346', () => {
 
     expect(inconnu.statusCode).toBe(200);
     expect(horsAudience.statusCode).toBe(200);
-    expect(inconnu.json()).toEqual(horsAudience.json());
+    expect(sansIdentifiantDePage(inconnu.json())).toEqual(sansIdentifiantDePage(horsAudience.json()));
     expect(inconnu.json().data).toEqual([]);
     expect(inconnu.json().pagination).toEqual({ limit: 20, hasMore: false, nextCursor: null });
 
@@ -410,7 +421,7 @@ describe('scope=sound — #4346', () => {
 
     expect(historique.statusCode).toBe(200);
     expect(scope.statusCode).toBe(200);
-    expect(scope.json()).toEqual(historique.json());
+    expect(sansIdentifiantDePage(scope.json())).toEqual(sansIdentifiantDePage(historique.json()));
 
     const ids = historique.json().data.map((p: any) => p.id);
     expect(ids).toEqual([PUBLIC_POST_ID]);
@@ -430,7 +441,7 @@ describe('scope=sound — #4346', () => {
 
     expect(inconnu.statusCode).toBe(200);
     expect(horsAudience.statusCode).toBe(200);
-    expect(inconnu.json()).toEqual(horsAudience.json());
+    expect(sansIdentifiantDePage(inconnu.json())).toEqual(sansIdentifiantDePage(horsAudience.json()));
     expect(inconnu.json().data).toEqual([]);
     expect(inconnu.json().pagination).toEqual({ limit: 20, hasMore: false, nextCursor: null });
 
@@ -537,7 +548,7 @@ describe('scope=nearby — #4346', () => {
 
     expect(historique.statusCode).toBe(200);
     expect(scope.statusCode).toBe(200);
-    expect(scope.json()).toEqual(historique.json());
+    expect(sansIdentifiantDePage(scope.json())).toEqual(sansIdentifiantDePage(historique.json()));
 
     const ids = historique.json().data.map((p: any) => p.id);
     expect(ids).toEqual([PUBLIC_POST_ID]);
@@ -641,6 +652,54 @@ describe('scope inconnu — #4346 ne relâche pas la garde de #4149', () => {
     const res = await app.inject({ method: 'GET', url: '/social/posts?scope=hashtags' });
     expect(res.statusCode).toBe(400);
     expect(res.json().code).toBe('VALIDATION_ERROR');
+    await app.close();
+  });
+});
+
+// ─── Contexte de listing — #10501 ───────────────────────────────────────────
+
+/**
+ * Chaque LISTING compte : une carte affichée dans la page d'un hashtag, d'un
+ * son ou d'un lieu est une impression, avec sa place dans CE listing. Les
+ * trois scopes et leurs trois routes historiques servent donc, comme les huit
+ * scopes keyset, `meta.feedRequestId` et `rankingSource` par élément —
+ * additifs : la pagination offset et toutes les autres clés restent.
+ */
+describe('contexte de listing des scopes hashtag/sound/nearby et de leurs routes historiques — #10501', () => {
+  const SON_ID = 'dddddddddddddddddddddddd';
+  const etatDeDecouverte = () => ({
+    posts: makeFixturePosts(),
+    hashtagByTag: new Map([['music', { id: 'h1' }]]),
+    linksByHashtagId: new Map([['h1', [{ postId: PUBLIC_POST_ID }, { postId: OWN_POST_ID }]]]),
+    usagesBySoundId: new Map([[SON_ID, [{ postId: PUBLIC_POST_ID, createdAt: NOW }]]]),
+    runCommandRawResult: { cursor: { firstBatch: [{ _id: PUBLIC_POST_ID, distanceMeters: 120 }] } },
+  });
+
+  it.each([
+    ['hashtag', '/social/posts?scope=hashtag&tag=music', '/posts/hashtag/music'],
+    ['sound', `/social/posts?scope=sound&soundId=${SON_ID}`, `/sounds/${SON_ID}/posts`],
+    ['nearby', '/social/posts?scope=nearby&lat=48.85&lng=2.35&radiusKm=5', '/posts/nearby?lat=48.85&lng=2.35&radiusKm=5'],
+  ])('%s : le scope ET sa route historique servent un feedRequestId neuf par page et la source de chaque élément', async (source, urlScope, urlHistorique) => {
+    const { app } = await buildApp(etatDeDecouverte());
+
+    for (const url of [urlScope, urlHistorique]) {
+      const a = (await app.inject({ method: 'GET', url })).json();
+      const b = (await app.inject({ method: 'GET', url })).json();
+
+      expect(a.meta.feedRequestId).toMatch(/^fr_[A-Za-z0-9_-]+$/);
+      expect(b.meta.feedRequestId).toMatch(/^fr_[A-Za-z0-9_-]+$/);
+      expect(a.meta.feedRequestId).not.toBe(b.meta.feedRequestId);
+      expect(a.data.length).toBeGreaterThan(0);
+      expect(a.data.map((item: { rankingSource: string }) => item.rankingSource)).toEqual(a.data.map(() => source));
+      expect(a.data.every((item: { id: string }) => typeof item.id === 'string')).toBe(true);
+      expect(a.pagination).toEqual(expect.objectContaining({ limit: 20, hasMore: false }));
+      expect(a.success).toBe(true);
+    }
+
+    const scope = (await app.inject({ method: 'GET', url: urlScope })).json();
+    const historique = (await app.inject({ method: 'GET', url: urlHistorique })).json();
+    expect(sansIdentifiantDePage(scope)).toEqual(sansIdentifiantDePage(historique));
+
     await app.close();
   });
 });

@@ -4,23 +4,35 @@ import lentilleTokens from '@meeshy/shared/design/lentille-tokens.json';
 
 import { lensSectionAccessibleName } from '@/lib/lens/folded-unread';
 import type { LensSectionId } from '@/lib/lens/sections';
-import { sectionLabelOf } from '@/lib/lens/sections';
+import { lensSectionLabel } from '@/lib/lens/sections';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import '@/styles/lens-section.css';
 
 import { Glyph } from './glyph';
 import { UnreadBadge } from './unread-badge';
 
 /**
- * LE PLIAGE D'UNE SECTION (#8694) — fourni par la liste pour les seules
- * sections repliables (`isLensSectionFoldable`). `unread` est déjà passé par
- * `foldedSectionUnread` : il vaut zéro dépliée, donc la pastille — dont le
+ * LE PLIAGE D'UNE SECTION (#8694, étendu à TOUTE section par #10103) — fourni
+ * par la liste hors recherche (`section-folds.ts`). `unread` est déjà passé
+ * par `foldedSectionUnread` : il vaut zéro dépliée, donc la pastille — dont le
  * portillon `count > 0` vit dans l'atome — ne peut pas y apparaître.
+ * `animate` : la section vient d'être dépliée par un geste (`lens-section.css`).
  */
 export type LensSectionFold = {
   readonly folded: boolean;
   readonly unread: number;
   readonly onToggle: () => void;
+  readonly animate?: boolean;
 };
+
+/** Le nom d'une catégorie, tel que l'utilisateur l'a écrit (#10103). */
+export type LensStickerCategory = { readonly name: string };
+
+/** L'identifiant de la liste de rangées qu'un en-tête commande — `aria-controls`. */
+const rowsIdOf = (id: LensSectionId): string => `section-rows-${id.replace(/[^\w-]/g, '-')}`;
+
+/** La cible du doigt (#10103) : 44 px, la hauteur minimale d'un contrôle. */
+export const SECTION_TOGGLE_MIN_HEIGHT = 44;
 
 /**
  * LE STICKER DE SECTION (#5694, écart 6) — miroir
@@ -57,9 +69,17 @@ export type LensSectionFold = {
  * avec toutes les sections. La cible iOS n'en montre jamais qu'un
  * (`targets/lentille.scrolled.{light,dark}.png`).
  */
-export function LensSticker({ id, fold }: { readonly id: LensSectionId; readonly fold?: LensSectionFold }) {
+export function LensSticker({
+  id,
+  category,
+  fold,
+}: {
+  readonly id: LensSectionId;
+  readonly category?: LensStickerCategory;
+  readonly fold?: LensSectionFold;
+}) {
   const sticker = lentilleTokens.list.sticker;
-  const label = sectionLabelOf(id);
+  const label = lensSectionLabel(category === undefined ? { id } : { id, category }, currentInterfaceLanguage());
 
   return (
     <h2
@@ -70,7 +90,9 @@ export function LensSticker({ id, fold }: { readonly id: LensSectionId; readonly
         fontSize: sticker.size,
         fontWeight: sticker.weight,
         letterSpacing: `${sticker.letterSpacingEm}em`,
-        padding: `${sticker.padding.vertical}px ${sticker.padding.horizontal}px`,
+        /* Repliable, la hauteur vient du BOUTON (44 px) : le padding vertical
+           du jeton y passe, pour que le bandeau ne s'épaississe pas deux fois. */
+        padding: fold === undefined ? `${sticker.padding.vertical}px ${sticker.padding.horizontal}px` : `0 ${sticker.padding.horizontal}px`,
         color: 'var(--color-ios-ink-2)',
       }}
     >
@@ -91,16 +113,21 @@ function FoldToggle({ id, label, fold }: { readonly id: LensSectionId; readonly 
       type="button"
       data-section-toggle={id}
       aria-expanded={!fold.folded}
+      aria-controls={rowsIdOf(id)}
       aria-label={lensSectionAccessibleName({ language: currentInterfaceLanguage(), label, folded: fold.folded, unread: fold.unread })}
       onClick={fold.onToggle}
       className="flex w-full items-center gap-2 text-start uppercase"
-      style={{ font: 'inherit', letterSpacing: 'inherit', color: 'inherit' }}
+      style={{ font: 'inherit', letterSpacing: 'inherit', color: 'inherit', minHeight: SECTION_TOGGLE_MIN_HEIGHT }}
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
       <span className="normal-case" style={{ letterSpacing: 'normal' }}>
         <UnreadBadge count={fold.unread} />
       </span>
-      <Glyph name="caretDown" size={10} {...(fold.folded ? { className: '-rotate-90 rtl:rotate-90' } : {})} />
+      <Glyph
+        name="caretDown"
+        size={10}
+        className={`motion-safe:transition-transform motion-safe:duration-150 motion-safe:ease-out ${fold.folded ? '-rotate-90 rtl:rotate-90' : ''}`}
+      />
     </button>
   );
 }
@@ -137,17 +164,37 @@ function FoldToggle({ id, label, fold }: { readonly id: LensSectionId; readonly 
  */
 export function LensSection({
   id,
+  category,
   fold,
   children,
 }: {
   readonly id: LensSectionId;
+  readonly category?: LensStickerCategory;
   readonly fold?: LensSectionFold;
   readonly children: ReactNode;
 }) {
   return (
     <li data-section={id} className="shrink-0" style={{ marginTop: lentilleTokens.list.row.marginVertical }}>
-      <LensSticker id={id} {...(fold === undefined ? {} : { fold })} />
-      {fold?.folded === true ? null : <ul>{children}</ul>}
+      <LensSticker id={id} {...(category === undefined ? {} : { category })} {...(fold === undefined ? {} : { fold })} />
+      <SectionRows id={id} fold={fold}>
+        {children}
+      </SectionRows>
     </li>
+  );
+}
+
+/**
+ * LES RANGÉES D'UNE SECTION (#10103). Repliée, la liste reste dans le DOM,
+ * VIDE et `hidden` : l'`aria-controls` du bouton désigne toujours un élément,
+ * et aucune rangée repliée ne se monte. Dépliée par un geste, elle porte
+ * `data-section-unfolding` — l'animation courte de `lens-section.css`.
+ */
+function SectionRows({ id, fold, children }: { readonly id: LensSectionId; readonly fold: LensSectionFold | undefined; readonly children: ReactNode }) {
+  if (fold === undefined) return <ul>{children}</ul>;
+  if (fold.folded) return <ul id={rowsIdOf(id)} hidden />;
+  return (
+    <ul id={rowsIdOf(id)} {...(fold.animate === true ? { 'data-section-unfolding': '' } : {})}>
+      {children}
+    </ul>
   );
 }

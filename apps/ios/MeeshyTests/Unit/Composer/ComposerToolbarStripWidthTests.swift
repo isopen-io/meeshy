@@ -300,12 +300,12 @@ final class ComposerToolbarOverflowTests: XCTestCase {
     }
 }
 
-/// #9954 — directive porteur 2026-10-10 : dans la pastille de langue, le code
-/// passe en petit SOUS le drapeau, et la pastille ne grandit pas.
+/// #10366 — directive porteur 2026-10-12 : la pastille de langue montre
+/// « 🇫🇷 FR » sur une ligne, sans chevron ; le toucher ouvre le menu.
 ///
-/// La référence est la pastille d'avant, sur une ligne (« 🇫🇷 FR ⌄ »), mesurée
-/// par le même harnais : la nouvelle garde sa HAUTEUR, à toute taille de texte
-/// où la barre se lit, et ne s'élargit pas.
+/// La référence est la pastille d'avant #9954 (« 🇫🇷 FR ⌄ »), mesurée par le
+/// même harnais : la nouvelle a sa HAUTEUR à toute taille de texte, et perd la
+/// largeur du chevron.
 @MainActor
 final class ComposerLanguagePillLabelTests: XCTestCase {
 
@@ -316,7 +316,7 @@ final class ComposerLanguagePillLabelTests: XCTestCase {
         return host.sizeThatFits(in: CGSize(width: 1024, height: 1024))
     }
 
-    private func inlineLabel(flag: String, code: String) -> some View {
+    private func labelWithChevron(flag: String, code: String) -> some View {
         HStack(spacing: MeeshySpacing.xxs) {
             Text(flag)
                 .font(.caption)
@@ -330,55 +330,55 @@ final class ComposerLanguagePillLabelTests: XCTestCase {
         .padding(.vertical, MeeshySpacing.xs)
     }
 
-    func test_pill_keepsTheHeightOfTheInlineLabel_atEveryTextSize() {
+    private func sourceOf(_ relative: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(relative)
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    }
+
+    func test_pill_keepsTheHeightOfTheLineLabel_atEveryTextSize() {
         for option in LanguageOption.defaults {
             for textSize in Self.textSizes {
-                let stacked = measured(ComposerLanguagePillLabel(flag: option.flag, code: option.code), textSize: textSize)
-                let inline = measured(inlineLabel(flag: option.flag, code: option.code), textSize: textSize)
-                XCTAssertEqual(stacked.height, inline.height, accuracy: 0.5,
-                               "\(option.code) en \(textSize) : la pastille passe de \(inline.height) à \(stacked.height) pt")
+                let pill = measured(ComposerLanguagePillLabel(flag: option.flag, code: option.code), textSize: textSize)
+                let before = measured(labelWithChevron(flag: option.flag, code: option.code), textSize: textSize)
+                XCTAssertEqual(pill.height, before.height, accuracy: 0.5,
+                               "\(option.code) en \(textSize) : la pastille passe de \(before.height) à \(pill.height) pt")
             }
         }
     }
 
-    func test_pill_isNoWiderThanTheInlineLabel() {
+    func test_pill_losesTheWidthOfTheChevron() {
         for option in LanguageOption.defaults {
-            let stacked = measured(ComposerLanguagePillLabel(flag: option.flag, code: option.code), textSize: .large)
-            let inline = measured(inlineLabel(flag: option.flag, code: option.code), textSize: .large)
-            XCTAssertLessThan(stacked.width, inline.width,
-                              "\(option.code) : la pastille s'élargit (\(inline.width) → \(stacked.width) pt)")
+            let pill = measured(ComposerLanguagePillLabel(flag: option.flag, code: option.code), textSize: .large)
+            let before = measured(labelWithChevron(flag: option.flag, code: option.code), textSize: .large)
+            XCTAssertLessThan(pill.width, before.width - 4,
+                              "\(option.code) : la pastille garde la place d'un chevron (\(before.width) → \(pill.width) pt)")
         }
     }
 
-    /// Fusible : le harnais voit une hauteur qui grandit — sans lui, une
-    /// mesure qui rendrait toujours la même hauteur passerait pour une preuve.
-    func test_harness_seesATallerStack() {
-        let unbounded = VStack(spacing: 0) {
-            Text("🇫🇷").font(.caption)
-            Text("FR").font(.caption2)
+    func test_pill_drawsFlagAndCodeOnOneLine_withoutChevron() throws {
+        let code = try sourceOf("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
+        guard let start = code.range(of: "struct ComposerLanguagePillLabel: View {") else {
+            return XCTFail("ComposerLanguagePillLabel introuvable")
         }
-        .padding(.vertical, MeeshySpacing.xs)
-        let inline = measured(inlineLabel(flag: "🇫🇷", code: "fr"), textSize: .large)
-        XCTAssertGreaterThan(measured(unbounded, textSize: .large).height, inline.height + 0.5)
+        let body = code[start.upperBound...].prefix(700)
+        XCTAssertFalse(body.contains("chevron"), "La pastille n'annonce pas son menu par un ⌄ (#10366).")
+        XCTAssertTrue(body.contains("HStack"), "Drapeau et code sur une ligne (#10366).")
+        XCTAssertTrue(body.contains("code.uppercased()"), "Le code se lit en majuscules.")
     }
 
-    func test_stackedMark_drawsTheFlagAboveASmallerCode() {
-        XCTAssertLessThan(ComposerLanguagePillMetrics.codeSize, ComposerLanguagePillMetrics.flagSize)
-        XCTAssertLessThanOrEqual(ComposerLanguagePillMetrics.lineSpacing, 0, "Les deux lignes se serrent.")
-    }
-
-    func test_toolbar_drawsThePillWithTheStackedLabel() throws {
-        let url = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
-        let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+    func test_toolbar_opensTheLanguageMenuOnTouch() throws {
+        let code = try sourceOf("Meeshy/Features/Main/Components/UniversalComposerBar+Toolbar.swift")
         guard let start = code.range(of: "private var languageSelectorPill: some View {") else {
             return XCTFail("languageSelectorPill introuvable")
         }
         let body = code[start.upperBound...].prefix(900)
+        XCTAssertTrue(body.contains("return Menu {"),
+                      "Le toucher ouvre directement le menu des langues (Menu natif, #10366).")
         XCTAssertTrue(body.contains("ComposerLanguagePillLabel(flag: currentLangOption.flag, code: currentLangOption.code)"),
-                      "La pastille de la barre pose le drapeau et son code empilés (#9954).")
+                      "La pastille de la barre pose le drapeau et son code.")
         XCTAssertTrue(body.contains(".accessibilityValue(currentLangOption.name)"),
                       "VoiceOver lit le NOM de la langue, pas le code.")
     }
@@ -434,10 +434,11 @@ final class ConversationComposerFoldTests: XCTestCase {
     }
 
     func test_conversation_mountsTheSharedFold() throws {
-        let composer = try source("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        let host = try source("Meeshy/Features/Main/Views/ConversationView+Composer.swift")
+        let composer = try source("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
         XCTAssertTrue(composer.contains(".foldableConversationComposer("),
                       "La barre de la conversation se replie comme la story (#9955).")
-        XCTAssertTrue(composer.contains("isFocused: isTyping || composerState.focusRequested"),
+        XCTAssertTrue(host.contains("isFocusedOrRequested: isTyping || composerState.focusRequested"),
                       "Le ⌄ s'efface clavier levé, et une demande de focus rouvre la barre.")
         XCTAssertTrue(composer.contains("isRecording: isRecording"),
                       "Le ⌄ s'efface pendant l'enregistrement d'un vocal.")

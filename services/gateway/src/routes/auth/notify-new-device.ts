@@ -1,4 +1,4 @@
-import jwt from 'jsonwebtoken';
+import { signRevokeAllLinkToken } from '../../services/auth/revoke-all-link-token';
 import { isLoginFromUnrecognisedDevice, type SessionEvidence } from '../../utils/new-device';
 import { parseUserAgent } from '../../services/GeoIPService';
 
@@ -135,9 +135,7 @@ export async function notifyIfLoginFromNewDevice(
   );
   if (!inconnu) return 'appareil-connu';
 
-  const revokeToken = jwt.sign({ userId: context.userId, action: 'revoke-all' }, jwtSecret, {
-    expiresIn: '24h',
-  });
+  const revokeToken = signRevokeAllLinkToken({ userId: context.userId, jwtSecret });
   await notifications.createLoginNewDeviceNotification({
     recipientUserId: context.userId,
     deviceInfo: context.deviceInfo,

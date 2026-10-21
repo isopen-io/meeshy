@@ -1,6 +1,6 @@
 import * as z from 'zod/mini';
 
-import { anonymousSessionsKey, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
+import { anonymousSessionsKey, heldAccountOf, type SessionStorage, type SessionStoreApi, type SessionUser } from './session';
 
 /**
  * PLUSIEURS COMPTES SUR L'APPAREIL (#8286, D-142) — le COFFRE des comptes et
@@ -188,9 +188,13 @@ export function createAccountSwitcher({
   /** Ferme côté passerelle la session d'un compte qu'on quitte SANS la garder. */
   readonly endServerSession: (session: PreservedSession) => void;
 }): AccountSwitcher {
+  /* Le compte QUITTÉ est le compte TENU (`heldAccountOf`) : effectif, ou tenu
+     derrière l'identité anonyme qu'il lit (#8816). Sans cela, quitter depuis
+     cette identité ne rangeait ni ne fermait le compte, que la suite effaçait
+     (#10474). */
   const leaveActive = (): void => {
-    const current = store.getState().session;
-    if (current.status !== 'authenticated') return;
+    const current = heldAccountOf(store.getState().session);
+    if (current === null) return;
     const known = vault.list().find((account) => account.user.id === current.user.id);
     if (known === undefined) vault.noteActive(current.user);
     else vault.refreshUser(current.user);

@@ -21,6 +21,8 @@ import type { NormalizedContact } from '../utils/contact-identifiers.js';
 import { getBlockedUserIdsAmong, getBlockRelatedUserIds } from '../utils/blocking.js';
 import { getPresenceVisibilityService, type PresenceViewer } from './PresenceVisibilityService.js';
 import { undiscoverableAmong } from './profile-discoverability.js';
+import type { PersonProfileDecor } from '@meeshy/shared/types/profile-decor';
+import { AVATAR_RING_COLUMN, authorProfileDecor } from './appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'ContactDirectory' });
 
@@ -49,6 +51,8 @@ export type MatchedUserProfile = {
   avatar: string | null;
   isOnline: boolean;
   lastActiveAt: Date | null;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  profileDecor?: PersonProfileDecor;
 };
 
 export type ContactMatch = {
@@ -84,6 +88,7 @@ const MATCH_USER_SELECT = {
   lastActiveAt: true,
   phoneNumber: true,
   email: true,
+  ...AVATAR_RING_COLUMN,
 } as const;
 
 const PUBLIC_USER_SELECT = {
@@ -95,6 +100,7 @@ const PUBLIC_USER_SELECT = {
   avatar: true,
   isOnline: true,
   lastActiveAt: true,
+  ...AVATAR_RING_COLUMN,
 } as const;
 
 function toPublicProfile(user: Record<string, unknown> | null): MatchedUserProfile | null {
@@ -108,6 +114,7 @@ function toPublicProfile(user: Record<string, unknown> | null): MatchedUserProfi
     avatar: (user.avatar as string) ?? null,
     isOnline: Boolean(user.isOnline),
     lastActiveAt: (user.lastActiveAt as Date) ?? null,
+    ...authorProfileDecor({ equippedAvatarRing: user.equippedAvatarRing as string | null | undefined }),
   };
 }
 

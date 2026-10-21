@@ -26,7 +26,7 @@
 
 import { addDays, dayDiff } from './day-prng.js';
 import { GLORY_POINTS } from './glory.js';
-import { leagueWeekOfMoment, type LeagueMoment } from './league.js';
+import { leagueWeekKey, leagueWeekOfMoment, type LeagueMoment } from './league.js';
 import type { MissionDifficulty } from './missions.js';
 
 export const SEASON_ONE_START = '2026-12-21';
@@ -97,6 +97,36 @@ export const seasonOfMoment = (moment: LeagueMoment): number | null => seasonAt(
 export const isSeasonOpen = (params: { readonly season: number; readonly dayKey: string }): boolean =>
   seasonAt(params.dayKey) === Math.trunc(params.season);
 
+/** L'état d'une saison : terminée, en cours, à venir — les valeurs de `GameArchiveStatus`. */
+export type SeasonTense = 'past' | 'current' | 'upcoming';
+
+const TENSE_RANK: Readonly<Record<SeasonTense, number>> = { upcoming: 0, current: 1, past: 2 };
+
+/**
+ * L'ÉTAT D'UNE SAISON À UN MOMENT (#10131) — lu sur ses dates (`startDay`, `endDay`) et la semaine de ligue du moment :
+ * la fermeture du dimanche 20 h ouvre la semaine suivante, donc la saison qui commence le lundi est en cours dès la
+ * veille à 20 h, et se termine le dimanche 20 h de sa dernière semaine. La passerelle sert l'état ainsi
+ * (`GameArchiveService`) ; un client le RECALCULE sur sa copie hors ligne avec son horloge (`liveSeasonTense`).
+ */
+export function seasonTenseAt(dates: { readonly startDay: string; readonly endDay: string }, moment: LeagueMoment): SeasonTense {
+  const week = leagueWeekOfMoment(moment);
+  if (week < leagueWeekKey(dates.startDay)) return 'upcoming';
+  return week > leagueWeekKey(dates.endDay) ? 'past' : 'current';
+}
+
+/**
+ * L'état d'une COPIE (#10131) : celui que le serveur a servi, avancé par l'horloge locale — une saison « à venir »
+ * gardée hors ligne passe « en cours » le jour de son ouverture, puis « terminée », sans réseau. Une horloge en
+ * retard ne le fait jamais RECULER : l'état servi est un plancher.
+ */
+export function liveSeasonTense(
+  copy: { readonly served: SeasonTense; readonly startDay: string; readonly endDay: string },
+  moment: LeagueMoment,
+): SeasonTense {
+  const computed = seasonTenseAt(copy, moment);
+  return TENSE_RANK[computed] > TENSE_RANK[copy.served] ? computed : copy.served;
+}
+
 /**
  * La saison À VENIR (#10014) : avant l'ouverture de la première, la saison 1 —
  * son numéro, son thème, ses dates — pour que l'écran dise « la saison 1 ouvre
@@ -145,15 +175,16 @@ export type SeasonReward = { readonly kind: SeasonRewardKind; readonly amount: n
 export const SEASON_STEP_POINTS = 100;
 
 /**
- * La récompense GRATUITE d'une étape : des points ; un fragment de cosmétique
+ * La récompense GRATUITE d'une étape : des points (ceux de la saison, bornés par
+ * `season-schedule.ts`, #10016) ; UN fragment d'étoile (`star-fragments.ts`)
  * toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
  */
-export function seasonStepReward(step: number): SeasonReward | null {
+export function seasonStepReward(step: number, stepPoints: number = SEASON_STEP_POINTS): SeasonReward | null {
   if (!Number.isInteger(step) || step < 1 || step > SEASON_STEPS) return null;
   if (step === SEASON_STEPS) return { kind: 'season-cup', amount: 1 };
   if (step % 10 === 0) return { kind: 'freeze', amount: 1 };
   if (step % 5 === 0) return { kind: 'fragment', amount: 1 };
-  return { kind: 'points', amount: SEASON_STEP_POINTS };
+  return { kind: 'points', amount: Number.isInteger(stepPoints) && stepPoints > 0 ? stepPoints : SEASON_STEP_POINTS };
 }
 
 /** Le cosmétique de la rangée Sceau à cette étape, `null` hors des étapes marquées. */
@@ -181,8 +212,10 @@ export function claimSeasonStep(params: {
   readonly stepsReached: number;
   readonly claimed: readonly number[];
   readonly sealOwned: boolean;
+  /** Les points d'une étape ordinaire de CETTE saison (calendrier servi, #10016) ; absent, la loi. */
+  readonly stepPoints?: number;
 }): SeasonClaim {
-  const reward = seasonStepReward(params.step);
+  const reward = seasonStepReward(params.step, params.stepPoints);
   if (reward === null) return { allowed: false, reason: 'out-of-range' };
   if (params.claimed.includes(params.step)) return { allowed: false, reason: 'already-claimed' };
   if (params.step > params.stepsReached) return { allowed: false, reason: 'locked' };

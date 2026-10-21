@@ -104,7 +104,7 @@ describe('notificationString — interpolation', () => {
       .toBe('Alice a réagi ❤️ à votre commentaire sur le réel de Bob');
     expect(notificationString('fr', 'reaction.commentVerbose',
       { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'STATUS' }))
-      .toBe('Alice a réagi ❤️ à votre commentaire sur le statut de Bob');
+      .toBe('Alice a réagi ❤️ à votre commentaire sur l’humeur de Bob');
     expect(notificationString('en', 'reaction.commentVerbose',
       { actor: 'Alice', emoji: '❤️', author: 'Bob', postType: 'REEL' }))
       .toBe('Alice reacted ❤️ to your comment on Bob’s reel');
@@ -242,7 +242,7 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
     expect(buildNotificationDisplay('fr', { type: 'post_like', actorName: 'A', emoji: '❤️' }))
       .toEqual({ title: 'A a réagi ❤️ à votre publication', subtitle: null, action: 'a réagi ❤️ à votre publication' });
     expect(buildNotificationDisplay('fr', { type: 'status_reaction', actorName: 'A', emoji: '🔥', postType: 'STATUS' }).title)
-      .toBe('A a réagi 🔥 à votre statut');
+      .toBe('A a réagi 🔥 à votre humeur');
 
     // Commentaire sur votre contenu (story_new_comment défaut STORY).
     expect(buildNotificationDisplay('fr', { type: 'story_new_comment', actorName: 'B' }))
@@ -264,7 +264,7 @@ describe('buildNotificationDisplay — titre + sous-titre', () => {
 
     // Repost — avec et sans entité.
     expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'F', postType: 'STORY' }))
-      .toEqual({ title: 'F a partagé votre story', subtitle: 'Votre story', action: 'a partagé votre story' });
+      .toEqual({ title: 'F a republié votre story', subtitle: 'Votre story', action: 'a republié votre story' });
     expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'F' }).subtitle).toBeNull();
 
     // Nouveau contenu d'un ami (post / réel / humeur).
@@ -457,5 +457,91 @@ describe('contact_recently_active — « X était sur Meeshy récemment » (#828
         expect(notificationString(lang, key)).not.toContain('contact.');
       }
     }
+  });
+});
+
+describe('post_repost — « X a republié votre réel, story, mood ou post » (#10525)', () => {
+  const ATTENDU = {
+    fr: { REEL: 'Awa a republié votre réel', STORY: 'Awa a republié votre story', STATUS: 'Awa a republié votre humeur', POST: 'Awa a republié votre publication' },
+    en: { REEL: 'Awa reposted your reel', STORY: 'Awa reposted your story', STATUS: 'Awa reposted your mood', POST: 'Awa reposted your post' },
+    es: { REEL: 'Awa republicó tu reel', STORY: 'Awa republicó tu historia', STATUS: 'Awa republicó tu estado de ánimo', POST: 'Awa republicó tu publicación' },
+    pt: { REEL: 'Awa republicou seu reel', STORY: 'Awa republicou sua story', STATUS: 'Awa republicou seu humor', POST: 'Awa republicou sua publicação' },
+    de: { REEL: 'Awa hat deinen Reel erneut geteilt', STORY: 'Awa hat deine Story erneut geteilt', STATUS: 'Awa hat deine Stimmung erneut geteilt', POST: 'Awa hat deinen Beitrag erneut geteilt' },
+    it: { REEL: 'Awa ha ripubblicato il tuo reel', STORY: 'Awa ha ripubblicato la tua storia', STATUS: 'Awa ha ripubblicato il tuo stato d’animo', POST: 'Awa ha ripubblicato il tuo post' },
+    ar: { REEL: 'Awa أعاد نشر ريلك', STORY: 'Awa أعاد نشر قصتك', STATUS: 'Awa أعاد نشر مزاجك', POST: 'Awa أعاد نشر منشورك' },
+  } as const;
+
+  for (const [lang, parType] of Object.entries(ATTENDU)) {
+    for (const [postType, titre] of Object.entries(parType)) {
+      it(`${lang} · ${postType} — le titre NOMME le contenu republié`, () => {
+        expect(buildNotificationDisplay(lang, { type: 'post_repost', actorName: 'Awa', postType }).title).toBe(titre);
+      });
+    }
+  }
+
+  it('un STATUS se dit « humeur » jusque dans le sous-titre — le mot que l’auteur lit (§ 7)', () => {
+    expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'Awa', postType: 'STATUS' }).subtitle).toBe('Votre humeur');
+  });
+
+  it('une charge déjà persistée en « MOOD » se rend encore', () => {
+    expect(buildNotificationDisplay('en', { type: 'post_repost', actorName: 'Awa', postType: 'MOOD' }).title).toBe('Awa reposted your mood');
+  });
+
+  it('sans type, l’ancien contrat reste juste : une publication', () => {
+    expect(buildNotificationDisplay('fr', { type: 'post_repost', actorName: 'Awa' }).title).toBe('Awa a republié votre publication');
+  });
+});
+
+describe('un mood se dit « humeur » dans TOUTE notification qui le nomme, pas seulement sa republication (#10526)', () => {
+  const SEPT = ['fr', 'en', 'es', 'pt', 'de', 'it', 'ar'] as const;
+  const MOT = {
+    fr: 'humeur', en: 'mood', es: 'estado de ánimo', pt: 'humor', de: 'Stimmung', it: 'stato d’animo', ar: 'مزاج',
+  } as const;
+
+  const TITRES = {
+    fr: { status_reaction: 'Awa a réagi 🔥 à votre humeur', post_comment: 'Awa a commenté votre humeur' },
+    en: { status_reaction: 'Awa reacted 🔥 to your mood', post_comment: 'Awa commented on your mood' },
+  } as const;
+
+  for (const [lang, parType] of Object.entries(TITRES)) {
+    for (const [type, titre] of Object.entries(parType)) {
+      it(`${lang} · ${type} sur un STATUS — le titre dit « ${titre} »`, () => {
+        expect(buildNotificationDisplay(lang, { type, actorName: 'Awa', emoji: '🔥', postType: 'STATUS' }).title).toBe(titre);
+      });
+    }
+  }
+
+  for (const lang of SEPT) {
+    it(`${lang} · réaction, commentaire, fil d’un ami, mention et sous-titres nomment l’humeur d’un STATUS`, () => {
+      const types = ['status_reaction', 'post_comment', 'story_new_comment', 'friend_story_comment', 'story_thread_reply', 'mention'];
+      for (const type of types) {
+        for (const authorName of [undefined, 'Bob']) {
+          const status = buildNotificationDisplay(lang, { type, actorName: 'Awa', emoji: '🔥', postType: 'STATUS', authorName });
+          const mood = buildNotificationDisplay(lang, { type, actorName: 'Awa', emoji: '🔥', postType: 'MOOD', authorName });
+          expect(status).toEqual(mood);
+          expect(`${status.title} ${status.subtitle}`).toContain(MOT[lang]);
+        }
+      }
+    });
+
+    it(`${lang} · chaque phrase du catalogue qui prend un type rend un STATUS comme une humeur`, () => {
+      for (const key of NOTIFICATION_STRING_KEYS) {
+        const params = { actor: 'Awa', emoji: '🔥', author: 'Bob', preview: '…' };
+        expect(notificationString(lang, key, { ...params, postType: 'STATUS' }))
+          .toBe(notificationString(lang, key, { ...params, postType: 'MOOD' }));
+      }
+    });
+  }
+
+  it('aucune notification sur un STATUS ne dit plus « statut » ni « status »', () => {
+    for (const key of NOTIFICATION_STRING_KEYS) {
+      expect(notificationString('fr', key, { actor: 'Awa', author: 'Bob', postType: 'STATUS' })).not.toMatch(/statut/i);
+      expect(notificationString('en', key, { actor: 'Awa', author: 'Bob', postType: 'STATUS' })).not.toMatch(/status/i);
+    }
+  });
+
+  it('le contrat ne change pas : une charge persistée en STATUS comme en MOOD se rend, et un type absent reste une publication', () => {
+    expect(buildNotificationDisplay('fr', { type: 'status_reaction', actorName: 'Awa', emoji: '🔥', postType: 'MOOD' }).title).toBe('Awa a réagi 🔥 à votre humeur');
+    expect(buildNotificationDisplay('fr', { type: 'post_like', actorName: 'Awa', emoji: '🔥' }).title).toBe('Awa a réagi 🔥 à votre publication');
   });
 });

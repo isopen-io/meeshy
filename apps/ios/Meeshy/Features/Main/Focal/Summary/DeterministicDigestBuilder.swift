@@ -45,7 +45,7 @@ nonisolated public enum DeterministicDigestBuilder {
         let activeSenderIds = Set(real.map(\.senderId))
         let countedParticipantIds = knownIds.isEmpty ? activeSenderIds : knownIds.intersection(activeSenderIds)
 
-        let messagesById = Dictionary(uniqueKeysWithValues: sorted.map { ($0.id, $0) })
+        let messagesById = Dictionary(sorted.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         return DeterministicConversationDigest(
             messageCount: real.count,

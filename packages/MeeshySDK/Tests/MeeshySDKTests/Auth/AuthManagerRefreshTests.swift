@@ -60,7 +60,7 @@ final class AuthManagerRefreshTests: XCTestCase {
             createdAt: "2024-01-01T00:00:00.000Z",
             updatedAt: "2024-01-01T00:00:00.000Z"
         )
-        AuthManager.shared.applySession(token: "expired-token", sessionToken: "session-abc", user: user)
+        try AuthManager.shared.applySession(token: "expired-token", sessionToken: "session-abc", user: user)
 
         // 2. Perform 5 concurrent refreshes
         mockAuthService.stubbedToken = "refreshed-jwt-success"
@@ -98,7 +98,7 @@ final class AuthManagerRefreshTests: XCTestCase {
             createdAt: "2024-01-01T00:00:00.000Z",
             updatedAt: "2024-01-01T00:00:00.000Z"
         )
-        AuthManager.shared.applySession(token: "expired-token", sessionToken: "session-abc", user: user)
+        try AuthManager.shared.applySession(token: "expired-token", sessionToken: "session-abc", user: user)
 
         // 2. Mock service to fail
         mockAuthService.errorToThrow = MeeshyError.auth(.sessionExpired)
@@ -254,14 +254,14 @@ private final class InMemoryKeychainStore: KeychainStoring, @unchecked Sendable 
 /// flag avant que la purge ne se déclenche).
 extension AuthManagerRefreshTests {
 
-    func test_refreshSession_authFailure_emitsSessionInvalidatedBeforeAuthFlip() async {
+    func test_refreshSession_authFailure_emitsSessionInvalidatedBeforeAuthFlip() async throws {
         let user = MeeshyUser(
             id: "user-inv", username: "inv", email: "inv@test.com",
             role: "USER", systemLanguage: "fr",
             createdAt: "2024-01-01T00:00:00.000Z",
             updatedAt: "2024-01-01T00:00:00.000Z"
         )
-        AuthManager.shared.applySession(token: "tok-inv", sessionToken: "sess", user: user)
+        try AuthManager.shared.applySession(token: "tok-inv", sessionToken: "sess", user: user)
 
         var emitCount = 0
         var wasStillAuthenticatedAtEmit: Bool?

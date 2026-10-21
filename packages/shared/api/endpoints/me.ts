@@ -70,6 +70,9 @@ export const gameFlameFreezes = '/api/v1/me/game/flame/freezes';
 /** POST /api/v1/me/game/flame/relight */
 export const gameFlameRelight = '/api/v1/me/game/flame/relight';
 
+/** PUT /api/v1/me/game/frames/atmosphere */
+export const gameFramesAtmosphere = '/api/v1/me/game/frames/atmosphere';
+
 /** POST /api/v1/me/game/guide/seen */
 export const gameGuideSeen = '/api/v1/me/game/guide/seen';
 
@@ -85,14 +88,29 @@ export const gameLeaguePseudonym = '/api/v1/me/game/league/pseudonym';
 /** GET /api/v1/me/game/league/week */
 export const gameLeagueWeek = '/api/v1/me/game/league/week';
 
+/** GET /api/v1/me/game/league/weeks/:weekKey */
+export const gameLeagueWeeksByWeekKey = (weekKey: string): string => `/api/v1/me/game/league/weeks/${encodeURIComponent(weekKey)}`;
+
 /** POST /api/v1/me/game/missions/:missionId/reroll */
 export const gameMissionsByMissionIdReroll = (missionId: string): string => `/api/v1/me/game/missions/${encodeURIComponent(missionId)}/reroll`;
+
+/** PUT /api/v1/me/game/photo-moments/invitations */
+export const gamePhotoMomentsInvitations = '/api/v1/me/game/photo-moments/invitations';
+
+/** POST /api/v1/me/game/photo-moments/presented */
+export const gamePhotoMomentsPresented = '/api/v1/me/game/photo-moments/presented';
 
 /** POST /api/v1/me/game/prestige */
 export const gamePrestige = '/api/v1/me/game/prestige';
 
 /** GET · PUT /api/v1/me/game/privacy */
 export const gamePrivacy = '/api/v1/me/game/privacy';
+
+/** GET /api/v1/me/game/seasons/:number */
+export const gameSeasonsByNumber = (number: string): string => `/api/v1/me/game/seasons/${encodeURIComponent(number)}`;
+
+/** GET /api/v1/me/game/seasons/calendar */
+export const gameSeasonsCalendar = '/api/v1/me/game/seasons/calendar';
 
 /** POST /api/v1/me/game/season/seal */
 export const gameSeasonSeal = '/api/v1/me/game/season/seal';
@@ -150,6 +168,9 @@ export const preferencesPrivacy = '/api/v1/me/preferences/privacy';
 
 /** GET · PUT · PATCH · DELETE /api/v1/me/preferences/video */
 export const preferencesVideo = '/api/v1/me/preferences/video';
+
+/** PUT /api/v1/me/profile-decor */
+export const profileDecor = '/api/v1/me/profile-decor';
 
 /** GET /api/v1/me */
 export const root = '/api/v1/me';

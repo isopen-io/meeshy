@@ -186,9 +186,8 @@ function makePrisma(rows: Row[]) {
       ),
     },
     conversationShareLink: {
-      update: jest.fn(async (_args: { where: { id: string }; data: { isActive: boolean } }) => ({
-        id: SHARE_LINK_ID,
-        isActive: false,
+      updateMany: jest.fn(async (_args: { where: { id: string; conversationId: string }; data: { isActive: boolean } }) => ({
+        count: 1,
       })),
     },
   };
@@ -198,7 +197,7 @@ type Emitted = { rooms: string[]; event: string; payload: any };
 
 function makeSocket(emitted: Emitted[], joins: string[][]) {
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
     emit: (event: string, payload: any) => emitted.push({ rooms, event, payload }),
   });
   const io = {
@@ -667,8 +666,8 @@ describe('PATCH …/:participantKey — les effets de bord survivent à la fusio
     });
     await app.close();
 
-    expect(prisma.conversationShareLink.update).toHaveBeenCalledWith({
-      where: { id: SHARE_LINK_ID },
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { id: SHARE_LINK_ID, conversationId: CONV_ID },
       data: { isActive: false },
     });
     expect(res.json().data.closedShareLinkId).toBe(SHARE_LINK_ID);

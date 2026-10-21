@@ -52,7 +52,7 @@ import {
   pingCache,
   servedCircuitBreakers,
 } from '../../services/admin/platform-probes';
-import { backupCardOf, backupStatusFile, readBackupVerdict } from '../../services/admin/backup-status';
+import { backupCardOf, backupScheduleFromEnv, backupStatusFile, readBackupVerdict } from '../../services/admin/backup-status';
 import { logError } from '../../utils/logger';
 import { sendInternalError, sendSuccess } from '../../utils/response';
 import {
@@ -177,7 +177,7 @@ const dependencySchema = {
   properties: { status: chaine, latencyMs: nombreNul },
 } as const;
 
-const backupsSchema = {
+export const backupsSchema = {
   type: 'object',
   nullable: true,
   description: 'Le verdict de la sauvegarde nocturne (etat.json, #9668) — null quand il est absent ou illisible',
@@ -324,7 +324,7 @@ export function registerMonitoringRoutes(fastify: FastifyInstance): void {
             lastFailureAt: lastFailure,
           })),
           presenceUpdates: readPresenceMetrics(fastify),
-          backups: backupCardOf(backupVerdict, now),
+          backups: backupCardOf(backupVerdict, now, backupScheduleFromEnv()),
         });
       } catch (error) {
         logError(fastify.log, 'Admin monitoring error:', error);

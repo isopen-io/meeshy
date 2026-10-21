@@ -35,16 +35,27 @@ struct GameLawVectorTests {
         let wave1: Set<String> = [
             "level", "level-record", "mint-price", "mint-preview", "glory-standing", "glory-gain", "treasury",
             "flame-form", "flame-advance", "flame-status", "flame-relight", "tailwind", "prism-hour",
-            "mission-objective", "mission-reward", "rng", "missions-draw", "mission-reroll", "chest", "guide",
+            "mission-objective", "mission-reward", "rng", "missions-draw", "mission-reroll", "chest", "star-fragments", "guide",
         ]
-        #expect(laws == wave1.union(GameLawVectorEvaluator.wave2Laws))
+        // Les lois d'ADMINISTRATION (`season-edit`) sont dans le fichier mais ne se rejouent pas ici : elles
+        // sont nommées, donc acceptées par cette couverture — une loi inconnue la fait toujours rougir.
+        #expect(laws == wave1.union(GameLawVectorEvaluator.wave2Laws).union(GameLawVectorEvaluator.adminOnlyLaws))
+        #expect(laws.contains("season-schedule"), "la lecture du calendrier servi se rejoue sur iOS (#10232)")
     }
 
     @Test("chaque vecteur rend, sur la loi Swift, exactement la sortie de la loi TypeScript")
     func everyVectorMatches() throws {
         let vectors = try Self.loadVectors()
         var failures: [String] = []
+        var skipped = 0
         for (index, vector) in vectors.enumerated() {
+            // `season-edit` est la PROGRAMMATION d'une saison par l'admin (#10232) : le web la consomme en TS,
+            // la passerelle l'applique, iOS ne programme jamais — il n'a pas de miroir à rejouer. Sauté
+            // EXPLICITEMENT, et compté : jamais un vert par omission d'une loi qu'iOS lit.
+            if let law = vector["input"]["law"].stringValue, GameLawVectorEvaluator.adminOnlyLaws.contains(law) {
+                skipped += 1
+                continue
+            }
             let label = "#\(index) « \(vector["_label"].stringValue ?? "") »"
             do {
                 let actual = try GameLawVectorEvaluator.evaluate(vector["input"])
@@ -55,6 +66,7 @@ struct GameLawVectorTests {
                 failures.append("\(label) — \(error)")
             }
         }
+        #expect(skipped < vectors.count / 10, "\(skipped) vecteur(s) d'admin sautés — trop pour n'être que la programmation")
         #expect(failures.isEmpty, "\(failures.count) vecteur(s) divergent :\n\(failures.joined(separator: "\n"))")
     }
 }

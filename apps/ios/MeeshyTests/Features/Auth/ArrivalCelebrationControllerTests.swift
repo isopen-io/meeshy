@@ -133,6 +133,30 @@ final class ArrivalCelebrationControllerTests: XCTestCase {
 
         XCTAssertEqual(prefetcher.startCount, 2)
     }
+
+    /// Déconnexion : les caches sont vidés, donc le préchargement d'arrivée doit
+    /// pouvoir repartir pour le même compte ; et celui en vol ne doit pas écrire
+    /// le fil du compte sortant dans le cache du suivant.
+    func test_resetForLogout_cancelsThePrefetch_andAllowsANewOne() async {
+        let (sut, prefetcher, hold) = makeSUT()
+        sut.begin(userId: "u1")
+        await Task.yield()
+
+        sut.resetForLogout()
+        XCTAssertFalse(sut.isShowing)
+        XCTAssertTrue(sut.isPrefetchCancelled)
+
+        sut.prepare(userId: "u1")
+        await Task.yield()
+        XCTAssertEqual(prefetcher.startCount, 2)
+        hold.open()
+        prefetcher.latch.open()
+    }
+
+    func test_logoutTeardown_resetsTheArrival() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Core/DependencyContainer.swift")
+        XCTAssertTrue(source.contains("ArrivalCelebrationController.shared.resetForLogout()"))
+    }
 }
 
 /// Reduce Motion : aucune particule, un fondu sobre.
@@ -158,5 +182,17 @@ final class ArrivalCelebrationMotionTests: XCTestCase {
 
     func test_fireworks_afterTheShow_drawNothing() {
         XCTAssertTrue(ArrivalFireworks.sparks(at: ArrivalFireworks.showDuration + 1, burstCount: 4, sparksPerBurst: 10).isEmpty)
+    }
+
+    func test_fireworks_isOver_onlyOnceTheLastBurstHasFaded() {
+        XCTAssertFalse(ArrivalFireworks.isOver(at: 0))
+        XCTAssertFalse(ArrivalFireworks.isOver(at: ArrivalFireworks.showDuration - 0.01))
+        XCTAssertTrue(ArrivalFireworks.isOver(at: ArrivalFireworks.showDuration))
+        XCTAssertTrue(ArrivalFireworks.isOver(at: ArrivalFireworks.showDuration + 30))
+    }
+
+    func test_fireworks_pausedClockFreezesOnAnEmptyFrame() {
+        XCTAssertTrue(ArrivalFireworks.sparks(at: ArrivalFireworks.showDuration).isEmpty,
+                      "une horloge en pause fige la dernière image : elle doit être vide")
     }
 }

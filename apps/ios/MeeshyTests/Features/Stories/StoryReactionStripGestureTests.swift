@@ -17,6 +17,7 @@ import CoreGraphics
 /// La garde du site épingle au passage l'habillage de la barre (échelle 2, sans
 /// capsule) : c'est le même arbitrage porteur, et le rendre au site est la seule
 /// preuve que la barre commandée est celle qui se monte.
+@MainActor
 final class StoryReactionStripGestureTests: XCTestCase {
 
     // MARK: - 1 · La loi
@@ -216,10 +217,18 @@ final class StoryReactionStripGestureTests: XCTestCase {
             return XCTFail("`unifiedDragGesture` introuvable — la garde ne mesurerait rien.")
         }
         let plat = compact(corps)
-        guard let consultation = plat.range(of: "StoryReactionStripGesture.yieldsHorizontalAxis("),
+        // #11045 : la barre ET les composants posés sur la scène cèdent ensemble,
+        // par `StoryReaderHorizontalYield.yields(`, qui consulte la barre.
+        guard let consultation = plat.range(of: "StoryReaderHorizontalYield.yields("),
               let axe = plat.range(of: "gestureAxis=1") else {
-            return XCTFail("Le lecteur doit consulter `yieldsHorizontalAxis(` avant de poser `gestureAxis = 1`.")
+            return XCTFail("Le lecteur doit consulter `StoryReaderHorizontalYield.yields(` avant de poser `gestureAxis = 1`.")
         }
+        let cession = try strippedSource(at: "Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift")
+        guard let yields = self.corps("static func yields(", dans: cession) else {
+            return XCTFail("`StoryReaderHorizontalYield.yields` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(compact(yields).contains("StoryReactionStripGesture.yieldsHorizontalAxis(stripFrame:stripFrame,dragStart:dragStart)"),
+                      "La cession consulte le cadre de la barre au point de départ.")
         XCTAssertLessThan(consultation.lowerBound, axe.lowerBound,
                           "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
         XCTAssertTrue(plat.contains("stripFrame:reactionStripFrame"),
@@ -275,7 +284,8 @@ final class StoryReactionStripGestureTests: XCTestCase {
     }
 
     private func contentSource() throws -> String {
-        try strippedSource(at: "Meeshy/Features/Main/Views/StoryViewerView+Content.swift")
+        // L'unité de `StoryViewerView+Content` : le drag du lecteur vit dans `+Content+Gestures`.
+        Self.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Content.swift"))
     }
 
     /// COMMENTAIRES RETIRÉS : une garde qui compte des occurrences dans un

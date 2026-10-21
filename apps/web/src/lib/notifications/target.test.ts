@@ -52,6 +52,32 @@ describe('les contenus sociaux ouvrent l’entité que la métadonnée NOMME', (
     }
   });
 
+  /* LA NOUVELLE HUMEUR D'UN CONTACT A SA PAGE (#10813) — plein écran, la
+     bannière de l'auteur, son avatar, la pluie de son emoji et la réponse en
+     privé. Elle ne passe plus par le lecteur de story, qui ne sait pas lire
+     une humeur sans scène. */
+  test('`friend_new_mood` ouvre la page de l’humeur, que la passerelle dise STATUS ou MOOD', () => {
+    for (const contentType of ['STATUS', 'MOOD', undefined]) {
+      expect(
+        notificationTarget(
+          record({ type: 'friend_new_mood', context: { postId: 'st1' }, metadata: contentType === undefined ? {} : { contentType, postType: contentType } }),
+        ),
+      ).toEqual({ route: 'mood', params: { post: 'st1' } });
+    }
+    expect(pushTapTarget({ type: 'friend_new_mood', postId: 'st1', postType: 'STATUS', contentType: 'STATUS' })).toEqual({
+      route: 'mood',
+      params: { post: 'st1' },
+    });
+  });
+
+  test('une RÉACTION à mon humeur garde le lecteur : seule la nouvelle humeur d’un autre a sa page', () => {
+    expect(resolveTarget({ type: 'status_reaction', postId: 'st1', postType: 'STATUS' })).toEqual({ route: 'story', params: { post: 'st1' } });
+  });
+
+  test('sans identifiant d’humeur, la nouvelle humeur retombe sur la liste — aucune page vide', () => {
+    expect(pushTapTarget({ type: 'friend_new_mood' })).toEqual({ route: 'notifications' });
+  });
+
   test('la famille `friend_new_*` se discrimine par `contentType`', () => {
     expect(
       notificationTarget(record({ type: 'friend_new_post', context: { postId: 's2' }, metadata: { contentType: 'STORY' } })),

@@ -13,6 +13,8 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MeeshService } from '../MeeshService';
+import { effectiveMeeshPrice } from '@meeshy/shared/utils/game/sparks';
+import { findAndModifyLikeMongo, type FindAndModifyCommand } from '../../engagement/__tests__/mongoLikeCounters';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -64,7 +66,7 @@ function fausseBase(params: {
   const registre: LigneRegistre[] = [...(params.registre ?? [])];
   const paliers: Palier[] = [...(params.paliers ?? [])];
   const gloire: LigneRegistre[] = [];
-  const compteur = { axisKey: 'content.text_message', count: 400, points: params.points };
+  const compteur = { userId: USER_ID, axisKey: 'content.text_message', count: 400, points: params.points };
   let conflitsRestants = params.conflits ?? 0;
 
   const correspond = (cle: string, filtre: FiltreCle) =>
@@ -74,13 +76,11 @@ function fausseBase(params: {
   const client = {
     engagementCounter: {
       findMany: async () => [{ ...compteur }],
-      update: async (args: { data: { points: Increment; count: Increment } }) => {
-        compteur.points -= args.data.points.decrement ?? 0;
-        compteur.count -= args.data.count.decrement ?? 0;
-        return { ...compteur };
-      },
       findUnique: async () => ({ count: compteur.count }),
     },
+    // Le débit du compteur passe par `EngagementCounterWrites` (#10541) : la
+    // commande s'applique à la ligne comme MongoDB l'appliquerait.
+    $runCommandRaw: async (command: FindAndModifyCommand) => findAndModifyLikeMongo([compteur], command),
     engagementMilestone: {
       deleteMany: async (args: { where: { milestoneType: string; milestoneKey: FiltreCle } }) => {
         const avant = paliers.length;
@@ -216,7 +216,7 @@ describe('MeeshService.mint — le solde se lit au REGISTRE', () => {
 
     const issue = await new MeeshService(prisma).mint(USER_ID, 'frappe-0003');
 
-    expect(issue).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null });
+    expect(issue).toEqual({ status: 'already-minted', balance: 1, mintedLifetime: 1, receipt: null, gameRevision: expect.any(Number) });
   });
 
   it('un compte sain ne compte pas deux fois la frappe qu’il vient d’écrire', async () => {
@@ -229,64 +229,8 @@ describe('MeeshService.mint — le solde se lit au REGISTRE', () => {
     const issue = await new MeeshService(prisma).mint(USER_ID, 'frappe-0004');
 
     expect(issue).toMatchObject({ status: 'minted', balance: 4, mintedLifetime: 4 });
-    expect(compte.engagementScore).toBe(5000 - 1221);
-  });
-});
-
-/**
- * CE QUE LA FRAPPE ÉTEINT (#6465) — et seulement cela.
- *
- * Mesuré sur staging le 2026-09-14, juste après la première frappe réelle :
- * « Niveau 3 · 1 point · Encore 9 points avant le niveau 4 », et « Dernier
- * succès : 10 messages envoyés, obtenu aujourd'hui » pour un badge vieux de
- * plusieurs mois. La frappe gardait les niveaux gravés au-dessus du score, et
- * effaçait puis regravait les badges que le compteur couvrait encore.
- */
-describe('MeeshService.mint — les paliers suivent la valeur RESTANTE', () => {
-  const badge = (seuil: number, reachedAt: string): Palier => ({
-    milestoneType: 'badge',
-    milestoneKey: `content.text_message:${seuil}`,
-    reachedAt,
-  });
-  const niveau = (seuil: number): Palier => ({
-    milestoneType: 'level',
-    milestoneKey: `level:${seuil}`,
-    reachedAt: '2026-03-01T00:00:00.000Z',
-  });
-
-  it('éteint les badges que le compteur restant ne couvre plus, et laisse les autres INTACTS, date comprise', async () => {
-    const { prisma, paliers, compteur } = fausseBase({
-      compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
-      points: 1300,
-      paliers: [
-        badge(1, '2026-01-05T00:00:00.000Z'),
-        badge(10, '2026-02-10T00:00:00.000Z'),
-        badge(50, '2026-04-20T00:00:00.000Z'),
-        badge(100, '2026-06-30T00:00:00.000Z'),
-      ],
-    });
-
-    await new MeeshService(prisma).mint(USER_ID, 'frappe-badges');
-
-    expect(compteur.count).toBeGreaterThanOrEqual(10);
-    expect(compteur.count).toBeLessThan(50);
-    expect(paliers.filter((p) => p.milestoneType === 'badge')).toEqual([
-      badge(1, '2026-01-05T00:00:00.000Z'),
-      badge(10, '2026-02-10T00:00:00.000Z'),
-    ]);
-  });
-
-  it('éteint les niveaux que le score restant ne couvre plus — le niveau et sa barre lisent la même valeur', async () => {
-    const { prisma, paliers, compte } = fausseBase({
-      compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
-      points: 1300,
-      paliers: [niveau(10), niveau(50), niveau(150), niveau(400), niveau(1000)],
-    });
-
-    await new MeeshService(prisma).mint(USER_ID, 'frappe-niveaux');
-
-    expect(compte.engagementScore).toBe(79);
-    expect(paliers.filter((p) => p.milestoneType === 'level')).toEqual([niveau(10), niveau(50)]);
+    // Cycle 5 000 : niveau 7 (retenu à 9 par les étapes), facteur 0,535 — le prix de la 4e pièce reste celui de rang 1221.
+    expect(compte.engagementScore).toBe(5000 - effectiveMeeshPrice(4, 7));
   });
 });
 
@@ -300,7 +244,7 @@ describe('MeeshService.mint — les paliers suivent la valeur RESTANTE', () => {
  * annule, et personne ne rejouait.
  */
 describe('MeeshService.mint — un conflit d’écriture ne coûte pas un geste', () => {
-  it('rejoue la frappe : elle aboutit, UNE ligne au registre, 1221 points débités une seule fois', async () => {
+  it('rejoue la frappe : elle aboutit, UNE ligne au registre, points débités une seule fois', async () => {
     const { prisma, compte, registre } = fausseBase({
       compte: { engagementScore: 1300, meeshBalance: 0, meeshMintedLifetime: 0 },
       points: 1300,
@@ -311,7 +255,7 @@ describe('MeeshService.mint — un conflit d’écriture ne coûte pas un geste'
 
     expect(issue).toMatchObject({ status: 'minted', balance: 1, mintedLifetime: 1 });
     expect(registre).toHaveLength(1);
-    expect(compte.engagementScore).toBe(1300 - 1221);
+    expect(compte.engagementScore).toBe(1300 - effectiveMeeshPrice(1, 3));
   });
 
   it('la reprise est BORNÉE : un conflit qui persiste remonte, et rien n’est écrit', async () => {

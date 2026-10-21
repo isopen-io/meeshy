@@ -1,0 +1,6054 @@
+{
+  "$format": "frame-offer/1",
+  "catalog": [
+    {
+      "slug": "afrique",
+      "atmosphere": "afrique",
+      "collections": [
+        "savane",
+        "royaumes"
+      ],
+      "frames": [
+        {
+          "id": "savane.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "savane.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "savane.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "savane.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "savane.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "savane.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "savane.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "savane.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "savane.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "savane.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "savane.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "savane.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "savane.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "savane.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "savane.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "savane.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "savane.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "savane.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "savane.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "savane",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "royaumes.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "royaumes",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "egypte",
+      "atmosphere": "egypte",
+      "collections": [
+        "egypte"
+      ],
+      "frames": [
+        {
+          "id": "egypte.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "egypte.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "egypte.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "egypte.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "egypte.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "egypte.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "egypte.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "egypte.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "egypte.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "egypte.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "egypte.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "egypte.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "egypte.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "egypte.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "egypte.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "egypte.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "egypte.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "egypte.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "egypte.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "egypte",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "olympe",
+      "atmosphere": "olympe",
+      "collections": [
+        "olympe"
+      ],
+      "frames": [
+        {
+          "id": "olympe.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "olympe.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "olympe.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "olympe.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "olympe.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "olympe.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "olympe.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "olympe.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "olympe.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "olympe.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "olympe.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "olympe.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "olympe.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "olympe.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "olympe.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "olympe.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "olympe.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "olympe.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "olympe.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "olympe",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "celeste",
+      "atmosphere": "celeste",
+      "collections": [
+        "celeste"
+      ],
+      "frames": [
+        {
+          "id": "celeste.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "celeste.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "celeste.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "celeste.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "celeste.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "celeste.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "celeste.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "celeste.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "celeste.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "celeste.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "celeste.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "celeste.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "celeste.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "celeste.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "celeste.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "celeste.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "celeste.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "celeste.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "celeste.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "celeste",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "nord",
+      "atmosphere": "nord",
+      "collections": [
+        "nord"
+      ],
+      "frames": [
+        {
+          "id": "nord.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "nord.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "nord.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "nord.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "nord.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "nord.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "nord.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "nord.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "nord.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "nord.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "nord.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "nord.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "nord.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "nord.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "nord.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "nord.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "nord.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "nord.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "nord.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "nord",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "abysses",
+      "atmosphere": "abysses",
+      "collections": [
+        "abysses"
+      ],
+      "frames": [
+        {
+          "id": "abysses.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "abysses.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "abysses.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "abysses.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "abysses.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "abysses.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "abysses.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "abysses.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "abysses.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "abysses.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "abysses.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "abysses.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "abysses.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "abysses.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "abysses.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "abysses.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "abysses.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "abysses.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "abysses.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "abysses",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "neon",
+      "atmosphere": "neon",
+      "collections": [
+        "neon"
+      ],
+      "frames": [
+        {
+          "id": "neon.ambassadeur-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "neon.ambassadeur-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "neon.ambassadeur-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "neon.ambassadeur-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "neon.ambassadeur-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "ambassadeur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "ambassadeur",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "neon.orateur-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "neon.orateur-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "neon.orateur-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "orateur"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "orateur",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "neon.oracle-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "neon.oracle-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "neon.oracle-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "oracle"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "oracle",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        },
+        {
+          "id": "neon.legende-5",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 5
+          },
+          "option": "V",
+          "hidden": false
+        },
+        {
+          "id": "neon.legende-4",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 4
+          },
+          "option": "IV",
+          "hidden": false
+        },
+        {
+          "id": "neon.legende-3",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 3
+          },
+          "option": "III",
+          "hidden": false
+        },
+        {
+          "id": "neon.legende-2",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 2
+          },
+          "option": "II",
+          "hidden": false
+        },
+        {
+          "id": "neon.legende-1",
+          "usage": {
+            "kind": "rank",
+            "rank": "legende"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "legende",
+            "division": 1
+          },
+          "option": "I",
+          "hidden": false
+        },
+        {
+          "id": "neon.mythe-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "neon.mythe-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        },
+        {
+          "id": "neon.mythe-c",
+          "usage": {
+            "kind": "rank",
+            "rank": "mythe"
+          },
+          "collection": "neon",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "mythe",
+            "division": null
+          },
+          "option": "C",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "moments",
+      "atmosphere": null,
+      "collections": [
+        "moments"
+      ],
+      "frames": [
+        {
+          "id": "moments.palier-lueur",
+          "usage": {
+            "kind": "moment",
+            "family": "tier"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "tier",
+            "tier": "lueur"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.palier-aurore",
+          "usage": {
+            "kind": "moment",
+            "family": "tier"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "tier",
+            "tier": "aurore"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.palier-galaxie",
+          "usage": {
+            "kind": "moment",
+            "family": "tier"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "tier",
+            "tier": "galaxie"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.palier-nebuleuse",
+          "usage": {
+            "kind": "moment",
+            "family": "tier"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "tier",
+            "tier": "nebuleuse"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.palier-supernova",
+          "usage": {
+            "kind": "moment",
+            "family": "tier"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "tier",
+            "tier": "supernova"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.palier-singularite",
+          "usage": {
+            "kind": "moment",
+            "family": "tier"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "tier",
+            "tier": "singularite"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.flamme-7",
+          "usage": {
+            "kind": "moment",
+            "family": "flame"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "flame",
+            "days": 7
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.flamme-30",
+          "usage": {
+            "kind": "moment",
+            "family": "flame"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "flame",
+            "days": 30
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.flamme-100",
+          "usage": {
+            "kind": "moment",
+            "family": "flame"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "flame",
+            "days": 100
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.flamme-365",
+          "usage": {
+            "kind": "moment",
+            "family": "flame"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "flame",
+            "days": 365
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.meesh-1",
+          "usage": {
+            "kind": "moment",
+            "family": "meesh"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "meesh",
+            "edition": "first"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.meesh-10",
+          "usage": {
+            "kind": "moment",
+            "family": "meesh"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "meesh",
+            "edition": "silver"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.meesh-100",
+          "usage": {
+            "kind": "moment",
+            "family": "meesh"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "meesh",
+            "edition": "gold"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.meesh-1000",
+          "usage": {
+            "kind": "moment",
+            "family": "meesh"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "meesh",
+            "edition": "prism"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "moments.jour-a",
+          "usage": {
+            "kind": "moment",
+            "family": "day"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "day"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "moments.jour-b",
+          "usage": {
+            "kind": "moment",
+            "family": "day"
+          },
+          "collection": "moments",
+          "appliesTo": {
+            "family": "day"
+          },
+          "option": "b",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "tresor",
+      "atmosphere": null,
+      "collections": [
+        "tresor"
+      ],
+      "frames": [
+        {
+          "id": "tresor.bourse-a",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "bourse"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "tresor.bourse-b",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "bourse"
+          },
+          "option": "b",
+          "hidden": false
+        },
+        {
+          "id": "tresor.escarcelle-a",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "escarcelle"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "tresor.escarcelle-b",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "escarcelle"
+          },
+          "option": "b",
+          "hidden": false
+        },
+        {
+          "id": "tresor.coffret-a",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "coffret"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "tresor.coffret-b",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "coffret"
+          },
+          "option": "b",
+          "hidden": false
+        },
+        {
+          "id": "tresor.coffre-a",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "coffre"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "tresor.coffre-b",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "coffre"
+          },
+          "option": "b",
+          "hidden": false
+        },
+        {
+          "id": "tresor.coffre-c",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "coffre"
+          },
+          "option": "c",
+          "hidden": false
+        },
+        {
+          "id": "tresor.tresor-a",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "tresor"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "tresor.tresor-b",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "tresor"
+          },
+          "option": "b",
+          "hidden": false
+        },
+        {
+          "id": "tresor.reserve-a",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "reserve"
+          },
+          "option": "a",
+          "hidden": false
+        },
+        {
+          "id": "tresor.reserve-b",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "reserve"
+          },
+          "option": "b",
+          "hidden": false
+        },
+        {
+          "id": "tresor.reserve-c",
+          "usage": {
+            "kind": "moment",
+            "family": "treasury"
+          },
+          "collection": "tresor",
+          "appliesTo": {
+            "family": "treasury",
+            "treasury": "reserve"
+          },
+          "option": "c",
+          "hidden": false
+        }
+      ]
+    },
+    {
+      "slug": "succes",
+      "atmosphere": null,
+      "collections": [
+        "succes"
+      ],
+      "frames": [
+        {
+          "id": "succes.common",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "common"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "common"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.rare",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "rare"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "rare"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.epic",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "epic"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "epic"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.legendary",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "legendary"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "legendary"
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.neutre",
+          "usage": {
+            "kind": "achievement"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": null
+          },
+          "option": null,
+          "hidden": false
+        },
+        {
+          "id": "succes.ancien-epic",
+          "usage": {
+            "kind": "achievement",
+            "rarity": "epic"
+          },
+          "collection": "succes",
+          "appliesTo": {
+            "family": "achievement",
+            "rarity": "epic"
+          },
+          "option": null,
+          "hidden": true
+        }
+      ]
+    },
+    {
+      "slug": "mythologies",
+      "atmosphere": null,
+      "collections": [
+        "mythologies"
+      ],
+      "frames": [
+        {
+          "id": "mythologies.murmure-a",
+          "usage": {
+            "kind": "rank",
+            "rank": "murmure"
+          },
+          "collection": "mythologies",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "murmure",
+            "division": null
+          },
+          "option": "A",
+          "hidden": false
+        },
+        {
+          "id": "mythologies.murmure-b",
+          "usage": {
+            "kind": "rank",
+            "rank": "murmure"
+          },
+          "collection": "mythologies",
+          "appliesTo": {
+            "family": "rank",
+            "rank": "murmure",
+            "division": null
+          },
+          "option": "B",
+          "hidden": false
+        }
+      ]
+    }
+  ],
+  "cases": [
+    {
+      "name": "Ambassadeur sans atmosphère : needsAtmosphere, l’Afrique, la division d’abord",
+      "input": {
+        "stepId": "rank:ambassadeur:3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": true,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-1"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-2"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-3"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-5"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-4"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-2"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-2"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-2"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-2"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-2"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-1"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.ambassadeur-3"
+        }
+      }
+    },
+    {
+      "name": "Oracle B, atmosphère null → needsAtmosphere + suggested = Afrique",
+      "input": {
+        "stepId": "rank:oracle:2",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": true,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.oracle-a"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.oracle-b"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.oracle-c"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.oracle-a"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.oracle-b"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.oracle-c"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.oracle-a"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.oracle-b"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.oracle-c"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.oracle-a"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.oracle-b"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.oracle-c"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.oracle-a"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.oracle-b"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.oracle-c"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.oracle-a"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.oracle-b"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.oracle-c"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.oracle-a"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.oracle-b"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.oracle-c"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.oracle-a"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.oracle-b"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.oracle-c"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.oracle-a"
+        }
+      }
+    },
+    {
+      "name": "choix reporté → présélection dans l’Afrique",
+      "input": {
+        "stepId": "rank:ambassadeur:5",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": true,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-1"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-2"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-5"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-4"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-3"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-2"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-2"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-2"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-2"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-2"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-1"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.ambassadeur-5"
+        }
+      }
+    },
+    {
+      "name": "lastChosen d’une autre atmosphère → ignoré",
+      "input": {
+        "stepId": "rank:ambassadeur:2",
+        "atmosphere": "afrique",
+        "lastChosen": "neon.ambassadeur-2",
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-1"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-2"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-2"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-5"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-4"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-3"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-2"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-2"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-2"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-1"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-2"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-1"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.ambassadeur-2"
+        }
+      }
+    },
+    {
+      "name": "Orateur IV dans l’Olympe installé",
+      "input": {
+        "stepId": "rank:orateur:4",
+        "atmosphere": "olympe",
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "olympe"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "olympe",
+            "frameId": "olympe.orateur-a"
+          },
+          {
+            "pack": "olympe",
+            "frameId": "olympe.orateur-b"
+          },
+          {
+            "pack": "olympe",
+            "frameId": "olympe.orateur-c"
+          }
+        ],
+        "others": [
+          {
+            "pack": "afrique",
+            "atmosphere": "afrique",
+            "installed": true,
+            "frames": [
+              {
+                "pack": "afrique",
+                "frameId": "savane.orateur-a"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.orateur-b"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.orateur-c"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.orateur-a"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.orateur-b"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-a"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-b"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-a"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-b"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-a"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-b"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-a"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-b"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-a"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-b"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-c"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "olympe",
+          "frameId": "olympe.orateur-a"
+        }
+      }
+    },
+    {
+      "name": "Mythe (rank:mythe:0) au Néon",
+      "input": {
+        "stepId": "rank:mythe:0",
+        "atmosphere": "neon",
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "neon"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "neon",
+            "frameId": "neon.mythe-a"
+          },
+          {
+            "pack": "neon",
+            "frameId": "neon.mythe-b"
+          },
+          {
+            "pack": "neon",
+            "frameId": "neon.mythe-c"
+          }
+        ],
+        "others": [
+          {
+            "pack": "afrique",
+            "atmosphere": "afrique",
+            "installed": true,
+            "frames": [
+              {
+                "pack": "afrique",
+                "frameId": "savane.mythe-a"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.mythe-b"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.mythe-c"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.mythe-a"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.mythe-b"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.mythe-c"
+              }
+            ]
+          },
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.mythe-a"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.mythe-b"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.mythe-c"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.mythe-a"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.mythe-b"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.mythe-c"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.mythe-a"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.mythe-b"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.mythe-c"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.mythe-a"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.mythe-b"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.mythe-c"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.mythe-a"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.mythe-b"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.mythe-c"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "neon",
+          "frameId": "neon.mythe-a"
+        }
+      }
+    },
+    {
+      "name": "Afrique : Savane puis Royaumes",
+      "input": {
+        "stepId": "rank:orateur:1",
+        "atmosphere": "afrique",
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.orateur-a"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.orateur-b"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.orateur-c"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.orateur-a"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.orateur-b"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.orateur-c"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-a"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-b"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.orateur-a"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.orateur-b"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-a"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-b"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-a"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-b"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-a"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-b"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-a"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-b"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-c"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.orateur-a"
+        }
+      }
+    },
+    {
+      "name": "Afrique : la collection du dernier choix d’abord",
+      "input": {
+        "stepId": "rank:orateur:1",
+        "atmosphere": "afrique",
+        "lastChosen": "royaumes.orateur-b",
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.orateur-a"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.orateur-b"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.orateur-c"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.orateur-a"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.orateur-b"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.orateur-c"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-a"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-b"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.orateur-a"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.orateur-b"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-a"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-b"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-a"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-b"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-a"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-b"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.orateur-c"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-a"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-b"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.orateur-c"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "royaumes.orateur-b"
+        }
+      }
+    },
+    {
+      "name": "Légende I : others marque chaque pack installé ou non",
+      "input": {
+        "stepId": "rank:legende:1",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "nord"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": true,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.legende-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.legende-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.legende-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.legende-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.legende-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.legende-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.legende-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.legende-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.legende-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.legende-2"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.legende-1"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.legende-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.legende-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.legende-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.legende-2"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.legende-1"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.legende-5"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.legende-4"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.legende-3"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.legende-2"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.legende-1"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.legende-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.legende-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.legende-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.legende-2"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": true,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.legende-1"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.legende-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.legende-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.legende-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.legende-2"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.legende-1"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.legende-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.legende-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.legende-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.legende-2"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.legende-1"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.legende-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.legende-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.legende-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.legende-2"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.legende-1"
+        }
+      }
+    },
+    {
+      "name": "pack non installé ⇒ jamais dans suggested",
+      "input": {
+        "stepId": "rank:ambassadeur:1",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "moments"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": true,
+        "suggested": [],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-1"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-1"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-5"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-4"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-3"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-1"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-1"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-1"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-1"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-2"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "atmosphère choisie, pack NON installé ⇒ Afrique + reinstall",
+      "input": {
+        "stepId": "rank:ambassadeur:1",
+        "atmosphere": "olympe",
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-1"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "savane.ambassadeur-2"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-5"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-4"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-3"
+          },
+          {
+            "pack": "afrique",
+            "frameId": "royaumes.ambassadeur-2"
+          }
+        ],
+        "others": [
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-1"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "olympe",
+            "atmosphere": "olympe",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-1"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-5"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-4"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-3"
+              },
+              {
+                "pack": "olympe",
+                "frameId": "olympe.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-1"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-1"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-1"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-1"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-2"
+              }
+            ]
+          }
+        ],
+        "reinstall": "olympe",
+        "preselected": {
+          "pack": "afrique",
+          "frameId": "savane.ambassadeur-1"
+        }
+      }
+    },
+    {
+      "name": "atmosphère choisie, pack installé mais pas prêt ⇒ suggested reste celui de l’atmosphère",
+      "input": {
+        "stepId": "rank:ambassadeur:1",
+        "atmosphere": "olympe",
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "olympe"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "olympe",
+            "frameId": "olympe.ambassadeur-1"
+          },
+          {
+            "pack": "olympe",
+            "frameId": "olympe.ambassadeur-5"
+          },
+          {
+            "pack": "olympe",
+            "frameId": "olympe.ambassadeur-4"
+          },
+          {
+            "pack": "olympe",
+            "frameId": "olympe.ambassadeur-3"
+          },
+          {
+            "pack": "olympe",
+            "frameId": "olympe.ambassadeur-2"
+          }
+        ],
+        "others": [
+          {
+            "pack": "afrique",
+            "atmosphere": "afrique",
+            "installed": true,
+            "frames": [
+              {
+                "pack": "afrique",
+                "frameId": "savane.ambassadeur-1"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.ambassadeur-1"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.ambassadeur-5"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.ambassadeur-4"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.ambassadeur-3"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "savane.ambassadeur-2"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.ambassadeur-5"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.ambassadeur-4"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.ambassadeur-3"
+              },
+              {
+                "pack": "afrique",
+                "frameId": "royaumes.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "egypte",
+            "atmosphere": "egypte",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-1"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-5"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-4"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-3"
+              },
+              {
+                "pack": "egypte",
+                "frameId": "egypte.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "celeste",
+            "atmosphere": "celeste",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-1"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-5"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-4"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-3"
+              },
+              {
+                "pack": "celeste",
+                "frameId": "celeste.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "nord",
+            "atmosphere": "nord",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-1"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-5"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-4"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-3"
+              },
+              {
+                "pack": "nord",
+                "frameId": "nord.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "abysses",
+            "atmosphere": "abysses",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-1"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-5"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-4"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-3"
+              },
+              {
+                "pack": "abysses",
+                "frameId": "abysses.ambassadeur-2"
+              }
+            ]
+          },
+          {
+            "pack": "neon",
+            "atmosphere": "neon",
+            "installed": false,
+            "frames": [
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-1"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-5"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-4"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-3"
+              },
+              {
+                "pack": "neon",
+                "frameId": "neon.ambassadeur-2"
+              }
+            ]
+          }
+        ],
+        "reinstall": null,
+        "preselected": {
+          "pack": "olympe",
+          "frameId": "olympe.ambassadeur-1"
+        }
+      }
+    },
+    {
+      "name": "meesh:1 → l’écrin",
+      "input": {
+        "stepId": "meesh:1",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.meesh-1"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.meesh-1"
+        }
+      }
+    },
+    {
+      "name": "meesh:30 → argent",
+      "input": {
+        "stepId": "meesh:30",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.meesh-10"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.meesh-10"
+        }
+      }
+    },
+    {
+      "name": "meesh:200 → or",
+      "input": {
+        "stepId": "meesh:200",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.meesh-100"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.meesh-100"
+        }
+      }
+    },
+    {
+      "name": "meesh:3000 → prisme",
+      "input": {
+        "stepId": "meesh:3000",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.meesh-1000"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.meesh-1000"
+        }
+      }
+    },
+    {
+      "name": "tier:lueur → lueur",
+      "input": {
+        "stepId": "tier:lueur",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.palier-lueur"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.palier-lueur"
+        }
+      }
+    },
+    {
+      "name": "tier:comete → aurore",
+      "input": {
+        "stepId": "tier:comete",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.palier-aurore"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.palier-aurore"
+        }
+      }
+    },
+    {
+      "name": "tier:infini → supernova",
+      "input": {
+        "stepId": "tier:infini",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.palier-supernova"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.palier-supernova"
+        }
+      }
+    },
+    {
+      "name": "treasury:coffre → a b c",
+      "input": {
+        "stepId": "treasury:coffre",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "tresor",
+            "frameId": "tresor.coffre-a"
+          },
+          {
+            "pack": "tresor",
+            "frameId": "tresor.coffre-b"
+          },
+          {
+            "pack": "tresor",
+            "frameId": "tresor.coffre-c"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "tresor",
+          "frameId": "tresor.coffre-a"
+        }
+      }
+    },
+    {
+      "name": "treasury:coffre, dernier choix b",
+      "input": {
+        "stepId": "treasury:coffre",
+        "atmosphere": null,
+        "lastChosen": "tresor.coffre-b",
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "tresor",
+            "frameId": "tresor.coffre-a"
+          },
+          {
+            "pack": "tresor",
+            "frameId": "tresor.coffre-b"
+          },
+          {
+            "pack": "tresor",
+            "frameId": "tresor.coffre-c"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "tresor",
+          "frameId": "tresor.coffre-b"
+        }
+      }
+    },
+    {
+      "name": "flame:30 → le cadre du seuil",
+      "input": {
+        "stepId": "flame:30",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.flamme-30"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.flamme-30"
+        }
+      }
+    },
+    {
+      "name": "day → jour a et b",
+      "input": {
+        "stepId": "day:2026-10-12",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "moments",
+            "frameId": "moments.jour-a"
+          },
+          {
+            "pack": "moments",
+            "frameId": "moments.jour-b"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "moments",
+          "frameId": "moments.jour-a"
+        }
+      }
+    },
+    {
+      "name": "succès rare ⇒ succes.rare",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": "rare"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes",
+            "frameId": "succes.rare"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes",
+          "frameId": "succes.rare"
+        }
+      }
+    },
+    {
+      "name": "succès sans rareté servie ⇒ le cadre neutre, jamais une rareté",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes",
+            "frameId": "succes.neutre"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes",
+          "frameId": "succes.neutre"
+        }
+      }
+    },
+    {
+      "name": "succès composé, rareté servie (un cadre masqué ne se propose pas)",
+      "input": {
+        "stepId": "achievement:defi.streak-3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": "epic"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes",
+            "frameId": "succes.epic"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes",
+          "frameId": "succes.epic"
+        }
+      }
+    },
+    {
+      "name": "succès composé, rareté non servie ⇒ le neutre",
+      "input": {
+        "stepId": "achievement:defi.streak-3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes",
+            "frameId": "succes.neutre"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes",
+          "frameId": "succes.neutre"
+        }
+      }
+    },
+    {
+      "name": "pack des succès absent ⇒ carte simple",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": "rare"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "succès d’une rareté sans cadre ⇒ le neutre, jamais une autre rareté",
+      "input": {
+        "stepId": "achievement:messages.3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": "mythic"
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "succes",
+            "frameId": "succes.neutre"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "succes",
+          "frameId": "succes.neutre"
+        }
+      }
+    },
+    {
+      "name": "Murmure → les cadres de sa mythologie",
+      "input": {
+        "stepId": "rank:murmure:3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [
+          {
+            "pack": "mythologies",
+            "frameId": "mythologies.murmure-a"
+          },
+          {
+            "pack": "mythologies",
+            "frameId": "mythologies.murmure-b"
+          }
+        ],
+        "others": [],
+        "reinstall": null,
+        "preselected": {
+          "pack": "mythologies",
+          "frameId": "mythologies.murmure-a"
+        }
+      }
+    },
+    {
+      "name": "Prestige sans cadre de prestige ⇒ carte simple",
+      "input": {
+        "stepId": "prestige:2",
+        "atmosphere": "afrique",
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor",
+          "succes",
+          "mythologies"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "niveau 100 sans cadre déclaré ⇒ carte simple",
+      "input": {
+        "stepId": "level-100:0",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "départ ⇒ carte simple",
+      "input": {
+        "stepId": "start",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "trophée ⇒ carte simple",
+      "input": {
+        "stepId": "trophy:trophy.prestige.1",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "saison ⇒ carte simple",
+      "input": {
+        "stepId": "season:3",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "identité illisible ⇒ rien",
+      "input": {
+        "stepId": "rank:ambassadeur:9",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "Meesh zéro ⇒ rien",
+      "input": {
+        "stepId": "meesh:0",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "palier inconnu ⇒ rien",
+      "input": {
+        "stepId": "tier:inconnu",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "division écrite autrement ⇒ rien",
+      "input": {
+        "stepId": "rank:ambassadeur:3.0",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    },
+    {
+      "name": "Meesh signée ⇒ rien",
+      "input": {
+        "stepId": "meesh:+10",
+        "atmosphere": null,
+        "lastChosen": null,
+        "installed": [
+          "afrique",
+          "moments",
+          "tresor"
+        ],
+        "rarity": null
+      },
+      "expected": {
+        "needsAtmosphere": false,
+        "suggested": [],
+        "others": [],
+        "reinstall": null,
+        "preselected": null
+      }
+    }
+  ]
+}

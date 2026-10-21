@@ -17,7 +17,8 @@ import { describe, expect, test } from 'bun:test';
  * le navigateur partageait `https://meeshy.me/…`.
  *
  * Ce témoin lit le CODE : toute lecture de `location.origin` hors de
- * `web-origin.ts` passe par `webOriginOf(` sur la même ligne. Une liste
+ * `web-origin.ts` passe par `webOriginOf(` — ou `publicWebOrigin(`, qui la
+ * précède de l'origine déclarée au déploiement (#10208) — sur la même ligne. Une liste
  * `origins: [webOriginOf(…), location.origin]` (reconnaître un lien interne)
  * reste permise : elle ne compose rien.
  */
@@ -38,7 +39,7 @@ const rawOriginReads = (): readonly string[] =>
       readFileSync(path, 'utf8')
         .split('\n')
         .map((line, index) => ({ line, at: `${relative(SRC, path)}:${index + 1}` }))
-        .filter(({ line }) => /location\.origin/.test(line) && !line.includes('webOriginOf(')),
+        .filter(({ line }) => /location\.origin/.test(line) && !line.includes('webOriginOf(') && !line.includes('publicWebOrigin(')),
     )
     .map(({ at }) => at);
 

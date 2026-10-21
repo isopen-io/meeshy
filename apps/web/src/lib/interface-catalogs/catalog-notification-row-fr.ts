@@ -12,7 +12,6 @@ const frNotificationRow = {
   'notifications.row.kind.story': 'Story',
   'notifications.row.kind.reel': 'Réel',
   'notifications.row.kind.mood': 'Humeur',
-  'notifications.row.kind.status': 'Statut',
   'notifications.row.kind.post': 'Publication',
   'notifications.row.media.photo': '📷 Photo',
   'notifications.row.media.video': '🎥 Vidéo',

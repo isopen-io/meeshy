@@ -26,7 +26,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .bubble, color: "#FFFFFF", fill: nil),
                 title: CallFrameTitle(source: .names, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.aurore.comite",
@@ -48,7 +49,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .bubble, color: "#FFFFFF", fill: "#1E1B4BCC"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.aurore.groupe",
@@ -70,7 +72,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .bubble, color: "#FFFFFF", fill: "#1E1B4BCC"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.aurore.tablee",
@@ -92,7 +95,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .bubble, color: "#FFFFFF", fill: nil),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.prisme.duo",
@@ -114,7 +118,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .bold, color: "#FFFFFF", fill: "#1E1B4BB3"),
                 title: CallFrameTitle(source: .names, font: .bold, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .bold, color: "#E0E7FF", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.prisme.comite",
@@ -136,7 +141,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .bold, color: "#FFFFFF", fill: "#1E1B4BB3"),
                 title: CallFrameTitle(source: .group, font: .bold, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .bold, color: "#E0E7FF", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.prisme.groupe",
@@ -158,7 +164,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .bold, color: "#FFFFFF", fill: "#312E81CC"),
                 title: CallFrameTitle(source: .group, font: .bold, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .date, font: .bold, color: "#E0E7FF", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.prisme.tablee",
@@ -180,7 +187,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .bold, color: "#FFFFFF", fill: "#312E81CC"),
                 title: CallFrameTitle(source: .group, font: .bold, color: "#FFFFFF", place: .top, size: .m, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.asIs),
                 subtitle: CallFrameTitle(source: .none, font: .bold, color: "#FFFFFF", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.bulle.duo",
@@ -201,7 +209,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .bubble, font: .bubble, color: "#1E1B4B", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .names, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.bulle.comite",
@@ -222,7 +231,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .bubble, font: .bubble, color: "#1E1B4B", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.bulle.groupe",
@@ -243,7 +253,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .bubble, color: "#FFFFFF", fill: "#6366F1"),
                 title: CallFrameTitle(source: .group, font: .bubble, color: "#FFFFFF", place: .top, size: .m, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "signature.echo.duo",
@@ -264,7 +275,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .bold, color: "#E0E7FF", fill: nil),
                 title: CallFrameTitle(source: .brand, font: .bubble, color: "#FFFFFF", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .bubble, color: "#C7D2FECC", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

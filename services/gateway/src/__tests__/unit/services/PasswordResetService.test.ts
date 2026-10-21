@@ -196,7 +196,7 @@ describe('PasswordResetService', () => {
 
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
     mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.passwordResetToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
 
@@ -1069,8 +1069,8 @@ describe('PasswordResetService', () => {
       it('should mark token as used', async () => {
         await service.completePasswordReset(validResetCompletion);
 
-        expect(mockPrisma.passwordResetToken.update).toHaveBeenCalledWith({
-          where: { id: 'token-1' },
+        expect(mockPrisma.passwordResetToken.updateMany).toHaveBeenCalledWith({
+          where: expect.objectContaining({ id: 'token-1', isRevoked: false }),
           data: { usedAt: expect.any(Date) }
         });
       });
@@ -1310,7 +1310,7 @@ describe('PasswordResetService - Edge Cases', () => {
 
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
     mockPrisma.passwordResetToken.count.mockResolvedValue(0);
-    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.passwordResetToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.passwordHistory.findMany.mockResolvedValue([]);
 
@@ -1636,7 +1636,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     const completionWith2FA = {
@@ -1682,7 +1682,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     const result = await service.completePasswordReset({
@@ -1738,7 +1738,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     await service.completePasswordReset(validResetCompletion);
@@ -1774,7 +1774,7 @@ describe('PasswordResetService - Security Tests', () => {
     mockBcryptHash.mockResolvedValue('$2b$12$newhash');
     mockPrisma.user.update.mockResolvedValue({});
     mockPrisma.passwordHistory.create.mockResolvedValue({});
-    mockPrisma.passwordResetToken.update.mockResolvedValue({});
+    mockPrisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.userSession.updateMany.mockResolvedValue({ count: 0 });
 
     const result = await service.completePasswordReset(validResetCompletion);

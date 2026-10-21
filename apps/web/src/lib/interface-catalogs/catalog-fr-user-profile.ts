@@ -11,6 +11,7 @@
 const frUserProfile = {
   'userProfile.self.edit': 'Modifier mon profil',
   'userProfile.title': 'Profil',
+  'userProfile.sendProfile': 'Envoyer le profil',
   'userProfile.loading': 'Chargement du profil',
   'userProfile.section.relation': 'CONNEXION',
   'userProfile.section.conversations': 'CONVERSATIONS',

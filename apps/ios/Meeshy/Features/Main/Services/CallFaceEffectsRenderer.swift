@@ -101,6 +101,22 @@ nonisolated final class CallFaceEffectsRenderer: CallFaceEffectsRendererProvidin
         } ?? image
     }
 
+    /// **Sur une image DÉJÀ debout, avec un visage connu** (#10311) — une photo
+    /// du composer, dont le visage vient d'être cherché sur ELLE : aucun suivi
+    /// d'une image à l'autre, donc aucun retard d'une trame. L'image a son
+    /// origine en zéro.
+    func render(_ effect: CallFaceEffect, upright image: CIImage, face: CallFaceLandmarks?,
+                intensity: Float) -> CIImage {
+        guard effect != .none else { return image }
+        lock.lock()
+        defer { lock.unlock() }
+        let isAnimated = !isReduceMotionEnabled()
+        let time = isAnimated ? clock() - clockOrigin : 0
+        let canvas = CGRect(origin: .zero, size: image.extent.size)
+        return stylize(effect, image, face: face, canvas: canvas, intensity: intensity, time: time,
+                       isAnimated: isAnimated, isDegraded: false).cropped(to: canvas)
+    }
+
     func retouch(
         _ image: CIImage,
         pixelBuffer: CVPixelBuffer,

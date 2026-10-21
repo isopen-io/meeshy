@@ -101,10 +101,11 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     const creation = corpsDe(service, 'public void onCreate(');
     expect(creation).toContain('new MediaSession(');
     expect(creation).toContain('setActive(true)');
-    expect(creation).toContain('setPlaybackState(state(true))');
+    expect(creation).toContain('setPlaybackState(state())');
     const etat = corpsDe(service, 'PlaybackState state(');
     expect(etat).toContain('PlaybackState.STATE_PLAYING');
-    expect(etat).toContain('PlaybackState.ACTION_PAUSE');
+    expect(etat).toContain('PlaybackRules.actions(playing');
+    expect(sansCommentaires(lire(...JAVA, 'PlaybackRules.java'))).toContain('PlaybackState.ACTION_PAUSE');
     expect(corpsDe(service, 'public void onPause(')).toContain('MeeshyPlaybackPlugin.pauseRequested(');
     expect(corpsDe(service, 'public void onDestroy(')).toContain('.release()');
   });
@@ -114,14 +115,14 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
     const notification = corpsDe(service, 'Notification notification(');
     expect(notification).toContain('new Notification.MediaStyle()');
     expect(notification).toContain('.setMediaSession(session.getSessionToken())');
-    expect(notification).toContain('.setShowActionsInCompactView(0)');
+    expect(notification).toMatch(/\.setShowActionsInCompactView\(seekable \? new int\[\] \{ 0, 1, 2 \} : new int\[\] \{ 0 \}\)/);
   });
 
   test('une pause garée offre « Lecture », à la notification comme au casque, et la remet à la page (#9394)', () => {
     const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
     expect(service).toContain('ACTION_PLAY');
     expect(service).toContain('PlaybackState.STATE_PAUSED');
-    expect(service).toContain('PlaybackState.ACTION_PLAY');
+    expect(sansCommentaires(lire(...JAVA, 'PlaybackRules.java'))).toContain('PlaybackState.ACTION_PLAY');
     expect(corpsDe(service, 'public void onPlay(')).toContain('resume(');
     expect(corpsDe(service, 'void resume(')).toContain('MeeshyPlaybackPlugin.playRequested(');
     expect(corpsDe(service, 'int onStartCommand(')).toContain('resume(');
@@ -135,6 +136,28 @@ describe('la lecture d’un vocal tenue au premier plan dans la coque Android (#
       const chaines = lire('res', dossier, 'strings_playback.xml');
       expect(chaines).toContain('name="playback_play"');
       expect(chaines).toContain('name="playback_paused"');
+    }
+  });
+
+  test('la page qui reprend la lecture fait taire le vocal lu depuis une notification : jamais deux sons (#10641)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    const tenir = corpsDe(plugin, 'public void holdPlayback(');
+    expect(tenir).toContain('NotificationVoiceService.yieldToPage()');
+    expect(tenir.indexOf('NotificationVoiceService.yieldToPage()')).toBeLessThan(tenir.indexOf('PlaybackForegroundService.start('));
+  });
+
+  test('la carte dit le vocal décrit par la page et renvoie la barre glissée à la page, en sept langues (#10624)', () => {
+    const plugin = sansCommentaires(lire(...JAVA, 'MeeshyPlaybackPlugin.java'));
+    expect(corpsDe(plugin, 'public void nowPlaying(')).toContain('PlaybackForegroundService.describe(');
+    expect(corpsDe(plugin, 'static boolean seekRequested(')).toContain('notifyListeners("seekRequested"');
+    const service = sansCommentaires(lire(...JAVA, 'PlaybackForegroundService.java'));
+    expect(corpsDe(service, 'public void onSeekTo(')).toContain('seek(');
+    expect(corpsDe(service, 'void seek(')).toContain('MeeshyPlaybackPlugin.seekRequested(');
+    expect(corpsDe(service, 'void show(')).toContain('session.setMetadata(');
+    expect(corpsDe(service, 'PlaybackState state(')).toContain('track.position(now)');
+    for (const dossier of LANGUES) {
+      const chaines = lire('res', dossier, 'strings_playback.xml');
+      for (const cle of ['playback_voice_message', 'playback_protected', 'playback_back', 'playback_forward']) expect(chaines).toContain(`name="${cle}"`);
     }
   });
 

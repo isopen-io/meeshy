@@ -22,13 +22,23 @@ nonisolated enum ComposerPhotoFrame: Hashable, Sendable {
 }
 
 /// Le rendu choisi pour la photo : un filtre (`.natural` ⇒ la photo telle
-/// quelle) et un cadre.
+/// quelle), un cadre, et un effet de l'appel (#10311).
 nonisolated struct ComposerPhotoLook: Hashable, Sendable {
     var filter: VideoFilterPreset = .natural
     var frame: ComposerPhotoFrame = .none
+    var effect: CallFaceEffect = .none
 
     /// Rien n'a été choisi : la prise part telle quelle, octets d'origine compris.
-    var isUntouched: Bool { filter == .natural && frame == .none }
+    var isUntouched: Bool { filter == .natural && frame == .none && effect == .none }
+
+    /// Le même look sans son cadre — ce qui se peint le temps que le cadre cuise.
+    var withoutFrame: ComposerPhotoLook {
+        ComposerPhotoLook(filter: filter, frame: .none, effect: effect)
+    }
+
+    /// L'identité du cadre pour la loi d'enregistrement (#10284) : deux looks
+    /// différents rendent deux versions différentes dans Photos.
+    var captureFrameId: String { String(describing: self) }
 }
 
 nonisolated enum ComposerPhotoLookRule {

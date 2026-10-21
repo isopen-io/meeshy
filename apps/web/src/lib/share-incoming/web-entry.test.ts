@@ -27,6 +27,7 @@ function harness(overrides: Partial<ShareEntryDeps> & { readonly received?: Inco
     },
     open: (request) => trace.opened.push(request),
     navigate: (path, replace) => trace.navigations.push({ path, replace }),
+    home: '/chats',
     ...overrides,
   };
   return { trace, run: () => enterSharedContent(deps) };
@@ -37,7 +38,7 @@ describe('enterSharedContent — ouvrir la feuille sur ce qu’on vient de parta
     const { trace, run } = harness();
     expect(await run()).toBe('opened');
     expect(trace.opened).toEqual([{ intent: 'share', payload: { kind: 'text', text: 'Bonjour' } }]);
-    expect(trace.navigations).toEqual([{ path: '/', replace: true }]);
+    expect(trace.navigations).toEqual([{ path: '/chats', replace: true }]);
   });
 
   test('des fichiers reçus ouvrent la feuille sur les fichiers', async () => {
@@ -77,7 +78,7 @@ describe('enterSharedContent — ouvrir la feuille sur ce qu’on vient de parta
       const { trace, run } = harness({ received });
       expect(await run()).toBe('empty');
       expect(trace.opened).toEqual([]);
-      expect(trace.navigations).toEqual([{ path: '/', replace: true }]);
+      expect(trace.navigations).toEqual([{ path: '/chats', replace: true }]);
     }
   });
 });

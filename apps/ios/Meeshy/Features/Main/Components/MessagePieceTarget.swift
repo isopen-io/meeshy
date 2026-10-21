@@ -125,8 +125,11 @@ enum MessagePieceMenu {
         let isProtected: Bool
         /// La loi de sortie du message porteur (`Message.exitOffer`).
         let exits: MessageExitOffer
-        /// L'utilisateur a-t-il le droit de supprimer (auteur, admin, modérateur).
+        /// L'utilisateur a-t-il le droit de supprimer sur la passerelle
+        /// (`MessageMenuContext.canDeleteOnServer`) — jamais « pour moi ».
         let canDelete: Bool
+        /// Le verdict `forward` de la loi partagée (E2EE, avis, envoi raté).
+        var canForward: Bool = true
     }
 
     /// Répondre, enregistrer, supprimer : chacun atteint la pièce AFFICHÉE.
@@ -137,17 +140,24 @@ enum MessagePieceMenu {
     /// - la suppression suit le droit de l'utilisateur, protégée ou non ;
     /// - « Tout le message » ferme toujours la liste : l'aperçu d'une pièce ne
     ///   retire jamais l'accès au message entier.
-    ///
-    /// **Transférer une seule pièce n'est pas offert** : la passerelle copie
-    /// TOUTES les pièces du message transféré (`copyForwardedAttachments`), et
-    /// une entrée « Transférer » enverrait le lot entier sous le nom d'une
-    /// pièce. Elle entrera ici quand la passerelle saura copier une pièce.
+    /// - « Transférer » ouvre l'écran de partage sur CETTE pièce (V2) : la
+    ///   passerelle ne recopie que la pièce choisie (`forwardedAttachmentIds`,
+    ///   #9914) — jamais une pièce protégée, ni quand la loi refuse le transfert.
     static func actions(_ ctx: Context) -> [PrimaryAction] {
         var out: [PrimaryAction] = []
         if !ctx.isProtected { out.append(.replyToPiece) }
+        if !ctx.isProtected && ctx.canForward && ctx.exits.offers(.forward) { out.append(.forwardPiece) }
         if !ctx.isProtected && ctx.exits.offers(.save) { out.append(.saveMedia) }
         if ctx.canDelete { out.append(.deletePiece) }
         out.append(.wholeMessage)
         return out
+    }
+}
+
+extension MessagePieceMenu.Context {
+    /// Le menu d'une pièce lit les verdicts de la fabrique du message
+    /// (#11214) : la suppression serveur, jamais « pour moi », et le transfert.
+    init(isProtected: Bool, menu: MessageMenuContext) {
+        self.init(isProtected: isProtected, exits: menu.exits, canDelete: menu.canDeleteOnServer, canForward: menu.canForward)
     }
 }

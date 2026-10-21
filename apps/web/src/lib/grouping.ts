@@ -1,4 +1,5 @@
 import type { Message } from './api/types';
+import { currentInterfaceLanguage } from './interface-language';
 import { isSystemMessage } from './view/message-badges';
 
 /**
@@ -208,9 +209,9 @@ export type DayLabelOptions = {
  * J-2 → `dayBeforeYesterday` ; J-3..J-6 → jour de semaine localisé ; J-7+ →
  * jour de semaine + jour + mois (+ année si différente).
  *
- * `locale` est OBLIGATOIRE — un appel sans locale ne compile plus : c'est le
- * témoin que le compilateur tient contre un prisme à un seul échelon
- * (`CLAUDE.md`, leçon 261).
+ * `locale` est OBLIGATOIRE et c'est la langue d'INTERFACE (#10817) : un
+ * séparateur de jour est du chrome, jamais du contenu — le Prisme du lecteur
+ * n'a rien à y dire.
  */
 export function dayLabel(iso: Clock, options: DayLabelOptions): string {
   const date = new Date(iso);
@@ -228,6 +229,8 @@ export function dayLabel(iso: Clock, options: DayLabelOptions): string {
   return fullDate(date, options.locale, options.timeZone, !sameYear);
 }
 
-export function time(iso: Clock): string {
-  return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+/** L'heure d'une bulle — libellé d'INTERFACE (#10817) : elle suit la langue
+ * d'interface, jamais un « fr-FR » figé ni la langue du contenu. */
+export function time(iso: Clock, language: string = currentInterfaceLanguage()): string {
+  return new Date(iso).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit' });
 }

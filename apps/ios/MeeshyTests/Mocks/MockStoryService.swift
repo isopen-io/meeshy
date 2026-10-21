@@ -14,7 +14,6 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     /// Pages servies dans l'ordre, une par appel à `list`. Prioritaire sur
     /// `listResult` tant qu'elle n'est pas épuisée.
     var listResults: [Result<PaginatedAPIResponse<[APIPost]>, Error>] = []
-    var markViewedResult: Result<Void, Error> = .success(())
     var deleteResult: Result<Void, Error> = .success(())
     var reactResult: Result<Void, Error> = .success(())
     var commentResult: Result<APIPostComment, Error> = .success(
@@ -40,11 +39,9 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
     var lastListLimit: Int?
     var lastListUpdatedSince: Date?
 
-    var markViewedCallCount = 0
-    var lastMarkViewedStoryId: String?
-
     var deleteCallCount = 0
     var lastDeleteStoryId: String?
+    var lastDeleteReason: String?
 
     var reactCallCount = 0
     var lastReactStoryId: String?
@@ -84,15 +81,24 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         return try listResult.get()
     }
 
-    func markViewed(storyId: String) async throws {
-        markViewedCallCount += 1
-        lastMarkViewedStoryId = storyId
-        try markViewedResult.get()
-    }
+    /// Plantage TestFlight 1890 : la chaîne réseau réelle reprend sur une file
+    /// de fond (décodage hors main). Vrai → `delete` reprend depuis
+    /// `DispatchQueue.global`, comme elle.
+    var deleteResumesOnBackgroundQueue = false
 
     func delete(storyId: String) async throws {
+        try await delete(storyId: storyId, reason: nil)
+    }
+
+    func delete(storyId: String, reason: String?) async throws {
         deleteCallCount += 1
         lastDeleteStoryId = storyId
+        lastDeleteReason = reason
+        if deleteResumesOnBackgroundQueue {
+            await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+                DispatchQueue.global(qos: .userInitiated).async { continuation.resume() }
+            }
+        }
         try deleteResult.get()
     }
 
@@ -173,13 +179,10 @@ final class MockStoryService: StoryServiceProviding, @unchecked Sendable {
         lastListCursor = nil
         lastListLimit = nil
 
-        markViewedResult = .success(())
-        markViewedCallCount = 0
-        lastMarkViewedStoryId = nil
-
         deleteResult = .success(())
         deleteCallCount = 0
         lastDeleteStoryId = nil
+        lastDeleteReason = nil
 
         reactResult = .success(())
         reactCallCount = 0

@@ -71,6 +71,7 @@ extension StickerPickerView {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(instant.title)
+                .accessibilityIdentifier(StickerAccessibilityID.instant(instant.id))
             }
             ForEach(instants.count..<Self.meeColumns, id: \.self) { _ in
                 Color.clear.frame(maxWidth: .infinity)

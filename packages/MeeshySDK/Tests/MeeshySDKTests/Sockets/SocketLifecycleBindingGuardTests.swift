@@ -1,19 +1,18 @@
 import XCTest
 @testable import MeeshySDK
 
-/// Gardes de SOURCE pour les branchements ajoutés à `setupEventHandlers()` :
+/// Gardes de SOURCE pour les routes de la table `MessageSocketRoutes` :
 /// `auth:session-revoked`, `friend-request:cancelled`, `friend-request:rejected`
 /// et les deux événements de masse `notification:read-bulk` /
 /// `notification:deleted-bulk`.
 ///
-/// Le client Socket.IO est un type concret tiers, sans mock : le seul niveau où
-/// l'on peut prouver qu'un événement est ÉCOUTÉ, et vers QUOI il route, est la
-/// source — même motif que `CallEmitSourceGuardTests`. Le comportement en aval
-/// (cache d'amitié, ré-authentification, mapping de portée) est couvert par des
-/// tests de comportement dans `Cache/`, `Auth/` et `Notifications/`.
+/// Que l'événement soit inscrit se prouve par la table (`SocketInboundRouteTableTests`) ; VERS QUOI il route, quand la
+/// livraison appelle un effet de bord (ré-authentification, cache d'amitié), se prouve à la source — même motif que
+/// `CallEmitSourceGuardTests`. Le comportement en aval est couvert par des tests de comportement dans `Cache/`,
+/// `Auth/` et `Notifications/`.
 ///
-/// Chaque garde vise le BLOC de son écouteur, jamais le fichier : c'est la
-/// seule façon de prouver qu'un chemin appelle une méthode ET PAS sa voisine.
+/// Chaque garde vise le BLOC de sa route, jamais le fichier : c'est la seule façon de prouver qu'un chemin appelle
+/// une méthode ET PAS sa voisine.
 final class SocketLifecycleBindingGuardTests: XCTestCase {
 
     private func sdkSource(_ relativePath: String) throws -> String {
@@ -27,20 +26,30 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     }
 
     private func messageSocketSource() throws -> String {
-        try sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift")
+        let directory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Sockets")
+        let routeFiles = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("MessageSocketRoutes") && $0.hasSuffix(".swift") }
+            .sorted()
+            .map { try sdkSource("Sources/MeeshySDK/Sockets/\($0)") }
+        return try (routeFiles + [
+            sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift"),
+            sdkSource("Sources/MeeshySDK/Sockets/MessageSocketManager.swift"),
+        ]).joined(separator: "\n")
     }
 
-    /// Bloc d'un écouteur : de son `socket.on("<event>")` jusqu'au `socket.on(`
-    /// suivant. Un commentaire qui PRÉCÈDE la ligne d'enregistrement appartient
-    /// donc au bloc précédent — voulu : la garde ne doit pas pouvoir être
-    /// satisfaite par une phrase écrite au-dessus.
-    private func listenerBlock(for event: String, in source: String) -> String? {
-        let marker = "socket.on(\"\(event)\")"
-        for segment in source.components(separatedBy: "socket.on(").dropFirst() {
-            let block = "socket.on(" + segment
-            if block.hasPrefix(marker) { return block }
-        }
-        return nil
+    /// Bloc d'une route : de son `(.<cas>,` ou `(.<cas>)` jusqu'à la route suivante (`m.route(`, `.raw(`) ou la fin du
+    /// tableau. Un commentaire qui PRÉCÈDE la route appartient donc au bloc précédent — voulu : la garde ne doit pas
+    /// pouvoir être satisfaite par une phrase écrite au-dessus.
+    private func routeBlock(for eventCase: String, in source: String) -> String? {
+        let start = source.range(of: "(.\(eventCase),") ?? source.range(of: "(.\(eventCase))")
+        guard let start else { return nil }
+        let tail = String(source[start.lowerBound...])
+        let next = try? NSRegularExpression(pattern: "\\n\\s*(m\\.route\\(|\\.raw\\(|\\]|static func|private static func)")
+        let end = next?.firstMatch(in: tail, range: NSRange(tail.startIndex..., in: tail))
+            .flatMap { Range($0.range, in: tail)?.lowerBound }
+        return end.map { String(tail[..<$0]) } ?? tail
     }
 
     /// Corps d'une déclaration : du marqueur jusqu'à la première accolade
@@ -57,7 +66,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     func test_authSessionRevokedListener_isRegistered() throws {
         let source = try messageSocketSource()
         XCTAssertNotNil(
-            listenerBlock(for: "auth:session-revoked", in: source),
+            routeBlock(for: "authSessionRevoked", in: source),
             "Le gateway émet `auth:session-revoked` PUIS coupe la socket (mot de passe changé, révocation " +
             "de tous les appareils, action admin). Sans écouteur, l'app garde une session morte jusqu'au prochain 401"
         )
@@ -65,17 +74,21 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
 
     func test_authSessionRevokedListener_routesToHandleSessionRevoked() throws {
         let source = try messageSocketSource()
-        let block = try XCTUnwrap(listenerBlock(for: "auth:session-revoked", in: source))
+        let block = try XCTUnwrap(routeBlock(for: "authSessionRevoked", in: source))
+        let handler = try XCTUnwrap(declarationBlock(after: "func handleSessionRevoked", in: source))
 
+        XCTAssertTrue(block.contains("m?.handleSessionRevoked(data)"), "la route délègue à la méthode qui porte la règle")
         XCTAssertTrue(
-            block.contains("AuthManager.shared.handleSessionRevoked(reason: reason)"),
+            handler.contains("AuthManager.shared.handleSessionRevoked(reason: reason)"),
             "La révocation doit aller droit à la ré-authentification"
         )
     }
 
     func test_authSessionRevokedListener_neverTriggersARefresh() throws {
         let source = try messageSocketSource()
-        let block = try XCTUnwrap(listenerBlock(for: "auth:session-revoked", in: source))
+        let route = try XCTUnwrap(routeBlock(for: "authSessionRevoked", in: source))
+        let handler = try XCTUnwrap(declarationBlock(after: "func handleSessionRevoked", in: source))
+        let block = route + "\n" + handler
 
         XCTAssertFalse(
             block.contains("handleUnauthorized"),
@@ -91,22 +104,27 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
 
     /// Contre-épreuve : la garde négative ci-dessus rougirait-elle si le
     /// mauvais appel revenait dans ce bloc ?
-    func test_listenerBlock_onFabricatedRefreshingBlock_exposesTheForbiddenCall() {
+    func test_routeBlock_onFabricatedRefreshingBlock_exposesTheForbiddenCall() {
         let fabricated = """
-        socket.on("auth:token-expired") { _, _ in
-            Task { @MainActor in AuthManager.shared.handleUnauthorized() }
-        }
-
-        socket.on("auth:session-revoked") { _, _ in
-            Task { @MainActor in AuthManager.shared.handleUnauthorized() }
-        }
+            .raw(.authTokenExpired) { _ in
+                Task { @MainActor in AuthManager.shared.handleUnauthorized() }
+            },
+            .raw(.authSessionRevoked) { _ in
+                Task { @MainActor in AuthManager.shared.handleUnauthorized() }
+            },
+            m.route(.mentionCreated, MentionCreatedEvent.self) { $0.mentionCreated.send($1) },
+        ]
         """
-        let block = listenerBlock(for: "auth:session-revoked", in: fabricated)
+        let block = routeBlock(for: "authSessionRevoked", in: fabricated)
 
         XCTAssertNotNil(block)
         XCTAssertTrue(
             block?.contains("handleUnauthorized") == true,
-            "Le découpage doit ramener le CORPS de l'écouteur visé — sans quoi la garde négative serait morte"
+            "Le découpage doit ramener le CORPS de la route visée — sans quoi la garde négative serait morte"
+        )
+        XCTAssertFalse(
+            block?.contains("mentionCreated") == true,
+            "Le découpage s'arrête à la route suivante"
         )
     }
 
@@ -115,7 +133,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     func test_friendRequestCancelledListener_appliesWithdrawal() throws {
         let source = try messageSocketSource()
         let block = try XCTUnwrap(
-            listenerBlock(for: "friend-request:cancelled", in: source),
+            routeBlock(for: "friendRequestCancelled", in: source),
             "`friend-request:cancelled` est le SEUL signal de ce geste : aucune ligne `Notification` n'est persistée, " +
             "donc sans écouteur la demande retirée reste affichée jusqu'au prochain chargement complet"
         )
@@ -129,7 +147,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
 
     func test_friendRequestRejectedListener_clearsTheSentRequest() throws {
         let source = try messageSocketSource()
-        let block = try XCTUnwrap(listenerBlock(for: "friend-request:rejected", in: source))
+        let block = try XCTUnwrap(routeBlock(for: "friendRequestRejected", in: source))
 
         XCTAssertTrue(
             block.contains("applyFriendRequestRejection(rejecterId: event.rejecterId)"),
@@ -177,7 +195,7 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
     }
 
     func test_meeshyNotificationType_declaresNoFriendRejectedCase() throws {
-        let source = try sdkSource("Sources/MeeshySDK/Models/NotificationModels.swift")
+        let source = try sdkSource("Sources/MeeshySDK/Models/MeeshyNotificationType.swift")
 
         XCTAssertFalse(
             declaresFriendRejectedCase(source),
@@ -206,18 +224,18 @@ final class SocketLifecycleBindingGuardTests: XCTestCase {
 
     func test_notificationReadBulkListener_republishesToItsSubject() throws {
         let source = try messageSocketSource()
-        let block = try XCTUnwrap(listenerBlock(for: "notification:read-bulk", in: source))
+        let block = try XCTUnwrap(routeBlock(for: "notificationReadBulk", in: source))
 
         XCTAssertTrue(block.contains("NotificationReadBulkEvent.self"))
-        XCTAssertTrue(block.contains("notificationReadBulk.send(event)"))
+        XCTAssertTrue(block.contains("notificationReadBulk.send($1)"))
     }
 
     func test_notificationDeletedBulkListener_republishesToItsSubject() throws {
         let source = try messageSocketSource()
-        let block = try XCTUnwrap(listenerBlock(for: "notification:deleted-bulk", in: source))
+        let block = try XCTUnwrap(routeBlock(for: "notificationDeletedBulk", in: source))
 
         XCTAssertTrue(block.contains("NotificationDeletedBulkEvent.self"))
-        XCTAssertTrue(block.contains("notificationDeletedBulk.send(event)"))
+        XCTAssertTrue(block.contains("notificationDeletedBulk.send($1)"))
     }
 
     func test_notificationToastManager_subscribesToBothBulkPublishers() throws {

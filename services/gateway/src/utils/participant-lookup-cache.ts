@@ -25,6 +25,8 @@ export type CachedParticipant = {
   id: string;
   conversationId: string;
   isActive: boolean;
+  /** Une ligne bannie n'écrit pas, même active (#10440). */
+  bannedAt?: Date | null;
   /**
    * L'instantané figé au join — porté depuis #4855 pour que
    * `MessagingService.handleMessage` puisse résoudre `canSendMessages` sans
@@ -33,7 +35,11 @@ export type CachedParticipant = {
    * prend effet qu'au bout du TTL.
    */
   permissions: ParticipantPermissions;
-  anonymousSession: { rights: AnonymousRightsOverride | null } | null;
+  /**
+   * `shareLinkId` : le lien d'un invité, dont les familles de pièces jointes
+   * gouvernent ce qu'il rattache à l'envoi (#10001).
+   */
+  anonymousSession: { rights: AnonymousRightsOverride | null; shareLinkId?: string } | null;
 };
 
 const TTL_MS = 30_000;

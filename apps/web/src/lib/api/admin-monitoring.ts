@@ -175,7 +175,7 @@ function decodeBackupContents(raw: unknown): AdminBackupContents | null {
   };
 }
 
-function decodeBackups(raw: unknown): AdminBackups | null {
+export function decodeBackups(raw: unknown): AdminBackups | null {
   const backups = asRecord(raw);
   const status = backups?.status;
   if (backups === null || (status !== 'ok' && status !== 'failed')) return null;

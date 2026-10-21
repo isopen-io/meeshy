@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - API Post Models
 
-public struct APIAuthor: Codable, Sendable {
+public struct APIAuthor: Codable, Sendable, ProfileDecorWearer {
     public let id: String
     public let username: String?
     public let displayName: String?
@@ -15,11 +15,15 @@ public struct APIAuthor: Codable, Sendable {
     /// viewers) et sur les caches antérieurs — décodage rétro-compatible.
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public let profileDecor: ServedProfileDecor?
 
     public var name: String { displayName ?? username ?? "Anonymous" }
 
     public init(id: String, username: String?, displayName: String?, avatar: String?,
-                isOnline: Bool? = nil, lastActiveAt: Date? = nil) {
+                isOnline: Bool? = nil, lastActiveAt: Date? = nil, profileDecor: ServedProfileDecor? = nil) {
+        self.profileDecor = profileDecor
         self.id = id
         self.username = username
         self.displayName = displayName
@@ -265,6 +269,14 @@ public struct APIPost: Sendable {
     public var qualifiedViewCount: Int? = nil
     public var playCount: Int? = nil
     public var impressionCount: Int? = nil
+    /// Part ANONYME de `viewCount` / `impressionCount` (#10483) — les totaux
+    /// l'incluent déjà. `nil` d'un serveur antérieur : rien à dire, jamais zéro.
+    public var anonymousViewCount: Int? = nil
+    public var anonymousImpressionCount: Int? = nil
+    /// Vues UNIQUES (#10483) : `viewCount` compte chaque ouverture, celles-ci
+    /// une par compte et une par lecteur anonyme. Décodées, pas affichées.
+    public var uniqueViewCount: Int? = nil
+    public var anonymousUniqueViewCount: Int? = nil
     public let bookmarkCount: Int?
     public let shareCount: Int?
     public let reactionSummary: [String: Int]?
@@ -306,6 +318,10 @@ public struct APIPost: Sendable {
     /// Absent (`nil`) : réponse d'écriture, lecteur sans compte, ancien
     /// serveur — « garde ce que tu sais », jamais zéro (`PostViewerPoints.kept`).
     public var viewerPoints: Int? = nil
+    /// La source de classement de CET élément dans la page qui l'a servi
+    /// (#10501) — recopiée dans `listing.rankingSource` de son impression.
+    /// `nil` sur une route ou un serveur qui ne la sert pas.
+    public var rankingSource: String? = nil
 
     /// `[rawURL: token]` lookup derived from `trackingLinks`. Empty when none.
     public var trackedLinkMap: [String: String] { (trackingLinks ?? []).trackedLinkMap }
@@ -316,12 +332,14 @@ extension APIPost: Decodable {
         case id, type, visibility, visibilityUserIds, content, originalLanguage, createdAt, updatedAt, contentEditedAt, expiresAt, location
         case author, likeCount, commentCount, repostCount, viewCount
         case postOpenCount, qualifiedViewCount, playCount, impressionCount
+        case anonymousViewCount, anonymousImpressionCount
+        case uniqueViewCount, anonymousUniqueViewCount
         case bookmarkCount, shareCount, reactionSummary, isPinned, isEdited
         case media, comments, repostOf, originalRepostOfId, isQuote, moodEmoji
         case audioUrl, audioDuration, storyEffects, translations
         case isLikedByMe, isBookmarkedByMe, isRepostedByMe, isViewedByMe
         case currentUserReactions, mentions, referenceAccess, viaUsername
-        case trackingLinks, metadata, viewerPoints
+        case trackingLinks, metadata, viewerPoints, rankingSource
     }
 
     /// Minimal `metadata` envelope to recover `trackingLinks` on REST/feed
@@ -352,6 +370,10 @@ extension APIPost: Decodable {
         qualifiedViewCount = try c.decodeIfPresent(Int.self, forKey: .qualifiedViewCount)
         playCount = try c.decodeIfPresent(Int.self, forKey: .playCount)
         impressionCount = try c.decodeIfPresent(Int.self, forKey: .impressionCount)
+        anonymousViewCount = try c.decodeIfPresent(Int.self, forKey: .anonymousViewCount)
+        anonymousImpressionCount = try c.decodeIfPresent(Int.self, forKey: .anonymousImpressionCount)
+        uniqueViewCount = try c.decodeIfPresent(Int.self, forKey: .uniqueViewCount)
+        anonymousUniqueViewCount = try c.decodeIfPresent(Int.self, forKey: .anonymousUniqueViewCount)
         bookmarkCount = try c.decodeIfPresent(Int.self, forKey: .bookmarkCount)
         shareCount = try c.decodeIfPresent(Int.self, forKey: .shareCount)
         reactionSummary = try c.decodeIfPresent([String: Int].self, forKey: .reactionSummary)
@@ -396,6 +418,7 @@ extension APIPost: Decodable {
         referenceAccess = try c.decodeIfPresent(ReferenceAccess.self, forKey: .referenceAccess)
         viaUsername = try c.decodeIfPresent(String.self, forKey: .viaUsername)
         viewerPoints = (try? c.decodeIfPresent(Int.self, forKey: .viewerPoints)).flatMap { $0 >= 0 ? $0 : nil }
+        rankingSource = (try? c.decodeIfPresent(String.self, forKey: .rankingSource)) ?? nil
         // Outbound-link tracking: prefer hoisted top-level `trackingLinks`
         // (socket), else recover from the REST `metadata` envelope. Tolerant.
         if let topLevel = try? c.decodeIfPresent([TrackedLink].self, forKey: .trackingLinks), !topLevel.isEmpty {
@@ -554,18 +577,24 @@ extension APIPost {
             if let username = c.author.username {
                 UserDisplayNameCache.shared.track(username: username, displayName: c.author.name)
             }
-            return FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
+            var comment = FeedComment(id: c.id, author: c.author.name, authorId: c.author.id,
                         authorUsername: c.author.username,
                         authorAvatarURL: c.author.avatar,
                         content: c.content,
                         timestamp: c.createdAt, likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                         parentId: c.parentId, effectFlags: c.effectFlags ?? 0,
                         originalLanguage: c.originalLanguage, translatedContent: commentTranslatedContent,
+                        translations: c.translations?.mapValues { entry in
+                            PostTranslation(text: entry.text, translationModel: entry.translationModel,
+                                            confidenceScore: entry.confidenceScore)
+                        },
                         currentUserReactions: c.currentUserReactions,
                         media: (c.media ?? []).map { $0.toFeedMedia() },
                         location: c.location,
                         quotedMedia: c.quotedCitation,
                         trackedLinkMap: c.trackedLinkMap)
+            comment.authorRing = c.author.avatarRing
+            return comment
         }
 
         let repost: RepostContent? = repostOf?.toRepostContent()
@@ -604,6 +633,9 @@ extension APIPost {
         feedPost.viewCount = viewCount ?? 0
         feedPost.postOpenCount = postOpenCount ?? 0
         feedPost.impressionCount = impressionCount ?? 0
+        feedPost.anonymousViewCount = anonymousViewCount
+        feedPost.uniqueViewCount = uniqueViewCount
+        feedPost.anonymousUniqueViewCount = anonymousUniqueViewCount
         feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
         feedPost.playCount = playCount ?? 0
         // Story canvas + legacy audio (top-level story posts). The init keeps a
@@ -621,6 +653,7 @@ extension APIPost {
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
         feedPost.viewerPoints = viewerPoints
+        feedPost.authorRing = author.avatarRing
         return feedPost
     }
 
@@ -669,7 +702,7 @@ extension APIRepostOf {
         let repostTranslations: [String: PostTranslation]? = translations?.mapValues { entry in
             PostTranslation(text: entry.text, translationModel: entry.translationModel, confidenceScore: entry.confidenceScore)
         }
-        return RepostContent(id: id, author: author.name, authorId: author.id,
+        var repost = RepostContent(id: id, author: author.name, authorId: author.id,
                              authorUsername: author.username,
                              authorAvatarURL: author.avatar,
                              content: content ?? "",
@@ -687,5 +720,7 @@ extension APIRepostOf {
                              expiresAt: nil,
                              location: location,
                              mentions: mentions)
+        repost.authorRing = author.avatarRing
+        return repost
     }
 }

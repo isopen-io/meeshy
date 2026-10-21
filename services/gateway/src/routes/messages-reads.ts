@@ -38,6 +38,7 @@ import { callerParticipantWhere } from './conversations/utils/access-control';
 import { readDeviceServedTo } from '../utils/read-device-visibility';
 import { discoverConversationIdsByMessageIds, withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { servePostReplyCitations } from '../services/messaging/servedPostReply';
+import { servedLinkMetadata } from '../services/messaging/linkTrackingAuthor';
 import { captureNoticeWithheldFrom } from '../services/messaging/captureNoticeVisibility';
 
 /**
@@ -387,6 +388,8 @@ export function registerMessagesReadRoutes(fastify: FastifyInstance, deps: Messa
       const [citedMessage] = await servePostReplyCitations(prisma, [message]);
       return sendSuccess(reply, projectViewOnceForReader(hoistStickerOnto(hoistLocationOnto({
         ...citedMessage,
+        // #10286 — un invité anonyme ne sert jamais sa carte de liens suivis.
+        metadata: servedLinkMetadata(citedMessage.metadata, message.sender),
         sender: gatedSender,
         // `Message.translations` est une CARTE Mongo (`langue → {text, …}`),
         // jamais un tableau — le contrat, lui, déclare un TABLEAU d'objets

@@ -1,12 +1,17 @@
 import Combine
 import SwiftUI
 import UIKit
+import MeeshySDK
 
 // MARK: - Image Editor View Model
 
-/// Owns the editor's mutable state, undo/redo history and the (debounced)
-/// render loop. Strictly separated from the renderer (`ImageFilterEngine`,
-/// stateless) and the view (`MeeshyImageEditorView`, presentation only).
+/// Owns the editor's mutable state, undo/redo history and the render loop.
+/// Strictly separated from the renderer (`ImageFilterEngine`, stateless) and
+/// the view (`MeeshyImageEditorView`, presentation only).
+///
+/// The preview and the filter thumbnails render OFF the main thread, with no
+/// delay (#9873): one render in flight, the latest slider value wins
+/// (`LatestWinsRenderLoop`) — a drag shows every render the GPU completes.
 ///
 /// Memory model: the full-resolution `original` is kept once and never copied
 /// or mutated. A downscaled `working` copy backs every live preview so editing
@@ -45,7 +50,8 @@ public final class ImageEditorViewModel: ObservableObject {
     @Published public private(set) var filterThumbnails: [ImageFilter: UIImage] = [:]
 
     private var history: ImageEditHistory
-    private var renderTask: Task<Void, Never>?
+    private var previewLoop: LatestWinsRenderLoop<ImageEditState, UIImage>?
+    private var thumbnailsLoop: LatestWinsRenderLoop<ImageEditState, [ImageFilter: UIImage]>?
 
     public init(image: UIImage, context: MediaPreviewContext) {
         let engine = ImageFilterEngine()
@@ -156,24 +162,40 @@ public final class ImageEditorViewModel: ObservableObject {
         engine.render(original, state: state)
     }
 
-    /// Rebuilds the per-filter preview thumbnails from the current framing.
+    /// Rebuilds the per-filter preview thumbnails from the current framing,
+    /// off the main thread; `filterThumbnails` publishes them when ready.
     public func loadFilterThumbnails() {
-        let framed = engine.renderGeometryOnly(working, state: state, applyCrop: true)
-        filterThumbnails = engine.filterThumbnails(for: framed)
+        thumbnailsLoopOrMake().submit(state)
     }
 
     // MARK: - Render loop
 
     private func scheduleRender() {
-        renderTask?.cancel()
-        let snapshot = state
-        renderTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(90))
-            guard !Task.isCancelled, let self else { return }
-            let rendered = self.engine.render(self.working, state: snapshot)
-            guard !Task.isCancelled else { return }
-            self.previewImage = rendered
-        }
+        previewLoopOrMake().submit(state)
+    }
+
+    private func previewLoopOrMake() -> LatestWinsRenderLoop<ImageEditState, UIImage> {
+        if let previewLoop { return previewLoop }
+        let engine = self.engine
+        let working = self.working
+        let loop = LatestWinsRenderLoop<ImageEditState, UIImage>(
+            render: { state in engine.render(working, state: state) },
+            deliver: { [weak self] _, rendered in self?.previewImage = rendered })
+        previewLoop = loop
+        return loop
+    }
+
+    private func thumbnailsLoopOrMake() -> LatestWinsRenderLoop<ImageEditState, [ImageFilter: UIImage]> {
+        if let thumbnailsLoop { return thumbnailsLoop }
+        let engine = self.engine
+        let working = self.working
+        let loop = LatestWinsRenderLoop<ImageEditState, [ImageFilter: UIImage]>(
+            render: { state in
+                engine.filterThumbnails(for: engine.renderGeometryOnly(working, state: state, applyCrop: true))
+            },
+            deliver: { [weak self] _, thumbnails in self?.filterThumbnails = thumbnails })
+        thumbnailsLoop = loop
+        return loop
     }
 
     // MARK: - Mode persistence

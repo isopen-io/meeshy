@@ -23,6 +23,12 @@ describe('AdminButton — le bouton commun de l’administration', () => {
     expect(buttonOf(host).className).toContain('text-ios-on-brand');
   });
 
+  test('le GROS bouton (`size="lg"`) : 52 px, pour les gestes d’une carte ou d’une feuille (#10562)', async () => {
+    const host = await mount(<AdminButton size="lg">Régénérer le mot de passe</AdminButton>);
+    expect(buttonOf(host).style.minHeight).toBe('52px');
+    expect(buttonOf(host).className).toContain('rounded-card');
+  });
+
   test('secondaire et danger : une surface bordée, le danger porte le ton du danger', async () => {
     const host = await mount(
       <>

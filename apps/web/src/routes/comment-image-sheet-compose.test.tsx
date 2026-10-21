@@ -39,6 +39,7 @@ const post: FeedPost = {
   content: 'Le coucher de soleil à Dakar',
   author: { id: 'u-awa', username: 'awa', displayName: 'Awa' },
   media: [],
+  visibility: 'PUBLIC',
 };
 
 const comment = (id: string, minute: number, parentId?: string): PostComment => ({
@@ -106,7 +107,8 @@ describe('une réponse', () => {
       'chosenReplies',
     ]);
     expect(last(painted)?.quoted?.text).toBe('texte root');
-    expect(last(painted)?.reply).toMatchObject({ author: 'Fil de commentaires', text: 'R1 : texte r1\nR2 : texte r2' });
+    expect(last(painted)?.context?.map((entry) => [entry.part.author, entry.part.text, entry.depth])).toEqual([['R1', 'texte r1', 1]]);
+    expect(last(painted)).toMatchObject({ reply: { author: 'R2', text: 'texte r2' }, replyDepth: 1 });
 
     await mounter.click(chip('[data-export-compose-post]'));
     await mounter.settle();
@@ -124,7 +126,8 @@ describe('une réponse', () => {
     await mounter.click(chip('[data-export-compose-reply="r3"]'));
     await mounter.settle();
     expect(last(painted)?.quoted?.text).toBe('texte r1');
-    expect(last(painted)?.reply.text).toBe('R3 : texte r3\nR2 : texte r2');
+    expect(last(painted)?.context?.map((entry) => `${entry.part.author} : ${entry.part.text}`)).toEqual(['R3 : texte r3']);
+    expect(last(painted)?.reply.text).toBe('texte r2');
   });
 
   test('les puces sont un groupe nommé, lisible au lecteur d’écran', async () => {

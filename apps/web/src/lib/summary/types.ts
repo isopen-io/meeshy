@@ -1,4 +1,4 @@
-import type { UserPresenceStatus } from '@/lib/api/types';
+import type { Participant } from '@/lib/api/types';
 
 /**
  * LES TYPES PURS DU RÉSUMÉ VIVANT (#5695, étape 3) — miroir de
@@ -46,7 +46,12 @@ export type DigestParticipant = {
   readonly displayName: string;
   readonly avatarUrl: string | null;
   readonly colorHex: string;
-  readonly presence: UserPresenceStatus;
+  /**
+   * La charge REST qui porte sa présence, jamais un statut résolu (#11412) :
+   * figé au montage du résumé, il ne décroissait ni ne suivait `user:status`.
+   * Le visage la résout VIVANTE (`usePresenceOf`, carte vivante d'abord).
+   */
+  readonly participant: Participant | undefined;
 };
 
 export type ConversationEpisode = {
@@ -146,7 +151,7 @@ export type FaceRampEntry = {
   readonly displayName: string;
   readonly avatarUrl: string | null;
   readonly colorHex: string;
-  readonly presence: UserPresenceStatus;
+  readonly participant: Participant | undefined;
   /** AFFICHÉ sur le badge — le nombre de messages qui attendent. */
   readonly awaitingCount: number;
   /** SERT AU TRI — jamais affiché. */
@@ -159,7 +164,7 @@ export type FaceRampRankingInput = {
   readonly displayName: string;
   readonly avatarUrl: string | null;
   readonly colorHex: string;
-  readonly presence: UserPresenceStatus;
+  readonly participant: Participant | undefined;
   readonly mentionEvidence: readonly string[];
   readonly directReplyEvidence: readonly string[];
   readonly unansweredQuestionEvidence: readonly string[];

@@ -43,7 +43,7 @@ describe('un succès révélé se photographie (#7742)', () => {
     const moment = achievementMoment('achievement.first_voice');
     expect(moment.id).toBe('achievement:achievement.first_voice');
     expect(moment.emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice' });
-    expect(moment.kicker).toBe('Succès débloqué');
+    expect(moment.kicker).toBe('Haut fait accompli');
     expect(moment.title.length).toBeGreaterThan(0);
     expect(moment.title).not.toBe(moment.kicker);
   });
@@ -51,7 +51,7 @@ describe('un succès révélé se photographie (#7742)', () => {
   test('un succès dont la rareté est mesurée la dit dans la ligne du dessus, sans changer d’identité', () => {
     const moment = achievementMoment('achievement.first_voice', 'epic');
     expect(moment.emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice', rarity: 'epic' });
-    expect(moment.kicker).toBe('Succès débloqué · Épique');
+    expect(moment.kicker).toBe('Haut fait accompli · Épique');
     expect(moment.id).toBe(achievementMoment('achievement.first_voice').id);
     expect(achievementMoment('achievement.first_voice', null).emblem).toEqual({ kind: 'achievement', key: 'achievement.first_voice' });
   });
@@ -82,22 +82,22 @@ describe('chaque moment porte son identité, son emblème et ses mots', () => {
   test('un palier de niveau', () => {
     const moment = tierMoment({ tier: 'lueur', level: 10 });
     expect(moment.id).toBe('tier:lueur');
-    expect(moment.title).toBe('Palier Lueur');
+    expect(moment.title).toBe('Ta lumière en Lueur');
     expect(moment.kicker).toBe('Niveau 10');
   });
 
   test('le niveau 100 et ses Prestiges', () => {
     expect(levelHundredMoment(0).id).toBe('level-100:0');
     expect(levelHundredMoment(0).title).toBe('Niveau 100');
-    expect(levelHundredMoment(2).title).toBe('Prestige 2');
+    expect(levelHundredMoment(2).title).toBe('Renaissance 2');
   });
 
   test('la première Meesh, une Meesh numérotée, une Meesh en or', () => {
-    expect(meeshMoment({ number: 1, edition: 'silver' }).title).toBe('Ma première Meesh');
-    expect(meeshMoment({ number: 20, edition: 'silver' }).title).toBe('Meesh n° 20');
-    expect(meeshMoment({ number: 100, edition: 'gold' }).title).toBe('Meesh n° 100 · or');
-    expect(meeshMoment({ number: 1000, edition: 'prism' }).title.replace(/\s/g, ' ')).toBe('Meesh n° 1 000 · prisme');
-    expect(meeshMoment({ number: 20, edition: 'silver' }).id).toBe('meesh:20');
+    expect(meeshMoment({ number: 1 }).title).toBe('Ma première Meesh');
+    expect(meeshMoment({ number: 20 }).title).toBe('Meesh n° 20');
+    expect(meeshMoment({ number: 100 }).title).toBe('Meesh n° 100 · or');
+    expect(meeshMoment({ number: 1000 }).title.replace(/\s/g, ' ')).toBe('Meesh n° 1 000 · prisme');
+    expect(meeshMoment({ number: 20 }).id).toBe('meesh:20');
   });
 
   test('un palier du trésor', () => {
@@ -167,6 +167,15 @@ describe('photoMomentsOfTransition — ce qui se propose APRÈS la célébration
     expect(minted(1000)).toEqual(['meesh:1000']);
   });
 
+  test('la pièce de la photo se dessine dans la plus haute édition atteinte, et son titre la nomme (#11483)', () => {
+    expect(meeshMoment({ number: 247 }).emblem).toEqual({ kind: 'meesh', number: 247, edition: 'gold' });
+    expect(meeshMoment({ number: 247 }).title).toBe('Meesh n° 247 · or');
+    expect(meeshMoment({ number: 1010 }).emblem).toEqual({ kind: 'meesh', number: 1010, edition: 'prism' });
+    expect(meeshMoment({ number: 90 }).title).toBe('Meesh n° 90');
+    const tenth = photoMomentsOfTransition(view({ score: AT_8, mintedLifetime: 249 }), view({ score: AT_8, mintedLifetime: 250 })).find((m) => m.id === 'meesh:250');
+    expect(tenth?.emblem).toEqual({ kind: 'meesh', number: 250, edition: 'gold' });
+  });
+
   test('une Meesh ordinaire ne se propose pas', () => {
     expect(photoMomentsOfTransition(view({ mintedLifetime: 3 }), view({ mintedLifetime: 4 }))).toEqual([]);
   });
@@ -214,13 +223,13 @@ describe('les moments photo de la vague 2', () => {
     const moment = photoMomentOfEmblemV2({ kind: 'trophy', trophyKey: 'trophy.league-cup.2026-10-26.jade.gold' });
     expect(moment.id).toBe('trophy:trophy.league-cup.2026-10-26.jade.gold');
     expect(moment.kicker).toBe('Nouveau trophée');
-    expect(moment.title).toBe('Coupe d’or — ligue Jade, semaine du 26 octobre');
+    expect(moment.title).toBe('Coupe d’or — joute Jade, semaine du 26 octobre');
   });
 
   test('une montée de ligue, une saison, un Prestige', () => {
-    expect(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' })).toMatchObject({ id: 'league-up:2026-11-09:saphir', kicker: 'Montée de ligue', title: 'Ligue Saphir' });
-    expect(photoMomentOfEmblemV2({ kind: 'season', season: 1 })).toMatchObject({ id: 'season:1', kicker: 'Saison terminée', title: 'Saison 1' });
-    expect(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 })).toMatchObject({ id: 'prestige:2', kicker: 'Nouveau Prestige', title: 'Prestige 2' });
+    expect(photoMomentOfEmblemV2({ kind: 'league-up', league: 'saphir', weekKey: '2026-11-09' })).toMatchObject({ id: 'league-up:2026-11-09:saphir', kicker: 'Cercle gravi', title: 'Joute Saphir' });
+    expect(photoMomentOfEmblemV2({ kind: 'season', season: 1 })).toMatchObject({ id: 'season:1', kicker: 'Voyage accompli', title: 'Voyage 1' });
+    expect(photoMomentOfEmblemV2({ kind: 'prestige', number: 2 })).toMatchObject({ id: 'prestige:2', kicker: 'Renaissance', title: 'Renaissance 2' });
   });
 
   test('un trophée reçu pendant que l’écran est ouvert se propose', () => {
@@ -249,3 +258,27 @@ describe('les moments photo de la vague 2', () => {
     expect(moment.emblem).toEqual({ kind: 'prestige', number: 3 });
   });
 });
+
+describe('un palier atteint de nouveau après un Prestige se photographie de nouveau (#10911)', () => {
+  test('au premier cycle, l’identité d’hier et le titre sans compte', () => {
+    const moment = tierMoment({ tier: 'lueur', level: 10 });
+    expect(moment.id).toBe('tier:lueur');
+    expect(moment.title).not.toContain('×');
+  });
+
+  test('dans un cycle neuf, une identité par cycle et le nombre de fois que le palier a été atteint', () => {
+    const moment = tierMoment({ tier: 'lueur', level: 10, prestige: 2, times: 3 });
+    expect(moment.id).toBe('tier:lueur:2');
+    expect(moment.emblem).toEqual({ kind: 'tier', tier: 'lueur', level: 10, prestige: 2, times: 3 });
+    expect(moment.title).toBe(`${tierMoment({ tier: 'lueur', level: 10 }).title} ×3`);
+  });
+
+  test('la carte du guide et la transition nomment le palier du cycle en cours', () => {
+    const after = view({ ...ALL_LEVEL_STEPS, score: 100 * 10 * 10, levelRecord: 9, prestige: 1, pastCycleRecords: [100] });
+    expect(photoMomentFromCard('new-tier', gameOf(after))?.id).toBe('tier:lueur:1');
+    expect(photoMomentFromCard('new-tier', gameOf(after))?.title).toContain('×2');
+    const before = view({ ...ALL_LEVEL_STEPS, score: 100 * 9 * 9 + 5, levelRecord: 9, prestige: 1, pastCycleRecords: [100] });
+    expect(photoMomentsOfTransition(before, after).map((m) => m.id)).toContain('tier:lueur:1');
+  });
+});
+

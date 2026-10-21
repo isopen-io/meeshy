@@ -22,6 +22,10 @@ enum StickerSheetChoice {
 /// partent contournés — la conversation, #9060 ; nus sur une scène).
 struct StickerSheetDestination {
     let diesCut: Bool
+    /// La Boutique de la feuille mène à la vitrine unique (« Plus dans la boutique », #10712).
+    /// La conversation l'offre ; la scène d'un composer non — partir vers Réglages y
+    /// laisserait la composition derrière une couverture.
+    var leadsToVitrine = false
     let onChoice: (StickerSheetChoice) -> Void
 }
 
@@ -58,7 +62,9 @@ struct MeeshyStickerSheet: View {
             .stickerPackShelfProvided(StickerPackShelf(
                 installed: packs.installed,
                 onPick: { choose(.packItem($0, $1)) },
-                shop: { [packs] in AnyView(StickerPackShopScreen(store: packs)) }
+                shop: { [packs, leadsToVitrine = destination.leadsToVitrine] in
+                    AnyView(StickerPackShopScreen(store: packs, leadsToVitrine: leadsToVitrine))
+                }
             ))
             // « Ma position… » ouvre la carte (#7922) ; sans ce fournisseur, la
             // puce n'est pas rendue.
@@ -73,13 +79,42 @@ struct MeeshyStickerSheet: View {
 /// service, celle-ci lui remet l'état optimiste et le geste.
 struct StickerPackShopScreen: View {
     @ObservedObject var store: StickerPackStore
+    var leadsToVitrine = false
+
+    @Environment(\.dismiss) private var dismiss
+
+    /// UNE SEULE BOUTIQUE (#10712, spec § 9) : ce qu'on possède est dans les onglets
+    /// de la feuille, le reste dans la vitrine unique, filtrée sur les stickers.
+    static let vitrine: DeepLink = .packShop(domain: .sticker)
 
     var body: some View {
-        StickerPackShopView(packs: store.state.catalogue,
-                            pending: store.state.pending,
-                            showsFailure: store.state.failed) { pack in
-            Task { await store.toggle(pack) }
+        VStack(spacing: 0) {
+            StickerPackShopView(packs: store.state.catalogue,
+                                pending: store.state.pending,
+                                showsFailure: store.state.failed) { pack in
+                Task { await store.toggle(pack) }
+            }
+            if leadsToVitrine {
+                vitrineLink
+            }
         }
         .task { await store.loadCatalogue() }
+    }
+
+    private var vitrineLink: some View {
+        Button {
+            HapticFeedback.light()
+            dismiss()
+            DeepLinkRouter.shared.pendingDeepLink = Self.vitrine
+        } label: {
+            Label(String(localized: "sticker.sheet.shopMore", defaultValue: "Plus dans la boutique", bundle: .main), systemImage: "bag")
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                .foregroundStyle(MeeshyColors.indigo500)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.vertical, MeeshySpacing.sm)
     }
 }

@@ -65,5 +65,66 @@ expect_redirect '/?affiliate=aff_123' 308 /signup/affiliate/aff_123
 
 expect_relative_location /join/mshy_abc
 
+# UNE ADRESSE INCONNUE RÉPOND 404 (#10123) — avec la coquille, qui dit
+# « introuvable » à un humain ; une adresse de l'application reste en 200.
+expect_status() {
+  got=$(curl -s -o /dev/null -w '%{http_code} %{content_type}' "$base$1")
+  case "$got" in
+    "$2"*) echo "ok    $1 -> $got" ;;
+    *) echo "FAUX  $1 -> $got (attendu $2)"; fail=1 ;;
+  esac
+}
+expect_status /n-existe-pas-recette '404 text/html'
+expect_status /chats '200 text/html'
+expect_status /c/64f0c0ffee0000000000abcd '200 text/html'
+expect_status /chat/mshy_world '200 text/html'
+expect_status /world '200 text/html'
+
+# L'APERÇU DE CHAQUE ADRESSE (#10192) — ce qu'un robot d'aperçu lit : le
+# titre de la famille dans la langue demandée, la grande carte, et RIEN de
+# l'adresse elle-même (identifiant, jeton) dans le document servi.
+expect_og() {
+  body=$(curl -s -A 'facebookexternalhit/1.1' -H "Accept-Language: $2" "$base$1")
+  case "$body" in
+    *"<meta property=\"og:title\" content=\"$3\">"*'<meta name="twitter:card" content="summary_large_image">'*) echo "ok    $1 [$2] -> og:title « $3 »" ;;
+    *) echo "FAUX  $1 [$2] sans og:title « $3 » ni grande carte"; fail=1 ;;
+  esac
+  if [ -n "${4:-}" ] && printf '%s' "$body" | grep -qF "$4"; then
+    echo "FAUX  $1 divulgue « $4 » dans le document servi"; fail=1
+  fi
+}
+expect_og /world fr 'World Wide — la conversation du monde entier, sur Meeshy'
+expect_og /login en-US,en 'Sign in to Meeshy'
+expect_og /signup/affiliate/aff_123 de-DE 'Ein Meeshy-Konto erstellen' aff_123
+expect_og /chats pt-BR 'Meeshy — o mensageiro que traduz'
+expect_og /c/64f0c0ffee0000000000abcd ar 'محادثة على Meeshy' 64f0c0ffee0000000000abcd
+expect_og /chat/mshy_world es 'Una invitación en Meeshy' mshy_world
+expect_og /l/Ab3xYz it 'Un link condiviso su Meeshy' Ab3xYz
+expect_og /about fr 'À propos de Meeshy'
+expect_status /shell-og/app/fr.html '404 text/html'
+# Un NAVIGATEUR reçoit la coquille d'avant, octet pour octet.
+if [ "$(curl -s -A 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) Safari/604.1' "$base/c/64f0c0ffee0000000000abcd")" = "$(cat /usr/share/nginx/html/index.html)" ]; then
+  echo "ok    navigateur /c/… -> index.html inchangée"
+else
+  echo "FAUX  navigateur /c/… ne reçoit pas index.html"; fail=1
+fi
+
+# LE STAGING NE S'INDEXE PAS (#10123) — l'hôte seul le distingue.
+staging_robots=$(curl -s -H 'Host: staging.meeshy.me' "$base/robots.txt")
+case "$staging_robots" in
+  *"Disallow: /"*) echo "ok    staging /robots.txt ferme tout" ;;
+  *) echo "FAUX  staging /robots.txt : $staging_robots"; fail=1 ;;
+esac
+if curl -s -o /dev/null -D - -H 'Host: staging.meeshy.me' "$base/chats" | grep -qi '^x-robots-tag: noindex'; then
+  echo "ok    staging /chats -> X-Robots-Tag noindex"
+else
+  echo "FAUX  staging /chats sans X-Robots-Tag noindex"; fail=1
+fi
+if curl -s -o /dev/null -D - -H 'Host: meeshy.me' "$base/chats" | grep -qi '^x-robots-tag'; then
+  echo "FAUX  production /chats porte un X-Robots-Tag"; fail=1
+else
+  echo "ok    production /chats sans X-Robots-Tag"
+fi
+
 [ "$fail" -eq 0 ] || { echo "des adresses publiques du domaine sont FAUSSES"; exit 1; }
 echo "les adresses publiques du domaine sont servies"

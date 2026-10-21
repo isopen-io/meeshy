@@ -54,6 +54,6 @@ describe('la bannière in-app', () => {
       />,
     );
     expect(html).toContain('Le lac au matin');
-    expect(html).toContain('href="/post/p1"');
+    expect(html).toContain('href="/post/p1?from=notification"');
   });
 });

@@ -104,6 +104,27 @@ describe('POST /conversations/:id/messages — statut du refus (#4855)', () => {
     expect(res.json().error).toContain('autorisé');
   });
 
+  // #10001 — un invité d'un lien à familles (World Wide) qui rattache une pièce
+  // hors de ses familles : 403, et le code stable que les clients localisent.
+  it('rend 403 avec le code GUEST_ATTACHMENT_KIND_NOT_ALLOWED quand la famille d’une pièce n’est pas ouverte aux invités', async () => {
+    const handleMessage = jest.fn().mockResolvedValue({
+      success: false,
+      error: 'Les invités ne peuvent joindre ici que : text, audio',
+      code: 'GUEST_ATTACHMENT_KIND_NOT_ALLOWED',
+      data: null,
+    });
+    app = await buildApp(handleMessage);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/conversations/${CONV_ID}/messages`,
+      payload: { attachmentIds: ['507f1f77bcf86cd799439055'] },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toMatchObject({ code: 'GUEST_ATTACHMENT_KIND_NOT_ALLOWED' });
+  });
+
   // Non-régression : toute autre fin de non-recevoir de `handleMessage`
   // (conversation close, mode lent, rang insuffisant…) garde son statut
   // ACTUEL — ce lot ne les touche pas.

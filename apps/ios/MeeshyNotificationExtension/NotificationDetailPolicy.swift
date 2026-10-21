@@ -41,8 +41,13 @@ nonisolated enum NotificationDetailPolicy {
         userInfo: [AnyHashable: Any],
         declared: String? = nil
     ) -> String {
-        guard base == "MEESHY_MESSAGE", refinableTypes.contains(type),
-              !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo) else { return base }
+        guard base == "MEESHY_MESSAGE", refinableTypes.contains(type) else { return base }
+        // #7455 — un éphémère se déploie en DÉCOMPTE vivant. Lu AVANT le
+        // second verrou, qu'un éphémère déclare toujours : la catégorie ne
+        // révèle que l'échéance, jamais le contenu. La NSE choisit la
+        // catégorie avant de graver l'échéance, d'où la DURÉE déclarée.
+        if NSEAttachmentPolicy.declaresEphemeralDuration(userInfo: userInfo) { return ephemeralCategory }
+        guard !NSEAttachmentPolicy.declaresProtection(userInfo: userInfo) else { return base }
         if let refined = detail(userInfo: userInfo)?.categoryIdentifier { return refined }
         // #8859 — un vocal dont la piste voyage se déploie en LECTEUR : c'est
         // cette catégorie qui fait choisir l'extension de contenu.
@@ -56,6 +61,10 @@ nonisolated enum NotificationDetailPolicy {
     private static let detailCategories: Set<String> = ["MEESHY_LOCATION", "MEESHY_CONTACT", "MEESHY_INVITE"]
 
     static let audioCategory = "MEESHY_AUDIO"
+
+    /// #7455 — un message éphémère : la notification DÉPLOYÉE montre son
+    /// décompte vivant (`MeeshyNotificationContentExtension`).
+    static let ephemeralCategory = "MEESHY_EPHEMERAL"
 
     /// La piste d'un vocal a-t-elle VOYAGÉ ? Un mime audio ET une adresse non
     /// vide — la passerelle vide `attachmentUrl` sous une clé de protection et

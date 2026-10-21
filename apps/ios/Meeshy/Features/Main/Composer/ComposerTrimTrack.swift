@@ -101,6 +101,9 @@ struct ComposerTrimTrack: View {
     static let height: CGFloat = 52
     private static let boundsHeight: CGFloat = 16
     private static let handleWidth: CGFloat = 18
+    /// Le retrait de la bande vidéo entre ses deux poignées : ce qui se pose
+    /// PAR-DESSUS elle (le son, #10341) s'y aligne.
+    static var trackInset: CGFloat { MeeshySpacing.mdPlus + handleWidth }
     private static let frameRadius: CGFloat = 10
     private static let thumbnailCount = 12
     private static let waveformSamples = 256
@@ -115,6 +118,11 @@ struct ComposerTrimTrack: View {
     /// Retombent d'eux-mêmes quand le système annule le geste sans `onEnded`.
     @GestureState private var precise: ComposerTrimHandle?
     @GestureState private var dragging: ComposerTrimHandle?
+    /// La tête tenue au doigt (#10356) : l'instant où elle est, et celui d'où
+    /// elle est partie. Retombe d'elle-même si le système annule le geste.
+    @State private var playheadDrag: TimeInterval?
+    @State private var playheadOrigin: TimeInterval?
+    @GestureState private var holdingPlayhead = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var range: ClosedRange<TimeInterval> {
@@ -157,6 +165,10 @@ struct ComposerTrimTrack: View {
         .adaptiveOnChange(of: dragging) { _, tenue in
             guard tenue == nil else { return }
             settle()
+        }
+        .adaptiveOnChange(of: holdingPlayhead) { _, tenue in
+            guard !tenue else { return }
+            releasePlayhead()
         }
         .task(id: url) { @MainActor in await load() }
     }
@@ -243,7 +255,7 @@ struct ComposerTrimTrack: View {
     }
 
     private var currentPlayhead: TimeInterval {
-        ComposerTrimRule.playhead(session.loopPlayer?.currentTime ?? range.lowerBound, in: range)
+        ComposerTrimRule.playhead(playheadDrag ?? session.loopPlayer?.currentTime ?? range.lowerBound, in: range)
     }
 
     /// **La loupe de précision** : une règle de la SEULE fenêtre visible (un trait
@@ -280,7 +292,7 @@ struct ComposerTrimTrack: View {
             guard !releve.isEmpty else { return }
             let pas = width / CGFloat(releve.count)
             for (index, valeur) in releve.enumerated() {
-                let hauteur = max(2, CGFloat(valeur) * Self.height)
+                let hauteur = max(2, CGFloat(WaveformScale.displayHeight(rms: valeur)) * Self.height)
                 chemin.addRect(CGRect(x: CGFloat(index) * pas, y: (Self.height - hauteur) / 2,
                                       width: max(1, pas - 1), height: hauteur))
             }
@@ -322,18 +334,58 @@ struct ComposerTrimTrack: View {
 
     /// La tête suit la boucle au rythme du palier thermique, et s'efface pendant
     /// un réglage de précision (la loupe la remplace).
+    ///
+    /// **Elle se fait glisser au doigt** (#10356) : une cible de 44 pt autour du
+    /// trait, l'image suit pendant le glissé, et au lâcher la boucle repart de
+    /// là. Les poignées sont montées PAR-DESSUS : dans leur zone, elles gardent
+    /// le geste. Un toucher dans la cible y place la tête, comme sur la bande.
     private func playheadLine(_ piste: ComposerTrimTrackGeometry) -> some View {
         let cadence = 1.0 / Double(ComposerCaptureSurfaceRule.editFPS(session.thermalBudget))
+        let cible = MeeshyControlSize.tapTarget
         return TimelineView(.animation(minimumInterval: cadence, paused: precise != nil)) { _ in
             Capsule()
                 .fill(Color.white)
-                .frame(width: 2, height: Self.height)
+                .frame(width: playheadDrag == nil ? 2 : 3, height: Self.height)
                 .shadow(color: .black.opacity(0.5), radius: 1)
-                .offset(x: piste.x(for: currentPlayhead) - 1)
+                .frame(width: cible, height: Self.height)
+                .contentShape(Rectangle())
+                .offset(x: piste.x(for: currentPlayhead) - cible / 2)
+                .gesture(playheadGesture(piste))
+                .simultaneousGesture(SpatialTapGesture(count: 1, coordinateSpace: .local).onEnded { toucher in
+                    guard piste.pointsPerSecond > 0 else { return }
+                    HapticFeedback.light()
+                    session.seekPlayhead(to: currentPlayhead
+                        + TimeInterval((toucher.location.x - cible / 2) / piste.pointsPerSecond))
+                })
         }
         .opacity(precise == nil ? 1 : 0)
-        .allowsHitTesting(false)
+        .allowsHitTesting(precise == nil)
         .accessibilityHidden(true)
+    }
+
+    /// Le glissé de la tête : l'instant suit le doigt, à l'échelle de la piste,
+    /// borné à la plage gardée ; l'aperçu montre son image exacte.
+    private func playheadGesture(_ piste: ComposerTrimTrackGeometry) -> some Gesture {
+        DragGesture(minimumDistance: 2, coordinateSpace: .global)
+            .updating($holdingPlayhead) { _, tenue, _ in tenue = true }
+            .onChanged { valeur in
+                guard piste.pointsPerSecond > 0 else { return }
+                let depart = playheadOrigin ?? currentPlayhead
+                if playheadOrigin == nil { playheadOrigin = depart }
+                let temps = ComposerTrimRule.playhead(
+                    depart + TimeInterval(valeur.translation.width / piste.pointsPerSecond), in: range)
+                playheadDrag = temps
+                session.scrubPlayhead(to: temps)
+            }
+            .onEnded { _ in releasePlayhead() }
+    }
+
+    /// La tête lâchée se pose, et la lecture reprend de là — sauf en pause.
+    private func releasePlayhead() {
+        playheadOrigin = nil
+        guard let temps = playheadDrag else { return }
+        playheadDrag = nil
+        session.endPlayheadScrub(at: temps)
     }
 
     // MARK: - Les poignées

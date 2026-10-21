@@ -199,3 +199,22 @@ describe('« Éditer » ouvre toutes les pièces du message', () => {
     expect(done).toBe(false);
   });
 });
+
+describe('« Pivoter » une pièce retouchée (#9160)', () => {
+  test('un toucher la tourne d’un quart dans la scène, et « Terminé » la rend', async () => {
+    const got: { done: readonly { readonly localId: string; readonly file: File }[] | null } = { done: null };
+    const piece = photo();
+    const el = mount(<ComposerRetouch pieces={[piece]} focus={0} onDone={(replaced) => (got.done = replaced)} onCancel={() => undefined} render={fakeRender} />);
+    await flush(() => el.querySelector('[data-story-option="frame"]') !== null);
+    act(() => el.querySelector<HTMLButtonElement>('[data-story-option="frame"]')!.click());
+    await flush(() => el.querySelector('[data-story-option="object:rotate"]') !== null);
+    const rotate = el.querySelector<HTMLButtonElement>('[data-story-option="object:rotate"]')!;
+    expect(rotate.getAttribute('aria-label')).toBe('Pivoter');
+    act(() => rotate.click());
+    await flush(() => el.querySelector('[data-scene-background-rotation="270"]') !== null);
+    expect(el.querySelector('[data-scene-background-rotation="270"]')).not.toBeNull();
+    act(() => el.querySelector<HTMLButtonElement>('[data-story-retouch-done]')!.click());
+    await flush(() => got.done !== null);
+    expect((got.done ?? []).map(({ localId, file }) => [localId, file.name])).toEqual([[piece.localId, 'plage-retouche.jpg']]);
+  });
+});

@@ -94,8 +94,22 @@ nonisolated final class ComposerCameraFeed: NSObject, AVCaptureVideoDataOutputSa
         return latest == nil ? nil : latestPosition
     }
 
+    /// Prévenu à chaque trame de l'objectif, retenue ou non : la première
+    /// après un armement se mesure (#10307).
+    private var frameWatcher: (@Sendable () -> Void)?
+
+    func watchFirstFrame(_ watcher: @escaping @Sendable () -> Void) {
+        lock.lock()
+        frameWatcher = watcher
+        lock.unlock()
+    }
+
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        lock.lock()
+        let guetteur = frameWatcher
+        lock.unlock()
+        guetteur?()
         guard let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         let objectif = (connection.inputPorts.first?.input as? AVCaptureDeviceInput)?.device.position
         guard ingest(buffer, position: objectif ?? publishedPosition) else { return }

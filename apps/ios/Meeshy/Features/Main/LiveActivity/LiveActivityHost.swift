@@ -2,6 +2,7 @@ import Foundation
 import os
 #if canImport(ActivityKit)
 @preconcurrency import ActivityKit
+import MeeshySDK
 #endif
 
 /// Ce qu'un coordinateur de Live Activity demande à ActivityKit : ouvrir,
@@ -10,6 +11,7 @@ import os
 protocol LiveActivityHostProviding<State>: AnyObject {
     associatedtype State
     var isRunning: Bool { get }
+    var activityID: String? { get }
     func endOrphans()
     func start(_ state: State)
     func update(_ state: State)
@@ -31,10 +33,10 @@ final class LiveActivityHost<Attributes: ActivityAttributes & Sendable>: LiveAct
 where Attributes.ContentState: Sendable {
     nonisolated deinit {}
 
-    private static var logger: Logger { Logger(subsystem: "me.meeshy.app", category: "live-activity") }
+    private static var logger: Logger { MeeshyLog.logger(.liveActivity) }
 
     private let attributes: () -> Attributes
-    private var activityID: String?
+    private(set) var activityID: String?
     private var pending: Task<Void, Never>?
 
     init(attributes: @escaping () -> Attributes) {

@@ -28,12 +28,17 @@
 import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { FLAME_RECORD_GLORY, gloryForLevel, gloryStanding } from '@meeshy/shared/utils/game/glory';
 import { levelCapWithSteps } from '@meeshy/shared/utils/game/level-steps';
-import { levelFromScore, newLevelsReached, recordLevel, type LevelCap } from '@meeshy/shared/utils/game/levels';
+import { GAME_LEVEL_MIN, levelFromScore, newLevelsReached, recordLevel, type LevelCap } from '@meeshy/shared/utils/game/levels';
 import type { AchievementRarity } from '@meeshy/shared/utils/game/glory';
 import { achievementGloryAtEarning } from '@meeshy/shared/utils/game/rarity';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MythicSeatService } from './MythicSeatService';
 import { LEVEL_STEP_USER_SELECT, countMissionsDone, levelStepFactsOf } from './LevelStepFacts';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from './SparksFacts';
+import { gameLevelUpNotifier, type LevelReached } from './GameLevelUpNotifier';
+import { stampGameRevisionAfterWrite } from './GameRevision';
+
+export type { LevelReached };
 
 const log = enhancedLogger.child({ module: 'GloryService' });
 
@@ -47,7 +52,15 @@ export type GloryReason =
   | 'league'
   | 'season'
   | 'prestige'
+  /** Le coffre du jour (#10011) : `chest:<jour>`, un point de Gloire pour dix points du coffre. */
+  | 'chest'
   | 'correction';
+
+/**
+ * `announce` (défaut `true`) : « Niveau N atteint » part quand CET appel monte le record du cycle (#10901, #10911). `false`
+ * pour un rattrapage (#10905) : le record et la Gloire s'écrivent pareil, rien ne s'annonce.
+ */
+export type LevelProgressOptions = { readonly announce?: boolean };
 
 export type GloryCredit = {
   readonly userId: string;
@@ -64,6 +77,10 @@ function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
 }
 
+/** Le compte porte encore `stars` étoiles — zéro couvre aussi le champ absent ou `null` (leçon 318). */
+const sameStars = (stars: number | null) =>
+  (stars ?? 0) === 0 ? { OR: [{ prestige: null }, { prestige: { isSet: false } }, { prestige: 0 }] } : { prestige: stars };
+
 /** Le total de Gloire — le seul endroit qui le calcule. */
 export async function gloryTotalFromLedger(db: GloryDb, userId: string): Promise<number> {
   const somme = await db.gloryLedger.aggregate({ where: { userId }, _sum: { delta: true } });
@@ -73,11 +90,22 @@ export async function gloryTotalFromLedger(db: GloryDb, userId: string): Promise
 export class GloryService {
   private readonly seats: Pick<MythicSeatService, 'claimIfEligible'>;
 
+  private readonly seatReader: Pick<MythicSeatService, 'seatOf'>;
+
+  private readonly onLevelReached: (event: LevelReached) => Promise<void>;
+
   constructor(
     private readonly prisma: PrismaClient,
-    deps: { readonly seats?: Pick<MythicSeatService, 'claimIfEligible'> } = {},
+    deps: {
+      readonly seats?: Pick<MythicSeatService, 'claimIfEligible'> & Partial<Pick<MythicSeatService, 'seatOf'>>;
+      /** « Niveau N atteint » (#10901) : par défaut le push `level_up` ; remplaçable en test. */
+      readonly onLevelReached?: (event: LevelReached) => Promise<void>;
+    } = {},
   ) {
-    this.seats = deps.seats ?? new MythicSeatService(prisma);
+    const seats = new MythicSeatService(prisma);
+    this.seats = deps.seats ?? seats;
+    this.seatReader = deps.seats?.seatOf !== undefined ? { seatOf: (userId) => deps.seats!.seatOf!(userId) } : seats;
+    this.onLevelReached = deps.onLevelReached ?? gameLevelUpNotifier(prisma);
   }
 
   async total(userId: string): Promise<number> {
@@ -118,6 +146,8 @@ export class GloryService {
       if (isP2002(err)) return false;
       throw err;
     }
+    // La Gloire change le rang servi : la révision de l'état du jeu monte (#10912) — jamais au rejeu d'une clé gravée.
+    await stampGameRevisionAfterWrite(this.prisma, entry.userId);
     return true;
   }
 
@@ -126,11 +156,11 @@ export class GloryService {
    * compte monte jusqu'où son score le porte. Un appoint, comme la place du Mythe : jamais une raison
    * de faire échouer le crédit déjà gravé — le prochain geste rattrape.
    */
-  private async openLevelsIfRankRose(userId: string, delta: number): Promise<void> {
+  private async openLevelsIfRankRose(userId: string, delta: number, options: LevelProgressOptions = {}): Promise<void> {
     try {
       const total = await this.total(userId);
       if (gloryStanding({ glory: total - delta }).rank === gloryStanding({ glory: total }).rank) return;
-      await this.openLevels(userId);
+      await this.openLevels(userId, options);
     } catch (error) {
       log.warn('level opening after a rank rise failed, the next gesture will catch up', {
         userId,
@@ -143,12 +173,23 @@ export class GloryService {
    * Une ÉTAPE vient peut-être d'être faite (#9706) — une Meesh frappée, une mission du jour accomplie, un
    * record de Flamme : le niveau qui attendait monte d'un coup jusqu'où le score le porte. Sans rien à
    * ouvrir, rien ne s'écrit. Jamais une raison de faire échouer le geste qui l'a appelée.
+   *
+   * `announce: false` : un RATTRAPAGE du record (#10905, la frappe qui grave le niveau d'avant son débit) — la Gloire se
+   * paie, rien ne s'annonce.
    */
-  async openLevels(userId: string): Promise<number> {
+  async openLevels(userId: string, options: LevelProgressOptions = {}): Promise<number> {
     try {
-      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { engagementScore: true, levelRecord: true } });
+      const account = await this.prisma.user.findUnique({ where: { id: userId }, select: { ...SPARKS_USER_SELECT, prestige: true } });
       if (account === null) return 0;
-      return await this.creditLevelProgress({ userId, score: account.engagementScore ?? 0, previousRecord: account.levelRecord ?? null });
+      // Le niveau se lit sur la POCHE (#10892).
+      return await this.creditLevelProgress({
+        userId,
+        score: levelSparksOf(sparksOf(account)),
+        previousRecord: account.levelRecord ?? null,
+        previousMax: account.levelMaxLifetime ?? null,
+        prestige: account.prestige ?? 0,
+        ...options,
+      });
     } catch (error) {
       log.warn('level opening after a step failed, the next gesture will catch up', {
         userId,
@@ -159,17 +200,18 @@ export class GloryService {
   }
 
   /**
-   * Le plafond du niveau SERVI (#9688, #9706) : le rang lu sur la Gloire, et les dix étapes — Meeshes
-   * frappées et record de Flamme sur la ligne du compte, missions du jour comptées. Trois lectures
-   * indexées, en parallèle.
+   * Le plafond du niveau SERVI (#9688, #9706) : le rang lu sur la Gloire ET le Mythe (#10903, comme le bloc `game` et la
+   * frappe), et les dix étapes — Meeshes frappées et record de Flamme sur la ligne du compte, missions du jour comptées.
+   * Quatre lectures indexées, en parallèle ; une place illisible rend le rang sur la Gloire, jamais le crédit entier.
    */
   private async servedLevelCap(userId: string): Promise<LevelCap> {
-    const [row, missionsDone, glory] = await Promise.all([
+    const [row, missionsDone, glory, seat] = await Promise.all([
       this.prisma.user.findUnique({ where: { id: userId }, select: LEVEL_STEP_USER_SELECT }),
       countMissionsDone(this.prisma, userId),
       this.total(userId),
+      this.seatReader.seatOf(userId).catch(() => null),
     ]);
-    const steps = levelStepFactsOf({ row, missionsDone, glory });
+    const steps = levelStepFactsOf({ row, missionsDone, glory, mythic: seat !== null });
     return levelCapWithSteps({ rank: steps.rank, steps });
   }
 
@@ -186,7 +228,7 @@ export class GloryService {
   }
 
   /**
-   * La Gloire du PREMIER passage de chaque niveau, et la hausse du record.
+   * La Gloire du PREMIER passage de chaque niveau, et la hausse des records.
    *
    * Le niveau se lit sous le plafond que le rang ouvre (#9688) : 499 sous
    * Ambassadeur, 1000 pour Ambassadeur et Orateur, sans limite à partir
@@ -194,9 +236,17 @@ export class GloryService {
    * dizaine, il attend juste en dessous. Une ligne par niveau qui paie (`level:<n>`, `gloryForLevel` :
    * chacun jusqu'à 100, puis chaque dizaine) : le registre dit lui-même quels
    * niveaux ont payé, et une montée concurrente ou rejouée ne paie pas deux
-   * fois. Le record ne fait que monter (`levelRecord < nouveau`, ou absent) :
-   * redescendre par une frappe ne l'abaisse pas, c'est lui qui règle le Vent
-   * arrière.
+   * fois.
+   *
+   * `score` est la POCHE d'étincelles (#10892, `levelSparksOf`) — la base du niveau. Deux records montent, sans jamais
+   * redescendre : celui du CYCLE (`levelRecord`, remis à 1 par le prestige) et le MAX À VIE
+   * (`levelMaxLifetime`, qui survit au prestige). La Gloire du premier passage suit le plus haut des
+   * deux : un niveau déjà gagné dans un cycle d'avant ne se re-paie pas. `previousMax` absent (appelant
+   * d'avant les étincelles) : le max à vie n'est ni lu ni écrit.
+   *
+   * C'est l'UNIQUE écriture du record vers le haut (#10905) : un record relevé à côté d'elle sauterait à jamais la Gloire
+   * des niveaux qu'il franchit, puisque cette Gloire se calcule depuis le record. Un rattrapage (lecture du bloc qui sert
+   * un record que la base ne porte pas, frappe qui grave le niveau d'avant son débit) passe donc par ici, `announce: false`.
    *
    * @returns la Gloire effectivement gravée par CET appel.
    */
@@ -204,13 +254,20 @@ export class GloryService {
     readonly userId: string;
     readonly score: number;
     readonly previousRecord: number | null;
-  }): Promise<number> {
+    readonly previousMax?: number | null;
+    /**
+     * Les étoiles lues AVEC le score (#10895). Le record du CYCLE ne s'écrit que si le compte en porte encore autant : un
+     * score en retard, lu avant un Prestige, ne relève pas le record du cycle neuf. Absent : non vérifié.
+     */
+    readonly prestige?: number | null;
+  } & LevelProgressOptions): Promise<number> {
+    const announce = params.announce !== false;
     const level = levelFromScore(params.score, await this.servedLevelCap(params.userId));
-    const reached = newLevelsReached({ level, previousRecord: params.previousRecord });
-    if (reached.count === 0) return 0;
+    const gloryBase = Math.max(params.previousRecord ?? 0, params.previousMax ?? 0);
+    const reached = newLevelsReached({ level, previousRecord: gloryBase === 0 ? null : gloryBase });
 
     let gained = 0;
-    for (let n = reached.from; n <= reached.to; n += 1) {
+    for (let n = reached.from; reached.count > 0 && n <= reached.to; n += 1) {
       const delta = gloryForLevel(n);
       if (delta === 0) continue;
       const written = await this.credit({ userId: params.userId, delta, reason: 'level', requestId: `level:${n}` });
@@ -218,18 +275,50 @@ export class GloryService {
     }
 
     const record = recordLevel({ level, previousRecord: params.previousRecord });
-    await this.prisma.user.updateMany({
-      // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
-      // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
-      where: {
-        id: params.userId,
-        OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }],
-      },
-      data: { levelRecord: record },
-    });
+    if (record > (params.previousRecord ?? GAME_LEVEL_MIN)) {
+      const raised = await this.prisma.user.updateMany({
+        // `isSet: false` : sur MongoDB, `{ levelRecord: null }` n'atteint PAS un
+        // champ ABSENT — celui de tous les comptes d'avant le jeu (leçon 318).
+        where: {
+          id: params.userId,
+          AND: [
+            { OR: [{ levelRecord: null }, { levelRecord: { isSet: false } }, { levelRecord: { lt: record } }] },
+            ...(params.prestige === undefined ? [] : [sameStars(params.prestige)]),
+          ],
+        },
+        data: { levelRecord: record },
+      });
+      if (raised.count > 0) await stampGameRevisionAfterWrite(this.prisma, params.userId);
+      // « Niveau N atteint » (#10901) : seulement si CETTE écriture a monté le record du cycle — une remontée après une
+      // frappe reste sous le record, et une montée concurrente ne gagne l'écriture qu'une fois.
+      if (raised.count > 0 && announce) await this.announceLevelReached({ userId: params.userId, level: record, sparks: params.score });
+    }
+    if (params.previousMax !== undefined) {
+      const maxLifetime = recordLevel({ level, previousRecord: Math.max(params.previousMax ?? 0, params.previousRecord ?? 0) || null });
+      if (maxLifetime > (params.previousMax ?? 0)) {
+        const raisedMax = await this.prisma.user.updateMany({
+          where: {
+            id: params.userId,
+            OR: [{ levelMaxLifetime: null }, { levelMaxLifetime: { isSet: false } }, { levelMaxLifetime: { lt: maxLifetime } }],
+          },
+          data: { levelMaxLifetime: maxLifetime },
+        });
+        if (raisedMax.count > 0) await stampGameRevisionAfterWrite(this.prisma, params.userId);
+      }
+    }
     // La Gloire de ces niveaux a pu faire franchir Ambassadeur ou Oracle : le plafond qu'elle lève s'ouvre aussitôt.
-    if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained);
+    if (gained > 0) await this.openLevelsIfRankRose(params.userId, gained, { announce });
     return gained;
+  }
+
+  private async announceLevelReached(event: LevelReached): Promise<void> {
+    await this.onLevelReached(event).catch((error: unknown) =>
+      log.warn('level reached announcement failed, the record stands', {
+        userId: event.userId,
+        level: event.level,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
   }
 
   /** La Gloire des records de Flamme franchis par cette série — une ligne par record. */

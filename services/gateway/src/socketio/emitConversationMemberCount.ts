@@ -10,6 +10,7 @@ import {
   type ParticipantRoomTarget,
 } from './emitToConversationParticipants';
 import { emitServerEvent, type ServerEventName, type ServerEventPayload } from './serverEmit';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 
 /**
  * Un destinataire du fanout d'effectif, avec les DEUX titres qui ouvrent la
@@ -30,46 +31,58 @@ const seesExactCount = (participant: MemberCountAudienceTarget): boolean =>
   });
 
 /**
+ * Les événements dont le SUJET (`payload.userId`) cesse d'être participant :
+ * ses appareils apprennent le départ, jamais l'effectif d'une conversation
+ * qui n'est plus la sienne.
+ */
+const DEPARTURE_EVENTS: ReadonlySet<string> = new Set([
+  SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT,
+  SERVER_EVENTS.CONVERSATION_PARTICIPANT_BANNED,
+]);
+
+function emitToRooms<E extends ServerEventName>(
+  io: ConversationRoomEmitter,
+  rooms: readonly string[],
+  event: E,
+  payload: ServerEventPayload<E>,
+): void {
+  const [firstRoom, ...otherRooms] = rooms;
+  if (!firstRoom) return;
+  let emitter = io.to(firstRoom);
+  for (const room of otherRooms) emitter = emitter.to(room);
+  // Même porte que `emitToConversationParticipants` : `emitServerEvent` lie
+  // l'événement et son payload par le contrat partagé jusqu'au fil.
+  emitServerEvent(emitter, event, payload);
+}
+
+/**
  * Le fanout d'un événement qui PORTE l'effectif de la conversation.
  *
- * Un broadcast unique ne pouvait porter qu'une seule présentation, et c'était
- * la plafonnée : sur un groupe de 250 personnes, l'admin qui venait de lire
- * l'effectif entier par REST le voyait retomber à « 199+ » au premier
- * départ — le canal partagé DÉGRADAIT ce que la règle produit accorde, et les
- * deux clients PERSISTENT cette valeur (cache disque iOS, `staleTime: Infinity`
- * web) jusqu'au prochain fetch.
+ * #10205, FAIL-CLOSED — l'audience de l'effectif se RÉSOUT au moment de
+ * l'émission, depuis les participants que l'appelant vient de relire : les
+ * seuls COMPTES (`userId` posé) encore participants, adressés par leur room
+ * PERSONNELLE `user:<User.id>`, que seules leurs sockets authentifiées par JWT
+ * rejoignent. La room du FIL n'est JAMAIS nommée dans une chaîne qui porte
+ * l'effectif : un invité y siège (#10205), et une socket peut y rester après
+ * un départ, le temps que l'éviction asynchrone la retire. Elle reçoit une
+ * copie SANS effectif, qui EXCLUT toutes les rooms déjà servies — une copie
+ * par socket, jamais deux.
  *
- * D'où deux chaînes disjointes, exactement la forme de `broadcastReadStatus` :
+ * Deux présentations de l'effectif, comme `broadcastReadStatus` : PLAFONNÉE
+ * (« 199+ ») pour les comptes ordinaires, ENTIÈRE pour ceux que
+ * `canViewExactMemberCount` autorise ; sous le plafond, elles sont identiques et
+ * partent dans une chaîne unique.
  *
- *  1. l'éventail PLAFONNÉ porte la room du fil et les rooms personnelles des
- *     non-autorisés, en EXCLUANT (`.except()`) les rooms des autorisés — sans
- *     quoi un autorisé qui a le fil ouvert recevrait la copie plafonnée par la
- *     room de conversation, en plus de la sienne ;
- *  2. la chaîne ENTIÈRE ne porte que les rooms personnelles des autorisés.
- *
- * La propriété « au plus une copie par socket » tient donc des deux côtés. Un
- * socket qui ne serait dans AUCUNE room personnelle reste servi par la room du
- * fil, plafonné : la dégradation est le comportement d'avant, jamais un silence.
- *
- * SOUS LE PLAFOND, la scission n'a rien à séparer : `presentMemberCount` rend
- * `{ memberCount }` à l'identique aux deux audiences, drapeau compris (absent).
- * Une conversation de douze personnes — l'immense majorité des fanouts — payait
- * alors deux parcours de la liste des participants, deux chaînes de rooms et
- * deux emits pour livrer deux fois le même octet. D'où le chemin rapide
- * ci-dessous : une chaîne UNIQUE, sans exclusion, exactement le fanout d'avant
- * ce lot. La borne est celle du plafond lui-même (`<=`), donc les deux formes
- * ne peuvent pas diverger sur une valeur.
+ * Le sujet d'un départ (`DEPARTURE_EVENTS`) n'est plus participant : ses
+ * appareils reçoivent la copie sans effectif, par sa room personnelle.
  */
 export function emitConversationMemberCountEvent<E extends ServerEventName>(params: {
   io: ConversationRoomEmitter | null | undefined;
   conversationId: string;
   participants: ReadonlyArray<MemberCountAudienceTarget>;
   /**
-   * L'événement, contraint au CONTRAT partagé depuis que
-   * `emitToConversationParticipants` est générique : une chaîne libre y
-   * passerait un événement que personne ne déclare, et le client ne l'écouterait
-   * jamais — sans que rien ne rougisse. Le générique propage simplement la
-   * contrainte au lieu de la casser ici.
+   * L'événement, contraint au CONTRAT partagé : une chaîne libre y passerait un
+   * événement que personne ne déclare, et le client ne l'écouterait jamais.
    */
   event: E;
   payload: Record<string, unknown>;
@@ -78,38 +91,27 @@ export function emitConversationMemberCountEvent<E extends ServerEventName>(para
   const { io, conversationId, participants, event, payload, memberCount } = params;
   if (!io) return;
 
-  if (memberCount <= MEMBER_COUNT_DISPLAY_CAP) {
-    emitToConversationParticipants({
-      io,
-      conversationId,
-      participants,
-      event,
-      payload: { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>,
-    });
-    return;
-  }
+  const departedUserId = DEPARTURE_EVENTS.has(event) && typeof payload.userId === 'string' ? payload.userId : null;
+  const isCountedAccount = (participant: MemberCountAudienceTarget): boolean =>
+    Boolean(participant.userId) && participant.userId !== departedUserId;
+  const accounts = participants.filter(isCountedAccount);
 
-  const exactRooms = participantUserRooms(participants.filter(seesExactCount));
+  const allRooms = participantUserRooms(accounts);
+  const exactRooms = memberCount <= MEMBER_COUNT_DISPLAY_CAP ? [] : participantUserRooms(accounts.filter(seesExactCount));
+  const cappedRooms = allRooms.filter((room) => !exactRooms.includes(room));
+
+  emitToRooms(io, cappedRooms, event, { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>);
+  emitToRooms(io, exactRooms, event, {
+    ...payload,
+    ...presentMemberCount(memberCount, { viewerSeesExactCount: true }),
+  } as ServerEventPayload<E>);
 
   emitToConversationParticipants({
     io,
     conversationId,
-    participants: participants.filter((participant) => !seesExactCount(participant)),
+    participants: participants.filter((participant) => !isCountedAccount(participant)),
     event,
-    payload: { ...payload, ...presentMemberCount(memberCount) } as ServerEventPayload<E>,
-    exceptRooms: exactRooms,
+    payload: payload as ServerEventPayload<E>,
+    exceptRooms: allRooms,
   });
-
-  const [firstRoom, ...otherRooms] = exactRooms;
-  if (!firstRoom) return;
-
-  let emitter = io.to(firstRoom);
-  for (const room of otherRooms) emitter = emitter.to(room);
-  // Même porte que `emitToConversationParticipants` : `emitServerEvent` plutôt
-  // qu'un `.emit()` nu, pour que l'événement et son payload restent liés par le
-  // contrat partagé jusqu'au fil.
-  emitServerEvent(emitter, event, {
-    ...payload,
-    ...presentMemberCount(memberCount, { viewerSeesExactCount: true }),
-  } as ServerEventPayload<E>);
 }

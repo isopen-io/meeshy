@@ -669,7 +669,27 @@ describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', 
     await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
 
     const where = (prisma.userSession.findFirst as jest.Mock<any>).mock.calls[0][0].where;
-    expect(where).toEqual({ id: SID_COURANTE, userId: USER_ID, isValid: true });
+    expect(where).toEqual({ id: SID_COURANTE, userId: USER_ID, isValid: true, expiresAt: { gt: expect.any(Date) } });
+    await app.close();
+  });
+
+  it('#10328 — REFUSE le jeton dont la session nommée est ÉCHUE, encore valide en base : le REST la refuse, refresh ne la renouvelle plus (sinon 401 → refresh → 401)', async () => {
+    const echue = { id: SID_COURANTE, userId: USER_ID, isValid: true, expiresAt: new Date(Date.now() - 60_000) };
+    const findFirst = jest.fn<any>().mockImplementation(async ({ where }: any) => {
+      const memeLigne = where.id === echue.id && where.userId === echue.userId;
+      const valide = where.isValid !== true || echue.isValid;
+      const nonEchue = !where.expiresAt?.gt || echue.expiresAt.getTime() > where.expiresAt.gt.getTime();
+      return memeLigne && valide && nonEchue ? { id: echue.id } : null;
+    });
+    const prisma = makePrisma();
+    prisma.userSession.findFirst = findFirst;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt-session-echue' } });
+
+    expect(res.statusCode).toBe(401);
+    expect(res.json().data?.token).toBeUndefined();
     await app.close();
   });
 
@@ -684,6 +704,42 @@ describe('POST /refresh — deux sessions, une révoquée (#4264, critère 5)', 
     await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
 
     expect(authService.generateToken).toHaveBeenCalledWith(expect.anything(), SID_COURANTE);
+    await app.close();
+  });
+});
+
+describe('POST /refresh — renouveler adopte une session prouvée par un lien (#10477)', () => {
+  beforeEach(() => { mockFindTrustedSession.mockReset().mockResolvedValue(null); });
+
+  it('une session nommée encore en attente prend son échéance normale, par une écriture conditionnelle', async () => {
+    const attendue = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const prisma = makePrisma();
+    prisma.userSession.findFirst = jest.fn<any>().mockResolvedValue({ id: SID_COURANTE, adoptedExpiresAt: attendue });
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    (prisma.userSession as Record<string, unknown>).updateMany = updateMany;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    const res = await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(res.statusCode).toBe(200);
+    expect(updateMany).toHaveBeenCalledWith({
+      where: { id: SID_COURANTE, isValid: true, expiresAt: { gt: expect.any(Date) }, adoptedExpiresAt: attendue },
+      data: { expiresAt: attendue, adoptedExpiresAt: null },
+    });
+    await app.close();
+  });
+
+  it('une session déjà adoptée ne réécrit rien', async () => {
+    const prisma = makePrisma();
+    const updateMany = jest.fn<any>().mockResolvedValue({ count: 1 });
+    (prisma.userSession as Record<string, unknown>).updateMany = updateMany;
+    const app = await buildApp({ prisma });
+    await servirJeton(jetonNomme(SID_COURANTE));
+
+    await app.inject({ method: 'POST', url: '/refresh', payload: { token: 'jwt' } });
+
+    expect(updateMany).not.toHaveBeenCalled();
     await app.close();
   });
 });

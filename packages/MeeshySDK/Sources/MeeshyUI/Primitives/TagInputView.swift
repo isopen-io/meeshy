@@ -30,7 +30,7 @@ public struct TagInputView: View {
                 .fill(colorForTag(tag))
                 .frame(width: 8, height: 8)
             Text(tag)
-                .font(.system(size: 13, weight: .medium))
+                .font(MeeshyFont.relative(13, weight: .medium))
                 .foregroundColor(theme.textPrimary)
             Button {
                 removeTag(tag)
@@ -50,7 +50,7 @@ public struct TagInputView: View {
 
     private var inputField: some View {
         TextField(String(localized: "tag.placeholder", defaultValue: "Ajouter un tag…", bundle: .module), text: $inputText)
-            .font(.system(size: 13))
+            .font(MeeshyFont.relative(13))
             .foregroundColor(theme.textPrimary)
             .frame(minWidth: 100)
             .onSubmit {
@@ -72,7 +72,8 @@ public struct TagInputView: View {
     }
 
     private func colorForTag(_ tag: String) -> Color {
-        let hash = abs(tag.hashValue)
+        // `magnitude` : `abs(Int.min)` trappe.
+        let hash = Int(tag.hashValue.magnitude % 1_000_003)
         let colors: [Color] = [
             Color(hex: "3B82F6"), Color(hex: "A855F7"), Color(hex: "F97316"),
             Color(hex: "4ECDC4"), Color(hex: "F8B500"), Color(hex: "FF6B6B"),

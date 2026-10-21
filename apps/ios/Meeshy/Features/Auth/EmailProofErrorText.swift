@@ -51,6 +51,7 @@ enum EmailProofErrorText {
 
     /// La saisie du code (écran de vérification, porte « e-mail seul »).
     static func codeMessage(for error: Error, bundle: Bundle = .main) -> String {
+        if error is SecondFactorRequired { return secondFactorRequired(bundle) }
         switch EmailProofRefusal.classify(error) {
         case .invalidCode:
             return String(localized: "emailVerification.error.invalidCode",
@@ -73,6 +74,7 @@ enum EmailProofErrorText {
 
     /// Un lien de connexion ou de vérification ouvert sur l'appareil.
     static func linkMessage(for error: Error, bundle: Bundle = .main) -> String {
+        if error is SecondFactorRequired { return secondFactorRequired(bundle) }
         switch EmailProofRefusal.classify(error) {
         case .tooManyAttempts: return tooManyAttempts(bundle)
         case .offline: return offline(bundle)
@@ -101,6 +103,38 @@ enum EmailProofErrorText {
             return String(localized: "auth.magiclink.error.generic",
                           defaultValue: "Une erreur est survenue. Veuillez réessayer.", bundle: bundle)
         }
+    }
+
+    /// La preuve a rendu une session, mais l'appareil ne l'a pas posée : un
+    /// autre compte y est déjà ouvert (#10450). Jamais « Connexion réussie ! ».
+    static func sessionNotOpened(bundle: Bundle = .main) -> String {
+        String(localized: "emailProof.sessionNotOpened",
+               defaultValue: "Un autre compte est déjà ouvert sur cet appareil : ce compte n'a pas pu s'ouvrir.", bundle: bundle)
+    }
+
+    /// La question « un AUTRE compte » a reçu sa réponse après la fenêtre
+    /// d'adoption de la session prouvée (#10513) : rien n'a changé, il faut un
+    /// nouveau lien.
+    static func linkExpired(bundle: Bundle = .main) -> String {
+        String(localized: "auth.magiclink.expired",
+               defaultValue: "Lien expiré, renvoyez-en un nouveau", bundle: bundle)
+    }
+
+    /// Le lien d'un AUTRE compte, accepté, n'a pas ouvert ce compte (#10518) :
+    /// l'écran dit POURQUOI — un lien trop vieux se redemande, une session que
+    /// l'appareil n'a pas pu poser ne se redemande pas.
+    static func accountSwitchMessage(for refusal: ProvenAccountSwitchRefusal, bundle: Bundle = .main) -> String {
+        switch refusal {
+        case .expired: return linkExpired(bundle: bundle)
+        case .failed: return sessionNotOpened(bundle: bundle)
+        }
+    }
+
+    /// L'adresse est prouvée mais le compte attend son second facteur
+    /// (#10445) : ce n'est ni un refus ni un « Email vérifié ! ».
+    private static func secondFactorRequired(_ bundle: Bundle) -> String {
+        String(localized: "emailProof.secondFactorRequired",
+               defaultValue: "Ce compte est protégé par la double authentification : connectez-vous avec votre mot de passe et votre code.", bundle: bundle)
     }
 
     private static func tooManyAttempts(_ bundle: Bundle) -> String {

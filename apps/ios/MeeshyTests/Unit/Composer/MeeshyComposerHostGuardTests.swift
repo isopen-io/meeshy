@@ -299,9 +299,16 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             "L'aperçu doit être RETENU par la porte — sans état, le cover n'a rien à présenter."
         )
         XCTAssertTrue(
-            compacted.contains("StoryViewerView(") && compacted.contains("isPreviewMode:true"),
-            "L'aperçu doit être rendu par le LECTEUR en mode aperçu, jamais par un composant maison "
-                + "(loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
+            compacted.contains(".modifier(StoryPreviewReaderCover("),
+            "L'aperçu doit être présenté par LE lecteur partagé (`StoryPreviewReaderCover`, #11197), "
+                + "jamais par un composant maison (loi 6 — un troisième chemin de rendu mentirait tôt ou tard)."
+        )
+        let lecteur = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerContainer.swift")
+        ).components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(
+            lecteur.contains("StoryViewerView(") && lecteur.contains("isPreviewMode:true"),
+            "L'aperçu partagé doit rendre le LECTEUR en mode aperçu (loi 6)."
         )
     }
 
@@ -1512,10 +1519,14 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // du fil (`ConversationImageSceneDoor`) monte le meuble au lieu de
             // l'éditeur d'image à part. Elle passe les trois canaux — et n'en
             // publie aucun : son socle rend l'image au message.
-            ["StoryTrayActions.swift", "ComposerMoodSurface.swift", "DocumentComposerDoor.swift",
+            //
+            // **Une porte de moins, 2026-10-20** (#11170) : la retouche d'une
+            // image ou d'une vidéo passe partout par la retouche de la caméra
+            // (`ConversationPieceRetouch`), qui ne monte pas le meuble. La porte
+            // de scène a quitté le dépôt avec son dernier appelant.
+            ["StoryTrayActions.swift", "MoodComposerDoor.swift", "DocumentComposerDoor.swift",
              "MediaComposerDoor.swift", "ShareComposeDoor.swift",
-             "StoryEditComposer.swift", "StoryRepublishComposer.swift",
-             "ConversationImageSceneDoor.swift"],
+             "StoryEditComposer.swift", "StoryRepublishComposer.swift"],
             "Les sites qui montent le MEUBLE lui-même sont écrits en toutes lettres, et ce sont des PORTES : "
                 + "un montage de plus, posé directement dans une feuille de présentation, recopierait l'envoi "
                 + "et la reprise hors-ligne que `MoodComposerDoor` et `DocumentComposerDoor` tiennent une "
@@ -1552,13 +1563,11 @@ final class MeeshyComposerHostGuardTests: XCTestCase {
             // deux choses (quel contenu reprendre, quelle audience il autorise)
             // parce que les séparer aurait permis d'en passer une sans l'autre,
             // c'est-à-dire de republier SANS PLAFOND, silencieusement.
-            // `onReturnMedia` ferme la liste (#8416, #9123) : la retouche d'une pièce du
-            // fil rend l'image composée au lieu de la publier. `retouchSeries` et
-            // `onReturnSeries` la suivent (#9126) : toutes les pièces du message
-            // en scènes, rendues chacune à sa place.
+            // Le chemin de retour au message (`onReturnMedia`, `retouchSeries`,
+            // `onReturnSeries`) a quitté le meuble (#11171) : la retouche de la
+            // caméra est l'éditeur unique d'une pièce du message (#11133).
             ["intent", "initialVisibility", "draftId", "hydration", "onPublishAllInBackground",
-             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss", "onReturnMedia",
-             "retouchSeries", "onReturnSeries"],
+             "onPublishDocument", "moodSeed", "mediaSeed", "onPreview", "onDismiss"],
             "La liste des paramètres du meuble a changé. Ce n'est pas un échec en soi — elle est écrite en "
                 + "toutes lettres ici pour qu'un changement d'ordre se lise dans un diff au lieu de se "
                 + "découvrir à la compilation, et pour que la sous-suite ci-dessous ait une référence stable."

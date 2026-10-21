@@ -1,10 +1,12 @@
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { Field } from '@/components/field';
 import { Glyph } from '@/components/glyph';
 import type { PersonSummary } from '@/lib/api/friend-requests';
 import { GROUP_DESCRIPTION_MAX, GROUP_TITLE_MAX, type GroupDraft, type GroupField } from '@/lib/conversation-new/group';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LE COMPOSEUR D'UN GROUPE** (#6706) — le nom, la description, qui en est, et
@@ -72,7 +74,7 @@ export function GroupComposer({
     >
       <Field
         id="group-title"
-        label="Nom du groupe"
+        label={translate(currentInterfaceLanguage(), 'newConversation.group.name')}
         icon="users"
         tint={FIELD_TINT}
         focused={focused === 'title'}
@@ -89,7 +91,7 @@ export function GroupComposer({
             autoComplete="off"
             maxLength={GROUP_TITLE_MAX}
             value={draft.title}
-            placeholder="Équipe déploiement"
+            placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.name.placeholder')}
             onInput={(event) => onEdit('title', event.currentTarget.value)}
             onFocus={() => onFocus('title')}
             onBlur={() => onFocus(null)}
@@ -101,7 +103,7 @@ export function GroupComposer({
 
       <Field
         id="group-description"
-        label="Description (facultative)"
+        label={translate(currentInterfaceLanguage(), 'newConversation.group.description')}
         tint={FIELD_TINT}
         focused={focused === 'description'}
         error={errorFor('description')}
@@ -116,7 +118,7 @@ export function GroupComposer({
             rows={2}
             maxLength={GROUP_DESCRIPTION_MAX}
             value={draft.description}
-            placeholder="À quoi sert ce groupe ?"
+            placeholder={translate(currentInterfaceLanguage(), 'newConversation.group.description.placeholder')}
             onInput={(event) => onEdit('description', event.currentTarget.value)}
             onFocus={() => onFocus('description')}
             onBlur={() => onFocus(null)}
@@ -140,12 +142,12 @@ export function GroupComposer({
           opacity: disabled ? 0.6 : 1,
         }}
       >
-        {busy ? 'Création du groupe…' : 'Créer le groupe'}
+        {translate(currentInterfaceLanguage(), busy ? 'newConversation.group.creating' : 'newConversation.group.create')}
       </button>
 
       {online ? null : (
         <p className="text-center text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Hors ligne — le groupe se créera quand le réseau sera revenu.
+          {translate(currentInterfaceLanguage(), 'newConversation.group.offline')}
         </p>
       )}
     </form>
@@ -168,11 +170,13 @@ function ChosenPeople({
   return (
     <div className="grid gap-1.5">
       <span className="text-caption font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
-        {chosen.length === 0 ? 'Personne choisie' : `${chosen.length} personne${chosen.length > 1 ? 's' : ''}`}
+        {chosen.length === 0
+          ? translate(currentInterfaceLanguage(), 'newConversation.group.chosen.none')
+          : translate(currentInterfaceLanguage(), chosen.length > 1 ? 'newConversation.group.chosen.other' : 'newConversation.group.chosen.one', { count: String(chosen.length) })}
       </span>
       {chosen.length === 0 ? (
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          Touchez des personnes dans la liste pour les ajouter.
+          {translate(currentInterfaceLanguage(), 'newConversation.group.chosen.hint')}
         </p>
       ) : (
         <ul data-group-chosen className="flex flex-wrap gap-2">
@@ -187,11 +191,13 @@ function ChosenPeople({
                   type="button"
                   data-group-remove={person.id}
                   onClick={() => onRemove(person.id)}
-                  aria-label={`Retirer ${name}`}
+                  aria-label={translate(currentInterfaceLanguage(), 'newConversation.group.remove', { name })}
                   className="flex items-center gap-2 rounded-chip py-1 ps-1 pe-2.5"
                   style={{ minHeight: 44, backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink)' }}
                 >
-                  <Avatar
+                  <PeerAvatar
+                    presenceKey={person.id}
+                    ringRef={person.ring}
                     initials={initialsOf(name)}
                     color={colorForName(name)}
                     size={28}

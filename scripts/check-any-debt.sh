@@ -354,7 +354,10 @@ readonly SHARED_BASELINE=0
 # 501 → 498 (lots du 2026-10-07 : transfert gardé #9579, points par post #9569/#9584,
 # défis #9635, loi de sortie #9572) : trois `any` ont quitté la passerelle avec ces lots —
 # le progrès est inscrit, le cliquet ne peut que descendre.
-readonly GATEWAY_BASELINE=498
+#
+# 497 → 496 (#11260 : le chemin TUS et le multipart partagent une fabrique de rendus) :
+# un `any` a quitté la passerelle avec la convergence des deux chemins d'upload.
+readonly GATEWAY_BASELINE=496
 
 # `apps/web` — le legacy Next.js (451 usages) a quitté le dépôt le
 # 2026-09-24 (#7668) et l'application qui a pris son chemin naît à ZÉRO

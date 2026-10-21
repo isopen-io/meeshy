@@ -13,6 +13,11 @@ import MeeshySDK
 // le constat qui a fait naître `ComposableAttachment` au #4025, et il vaut une
 // seconde fois à l'échelle des SURFACES.
 //
+// **La story a QUITTÉ cette règle au #9994.** Une story n'est pas un lot de
+// pièces jointes mais une SCÈNE, et « Composer » la recrée entière — textes
+// posés, stickers, effets, tous ses médias — par `StoryRecomposition` (SDK).
+// La règle « exactement une pièce » ne vaut plus que pour le message et le post.
+//
 // **Ce qui la rend UNE est la SOURCE, pas un paramètre de surface.** La question
 // posée est « cette chose sème-t-elle quelque chose sur un canvas ? », et sa
 // réponse ne dépend d'aucun endroit : elle dépend des PIÈCES, du TEXTE et de la
@@ -50,7 +55,7 @@ nonisolated extension ComposableAttachment {
         let text: String?
 
         /// Le PORTEUR est-il masqué ? Un message le déclare de trois façons
-        /// (vue unique, flou, chiffrement) ; un post et une story n'ont aucune
+        /// (vue unique, flou, chiffrement) ; un post n'a aucune
         /// de ces colonnes — le champ vaut alors `false`, et le dire au site
         /// de projection vaut mieux que de laisser la règle deviner.
         let carrierIsProtected: Bool
@@ -105,15 +110,13 @@ nonisolated extension ComposableAttachment {
         return seedPlan(for: source)
     }
 
-    /// **Ce qu'une SLIDE de story sème** (#6085).
-    ///
-    /// `preferredLanguages` descend le Prisme du lecteur par la fonction du SDK
-    /// (`StoryItem.resolvedContent(preferredLanguages:)`), qui retombe sur
-    /// l'ORIGINAL quand aucune langue de la chaîne n'a de traduction — jamais
-    /// sur `translations.first`. Vide ⇒ l'original, ce qui est licite et jamais
-    /// souhaitable : l'appelant passe la chaîne du lecteur.
-    static func seedPlan(inStory story: StoryItem, preferredLanguages: [String] = []) -> SeedPlan? {
-        seedPlan(for: .story(story, preferredLanguages: preferredLanguages))
+    /// **Ce qu'une story RECOMPOSÉE sème.** La scène entière part par la
+    /// recomposition : le plan ne porte aucun média, seulement la description,
+    /// normalisée comme ailleurs. Une story n'a aucune colonne de protection,
+    /// et le plan existe même sans texte — c'est la scène qui fait la graine.
+    static func seedPlan(recomposingStoryWith description: String?) -> SeedPlan {
+        let texte = (description ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return SeedPlan(media: nil, description: texte.isEmpty ? nil : texte)
     }
 }
 
@@ -137,14 +140,5 @@ nonisolated extension ComposableAttachment.SeedSource {
         return Self(pieces: [media.toMessageAttachment()],
                     text: post.displayContent,
                     carrierIsProtected: false)
-    }
-
-    /// Idem pour une story : `StoryItem` porte une EXPIRATION, jamais un masque.
-    /// Une story expirée ne se lit plus du tout — la question ne se pose pas à
-    /// ce niveau, elle est déjà tranchée par le lecteur qui l'affiche.
-    static func story(_ story: StoryItem, preferredLanguages: [String]) -> Self {
-        Self(pieces: story.media.map { $0.toMessageAttachment() },
-             text: story.resolvedContent(preferredLanguages: preferredLanguages),
-             carrierIsProtected: false)
     }
 }

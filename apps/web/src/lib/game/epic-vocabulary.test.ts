@@ -1,0 +1,226 @@
+import { describe, expect, test } from 'bun:test';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { z } from 'zod';
+
+import { loadGameCatalog } from '../i18n-game-catalog';
+import { loadOnboardingCatalog } from '../i18n-onboarding-catalog';
+import { SUPPORTED_INTERFACE_LANGUAGES } from '../inline-interface-language-bootstrap.js';
+import type { InterfaceLanguage } from '../interface-language';
+
+/**
+ * **LE JEU RACONTE, IL NE COMPTE PLUS** (épopée § 3.1 et § 4, #11173) — la garde
+ * de vocabulaire du web. Le lexique vit, une langue par fichier, dans
+ * `packages/shared/design/game-epic-vocabulary/<langue>.json` (format :
+ * `docs/product/epopee/glossaire/README.md`) ; la garde iOS lira les MÊMES
+ * fichiers. Une langue entre sous la garde en posant son fichier : rien à
+ * déclarer ici.
+ *
+ * Pour chaque langue : aucune valeur des catalogues du jeu (le catalogue `game.*`
+ * entier, la pastille d'engagement, l'accueil qui fait jaillir les premières
+ * étincelles) ne porte un motif banni, paramètres `{…}` mis de côté ; et chaque
+ * clé de NOM (palier, rang, contenant, forme de Flamme, joute, concept) porte le
+ * nom canonique, au caractère près.
+ */
+
+const SHARED_VOCABULARY = join(dirname(fileURLToPath(import.meta.url)), '../../../../../packages/shared/design/game-epic-vocabulary');
+
+const keyScope = z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]);
+
+const vocabularySchema = z.object({
+  $doc: z.string().optional(),
+  language: z.enum(SUPPORTED_INTERFACE_LANGUAGES),
+  banned: z.array(
+    z.object({
+      pattern: z.string().min(1),
+      flags: z.string().regex(/^[imsu]*$/),
+      instead: z.string().min(1),
+      keys: keyScope.optional(),
+      except: z.array(z.string().min(1)).optional(),
+    }),
+  ),
+  names: z.record(z.string().regex(/^game\./), z.string().min(1)),
+});
+
+type Vocabulary = z.infer<typeof vocabularySchema>;
+type BannedRule = Vocabulary['banned'][number];
+type Catalog = Readonly<Record<string, string>>;
+type Violation = { readonly key: string; readonly value: string; readonly pattern: string; readonly instead: string };
+
+const asList = (scope: string | readonly string[]): readonly string[] => (typeof scope === 'string' ? [scope] : scope);
+
+const ruleGoverns = (rule: BannedRule, key: string): boolean =>
+  (rule.keys === undefined || asList(rule.keys).some((prefix) => key.startsWith(prefix))) &&
+  !(rule.except ?? []).some((prefix) => key.startsWith(prefix));
+
+const withoutPlaceholders = (value: string): string => value.replace(/\{[^{}]*\}/g, ' ');
+
+/** Les mots bannis que porte un catalogue : une ligne par (clé, motif) fautif. */
+const bannedWordsIn = (vocabulary: Vocabulary, catalog: Catalog): readonly Violation[] =>
+  vocabulary.banned.flatMap((rule) => {
+    const matcher = new RegExp(rule.pattern, rule.flags);
+    return Object.entries(catalog)
+      .filter(([key, value]) => ruleGoverns(rule, key) && matcher.test(withoutPlaceholders(value)))
+      .map(([key, value]) => ({ key, value, pattern: rule.pattern, instead: rule.instead }));
+  });
+
+/** Les clés de nom qui ne portent pas leur nom canonique (ou qui n'existent plus). */
+const misnamedIn = (vocabulary: Vocabulary, catalog: Catalog) =>
+  Object.entries(vocabulary.names)
+    .filter(([key, name]) => catalog[key] !== name)
+    .map(([key, name]) => ({ key, expected: name, actual: catalog[key] ?? null }));
+
+const vocabularies: readonly Vocabulary[] = readdirSync(SHARED_VOCABULARY)
+  .filter((file) => file.endsWith('.json'))
+  .sort()
+  .map((file) => vocabularySchema.parse(JSON.parse(readFileSync(join(SHARED_VOCABULARY, file), 'utf8'))));
+
+const engagementCatalog = async (language: InterfaceLanguage): Promise<Catalog> =>
+  (await import(`../interface-catalogs/catalog-${language}-engagement.ts`)).default as Catalog;
+
+/** Les catalogues du jeu d'une langue, fusionnés : `game.*`, la pastille d'engagement, l'accueil. */
+const gameCatalogsOf = async (language: InterfaceLanguage): Promise<Catalog> => ({
+  ...(await loadGameCatalog(language)),
+  ...(await engagementCatalog(language)),
+  ...(await loadOnboardingCatalog(language)),
+});
+
+describe('le lexique partagé de l’épopée', () => {
+  test('le français, la source, est posé, et une langue n’a qu’un fichier', () => {
+    const languages = vocabularies.map((vocabulary) => vocabulary.language);
+    expect(languages).toContain('fr');
+    expect(new Set(languages).size).toBe(languages.length);
+  });
+
+  test('chaque fichier porte le nom de sa langue', () => {
+    const files = readdirSync(SHARED_VOCABULARY).filter((file) => file.endsWith('.json')).sort();
+    expect(files).toEqual(vocabularies.map((vocabulary) => `${vocabulary.language}.json`).sort());
+  });
+
+  test('chaque motif banni se compile et dit ce qui le remplace', () => {
+    for (const vocabulary of vocabularies) {
+      for (const rule of vocabulary.banned) {
+        expect(() => new RegExp(rule.pattern, rule.flags)).not.toThrow();
+      }
+    }
+  });
+
+  test('la garde voit un mot banni, et ne le voit pas dans un paramètre', () => {
+    const french = vocabularies.find((vocabulary) => vocabulary.language === 'fr');
+    if (french === undefined) throw new Error('le lexique français manque');
+    const caught = bannedWordsIn(french, {
+      'game.sparks.trap': 'Ta dette : {debt}',
+      'game.flame.trap': 'Ta plus longue Flamme : {record}',
+    });
+    expect(caught.map((violation) => violation.key)).toEqual(['game.sparks.trap']);
+  });
+});
+
+/**
+ * L'angle mort de `game.fact.stars` (#11173) : le libellé d'un fait du Voyage ou de la Renaissance vit sous
+ * `game.fact.*`, hors des familles `game.season.*` et `game.prestige.*` que le motif de l'étoile gardait — « Étoiles »
+ * y a survécu à toute la vague. Les deux faits sont désormais sous ce motif, dans chaque langue.
+ */
+const STAR_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Étoiles',
+  en: 'Stars',
+  es: 'Estrellas',
+  de: 'Sterne',
+  it: 'Stelle',
+  pt: 'Estrelas',
+  ar: 'النجوم',
+};
+
+describe('les faits du Voyage et de la Renaissance ne disent jamais « étoile »', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : la garde voit une étoile sur le fait des pas comme sur celui des renaissances`, () => {
+      const star = STAR_OF[vocabulary.language];
+      const caught = bannedWordsIn(vocabulary, { 'game.fact.strides': star, 'game.fact.rebirths': star }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)].sort() }).toEqual({
+        language: vocabulary.language,
+        caught: ['game.fact.rebirths', 'game.fact.strides'],
+      });
+    });
+  }
+});
+
+/**
+ * LES MÉDAILLES MONTENT DES PALIERS, PAS DES ÉTOILES (#11444 choix 8, #11484) — « étoile » est réservé au ciel des
+ * aïeux : le libellé des paliers d'une médaille (`game.badge.stars_label`) est sous le motif de l'étoile, dans chaque
+ * langue. LA SÉRIE D'UNE CONVERSATION NE S'APPELLE PAS FLAMME (#11444 choix 7) : sous 🔥, la durée seule.
+ */
+const FLAME_STREAK_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Flamme de 4 jours',
+  en: '4-day Flame',
+  es: 'Llama de 4 días',
+  de: 'Flamme seit 4 Tagen',
+  it: 'Fiamma di 4 giorni',
+  pt: 'Chama de 4 dias',
+  ar: 'لهب 4 أيام',
+};
+
+/** Le mot des paliers d'une médaille, celui que chaque glossaire donne au seuil d'une médaille (#11484). */
+const TIERS_OF: Readonly<Record<InterfaceLanguage, string>> = {
+  fr: 'Paliers',
+  en: 'Marks',
+  es: 'Escalones',
+  de: 'Stufen',
+  it: 'Gradini',
+  pt: 'Patamares',
+  ar: 'العتبات',
+};
+
+describe('les paliers des médailles et la série d’une conversation ne reprennent pas un mot réservé', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : la garde voit une étoile sur les paliers d’une médaille`, () => {
+      const caught = bannedWordsIn(vocabulary, { 'game.badge.stars_label': STAR_OF[vocabulary.language] }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)] }).toEqual({ language: vocabulary.language, caught: ['game.badge.stars_label'] });
+    });
+
+    test(`${vocabulary.language} : la garde voit la Flamme sur la série d’une conversation`, () => {
+      const caught = bannedWordsIn(vocabulary, {
+        'engagement.pill.streak.one': FLAME_STREAK_OF[vocabulary.language],
+        'engagement.pill.streak.other': FLAME_STREAK_OF[vocabulary.language],
+      }).map((violation) => violation.key);
+      expect({ language: vocabulary.language, caught: [...new Set(caught)].sort() }).toEqual({
+        language: vocabulary.language,
+        caught: ['engagement.pill.streak.one', 'engagement.pill.streak.other'],
+      });
+    });
+
+    test(`${vocabulary.language} : le titre de l’échelle d’une médaille dit le mot des paliers, jamais « tier », « livelli » ni « níveis »`, () => {
+      const title = vocabulary.names['game.badge.ladder_title'] ?? '';
+      expect({ language: vocabulary.language, says: title.toLocaleLowerCase(vocabulary.language).includes(TIERS_OF[vocabulary.language].toLocaleLowerCase(vocabulary.language)) }).toEqual({
+        language: vocabulary.language,
+        says: true,
+      });
+    });
+
+    test(`${vocabulary.language} : les paliers d’une médaille portent leur nom canonique`, () => {
+      expect({ language: vocabulary.language, name: vocabulary.names['game.badge.stars_label'] ?? null }).toEqual({
+        language: vocabulary.language,
+        name: TIERS_OF[vocabulary.language],
+      });
+    });
+  }
+});
+
+describe('aucune valeur du jeu ne porte un mot banni, dans aucune langue posée', () => {
+  for (const vocabulary of vocabularies) {
+    test(`${vocabulary.language} : aucun mot banni`, async () => {
+      expect({ language: vocabulary.language, violations: bannedWordsIn(vocabulary, await gameCatalogsOf(vocabulary.language)) }).toEqual({
+        language: vocabulary.language,
+        violations: [],
+      });
+    });
+
+    test(`${vocabulary.language} : chaque clé de nom porte son nom canonique`, async () => {
+      expect({ language: vocabulary.language, misnamed: misnamedIn(vocabulary, await gameCatalogsOf(vocabulary.language)) }).toEqual({
+        language: vocabulary.language,
+        misnamed: [],
+      });
+    });
+  }
+});

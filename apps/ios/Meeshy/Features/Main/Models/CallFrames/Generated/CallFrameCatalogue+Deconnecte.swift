@@ -26,7 +26,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .handwriting, color: "#3B2F2A", fill: nil),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#C8553D", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .names, font: .handwriting, color: "#2B4C7E", place: .top, size: .m, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.carte-postale.comite",
@@ -48,7 +49,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .handwriting, color: "#3B2F2A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .handwriting, color: "#2B4C7E", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#C8553D", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.carte-postale.groupe",
@@ -70,7 +72,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .list, font: .handwriting, color: "#3B2F2A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .handwriting, color: "#2B4C7E", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#C8553D", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.carte-postale.tablee",
@@ -92,7 +95,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .tag, font: .handwriting, color: "#3B2F2A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .handwriting, color: "#2B4C7E", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#C8553D", place: .bottom, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.road-trip.duo",
@@ -114,7 +118,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .retro, color: "#F2CC8F", fill: "#1E1A17CC"),
                 title: CallFrameTitle(source: .names, font: .retro, color: "#F2CC8F", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#E07A5F", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.road-trip.comite",
@@ -136,7 +141,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .caption, font: .retro, color: "#F2CC8F", fill: nil),
                 title: CallFrameTitle(source: .group, font: .retro, color: "#F2CC8F", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.road-trip.groupe",
@@ -158,7 +164,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .typewriter, color: "#F2CC8F", fill: "#1E1A17CC"),
                 title: CallFrameTitle(source: .group, font: .retro, color: "#F2CC8F", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.cahier-de-vacances.duo",
@@ -180,7 +187,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .handwriting, color: "#2B4C7E", fill: nil),
                 title: CallFrameTitle(source: .names, font: .note, color: "#C8553D", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .handwriting, color: "#2B4C7E", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.cahier-de-vacances.comite",
@@ -202,7 +210,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .handwriting, color: "#2B4C7E", fill: nil),
                 title: CallFrameTitle(source: .group, font: .note, color: "#C8553D", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.cahier-de-vacances.groupe",
@@ -224,7 +233,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .note, color: "#2B4C7E", fill: nil),
                 title: CallFrameTitle(source: .group, font: .note, color: "#C8553D", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.cahier-de-vacances.tablee",
@@ -245,7 +255,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .caption, font: .note, color: "#2B4C7E", fill: nil),
                 title: CallFrameTitle(source: .group, font: .note, color: "#C8553D", place: .top, size: .m, effect: nil, letterCase: nil),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "deconnecte.coucher-de-soleil.duo",
@@ -267,7 +278,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .handwriting, color: "#FFF8EE", fill: "#3B2F2ACC"),
                 title: CallFrameTitle(source: .names, font: .handwriting, color: "#3B2F2A", place: .bottom, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#3B2F2A", place: .bottom, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

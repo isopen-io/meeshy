@@ -131,7 +131,11 @@ enum AppSourceGuard {
     /// n'ont aucune raison de s'appeler `Type+…`.
     static func unitURLs(_ relativeToAppRoot: String,
                          alsoIncluding compagnons: [String] = []) -> [URL] {
-        let principal = appRoot.appendingPathComponent(relativeToAppRoot)
+        familyURLs(of: appRoot.appendingPathComponent(relativeToAppRoot))
+            + compagnons.map(appRoot.appendingPathComponent)
+    }
+
+    private static func familyURLs(of principal: URL) -> [URL] {
         let dossier = principal.deletingLastPathComponent()
         let base = principal.deletingPathExtension().lastPathComponent
         let voisins = (try? FileManager.default.contentsOfDirectory(
@@ -140,7 +144,63 @@ enum AppSourceGuard {
             .filter { $0.pathExtension == "swift"
                 && $0.deletingPathExtension().lastPathComponent.hasPrefix(base + "+") }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
-        return [principal] + parties + compagnons.map(appRoot.appendingPathComponent)
+        return [principal] + parties + layerURLs(of: base, in: dossier)
+    }
+
+    /// Les couches nominales de l'écran de conversation vivent dans
+    /// `ConversationLayers/` (LOT-10) : elles font partie de l'unité
+    /// `ConversationView`, comme ses extensions.
+    private static func layerURLs(of base: String, in dossier: URL) -> [URL] {
+        guard base == "ConversationView" else { return [] }
+        let couches = (try? FileManager.default.contentsOfDirectory(
+            at: dossier.appendingPathComponent("ConversationLayers"), includingPropertiesForKeys: nil)) ?? []
+        return couches
+            .filter { $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    /// Les types découpés par responsabilité qu'une garde lit comme leur unité :
+    /// `BubbleStandardLayout` (#10678), `MessageListViewController` (#10758),
+    /// `PostDetailView` (#10956), `ConversationListViewModel`, `FeedViewModel`,
+    /// `ConversationListView`, `ConversationView`, `StoryViewerView`,
+    /// `FeedCommentsSheet`, `P2PWebRTCClient`, `FeedView`,
+    /// `ConversationDashboardView`, `FocalRow`, `ComposerMoodSurface`,
+    /// `ConversationMediaGalleryView`, `AudioPostComposerView`, `PostDetailViewModel`,
+    /// `ConversationInfoSheet`, `StoryTrayView` et `RootViewComponents` (#10988).
+    static let splitUnits: Set<String> = [
+        "AudioPostComposerView.swift",
+        "BubbleStandardLayout.swift",
+        "ComposerMoodSurface.swift",
+        "ConversationDashboardView.swift",
+        "ConversationInfoSheet.swift",
+        "ConversationListView.swift",
+        "ConversationListViewModel.swift",
+        "ConversationMediaGalleryView.swift",
+        "ConversationView.swift",
+        "FeedCommentsSheet.swift",
+        "FeedView.swift",
+        "FeedViewModel.swift",
+        "FocalRow.swift",
+        "MessageListViewController.swift",
+        "P2PWebRTCClient.swift",
+        "PostDetailView.swift",
+        "PostDetailViewModel.swift",
+        "RootViewComponents.swift",
+        "StoryViewerView+Canvas.swift",
+        "StoryViewerView+Content.swift",
+        "StoryTrayView.swift",
+        "StoryViewerView.swift",
+    ]
+
+    /// Lit un fichier ; un type de `splitUnits` se lit comme son UNITÉ
+    /// (`<Type>+*.swift`), par le même glob que
+    /// `unit(_:)` : le type a été découpé par responsabilité et une garde ne
+    /// doit ni rougir ni verdir parce que du code a changé de fichier.
+    static func text(at url: URL) throws -> String {
+        let urls = Self.splitUnits.contains(url.lastPathComponent) ? familyURLs(of: url) : [url]
+        return try urls
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
     }
 
     static func unit(_ relativeToAppRoot: String,
@@ -186,6 +246,9 @@ enum AppSourceGuard {
         // les gardes qui lisent « la feuille POSE par le viewmodel » liraient
         // un meuble qui ne pose plus rien lui-même.
         "Meeshy/Features/Main/Composer/SceneStickerPose.swift",
+        // Le voile de progression d'export, sorti du meuble au #10988 : il reste
+        // dans l'unité pour que les gardes négatives du meuble le balaient.
+        "Meeshy/Features/Main/Composer/ComposerExportProgressVeil.swift",
     ]
 
     static func composerHostURLs() -> [URL] {

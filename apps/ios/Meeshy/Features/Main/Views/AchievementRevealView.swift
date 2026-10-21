@@ -12,6 +12,13 @@ import MeeshyUI
 /// remplace pas : elle le COUVRE, et le referme sur lui. L'utilisateur n'a donc
 /// jamais un geste de plus à faire pour arriver là où il allait.
 ///
+/// **Une CARTE posée, pas un plein écran (#10816).** Constat porteur : « le
+/// cadre du premier achievement est moche, prend tout l'écran et ne dit rien
+/// sur l'auteur ». La célébration est une carte bornée (300 pt), inclinée d'un
+/// degré et demi, posée sur un voile qui laisse voir l'écran qu'elle couvre ;
+/// un succès obtenu y porte la plaque d'auteur — le pseudo gravé au métal de
+/// sa rareté (`GamePhotoAuthorPlate`). Toucher le voile referme.
+///
 /// **Réduire les animations est respecté, et pas seulement ralenti.** Sous ce
 /// réglage, le badge est POSÉ à son état final — aucune échelle, aucun halo qui
 /// pulse, aucun rayon qui tourne. Une animation « plus lente » reste une
@@ -64,6 +71,8 @@ struct AchievementRevealView: View {
     /// Progression. `nil` — un badge, une série, un niveau, un ancien serveur, une rareté non mesurée ou « Jeu
     /// masqué » — et la célébration reste celle d'avant.
     var rarity: GameRarityEntry?
+    /// L'auteur dont la plaque grave le pseudo (#10816) : le compte connecté ; `nil` pour un invité.
+    var author: PhotoAuthor? = PhotoAuthor.current()
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -92,7 +101,7 @@ struct AchievementRevealView: View {
                 return String(localized: "reveal.badge.tier",
                               defaultValue: "Palier \(seuil)", bundle: .main)
             }
-            return "\(seuil) \(ProgressionCopy.title(for: clé).lowercased())"
+            return ProgressionCopy.badgeTierTitle(threshold: seuil, axis: clé)
         case .streak(let jours): return ProgressionCopy.streak(jours)
         case .level(let rang): return ProgressionCopy.levelTitle(rang)
         }
@@ -196,10 +205,25 @@ struct AchievementRevealView: View {
     private var momentPhoto: PhotoMoment? {
         guard occasion.estCelebration, onPhoto != nil else { return nil }
         switch reveal {
-        case .achievement, .composedAchievement: return GamePhotoMoments.achievement(id: reveal.id, title: titre)
+        case .achievement, .composedAchievement:
+            return GamePhotoMoments.achievement(id: reveal.id, title: titre, rarity: rarity?.visibleRarity)
         case .badge, .streak, .level: return nil
         }
     }
+
+    /// La plaque d'auteur d'un SUCCÈS obtenu (#10816), au métal de sa rareté visible ; rien pour un badge, une
+    /// série, un niveau, un palier à débloquer ou un invité.
+    private var plaqueAuteur: AuthorPlate? {
+        guard occasion.estObtenu else { return nil }
+        switch reveal {
+        case .achievement, .composedAchievement:
+            return GamePhotoAuthorPlate.plate(for: .achievement(rarity: rarity?.visibleRarity), author: author)
+        case .badge, .streak, .level:
+            return nil
+        }
+    }
+
+    static let cardWidth: CGFloat = 300
 
     private var libelleProgression: String {
         String(localized: "reveal.continue", defaultValue: "Voir ma progression", bundle: .main)
@@ -207,41 +231,82 @@ struct AchievementRevealView: View {
 
     var body: some View {
         ZStack {
-            MeeshyColors.backgroundPrimary(isDark: isDark).ignoresSafeArea()
-            lueurDeFond.ignoresSafeArea()
+            // Le voile : l'écran couvert reste visible, la carte s'y pose. Le toucher referme — c'est la
+            // fermeture, pas une seconde action.
+            Color.black.opacity(isDark ? 0.62 : 0.45)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onContinue() }
+                .accessibilityHidden(true)
 
-            VStack(spacing: MeeshySpacing.xl) {
-                Spacer()
-                médaille
-                texte
-                Spacer()
-                sortie
+            // Centrée quand elle tient ; elle défile sous un grand corps de texte plutôt que de déborder.
+            GeometryReader { proxy in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: MeeshySpacing.xl) {
+                        carte
+                        sortie
+                            .frame(maxWidth: Self.cardWidth)
+                    }
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .padding(.vertical, MeeshySpacing.xxl)
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+                }
             }
-            .padding(.horizontal, MeeshySpacing.xl)
-            .padding(.bottom, MeeshySpacing.xxl)
         }
+        .clearCoverBackground()
         .onAppear(perform: entrer)
+        // La célébration RETIENT : la conversation s'ouvre quand on la quitte (#10543).
+        .retainsAgainstConversationOpening(.game)
+    }
+
+    /// La carte posée : la médaille, ce que le palier dit, et la plaque de son auteur.
+    private var carte: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            médaille
+            texte
+            if let plaqueAuteur {
+                GameAuthorPlateLive(plate: plaqueAuteur, width: Self.cardWidth - 2 * MeeshySpacing.lg)
+                    .accessibilityIdentifier("reveal.author.plate")
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.top, MeeshySpacing.xl)
+        .padding(.bottom, MeeshySpacing.lg)
+        .frame(maxWidth: Self.cardWidth)
+        .background(
+            ZStack {
+                GameAuthorCardBackdrop()
+                lueurDeFond.clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl, style: .continuous))
+            }
+        )
+        .rotationEffect(.degrees(-1.5))
+        .scaleEffect(apparu ? 1 : 0.85)
+        .opacity(apparu ? 1 : 0)
+        // La carte se lit sur son fond sombre, quel que soit le thème de l'appareil.
+        .environment(\.colorScheme, .dark)
         // UN seul élément pour le lecteur d'écran : « Succès débloqué, <titre>,
-        // <explication> » se lit d'un trait. Trois éléments séparés feraient
-        // balayer trois fois ce qui est une seule nouvelle.
+        // <explication> », puis l'auteur, se lit d'un trait. Trois éléments
+        // séparés feraient balayer trois fois ce qui est une seule nouvelle.
         .accessibilityElement(children: .combine)
         .accessibilityLabel(phraseAccessible)
+        .accessibilityIdentifier("reveal.card")
     }
 
     /// « Succès débloqué. <titre>. <explication> », puis la rareté en toutes lettres : la couleur du liseré n'est
     /// jamais la seule information.
     private var phraseAccessible: String {
         let base = "\(bandeau). \(titre). \(explication)"
-        guard let visible = rarity?.visibleRarity else { return base }
-        return "\(base). \(GameText.rarityName(visible))"
+        let rare = rarity?.visibleRarity.map { "\(base). \(GameText.rarityName($0))" } ?? base
+        guard let plaqueAuteur else { return rare }
+        return "\(rare). \(plaqueAuteur.label)"
     }
 
     // MARK: - Pièces
 
     private var lueurDeFond: some View {
         RadialGradient(
-            colors: [teinte.opacity(isDark ? 0.28 : 0.18), .clear],
-            center: .center, startRadius: 0, endRadius: 320
+            colors: [teinte.opacity(0.32), .clear],
+            center: .top, startRadius: 0, endRadius: 260
         )
         .scaleEffect(halo ? 1.0 : 0.7)
         .opacity(apparu ? 1 : 0)
@@ -262,7 +327,7 @@ struct AchievementRevealView: View {
                     Capsule()
                         .fill(teinte.opacity(0.35))
                         .frame(width: 3, height: 18)
-                        .offset(y: liseré == nil ? -78 : -104)
+                        .offset(y: liseré == nil ? -64 : -86)
                         .rotationEffect(.degrees(Double(i) / 12 * 360))
                         .scaleEffect(halo ? 1.15 : 0.6)
                         .opacity(apparu ? 1 : 0)
@@ -297,7 +362,7 @@ struct AchievementRevealView: View {
                 family: medaille.family, glyph: medaille.glyph, material: medaille.material,
                 state: .lit, progress: 0, label: GameCopy.formatCount(medaille.threshold)
             )
-            .frame(width: 128)
+            .frame(width: 104)
             .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
             .gamePrismTilt(active: medaille.material == .prism)
         } else {
@@ -305,11 +370,11 @@ struct AchievementRevealView: View {
                 Circle()
                     .fill(LinearGradient(colors: [teinte, teinte.opacity(0.55)],
                                          startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 128, height: 128)
+                    .frame(width: 104, height: 104)
                     .shadow(color: teinte.opacity(0.45), radius: 24, y: 10)
 
                 Image(systemName: symbole)
-                    .font(MeeshyFont.relative(56, weight: .semibold))
+                    .font(MeeshyFont.relative(46, weight: .semibold))
                     .foregroundColor(.white)
             }
         }
@@ -320,21 +385,22 @@ struct AchievementRevealView: View {
             Text(bandeau.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                 .tracking(1.2)
-                .foregroundColor(teinte)
+                .foregroundColor(occasion.estObtenu ? MeeshyColors.indigo200 : MeeshyColors.neutral500)
 
             Text(titre)
-                .font(MeeshyFont.relative(26, weight: .bold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                .foregroundColor(.white)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
 
             Text(explication)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                .foregroundColor(MeeshyColors.indigo200)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
             // « Épique · 4 % des comptes » : le nom de la rareté, lu en toutes lettres sous le liseré.
-            GameRarityLine(entry: rarity)
+            GameRarityLine(entry: rarity, ink: MeeshyColors.indigo200)
         }
         .opacity(apparu ? 1 : 0)
         .offset(y: apparu ? 0 : MeeshySpacing.lg)
@@ -364,7 +430,7 @@ struct AchievementRevealView: View {
                 } label: {
                     Label(libellePhoto, systemImage: "camera.fill")
                         .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                        .foregroundColor(teinte)
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.plain)
@@ -380,14 +446,14 @@ struct AchievementRevealView: View {
             } label: {
                 Text(libelleSortie)
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
-                    .foregroundColor(onVoirProgression == nil ? .white : teinte)
+                    .foregroundColor(.white)
                     .frame(maxWidth: .infinity, minHeight: 52)
                     .background(
                         Capsule().fill(onVoirProgression == nil ? teinte : Color.clear)
                     )
                     .overlay(
                         Capsule().stroke(
-                            onVoirProgression == nil ? Color.clear : teinte.opacity(0.5),
+                            onVoirProgression == nil ? Color.clear : Color.white.opacity(0.6),
                             lineWidth: 1
                         )
                     )

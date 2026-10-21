@@ -21,10 +21,6 @@ extension UserProfileSheet {
             aboutSection
             voiceSection
             if !isCurrentUser { actionsSection }
-            if !isCurrentUser, let userId = resolvedUserId, !userId.isEmpty, let gameSection {
-                gameSection.build(userId, displayUser.displayName ?? displayUser.username)
-                    .padding(.horizontal, MeeshySpacing.xl)
-            }
             statsSection
         }
         .confirmationDialog(
@@ -200,7 +196,7 @@ extension UserProfileSheet {
             if isBlocked {
                 profileActionButton(
                     icon: "hand.raised.slash.fill",
-                    label: String(localized: "profile.action.unblockUser", defaultValue: "Debloquer l'utilisateur", bundle: .module),
+                    label: String(localized: "profile.action.unblockUser", defaultValue: "Débloquer l'utilisateur", bundle: .module),
                     color: MeeshyColors.warning,
                     action: { Task { await unblockUser() } }
                 )
@@ -259,7 +255,7 @@ extension UserProfileSheet {
                 .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text(text)
-                .font(.system(size: MeeshyFont.subheadSize))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                 .foregroundColor(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
@@ -374,7 +370,7 @@ extension UserProfileSheet {
                         .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         .foregroundColor(Color(hex: resolvedAccent))
                     Text(String(localized: "profile.voice.title", defaultValue: "Voix", bundle: .module))
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
 
@@ -406,8 +402,9 @@ extension UserProfileSheet {
     // MARK: - Compact stats band
 
     /// A small horizontal band of mini stat chips + member-since, replacing the
-    /// full stats stack. Triggers `loadStatsIfNeeded()` on appear. Achievements
-    /// grid is dropped here for compactness.
+    /// full stats stack. The figures are read with the profile when the sheet
+    /// opens (#10093) — cached first, then synchronized. Achievements grid is
+    /// dropped here for compactness.
     @ViewBuilder
     var compactStatsBand: some View {
         // Aucune marge horizontale ici : `profileSection` porte déjà celles de
@@ -442,12 +439,6 @@ extension UserProfileSheet {
                             .shimmer()
                     }
                 }
-            } else {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        Task { await loadStatsIfNeeded() }
-                    }
             }
         }
     }
@@ -458,7 +449,7 @@ extension UserProfileSheet {
                 .font(.system(size: MeeshyIconSize.sm, weight: .medium))
                 .foregroundColor(Color(hex: resolvedAccent))
             Text("\(value)")
-                .font(.system(size: MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Text(label)
                 .font(.caption2)

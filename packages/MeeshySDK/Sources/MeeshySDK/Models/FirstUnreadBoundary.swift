@@ -41,6 +41,14 @@ public struct FirstUnreadCandidateMessage: Equatable, Sendable {
 ///    la fenêtre chargée).
 /// 3. **`nil` si tout est lu** — jamais un `Result` à `unreadCount == 0`.
 ///
+/// **`unreadCountHint`** (#7427, miroir du repli #7351 de la loi TS) — le compte
+/// SERVEUR, consulté SEULEMENT quand aucun des trois rangs n'existe (un
+/// appareil qui ouvre `GET /conversations/:id` sans jamais avoir ouvert la
+/// conversation) : `0` ⇒ `nil`, `N` ⇒ les N DERNIERS candidats (tous si la
+/// fenêtre en porte moins). Dès qu'un rang existe, il est ignoré, y compris à
+/// zéro : un compte relu d'un cache est figé, le curseur dit la vérité. Omis
+/// (`nil`) ⇒ comportement d'avant, tout message d'autrui est candidat.
+///
 /// À `createdAt` ÉGAL, l'`id` départage : `Swift.sorted(by:)` n'est PAS
 /// stable là où `Array.prototype.sort` l'est, donc sans cette seconde clé les
 /// deux miroirs éliraient deux messages différents pour la même entrée.
@@ -74,9 +82,10 @@ public enum FirstUnreadBoundary {
         lastReadAt: Date?,
         lastReadMessageCreatedAt: Date?,
         joinedAt: Date? = nil,
-        viewerId: String
+        viewerId: String,
+        unreadCountHint: Int? = nil
     ) -> Result? {
-        let candidates = orderedCandidates(
+        let ordered = orderedCandidates(
             messages: messages,
             lastReadMessageId: lastReadMessageId,
             lastReadAt: lastReadAt,
@@ -84,6 +93,10 @@ public enum FirstUnreadBoundary {
             joinedAt: joinedAt,
             viewerId: viewerId
         )
+        let hasChronologicalRank = (lastReadMessageCreatedAt ?? lastReadAt ?? joinedAt) != nil
+        let candidates = hasChronologicalRank
+            ? ordered
+            : unreadCountHint.map { Array(ordered.suffix(max(0, $0))) } ?? ordered
 
         guard let first = candidates.first else { return nil }
 

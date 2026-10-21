@@ -16,13 +16,15 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import type { GameAchievementRarities } from '@meeshy/shared/types/game';
+import type { GameAchievementRarities, GamePhotoBlock } from '@meeshy/shared/types/game';
+import { seasonSchedule } from './SeasonScheduleService';
 import { buildGameBlockExtras, type GameBlockExtras, type GameBlockExtrasFacts } from '@meeshy/shared/utils/game/game-block-extras';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { AchievementRarityService } from './AchievementRarityService';
 import { AtlasService } from './AtlasService';
 import { DuoService } from './DuoService';
 import { GameProfileService } from './GameProfileService';
+import { GamePhotoService } from './GamePhotoService';
 import { LeagueService } from './LeagueService';
 import { READ_ONLY_CREDIT } from './MissionService';
 import { SeasonService } from './SeasonService';
@@ -35,6 +37,8 @@ export type ExtrasBase = {
   readonly userId: string;
   readonly score: number;
   readonly levelRecord: number | null;
+  /** Le niveau max à vie (#10846) : il ouvre ligues et duo après un Prestige. */
+  readonly levelMaxLifetime?: number | null;
   readonly prestige: number;
   readonly flameDays: number;
   readonly balance: number;
@@ -50,6 +54,7 @@ export type GameBlockExtrasDeps = {
   readonly atlas?: AtlasService;
   readonly profile?: GameProfileService;
   readonly rarity?: Pick<AchievementRarityService, 'served'>;
+  readonly photo?: Pick<GamePhotoService, 'block'>;
 };
 
 export class GameBlockExtrasService {
@@ -67,7 +72,11 @@ export class GameBlockExtrasService {
 
   private readonly rarity: Pick<AchievementRarityService, 'served'>;
 
+  private readonly photo: Pick<GamePhotoService, 'block'>;
+  private readonly prisma: PrismaClient;
+
   constructor(prisma: PrismaClient, deps: GameBlockExtrasDeps = {}) {
+    this.prisma = prisma;
     this.profile = deps.profile ?? new GameProfileService(prisma);
     this.league = deps.league ?? new LeagueService(prisma, { profile: this.profile });
     this.seasons =
@@ -76,6 +85,17 @@ export class GameBlockExtrasService {
     this.trophies = deps.trophies ?? new TrophyService(prisma, { profile: this.profile });
     this.atlas = deps.atlas ?? new AtlasService(prisma);
     this.rarity = deps.rarity ?? new AchievementRarityService(prisma);
+    this.photo = deps.photo ?? new GamePhotoService(prisma);
+  }
+
+  /** Les réglages et le registre photo (#10162), ou `null` : illisibles, ils s'absentent SANS emporter les autres extensions. */
+  private async photoBlock(userId: string, balance: number): Promise<GamePhotoBlock | null> {
+    try {
+      return await this.photo.block(userId, { balance });
+    } catch (error) {
+      log.warn('photo moments unavailable, block served without them', { error: error instanceof Error ? error.message : String(error) });
+      return null;
+    }
   }
 
   /** La carte des raretés, ou `null` : vide ou illisible, elle s'absente SANS emporter les autres extensions. */
@@ -93,7 +113,7 @@ export class GameBlockExtrasService {
   async build(base: ExtrasBase): Promise<GameBlockExtras | null> {
     const now = base.now ?? new Date();
     try {
-      const [placement, friends, pseudonym, duo, season, trophies, atlas, settings] = await Promise.all([
+      const [placement, friends, pseudonym, duo, season, trophies, atlas, settings, schedule] = await Promise.all([
         this.league.placement(base.userId, now),
         this.league.friendsFacts(base.userId, now),
         this.league.pseudonyms.current(base.userId),
@@ -102,6 +122,7 @@ export class GameBlockExtrasService {
         this.trophies.list(base.userId),
         this.atlas.state(base.userId),
         this.profile.settings(base.userId),
+        seasonSchedule(this.prisma),
       ]);
 
       const facts: GameBlockExtrasFacts = {
@@ -110,6 +131,7 @@ export class GameBlockExtrasService {
         minuteOfDay: minuteOfDayInTimezone(now, base.timezone),
         score: base.score,
         levelRecord: base.levelRecord,
+        levelMaxLifetime: base.levelMaxLifetime ?? null,
         prestige: base.prestige,
         flameDays: base.flameDays,
         balance: base.balance,
@@ -126,14 +148,19 @@ export class GameBlockExtrasService {
         },
         duo,
         season: { stars: season.stars, claimedSteps: season.claimedSteps, sealOwned: season.sealOwned },
+        schedule,
         trophies,
         showcaseOrder: settings.showcaseOrder,
         atlas,
         visibility: settings.visibility,
       };
       const extras = buildGameBlockExtras(facts);
-      const achievementRarities = await this.achievementRarities(now);
-      return achievementRarities === null ? extras : { ...extras, achievementRarities };
+      const [achievementRarities, photo] = await Promise.all([this.achievementRarities(now), this.photoBlock(base.userId, base.balance)]);
+      return {
+        ...extras,
+        ...(achievementRarities === null ? {} : { achievementRarities }),
+        ...(photo === null ? {} : { photo }),
+      };
     } catch (error) {
       log.warn('game block extensions unavailable, block served without them', {
         userId: base.userId,

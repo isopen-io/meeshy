@@ -102,6 +102,16 @@ struct ComposerCaptureBottomRow: View {
                 }
                 .environment(\.layoutDirection, .leftToRight)
             }
+            .overlay(alignment: .bottomLeading) {
+                if ComposerCaptureGesture.offersRail(context) {
+                    ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                        session.toggleFamily(famille)
+                    }
+                    .padding(.leading, MeeshySpacing.mdPlus)
+                    .padding(.bottom, ComposerLookStripRule.railBottomInset)
+                        .transition(.opacity)
+                }
+            }
             if showsHint {
                 Text(showsLock ? ComposerSceneCameraCopy.lockHint
                                : ComposerSceneCameraCopy.hint(mode: session.mode ?? .photo, stage: session.stage))
@@ -116,74 +126,91 @@ struct ComposerCaptureBottomRow: View {
             }
         }
         .padding(.bottom, MeeshySpacing.lg)
-        .overlay(alignment: .bottomLeading) {
-            if ComposerCaptureGesture.offersRail(context) {
-                ComposerLookRail(open: session.openFamily) { famille in session.toggleFamily(famille) }
-                    .padding(.leading, MeeshySpacing.mdPlus)
-                    .padding(.bottom, ComposerLookStripRule.cellSize.height + MeeshySpacing.xxxl * 2)
-                    .transition(.opacity)
-            }
-        }
     }
 
     /// **Sous la scène de retouche : les panneaux, puis les outils** (#9567,
-    /// #9754) — un panneau par outil ACTIF, empilés : les proportions, le
-    /// spectre du son, la piste de découpe, le bouton muet à DROITE d'une piste
-    /// du temps ; ou la bande ouverte, qui les replie. Puis « Filtres »,
-    /// « Cadres », « Recadrer », « Couper », « Son » : chaque outil se retire ou
-    /// revient d'un toucher, sans fermer les autres.
+    /// #9754) — un panneau par outil ACTIF, empilés : les proportions, la
+    /// piste de découpe portant le spectre du son (#10341), ou le spectre seul
+    /// quand la coupe est retirée. Puis « Filtres », « Effets », « Cadres », « Recadrer »,
+    /// « Couper », « Son » : chaque outil se retire ou revient d'un toucher,
+    /// sans fermer les autres. Une famille ouverte prend la place de tout cela,
+    /// sa bande au niveau de son rail (#10311).
     private var editTools: some View {
         VStack(spacing: ComposerEditScene.gap) {
-            ForEach(session.editPanels, id: \.self) { panneau in
-                switch panneau {
-                case .trim:
-                    if let trimClip {
-                        mediaTrack(.trim) {
-                            ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
-                        }
-                    }
-                case .sound:
-                    if let trimClip {
-                        mediaTrack(.sound) { ComposerSoundTrack(session: session, url: trimClip.url) }
-                    }
-                case .band:
-                    ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
-                        .transition(.opacity)
-                case .presets:
-                    ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
-                        .transition(.opacity)
-                case .none:
-                    EmptyView()
-                }
+            if session.openFamily != nil {
+                familyRow
+            } else {
+                editPanelsAndTools
             }
-            ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
-                             shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) }) { famille in
-                session.toggleFamily(famille)
-            }
-            .frame(height: ComposerEditScene.toolsRow)
         }
         .padding(.bottom, ComposerEditScene.gap)
     }
 
-    /// Une piste du temps, et le bouton muet à sa DROITE quand elle le porte ;
-    /// l'autre piste réserve sa place, et leurs instants s'alignent.
-    private func mediaTrack<Track: View>(_ panneau: ComposerEditPanel, @ViewBuilder _ track: () -> Track) -> some View {
-        let panneaux = session.editPanels
-        let son = session.takeHasAudio
-        return HStack(spacing: MeeshySpacing.xs) {
-            track()
-            if ComposerEditTools.muteHost(panels: panneaux, hasAudio: son) == panneau {
-                ComposerTakeMuteButton(muted: session.takeSound.muted) { session.toggleTakeMute() }
-                    .padding(.trailing, MeeshySpacing.sm)
-            } else if ComposerEditTools.reservesMuteColumn(panneau, panels: panneaux, hasAudio: son) {
-                Color.clear
-                    .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                    .padding(.trailing, MeeshySpacing.sm)
-                    .accessibilityHidden(true)
+    @ViewBuilder
+    private var editPanelsAndTools: some View {
+        ForEach(session.editPanels, id: \.self) { panneau in
+            switch panneau {
+            case .trim:
+                if let trimClip {
+                    // **Le son se pose PAR-DESSUS la bande vidéo** (#10341) :
+                    // spectre et volume quand « Son » est actif, sans réserver
+                    // de hauteur (#10356). Le bouton du son, lui, est monté sur
+                    // la scène, à côté de la lecture.
+                    ComposerTrimTrack(session: session, url: trimClip.url, duration: trimClip.duration)
+                        .overlay(alignment: .bottom) {
+                            if session.takeHasAudio, session.shownEditTools.contains(.sound) {
+                                ComposerSoundTrack(session: session, url: trimClip.url, overlaid: true)
+                                    .padding(.horizontal, ComposerTrimTrack.trackInset)
+                            }
+                        }
+                        .transition(.opacity)
+                }
+            case .sound:
+                // Seul quand la coupe est retirée : il garde alors sa piste.
+                if let trimClip {
+                    mediaTrack { ComposerSoundTrack(session: session, url: trimClip.url) }
+                }
+            case .presets, .band, .none:
+                // Les proportions : leur place est retenue sous la scène, leur
+                // bande pleine largeur s'y pose (`ComposerEditPresetsLayout`).
+                EmptyView()
             }
         }
-        .environment(\.layoutDirection, .leftToRight)
+        ComposerEditRailFit(rail: editRail)
+            .frame(height: ComposerEditScene.toolsRow)
+    }
+
+    private var editRail: ComposerLookRail {
+        ComposerLookRail(open: session.openFamily, axis: .horizontal, editTools: session.editTools,
+                         shownTools: session.shownEditTools, onTool: { session.toggleEditTool($0) },
+                         fitsLabels: true) { famille in
+            session.toggleFamily(famille)
+        }
+    }
+
+    /// **La famille ouverte, au niveau de son rail** (#10311) : Filtres · Effets
+    /// · Cadres en colonne, la bande à leur droite — jamais un panneau qui
+    /// flotte au-dessus des outils. Retoucher la famille ouverte rend les outils.
+    private var familyRow: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.sm) {
+            // Le haut de la colonne sur le haut des cases (#10339).
+            ComposerLookRail(open: session.openFamily, alignedWithCells: true) { famille in
+                session.toggleFamily(famille)
+            }
+            .padding(.leading, MeeshySpacing.mdPlus)
+            .padding(.top, ComposerTriggerOutline.outset)
+            ComposerLookStrip(session: session, source: source, context: context, recordingTime: 0)
+        }
+        .frame(height: ComposerEditScene.familyRow)
         .transition(.opacity)
+    }
+
+    /// Une piste du temps seule — le spectre quand la coupe est retirée. Le
+    /// bouton muet n'est plus à côté d'elle : il est sur la scène (#10356).
+    private func mediaTrack<Track: View>(@ViewBuilder _ track: () -> Track) -> some View {
+        track()
+            .environment(\.layoutDirection, .leftToRight)
+            .transition(.opacity)
     }
 
     /// Les crans sont ceux de l'OBJECTIF ; pendant sa bascule, ils morphent (#9753).
@@ -192,5 +219,25 @@ struct ComposerCaptureBottomRow: View {
                                switching: capture.switchingCamera,
                                onSelect: { session.controls.setZoom($0) },
                                onStep: { session.stepZoom(up: $0) })
+    }
+}
+
+/// **Le rail entier, ou qui défile — jamais un libellé coupé** (porteur
+/// 2026-10-20) : à son idéal s'il tient, sinon il défile jusqu'aux bords.
+///
+/// Un type à lui seul (#11411) : `ViewThatFits` mesure ses candidats sur le
+/// rendu asynchrone d'iOS 26, et un candidat posé au fil d'un membre de la
+/// rangée y emportait tout ce que ce membre construit avant lui — pistes de
+/// coupe et de son, bande des familles. Ici, il ne voit que le rail.
+struct ComposerEditRailFit: View {
+    let rail: ComposerLookRail
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            rail
+            ScrollView(.horizontal, showsIndicators: false) {
+                rail.padding(.horizontal, ComposerEditPresetsLayout.leadingInset)
+            }
+        }
     }
 }

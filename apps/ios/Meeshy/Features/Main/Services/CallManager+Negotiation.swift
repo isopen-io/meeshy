@@ -32,7 +32,7 @@ extension CallManager {
             Logger.calls.info("Participant joined call \(callId), creating offer")
             // Ancrage négociation côté appelant : l'appelé vient de décrocher,
             // la sonnerie est finie — tout ce qui suit est du setup technique.
-            self.analyticsNegotiationStartDate = Date()
+            self.analytics.negotiationStartDate = Date()
 
             // Update ICE servers with TURN credentials without recreating the peer connection
             if let servers = event.iceServers, !servers.isEmpty {
@@ -211,7 +211,7 @@ extension CallManager {
             }
             Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
             if attempt < maxAttempts {
-                try? await Task.sleep(for: .seconds(delay))
+                _ = await cancellableSleep(for: .seconds(delay))
                 delay *= 2
             }
         }
@@ -263,7 +263,7 @@ extension CallManager {
                 Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
-            try? await Task.sleep(for: .seconds(delay))
+            _ = await cancellableSleep(for: .seconds(delay))
             delay *= 2
             guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else { return }
             let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
@@ -316,5 +316,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

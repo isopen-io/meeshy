@@ -4,7 +4,7 @@ import SocketIO
 
 // #8064 — le consentement à l'enregistrement d'un appel, vu du socket. Dans
 // son propre fichier : `MessageSocketManager.swift` est hors budget de taille,
-// il n'y porte que la ligne `registerCallRecordingHandlers(on:)`.
+// la table des routes n'y porte que `callRecordingRoutes`.
 //
 // La passerelle est l'AUTORITÉ (`CallRecordingService`) : ce fichier ne
 // décide rien. Il émet les trois verbes (demander, répondre, arrêter), rend
@@ -143,26 +143,22 @@ extension MessageSocketManager: CallRecordingSocketProviding {
         CallRecordingSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallRecordingHandlers(on socket: SocketIOClient) {
-        socket.on("call:recording-requested") { [weak self] data, _ in
-            self?.decode(CallRecordingRequestedEvent.self, from: data) { event in
+    var callRecordingRoutes: [SocketInboundRoute] {
+        [
+            route(.callRecordingRequested, CallRecordingRequestedEvent.self) { _, event in
                 CallRecordingSocketChannel.events.send(.requested(event))
-            }
-        }
-        socket.on("call:recording-started") { [weak self] data, _ in
-            self?.decode(CallRecordingStartedEvent.self, from: data) { event in
+            },
+            route(.callRecordingStarted, CallRecordingStartedEvent.self) { _, event in
                 CallRecordingSocketChannel.events.send(.started(event))
-            }
-        }
-        socket.on("call:recording-stopped") { [weak self] data, _ in
-            self?.decode(CallRecordingStoppedEvent.self, from: data) { event in
+            },
+            route(.callRecordingStopped, CallRecordingStoppedEvent.self) { _, event in
                 CallRecordingSocketChannel.events.send(.stopped(event))
-            }
-        }
+            },
+        ]
     }
 
     public func requestCallRecording(callId: String, kind: CallRecordingKind) async throws -> String {
-        try await emitCallRecording("call:recording-request", Self.callRecordingRequestPayload(callId: callId, kind: kind))
+        try await emitCallRecording(.callRecordingRequest, Self.callRecordingRequestPayload(callId: callId, kind: kind))
     }
 
     /// La passerelle antérieure à #8437 valide la demande en schéma STRICT :
@@ -174,40 +170,34 @@ extension MessageSocketManager: CallRecordingSocketProviding {
 
     public func answerCallRecording(callId: String, recordingId: String, accepted: Bool) async throws {
         _ = try await emitCallRecording(
-            "call:recording-consent",
+            .callRecordingConsent,
             ["callId": callId, "recordingId": recordingId, "accepted": accepted]
         )
     }
 
     public func stopCallRecording(callId: String, recordingId: String) async throws {
-        _ = try await emitCallRecording("call:recording-stop", ["callId": callId, "recordingId": recordingId])
+        _ = try await emitCallRecording(.callRecordingStop, ["callId": callId, "recordingId": recordingId])
     }
 
-    private func emitCallRecording(_ event: String, _ payload: [String: Any]) async throws -> String {
+    private func emitCallRecording(_ event: SocketEvent, _ payload: [String: Any]) async throws -> String {
         guard let socket else { throw CallRecordingRefusal(code: "NO_SOCKET") }
-        return try await withCheckedThrowingContinuation { continuation in
-            socket.emitWithAck(event, payload).timingOut(after: 10) { items in
-                switch Self.callRecordingAck(items.first) {
-                case .success(let recordingId): continuation.resume(returning: recordingId)
-                case .failure(let refusal): continuation.resume(throwing: refusal)
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(event, payload, as: CallRecordingAckBody.self, payloadAt: .root, timingOutAfter: 10)
+        return try Self.callRecordingAck(ack).get()
     }
 
     /// `{ success: true, recordingId }` ou `{ success: false, code }` — tout
     /// autre forme (dont l'échéance, que Socket.IO rend en `"NO ACK"`) est un
     /// refus : rien ne se croit accepté sans que la passerelle l'ait dit.
-    static func callRecordingAck(_ item: Any?) -> Result<String, CallRecordingRefusal> {
-        guard let response = item as? [String: Any] else {
-            return .failure(CallRecordingRefusal(code: "TIMEOUT"))
+    static func callRecordingAck(_ ack: SocketAck<CallRecordingAckBody>) -> Result<String, CallRecordingRefusal> {
+        switch ack {
+        case .accepted(let body): return .success(body.recordingId)
+        case .timedOut: return .failure(CallRecordingRefusal(code: "TIMEOUT"))
+        case .refused(let refusal): return .failure(CallRecordingRefusal(code: refusal.code ?? "MALFORMED_ACK"))
+        case .acceptedWithoutPayload, .undecodable: return .failure(CallRecordingRefusal(code: "MALFORMED_ACK"))
         }
-        guard response["success"] as? Bool == true else {
-            return .failure(CallRecordingRefusal(code: response["code"] as? String ?? "MALFORMED_ACK"))
-        }
-        guard let recordingId = response["recordingId"] as? String else {
-            return .failure(CallRecordingRefusal(code: "MALFORMED_ACK"))
-        }
-        return .success(recordingId)
     }
+}
+
+struct CallRecordingAckBody: Decodable, Sendable {
+    let recordingId: String
 }

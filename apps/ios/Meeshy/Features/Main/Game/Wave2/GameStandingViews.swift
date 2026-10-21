@@ -5,57 +5,50 @@ import MeeshyUI
 // MARK: - Le niveau et le rang d'un AUTRE membre (#9481)
 //
 // Ce que le serveur sert de SON jeu, selon SON réglage : l'anneau de niveau (emblème du palier, chiffre romain,
-// étoiles de Prestige), le blason de son rang et sa division, le palier de son trésor, la forme de sa Flamme. Jamais
-// un compte exact : ni Gloire, ni jours de série, ni Meeshes. Quand le serveur ne sert rien (réglage fermé, blocage,
-// « Jeu masqué », compte inconnu), la vue ne se dessine PAS — un refus ne se distingue pas d'une absence.
+// étoiles de Prestige), le blason de son rang et sa division, le palier de son trésor. Jamais un compte exact : ni
+// Gloire, ni jours de série, ni Meeshes — et jamais la Flamme, que le serveur sert pourtant : aucun réglage du jeu ne
+// permet à son propriétaire de choisir de la montrer, elle reste donc masquée (#10093). Quand le serveur ne sert rien
+// (réglage fermé, blocage, « Jeu masqué », compte inconnu), la vue ne se dessine PAS — un refus ne se distingue pas
+// d'une absence.
 
 extension GameText {
-    static func visitorGameTitle(name: String) -> String {
-        String(localized: "game2.profile.visitor_game_title", defaultValue: "Le jeu de \(name)", bundle: .main)
-    }
-
     static func visitorTreasury(tier: String) -> String {
-        String(localized: "game2.profile.visitor_treasury", defaultValue: "Trésor : \(tier)", bundle: .main)
-    }
-
-    static func visitorFlame(form: String) -> String {
-        String(localized: "game2.profile.visitor_flame", defaultValue: "Flamme : \(form)", bundle: .main)
+        String(localized: "game2.profile.visitor_treasury", defaultValue: "Héritage : \(tier)", bundle: .main)
     }
 }
 
 extension GameStandingContent {
-    /// Ce que VoiceOver lit : « Niveau 42, palier Éclat, quatrième palier, Voix II, Flamme : Brasier, Trésor : Coffre ».
+    /// Ce que VoiceOver lit : « Niveau 42, palier Éclat, quatrième palier, Voix II, Trésor : Coffre ».
     var accessibilityLabel: String {
         var parts: [String] = []
         if let standing {
             parts.append(GameCopy.levelRingAccessibility(level: standing.shownLevel, tier: standing.shownTier))
             parts.append(GameCopy.rankLabel(standing))
-            if let flame = standing.flame { parts.append(GameText.visitorFlame(form: GameCopy.flameFormName(flame))) }
         }
         if let tier = treasuryTier { parts.append(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier))) }
         return parts.joined(separator: ", ")
     }
 }
 
+/// La rangée de la bande de la carte de contact (#9481) — la seule qui la monte depuis que la fiche d'un profil porte
+/// le niveau et le rang sur sa bannière (#10093, #10380).
 struct GameStandingView: View {
     let content: GameStandingContent
-    /// La rangée de la fiche de contact : plus petite, sur une ligne.
-    var compact = false
 
     private var theme: ThemeManager { ThemeManager.shared }
 
-    private var ringSize: CGFloat { compact ? 44 : 64 }
+    private let ringSize: CGFloat = 44
 
     var body: some View {
-        HStack(alignment: .center, spacing: compact ? MeeshySpacing.sm : MeeshySpacing.lg) {
+        HStack(alignment: .center, spacing: MeeshySpacing.sm) {
             if let standing = content.standing {
                 ring(standing)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(GameText.profileLevel(level: GameCopy.formatCount(standing.shownLevel), tier: GameCopy.tierName(standing.shownTier)))
-                        .font(MeeshyFont.relative(compact ? MeeshyFont.smallSize : MeeshyFont.bodySize, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                     Text(GameCopy.rankLabel(standing))
-                        .font(MeeshyFont.relative(compact ? MeeshyFont.footnoteSize : MeeshyFont.smallSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     if let tier = content.treasuryTier {
                         Text(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier)))
@@ -65,14 +58,9 @@ struct GameStandingView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
-                if let flame = standing.flame {
-                    FlameView(form: flame, flickers: false)
-                        .frame(width: compact ? 18 : 22, height: compact ? 18 : 22)
-                        .accessibilityHidden(true)
-                }
                 RankBlasonView(rank: standing.rank, division5: standing.shownDivision, level: standing.shownLevel,
                                mythic: standing.mythic, title: nil, figures: nil)
-                    .frame(width: compact ? 36 : 56, height: compact ? 34 : 52)
+                    .frame(width: 36, height: 34)
                     .accessibilityHidden(true)
             } else if let tier = content.treasuryTier {
                 Text(GameText.visitorTreasury(tier: GameCopy.treasuryName(tier)))
@@ -83,7 +71,7 @@ struct GameStandingView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(content.accessibilityLabel)
-        .accessibilityIdentifier(compact ? "game.contact.standing" : "game.profile.standing")
+        .accessibilityIdentifier("game.contact.standing")
     }
 
     /// L'anneau est PLEIN : on ne sait pas où en est la barre d'un autre (le serveur ne le dit pas), et un arc

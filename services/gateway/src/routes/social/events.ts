@@ -1,19 +1,57 @@
-import { FastifyInstance, FastifyReply, FastifyRequest, FastifySchema } from 'fastify';
-import { z } from 'zod';
+import { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
-import { filterConsumablePostIds } from '../posts/postConsumptionGate';
-import { buildViewerVisibilityFilter } from '../../services/posts/viewerAudience';
-import { NOT_DELETED } from '../../services/posts/postIncludes';
-import { EngagementSessionSchema, DOWNLOAD_SURFACES } from '../posts/types';
+import { consumablePostAuthors } from '../posts/postConsumptionGate';
+import { readServableToAnonymous } from '../posts/anonymousPostGate';
+import {
+  creditAnonymousImpressions,
+  creditAnonymousOpens,
+  creditAnonymousViews,
+  type ServableMap,
+} from '../../services/posts/anonymousReach';
+import { creditOpens } from '../../services/posts/contentOpens';
+import {
+  admitAnonymousEvents,
+  anonymousReaderKeyOf,
+  resolveAnonymousReader,
+  ANONYMOUS_READER_BUDGET,
+} from './anonymousReader';
+import { incrementPostCounters } from '../../services/posts/postCounters';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { safeBroadcast } from '../../socketio/serverEmit';
-import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError } from '../../utils/response';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { sendSuccess, sendBadRequest, sendForbidden, sendInternalError, sendError } from '../../utils/response';
+import {
+  SOCIAL_EVENTS_SCHEMA_VERSION,
+  SOCIAL_EVENTS_VERSION_HEADER,
+} from '@meeshy/shared/types/social-events-v2';
+import { readSocialEventsBody, type EventClock } from './eventsEnvelope';
+import type { ParsedSocialEventsContext } from './eventsV2Schemas';
+import { acceptedEventTypes, socialEventsV2Settings } from '../../services/social/contentEvents';
+import { claimCountingReceipts, releaseCountingReceipts, type CountingReceipts } from '../../services/social/countingReplays';
+import { readAnalyticsStanding, type AnalyticsStanding } from '../../services/social/eventPrivacy';
+import { impressionRowOf, insertKeyedImpressions, removeKeyedImpressions } from '../../services/social/impressionRows';
+import { ingestSocialEventsV2 } from '../../services/social/socialEventsV2';
+import {
+  authorImpressionsOnce,
+  consumeImpliedImpressions,
+  impressionsCarriedByViews,
+} from '../../services/social/viewImpressions';
 export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation';
+import {
+  SOCIAL_EVENTS_BATCH_CAP,
+  type SocialEvent,
+} from './eventsSchemas';
+export {
+  VIEW_ALIAS_SCHEMA,
+  SOCIAL_EVENTS_BATCH_CAP,
+  IMPRESSION_SOURCES,
+  SocialEventSchema,
+  SocialEventsBatchSchema,
+  type SocialEvent,
+  type SocialEventsBatch,
+} from './eventsSchemas';
 
 /**
  * `POST /social/events` — le point d'ingestion UNIQUE de la télémétrie de
@@ -33,9 +71,10 @@ export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation
  * tenait ensemble
  *
  * 1. **L'audience filtre DANS la requête**, en UNE passe, AVANT la moindre
- *    écriture — {@link filterConsumablePostIds} pour un compte,
- *    {@link filterPublicPostIds} pour un visiteur. Ce qui n'y survit pas est
- *    COMPTÉ (`rejected`), jamais écrit.
+ *    écriture — {@link consumablePostAuthors} pour un compte,
+ *    {@link readServableToAnonymous} pour un visiteur (la garde de LECTURE
+ *    anonyme, #10483 : on ne compte jamais ce qu'un anonyme ne peut pas lire).
+ *    Ce qui n'y survit pas est COMPTÉ (`rejected`), jamais écrit.
  * 2. **Aucun oracle d'existence.** Un post inexistant, un post supprimé, un
  *    post hors audience et un identifiant malformé sortent tous par la même
  *    porte : ils ne sont pas dans l'ensemble admis, et la réponse ne dit rien
@@ -66,163 +105,23 @@ export { SOCIAL_EVENTS_SUCCESSEUR, socialEventsDeprecation } from './deprecation
  * (`utils/deprecation.ts`).
  */
 
-/**
- * Le contrat de fil de l'alias `POST /posts/:postId/view`.
- *
- * Il vit ICI, avec la branche `view` du point d'ingestion dont il est la
- * PROJECTION historique, plutôt qu'au site de montage : c'est le même
- * événement, dit dans l'ancienne langue (`duration` au lieu de `durationMs`),
- * et les deux formes doivent bouger ensemble ou pas du tout.
- *
- * Annoté `FastifySchema` — et pas laissé à l'inférence. Un littéral exporté est
- * inféré au plus étroit, et le fournisseur de types de Fastify en dérive alors
- * les génériques de la route : `params` devient `{}` (le schéma JSON décrit des
- * propriétés, pas un type TypeScript), ce qui contredit le `Params: PostParams`
- * que le gestionnaire déclare. L'annotation dit ce que la valeur EST — un
- * schéma — plutôt que la forme exacte de son littéral.
- */
-export const VIEW_ALIAS_SCHEMA: FastifySchema = {
-    params: { type: 'object', required: ['postId'], properties: { postId: { type: 'string' } } },
-    // `['object', 'null']` et non `'object'` : les clients appellent cette
-    // route SANS corps (une vue n'a rien à dire de plus que son existence),
-    // et Fastify remet alors `null`. Un schéma `object` nu refuserait ces
-    // appels — la rigueur fermerait une porte qu'elle n'a pas à fermer.
-    body: {
-      oneOf: [
-        { type: 'null' },
-        {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            duration: {
-              type: 'integer',
-              minimum: 0,
-              maximum: 300_000,
-              description: 'Durée de consultation en millisecondes (plafond : 5 minutes)',
-            },
-          },
-        },
-      ],
-    },
-    // Le succès est DÉCLARÉ (#4531) : sans clé `response`, rien n'oblige la
-    // charge servie à rester celle qu'on annonce, et le contrat de la route
-    // n'existe que dans son handler. Une vue n'a qu'une chose à dire — elle
-    // a été enregistrée.
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: true },
-          data: {
-            type: 'object',
-            properties: {
-              viewed: { type: 'boolean', description: 'La vue a été enregistrée' },
-            },
-          },
-        },
-      },
-      401: errorResponseSchema,
-      500: errorResponseSchema,
-    },
-  };
-
-/** Le plafond du lot — le critère 1 le pose à 200. */
-export const SOCIAL_EVENTS_BATCH_CAP = 200;
-
-/**
- * Plafond de `durationMs`, en millisecondes.
- *
- * Cinq minutes : la même borne que `PostService.recordView` applique déjà en
- * aval. Elle est REDITE ici parce qu'une borne d'aval n'est pas une borne — le
- * jour où un second consommateur lit ce champ, il hérite d'un entier libre.
- */
-const DUREE_MAX_MS = 300_000;
-
-/**
- * Surfaces qui peuvent produire une impression — le SITE UNIQUE de cette
- * énumération depuis que l'impression a rejoint ce point d'ingestion.
- *
- * Elle a déjà divergé une fois entre la route unitaire et son lot : iOS envoyait
- * `story` à chaque slide révélé, valeur absente des deux listes, donc 400
- * systématique et `impressionCount` figé à 0 sur toutes les stories malgré des
- * vues réelles. Toute nouvelle surface cliente s'ajoute ICI.
- */
-export const IMPRESSION_SOURCES = [
-  'feed',
-  'profile',
-  'search',
-  'shared_link',
-  'notification',
-  'detail',
-  'story',
-  'status',
-] as const;
-
-const postId = z.string().regex(OBJECT_ID_REGEX);
-
-const ViewEventSchema = z.object({
-  type: z.literal('view'),
-  postId,
-  /**
-   * `durationMs` et non `duration` : le nom dit son unité. L'ancienne route
-   * lisait `duration` en `(request.body as any) ?? {}` — sans schéma, sans
-   * borne, et sans que rien ne dise s'il s'agissait de secondes.
-   */
-  durationMs: z.number().int().min(0).max(DUREE_MAX_MS).optional(),
-});
-
-const ImpressionEventSchema = z.object({
-  type: z.literal('impression'),
-  postId,
-  source: z.enum(IMPRESSION_SOURCES).default('feed'),
-});
-
-const DownloadEventSchema = z.object({
-  type: z.literal('download'),
-  postId,
-  /// Bornes alignées sur `RecordDownloadsSchema` : un poste ne porte jamais 50
-  /// médias, la borne est un garde-fou anti-abus, pas une limite produit.
-  mediaIds: z.array(z.string()).min(1).max(50),
-  surface: z.enum(DOWNLOAD_SURFACES).default('detail'),
-});
-
-/**
- * `dwell` REPREND `EngagementSessionSchema` au lieu de le redécrire.
- *
- * `POST /posts/engagement/batch` est la plus mûre des six portes — débit par
- * COMPTE, corps typé riche (dwell, watch, actions, échantillons) — et le
- * critère 1 demande de s'en inspirer, pas de la dégrader. L'extension n'ajoute
- * que le discriminant.
- */
-const DwellEventSchema = EngagementSessionSchema.extend({ type: z.literal('dwell') });
-
-export const SocialEventSchema = z.discriminatedUnion('type', [
-  ViewEventSchema,
-  ImpressionEventSchema,
-  DownloadEventSchema,
-  DwellEventSchema,
-]);
-
-export const SocialEventsBatchSchema = z.object({
-  /**
-   * PAS de `min(1)` : un lot VIDE est un succès à zéro enregistrement. Un
-   * client qui n'a rien observé ne doit pas avoir à le vérifier avant
-   * d'appeler — c'est le serveur qui sait répondre « rien à faire ».
-   */
-  events: z.array(SocialEventSchema).max(SOCIAL_EVENTS_BATCH_CAP).default([]),
-});
-
-export type SocialEvent = z.infer<typeof SocialEventSchema>;
-export type SocialEventsBatch = z.infer<typeof SocialEventsBatchSchema>;
 
 /**
  * QUI ingère. Les deux formes sont mutuellement exclusives et portent des
- * droits différents — un visiteur ne voit que le PUBLIC et ne peut produire
- * qu'une vue.
+ * droits différents — un visiteur ne compte que ce qu'il peut lire, et ne
+ * produit que des vues et des impressions. Il est désigné par sa CLÉ DE
+ * LECTEUR (`readerKeyOf`, HMAC), jamais par la valeur de X-Session-Token.
  */
+/**
+ * Les types dont la MESURE rangée dépend du statut d'analyse du compte (#10501,
+ * #10772, #10785) : la mesure d'une impression (une vue peut porter la sienne),
+ * la trace d'une session de lecture. Le lecteur, lui, est rangé quel que soit le statut.
+ */
+const STANDING_TYPES: ReadonlySet<SocialEvent['type']> = new Set(['impression', 'view', 'dwell', 'dwell-start']);
+
 export type SocialEventsActor =
   | { readonly kind: 'user'; readonly userId: string; readonly username: string }
-  | { readonly kind: 'anonymous'; readonly sessionKey: string };
+  | { readonly kind: 'anonymous'; readonly readerKey: string };
 
 /**
  * Le contrat de la porte : ce qui a été écrit, ce qui a été écarté.
@@ -242,47 +141,27 @@ export type SocialEventsOutcome = {
   };
 };
 
+/**
+ * Ce que la porte v2 sait du lot en plus des événements (#10500) : le
+ * contexte, la situation de consentement, l'heure corrigée de chaque
+ * événement. Les six alias n'en passent aucun — un ancien chemin compte
+ * exactement comme avant.
+ */
+export type SocialEventsIngestOptions = {
+  readonly context?: ParsedSocialEventsContext;
+  readonly standing?: AnalyticsStanding;
+  readonly clocks?: ReadonlyMap<SocialEvent, EventClock>;
+  readonly receivedAt?: Date;
+};
+
 export type SocialEventsDeps = {
   readonly fastify: FastifyInstance;
   readonly prisma: PrismaClient;
   readonly postService: Pick<
     PostService,
-    'recordView' | 'getPostById' | 'recordAnonymousOpen' | 'recordMediaDownloads' | 'recordEngagementBatch'
+    'recordView' | 'getPostById' | 'recordMediaDownloads' | 'recordEngagementBatch'
   >;
 };
-
-/**
- * Les ids PUBLICS parmi ceux demandés — l'audience d'un visiteur sans compte.
- *
- * Le filtre lui-même n'est PAS écrit ici : `buildViewerVisibilityFilter(prisma,
- * undefined)` est la source de vérité de « ce qu'un anonyme voit », la même que
- * `PostService.recordAnonymousOpen` consulte déjà. Une clause `visibility:
- * PUBLIC` recopiée ici serait une seconde loi qui dériverait de la première.
- *
- * Comme sa jumelle authentifiée, cette passe est UNE lecture bornée par les ids
- * DISTINCTS — jamais un `findFirst` par événement : deux cents allers-retours
- * séquentiels sur un chemin appelé à chaque défilement seraient une lenteur,
- * donc un bug.
- */
-async function filterPublicPostIds(
-  prisma: PrismaClient,
-  postIds: readonly string[],
-): Promise<ReadonlySet<string>> {
-  const distinctIds = [...new Set(postIds)];
-  if (distinctIds.length === 0) return new Set<string>();
-
-  const visibilityFilter = await buildViewerVisibilityFilter(prisma, undefined);
-  const rows = await prisma.post.findMany({
-    where: { id: { in: distinctIds }, deletedAt: NOT_DELETED, ...visibilityFilter },
-    select: { id: true },
-    // La borne est REDITE à la requête, alors que `distinctIds` est déjà plafonné
-    // par le schéma du lot : une borne qui ne vit que chez l'appelant est une
-    // convention, pas une borne — elle disparaît le jour où un second appelant
-    // arrive avec sa propre idée du plafond.
-    take: SOCIAL_EVENTS_BATCH_CAP,
-  });
-  return new Set(rows.map((row: { id: string }) => row.id));
-}
 
 /**
  * Les VUES admises, avec leurs DEUX effets de bord.
@@ -294,23 +173,22 @@ async function filterPublicPostIds(
 async function applyViews(
   deps: SocialEventsDeps,
   events: readonly Extract<SocialEvent, { type: 'view' }>[],
-  actor: SocialEventsActor,
+  actor: Extract<SocialEventsActor, { kind: 'user' }>,
+  counted: (events: readonly SocialEvent[]) => void = () => undefined,
+  alreadyShown: ReadonlySet<string> = new Set(),
 ): Promise<number> {
   if (events.length === 0) return 0;
 
-  // Un visiteur sans compte n'a pas de `userId` : sa vue est un COMPTAGE
-  // d'ouverture dédupliqué par jeton de session, jamais une ligne `PostView`.
-  if (actor.kind === 'anonymous') {
-    const comptes = await Promise.all(
-      events.map((event) => deps.postService.recordAnonymousOpen(event.postId, actor.sessionKey)),
-    );
-    return comptes.filter(Boolean).length;
-  }
-
   let recorded = 0;
   for (const event of events) {
-    const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs);
+    const isNewView = await deps.postService.recordView(event.postId, actor.userId, event.durationMs, {
+      surface: event.surface,
+      provenance: event.provenance,
+      origin: event.origin,
+      impliesImpression: !event.impression && !alreadyShown.has(event.postId),
+    });
     recorded += 1;
+    counted([event]);
 
     // Contenu consommé (première vue réelle) → les notifications liées à ce
     // post ne doivent plus apparaître comme non lues. Borné à la PREMIÈRE vue
@@ -382,42 +260,106 @@ async function broadcastStoryViewed(
  */
 async function applyImpressions(
   deps: SocialEventsDeps,
-  events: readonly Extract<SocialEvent, { type: 'impression' }>[],
+  all: readonly Extract<SocialEvent, { type: 'impression' }>[],
   userId: string,
+  options: SocialEventsIngestOptions,
+  ownPostIds: ReadonlySet<string>,
 ): Promise<number> {
-  if (events.length === 0) return 0;
+  if (all.length === 0) return 0;
 
-  await deps.prisma.postImpression.createMany({
-    data: events.map((event) => ({ postId: event.postId, userId, source: event.source })),
+  // #11037 — l'auteur ne compte qu'une fois par contenu, et n'ouvre rien.
+  const counted = await authorImpressionsOnce(deps.prisma, userId, all, ownPostIds);
+
+  const receivedAt = options.receivedAt ?? new Date();
+  const rowOf = (event: Extract<SocialEvent, { type: 'impression' }>) => impressionRowOf({
+    event,
+    userId,
+    standing: options.standing ?? 'not_granted',
+    context: options.context ?? {},
+    derivedAt: event.occurredAt ? options.clocks?.get(event)?.derivedAt : undefined,
+    receivedAt,
   });
 
-  const impressions = compterParId(events.map((event) => event.postId));
-  // Ouvrir le Détail d'un post est à la fois une impression ET une ouverture
-  // comptée immédiatement — chaque ouverture compte, sans seuil. Les autres
-  // surfaces ne comptent qu'une impression.
-  const ouvertures = compterParId(
-    events.filter((event) => event.source === 'detail').map((event) => event.postId),
-  );
+  // Une impression qui porte un `eventId` s'écrit par l'`insert` brut : sa
+  // ligne porte la clé, et un doublon (rejeu) ne crédite aucun compteur.
+  const plain = counted.filter((event) => !event.eventId);
+  const keyed = counted.filter((event) => event.eventId);
+  if (plain.length > 0) await deps.prisma.postImpression.createMany({ data: plain.map(rowOf) });
+  const keyedRows = keyed.map(rowOf);
+  const { inserted } = await insertKeyedImpressions(deps.prisma, keyedRows);
+  const events = [...plain, ...keyed.filter((_, index) => inserted.has(index))];
+  const written = keyedRows.filter((_, index) => inserted.has(index));
+
+  // #10732 — une vraie impression prend la place de celle qu'une vue sans clé avait déduite.
+  const remplacees = await consumeImpliedImpressions(deps.prisma, userId, events.map((event) => event.postId));
+  const impressions = new Map([...compterParId(events.map((event) => event.postId))]
+    .map(([id, n]) => [id, n - (remplacees.get(id) ?? 0)] as const)
+    .filter(([, n]) => n > 0));
+  const ouvertures = compterParId(events
+    .filter((event) => isDetailOpen(event) && !ownPostIds.has(event.postId))
+    .map((event) => event.postId));
 
   const racines = await resoudreRacinesDeRepost(deps.prisma, [...impressions.keys()]);
   const creditsRacine = compterParId(
     events.map((event) => racines.get(event.postId)).filter((id): id is string => id !== undefined),
   );
 
+  // La ligne à clé est écrite AVANT ses compteurs : si eux échouent, elle est
+  // retirée, sinon le renvoi du client serait un doublon et rien ne compterait.
   await Promise.all([
     ...groupesParIncrement(impressions).map(([increment, ids]) =>
-      deps.prisma.post.updateMany({ where: { id: { in: ids } }, data: { impressionCount: { increment } } })),
+      incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } })),
     ...groupesParIncrement(ouvertures).map(([increment, ids]) =>
-      deps.prisma.post.updateMany({ where: { id: { in: ids } }, data: { postOpenCount: { increment } } })),
+      incrementPostCounters(deps.prisma, ids, { postOpenCount: { increment } })),
     ...groupesParIncrement(creditsRacine).map(([increment, ids]) =>
-      deps.prisma.post.updateMany({
-        where: { id: { in: ids }, deletedAt: NOT_DELETED },
-        data: { impressionCount: { increment } },
-      })),
-  ]);
+      incrementPostCounters(deps.prisma, ids, { impressionCount: { increment } }, { liveOnly: true })),
+  ]).catch(async (error: unknown) => {
+    await removeKeyedImpressions(deps.prisma, written);
+    throw error;
+  });
 
-  return events.length;
+  return all.length;
 }
+
+/**
+ * Les ENGAGEMENTS D'OUVERTURE admis (#10483) — `openCountByOrigin` par origine,
+ * aucune vue. L'auteur qui tape son propre contenu n'est pas compté : la même
+ * règle que la vue.
+ */
+async function applyOpens(
+  deps: SocialEventsDeps,
+  events: readonly Extract<SocialEvent, { type: 'open' }>[],
+  userId: string,
+): Promise<number> {
+  if (events.length === 0) return 0;
+  const auteurs = await deps.prisma.post.findMany({
+    where: { id: { in: [...new Set(events.map((event) => event.postId))] } },
+    select: { id: true, authorId: true },
+    take: SOCIAL_EVENTS_BATCH_CAP,
+  });
+  const siens = new Set(auteurs.filter((post: { authorId: string }) => post.authorId === userId)
+    .map((post: { id: string }) => post.id));
+  const comptees = events.filter((event) => !siens.has(event.postId));
+  await creditOpens(deps.prisma, comptees.map((event) => ({ postId: event.postId, origin: event.origin })));
+  return comptees.length;
+}
+
+/**
+ * Les sources qui OUVRENT le détail d'un post : l'ouvrir depuis le fil
+ * (`detail`), depuis une notification ou depuis un lien partagé est la même
+ * ouverture — le client dit seulement d'où il venait (#10483).
+ */
+const DETAIL_OPEN_SOURCES: ReadonlySet<string> = new Set(['detail', 'notification', 'shared_link']);
+
+/**
+ * Ouvrir le Détail d'un post est à la fois une impression ET une ouverture,
+ * comptée immédiatement — chaque ouverture compte, sans seuil. Une source de
+ * détail rendue dans un AUTRE écran n'ouvre rien : une citation dans une bulle
+ * (`shared_link` + `citation`) est un listage. Sans écran déclaré (ancien
+ * client), la source fait foi.
+ */
+const isDetailOpen = (event: Extract<SocialEvent, { type: 'impression' }>): boolean =>
+  DETAIL_OPEN_SOURCES.has(event.source) && (event.surface === undefined || event.surface === 'detail');
 
 /**
  * La RACINE de chaque repost du lot, en UNE requête — jamais une par post.
@@ -470,37 +412,162 @@ export async function ingestSocialEvents(
   deps: SocialEventsDeps,
   events: readonly SocialEvent[],
   actor: SocialEventsActor,
+  options: SocialEventsIngestOptions = {},
 ): Promise<SocialEventsOutcome> {
   const vide: SocialEventsOutcome['legacy'] = { mediaRecorded: 0, anonymousCounted: false };
   if (events.length === 0) return { recorded: 0, rejected: 0, legacy: vide };
 
-  const allowed = actor.kind === 'user'
-    ? await filterConsumablePostIds(deps.prisma, events.map((e) => e.postId), actor.userId)
-    : await filterPublicPostIds(deps.prisma, events.map((e) => e.postId));
+  if (actor.kind === 'anonymous') return ingestAnonymous(deps, events, actor, options);
 
-  const admis = events.filter((event) => allowed.has(event.postId));
-  const rejected = events.length - admis.length;
-  if (admis.length === 0) return { recorded: 0, rejected, legacy: vide };
+  const authors = await consumablePostAuthors(deps.prisma, events.map((e) => e.postId), actor.userId);
+  const allowed = new Set(authors.keys());
+  const ownPostIds = new Set([...authors].filter(([, authorId]) => authorId === actor.userId).map(([id]) => id));
+
+  const audiences = events.filter((event) => allowed.has(event.postId));
+  const rejected = events.length - audiences.length;
+  if (audiences.length === 0) return { recorded: 0, rejected, legacy: vide };
+
+  const recus = await rejeuxDe(deps, audiences, ['view', 'open'], options);
+  const rejoues = recus.replays;
+  const admis = audiences.filter((event) => !rejoues.has(event));
 
   const parType = <T extends SocialEvent['type']>(type: T) =>
     admis.filter((event): event is Extract<SocialEvent, { type: T }> => event.type === type);
 
-  const vues = await applyViews(deps, parType('view'), actor);
-  if (actor.kind === 'anonymous') {
-    return { recorded: vues, rejected, legacy: { mediaRecorded: 0, anonymousCounted: vues > 0 } };
-  }
+  // #10772, #10785 — la MESURE qu'une ligne de lecture garde dépend du statut d'analyse
+  // que la PASSERELLE établit (le client fait foi pour refuser, elle pour
+  // accorder). Les alias historiques ne le passent pas : il se lit ici.
+  const standing = options.standing ?? (admis.some((event) => STANDING_TYPES.has(event.type))
+    ? await readAnalyticsStanding(deps.prisma as never, actor.userId, options.context?.consent)
+    : 'not_granted');
+  const situated = { ...options, standing };
 
-  const [impressions, telechargements, sessions] = await Promise.all([
-    applyImpressions(deps, parType('impression'), actor.userId),
-    applyDownloads(deps, parType('download'), actor.userId),
-    applyDwell(deps, parType('dwell'), actor.userId),
-  ]);
+  return orReleaseReceipts(deps, recus, async (counted) => {
+    // #10732 — une vue implique son impression : sous sa clé si elle la porte
+    // (écrite avec les impressions ci-dessous), déduite par `recordView` sinon —
+    // jamais pour un post dont le lot porte déjà l'impression.
+    const montres = new Set(parType('impression').map((event) => event.postId));
+    const vues = await applyViews(deps, parType('view'), actor, counted, montres);
+
+    const [ouvertures, impressions, telechargements, sessions] = await Promise.all([
+      applyOpens(deps, parType('open'), actor.userId).then((n) => { counted(parType('open')); return n; }),
+      applyImpressions(deps, [...parType('impression'), ...impressionsCarriedByViews(parType('view'))], actor.userId, situated, ownPostIds),
+      applyDownloads(deps, parType('download'), actor.userId),
+      applyDwell(deps, [...parType('dwell'), ...parType('dwell-start')], actor.userId, standing),
+    ]);
+
+    return {
+      recorded: vues + ouvertures + impressions + telechargements.events + sessions + rejoues.size,
+      rejected,
+      legacy: { mediaRecorded: telechargements.media, anonymousCounted: false },
+    };
+  });
+}
+
+/**
+ * Le comptage ne perd rien (#10553) : si un effet échoue après l'écriture des
+ * reçus, ils sont RENDUS avant que l'erreur ne remonte — le renvoi du client,
+ * au même `eventId`, comptera. Seuls les reçus des événements dont l'effet
+ * n'est PAS parti sont rendus : ce qui a compté ne recompte pas.
+ */
+async function orReleaseReceipts<T>(
+  deps: SocialEventsDeps,
+  recus: CountingReceipts<SocialEvent>,
+  effects: (counted: (events: readonly SocialEvent[]) => void) => Promise<T>,
+): Promise<T> {
+  const settled = new Set<SocialEvent>();
+  try {
+    return await effects((events) => events.forEach((event) => settled.add(event)));
+  } catch (error) {
+    const lost = [...recus.claimed].flatMap(([event, key]) => (settled.has(event) ? [] : [key]));
+    await releaseCountingReceipts(deps.prisma, lost);
+    throw error;
+  }
+}
+
+/**
+ * Les REJEUX d'un lot (#10500) : les événements des `types` donnés qui portent
+ * un `eventId` déjà reçu. Leurs reçus s'écrivent en UNE commande, AVANT tout
+ * effet ; un rejeu est compté `recorded` sans rien recompter.
+ */
+async function rejeuxDe(
+  deps: SocialEventsDeps,
+  events: readonly SocialEvent[],
+  types: readonly SocialEvent['type'][],
+  options: SocialEventsIngestOptions,
+): Promise<CountingReceipts<SocialEvent>> {
+  const receivedAt = options.receivedAt ?? new Date();
+  const candidats = events.flatMap((event) => types.includes(event.type) && event.eventId
+    ? [{ item: event, eventId: event.eventId, type: event.type }]
+    : []);
+  return claimCountingReceipts(deps.prisma, candidats, receivedAt);
+}
+
+/**
+ * Le lot d'un lecteur SANS compte (#10483) — même ordre en trois temps.
+ *
+ *  1. l'AUDIENCE : `readServableToAnonymous`, la garde de LECTURE anonyme, en
+ *     une passe ; elle rend aussi la racine de chaque repost ;
+ *  2. la PARTITION, comme pour un compte ;
+ *  3. les EFFETS : chaque vue et chaque impression comptent (règle du porteur
+ *     2026-10-13), la première vue d'un lecteur monte en plus les vues
+ *     uniques — sans aucune ligne portant une identité (`anonymousReach.ts`).
+ *
+ * `recorded` dit ce qui a été ÉCRIT : les vues et les impressions comptées.
+ */
+async function ingestAnonymous(
+  deps: SocialEventsDeps,
+  events: readonly SocialEvent[],
+  actor: Extract<SocialEventsActor, { kind: 'anonymous' }>,
+  options: SocialEventsIngestOptions,
+): Promise<SocialEventsOutcome> {
+  const servable: ServableMap = await readServableToAnonymous(
+    deps.prisma as never,
+    events.map((event) => event.postId),
+  );
+  const audiences = events.filter((event) => servable.has(event.postId));
+  const rejected = events.length - audiences.length;
+  const vide: SocialEventsOutcome['legacy'] = { mediaRecorded: 0, anonymousCounted: false };
+  if (audiences.length === 0) return { recorded: 0, rejected, legacy: vide };
+
+  const recus = await rejeuxDe(deps, audiences, ['view', 'open', 'impression'], options);
+  const rejoues = recus.replays;
+  const admis = audiences.filter((event) => !rejoues.has(event));
+
+  const ofType = (type: SocialEvent['type']) => admis.filter((event) => event.type === type);
+
+  return orReleaseReceipts(deps, recus, async (counted) => {
+  const vues = await creditAnonymousViews(deps.prisma, {
+    readerKey: actor.readerKey,
+    views: admis.flatMap((event) => event.type === 'view'
+      ? [{
+        postId: event.postId,
+        durationMs: event.durationMs,
+        surface: event.surface,
+        provenance: event.provenance,
+        origin: event.origin,
+      }]
+      : []),
+    servable,
+  });
+  counted(ofType('view'));
+  const ouvertures = await creditAnonymousOpens(deps.prisma, {
+    opens: admis.flatMap((event) => event.type === 'open' ? [{ postId: event.postId, origin: event.origin }] : []),
+    servable,
+  });
+  counted(ofType('open'));
+  const impressions = await creditAnonymousImpressions(deps.prisma, {
+    postIds: admis.flatMap((event) => event.type === 'impression' ? [event.postId] : []),
+    servable,
+  });
+  counted(ofType('impression'));
 
   return {
-    recorded: vues + impressions + telechargements.events + sessions,
+    recorded: vues + ouvertures + impressions + rejoues.size,
     rejected,
-    legacy: { mediaRecorded: telechargements.media, anonymousCounted: false },
+    legacy: { mediaRecorded: 0, anonymousCounted: vues > 0 },
   };
+  });
 }
 
 /**
@@ -539,14 +606,16 @@ async function applyDownloads(
  */
 async function applyDwell(
   deps: SocialEventsDeps,
-  events: readonly Extract<SocialEvent, { type: 'dwell' }>[],
+  events: readonly Extract<SocialEvent, { type: 'dwell' | 'dwell-start' }>[],
   userId: string,
+  standing: AnalyticsStanding,
 ): Promise<number> {
   if (events.length === 0) return 0;
   const sessions = events.map(({ type: _type, ...session }) => session);
   return deps.postService.recordEngagementBatch(
     sessions as Parameters<PostService['recordEngagementBatch']>[0],
     userId,
+    standing,
   );
 }
 
@@ -554,73 +623,47 @@ async function applyDwell(
  * La clé du seau de débit — exportée parce que c'est ELLE que le témoin du
  * critère 7.3 exerce, pas la fabrique qui l'enveloppe.
  *
- * ## Pourquoi elle ne contient PAS l'adresse
+ * - Un COMPTE : son id. 30/min couvre le lot entier — une clé par `(compte,
+ *   post)` rendrait le plafond proportionnel au nombre de posts observés.
+ * - Un ANONYME (#10483) : sa CLÉ DE LECTEUR (`readerKeyOf`), jamais la valeur
+ *   brute du jeton ni l'adresse. Les budgets en ÉVÉNEMENTS (par lecteur, et
+ *   un plafond élevé par empreinte d'adresse) sont à part
+ *   ({@link admitAnonymousEvents}).
  *
- * L'ancienne clé de la vue anonyme était `posts:view:ip:${request.ip}` : UN
- * seau pour tout ce qu'une adresse observe, quel que soit le post. Deux
- * conséquences, toutes deux mauvaises — c'est une garde inefficace (un
- * visiteur qui martèle un post consomme le crédit de tous ses autres gestes)
- * et un déni de service mutuel entre visiteurs légitimes partageant une sortie
- * NAT. Le jeton de session est l'identité que le visiteur porte DÉJÀ ; le post
- * borne le seau à ce qu'il observe.
- *
- * > Note sur le critère 8, mesurée plutôt que reprise : `trustProxy:
- * > resolveTrustProxy()` est posé aux DEUX constructions de `server.ts`
- * > (`:213`, `:235`), avec un maillon de confiance par défaut. `request.ip`
- * > désigne donc l'appelant RÉEL, pas le conteneur Traefik — le repli IP est
- * > OPÉRANT, contrairement à ce que l'énoncé suppose. Il reste néanmoins le
- * > mauvais choix ICI, pour les deux raisons ci-dessus, qui ne tiennent pas à
- * > la confiance de proxy.
- *
- * ## Pourquoi le seau d'un COMPTE ne se scinde pas par post
- *
- * 30/min couvre le lot entier : une clé par `(compte, post)` rendrait le
- * plafond proportionnel au nombre de posts observés, c'est-à-dire non borné.
+ * La clé se lit sur `registeredUser`, jamais sur `authContext.userId` : le
+ * contexte NON authentifié du middleware porte `userId: 'anonymous'`, et tous
+ * les visiteurs partageaient ainsi UN seau de 30/min.
  */
 export function socialEventsRateLimitKey(request: FastifyRequest): string {
-  const userId = (request as UnifiedAuthRequest).authContext?.userId;
+  const userId = (request as UnifiedAuthRequest).authContext?.registeredUser?.id;
   if (userId) return `social:events:${userId}`;
-
-  const sessionKey = sessionKeyOf(request);
-  // `request.body` est parsé au moment où le limiteur s'exécute (`preHandler`,
-  // cf. `GARDES_DE_CLE`) — jamais à `onRequest`, où il n'existe pas encore.
-  const premier = premierPostId(request.body);
-  return `social:events:${sessionKey ?? 'anonyme'}:${premier ?? 'lot'}`;
+  const readerKey = anonymousReaderKeyOf(request);
+  return readerKey ? `social:events:reader:${readerKey}` : 'social:events:anonyme';
 }
 
 /**
- * Le premier `postId` du lot — la borne du seau anonyme.
- *
- * LE PREMIER, et non tous : une clé doit être UNE chaîne, et un visiteur
- * n'observe qu'un contenu à la fois (le web n'émet qu'un événement anonyme par
- * appel). Lu défensivement — ce corps n'a pas encore traversé le schéma.
+ * Le débit d'un COMPTE sur la porte unique (#10483). Les six anciennes portes
+ * avaient chacune leur seau ; iOS et le web y versent désormais TOUT (impressions
+ * de chaque liste, vues, ouvertures, sessions de lecture) : 30/min faisait perdre
+ * les événements « tirés et oubliés » (ouverture de détail, vue d'une humeur)
+ * dès qu'un fil défilait vite.
  */
-function premierPostId(body: unknown): string | undefined {
-  const events = (body as { events?: unknown })?.events;
-  if (!Array.isArray(events)) return undefined;
-  const premier = (events[0] as { postId?: unknown })?.postId;
-  return typeof premier === 'string' && OBJECT_ID_REGEX.test(premier) ? premier : undefined;
-}
-
-const sessionKeyOf = (request: FastifyRequest): string | undefined => {
-  const brut = request.headers['x-session-token'];
-  const valeur = Array.isArray(brut) ? brut[0] : brut;
-  return typeof valeur === 'string' && valeur.length > 0 && valeur.length <= 128 ? valeur : undefined;
-};
+export const ACCOUNT_SOCIAL_EVENTS_BUDGET = 120;
 
 /**
- * Débits du critère 5 (compte) et du critère 4 (visiteur), sur la MÊME route.
- *
- * `max` est une FONCTION parce que les deux plafonds diffèrent et que la route
- * est unique : 30/min pour un compte, 10/min pour un visiteur. Les deux gardes
- * de `GARDES_DE_CLE` sont redites ici plutôt qu'importées d'une fabrique de
- * `middleware/rate-limiter` : ce limiteur porte une clé qui lit le CORPS, ce
- * qu'aucune des fabriques existantes ne fait.
+ * Le débit d'un lecteur anonyme en REQUÊTES : la somme de ses deux seaux
+ * d'événements (comptage et v2), pour que soixante lots de défilement ne
+ * ferment pas la porte à la vue qui suit.
+ */
+export const ANONYMOUS_REQUEST_BUDGET = 2 * ANONYMOUS_READER_BUDGET;
+
+/**
+ * Débits du compte (ACCOUNT_SOCIAL_EVENTS_BUDGET/min) et du lecteur anonyme (ANONYMOUS_REQUEST_BUDGET/min par clé de lecteur),
+ * sur la MÊME route ; `max` est une FONCTION pour cela.
  *
  *  - `hook: 'preHandler'` — `config.rateLimit` s'applique par défaut à
- *    `onRequest`, AVANT que l'authentification ne pose `authContext` et avant
- *    que le corps ne soit parsé : la clé y verrait `undefined` deux fois et
- *    retomberait systématiquement sur le repli.
+ *    `onRequest`, AVANT que l'authentification ne pose `authContext` : la clé
+ *    y verrait `undefined` et retomberait systématiquement sur le repli.
  *  - `skipOnError: false` — le limiteur global pose `skipOnError: true`, valeur
  *    GLOBALE fusionnée par `Object.assign` dans toute config qui ne la
  *    redéclare pas. Un Redis indisponible ouvrirait ce seau en grand : la panne
@@ -628,7 +671,7 @@ const sessionKeyOf = (request: FastifyRequest): string | undefined => {
  */
 export const socialEventsRateLimit = {
   max: (request: FastifyRequest) =>
-    ((request as UnifiedAuthRequest).authContext?.userId ? 30 : 10),
+    ((request as UnifiedAuthRequest).authContext?.registeredUser ? ACCOUNT_SOCIAL_EVENTS_BUDGET : ANONYMOUS_REQUEST_BUDGET),
   timeWindow: '1 minute',
   hook: 'preHandler' as const,
   skipOnError: false,
@@ -641,15 +684,19 @@ export const socialEventsRateLimit = {
 };
 
 /**
- * Les types qu'un visiteur SANS COMPTE peut produire.
- *
- * Une vue, et rien d'autre. Un téléchargement, une impression et une session
- * d'engagement écrivent tous une ligne PORTANT UNE IDENTITÉ (`userId`) —
- * qu'un anonyme n'a pas. Refuser explicitement vaut mieux que les ignorer en
- * silence : un client qui les envoie a un défaut, et un `rejected` muet le lui
- * cacherait derrière un mot qui signifie « hors audience ».
+ * Les types qu'un visiteur SANS COMPTE peut produire : une vue et une
+ * impression (#10483), qui ne laissent que sa clé de lecteur et des compteurs.
+ * Un téléchargement et une session d'engagement écrivent une ligne PORTANT UNE
+ * IDENTITÉ (`userId`) — qu'un anonyme n'a pas. Refuser explicitement vaut mieux
+ * que les ignorer en silence : un client qui les envoie a un défaut, et un
+ * `rejected` muet le lui cacherait derrière un mot qui signifie « hors
+ * audience ».
  */
-const TYPES_ANONYMES: ReadonlySet<SocialEvent['type']> = new Set(['view']);
+export const TYPES_ANONYMES: ReadonlySet<SocialEvent['type']> = new Set(['view', 'open', 'impression']);
+
+/** La réponse d'un lecteur anonyme qui a épuisé son débit. */
+export const refuseAnonymousBudget = (reply: FastifyReply) =>
+  sendError(reply, 429, 'Trop d’événements sociaux. Veuillez patienter.', { code: 'RATE_LIMITED' });
 
 /**
  * Monte `POST /social/events` sur `fastify`.
@@ -672,23 +719,69 @@ export function registerSocialEventRoutes(
     config: { rateLimit: socialEventsRateLimit },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const parsed = SocialEventsBatchSchema.safeParse(request.body ?? {});
-      if (!parsed.success) {
+      const receivedAt = new Date();
+      const lot = readSocialEventsBody(request.body, receivedAt);
+      if (!lot.ok) {
         return sendBadRequest(reply, 'Invalid social events batch', { code: 'VALIDATION_ERROR' });
       }
 
-      const acteur = resolveActor(request);
+      const acteur = await resolveActor(prisma, request);
       if (!acteur) {
         return sendBadRequest(reply, 'Missing or invalid session key', { code: 'VALIDATION_ERROR' });
       }
 
-      if (acteur.kind === 'anonymous'
-        && parsed.data.events.some((event) => !TYPES_ANONYMES.has(event.type))) {
+      if (acteur.kind === 'anonymous' && lot.counting.some(({ event }) => !TYPES_ANONYMES.has(event.type))) {
         return sendForbidden(reply, 'Authentication required for this event type', { code: 'FORBIDDEN' });
       }
 
-      const { recorded, rejected } = await ingestSocialEvents(deps, parsed.data.events, acteur);
-      return sendSuccess(reply, { recorded, rejected });
+      // L'interrupteur d'urgence : tous les types v2 deviennent `ignored`, sans écriture.
+      const settings = socialEventsV2Settings();
+      const v2 = settings.enabled ? lot.v2 : [];
+      const ignored = lot.ignored + lot.v2.length - v2.length;
+      const total = lot.counting.length + v2.length;
+
+      // Deux seaux (`AnonymousBudgetScope`) : le défilement d'un visiteur ne fait jamais refuser ses vues.
+      const [comptageAdmis, v2Quota] = acteur.kind === 'anonymous'
+        ? await Promise.all([
+          admitAnonymousEvents(fastify, request, acteur, lot.counting.length, 'counting'),
+          admitAnonymousEvents(fastify, request, acteur, v2.length, 'v2'),
+        ])
+        : [lot.counting.length, v2.length];
+      const admis = comptageAdmis + v2Quota;
+      if (admis === 0 && total > 0) return refuseAnonymousBudget(reply);
+
+      const comptage = lot.counting.slice(0, comptageAdmis);
+      const v2Admis = v2.slice(0, v2Quota);
+      // Le consentement ne se lit que si une écriture en dépend (une impression,
+      // une vue qui en déduit une, une session de lecture, un événement v2).
+      const consentCompte = v2Admis.length > 0 || comptage.some(({ event }) => STANDING_TYPES.has(event.type));
+      const standing: AnalyticsStanding | undefined = acteur.kind === 'anonymous'
+        ? 'anonymous'
+        : consentCompte
+          ? await readAnalyticsStanding(prisma as never, acteur.userId, lot.context.consent)
+          : undefined;
+
+      const comptes = await ingestSocialEvents(deps, comptage.map(({ event }) => event), acteur, {
+        context: lot.context,
+        standing,
+        receivedAt,
+        clocks: new Map(comptage.map(({ event, clock }) => [event, clock])),
+      });
+      const v2Comptes = await ingestSocialEventsV2(prisma as never, v2Admis, {
+        actor: acteur.kind === 'user' ? { kind: 'user', userId: acteur.userId } : { kind: 'anonymous' },
+        standing: standing ?? 'not_granted',
+        context: lot.context,
+        receivedAt,
+      });
+
+      reply.header(SOCIAL_EVENTS_VERSION_HEADER, String(SOCIAL_EVENTS_SCHEMA_VERSION));
+      return sendSuccess(reply, {
+        recorded: comptes.recorded + v2Comptes.recorded,
+        rejected: comptes.rejected + v2Comptes.rejected + total - admis,
+        ignored: ignored + v2Comptes.withheld,
+        accepts: acceptedEventTypes(settings),
+        sampling: settings.sampling,
+      });
     } catch (error) {
       enhancedLogger.error('[POST /social/events]', error);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
@@ -697,20 +790,22 @@ export function registerSocialEventRoutes(
 }
 
 /**
- * QUI appelle — un compte, un visiteur porteur d'un jeton de session, ou
- * personne (`undefined`).
+ * QUI appelle — un compte, un lecteur anonyme (invité de lien ou visiteur
+ * porteur d'une clé visiteur), ou personne (`undefined`).
  *
  * Un visiteur SANS jeton est refusé : sans lui, il n'a aucune identité de seau,
  * et son débit retomberait sur l'unique repli — exactement le seau partagé que
  * ce lot ferme.
  */
-function resolveActor(request: FastifyRequest): SocialEventsActor | undefined {
+export async function resolveActor(
+  prisma: PrismaClient,
+  request: FastifyRequest,
+): Promise<SocialEventsActor | undefined> {
   const registeredUser = (request as UnifiedAuthRequest).authContext?.registeredUser;
   if (registeredUser) {
     return { kind: 'user', userId: registeredUser.id, username: registeredUser.username ?? '' };
   }
-  const sessionKey = sessionKeyOf(request);
-  return sessionKey ? { kind: 'anonymous', sessionKey } : undefined;
+  return resolveAnonymousReader(prisma as never, request);
 }
 
 /**

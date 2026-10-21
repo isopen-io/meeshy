@@ -203,7 +203,7 @@ describe('MagicLinkService', () => {
     mockEmailService.sendMagicLinkEmail.mockResolvedValue(undefined);
 
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
-    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.magicLinkToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.magicLinkToken.update.mockResolvedValue({ id: 'token-1' });
     mockPrisma.user.update.mockResolvedValue(mockUser);
@@ -468,7 +468,7 @@ describe('MagicLinkService', () => {
   describe('validateMagicLink', () => {
     const validValidation: MagicLinkValidation = {
       token: 'valid-raw-token',
-      requestContext: mockRequestContext
+      requestContext: mockRequestContext, confirmed: true
     };
 
     describe('Token Not Found', () => {
@@ -539,6 +539,9 @@ describe('MagicLinkService', () => {
         expect(result.success).toBe(false);
         expect(result.token).toBeUndefined();
         expect(mockPrisma.magicLinkToken.update).not.toHaveBeenCalled();
+        expect(mockPrisma.magicLinkToken.updateMany).not.toHaveBeenCalledWith(
+          expect.objectContaining({ data: { usedAt: expect.any(Date) } })
+        );
       });
     });
 
@@ -582,8 +585,13 @@ describe('MagicLinkService', () => {
       it('should mark token as used', async () => {
         await service.validateMagicLink(validValidation);
 
-        expect(mockPrisma.magicLinkToken.update).toHaveBeenCalledWith({
-          where: { id: mockMagicLinkToken.id },
+        // #10475 — par une écriture CONDITIONNELLE, jamais un `update` nu.
+        expect(mockPrisma.magicLinkToken.updateMany).toHaveBeenCalledWith({
+          where: {
+            id: mockMagicLinkToken.id,
+            isRevoked: false,
+            OR: [{ usedAt: null }, { usedAt: { isSet: false } }]
+          },
           data: { usedAt: expect.any(Date) }
         });
       });
@@ -912,7 +920,7 @@ describe('MagicLinkService - Edge Cases', () => {
     mockCreateSession.mockResolvedValue(mockSession);
     mockEmailService.sendMagicLinkEmail.mockResolvedValue(undefined);
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
-    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.magicLinkToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.user.update.mockResolvedValue(mockUser);
 
@@ -980,7 +988,7 @@ describe('MagicLinkService - Edge Cases', () => {
     mockPrisma.magicLinkToken.findUnique.mockResolvedValue(mockMagicLinkToken);
 
     const validationWithNullGeo: MagicLinkValidation = {
-      token: 'valid-raw-token',
+      token: 'valid-raw-token', confirmed: true,
       requestContext: {
         ip: '192.168.1.1',
         geoData: null,
@@ -1015,7 +1023,7 @@ describe('MagicLinkService - Security Tests', () => {
     mockCreateSession.mockResolvedValue(mockSession);
     mockEmailService.sendMagicLinkEmail.mockResolvedValue(undefined);
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'event-1' });
-    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 0 });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.magicLinkToken.create.mockResolvedValue({ id: 'token-1' });
     mockPrisma.user.update.mockResolvedValue(mockUser);
 
@@ -1100,7 +1108,7 @@ describe('MagicLinkService - Security Tests', () => {
 
     const result = await service.validateMagicLink({
       token: 'reused-token',
-      requestContext: mockRequestContext
+      requestContext: mockRequestContext, confirmed: true
     });
 
     expect(result.success).toBe(false);

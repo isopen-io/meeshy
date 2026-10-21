@@ -28,6 +28,12 @@ enum MyStoriesSourceCorpus {
         "Meeshy/Features/Main/Views/MyStoryThumbnail.swift",
         "Meeshy/Features/Main/Views/MyStoryCardPresentation.swift",
         "Meeshy/Features/Main/Views/MyStoriesDeleteConfirmation.swift",
+        "Meeshy/Features/Main/Views/MyStoriesDeleteAlerts.swift",
+        "Meeshy/Features/Main/Views/MyStoriesQueueRows.swift",
+        "Meeshy/Features/Main/Views/MyStoriesSheetTargets.swift",
+        "Meeshy/Features/Main/Views/MyStoryActionMenu.swift",
+        "Meeshy/Features/Main/Views/MyStoryCardModelRules.swift",
+        "Meeshy/Features/Main/Views/StoryVisibilityMenuResolver.swift",
     ]
 
     /// Racine `apps/ios/`, dérivée du chemin du fichier APPELANT.
@@ -70,7 +76,7 @@ enum MyStoriesSourceCorpus {
     /// gardes qui doivent vraiment viser un fichier précis.
     static func text(of relativePath: String, file: StaticString = #filePath) throws -> String {
         let url = appRoot(file: file).appendingPathComponent(relativePath)
-        return strippingComments(try String(contentsOf: url, encoding: .utf8))
+        return strippingComments(try AppSourceGuard.text(at: url))
     }
 
     // MARK: - Retrait des commentaires
@@ -125,5 +131,54 @@ enum MyStoriesSourceCorpus {
             index = line.index(after: index)
         }
         return nil
+    }
+}
+
+/// **L'unité de source du lecteur de story, après la découpe par cohésion.**
+///
+/// `StoryViewerView.swift`, `StoryViewerView+Canvas.swift` et `StoryViewerView+Content.swift`
+/// ont cédé leurs responsabilités à de VRAIS types (le geste, ses décisions, la liste des
+/// commentaires, l'interstitiel, les feuilles, les règles de contenu…) rangés sous leur propre
+/// nom. Le glob `AppSourceGuard.unit` ne suit que les fichiers `StoryViewerView+…` : une garde
+/// NÉGATIVE (« ce code n'apparaît nulle part ») qui lirait seulement l'unité verdirait donc
+/// en silence sur la moitié qui a changé de nom. Cette liste est l'adresse de cette moitié.
+enum StoryViewerSources {
+
+    static let views = "Meeshy/Features/Main/Views/"
+
+    /// Les types sortis des trois fichiers, par nom de fichier.
+    static let companionFiles = [
+        "PrefetcherHostView.swift",
+        "RenderableSlideCache.swift",
+        "RevealCircleShape.swift",
+        "StoryCommentThread.swift",
+        "StoryCommentsOverlayView.swift",
+        "StoryDraft.swift",
+        "StoryGestureDecisions.swift",
+        "StoryGestureOverlayView.swift",
+        "StoryGroupIntroOverlay.swift",
+        "StoryGroupIntroPolicy.swift",
+        "StoryOpeningEntrance.swift",
+        "StoryPlaybackStallIndicator.swift",
+        "StoryPostMediaResolver.swift",
+        "StoryReactionRecovery.swift",
+        "StoryReaderBackground.swift",
+        "StoryReaderCanvasLayout.swift",
+        "StoryReaderContentRules.swift",
+        "StoryReaderSurfaceRules.swift",
+        "StoryVerticalGestureDecisions.swift",
+        "StoryVideoAudioProbe.swift",
+        "StoryViewerCardTransform.swift",
+        "StoryViewerEngagement.swift",
+        "StoryViewerSheetItems.swift",
+        "StoryViewerSheets.swift",
+        "View+StoryOverlayLegible.swift",
+    ]
+
+    static let companions = companionFiles.map { views + $0 }
+
+    /// Le lecteur tout entier : les trois fichiers, leurs extensions et leurs types.
+    static func unit() throws -> String {
+        try AppSourceGuard.unit(views + "StoryViewerView.swift", alsoIncluding: companions)
     }
 }

@@ -22,7 +22,7 @@ extension TimelineViewModel {
     // MARK: - Logger
 
     internal var offlinePublishLogger: Logger {
-        Logger(subsystem: "me.meeshy.app", category: "media")
+        MeeshyLog.logger(.media)
     }
 
     /// Resets the snackbar confirmation flag after the view has shown it.

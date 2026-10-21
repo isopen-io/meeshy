@@ -155,6 +155,13 @@ describe('AdminPostsPanel — la liste : de vrais noms, des métadonnées interp
     expect(row(host, 7)?.textContent).toContain('Retirée');
   });
 
+  test('l’état et les gestes viennent juste après la visibilité, avant les compteurs : on modère sans défiler de côté (#10461)', async () => {
+    const { host } = await ouvrir();
+    const headers = [...host.querySelectorAll('thead th')].map((th) => th.textContent?.trim());
+    expect(headers.slice(0, 6)).toEqual(['Auteur', 'Extrait', 'Type', 'Visibilité', 'État', 'Gestes']);
+    expect(headers.at(-1)).toBe('Publiée');
+  });
+
   test('les réactions, les commentaires et les vues sont formatés ; la date est relative', async () => {
     const { host } = await ouvrir();
     const cells = [...(row(host, 3)?.querySelectorAll('td') ?? [])].map((cell) => cell.textContent?.trim());

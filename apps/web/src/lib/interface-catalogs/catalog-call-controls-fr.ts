@@ -63,6 +63,7 @@ const fr = {
   'callControls.journal.original': 'Original',
   'callControls.camera.denied': 'L’accès à la caméra est refusé',
   'callControls.camera.failed': 'La caméra n’a pas pu s’ouvrir',
+  'callControls.camera.settings': 'Réglages',
   'callControls.cameraPicker': 'Caméra',
   'callControls.cameraPicker.label': 'Choisir la caméra',
   'callControls.cameraPicker.unnamed': 'Caméra {n}',

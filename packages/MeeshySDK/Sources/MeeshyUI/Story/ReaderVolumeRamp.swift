@@ -12,6 +12,7 @@ nonisolated enum ReaderVolumeRamp {
     /// Cadence de rafraîchissement : `AVAudioPlayerNode.volume` est lu à chaque
     /// tranche de rendu, 60 Hz rend les paliers inaudibles.
     static let stepInterval: TimeInterval = 1.0 / 60.0
+    static let step: Duration = .seconds(stepInterval)
 
     static func volume(from start: Float, to end: Float,
                        duration: TimeInterval, elapsed: TimeInterval) -> Float {

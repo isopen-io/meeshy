@@ -32,6 +32,8 @@ private struct GameOnScreenKey: PreferenceKey {
 /// motif que `AdaptiveOnChangeModifier`).
 private struct GameOnScreenModifier: ViewModifier {
     let onChange: (Bool) -> Void
+    /// La fenêtre qui PORTE la vue (Stage Manager, fenêtre détachée) — la fenêtre clé n'est que le repli.
+    @Environment(\.sceneWindowSize) private var sceneWindowSize
 
     func body(content: Content) -> some View {
         if #available(iOS 18.0, *) {
@@ -44,7 +46,7 @@ private struct GameOnScreenModifier: ViewModifier {
                             key: GameOnScreenKey.self,
                             value: GameOnScreen.isVisible(
                                 frame: proxy.frame(in: .global),
-                                window: CGRect(origin: .zero, size: WindowMetrics.windowSize)
+                                window: CGRect(origin: .zero, size: SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize))
                             )
                         )
                     }

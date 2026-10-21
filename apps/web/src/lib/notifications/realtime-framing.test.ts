@@ -53,6 +53,8 @@ describe('le cadrage temps réel recompose la phrase d’action', () => {
       ['post_comment', 'POST', 'a commenté votre publication'],
       ['status_reaction', 'MOOD', 'a réagi 😂 à votre humeur'],
       ['friend_new_story', 'STORY', 'a publié une nouvelle story'],
+      ['post_repost', 'REEL', 'a republié votre réel'],
+      ['post_repost', 'STATUS', 'a republié votre humeur'],
       ['friend_request', '', 'veut se connecter'],
     ];
     cases.forEach(([type, postType, action]) => {

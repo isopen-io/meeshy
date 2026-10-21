@@ -84,8 +84,10 @@ export function logError(loggerOrMessage: any, message?: string | unknown, error
   const text = calledWithoutLogger ? loggerOrMessage : String(message ?? '');
   const cause = calledWithoutLogger ? message : error;
 
+  const causeCode = cause instanceof Error && 'code' in cause ? cause.code : undefined;
+  const code = typeof causeCode === 'string' ? ` [code=${causeCode}]` : '';
   const detail = cause instanceof Error
-    ? `${cause.message}${cause.stack ? `\n${cause.stack}` : ''}`
+    ? `${cause.message}${code}${cause.stack ? `\n${cause.stack}` : ''}`
     : String(cause);
 
   logger.error(text, detail);

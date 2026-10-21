@@ -1,3 +1,4 @@
+import '@/lib/links/email-link-boot';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Fragment, StrictMode, useEffect, useSyncExternalStore, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -6,6 +7,7 @@ import { useStore } from 'zustand/react';
 import './styles/app.css';
 import './styles/sealed-exit.css';
 
+import { ScreenWait } from '@/components/screen-wait';
 import Shell from '@/components/shell';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
@@ -17,7 +19,8 @@ import { followSystem } from '@/lib/scheme';
 import { landingAfterSession, resolveRouteAccess } from '@/lib/session-guard';
 import { useAnonymousScope } from '@/lib/view/use-anonymous-scope';
 import { installSealedExitGuard } from '@/lib/view/sealed-exit-guard';
-import { Router, href, navigate } from '@/routes/route-table';
+import { shellStartHref } from '@/lib/links/shell-start';
+import { Router, href, navigate, preload } from '@/routes/route-table';
 
 /**
  * Defaut 3c (recette 2026-09-07, #5604) : la bascule clair/sombre du systeme
@@ -72,7 +75,7 @@ function SessionGate({ children }: { children: ReactNode }) {
   /* L'IDENTITÉ SUIT LA CONVERSATION LUE (#8816) — posée AVANT la décision
      d'accès : sous l'identité anonyme d'un compte, la liste redirigerait
      sinon vers la connexion au lieu de rendre le compte. */
-  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <Skeleton />;
+  return useAnonymousScope(route) ? <RouteAccessGate>{children}</RouteAccessGate> : <ScreenWait />;
 }
 
 function RouteAccessGate({ children }: { children: ReactNode }) {
@@ -102,21 +105,7 @@ function RouteAccessGate({ children }: { children: ReactNode }) {
     );
   }, [status, key, viewerId]);
 
-  return decision === 'allow' ? children : <Skeleton />;
-}
-
-/** Le squelette d'attente d'un ecran decoupe — statique, jamais un spinner. */
-function Skeleton() {
-  return (
-    <div className="grid gap-2 p-4" aria-busy="true">
-      <p className="text-meta" style={{ color: 'var(--color-ios-ink-2)' }}>
-        L’écran arrive…
-      </p>
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="h-20 rounded-[14px]" style={{ backgroundColor: 'var(--color-ios-card)' }} />
-      ))}
-    </div>
-  );
+  return decision === 'allow' ? children : <ScreenWait />;
 }
 
 /**
@@ -134,6 +123,19 @@ function InterfaceLanguageRoot({ children }: { children: ReactNode }) {
   return <Fragment key={language}>{children}</Fragment>;
 }
 
+/* LA COQUE DÉMARRE SUR LA LISTE (#10353), OU SUR LA CONNEXION SANS COMPTE
+   (#10784) — la session est restaurée plus haut, de façon synchrone.
+   `navigate`, pas un `replaceState` nu : le routeur a lu l'adresse à l'import
+   et ne verrait pas la réécriture. */
+if (__SHELL__) {
+  const start = shellStartHref(window.location, {
+    listHref: href('list'),
+    loginHref: href('login'),
+    authenticated: sessionStore.getState().session.status === 'authenticated',
+  });
+  if (start !== null) navigate(start, true);
+}
+
 const root = document.getElementById('root');
 if (!root) throw new Error('#root absent du document');
 
@@ -146,11 +148,66 @@ createRoot(root).render(
   <StrictMode>
     <QueryClientProvider client={appQueryClient}>
       <InterfaceLanguageRoot>
-        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<Skeleton />} />
+        <Router wrap={(screen) => <Shell><SessionGate>{screen}</SessionGate></Shell>} skeleton={<ScreenWait />} />
       </InterfaceLanguageRoot>
     </QueryClientProvider>
   </StrictMode>,
 );
+
+/**
+ * LES ÉCRANS PRINCIPAUX SE PRÉCHARGENT EN TÂCHE DE FOND (#10636) — après le
+ * `load`, un écran par moment d'inactivité, et seulement pour un compte
+ * connecté : un visiteur ne télécharge pas les écrans qu'il n'ouvrira pas.
+ */
+{
+  const precharger = (): void => {
+    const lancer = (): void =>
+      void import('@/lib/view/screen-preload').then(({ preloadScreensWhenIdle, browserIdle, browserNetworkHints }) =>
+        preloadScreensWhenIdle({ preload, idle: browserIdle, network: browserNetworkHints() }),
+      );
+    if (sessionStore.getState().session.status === 'authenticated') return lancer();
+    const stop = sessionStore.subscribe((state) => {
+      if (state.session.status !== 'authenticated') return;
+      stop();
+      lancer();
+    });
+  };
+  if (document.readyState === 'complete') precharger();
+  else window.addEventListener('load', precharger, { once: true });
+}
+
+/**
+ * LE CONSENTEMENT D'ANALYSE QUE LA TÉLÉMÉTRIE DÉCLARE (#10502) — la bascule
+ * « Analytique » des réglages et le consentement que la passerelle a
+ * enregistré, relus à chaque connexion, changement de compte et écriture du
+ * cache ; déconnecté ⇒ `unknown`, sans aucune requête. Hors du premier rendu :
+ * le contexte de lot n'est lu qu'à l'envoi d'un lot.
+ */
+void Promise.all([
+  import('@/lib/telemetry/analytics-consent'),
+  import('@/lib/view/telemetry-context'),
+  import('@/lib/api/app-preferences'),
+  import('@/lib/api/consents'),
+]).then(([{ refreshAnalyticsConsentSources, syncAnalyticsConsent }, { noteAnalyticsConsent }, { appPreferencesQueryOptions }, { consentsQueryOptions }]) =>
+  syncAnalyticsConsent({
+    sessionStore,
+    queryClient: appQueryClient,
+    note: noteAnalyticsConsent,
+    refresh: () => {
+      if (apiDeps.source !== 'gateway') return;
+      refreshAnalyticsConsentSources({
+        queryClient: appQueryClient,
+        preferences: appPreferencesQueryOptions(apiDeps),
+        consents: consentsQueryOptions(apiDeps),
+      });
+    },
+  }),
+);
+
+/* Le clavier virtuel posé sur `<html>` (#10005) : Safari iOS le fait
+   RECOUVRIR la page, `h-app` le retire des écrans d'application. Aucun clavier
+   ne s'ouvre avant la première peinture : `import()` le tient hors d'elle. */
+void import('@/lib/view/keyboard-viewport').then(({ installKeyboardViewport }) => installKeyboardViewport(window));
 
 /**
  * LE TEMPS RÉEL S'AMORCE APRÈS LA PREMIÈRE PEINTURE (#5793) — `import()`,
@@ -164,6 +221,14 @@ createRoot(root).render(
  */
 void import('@/lib/api/realtime');
 
+/**
+ * L'APPAREIL FINIT CE QU'UN RETRAIT RATÉ A LAISSÉ (audit #10237) — un compte
+ * supprimé noté mais pas retiré (module de retrait non chargé), un carnet de
+ * jeu dont la suppression n'a pas abouti. Quelques secondes après la
+ * première peinture : rien ici ne la retarde.
+ */
+setTimeout(() => void import('@/lib/api/account-deleted-retire').then(({ tidyDeviceAfterBoot }) => tidyDeviceAfterBoot()).catch(() => undefined), 4_000);
+
 
 /**
  * UN LIEN MEESHY OUVERT PAR LE SYSTÈME MÈNE À SON ÉCRAN (#5819) — la coque
@@ -176,6 +241,34 @@ if (__SHELL__) {
     ([{ ecouterLiensEntrants }, { coqueCourante }, { isAppPath }]) =>
       ecouterLiensEntrants(coqueCourante(), { isAppPath, navigate: (chemin) => navigate(chemin) }),
   );
+}
+
+/**
+ * LES WIDGETS D'ÉCRAN D'ACCUEIL DE LA COQUE ANDROID (#10626) — la page leur
+ * publie ce qu'elle tient déjà (non-lus, conversations, favoris) et vide leur
+ * file « marquer lu » ; une déconnexion les vide sur-le-champ. Hors coque, ou
+ * dans une coque construite avant le plugin, rien ne se charge — et, comme
+ * les autres écoutes de la coque, après la première peinture.
+ */
+if (__SHELL__) {
+  const brancherWidgets = (): void => {
+    void import('@/lib/shell-widgets/start').then(({ startShellWidgets }) => startShellWidgets());
+  };
+  if (document.readyState === 'complete') brancherWidgets();
+  else window.addEventListener('load', brancherWidgets, { once: true });
+}
+
+/**
+ * ET « RAPPELER » SUR LA BANNIÈRE D'UN APPEL MANQUÉ COMPOSE L'APPEL (#10908) —
+ * le jumeau, dans la coque, de l'écoute que le web monte avec son worker ;
+ * après la première peinture, le signal natif étant retenu jusque-là.
+ */
+if (__SHELL__) {
+  const ecouterRappels = (): void => {
+    void import('@/lib/calls/call-back-intent').then(({ listenCallBackIntentsInShell }) => listenCallBackIntentsInShell());
+  };
+  if (document.readyState === 'complete') ecouterRappels();
+  else window.addEventListener('load', ecouterRappels, { once: true });
 }
 
 /**
@@ -209,6 +302,16 @@ if (__SHELL__) {
     holdWhileAudioPlays(document, shellPlaybackHold());
     pauseVideosWhenNoisy(document, shellNoisy());
   });
+}
+
+/**
+ * ET DANS LE NAVIGATEUR, LA NOTIFICATION D'UN VOCAL DIT QUI PARLE ET SE PILOTE
+ * (#10890) — la même carte que la coque, par la Media Session API : l'auteur,
+ * la conversation, la date, l'avatar, la barre et les ±15 s. Un navigateur
+ * sans Media Session garde sa carte générique et ne charge rien.
+ */
+if (!__SHELL__ && 'mediaSession' in navigator) {
+  void import('@/lib/view/web-now-playing').then(({ startWebNowPlaying }) => startWebNowPlaying());
 }
 
 /**
@@ -310,4 +413,86 @@ if (__SHELL__) {
   };
   if (document.readyState === 'complete') guetter();
   else window.addEventListener('load', guetter, { once: true });
+}
+
+/**
+ * ET LA COQUE ANDROID CONNAÎT LA SESSION DE LA PAGE (#10662) : le natif accuse
+ * la remise d'un push, refuse un appel et joue un vocal depuis sa notification
+ * sans la page (#10641). Posé à chaque lancement, après la première peinture,
+ * indépendamment du socket et des appels, retiré à la déconnexion.
+ */
+if (__SHELL__) {
+  const poserCredential = (): void => {
+    void import('@/lib/notifications/shell-credential').then(({ startShellCredentialSync }) => startShellCredentialSync());
+  };
+  if (document.readyState === 'complete') poserCredential();
+  else window.addEventListener('load', poserCredential, { once: true });
+}
+
+/**
+ * LA CAPTURE D'UN CONTENU (#10508) — dans la coque seulement : un navigateur
+ * ne détecte aucune capture. L'écoute se charge après la première peinture ;
+ * elle déclare à la télémétrie ce que la coque détecte réellement, puis émet
+ * `screen_capture` avec ce qui était à l'écran — jamais l'image.
+ */
+if (__SHELL__) {
+  const ecouterCaptures = (): void => {
+    void Promise.all([
+      import('@/lib/telemetry/content-capture'),
+      import('@/lib/view/reading-telemetry'),
+      import('@/lib/view/viewability'),
+      import('@/lib/view/telemetry-context'),
+      import('@/lib/native-shell'),
+    ]).then(([{ startContentCaptureReports, captureSurfaceOf }, { readingTelemetry }, { visibleTargets }, { noteCaptureDetection }, { coqueCourante }]) =>
+      startContentCaptureReports({
+        coque: coqueCourante(),
+        record: (event) => readingTelemetry.recordV2(event),
+        collect: () => ({ surface: captureSurfaceOf(window.location.pathname), visibleTargets: visibleTargets() }),
+        now: () => Date.now(),
+        onDetection: noteCaptureDetection,
+      }),
+    );
+  };
+  if (document.readyState === 'complete') ecouterCaptures();
+  else window.addEventListener('load', ecouterCaptures, { once: true });
+}
+
+/**
+ * LE CLIC D'UN LIEN DANS UN CONTENU (#10505) — une écoute déléguée unique,
+ * posée après la première peinture : le domaine enregistrable seul, jamais
+ * l'adresse, et aucune adresse décorée.
+ */
+{
+  const ecouterLiens = (): void => {
+    void Promise.all([import('@/lib/telemetry/link-clicks'), import('@/lib/view/reading-telemetry'), import('@/lib/links/public-origin')]).then(
+      ([{ bindLinkClicks }, { readingTelemetry }, { publicWebOrigin }]) =>
+        bindLinkClicks(document, (event) => readingTelemetry.recordV2(event), () => ({
+          ownOrigins: [window.location.origin, publicWebOrigin(window.location.origin)],
+          pathname: window.location.pathname,
+        })),
+    );
+  };
+  if (document.readyState === 'complete') ecouterLiens();
+  else window.addEventListener('load', ecouterLiens, { once: true });
+}
+
+/**
+ * L'ENTONNOIR DES NOTIFICATIONS (#10507) — ce que le service worker a noté
+ * (reçue, affichée, ouverte, écartée) passe dans la file v2 au chargement ;
+ * et ce que la coque Android a noté app fermée aussi (#10938).
+ */
+{
+  const viderNotifications = (): void => {
+    void Promise.all([
+      import('@/lib/notifications/notification-telemetry'),
+      import('@/lib/view/reading-telemetry'),
+      import('@/lib/native-shell'),
+    ]).then(([{ drainNotificationTelemetry, drainShellNotificationTelemetry }, { readingTelemetry }, { coqueCourante }]) => {
+      const record = (event: Parameters<typeof readingTelemetry.recordV2>[0]): void => readingTelemetry.recordV2(event);
+      void drainNotificationTelemetry(typeof indexedDB === 'undefined' ? undefined : indexedDB, record);
+      void drainShellNotificationTelemetry(coqueCourante(), record);
+    });
+  };
+  if (document.readyState === 'complete') viderNotifications();
+  else window.addEventListener('load', viderNotifications, { once: true });
 }

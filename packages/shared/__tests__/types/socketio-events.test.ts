@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '../../types/socketio-events';
+import { CALL_RECORDING_CLIENT_EVENTS, CALL_RECORDING_SERVER_EVENTS } from '../../types/socketio-events/call-recording-event-names';
+import { SESSION_SERVER_EVENTS } from '../../types/socketio-events/session-event-names';
+import { VIEWING_CLIENT_EVENTS, VIEWING_SERVER_EVENTS } from '../../types/socketio-events/viewing-event-names';
 
 describe('SERVER_EVENTS', () => {
   it('declares MESSAGE_ATTACHMENT_UPDATED for async attachment enrichments', () => {
@@ -117,5 +120,20 @@ describe('la convention de nommage, sur TOUT le contrat', () => {
     for (const wrong of ['message_new', 'Message:New', 'message:New', 'message', ':new']) {
       expect(HANDSHAKE_NAMES.has(wrong) || PRODUCT_EVENT_SHAPE.test(wrong)).toBe(false);
     }
+  });
+});
+
+describe('les noms lus dès la première peinture vivent dans leur DOMAINE (#9966)', () => {
+  const domains = [
+    ['présence « regarde » (serveur)', VIEWING_SERVER_EVENTS, SERVER_EVENTS],
+    ['présence « regarde » (client)', VIEWING_CLIENT_EVENTS, CLIENT_EVENTS],
+    ['session', SESSION_SERVER_EVENTS, SERVER_EVENTS],
+    ['enregistrement d’appel (serveur)', CALL_RECORDING_SERVER_EVENTS, SERVER_EVENTS],
+    ['enregistrement d’appel (client)', CALL_RECORDING_CLIENT_EVENTS, CLIENT_EVENTS],
+  ] as const;
+
+  it.each(domains)('%s : chaque nom est servi par la carte, sous la même clé', (_label, domain, map) => {
+    expect(Object.keys(domain).length).toBeGreaterThan(0);
+    expect(map).toMatchObject(domain);
   });
 });

@@ -22,3 +22,22 @@ describe('le tap d’une notification du jeu, dans la coque', () => {
     expect(shellPushUrl(pushTapTarget({ type: 'game_mission_window', route: 'progression' }))).toBe('/me/progression?section=missions');
   });
 });
+
+/**
+ * LA PROVENANCE D'UNE VUE (#10483, #11097) — le worker web ouvre une publication par
+ * `/post/:id?from=notification` (`sw-push.js` § `resolvePushTarget`), et la vue du détail compte en
+ * `notification`. La coque doit poser le même paramètre, et seulement sur une publication.
+ */
+describe('le tap d’une notification de publication, dans la coque', () => {
+  const postId = '65f0a1b2c3d4e5f6a7b8c9d0';
+
+  test('une publication s’ouvre avec ?from=notification, comme le worker web', () => {
+    expect(shellPushUrl(pushTapTarget({ type: 'post_like', postId }))).toBe(`/post/${postId}?from=notification`);
+  });
+
+  test('une story, une humeur et un fil gardent leur adresse nue, comme le worker web', () => {
+    expect(shellPushUrl({ route: 'story', params: { post: postId } })).toBe(`/story/${postId}`);
+    expect(shellPushUrl({ route: 'mood', params: { post: postId } })).toBe(`/mood/${postId}`);
+    expect(shellPushUrl({ route: 'thread', params: { conversation: postId } })).toBe(`/c/${postId}`);
+  });
+});

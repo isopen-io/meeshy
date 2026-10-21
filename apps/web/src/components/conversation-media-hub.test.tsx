@@ -33,7 +33,7 @@ const wireMessage = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   conversationId: 'c1',
   senderId: 'u-nour',
-  sender: { id: 'p-nour', displayName: 'Nour Haddad' },
+  sender: { id: 'p-nour', type: 'user', displayName: 'Nour Haddad' },
   content: '',
   originalLanguage: 'fr',
   messageType: 'text',
@@ -281,13 +281,13 @@ describe('les actions de la visionneuse ouverte depuis l’écran (#8180)', () =
     await openFirst([photoMessage('m2'), photoMessage('m1')]);
     await until(() => $('[data-viewer-action="share"]') !== null);
     click($('[data-viewer-action="share"]'));
-    expect(sendSheetStore.getState().request?.intent).toBe('share');
+    expect(sendSheetStore.getState().request?.intent).toBe('forward');
     expect(sendSheetStore.getState().request?.payload).toMatchObject({
       kind: 'attachment',
       conversationId: 'c1',
       messageId: 'm2',
       attachmentId: 'a-m2',
-      protected: false,
+      exit: { id: 'm2', pieces: [{ id: 'a-m2' }] },
     });
   });
 
@@ -424,5 +424,48 @@ describe('ConversationMediaSection — l’aperçu de la feuille de détails (#7
     expect($$('[data-conversation-details-media-strip] [data-media-hub-tile]')).toHaveLength(4);
     expect(client.getQueryData(mediaHubQueryKey('c1', 'visual', null))).toBeDefined();
     expect($('[data-conversation-details-media-open]')?.textContent).toContain('Médias, liens et documents');
+  });
+});
+
+describe('ConversationMediaSection — ses états dessinés (#7834)', () => {
+  const mountSection = (replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>>) => {
+    const { deps, calls } = transportOf(replies);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <ConversationMediaSection conversationId="c1" viewerId="u-moi" accent="#6366f1" deps={deps} />
+        </QueryClientProvider>,
+      );
+    });
+    return { calls };
+  };
+
+  test('aucun média : une phrase le dit, l’entrée vers l’écran complet reste', async () => {
+    mountSection({ [pathOf('visual')]: page([]) });
+    await until(() => $('[data-conversation-details-media-empty]') !== null);
+    expect($('[data-conversation-details-media-empty]')?.textContent).toBe('Rien à afficher dans « Médias » pour l’instant.');
+    expect($('[data-conversation-details-media-open]')).not.toBeNull();
+  });
+
+  test('refus et cache vide : l’erreur se dit, « Réessayer » relance, à 44 px', async () => {
+    const { calls } = mountSection({ [pathOf('visual')]: { ok: false, status: 500, error: 'boom' } });
+    await until(() => $('[data-conversation-details-media-error]') !== null);
+    const retry = $('[data-conversation-details-media-error] button');
+    expect(retry?.style.minHeight).toBe('44px');
+    const before = calls().length;
+    click(retry);
+    await settle();
+    expect(calls().length).toBe(before + 1);
+  });
+
+  test('hors ligne sans cache : on le dit, sans squelette', async () => {
+    Object.defineProperty(navigator, 'onLine', { configurable: true, get: () => false });
+    mountSection({ [pathOf('visual')]: 'pending' });
+    await until(() => $('[data-conversation-details-media-offline-empty]') !== null);
+    expect($('[data-conversation-details-media-loading]')).toBeNull();
   });
 });

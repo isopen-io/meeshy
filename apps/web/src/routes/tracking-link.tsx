@@ -7,10 +7,12 @@ import { recordTrackingClick, resolveTrackingLink } from '@/lib/api/tracking-lin
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { browserClickEnvironment, collectClickContext, type ClickContext } from '@/lib/links/click-context';
+import { cheminDuLienEntrant } from '@/lib/links/shell-deep-links';
 import { shellLeave } from '@/lib/links/shell-leave';
 import { decideTrackingRedirect, isTrackingToken, sharedContentPath, type TrackingClick, type TrackingResolution } from '@/lib/links/tracking-redirect';
 import { currentHistory } from '@/lib/reels/exit';
 import { useParams } from '@/lib/router';
+import { isAppPath } from '@/routes/app-paths';
 import { href, navigate } from '@/routes/route-table';
 
 import { LinkPage, ReachFailurePage } from './link-page-parts';
@@ -53,7 +55,8 @@ export type TrackingLinkDeps = {
 };
 
 /* La coque ne quitte pas le document (#8322) : elle remet la cible au
-   navigateur, puis recule au retour au premier plan (`shell-leave.ts`). */
+   navigateur, puis recule au retour au premier plan (`shell-leave.ts`) — sauf
+   quand la cible est un écran de Meeshy, où le routeur y va (#10329). */
 const leave = (target: string): void =>
   __SHELL__
     ? shellLeave({
@@ -62,6 +65,8 @@ const leave = (target: string): void =>
         history: currentHistory,
         back: () => window.history.back(),
         home: () => navigate(href('list'), true),
+        inside: (url) => cheminDuLienEntrant(url, isAppPath),
+        go: (path) => navigate(path, true),
       })(target)
     : window.location.replace(target);
 

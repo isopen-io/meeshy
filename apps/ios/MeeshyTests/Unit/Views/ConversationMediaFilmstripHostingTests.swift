@@ -2,6 +2,7 @@ import Combine
 import SwiftUI
 import UIKit
 import XCTest
+import MeeshyUI
 @testable import Meeshy
 
 /// #6759 — **la pellicule montre la vignette courante sous la tête de lecture,
@@ -55,6 +56,8 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
     private struct Harness: View {
         let attachments: [MessageAttachment]
         @ObservedObject var pager: PagerStandIn
+        /// La largeur que la galerie remet : celle de la fenêtre, ou d'une colonne plus étroite.
+        var containerWidth: CGFloat = ConversationMediaFilmstripHostingTests.window.width
 
         var body: some View {
             VStack(spacing: 0) {
@@ -62,9 +65,12 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
                 ConversationMediaFilmstrip(
                     attachments: attachments,
                     currentPageID: $pager.pageID,
-                    accentColor: "6366F1"
+                    accentColor: "6366F1",
+                    containerWidth: containerWidth
                 )
+                .frame(width: containerWidth)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -79,6 +85,43 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
                 defer { screen.dismount() }
 
                 assertPlayhead(on: current, count: count, in: screen, context: "ouverture sur \(current + 1)/\(count)")
+            }
+        }
+    }
+
+    /// Stage Manager / Split View / fenêtre détachée : la bande vit dans une fenêtre PLUS ÉTROITE que la fenêtre
+    /// clé. Sa marge de tête se calcule sur SA largeur, dès la première mise en page — une marge prise d'abord sur
+    /// la fenêtre clé puis corrigée après coup laissait la bande calée sur l'ancienne (vignette décalée d'un pas).
+    func test_opening_inANarrowWindow_showsTheCurrentThumbnailUnderItsPlayhead() {
+        let narrow = CGSize(width: 320, height: 700)
+        for count in [5, 40] {
+            for current in Self.openingIndices(count: count) {
+                let attachments = Self.attachments(count: count)
+                let pager = PagerStandIn(pageID: attachments[current].id)
+                let screen = RenderedScreen(Harness(attachments: attachments, pager: pager, containerWidth: narrow.width),
+                                            size: narrow)
+                defer { screen.dismount() }
+
+                assertPlayhead(on: current, count: count, in: screen,
+                               context: "fenêtre de 320 pt, ouverture sur \(current + 1)/\(count)", width: narrow.width)
+            }
+        }
+    }
+
+    /// iPad : la galerie peut vivre dans une COLONNE plus étroite que sa fenêtre. La marge de tête se calcule sur la
+    /// largeur que la galerie a mesurée pour elle, pas sur la fenêtre — sinon la tête de lecture tombe hors colonne.
+    func test_opening_inAColumnNarrowerThanItsWindow_showsTheCurrentThumbnailUnderItsPlayhead() {
+        let column: CGFloat = 300
+        for count in [5, 40] {
+            for current in Self.openingIndices(count: count) {
+                let attachments = Self.attachments(count: count)
+                let pager = PagerStandIn(pageID: attachments[current].id)
+                let screen = RenderedScreen(Harness(attachments: attachments, pager: pager, containerWidth: column),
+                                            size: Self.window)
+                defer { screen.dismount() }
+
+                assertPlayhead(on: current, count: count, in: screen,
+                               context: "colonne de 300 pt, ouverture sur \(current + 1)/\(count)", width: column)
             }
         }
     }
@@ -169,8 +212,8 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
 
     /// Centre attendu de la vignette `index` quand `current` est sous la tête
     /// de lecture — le bord DROIT de la bande, moins sa marge de queue.
-    private static func expectedMidX(of index: Int, current: Int) -> CGFloat {
-        window.width
+    private static func expectedMidX(of index: Int, current: Int, width: CGFloat = window.width) -> CGFloat {
+        width
             - FilmstripMetrics.trailingInset
             - FilmstripMetrics.itemSide / 2
             - CGFloat(current - index) * FilmstripMetrics.stride
@@ -178,9 +221,10 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
 
     private static let tolerance: CGFloat = 1
 
-    private static func playheadIsOn(_ current: Int, count: Int, in screen: RenderedScreen) -> Bool {
+    private static func playheadIsOn(_ current: Int, count: Int, in screen: RenderedScreen,
+                                     width: CGFloat = window.width) -> Bool {
         guard let frame = thumbnailFrames(count: count, in: screen)[current] else { return false }
-        return abs(frame.midX - expectedMidX(of: current, current: current)) <= tolerance
+        return abs(frame.midX - expectedMidX(of: current, current: current, width: width)) <= tolerance
     }
 
     private func assertPlayhead(
@@ -188,6 +232,7 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
         count: Int,
         in screen: RenderedScreen,
         context: String,
+        width: CGFloat = window.width,
         file: StaticString = #filePath,
         line: UInt = #line
     ) {
@@ -199,12 +244,12 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
             return
         }
         XCTAssertTrue(
-            currentFrame.minX >= 0 && currentFrame.maxX <= Self.window.width,
+            currentFrame.minX >= 0 && currentFrame.maxX <= width,
             "\(context) : la vignette courante est hors de la fenêtre — \(diagnostic)",
             file: file, line: line
         )
         XCTAssertEqual(
-            currentFrame.midX, Self.expectedMidX(of: current, current: current), accuracy: Self.tolerance,
+            currentFrame.midX, Self.expectedMidX(of: current, current: current, width: width), accuracy: Self.tolerance,
             "\(context) : la vignette courante n'est pas sous la tête de lecture — \(diagnostic)",
             file: file, line: line
         )
@@ -214,7 +259,7 @@ final class ConversationMediaFilmstripHostingTests: XCTestCase {
             return
         }
         XCTAssertEqual(
-            previousFrame.midX, Self.expectedMidX(of: current - 1, current: current), accuracy: Self.tolerance,
+            previousFrame.midX, Self.expectedMidX(of: current - 1, current: current, width: width), accuracy: Self.tolerance,
             "\(context) : la vignette précédente n'est pas posée juste à gauche de la courante — \(diagnostic)",
             file: file, line: line
         )

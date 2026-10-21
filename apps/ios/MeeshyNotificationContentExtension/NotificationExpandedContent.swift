@@ -29,11 +29,15 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
     case audio(NotificationAudioDetail)
     case location(NotificationLocationDetail)
     case contact(NotificationContactCard)
+    /// #7455 — un message éphémère : son décompte VIVANT jusqu'à l'échéance
+    /// locale que la NSE a gravée, et rien de son contenu.
+    case ephemeral(deadline: Date)
 
     /// Les catégories que l'extension DÉCLARE dans son `Info.plist`
     /// (`UNNotificationExtensionCategory`) — une par cas ci-dessus.
     static let categoryIdentifiers: [String] = [
         NotificationDetailPolicy.audioCategory, "MEESHY_LOCATION", "MEESHY_CONTACT",
+        NotificationDetailPolicy.ephemeralCategory,
     ]
 
     /// `resolveURL` résout l'adresse de la piste contre l'origine API de
@@ -43,6 +47,11 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
         userInfo: [AnyHashable: Any],
         resolveURL: (String) -> URL?
     ) -> NotificationExpandedContent? {
+        // #7455 — l'échéance passe AVANT le détail : un éphémère est protégé,
+        // et seule l'heure de sa disparition a le droit de se déployer.
+        if let deadline = EphemeralBannerDeadline.deadline(in: userInfo) {
+            return .ephemeral(deadline: deadline)
+        }
         switch NotificationDetailPolicy.detail(userInfo: userInfo) {
         case .location(let place): return .location(place)
         case .contact(let card): return .contact(card)
@@ -57,6 +66,28 @@ nonisolated enum NotificationExpandedContent: Equatable, Sendable {
             durationMs: NSEAttachmentPolicy.declaredDurationMs(userInfo["attachmentDurationMs"])
                 .flatMap { $0 > 0 ? $0 : nil }
         ))
+    }
+
+    /// L'intervalle du décompte : de maintenant à l'échéance. `Text(timerInterval:)`
+    /// prend un intervalle FERMÉ, qui PIÈGE si sa borne basse dépasse la haute :
+    /// une échéance déjà passée rend un intervalle nul, à l'échéance.
+    static func countdownRange(deadline: Date, now: Date) -> ClosedRange<Date> {
+        min(now, deadline)...deadline
+    }
+
+    /// Plafond du sommeil avant de retirer une notification d'éphémère :
+    /// sept jours, au-delà de toute durée d'éphémère.
+    static let expirySleepCapNanoseconds: UInt64 = 7 * 24 * 3_600 * 1_000_000_000
+
+    /// Le sommeil, en nanosecondes, jusqu'à l'échéance. L'échéance vient de la
+    /// charge du push : une valeur absurde (lointaine, infinie, NaN) ne doit
+    /// jamais faire piéger la conversion en `UInt64` — elle est plafonnée.
+    static func expirySleepNanoseconds(deadline: Date, now: Date) -> UInt64 {
+        let delay = deadline.timeIntervalSince(now)
+        guard delay.isFinite else { return expirySleepCapNanoseconds }
+        guard delay > 0 else { return 0 }
+        let cap = Double(expirySleepCapNanoseconds)
+        return UInt64(min(delay * 1_000_000_000, cap))
     }
 
     /// Le fichier à jouer : celui que l'extension de service a déjà ATTACHÉ

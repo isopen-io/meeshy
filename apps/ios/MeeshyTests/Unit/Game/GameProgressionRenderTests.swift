@@ -96,9 +96,8 @@ final class GameProgressionRenderTests: XCTestCase {
         XCTAssertFalse(identifiants.contains("game.guide.card"), "Mee ne dit qu'UNE ligne ici ; son message entier s'ouvre au toucher")
     }
 
-    /// L'amendement porteur : sous la tête, les données importantes, puis le pourquoi et le comment — et UN seul
-    /// élément d'accessibilité par carte, qui dit concept, valeur et pourquoi.
-    func test_eachCard_saysItsConceptItsValueAndItsWhy_toVoiceOver() async {
+    /// Trois étages (#11180) : le nom, la valeur, une ligne — et UN seul élément d'accessibilité par carte, qui les dit.
+    func test_eachCard_saysItsNameItsValueAndItsLine_toVoiceOver() async {
         let game = fullGame()
         let vm = await loadedViewModel(GameFixture.snapshot(game))
         let ecran = monter(ProgressionView(viewModel: vm))
@@ -107,13 +106,10 @@ final class GameProgressionRenderTests: XCTestCase {
         for card in ProgressionConceptModel.cards(progress: progress, game: game) {
             let dit = ecran.node("progression.concept.\(card.concept.rawValue)")?.label ?? ""
             XCTAssertTrue(dit.contains(card.name), "\(card.concept.rawValue) : le nom manque dans « \(dit) »")
-            XCTAssertTrue(dit.contains(card.why), "\(card.concept.rawValue) : le « à quoi ça sert » manque dans « \(dit) »")
-        }
-        let source = try? String(contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Game/ProgressionConceptViews.swift"), encoding: .utf8)
-        for etage in ["ProgressionConceptChips(items: card.chips", "Text(card.why)", "Text(card.how)"] {
-            XCTAssertTrue(source?.contains(etage) ?? false, "la carte ne rend pas « \(etage) »")
+            XCTAssertTrue(dit.contains(card.value), "\(card.concept.rawValue) : la valeur manque dans « \(dit) »")
+            if let line = card.line {
+                XCTAssertTrue(dit.contains(line.text), "\(card.concept.rawValue) : la ligne manque dans « \(dit) »")
+            }
         }
     }
 
@@ -170,7 +166,7 @@ final class GameProgressionRenderTests: XCTestCase {
 
         let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
 
-        XCTAssertTrue(identifiants.contains("game.mint.spend.mint_missing"), "« Il te manque N points convertibles » : la rangée de dépense à la place du bouton (#9705)")
+        XCTAssertTrue(identifiants.contains("game.mint.missing"), "« Il en manque encore N pour la frapper » : la phrase du manque à la place du bouton (#9705, #11180)")
         XCTAssertFalse(identifiants.contains("game.mint.action"), "un bouton grisé : la directive est « sinon pas de bouton »")
     }
 
@@ -209,20 +205,26 @@ final class GameProgressionRenderTests: XCTestCase {
     }
 
     /// Chaque concept servi a SA fiche, et UN héros (règle n° 3) : sa pièce de jeu quand il en a une — l'anneau du
-    /// niveau, la frappe, le détail de ligue, les Élans —, le héros générique sinon. Jamais les deux.
+    /// niveau, l'Héritage et sa frappe, le détail de ligue, les Élans —, la tête des Étincelles (ta lumière, #11180),
+    /// le héros générique sinon. Jamais deux.
     func test_everyServedConcept_hasItsSheet_withOneHero() async {
         let game = fullGame()
         let vm = await loadedViewModel(GameFixture.snapshot(game))
         let progress = EngagementProgressResolver.resolve(GameFixture.snapshot(game))
         let pieces: [ProgressionConcept: String] = [.level: "game.hero", .meesh: "game.mint.hero", .league: "game.league.detail"]
+        let heads: [ProgressionConcept: String] = [.points: "game.fiche.light", .meesh: "game.fiche.heritage"]
 
         for concept in ProgressionConcepts.served(for: progress, game: game) {
             let identifiants = monter(ProgressionConceptPage(concept: concept, viewModel: vm)).identifiers
             let piece = ProgressionConceptGestures.isHero(for: concept, progress: progress, game: game)
-            XCTAssertEqual(identifiants.contains("progression.concept.hero"), !piece,
+            let ownHead = concept == .points
+            XCTAssertEqual(identifiants.contains("progression.concept.hero"), !piece && !ownHead,
                            "\(concept.rawValue) : un héros générique À CÔTÉ de la pièce, ou aucun héros. Vus : \(identifiants)")
             if let attendu = pieces[concept] {
                 XCTAssertTrue(identifiants.contains(attendu), "\(concept.rawValue) : sa pièce « \(attendu) » n'est pas montée")
+            }
+            if let attendu = heads[concept] {
+                XCTAssertTrue(identifiants.contains(attendu), "\(concept.rawValue) : sa tête « \(attendu) » n'est pas montée")
             }
             ecran?.dismount()
         }
@@ -235,13 +237,18 @@ final class GameProgressionRenderTests: XCTestCase {
         let sans = APIEngagementProgress(
             counters: [], milestones: [], streak: .init(currentStreakDays: 0, longestStreakDays: 0),
             level: .init(engagementScore: 36),
-            meesh: GameFixture.meesh()
+            meesh: GameFixture.meesh(debitable: 50_000_000)
         )
         let vm = await loadedViewModel(sans)
 
-        let identifiants = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm)).identifiers
+        let rendu = monter(ProgressionConceptPage(concept: .meesh, viewModel: vm))
+        // Le harnais ne relève que les ÉLÉMENTS d'accessibilité : le conteneur du détail d'avant (`.contain`) n'en est
+        // pas un, son bouton de frappe si — d'où des points de quoi frapper. On attend le bouton, posé après la relecture.
+        let detail = rendu.frame(of: "progression.meesh.mint")
+        let identifiants = rendu.identifiers
 
-        XCTAssertTrue(identifiants.contains("progression.meesh.detail"), "la fiche des Meeshes garde sa frappe d'avant : \(identifiants)")
+        XCTAssertNotNil(detail, "la fiche des Meeshes garde sa frappe d'avant : \(identifiants) — "
+                        + "progress \(vm.progress != nil), game \(vm.game != nil), état \(vm.loadState)")
         XCTAssertFalse(identifiants.contains("progression.concept.hero"), "la frappe d'avant est le héros : pas de second")
         XCTAssertFalse(identifiants.contains { $0.hasPrefix("game.") && !$0.hasPrefix("game.element.") },
                        "du jeu est monté sans le bloc : \(identifiants)")

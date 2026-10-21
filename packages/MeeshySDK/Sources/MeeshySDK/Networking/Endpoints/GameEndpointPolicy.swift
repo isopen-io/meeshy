@@ -83,6 +83,21 @@ public extension MeEndpoint {
     static func gameSeasonClaim(step: Int) -> MeEndpoint {
         MeEndpoint.gameSeasonStepsByStepClaim(step: String(step))
     }
+
+    /// Une saison par son numéro, passée, en cours ou future (#10018). Un entier, jamais une chaîne libre.
+    static func gameSeasonArchive(number: Int) -> MeEndpoint {
+        MeEndpoint.gameSeasonsByNumber(number: String(number))
+    }
+
+    /// Le calendrier des saisons servi (#10232) : `GET /api/v1/me/game/seasons/calendar`, le cas généré du manifeste.
+    static var gameSeasonCalendar: MeEndpoint {
+        MeEndpoint.gameSeasonsCalendar
+    }
+
+    /// Une semaine de ligue par son lundi (#10018). La clé vient d'un lien : encodée.
+    static func gameLeagueWeekArchive(weekKey: String) -> MeEndpoint {
+        MeEndpoint.gameLeagueWeeksByWeekKey(weekKey: GamePathSegment.encoded(weekKey))
+    }
 }
 
 public extension UsersEndpoint {

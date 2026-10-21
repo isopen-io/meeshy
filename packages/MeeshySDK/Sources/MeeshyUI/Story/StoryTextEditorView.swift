@@ -378,8 +378,8 @@ public struct StoryTextEditorView: View {
     private var timingSection: some View {
         VStack(spacing: 8) {
             HStack(spacing: 12) {
-                timingField(label: String(localized: "story.textEditor.start", defaultValue: "Debut", bundle: .module), value: startTimeBinding, range: 0...30, unit: "s")
-                timingField(label: String(localized: "story.textEditor.duration", defaultValue: "Duree", bundle: .module), value: durationBinding, range: 0...30, unit: "s")
+                timingField(label: String(localized: "story.textEditor.start", defaultValue: "Début", bundle: .module), value: startTimeBinding, range: 0...30, unit: "s")
+                timingField(label: String(localized: "story.textEditor.duration", defaultValue: "Durée", bundle: .module), value: durationBinding, range: 0...30, unit: "s")
             }
             HStack(spacing: 12) {
                 timingField(label: String(localized: "story.textEditor.fadeIn", defaultValue: "Fondu in", bundle: .module), value: fadeInBinding, range: 0...5, unit: "s")

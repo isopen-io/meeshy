@@ -8,6 +8,7 @@ import type { StickerPackDetail } from '@meeshy/shared/types/sticker-pack';
 
 import { GlyphSvg } from './glyph';
 import { COMPOSER_GLYPHS } from './glyphs-composer';
+import { Link } from '@/routes/route-table';
 import { Sheet } from './sheet';
 import { FavoriteStar } from './sticker-favorite-star';
 import { apiDeps } from '@/lib/api/deps';
@@ -255,6 +256,17 @@ export function ComposerStickerSheet({
           <Suspense fallback={MEE_FALLBACK}>
             <StickerShop language={language} />
           </Suspense>
+          {/* UNE SEULE BOUTIQUE (#10712, spec § 9) : ce qu'on possède est dans les onglets, le reste dans la vitrine unique, filtrée sur les stickers. */}
+          <Link
+            to="settings"
+            search={{ volet: 'packs', domaine: 'sticker' }}
+            data-sticker-shop-more
+            onClick={onClose}
+            className="mt-3 flex min-h-11 items-center justify-center rounded-card px-4 text-body font-semibold focus-visible:outline-2"
+            style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)', backgroundColor: 'color-mix(in srgb, var(--color-ios-brand) 10%, transparent)' }}
+          >
+            {translateStickerPacks(language, 'stickerPacks.shopMore')}
+          </Link>
         </div>
       ) : (
         <div

@@ -7,8 +7,10 @@ import MeeshySDK
 @MainActor
 final class GameWave2ModelTests: XCTestCase {
 
-    private actor MemoryCache: GameWave2Caching {
+    @MainActor
+    private final class MemoryCache: GameWave2Caching {
         private var store: [String: Data] = [:]
+        nonisolated deinit {}
         func load<T: Decodable & Sendable>(_ type: T.Type, name: String) async -> T? {
             store[name].flatMap { try? JSONDecoder().decode(T.self, from: $0) }
         }
@@ -30,7 +32,7 @@ final class GameWave2ModelTests: XCTestCase {
         let userId: String
     }
 
-    private func makeSUT(game: GameBlock = GameWave2Fixture.game()) -> Rig {
+    private func makeSUT(game: GameBlock = GameWave2Fixture.game(), seasonSchedule: GameSeasonScheduleProviding? = nil) -> Rig {
         let userId = "me-\(UUID().uuidString)"
         let progression = ProgressionViewModel(
             service: {
@@ -49,7 +51,7 @@ final class GameWave2ModelTests: XCTestCase {
         let prefs = GameDevicePrefsStore(userId: userId, defaults: UserDefaults(suiteName: userId) ?? .standard)
         let sut = GameWave2Model(
             progression: progression, service: service, integration: integration, cache: cache, friends: NoFriends(),
-            prefs: prefs, currentUserId: userId
+            prefs: prefs, seasonSchedule: seasonSchedule, currentUserId: userId
         )
         return Rig(sut: sut, service: service, integration: integration, cache: cache, prefs: prefs, userId: userId)
     }
@@ -64,6 +66,32 @@ final class GameWave2ModelTests: XCTestCase {
 
     private func refusal(_ code: GameErrorCode) -> Error {
         MeeshyError.rejected(APIRejection(statusCode: 409, code: code.rawValue, message: "refus"))
+    }
+
+    // MARK: - Le calendrier des saisons servi (#10232)
+
+    private final class FakeSeasonSchedule: GameSeasonScheduleProviding, @unchecked Sendable {
+        let served: SeasonSchedule
+        private(set) var loads = 0
+        init(served: SeasonSchedule) { self.served = served }
+        var current: SeasonSchedule { .default }
+        func load() async -> SeasonSchedule {
+            loads += 1
+            return served
+        }
+    }
+
+    func test_loadSeasonSchedule_publishesTheServedCalendar_andStartsFromTheKnownOne() async {
+        let served = SeasonSchedule.normalize(["revision": 7, "seasons": [
+            ["number": 2, "startDay": "2027-03-01", "status": "scheduled", "themeKey": "language:ja", "stepPoints": 150, "copy": NSNull()],
+        ]])
+        let schedule = FakeSeasonSchedule(served: served)
+        let sut = makeSUT(seasonSchedule: schedule).sut
+        XCTAssertEqual(sut.seasonSchedule, .default, "avant toute lecture : la constante, jamais un vide")
+        await sut.loadSeasonSchedule()
+        XCTAssertEqual(sut.seasonSchedule.revision, 7)
+        XCTAssertEqual(sut.seasonSchedule.calendar(number: 2)?.startDay, "2027-03-01")
+        XCTAssertEqual(schedule.loads, 1)
     }
 
     // MARK: - La saison
@@ -155,7 +183,7 @@ final class GameWave2ModelTests: XCTestCase {
         rig.service.weekResult = .success(week())
         await rig.sut.progression.load(forceNetwork: true)
         await rig.sut.loadWeek()
-        let before = await rig.cache.has(GameWave2CacheName.leagueWeek)
+        let before = rig.cache.has(GameWave2CacheName.leagueWeek)
         XCTAssertTrue(before)
         rig.service.consentResult = .success(LeagueConsentResponse(consent: false, pseudonym: nil))
 
@@ -164,7 +192,7 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertNil(rig.sut.week.value, "les pseudonymes des autres ne restent pas à l'écran")
         var after = true
         for _ in 0..<50 where after {
-            after = await rig.cache.has(GameWave2CacheName.leagueWeek)
+            after = rig.cache.has(GameWave2CacheName.leagueWeek)
             if after { await Task.yield() }
         }
         XCTAssertFalse(after, "ni sur le disque d'une personne qui n'y joue plus")
@@ -232,7 +260,7 @@ final class GameWave2ModelTests: XCTestCase {
             let served = await GameShowcaseLoader(service: service, cache: cache, currentUserId: "me").load(userId: "u1")
 
             XCTAssertNil(served, "le serveur a répondu : une vitrine fermée (blocage, réglage) ne se rouvre pas depuis le disque — \(answer)")
-            let kept = await cache.has(name)
+            let kept = cache.has(name)
             XCTAssertFalse(kept, "ni ne reste sur l'appareil — \(answer)")
         }
     }
@@ -339,7 +367,7 @@ final class GameWave2ModelTests: XCTestCase {
 
         XCTAssertEqual(content?.standing?.level, 42)
         XCTAssertEqual(content?.treasuryTier, .coffre)
-        let kept = await cache.has(GameWave2CacheName.userGame("u1"))
+        let kept = cache.has(GameWave2CacheName.userGame("u1"))
         XCTAssertTrue(kept)
     }
 
@@ -379,7 +407,7 @@ final class GameWave2ModelTests: XCTestCase {
             let content = await GameUserGameLoader(service: integration, cache: cache, currentUserId: "me").load(userId: "u1")
 
             XCTAssertNil(content, "\(answer)")
-            let kept = await cache.has(name)
+            let kept = cache.has(name)
             XCTAssertFalse(kept, "\(answer)")
         }
     }
@@ -401,13 +429,15 @@ final class GameWave2ModelTests: XCTestCase {
         XCTAssertNotNil(GameStandingContent.of(UserGameProfileResponse(visible: true, standing: nil, treasury: GameShownTreasury(tier: .bourse))))
     }
 
-    func test_standingContent_isReadAsOneSentence_levelRankFlameAndTreasury() throws {
+    /// #10093 — la Flamme n'a aucun réglage de visibilité : son propriétaire ne peut pas choisir de la montrer, elle
+    /// n'est donc jamais lue, même quand le serveur sert sa forme.
+    func test_standingContent_isReadAsOneSentence_levelRankAndTreasury_neverTheFlame() throws {
         let content = try XCTUnwrap(GameStandingContent.of(otherGame()))
 
         let label = content.accessibilityLabel
         XCTAssertTrue(label.contains(GameCopy.tierName(.eclat)), label)
         XCTAssertTrue(label.contains(GameCopy.rankLabel(.voix, division: .ii)), label)
-        XCTAssertTrue(label.contains(GameCopy.flameFormName(.brasier)), label)
+        XCTAssertFalse(label.contains(GameCopy.flameFormName(.brasier)), label)
         XCTAssertTrue(label.contains(GameCopy.treasuryName(.coffre)), label)
     }
 

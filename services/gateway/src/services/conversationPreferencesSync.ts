@@ -25,6 +25,8 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import type { Prisma } from '@meeshy/shared/prisma/client';
+import { readConversationAppearance, type ConversationAppearance } from '@meeshy/shared/types/conversation-appearance';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
   ConversationPreferencesPayload,
@@ -45,6 +47,8 @@ export interface ConversationPrefRow {
   reaction: string | null;
   readingMode: string;
   clearHistoryBefore: Date | null;
+  /** #10631 : le fond et l'accent PERSONNELS (JSON validé à l'écriture) ; absent des lignes d'avant. */
+  appearance?: unknown;
   version: number;
 }
 
@@ -60,6 +64,8 @@ export const toPreferencesPayload = (row: ConversationPrefRow): ConversationPref
   reaction: row.reaction,
   readingMode: row.readingMode,
   clearHistoryBefore: row.clearHistoryBefore ? row.clearHistoryBefore.toISOString() : null,
+  // Additif (#10631) : lu tolérant, jamais bloquant ; `null` = Signature + accent calculé.
+  ...(row.appearance === undefined ? {} : { appearance: row.appearance === null ? null : readConversationAppearance(row.appearance) }),
 });
 
 /**
@@ -78,6 +84,8 @@ export interface ConversationPreferencesWrite {
   readonly reaction?: string | null;
   readonly readingMode?: string;
   readonly clearHistoryBefore?: Date | null;
+  /** #10631 : déjà validé par `validateConversationAppearance` ; `null` remet Signature + accent calculé. */
+  readonly appearance?: ConversationAppearance | null;
 }
 
 export interface WriteConversationPreferencesParams {
@@ -100,6 +108,13 @@ export class ConversationPreferencesScopeError extends Error {
     this.name = 'ConversationPreferencesScopeError';
   }
 }
+
+const asJson = (appearance: ConversationAppearance): Prisma.InputJsonObject => ({
+  v: appearance.v,
+  background: { ...appearance.background },
+  accent: appearance.accent,
+  animate: appearance.animate,
+});
 
 /**
  * Upsert the row, bump its version, broadcast the new snapshot, return the row
@@ -158,10 +173,13 @@ export async function writeConversationPreferences(
     }
   }
 
+  const { appearance, ...columns } = data;
+  // MongoDB : un Json? nullable s'écrit `null` tel quel (pas de `DbNull`/`JsonNull` sur ce connecteur).
+  const stored: { appearance?: Prisma.InputJsonObject | null } = appearance === undefined ? {} : { appearance: appearance === null ? null : asJson(appearance) };
   const row = await fastify.prisma.userConversationPreferences.upsert({
     where: { userId_conversationId: { userId, conversationId } },
-    create: { userId, conversationId, ...data, version: 1 },
-    update: { ...data, version: { increment: 1 } },
+    create: { userId, conversationId, ...columns, ...stored, version: 1 },
+    update: { ...columns, ...stored, version: { increment: 1 } },
     include: { category: true },
   });
 

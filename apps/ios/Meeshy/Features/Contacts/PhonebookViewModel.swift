@@ -7,7 +7,7 @@ import os
 
 // `nonisolated` : `os.Logger` est un type valeur thread-safe (doc Apple) et ce
 // journal est écrit depuis `DirectoryPaging`, marqué `nonisolated`.
-private nonisolated let phonebookPagingLogger = Logger(subsystem: "me.meeshy.app", category: "phonebook")
+private nonisolated let phonebookPagingLogger = MeeshyLog.logger(.phonebook)
 
 /// Répertoire — le carnet d'adresses de l'appareil, synchronisé et CONSERVÉ
 /// côté serveur, consultable sans re-scanner les contacts.
@@ -62,7 +62,7 @@ final class PhonebookViewModel: ObservableObject {
         self.searchDebounce = searchDebounce
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
         platformSearchTask?.cancel()
     }
@@ -163,7 +163,7 @@ final class PhonebookViewModel: ObservableObject {
             let all = try await directoryService.listAll(filter: .all, query: nil)
             contacts = all
             loadState = .loaded
-            try? await CacheCoordinator.shared.phonebook.save(all, for: cacheKey)
+            await bestEffort("phonebookViewModel.phonebook.save", category: .cache) { try await CacheCoordinator.shared.phonebook.save(all, for: cacheKey) }
         } catch {
             // Le cache déjà affiché prime : une revalidation ratée ne doit pas
             // effacer un répertoire consultable (dégradation offline).
@@ -227,8 +227,7 @@ final class PhonebookViewModel: ObservableObject {
         let debounce = searchDebounce
         let userService = self.userService
         platformSearchTask = Task { [weak self] in
-            try? await Task.sleep(for: debounce)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: debounce), !Task.isCancelled else { return }
             await self?.runPlatformSearch(query: query, using: userService)
         }
         await platformSearchTask?.value

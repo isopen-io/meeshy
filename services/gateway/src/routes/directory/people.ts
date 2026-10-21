@@ -1,7 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response.js';
-import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { errorResponseSchema, participantProfileDecorSchema } from '@meeshy/shared/types/api-schemas';
 import { jetonRecherche } from '../../utils/search-tokens';
 import { callerRateKey } from '../../utils/client-rate-key';
 import { createCustomRateLimiter } from '../../utils/rate-limiter.js';
@@ -16,6 +16,7 @@ import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { contactLookupScope, blockedIdsAroundViewer } from '../../services/ContactDirectoryService';
 import { keepDiscoverable } from '../../services/profile-discoverability';
+import { AVATAR_RING_COLUMN, servedPerson } from '../../services/appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'DirectoryPeople' });
 
@@ -34,12 +35,14 @@ const LIMITE_MAX = 50;
 export const BUDGET_LIGNES_PAR_JOUR = 2000;
 const FENETRE_BUDGET_SECONDES = 24 * 60 * 60;
 
-/** Ce qui part par défaut : quatre champs, et rien d'autre. */
+/** Ce qui part par défaut : quatre champs et le contour équipé, rien d'autre. */
 const PROJECTION_MINIMALE = {
   id: true,
   username: true,
   displayName: true,
   avatar: true,
+  // #10945 — le contour équipé, jamais servi brut : résolu en `profileDecor`.
+  ...AVATAR_RING_COLUMN,
 } as const;
 
 /**
@@ -119,6 +122,7 @@ export async function directoryPeopleRoutes(fastify: FastifyInstance) {
                   avatar: { type: 'string', nullable: true },
                   isOnline: { type: 'boolean', nullable: true },
                   lastActiveAt: { type: 'string', format: 'date-time', nullable: true },
+                  profileDecor: participantProfileDecorSchema,
                 },
               },
             },
@@ -208,7 +212,7 @@ export async function directoryPeopleRoutes(fastify: FastifyInstance) {
       const curseur = hasMore ? (page[page.length - 1] as { username: string }).username : null;
       const trouvables = await keepDiscoverable(fastify.prisma, viewerId, page);
 
-      const servi = avecPresence ? await gaterPresence(fastify, presenceViewer, trouvables) : trouvables;
+      const servi = (avecPresence ? await gaterPresence(fastify, presenceViewer, trouvables) : trouvables).map((u) => servedPerson(u));
 
       return sendSuccess(reply, servi, {
         pagination: {

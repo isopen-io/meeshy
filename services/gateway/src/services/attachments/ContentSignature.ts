@@ -79,7 +79,17 @@
  * déclaration mérite d'être crue — rôles différents, ne pas fusionner.
  */
 
-import { WORLD_CONVERSATION_IDENTIFIER } from '@meeshy/shared/types/world';
+import { GUEST_ATTACHMENT_KIND_CEILINGS } from '@meeshy/shared/types/world';
+import {
+  GUEST_ATTACHMENT_KIND_EXTENSIONS,
+  GUEST_ATTACHMENT_MAX_BYTES,
+  GUEST_ATTACHMENT_REFUSAL_CODES,
+  effectiveGuestAttachmentKinds,
+  guestAttachmentKindOfMimeType,
+  type GuestAttachmentKind,
+  type GuestAttachmentRefusalCode,
+} from '@meeshy/shared/types/guest-attachment-kinds';
+import { decodeAudioContent } from './AudioContentDecoding.js';
 
 /**
  * Nombre d'octets de tête suffisant pour évaluer TOUTES les signatures
@@ -322,37 +332,154 @@ export function verifyDeclaredMimeType(declaredMimeType: string, buffer: Buffer)
   return { verified: true };
 }
 
+// ─── Familles de pièces jointes d'un invité (#10001, #10029) ───────────────
+//
+// Quand un lien liste ses familles (`ConversationShareLink.allowedAttachmentKinds`)
+// — ou que sa conversation les plafonne, comme World Wide —, cette liste seule
+// décide, et chaque famille se MÉRITE par le contenu ENTIER du fichier :
+//
+// - `text`  : type déclaré `text/plain`, extension `.txt`, UTF-8 valide, aucun
+//   caractère de contrôle hors tabulation et fins de ligne, aucune signature
+//   binaire (un JPEG ou un PDF renommé `.txt` est refusé) ;
+// - `audio` : type déclaré `audio/*`, extension audio, conteneur décodé de bout
+//   en bout et sans piste vidéo (`AudioContentDecoding.ts`) ;
+// - `image` : image matricielle dont la signature confirme le type déclaré ;
+// - `pdf`   : `application/pdf` dont la signature est celle d'un PDF.
+//
+// Elle ne lit jamais `allowAnonymousFiles` / `allowAnonymousImages`, ni les
+// droits gravés à l'entrée (`Participant.permissions`) : un invité entré sous
+// d'autres termes est couvert à chaque envoi.
+
+const PDF_MAGIC = Buffer.from('%PDF-', 'latin1');
+const ZIP_LOCAL_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
+const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+
+/**
+ * Les caractères de contrôle C0, DEL et C1, hors tabulation, saut de ligne,
+ * saut de page et retour chariot — les seuls contrôles d'un texte. Une
+ * expression balaie la chaîne sans la découper : un texte au plafond (25 Mio)
+ * découpé en tableau d'un élément par caractère gelait la boucle une seconde
+ * et coûtait ~400 Mo par envoi.
+ */
+const FORBIDDEN_TEXT_CHARACTER = /[\u0000-\u0008\u000b\u000e-\u001f\u007f-\u009f]/;
+
+/** Le contenu ENTIER est-il un texte brut UTF-8, sans signature binaire ? */
+export function isPlainUtf8Text(buffer: Buffer): boolean {
+  const body = startsWithBytes(buffer, [...UTF8_BOM]) ? buffer.subarray(UTF8_BOM.length) : buffer;
+  const binary =
+    body.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC) ||
+    body.subarray(0, ZIP_LOCAL_MAGIC.length).equals(ZIP_LOCAL_MAGIC) ||
+    matchesImageSignature(body) ||
+    matchesAudioSignature(body);
+  if (binary) return false;
+  try {
+    return !FORBIDDEN_TEXT_CHARACTER.test(new TextDecoder('utf-8', { fatal: true }).decode(body));
+  } catch {
+    return false;
+  }
+}
+
+/** `null` : aucun nom n'a été transmis. Un nom VIDE en est un, sans extension. */
+function extensionOf(fileName: string | null | undefined): string | null {
+  if (fileName === undefined || fileName === null) return null;
+  const base = fileName.split(/[\\/]/).pop() ?? '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
+function contentRefutesKind(kind: GuestAttachmentKind, buffer: Buffer): string | null {
+  switch (kind) {
+    case 'text':
+      return isPlainUtf8Text(buffer) ? null : 'content is not plain UTF-8 text';
+    case 'audio': {
+      const verdict = decodeAudioContent(buffer);
+      return verdict.ok ? null : `content is not audio (${verdict.reason})`;
+    }
+    case 'image':
+      return matchesImageSignature(buffer) ? null : 'content is not an image';
+    case 'pdf':
+      return matchesPdfSignature(buffer) ? null : 'content is not a PDF';
+  }
+}
+
+export type GuestAttachmentCandidate = {
+  readonly declaredMimeType: string;
+  readonly buffer: Buffer;
+  readonly fileName?: string | null;
+};
+
+/** La décision pour une liste de familles EFFECTIVE — jamais `null` ici. */
+export function classifyGuestAttachmentByKinds(
+  candidate: GuestAttachmentCandidate,
+  allowedKinds: readonly GuestAttachmentKind[],
+): AnonymousAttachmentVerdict {
+  const refuseKind = (reason: string): AnonymousAttachmentVerdict => ({
+    allowed: false,
+    reason,
+    code: GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED,
+  });
+  if (candidate.buffer.length > GUEST_ATTACHMENT_MAX_BYTES) {
+    return {
+      allowed: false,
+      reason: `Guest attachments are limited to ${GUEST_ATTACHMENT_MAX_BYTES} bytes on this conversation`,
+      code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE,
+    };
+  }
+  const kind = guestAttachmentKindOfMimeType(candidate.declaredMimeType);
+  if (!kind || !allowedKinds.includes(kind)) {
+    return refuseKind(`Guests may only attach ${allowedKinds.join(', ') || 'nothing'} on this conversation`);
+  }
+  const extension = extensionOf(candidate.fileName);
+  if (extension !== null && !GUEST_ATTACHMENT_KIND_EXTENSIONS[kind].includes(extension)) {
+    return refuseKind(`The file name does not match a ${kind} attachment`);
+  }
+  const refutation = contentRefutesKind(kind, candidate.buffer);
+  return refutation ? refuseKind(`Declared ${kind} attachment refused: ${refutation}`) : { allowed: true };
+}
+
 // ─── Décision d'autorisation anonyme ───────────────────────────────────────
 
 export type ShareLinkAnonymousFlags = {
   readonly allowAnonymousFiles: boolean;
   readonly allowAnonymousImages: boolean;
-  /** La conversation que le lien ouvre — les deux chemins d'upload la lisent (World Wide, ci-dessous). */
-  readonly conversation?: { readonly identifier: string } | null;
+  /** Les familles ouvertes aux invités (#10001) — vide ou absent : aucune restriction par famille. */
+  readonly allowedAttachmentKinds?: readonly string[] | null;
+  /** La conversation que le lien ouvre — elle peut plafonner les familles (World Wide). */
+  readonly conversation?: { readonly identifier?: string | null } | null;
 };
 
+/** Les familles qu'un invité de ce lien peut joindre, ou `null` si le lien ne restreint pas par famille. */
+export function guestAttachmentKindsOf(
+  shareLink: Pick<ShareLinkAnonymousFlags, 'allowedAttachmentKinds' | 'conversation'>,
+): readonly GuestAttachmentKind[] | null {
+  return effectiveGuestAttachmentKinds(
+    { allowedAttachmentKinds: shareLink.allowedAttachmentKinds, conversationIdentifier: shareLink.conversation?.identifier },
+    GUEST_ATTACHMENT_KIND_CEILINGS,
+  );
+}
+
 /**
- * WORLD WIDE (#10000) — un invité n'y joint RIEN, audio compris, tant que la
- * garde décodante de #10001 / #10029 n'est pas livrée. L'exemption « voix »
- * ci-dessous se mérite sur un en-tête seul : deux octets de synchro MPEG
- * suivis de n'importe quelle charge, ou une vidéo MP4 déclarée `audio/mp4`,
- * passent. Ouvert au monde entier sans compte, c'est un hébergement de
- * contenus arbitraires. La décision porte sur la CONVERSATION, jamais sur les
- * drapeaux du lien ni sur les droits gravés à l'entrée (`link-admission.ts`) :
- * un invité entré sous d'autres termes est couvert, à chaque envoi.
+ * La garde par familles lit le fichier ENTIER : un appelant qui ne tient qu'un
+ * préfixe (tus) doit charger le reste quand elle s'applique.
  */
-export const WORLD_GUEST_ATTACHMENTS_CLOSED_REASON = 'Attachments are not open to guests of World Wide yet';
+export function guestAttachmentNeedsFullContent(shareLink: ShareLinkAnonymousFlags): boolean {
+  return guestAttachmentKindsOf(shareLink) !== null;
+}
 
 export type AnonymousAttachmentVerdict =
   | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: string };
+  | { readonly allowed: false; readonly reason: string; readonly code?: GuestAttachmentRefusalCode };
 
 /**
  * Décision UNIQUE de classification/autorisation anonyme, partagée par
  * `routes/attachments/upload.ts` (REST, fichier entier en mémoire) et
- * `routes/uploads/tus-handler.ts` (resumable, préfixe lu depuis le disque) —
- * pour que les deux chemins d'upload ne puissent pas diverger (task-1-fix-
- * round-2, Critical 1).
+ * `routes/uploads/tus-handler.ts` (resumable) — pour que les deux chemins
+ * d'upload ne puissent pas diverger (task-1-fix-round-2, Critical 1).
+ *
+ * Quand le lien liste ses familles, ou que sa conversation les plafonne
+ * (World Wide, #10001), `classifyGuestAttachmentByKinds` décide seule, sur le
+ * fichier ENTIER. Sinon, le comportement d'avant : un préfixe structurel et les
+ * drapeaux du lien.
  *
  * Normalise la casse du `mimeType` déclaré : `IMAGE/PNG` sur une vraie image
  * doit rester classée « image », pas basculer dans le seau « fichier » plus
@@ -361,10 +488,12 @@ export type AnonymousAttachmentVerdict =
 export function classifyAnonymousAttachment(
   declaredMimeType: string,
   buffer: Buffer,
-  shareLink: ShareLinkAnonymousFlags
+  shareLink: ShareLinkAnonymousFlags,
+  options: { readonly fileName?: string | null } = {},
 ): AnonymousAttachmentVerdict {
-  if (shareLink.conversation?.identifier === WORLD_CONVERSATION_IDENTIFIER) {
-    return { allowed: false, reason: WORLD_GUEST_ATTACHMENTS_CLOSED_REASON };
+  const kinds = guestAttachmentKindsOf(shareLink);
+  if (kinds !== null) {
+    return classifyGuestAttachmentByKinds({ declaredMimeType, buffer, fileName: options.fileName }, kinds);
   }
 
   const normalizedMimeType = declaredMimeType.toLowerCase();

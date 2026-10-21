@@ -39,7 +39,11 @@ afterEach(() => {
     root?.unmount();
   });
   container?.remove();
-  HTMLElement.prototype.getBoundingClientRect = originalRect;
+  // Restaurer = rendre le prototype tel qu'il était : la mesure d'origine vit sur
+  // Element.prototype, une affectation laisserait une propriété PROPRE à HTMLElement.prototype
+  // que top-band.test.tsx voit dans la suite complète (CI dev du 2026-10-13).
+  if (HTMLElement.prototype.getBoundingClientRect !== originalRect) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
+  if (HTMLElement.prototype.getBoundingClientRect !== originalRect) HTMLElement.prototype.getBoundingClientRect = originalRect;
 });
 
 const timedDocument: CanvasDocument = {

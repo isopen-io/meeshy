@@ -230,7 +230,7 @@ async function main() {
     // ----------------------------------------------------- 1. sans session
     {
       const ctx = await openContext(browser, { base, viewport: { width: 390, height: 844 }, scheme: 'light', session: null, pose: null, served: 'admin' });
-      await ctx.page.goto(`${base}/`, { waitUntil: 'load' });
+      await ctx.page.goto(`${base}/chats`, { waitUntil: 'load' });
       await ctx.page.waitForTimeout(1_200);
       const path = await ctx.page.evaluate(() => window.location.pathname);
       check(path === '/login', `sans session, "/" mène à /login (obtenu ${path})`);
@@ -251,7 +251,7 @@ async function main() {
           const tag = `Administration, pose haute, ${gabarit}`;
           const ctx = await openContext(browser, { base, viewport, scheme, session: SESSION, pose: null, served: 'admin' });
           const { page } = ctx;
-          await page.goto(`${base}/`, { waitUntil: 'load' });
+          await page.goto(`${base}/chats`, { waitUntil: 'load' });
           await page.waitForSelector('[data-floating-menu]');
           check(await until(() => ctx.permissionCalls.length === 1), `${tag} : la matrice est lue (obtenu ${ctx.permissionCalls.length})`);
           await page.waitForTimeout(250);
@@ -288,7 +288,7 @@ async function main() {
           const tag = `Administration, pose basse, ${gabarit}`;
           const ctx = await openContext(browser, { base, viewport, scheme, session: SESSION, pose: '1,1', served: 'admin' });
           const { page } = ctx;
-          await page.goto(`${base}/`, { waitUntil: 'load' });
+          await page.goto(`${base}/chats`, { waitUntil: 'load' });
           await page.waitForSelector('[data-floating-menu]');
           await until(() => ctx.permissionCalls.length === 1);
           await page.waitForTimeout(250);
@@ -308,7 +308,7 @@ async function main() {
       const tag = `matrice ${served}`;
       const ctx = await openContext(browser, { base, viewport: { width: 320, height: 568 }, scheme: 'light', session: SESSION, pose: null, served });
       const { page } = ctx;
-      await page.goto(`${base}/`, { waitUntil: 'load' });
+      await page.goto(`${base}/chats`, { waitUntil: 'load' });
       await page.waitForSelector('[data-floating-menu]');
       check(await until(() => ctx.permissionCalls.length === 1), `${tag} : la matrice est demandée (obtenu ${ctx.permissionCalls.length})`);
       await page.waitForTimeout(400);

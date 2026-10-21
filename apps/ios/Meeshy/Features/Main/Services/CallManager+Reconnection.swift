@@ -32,7 +32,7 @@ extension CallManager {
         // restart n'est possible (pas de remote description) et la bascule
         // d'état faisait rendre l'écran connecté (00:00 figé) pendant que
         // l'appelé sonnait encore.
-        guard CallReliabilityPolicy.reconnectingAllowed(from: callState) else {
+        guard CallReliabilityPolicy.reconnectingAllowed(from: callState, awaitingRemoteOffer: isAwaitingRemoteOffer) else {
             Logger.calls.warning("attemptReconnection ignoré en état \(String(describing: self.callState)) — réservé aux appels en négociation/établis (FSM §3.2)")
             return
         }
@@ -55,7 +55,7 @@ extension CallManager {
         }
 
         reconnectAttempt += 1
-        analyticsTotalReconnects += 1
+        analytics.totalReconnects += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
             if callUsesCallKit, let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
@@ -139,8 +139,7 @@ extension CallManager {
                   case .reconnecting(let currentAfterChain) = self.callState, currentAfterChain == attempt
             else { return }
             if backoffSeconds > 0 {
-                try? await Task.sleep(for: .seconds(backoffSeconds))
-                guard !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
+                guard await cancellableSleep(for: .seconds(backoffSeconds)), !Task.isCancelled, case .reconnecting(let current) = self.callState, current == attempt else { return }
             }
             guard let offer = await self.webRTCService.performICERestart() else {
                 // The call may have ended (or a newer reconnect cycle already
@@ -187,8 +186,7 @@ extension CallManager {
         let refreshDelay = CallReliabilityPolicy.turnRefreshDelay(ttl: ttl)
         Logger.calls.info("TURN credential refresh scheduled in \(Int(refreshDelay))s (TTL=\(Int(ttl))s)")
         turnRefreshTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(refreshDelay))
-            guard !Task.isCancelled, let self, self.callState.isActive,
+            guard await cancellableSleep(for: .seconds(refreshDelay)), !Task.isCancelled, let self, self.callState.isActive,
                   let callId = self.currentCallId else { return }
             self.requestFreshTurnCredentials(callId: callId)
         }
@@ -212,8 +210,7 @@ extension CallManager {
     private func armTurnRefreshWatchdog(callId: String) {
         turnRefreshWatchdogTask?.cancel()
         turnRefreshWatchdogTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds))
-            guard !Task.isCancelled, let self, self.callState.isActive,
+            guard await cancellableSleep(for: .seconds(QualityThresholds.turnRefreshRetryTimeoutSeconds)), !Task.isCancelled, let self, self.callState.isActive,
                   self.currentCallId == callId else { return }
             self.turnRefreshRetryAttempt += 1
             guard CallReliabilityPolicy.turnRefreshShouldRetry(attempt: self.turnRefreshRetryAttempt) else {
@@ -252,5 +249,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

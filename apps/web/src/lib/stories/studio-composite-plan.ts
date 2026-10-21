@@ -55,9 +55,20 @@ function fitted(ratio: number, cover: boolean, card: number): { readonly width: 
   return wider === cover ? { width: ratio / card, height: 1 } : { width: 1, height: card / ratio };
 }
 
-/** Le rapport que le fond MONTRE — celui de son recadrage quand il en a un. */
+/** Le rapport que le fond MONTRE — celui de son recadrage quand il en a un,
+ * couché par un quart de tour impair (#9160). */
 export function backgroundShownRatio(background: StudioVisualAsset & { readonly aspectRatio: number }): number {
-  return effectiveMediaRatio(background.aspectRatio, background.crop ?? null);
+  const cropped = effectiveMediaRatio(background.aspectRatio, background.crop ?? null);
+  return sideways(background) ? 1 / cropped : cropped;
+}
+
+const sideways = (asset: StudioVisualAsset): boolean => asset.rotation === 90 || asset.rotation === 270;
+
+/** Le rectangle À PEINDRE avant la rotation : un quart de tour impair échange
+ * ses côtés, mesurés en fractions de la carte (largeur pour l'un, hauteur
+ * pour l'autre). */
+function unrotated(rect: { readonly width: number; readonly height: number }, turned: boolean, card: number): { readonly width: number; readonly height: number } {
+  return turned ? { width: rect.height / card, height: rect.width * card } : rect;
 }
 
 /** `video` : la retouche d'une VIDÉO (#9124) peint l'image courante d'un
@@ -81,8 +92,8 @@ export function studioCompositePlan(
       blur,
       x: 0.5,
       y: 0.5,
-      rotation: 0,
-      ...rect,
+      rotation: background.rotation ?? 0,
+      ...unrotated(rect, sideways(background), cardRatio),
       ...(background.crop !== undefined ? { crop: background.crop } : {}),
     });
     const shown = backgroundShownRatio(background);

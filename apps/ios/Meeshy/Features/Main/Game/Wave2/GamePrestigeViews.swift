@@ -90,11 +90,11 @@ struct GamePrestigeScreen: View {
         let shown = game.level.shown
         func arrow(_ before: String, _ after: String) -> String { "\(before) → \(after)" }
         return [
-            GameFactChipItem(label: ConceptText.factBalance, value: arrow(GameCopy.points(game.level.score), GameCopy.points(pass.scoreAfter)), detail: .score),
+            GameFactChipItem(label: GameSparksCopy.pocketLabel, value: arrow(GameCopy.points(game.level.score), GameCopy.points(pass.scoreAfter)), detail: .score),
             GameFactChipItem(label: ConceptText.name(.level), value: arrow(GameCopy.formatCount(shown.level), GameCopy.formatCount(pass.levelAfter)), detail: .levelNow),
             GameFactChipItem(label: ConceptText.factRecord, value: arrow(GameCopy.formatCount(shown.record), GameCopy.formatCount(pass.levelRecordAfter)), detail: .levelRecord),
             GameFactChipItem(
-                label: ConceptText.factStars, value: arrow(GameCopy.formatCount(prestige.stars), GameCopy.formatCount(pass.prestigeAfter)),
+                label: ConceptText.factRebirths, value: arrow(GameCopy.formatCount(prestige.stars), GameCopy.formatCount(pass.prestigeAfter)),
                 detail: .prestigeGlory, element: GameElementDetails.prestigeStar(pass.prestigeAfter, in: prestige)
             ),
             GameFactChipItem(label: ConceptText.name(.glory), value: "+" + GameCopy.formatCount(pass.gloryGained), detail: .prestigeGlory),

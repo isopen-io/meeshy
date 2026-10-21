@@ -17,6 +17,7 @@ extension ConversationListView {
     /// `true`, exactement comme aujourd'hui.
     nonisolated static func isSectionCollapsible(sectionId: String) -> Bool {
         !LentilleSectionIdentity.isLentilleOnly(sectionId: sectionId)
+            && !ConversationListWorldHead.isHead(sectionId: sectionId)
     }
 
     /// Cible de drop légitime. Même partition que `isSectionCollapsible` — une
@@ -25,6 +26,7 @@ extension ConversationListView {
     /// replier ? », « puis-je y déposer ? ») qui pourraient diverger demain.
     nonisolated static func acceptsSectionDrop(sectionId: String) -> Bool {
         !LentilleSectionIdentity.isLentilleOnly(sectionId: sectionId)
+            && !ConversationListWorldHead.isHead(sectionId: sectionId)
     }
 
     /// Rangs visibles ? Réécriture PURE et testable de la condition
@@ -40,6 +42,19 @@ extension ConversationListView {
         if isSingleUngroupedSection { return true }
         if !isSectionCollapsible(sectionId: sectionId) { return true }
         return expandedSections.contains(sectionId)
+    }
+
+    /// La liste PLATE — une seule section « Mes conversations » — ne montre
+    /// aucun en-tête. La tête World Wide (#10347) ne compte pas : posée
+    /// au-dessus d'une liste plate, elle la laisse plate.
+    nonisolated static func isSingleUngroupedSection(sectionIds: [String]) -> Bool {
+        let sections = sectionIds.filter { !ConversationListWorldHead.isHead(sectionId: $0) }
+        return sections.count == 1 && sections[0] == "other"
+    }
+
+    /// La tête World Wide n'a jamais d'en-tête : sa rangée EST son titre.
+    nonisolated static func showsSectionHeader(sectionId: String, isSingleUngroupedSection: Bool) -> Bool {
+        !isSingleUngroupedSection && !ConversationListWorldHead.isHead(sectionId: sectionId)
     }
 }
 
@@ -89,8 +104,16 @@ extension ConversationListView {
     /// La queue ne se pose que sous un contenu CONNU. Sous un squelette, elle
     /// disait « Aucune conversation » à un compte qui en a, puis les rangées
     /// réelles la repoussaient : elle attend que la liste soit là.
+    ///
+    /// Un chargement en ÉCHEC n'est pas un contenu connu non plus (#10923) :
+    /// sous « Impossible de charger vos conversations », la queue titrait
+    /// « Aucune conversation » avec ses raccourcis — deux verdicts
+    /// contradictoires sur le même écran. L'erreur est alors le seul état.
     nonisolated static func showsQuickActionsTail(emptyBranch: ConversationListEmptyBranch?) -> Bool {
-        emptyBranch != .skeleton
+        switch emptyBranch {
+        case .skeleton, .syncError: false
+        case nil, .searchNoResults, .createFirstConversation: true
+        }
     }
 
     /// `nil` ⇒ la liste a des sections à rendre.

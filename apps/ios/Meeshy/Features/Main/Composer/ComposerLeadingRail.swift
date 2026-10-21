@@ -44,6 +44,12 @@ struct ComposerLeadingRail: View {
 
     var onDoor: ((ComposerRailDoor) -> Void)?
 
+    /// **L'appui long d'une porte** (#10306, #10357) — servi aux seules portes
+    /// qui en ont un (`ComposerMediaSourcePolicy.offersLongPress`) : la
+    /// photothèque propose alors ses autres sources. `nil` ⇒ aucune porte n'a
+    /// d'appui long.
+    var onDoorLongPress: ComposerRailDoorLongPressHandler?
+
     /// Un contrôleur d'outil a été tapé — l'hôte déplie ou replie son panneau.
     var onToolControl: ((ComposerToolControl) -> Void)?
 
@@ -109,7 +115,8 @@ struct ComposerLeadingRail: View {
     var badges: [ComposerRailDoor: Int] = [:]
 
     /// **Des boutons séparés, sans colonne** (directive porteur 2026-09-27) —
-    /// chaque entrée porte son disque de verre (`ComposerRailButtonGlass`).
+    /// chaque entrée est un glyphe blanc en relief, sans disque de verre
+    /// (`ComposerFloatingRailInk`, #10358).
     var separateButtons: Bool = false
 
     /// **Les boutons de SCÈNE, après le lieu** (#8713, directive porteur
@@ -122,6 +129,8 @@ struct ComposerLeadingRail: View {
     var sceneTogglesAfter: ComposerRailDoor?
 
     @State private var lastTapped: String?
+    /// L'appui long dont la levée ne doit pas rappeler le toucher (#10306).
+    @State private var press = ComposerRailDoorPress()
 
     /// L'écart entre deux cadres : resserré quand chaque bouton ne dessine
     /// qu'un disque plus petit que sa cible.
@@ -292,7 +301,6 @@ struct ComposerLeadingRail: View {
               symbolName: bouton.toggle.symbol,
               label: bouton.label,
               tint: MeeshyColors.textPrimary(isDark: true),
-              glassTint: bouton.isOn ? MeeshyColors.brandPrimary : nil,
               isOn: bouton.isOn,
               action: bouton.action)
     }
@@ -330,9 +338,27 @@ struct ComposerLeadingRail: View {
               symbolName: door.symbolName,
               label: ComposerRailCopy.label(door),
               tint: MeeshyColors.textSecondary(isDark: true),
-              badge: badges[door]) {
+              badge: badges[door],
+              longPress: longPress(of: door)) {
             onDoor?(door)
         }
+        .accessibilityIdentifier("composer.rail.\(door.rawValue)")
+    }
+
+    /// L'appui long de la porte, s'il en a un et que l'hôte l'écoute : le
+    /// geste présente le choix des sources, VoiceOver reçoit chaque source en
+    /// action nommée.
+    private func longPress(of door: ComposerRailDoor) -> ComposerRailEntryLongPress? {
+        guard let handler = onDoorLongPress,
+              ComposerMediaSourcePolicy.offersLongPress(door),
+              !handler.sources.isEmpty else { return nil }
+        return ComposerRailEntryLongPress(
+            begin: { handler.offer(door) },
+            actions: handler.sources.map { source in
+                ComposerRailNamedAction(id: "\(source)",
+                                        label: ComposerMediaSourcePolicy.longPressLabel(source),
+                                        perform: { handler.choose(source) })
+            })
     }
 
     /// Un contrôleur d'outil. **Teinté quand son panneau est déplié** — le même
@@ -344,7 +370,8 @@ struct ComposerLeadingRail: View {
               label: control.label,
               tint: control.isExpanded
                   ? MeeshyColors.brandPrimary
-                  : MeeshyColors.textSecondary(isDark: true)) {
+                  : MeeshyColors.textSecondary(isDark: true),
+              isOn: control.isExpanded) {
             onToolControl?(control)
         }
     }
@@ -370,21 +397,27 @@ struct ComposerLeadingRail: View {
                        label: String,
                        tint: Color,
                        badge: Int? = nil,
-                       glassTint: Color? = nil,
                        isOn: Bool = false,
+                       longPress: ComposerRailEntryLongPress? = nil,
                        action: @escaping () -> Void) -> some View {
         Button {
+            // Sans appui long en mémoire, l'état n'est pas touché : aucun rendu de plus.
+            guard press.longPressedId == nil || press.admitsTap(id: id, at: Date()) else { return }
             lastTapped = id
             action()
             HapticFeedback.light()
         } label: {
+            // **Sur la scène, plus de disque de verre** (#10358) : le glyphe
+            // est BLANC, en relief par son ombre, et passe au jaune quand il
+            // est actif. La cible reste le cadre de `railWidth`, 44 pt.
             Image(systemName: symbolName)
-                .font(separateButtons ? .body.weight(.semibold) : .title3)
+                .font(separateButtons ? .title3.weight(.semibold) : .title3)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundColor(tint)
+                .foregroundColor(ComposerFloatingRailInk.glyph(separate: separateButtons,
+                                                               active: isOn,
+                                                               columnTint: tint))
+                .modifier(ComposerRailGlyphRelief(active: separateButtons))
                 .composerToolBounce(active: lastTapped == id)
-                .modifier(ComposerRailButtonGlass(active: separateButtons, plateauTint: plateauTint,
-                                                  tint: glassTint))
                 .frame(width: ComposerRailGeometry.railWidth,
                        height: ComposerRailGeometry.railWidth)
                 // **La pastille est posée SUR le glyphe, hors du flux** : dans
@@ -393,8 +426,26 @@ struct ComposerLeadingRail: View {
                 .overlay(alignment: .topTrailing) { badgeBubble(badge) }
                 .contentShape(Rectangle())
         }
+        // Le bouton rappelle aussi la levée d'un appui long : elle est avalée.
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: ComposerRailDoorPress.minimumDuration).onEnded { _ in
+                guard let longPress else { return }
+                press.noteLongPress(id: id, at: Date())
+                lastTapped = id
+                HapticFeedback.medium()
+                longPress.begin()
+            },
+            including: longPress == nil ? .subviews : .all)
         .accessibilityLabel(Text(label))
         .accessibilityAddTraits(isOn ? .isSelected : [])
+        .accessibilityActions {
+            if let longPress {
+                ForEach(longPress.actions.map { named in
+                            AsyncRenderRow(id: named.id, content: Button(named.label) { named.perform() })
+                        },
+                        content: asyncRenderRowContent)
+            }
+        }
         // **Le compte est une VALEUR, jamais une seconde étiquette.** Le
         // fondre dans le libellé remplacerait le VERBE que VoiceOver annonce
         // (« Ajouter du texte ») par une phrase composée — et un contrôle qui
@@ -419,6 +470,7 @@ struct ComposerLeadingRail: View {
                 // glyphe qu'elle chevauche — sans lui, un « 8 » posé sur une
                 // icône claire se lit comme un morceau de l'icône.
                 .overlay(Capsule().stroke(Color.black.opacity(0.35), lineWidth: 1))
+                .modifier(ComposerRailGlyphRelief(active: separateButtons))
                 .offset(x: 4, y: -2)
                 // Le glyphe reste la cible : la pastille n'est qu'un témoin, et
                 // un témoin qui capture le doigt vole le tap de sa porte.

@@ -6,40 +6,39 @@ import type { PublishedPost } from '@/lib/api/share-publish';
 import type { PublishFormat, SendPayload, SendPlanEntry, SendStep } from './send-sheet-plan';
 
 /**
- * LE MOTEUR D'EXÉCUTION D'UN ENVOI (#8884) — joue le plan de `send-sheet-plan`
- * cible par cible, à PORTS INJECTÉS : ce fichier n'importe aucun réseau, il ne
- * connaît que la forme des appels (`SendSheetPorts`). `send-sheet-ports.ts`
- * branche les vrais ; les témoins branchent des factices.
+ * LE MOTEUR D'EXÉCUTION D'UN ENVOI (#8884, #10948) — joue le plan de
+ * `send-sheet-plan` cible par cible, à PORTS INJECTÉS : ce fichier n'importe
+ * aucun réseau. `send-sheet-ports.ts` branche les vrais ; les témoins des
+ * factices.
  *
- * **SÉQUENTIEL, dans l'ordre choisi.** Les cibles partent l'une après l'autre :
- * c'est ce qui rend le partage d'un téléversement DÉTERMINISTE (la première
- * cible qui réussit téléverse, les suivantes copient) et qui ménage le seau
- * d'écriture de la passerelle.
+ * **SÉQUENTIEL, dans l'ordre choisi** : la première cible qui réussit
+ * téléverse, les suivantes copient côté serveur ; le seau d'écriture de la
+ * passerelle est ménagé.
  *
  * **Le rejeu ne renvoie JAMAIS ce qui est parti.** Chaque cible mémorise
- * combien de ses étapes sont accomplies : un transfert réussi dont la légende a
- * échoué se rejoue par la légende seule. Les identifiants de message
- * (`clientMessageId`) sont figés par étape — un envoi dont l'accusé s'est perdu
- * se rejoue sous le MÊME identifiant, que la passerelle dédoublonne.
+ * combien de ses étapes sont accomplies, et chaque étape fige son
+ * `clientMessageId` : un envoi dont l'accusé s'est perdu se rejoue sous le MÊME
+ * identifiant, que la passerelle dédoublonne.
  *
- * **Hors ligne : échec rejouable, pas de file.** L'outbox (`outbox-store.ts`)
- * ne porte qu'une bulle LOCALE d'un fil (`LocalMessage`, un seul
- * `attachmentIds`), pas un transfert, une copie serveur ni une publication, et
- * elle est en mémoire seule : y router ces envois promettrait une durabilité
- * qu'elle n'a pas. Hors ligne, chaque cible est donc `failed(offline)` — sans
- * aucun appel — et `retry` / `retryFailed` la relancent au retour du réseau.
+ * **Hors ligne, rien n'est refusé : la cible passe « En file »** (`queued`),
+ * sans aucun appel. Tout ce que le rejeu exige vit dans un INSTANTANÉ
+ * (`snapshot()`, `resume`) que la file durable (`send-queue.ts`) écrit dans
+ * IndexedDB à chaque progrès : fermer la feuille, puis l'application, ne perd
+ * rien, et le retour du réseau reprend où l'on s'était arrêté.
  */
 
 export type SendFailure =
-  | { readonly kind: 'offline' }
   | { readonly kind: 'network' }
   | { readonly kind: 'download' }
+  /** Passagère (session à rafraîchir, délai, limite, panne serveur) : rejouable, jamais effacée. */
+  | { readonly kind: 'unavailable'; readonly status: number }
   | { readonly kind: 'refused'; readonly status: number; readonly message: string; readonly code?: string };
 
 export type TargetStatus =
   | { readonly state: 'idle' }
+  | { readonly state: 'queued' }
   | { readonly state: 'sending' }
-  | { readonly state: 'sent' }
+  | { readonly state: 'sent'; readonly conversationId?: string }
   | { readonly state: 'failed'; readonly failure: SendFailure };
 
 export type SendRunState = {
@@ -56,9 +55,23 @@ export type ReadyMedia = {
   readonly thumbHash?: string;
 };
 
+/** Ce qu'un message de fichiers a déjà coûté : ses pièces, et le premier message qui les porte (copié ensuite). */
+type Upload = { readonly attachmentIds: readonly string[] | null; readonly firstMessageId: string | null };
+
+/** TOUT ce qu'un rejeu exige, sérialisable (IndexedDB) — jamais une promesse, jamais une fonction. */
+export type SendRunSnapshot = {
+  readonly statuses: Readonly<Record<string, TargetStatus>>;
+  readonly completed: Readonly<Record<string, number>>;
+  readonly clientIds: Readonly<Record<string, string>>;
+  readonly conversations: Readonly<Record<string, string>>;
+  readonly uploads: Readonly<Record<string, Upload>>;
+  readonly media: Readonly<Record<string, ReadyMedia>>;
+};
+
 export type SendSheetPorts = {
   readonly online: () => boolean;
   readonly openDirect: (userId: string) => Promise<ApiResult<{ readonly id: string }>>;
+  readonly openGroup: (params: { readonly userIds: readonly string[]; readonly title: string }) => Promise<ApiResult<{ readonly id: string }>>;
   readonly forward: (params: {
     readonly messages: readonly ForwardSource[];
     readonly sourceConversationId?: string;
@@ -80,11 +93,13 @@ export type SendSheetPorts = {
 export type SendRun = {
   readonly getState: () => SendRunState;
   readonly subscribe: (listener: () => void) => () => void;
-  /** Joue toutes les cibles, dans l'ordre. Ne rejette JAMAIS. */
+  /** Joue toutes les cibles qui ne sont pas parties, dans l'ordre. Ne rejette JAMAIS. */
   readonly start: () => Promise<void>;
   /** Rejoue UNE cible échouée, à partir de sa première étape non accomplie. */
   readonly retry: (key: string) => Promise<void>;
+  /** Rejoue les cibles échouées sur un motif rejouable ET celles en file. */
   readonly retryFailed: () => Promise<void>;
+  readonly snapshot: () => SendRunSnapshot;
 };
 
 export const sentCountOf = (state: SendRunState): number =>
@@ -93,36 +108,46 @@ export const sentCountOf = (state: SendRunState): number =>
 export const failedKeysOf = (state: SendRunState): readonly string[] =>
   state.order.filter((key) => state.statuses[key]?.state === 'failed');
 
-/** Une étape qui s'arrête : la cible s'immobilise dessus, rejouable. */
+export const queuedKeysOf = (state: SendRunState): readonly string[] =>
+  state.order.filter((key) => state.statuses[key]?.state === 'queued');
+
+/** La cible n'est pas finie : ni envoyée, ni refusée pour de bon. */
+export const pendingKeysOf = (state: SendRunState): readonly string[] =>
+  state.order.filter((key) => {
+    const status = state.statuses[key];
+    return status === undefined || status.state === 'idle' || status.state === 'queued' || status.state === 'sending' || (status.state === 'failed' && status.failure.kind !== 'refused');
+  });
+
 class StepFailed extends Error {
   constructor(readonly failure: SendFailure) {
     super(failure.kind);
   }
 }
 
+/** Le réseau est tombé pendant l'étape : la cible retourne en file, sans motif. */
+class WentOffline extends Error {}
+
 const isTransportFailure = (failure: ApiFailure): boolean => failure.status === 0 || failure.code === 'TIMEOUT' || failure.code === 'ABORTED';
+
+/** 401 : le jeton se rafraîchit ou la session revient ; 408, 429, 5xx : le serveur dira oui plus tard. */
+const isPassing = (status: number): boolean => status === 401 || status === 408 || status === 429 || status >= 500;
+
+function refusalOf(status: number, message: string, code: string | undefined): SendFailure {
+  if (isPassing(status)) return { kind: 'unavailable', status };
+  return { kind: 'refused', status, message, ...(code === undefined ? {} : { code }) };
+}
 
 function failureOf(failure: ApiFailure): SendFailure {
   if (isTransportFailure(failure)) return { kind: 'network' };
-  return {
-    kind: 'refused',
-    status: failure.status,
-    message: failure.error,
-    ...(failure.code === undefined ? {} : { code: failure.code }),
-  };
+  return refusalOf(failure.status, failure.error, failure.code);
 }
 
 const contentProp = (content: string | undefined): { readonly content?: string } => (content === undefined ? {} : { content });
 
-type Shared = {
-  files: Promise<readonly File[] | null> | null;
-  attachmentIds: readonly string[] | null;
-  firstMessageId: string | null;
-  readonly media: Map<number, ReadyMedia>;
-  readonly conversations: Map<string, string>;
-  readonly completed: Map<string, number>;
-  readonly clientIds: Map<string, string>;
-};
+const uploadKeyOf = (indexes: readonly number[]): string => indexes.join(',');
+
+/** Ce qui était en vol au moment de l'instantané n'a pas fini : il redevient en file. */
+const settledStatus = (status: TargetStatus): TargetStatus => (status.state === 'sending' || status.state === 'idle' ? { state: 'queued' } : status);
 
 export function createSendRun(params: {
   readonly entries: readonly SendPlanEntry[];
@@ -130,108 +155,130 @@ export function createSendRun(params: {
   /** La langue d'ORIGINE des messages que le moteur compose (légende, lien). */
   readonly language: string;
   readonly ports: SendSheetPorts;
+  /** L'instantané d'un envoi interrompu (file durable). */
+  readonly resume?: SendRunSnapshot;
+  /** Prévenu à chaque progrès — la file durable y écrit son instantané. */
+  readonly onProgress?: (snapshot: SendRunSnapshot) => void;
 }): SendRun {
   const { entries, payload, language, ports } = params;
   const order = entries.map((entry) => entry.key);
+  const resumed = params.resume;
   let state: SendRunState = {
     phase: 'idle',
     order,
-    statuses: Object.fromEntries(order.map((key): [string, TargetStatus] => [key, { state: 'idle' }])),
+    statuses: Object.fromEntries(
+      order.map((key): [string, TargetStatus] => [key, resumed?.statuses[key] === undefined ? { state: 'idle' } : settledStatus(resumed.statuses[key])]),
+    ),
   };
   const listeners = new Set<() => void>();
-  const shared: Shared = {
-    files: null,
-    attachmentIds: null,
-    firstMessageId: null,
-    media: new Map(),
-    conversations: new Map(entries.flatMap((e) => (e.target.kind === 'conversation' ? [[e.key, e.target.conversationId] as const] : []))),
-    completed: new Map(),
-    clientIds: new Map(),
-  };
+  const completed = new Map(Object.entries(resumed?.completed ?? {}));
+  const clientIds = new Map(Object.entries(resumed?.clientIds ?? {}));
+  const conversations = new Map<string, string>([
+    ...entries.flatMap((entry) => (entry.target.kind === 'conversation' ? [[entry.key, entry.target.conversationId] as const] : [])),
+    ...Object.entries(resumed?.conversations ?? {}),
+  ]);
+  const uploads = new Map(Object.entries(resumed?.uploads ?? {}));
+  const media = new Map(Object.entries(resumed?.media ?? {}));
+  let downloaded: Promise<readonly File[] | null> | null = null;
+
+  const snapshot = (): SendRunSnapshot => ({
+    statuses: state.statuses,
+    completed: Object.fromEntries(completed),
+    clientIds: Object.fromEntries(clientIds),
+    conversations: Object.fromEntries(conversations),
+    uploads: Object.fromEntries(uploads),
+    media: Object.fromEntries(media),
+  });
 
   const publishState = (next: SendRunState): void => {
     state = next;
     listeners.forEach((listener) => listener());
+    params.onProgress?.(snapshot());
   };
-  const setStatus = (key: string, status: TargetStatus): void =>
-    publishState({ ...state, statuses: { ...state.statuses, [key]: status } });
+  const setStatus = (key: string, status: TargetStatus): void => publishState({ ...state, statuses: { ...state.statuses, [key]: status } });
 
   const clientIdFor = (slot: string): string => {
-    const known = shared.clientIds.get(slot);
+    const known = clientIds.get(slot);
     if (known !== undefined) return known;
     const fresh = ports.newClientMessageId();
-    shared.clientIds.set(slot, fresh);
+    clientIds.set(slot, fresh);
     return fresh;
   };
 
   const ensureFiles = (): Promise<readonly File[] | null> => {
     if (payload.kind === 'files') return Promise.resolve(payload.files);
     if (payload.kind !== 'media') return Promise.resolve(null);
-    if (shared.files === null) {
-      const download = ports
+    if (downloaded === null) {
+      downloaded = ports
         .fetchFile({ url: payload.url, mime: payload.mime, name: payload.name })
         .then((file) => {
-          if (file === null) shared.files = null;
+          if (file === null) downloaded = null;
           return file === null ? null : [file];
         })
         .catch(() => {
-          shared.files = null;
+          downloaded = null;
           return null;
         });
-      shared.files = download;
     }
-    return shared.files;
+    return downloaded;
   };
 
   const need = async <T,>(result: Promise<ApiResult<T>>): Promise<T> => {
     const settled = await result;
-    if (!settled.ok) throw new StepFailed(failureOf(settled));
+    if (!settled.ok) {
+      const failure = failureOf(settled);
+      if (failure.kind === 'network' && !ports.online()) throw new WentOffline();
+      throw new StepFailed(failure);
+    }
     return settled.data;
   };
 
   const conversationOf = (key: string): string => {
-    const id = shared.conversations.get(key);
+    const id = conversations.get(key);
     if (id === undefined) throw new StepFailed({ kind: 'refused', status: 0, message: 'Conversation introuvable' });
     return id;
   };
 
   const send = async (key: string, slot: string, body: Omit<SendMessageBody, 'originalLanguage' | 'clientMessageId'>): Promise<SentMessageAck> =>
-    need(
-      ports.sendMessage({
-        conversationId: conversationOf(key),
-        body: { ...body, originalLanguage: language, clientMessageId: clientIdFor(slot) },
-      }),
-    );
+    need(ports.sendMessage({ conversationId: conversationOf(key), body: { ...body, originalLanguage: language, clientMessageId: clientIdFor(slot) } }));
 
-  async function sendFiles(key: string, slot: string, content: string | undefined): Promise<void> {
-    const files = await ensureFiles();
-    if (files === null) throw new StepFailed({ kind: 'download' });
-    if (shared.firstMessageId !== null) {
-      await send(key, slot, { copyAttachmentsFromMessageId: shared.firstMessageId, ...contentProp(content) });
+  async function sendFiles(key: string, slot: string, step: Extract<SendStep, { kind: 'send-files' }>): Promise<void> {
+    const all = await ensureFiles();
+    const picked = all === null ? null : step.indexes.map((index) => all[index]).filter((file): file is File => file !== undefined);
+    if (picked === null || picked.length !== step.indexes.length) throw new StepFailed({ kind: 'download' });
+    const uploadKey = uploadKeyOf(step.indexes);
+    const known = uploads.get(uploadKey);
+    if (known?.firstMessageId !== undefined && known.firstMessageId !== null) {
+      await send(key, slot, { copyAttachmentsFromMessageId: known.firstMessageId, ...contentProp(step.content) });
       return;
     }
-    const attachmentIds = shared.attachmentIds ?? (await need(ports.uploadFiles(files))).attachmentIds;
-    shared.attachmentIds = attachmentIds;
-    const sent = await send(key, slot, { attachmentIds, ...contentProp(content) });
-    shared.firstMessageId = sent.id;
+    const attachmentIds = known?.attachmentIds ?? (await need(ports.uploadFiles(picked))).attachmentIds;
+    uploads.set(uploadKey, { attachmentIds, firstMessageId: null });
+    const sent = await send(key, slot, { attachmentIds, ...contentProp(step.content) });
+    uploads.set(uploadKey, { attachmentIds, firstMessageId: sent.id });
   }
 
   async function publishFile(step: Extract<SendStep, { kind: 'publish-file' }>): Promise<void> {
     const files = await ensureFiles();
     const file = files?.[step.fileIndex];
     if (file === undefined) throw new StepFailed({ kind: 'download' });
-    const known = shared.media.get(step.fileIndex);
-    const media = known ?? (await need(ports.uploadMedia(file)));
-    shared.media.set(step.fileIndex, media);
-    await need(ports.publishMedia({ format: step.format, media, ...(step.caption === undefined ? {} : { caption: step.caption }) }));
+    const mediaKey = String(step.fileIndex);
+    const ready = media.get(mediaKey) ?? (await need(ports.uploadMedia(file)));
+    media.set(mediaKey, ready);
+    await need(ports.publishMedia({ format: step.format, media: ready, ...(step.caption === undefined ? {} : { caption: step.caption }) }));
   }
 
   async function playStep(key: string, index: number, step: SendStep): Promise<void> {
     const slot = `${key}#${index}`;
     switch (step.kind) {
       case 'open-direct': {
-        const conversation = await need(ports.openDirect(step.userId));
-        shared.conversations.set(key, conversation.id);
+        const opened = await need(ports.openDirect(step.userId));
+        conversations.set(key, opened.id);
+        return;
+      }
+      case 'open-group': {
+        const opened = await need(ports.openGroup({ userIds: step.userIds, title: step.title }));
+        conversations.set(key, opened.id);
         return;
       }
       case 'forward': {
@@ -243,28 +290,26 @@ export function createSendRun(params: {
           nextClientMessageId: () => clientIdFor(`${slot}/${(n += 1)}`),
           ...(step.ephemeralDuration === undefined ? {} : { ephemeralDuration: step.ephemeralDuration }),
         });
-        if (!result.ok) {
-          throw new StepFailed({ kind: 'refused', status: result.status ?? 0, message: result.error, ...(result.code === undefined ? {} : { code: result.code }) });
-        }
-        return;
+        if (result.ok) return;
+        const transport = result.status === 0;
+        if (transport && !ports.online()) throw new WentOffline();
+        throw new StepFailed(transport ? { kind: 'network' } : refusalOf(result.status ?? 0, result.error, result.code));
       }
       case 'forward-attachment': {
         const body = forwardBodyOf({
           message: { id: step.messageId, content: '', originalLanguage: language },
           sourceConversationId: step.sourceConversationId,
           clientMessageId: clientIdFor(slot),
+          forwardedAttachmentIds: [step.attachmentId],
         });
         await need(ports.sendMessage({ conversationId: conversationOf(key), body }));
         return;
       }
-      case 'copy-attachment':
-        await send(key, slot, { copyAttachmentsFromMessageId: step.messageId, ...contentProp(step.content) });
-        return;
       case 'text':
         await send(key, slot, { content: step.text });
         return;
       case 'send-files':
-        return sendFiles(key, slot, step.content);
+        return sendFiles(key, slot, step);
       case 'publish-attachment':
         await need(ports.publishFromAttachment({ attachmentId: step.attachmentId, target: step.format, ...contentProp(step.content) }));
         return;
@@ -281,17 +326,26 @@ export function createSendRun(params: {
 
   async function playTarget(entry: SendPlanEntry): Promise<void> {
     const { key, steps } = entry;
+    if (!ports.online()) {
+      setStatus(key, { state: 'queued' });
+      return;
+    }
     setStatus(key, { state: 'sending' });
     try {
-      for (let index = shared.completed.get(key) ?? 0; index < steps.length; index += 1) {
-        if (!ports.online()) throw new StepFailed({ kind: 'offline' });
+      for (let index = completed.get(key) ?? 0; index < steps.length; index += 1) {
+        if (!ports.online()) throw new WentOffline();
         const step = steps[index];
         if (step === undefined) continue;
         await playStep(key, index, step);
-        shared.completed.set(key, index + 1);
+        completed.set(key, index + 1);
       }
-      setStatus(key, { state: 'sent' });
+      const conversationId = conversations.get(key);
+      setStatus(key, { state: 'sent', ...(conversationId === undefined ? {} : { conversationId }) });
     } catch (error) {
+      if (error instanceof WentOffline) {
+        setStatus(key, { state: 'queued' });
+        return;
+      }
       setStatus(key, { state: 'failed', failure: error instanceof StepFailed ? error.failure : { kind: 'network' } });
     }
   }
@@ -299,11 +353,24 @@ export function createSendRun(params: {
   let queue: Promise<void> = Promise.resolve();
   const enqueue = (work: () => Promise<void>): Promise<void> => {
     const next = queue.then(work, work);
-    queue = next.then(() => undefined, () => undefined);
+    queue = next.then(
+      () => undefined,
+      () => undefined,
+    );
     return next;
   };
 
-  const entryOf = (key: string): SendPlanEntry | undefined => entries.find((entry) => entry.key === key);
+  const playAll = async (picked: readonly SendPlanEntry[]): Promise<void> => {
+    if (picked.length === 0) return;
+    publishState({ ...state, phase: 'running' });
+    for (const entry of picked) await playTarget(entry);
+    publishState({ ...state, phase: 'done' });
+  };
+
+  const isReplayable = (key: string): boolean => {
+    const status = state.statuses[key];
+    return status?.state === 'queued' || (status?.state === 'failed' && status.failure.kind !== 'refused');
+  };
 
   return {
     getState: () => state,
@@ -311,27 +378,15 @@ export function createSendRun(params: {
       listeners.add(listener);
       return () => void listeners.delete(listener);
     },
-    start: () =>
-      enqueue(async () => {
-        publishState({ ...state, phase: 'running' });
-        for (const entry of entries) await playTarget(entry);
-        publishState({ ...state, phase: 'done' });
-      }),
+    start: () => enqueue(() => playAll(entries.filter((entry) => state.statuses[entry.key]?.state !== 'sent' && state.statuses[entry.key]?.state !== 'failed'))),
     retry: (key) =>
       enqueue(async () => {
-        const entry = entryOf(key);
-        if (entry === undefined || state.statuses[key]?.state !== 'failed') return;
-        publishState({ ...state, phase: 'running' });
-        await playTarget(entry);
-        publishState({ ...state, phase: 'done' });
+        const entry = entries.find((candidate) => candidate.key === key);
+        const status = state.statuses[key];
+        if (entry === undefined || (status?.state !== 'failed' && status?.state !== 'queued')) return;
+        await playAll([entry]);
       }),
-    retryFailed: () =>
-      enqueue(async () => {
-        const failed = entries.filter((entry) => state.statuses[entry.key]?.state === 'failed');
-        if (failed.length === 0) return;
-        publishState({ ...state, phase: 'running' });
-        for (const entry of failed) await playTarget(entry);
-        publishState({ ...state, phase: 'done' });
-      }),
+    retryFailed: () => enqueue(() => playAll(entries.filter((entry) => isReplayable(entry.key)))),
+    snapshot,
   };
 }

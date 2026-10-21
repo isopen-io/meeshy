@@ -58,7 +58,7 @@ final class ArrivalCelebrationController: ObservableObject, ArrivalCelebrating {
         hold: (@MainActor () async -> Void)? = nil
     ) {
         self.prefetcher = prefetcher ?? ArrivalPrefetcher()
-        self.hold = hold ?? { try? await Task.sleep(for: ArrivalCelebrationController.holdDuration) }
+        self.hold = hold ?? { _ = await cancellableSleep(for: ArrivalCelebrationController.holdDuration) }
     }
 
     func begin(userId: String) {
@@ -83,6 +83,20 @@ final class ArrivalCelebrationController: ObservableObject, ArrivalCelebrating {
         holdTask = nil
         isShowing = false
     }
+
+    /// Déconnexion : la fête s'arrête, le préchargement en vol est annulé (il
+    /// écrirait le fil du compte sortant dans le cache du suivant), et la
+    /// mémoire « déjà préchargé » se vide — les caches viennent de l'être.
+    func resetForLogout() {
+        holdTask?.cancel()
+        holdTask = nil
+        isShowing = false
+        prefetchTask?.cancel()
+        prefetchedUserIds.removeAll()
+    }
+
+    /// Le préchargement courant a-t-il été annulé ? (tests)
+    var isPrefetchCancelled: Bool { prefetchTask?.isCancelled ?? false }
 
     func awaitHold() async {
         await holdTask?.value

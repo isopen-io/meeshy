@@ -10,6 +10,9 @@
 const enIdentity = {
   'a11y.avatar.profile': 'View {name}’s profile',
   'a11y.avatar.story': 'View {name}’s story',
+  'a11y.avatar.conversation': 'View the conversation {name}',
+  'a11y.avatar.mood': '{name}, mood {mood}',
+  'mood.peek.title': '{name}’s mood',
   'avatar.menu.label': 'Actions for {name}',
   'avatar.menu.view_profile': 'View profile',
   'userProfile.peek.openPage': 'Open full profile',
@@ -39,6 +42,7 @@ const enIdentity = {
   'conversation.details.share.failed': 'Couldn’t create the link — try again in a moment.',
   'conversation.details.share.unavailable': 'Sharing isn’t available here — copy the link: {url}',
   'thread.header.active_members': 'Most active members',
+  'thread.header.share': 'Share the conversation',
 };
 
 export default enIdentity;

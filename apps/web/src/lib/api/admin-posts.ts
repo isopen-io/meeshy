@@ -72,6 +72,10 @@ export type AdminPostRow = {
   readonly isPinned: boolean;
   readonly deletedAt: string | null;
   readonly expiresAt: string | null;
+  /** Le retrait de modération (#10392) : posé, la publication est hors ligne. */
+  readonly moderationHiddenAt: string | null;
+  /** L'audience de l'auteur, retenue par le retrait et rendue par « Remettre en ligne ». */
+  readonly moderationPriorVisibility: string | null;
   readonly likeCount: number;
   readonly commentCount: number;
   readonly viewCount: number;
@@ -113,6 +117,8 @@ export function decodeAdminPostRow(raw: unknown): AdminPostRow | null {
     isPinned: post.isPinned === true,
     deletedAt: textOrNull(post.deletedAt),
     expiresAt: textOrNull(post.expiresAt),
+    moderationHiddenAt: textOrNull(post.moderationHiddenAt),
+    moderationPriorVisibility: textOrNull(post.moderationPriorVisibility),
     likeCount: asCount(post.likeCount),
     commentCount: asCount(post.commentCount),
     viewCount: asCount(post.viewCount),

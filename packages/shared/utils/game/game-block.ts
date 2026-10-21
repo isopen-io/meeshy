@@ -10,9 +10,8 @@
  * Pur : `today` (clé de jour dans le fuseau de l'utilisateur) est un paramètre.
  */
 
-import type { DailyChest } from './chest.js';
-import { CHEST_ODDS } from './chest.js';
-import { prismHourWindow, PRISM_HOUR_MULTIPLIER, tailwindFactor } from './boosts.js';
+import { CHEST_ODDS, chestContentForEffort, dayEffort } from './chest.js';
+import { prismHourWindow, PRISM_HOUR_MULTIPLIER, sparksTailwindFactor, tailwindFactor } from './boosts.js';
 import {
   FLAME_FREEZE_MAX,
   FLAME_FREEZE_PRICE,
@@ -24,13 +23,14 @@ import {
 } from './flame.js';
 import { gloryStanding, levelCapForRank, type MythicSeatRef } from './glory.js';
 import type { LevelStepFacts } from './level-steps.js';
-import { previewMint } from './mint.js';
+import { meeshPrice, previewMint } from './mint.js';
+import { levelSparksOf, previewSparksMint, type SparksFacts } from './sparks.js';
 import { levelOnTheWire, mintOnTheWire } from './level-wire.js';
 import { MISSIONS_MIN_LEVEL, MISSION_REROLL_PER_DAY, MISSION_REROLL_PRICE, isPrismDay } from './missions.js';
 import { personalMissionState } from './personal-mission.js';
-import { treasuryTier } from './treasury.js';
+import { treasuryReserveAccess, treasuryTier } from './treasury.js';
 import { buildGameBlockExtras, type GameBlockExtrasFacts } from './game-block-extras.js';
-import type { GameBlock, GameMission } from '../../types/game.js';
+import type { GameBlock, GameChestReward, GameMission } from '../../types/game.js';
 
 /** Une mission telle que la passerelle la persiste. */
 export type GameMissionRecord = GameMission;
@@ -48,8 +48,23 @@ export type GameBlockFacts = {
    * `today`.
    */
   readonly flameToday?: string;
-  /** Le score en poche (`User.engagementScore`). */
+  /**
+   * Le score en poche (`User.engagementScore`) — la loi d'HIER, où la frappe le débite et le fait baisser le niveau.
+   * Avec `sparks`, il est ignoré.
+   */
   readonly score: number;
+  /**
+   * LES ÉTINCELLES (#10846) : la poche que la frappe dépense et que lit le NIVEAU (#10892), le cycle (depuis le
+   * dernier prestige) et le total à vie, indicatifs. Présentes, c'est la loi d'aujourd'hui : le prix de la frappe suit
+   * le niveau ACTUEL (#10847), les réserves du trésor s'ouvrent par le rang (#10848), le Vent arrière souffle à 7 niveaux
+   * ou plus sous le record (#10896).
+   * Absentes, le bloc garde exactement la forme d'hier.
+   */
+  readonly sparks?: SparksFacts;
+  /** Le niveau max à vie (#10846), qui survit au prestige. Lu seulement avec `sparks`. */
+  readonly levelMaxLifetime?: number | null;
+  /** Le record de chaque cycle clos par un Prestige (#10911, `User.prestigeLevelRecords`). Absent : le champ ne part pas. */
+  readonly pastCycleRecords?: readonly number[];
   readonly levelRecord: number | null;
   readonly prestige: number;
   readonly glory: number;
@@ -60,6 +75,11 @@ export type GameBlockFacts = {
   readonly mythic: boolean;
   readonly mythicSeat?: MythicSeatRef | null;
   readonly mintedLifetime: number;
+  /**
+   * Les Meeshes frappées AVANT l'ouverture du jour de jeu (#10219, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` : le
+   * cours de la prime du coffre. Absent ou `null` : `mintedLifetime`, le calcul d'avant.
+   */
+  readonly chestMintBase?: number | null;
   /** Missions du jour accomplies à vie, comptées jusqu'à `LEVEL_STEP_MISSIONS_COUNTED` (#9706). */
   readonly missionsDone: number;
   /** La plus longue Flamme, en jours — le record que jugent les étapes 40 et 90 (#9706). */
@@ -94,7 +114,13 @@ export type GameBlockFacts = {
   } | null;
   readonly rerollsUsedToday: number;
   readonly chestClaimed: boolean;
-  readonly chestReward: DailyChest | null;
+  /** Le contenu servi du coffre ouvert — un jour d'avant #10011 n'a ni Gloire ni prime. */
+  readonly chestReward: GameChestReward | null;
+  /**
+   * Les fragments d'étoile collectés à vie, toutes sources confondues (#10011, `star-fragments.ts`) — LUS par la
+   * passerelle. Absent : elle ne les sert pas.
+   */
+  readonly starFragments?: number;
   readonly guideSeen: readonly string[];
   /**
    * Les faits de la VAGUE 2 (ligues, duo, saison, trophées, Atlas, Prestige,
@@ -114,7 +140,16 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
     glory: standing.glory,
     rank: standing.rank,
   };
-  const level = levelOnTheWire({ score: facts.score, levelCap, levelRecord: facts.levelRecord, prestige: facts.prestige, steps });
+  const sparks = facts.sparks;
+  const level = levelOnTheWire({
+    score: sparks === undefined ? facts.score : levelSparksOf(sparks),
+    levelCap,
+    levelRecord: facts.levelRecord,
+    prestige: facts.prestige,
+    steps,
+    ...(sparks === undefined ? {} : { sparks, levelMaxLifetime: facts.levelMaxLifetime ?? null }),
+    ...(facts.pastCycleRecords === undefined ? {} : { pastCycleRecords: facts.pastCycleRecords }),
+  });
   const record = level.ladder?.record ?? level.record;
   const treasury = treasuryTier(facts.balance);
 
@@ -150,15 +185,31 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       progress: standing.progress,
       mythic: standing.mythic,
     },
-    treasury: { held: treasury.held, tier: treasury.tier, next: treasury.next },
+    treasury: {
+      held: treasury.held,
+      tier: treasury.tier,
+      next: treasury.next,
+      ...(sparks === undefined ? {} : { access: [...treasuryReserveAccess({ glory: standing.glory, mythic: standing.rank === 'mythe' })] }),
+    },
     mint: mintOnTheWire(
-      previewMint({
-        score: facts.score,
-        mintedLifetime: facts.mintedLifetime,
-        debitablePoints: facts.debitablePoints,
-        levelCap,
-        steps,
-      }),
+      sparks === undefined
+        ? previewMint({
+            score: facts.score,
+            mintedLifetime: facts.mintedLifetime,
+            debitablePoints: facts.debitablePoints,
+            levelCap,
+            steps,
+          })
+        : previewSparksMint({
+            sparks: sparks.pocket,
+            mintedLifetime: facts.mintedLifetime,
+            held: facts.balance,
+            glory: standing.glory,
+            mythic: standing.rank === 'mythe',
+            levelCap,
+            steps,
+            debt: sparks.debt,
+          }),
     ),
     missions: {
       dayKey: facts.today,
@@ -190,6 +241,10 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       status: chestStatus,
       odds: { ...CHEST_ODDS },
       reward: chestStatus === 'claimed' ? facts.chestReward : null,
+      // Le contenu CERTAIN et les primes possibles, dits avant l'ouverture (#10011) : l'effort des missions du
+      // jour tirées, et le cours de la prochaine Meesh du compte, figé au début du jour de jeu (#10219).
+      today:
+        facts.missions.length === 0 ? null : chestContentForEffort(dayEffort(facts.missions), meeshPrice((facts.chestMintBase ?? facts.mintedLifetime) + 1)),
     },
     flame: {
       days,
@@ -203,10 +258,12 @@ export function buildGameBlock(facts: GameBlockFacts): GameBlock {
       canRelight: relight.allowed,
     },
     boosts: {
-      tailwind: tailwindFactor({ level: level.ladder?.level ?? level.level, levelRecord: record }),
+      // Avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record (#10896) ; sans, la loi d'hier.
+      tailwind: (sparks === undefined ? tailwindFactor : sparksTailwindFactor)({ level: level.ladder?.level ?? level.level, levelRecord: record }),
       prismHour: { ...prismHourWindow({ userId: facts.userId, dayKey: facts.today }), multiplier: PRISM_HOUR_MULTIPLIER },
     },
     guideSeen: [...facts.guideSeen],
+    ...(facts.starFragments === undefined ? {} : { starFragments: { collected: Math.max(0, Math.trunc(facts.starFragments)) } }),
     ...(facts.extras === undefined ? {} : buildGameBlockExtras(facts.extras)),
   };
 }

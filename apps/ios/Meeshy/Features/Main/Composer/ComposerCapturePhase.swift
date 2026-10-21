@@ -28,9 +28,37 @@ nonisolated final class ComposerStillSource: ComposerFrameSourcing, @unchecked S
 
     nonisolated deinit {}
 
+    /// **L'écran ne lit jamais la photo pleine définition** (#10340). Le contexte
+    /// ne garde rien d'un rendu à l'autre : chaque passage décodait la photo
+    /// entière (12 Mpx et plus) sur le fil principal — à chaque image d'une
+    /// animation d'outil, et pour chaque vignette. La source montre une copie à
+    /// la taille de l'écran, décodée une fois ; la photo qui part se rend
+    /// toujours depuis l'original (`editPhoto`).
+    static let displayLongSide: CGFloat = 2048
+
     init(_ cgImage: CGImage) {
-        image = CIImage(cgImage: cgImage)
+        image = CIImage(cgImage: Self.displayCopy(of: cgImage))
         declaredSpace = ComposerPhotoLookRule.colorSpace(of: cgImage)
+    }
+
+    /// La photo réduite à `displayLongSide` sur son plus grand côté, en bitmap
+    /// déjà décodé ; une photo plus petite est rendue telle quelle, décodée.
+    static func displayCopy(of cgImage: CGImage) -> CGImage {
+        let taille = displaySize(of: CGSize(width: cgImage.width, height: cgImage.height))
+        let espace = cgImage.colorSpace ?? CGColorSpaceCreateDeviceRGB()
+        guard let contexte = CGContext(data: nil, width: Int(taille.width), height: Int(taille.height),
+                                       bitsPerComponent: 8, bytesPerRow: 0, space: espace,
+                                       bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return cgImage }
+        contexte.interpolationQuality = .high
+        contexte.draw(cgImage, in: CGRect(origin: .zero, size: taille))
+        return contexte.makeImage() ?? cgImage
+    }
+
+    static func displaySize(of size: CGSize) -> CGSize {
+        let plusGrand = max(size.width, size.height)
+        guard plusGrand > displayLongSide else { return size }
+        let echelle = displayLongSide / plusGrand
+        return CGSize(width: (size.width * echelle).rounded(), height: (size.height * echelle).rounded())
     }
 
     func latestImage() -> CIImage? { image }

@@ -64,12 +64,12 @@ const compte = (overrides: Record<string, unknown> = {}) => ({
 const prismaFor = (ligne: Record<string, unknown>) =>
   ({
     user: { findUnique: jest.fn(async () => ligne) },
-    userSession: { findFirst: jest.fn(async () => ({ isValid: true })), update: jest.fn(async () => ({})) },
+    userSession: { findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date('2100-01-01T00:00:00.000Z') })), update: jest.fn(async () => ({})) },
     participant: { findFirst: jest.fn(async () => null) },
   }) as never;
 
 const bearer = (): string =>
-  `Bearer ${jwt.sign({ userId: USER_ID, username: 'lena', role: 'USER', sid: 'sess-1' }, JWT_SECRET, { expiresIn: '1h' })}`;
+  `Bearer ${jwt.sign({ userId: USER_ID, username: 'lena', role: 'USER', sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' })}`;
 
 beforeEach(() => {
   process.env.JWT_SECRET = JWT_SECRET;

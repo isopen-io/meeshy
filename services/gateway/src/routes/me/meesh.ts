@@ -23,7 +23,7 @@ import { MeeshService, receiptOnTheWire } from '../../services/meesh/MeeshServic
 /**
  * Débit par COMPTE, strict — la frappe ÉCRIT, et elle est irréversible. Un
  * plafond bas est ici une protection, pas une gêne : personne ne frappe
- * légitimement plus de quelques Meeshes par minute (il en coûte 1221 points).
+ * légitimement plus de quelques Meeshes par minute (il en coûte des centaines d'étincelles).
  */
 function mintRateLimitConfig() {
   return {
@@ -57,6 +57,12 @@ const mintBodySchema = {
   properties: {
     // Borné : un identifiant d'idempotence est un UUID, pas un champ libre.
     requestId: { type: 'string', minLength: 8, maxLength: 64 },
+    // Une Meesh ne se paie QU'EN POINTS (porteur, 2026-10-10, #10011) : tout autre moyen est refusé en 400, AVANT
+    // toute écriture — jamais ignoré en silence (une frappe en points que le client n'a pas demandée).
+    payWith: { type: 'string', enum: ['points'] },
+    // La garde de prix (#10903) : le prix que l'écran a montré. Au-delà, 409 PRICE_CHANGED avec le prix courant, sans
+    // débit. Absente, la frappe se comporte comme avant (rétrocompatible).
+    maxPrice: { type: 'integer', minimum: 1 },
   },
   additionalProperties: false,
 } as const;
@@ -81,10 +87,16 @@ const mintResponseSchema = {
         // Ancienne loi : bornés à 100 pour les clients publiés ; les niveaux ouverts par le rang dans `ladder` (#9688).
         levelBefore: { type: 'number' },
         levelAfter: { type: 'number' },
+        // Le prix de rang et le facteur du niveau actuel (#10847) — ajoutés à côté du prix effectif (`price`).
+        basePrice: { type: 'number' },
+        costFactor: { type: 'number' },
         ladder: {
           type: 'object',
           properties: { levelBefore: { type: 'number' }, levelAfter: { type: 'number' } },
         },
+        // Le marqueur d'ordre de l'état après la frappe (#10900) : un état servi avant lui (une lecture partie avant la
+        // frappe) est plus ancien, et le client l'ignore.
+        gameRevision: { type: 'number' },
       },
     },
   },
@@ -98,9 +110,12 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
       config: { rateLimit: mintRateLimitConfig() },
       schema: {
         description:
-          'Frappe une Meesh au prix de sa rareté (1221 points pour les dix premières, #5743, #9374). Action MANUELLE ' +
-          'et idempotente par `requestId`. Les axes de conversation ne sont jamais ' +
-          'débités — ils forment le plancher inaliénable du niveau.',
+          'Frappe une Meesh au prix de sa rareté (1221 pour les dix premières, #5743, #9374) × le facteur du niveau ' +
+          'ACTUEL (#10847). Action MANUELLE et idempotente par `requestId`. Elle dépense la poche d\'étincelles ' +
+          'et fait baisser le niveau du montant dépensé (#10892), jamais un badge (#10845). 409 TREASURY_LOCKED si le rang n\'ouvre pas ' +
+          'la réserve où la pièce entrerait (#10848). `maxPrice` optionnel (#10903) : le prix que l\'écran a montré ; ' +
+          'si le prix rejugé dans la transaction le dépasse, 409 PRICE_CHANGED avec le prix courant (`number`, `price`, ' +
+          '`basePrice`, `costFactor` à la racine), sans rien débiter. La réponse porte `gameRevision` (#10900).',
         tags: ['me', 'meesh'],
         summary: 'Mint a Meesh',
         body: mintBodySchema,
@@ -112,14 +127,30 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           // devait relire toute la progression pour le dire.
           409: {
             ...errorResponseSchema,
-            properties: { ...errorResponseSchema.properties, missingPoints: { type: 'number' } },
+            properties: {
+              ...errorResponseSchema.properties,
+              missingPoints: { type: 'number' },
+              // Le refus de RANG (#10848) : la réserve fermée et le rang qu'elle exige, à la racine, à côté de `code`.
+              sparksDebt: { type: 'number' },
+              // Le refus de GARDE DE PRIX (#10903) : le prix courant de la prochaine pièce.
+              number: { type: 'number' },
+              price: { type: 'number' },
+              basePrice: { type: 'number' },
+              costFactor: { type: 'number' },
+              tier: { type: 'string' },
+              minHeld: { type: 'number' },
+              requires: {
+                type: 'object',
+                properties: { rank: { type: 'string' }, division: { type: 'number' }, division5: { type: 'number' } },
+              },
+            },
           },
           429: errorResponseSchema,
           500: errorResponseSchema,
         },
       },
     },
-    async (request: FastifyRequest<{ Body: { requestId: string } }>, reply: FastifyReply) => {
+    async (request: FastifyRequest<{ Body: { requestId: string; maxPrice?: number } }>, reply: FastifyReply) => {
       const userId = request.auth?.userId;
       if (!userId) {
         // Le sens est NOMMÉ plutôt qu'hérité du défaut : `undefined` disparaît
@@ -133,7 +164,32 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
       }
 
       try {
-        const outcome = await new MeeshService(fastify.prisma).mint(userId, request.body.requestId);
+        const { requestId, maxPrice } = request.body;
+        const outcome = await new MeeshService(fastify.prisma).mint(userId, requestId, maxPrice === undefined ? {} : { maxPrice });
+
+        if (outcome.status === 'blocked-by-debt') {
+          // 409 TYPÉ (porteur, 2026-10-16) : une reprise de contenu supprimé n'a pas pu être prélevée sur une poche déjà
+          // dépensée ; la dette se déduit des prochaines étincelles et bloque la frappe jusqu'à son remboursement.
+          return sendError(reply, 409, 'MINT_BLOCKED_BY_DEBT', { code: 'MINT_BLOCKED_BY_DEBT', details: { sparksDebt: outcome.sparksDebt } });
+        }
+
+        if (outcome.status === 'treasury-locked') {
+          // 409 TYPÉ (#10848) : la pièce ferait entrer dans une réserve que le rang de Gloire n'ouvre pas encore. Le rang
+          // exigé est servi pour que l'écran le dise sans relire toute la progression.
+          return sendError(reply, 409, 'TREASURY_LOCKED', {
+            code: 'TREASURY_LOCKED',
+            details: { tier: outcome.lock.tier, minHeld: outcome.lock.minHeld, requires: outcome.lock.requires },
+          });
+        }
+
+        if (outcome.status === 'price-changed') {
+          // 409 TYPÉ (#10903) : le prix a bougé depuis ce que l'écran a montré. Le prix COURANT est servi pour que l'écran
+          // le montre et redemande la confirmation — jamais un débit que l'utilisateur n'a pas vu.
+          return sendError(reply, 409, 'PRICE_CHANGED', {
+            code: 'PRICE_CHANGED',
+            details: { number: outcome.number, price: outcome.price, basePrice: outcome.basePrice, costFactor: outcome.costFactor },
+          });
+        }
 
         if (outcome.status === 'insufficient') {
           // 409 et non 400 : la requête est bien formée, c'est l'ÉTAT du compte
@@ -150,6 +206,9 @@ export async function meMeeshRoutes(fastify: FastifyInstance) {
           balance: outcome.balance,
           mintedLifetime: outcome.mintedLifetime,
           ...(outcome.receipt === null ? {} : receiptOnTheWire(outcome.receipt)),
+          // La révision GRAVÉE par la frappe (#10912), jamais l'heure de la réponse : toute lecture partie avant elle porte
+          // une révision plus petite, quelle que soit l'horloge de la passerelle qui la sert.
+          gameRevision: outcome.gameRevision,
         });
       } catch (error) {
         logError(fastify.log, 'Error minting a Meesh', error);

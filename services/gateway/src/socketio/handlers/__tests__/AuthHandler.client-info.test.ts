@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
@@ -44,7 +45,7 @@ const createMockPrisma = (): PrismaClient => ({
   // porte SANS stubber explicitement cette méthode échoue fermé plutôt que
   // de passer par accident.
   userSession: {
-    findFirst: jest.fn().mockResolvedValue(null),
+    findFirst: jest.fn().mockResolvedValue(liveSession()),
     updateMany: jest.fn().mockResolvedValue({ count: 1 })
   }
 } as unknown as PrismaClient);
@@ -90,7 +91,7 @@ describe('AuthHandler — la session nommée retient le relevé de la socket (#9
       userSockets
     });
 
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
   });
 
   afterEach(() => {
@@ -99,11 +100,11 @@ describe('AuthHandler — la session nommée retient le relevé de la socket (#9
 
   const brancherLaSession = () =>
     jest.spyOn((mockPrisma as any).userSession, 'findFirst').mockImplementation(async (args: any) =>
-      args?.select?.appVersion ? relevéDeLaSession : { id: 'session-abc' });
+      args?.select?.appVersion ? relevéDeLaSession : { ...liveSession(), id: 'bbbbbbbbbbbbbbbbbbbbbabc' });
 
   it('une application mise à jour écrit sa nouvelle version sur la session du `sid`, et rien d’autre', async () => {
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
-    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'user-123', systemLanguage: 'en' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaa0123', sid: 'bbbbbbbbbbbbbbbbbbbbbabc' } as any);
+    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en' } as any);
     brancherLaSession();
     const socket = createMockSocket({
       handshake: { auth: { token: 'jwt', client: { appVersion: '2.0.3', platform: 'pwa', deviceName: 'Chrome sur Mac' } }, headers: {} },
@@ -113,15 +114,15 @@ describe('AuthHandler — la session nommée retient le relevé de la socket (#9
     await attendreLeRelevé();
 
     expect((mockPrisma as any).userSession.updateMany).toHaveBeenCalledWith({
-      where: { id: 'session-abc', userId: 'user-123', isValid: true },
+      where: { id: 'bbbbbbbbbbbbbbbbbbbbbabc', userId: 'aaaaaaaaaaaaaaaaaaaa0123', isValid: true },
       data: { appVersion: '2.0.3', deviceName: 'Chrome sur Mac' },
     });
     expect(connectedUsers.size).toBe(1);
   });
 
   it('une socket sans relevé (ancien client) ne touche pas la session', async () => {
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', sid: 'session-abc' } as any);
-    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'user-123', systemLanguage: 'en' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'aaaaaaaaaaaaaaaaaaaa0123', sid: 'bbbbbbbbbbbbbbbbbbbbbabc' } as any);
+    jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({ id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en' } as any);
     brancherLaSession();
 
     await authHandler.handleTokenAuthentication(createMockSocket({ handshake: { auth: { token: 'jwt' }, headers: {} } }));

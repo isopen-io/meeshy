@@ -149,6 +149,19 @@ describe('MessageSwipe — le glissé d’iOS sous le doigt (#7559)', () => {
     expect(contenu(host).style.transform).toBe('');
   });
 
+  test('le clic sur un avatar (lien de profil) dans les 400 ms d’un glissé de réponse est AVALÉ', async () => {
+    let opened = 0;
+    const journal: Journal = [];
+    const host = await monte({ actions: actionsOf(journal) });
+    const avatar = document.createElement('a');
+    avatar.href = '/u/someone';
+    avatar.addEventListener('click', () => (opened += 1));
+    contenu(host).appendChild(avatar);
+    await glisser(texte(host), [[100, 100], [140, 100], [180, 100]]);
+    await act(async () => avatar.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })));
+    expect(opened).toBe(0);
+  });
+
   test('le clic qui suit un glissé engagé est AVALÉ', async () => {
     let clicks = 0;
     const journal: Journal = [];

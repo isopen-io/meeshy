@@ -54,6 +54,12 @@ const EXEMPTIONS = [
     pourquoi:
       "LinkArrival (lib/api/link-arrivals.ts) et son décodeur WirePage ne portent aucun champ photo — la chaîne s'arrête au décodage de GET links.byLinkIdArrivals (#7813, #9357)",
   },
+  {
+    fichier: 'components/world-participant-card-sheet.tsx',
+    combien: 1,
+    pourquoi:
+      "worldParticipantCardSchema (packages/shared/types/world-participant-card.ts), liste blanche de la fiche de modération, ne porte aucun champ photo — la chaîne s'arrête à la projection de GET world.participantsByParticipantId (#10102)",
+  },
 ];
 
 /**
@@ -67,7 +73,14 @@ const EXEMPTIONS = [
  * Un relais qui cesserait de répandre ses props rougit : il choisirait alors
  * lui-même, et devrait servir un `src` comme tout le monde.
  */
-const RELAIS = [{ fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' }];
+const RELAIS = [
+  { fichier: 'components/author-avatar.tsx', balise: '<AuthorAvatar' },
+  /* L'AVATAR D'UNE PERSONNE CONNUE PAR SON IDENTIFIANT (#10944) — il ne choisit
+     que la présence ; la photo reste à l'hôte. */
+  { fichier: 'components/peer-avatar.tsx', balise: '<PeerAvatar' },
+  /* L'AVATAR QUI RÉSOUT SON CONTOUR (#10946) — il ne choisit que le contour. */
+  { fichier: 'components/peer-avatar.tsx', balise: '<RingedAvatar' },
+];
 const BALISES = ['<Avatar', ...RELAIS.map((relais) => relais.balise)];
 
 const fichiers = [];
@@ -122,7 +135,7 @@ for (const chemin of fichiers) {
       if (apres !== undefined && /[A-Za-z0-9_]/.test(apres)) continue;
       const element = elementAt(source, i);
       if (SRC_PROP.test(element)) continue;
-      if (relais && balise === '<Avatar' && /\{\.\.\.props\}/.test(element)) continue;
+      if (relais && /\{\.\.\.props\}/.test(element)) continue;
       muettes.set(cle, (muettes.get(cle) ?? 0) + 1);
     }
   }

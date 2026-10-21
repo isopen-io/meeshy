@@ -36,9 +36,11 @@ jest.mock('../../../middleware/auth', () => ({
     const asUser = (request.headers['x-test-user-id'] as string) ?? USER_ID;
     request.authContext = {
       userId: asUser,
-      type: 'registered',
+      type: 'user',
+      isAuthenticated: true,
       isAnonymous: false,
       hasFullAccess: true,
+      registeredUser: { id: asUser, role: 'USER' },
     };
   },
 }));

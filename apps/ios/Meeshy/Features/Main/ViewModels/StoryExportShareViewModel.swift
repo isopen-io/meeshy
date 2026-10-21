@@ -18,25 +18,6 @@ import MeeshyUI
 // (assets + JSON effects). The MP4 is for partage hors-Meeshy (Photos,
 // Messages, WhatsApp, AirDrop, etc.).
 
-/// **Qui signe l'export** (#9953) — la même règle que
-/// `StoryPhotoSaveService.save(story:authorUsername:)` : le filigrane nomme
-/// l'AUTEUR de la story ; l'interlude d'identité de l'utilisateur connecté ne
-/// précède que SA propre story — un lecteur qui exporte la story d'un autre ne
-/// la signe pas de son visage. Sans auteur connu, l'utilisateur connecté est
-/// l'auteur (« Mes stories »).
-nonisolated struct StoryExportAuthorship: Equatable {
-    let watermarkHandle: String?
-    let showsViewerIntro: Bool
-
-    static func resolve(authorUsername: String?, viewerUsername: String?) -> StoryExportAuthorship {
-        guard let authorUsername else {
-            return StoryExportAuthorship(watermarkHandle: viewerUsername, showsViewerIntro: true)
-        }
-        let isViewer = viewerUsername.map { authorUsername.caseInsensitiveCompare($0) == .orderedSame } ?? false
-        return StoryExportAuthorship(watermarkHandle: authorUsername, showsViewerIntro: isViewer)
-    }
-}
-
 /// Lifecycle phase observed by the share UI.
 enum StoryExportSharePhase: Equatable, Sendable {
     case idle
@@ -69,21 +50,24 @@ final class StoryExportShareViewModel: ObservableObject {
     @Published var selectedLanguage: String? = nil
 
     private let exporter: StoryVideoExportServiceProviding
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "story-export-share")
+    private let logger = MeeshyLog.logger(.storyExportShare)
     private var exportTask: Task<Void, Never>?
 
-    /// Identité gravée dans le préambule de marque. Injectable : la lire
+    /// L'habillage de l'export — interlude, carte de fin, pseudo du filigrane —
+    /// se résout par `StoryExportDressing` (#10536), le même site que
+    /// l'enregistrement et la feuille de partage du système.
+    ///
+    /// Les identités sont INJECTABLES (`brandIntro` : l'utilisateur connecté ;
+    /// `authorIntro` : l'auteur d'une story qu'un lecteur exporte) : les lire
     /// directement dans `AuthManager.shared` rendait l'export dépendant d'une
-    /// session ambiante — sans session, `currentUserBrandIntro()` renvoyait `nil`
-    /// et le MP4 partait SANS interlude, silencieusement. C'est aussi ce qui
-    /// rendait les tests verts en local (session résiduelle du simulateur) et
-    /// rouges en CI (simulateur vierge).
-    private let brandIntro: @MainActor @Sendable () async -> StoryExportIntroContent?
-
-    /// Borne dure sur la résolution de `brandIntro` — LA MÊME que les deux
-    /// autres chemins d'export (`StoryPhotoSaveService.introTimeout`,
-    /// `TimelineExportController.introTimeout`), désormais domiciliée à côté du
-    /// mécanisme lui-même : `BoundedAsyncResolution.defaultTimeout`.
+    /// session ambiante — sans session, le MP4 partait SANS interlude,
+    /// silencieusement. C'est aussi ce qui rendait les tests verts en local
+    /// (session résiduelle du simulateur) et rouges en CI (simulateur vierge).
+    ///
+    /// La résolution est BORNÉE par `introTimeout` — LA MÊME borne que les
+    /// autres chemins d'export (`StoryPhotoSaveService`,
+    /// `TimelineExportController.introTimeout`), domiciliée à côté du mécanisme
+    /// lui-même : `BoundedAsyncResolution.defaultTimeout`.
     ///
     /// Revue finale (item 4) : « Partager » était le SEUL des trois chemins à
     /// attendre `brandIntro()` sans borne, et il le faisait avant même que
@@ -91,16 +75,17 @@ final class StoryExportShareViewModel: ObservableObject {
     /// lent = barre à 0 % pendant jusqu'à ~60 s, bouton « Annuler » sans effet
     /// (il annule `exportTask`, encore `nil`), et fermer la sheet ne stoppait
     /// pas le bake qui démarrait derrière.
-    private let introTimeout: Duration
+    private let dressings: StoryExportDressingResolver
 
     init(exporter: StoryVideoExportServiceProviding? = nil,
          introTimeout: Duration = BoundedAsyncResolution.defaultTimeout,
-         brandIntro: (@MainActor @Sendable () async -> StoryExportIntroContent?)? = nil) {
+         brandIntro: StoryExportDressingResolver.ViewerIntro? = nil,
+         authorIntro: StoryExportDressingResolver.AuthorIntro? = nil) {
         // `StoryVideoExportService.shared` is `@MainActor`-isolated so it
         // can't be a default arg expression; resolve inside the body.
         self.exporter = exporter ?? StoryVideoExportService.shared
-        self.introTimeout = introTimeout
-        self.brandIntro = brandIntro ?? StoryExportIntroFactory.currentUser
+        self.dressings = StoryExportDressingResolver(viewerIntro: brandIntro, authorIntro: authorIntro,
+                                                     timeout: introTimeout)
     }
 
     // MARK: - Public API
@@ -122,8 +107,12 @@ final class StoryExportShareViewModel: ObservableObject {
     /// `toRenderableSlide(preferredLanguages:)` so text overlays + content
     /// resolve through the same pipeline the live viewer uses.
     ///
+    /// - Parameter author: l'AUTEUR de la story. L'export d'une story porte
+    ///   TOUJOURS son prélude et sa carte de fin (#10536) ; l'interlude
+    ///   présente l'auteur, jamais le lecteur qui exporte la story d'un autre
+    ///   (#9953). `nil` (« Mes stories ») : l'utilisateur connecté est l'auteur.
     /// - Returns: nothing — observe `phase` / `sharedURL` to drive the UI.
-    func startExport(story: StoryItem, authorUsername: String? = nil) async {
+    func startExport(story: StoryItem, author: StoryExportAuthor? = nil) async {
         guard phase != .exporting && phase != .sharing else { return }
         let langs: [String] = selectedLanguage.map { [$0] } ?? []
         let slide = story.toRenderableSlide(preferredLanguages: langs)
@@ -151,29 +140,22 @@ final class StoryExportShareViewModel: ObservableObject {
         // (AVAssetWriter), mais le résultat tardif est nettoyé ici.
         exportTask?.cancel()
         let exporter = self.exporter
-        // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'AUTEUR), baké sur
-        // chaque frame et alternant les coins toutes les 5 s. L'export est
-        // offert à tout lecteur (#9953) : l'auteur vient de la story, pas de la
-        // session.
-        let authorship = StoryExportAuthorship.resolve(authorUsername: authorUsername,
-                                                       viewerUsername: AuthManager.shared.currentUser?.username)
-        let watermark = MeeshyExportWatermark.make(username: authorship.watermarkHandle)
-        let showsViewerIntro = authorship.showsViewerIntro
-        let brandIntro = self.brandIntro
-        let introTimeout = self.introTimeout
+        // L'export est offert à tout lecteur (#9953) : l'auteur vient de la
+        // story, pas de la session. C'est une STORY — prélude et carte de fin
+        // sont dus, quel que soit celui qui exporte (#10536).
+        let dressing = StoryExportDressing.forStory(of: author, viewer: .current)
+        let dressings = self.dressings
         let task = Task { [weak self] in
-            // Résolue DANS le Task (`exportTask` existe donc pendant l'attente,
+            // Résolu DANS le Task (`exportTask` existe donc pendant l'attente,
             // et « Annuler » / la fermeture de la sheet ont enfin prise) et
-            // BORNÉE dans le temps par le MÊME mécanisme que les deux autres
-            // chemins — voir `BoundedAsyncResolution.resolve` et la doc de
-            // `introTimeout`. `brandIntro` est la closure injectée à l'init,
-            // pas le singleton : l'injection en test reste honorée.
-            let intro: StoryExportIntroContent?
-            if showsViewerIntro {
-                intro = await BoundedAsyncResolution.resolve(brandIntro, timeout: introTimeout)
-            } else {
-                intro = nil
-            }
+            // BORNÉ dans le temps par le MÊME mécanisme que les autres
+            // chemins — voir `StoryExportDressingResolver.plan(for:)`. Les
+            // closures d'identité sont celles injectées à l'init, pas le
+            // singleton : l'injection en test reste honorée.
+            let plan = await dressings.plan(for: dressing)
+            // Filigrane Meeshy animé (logo + « meeshy » + pseudo de l'AUTEUR),
+            // baké sur chaque frame et alternant les coins toutes les 5 s.
+            let watermark = MeeshyExportWatermark.make(username: plan.watermarkHandle)
             // Sheet fermée ou « Annuler » tapé pendant la résolution : ne pas
             // démarrer un bake derrière une surface déjà partie.
             guard !Task.isCancelled else { return }
@@ -181,19 +163,13 @@ final class StoryExportShareViewModel: ObservableObject {
                 slide: slide,
                 languages: langs,
                 watermark: watermark,
-                intro: intro,
+                intro: plan.intro,
                 inputs: StoryExportInputs(stickerImageSources: stickerImageSources),
-                // **La carte de fin est DUE** (#7052). L'exception que porte ce
-                // paramètre vise le seul export d'une SCÈNE DE POST, voulue sans
-                // habillage. Ici on partage une STORY publiée, qui peint déjà
-                // son interlude de marque quatre lignes plus haut : lui retirer
-                // sa carte livrerait une story amputée de sa signature.
-                //
-                // Le site appelle par le PROTOCOLE, où les valeurs par défaut de
-                // l'implémentation concrète ne s'appliquent pas — c'est ce qui
-                // l'a fait rougir là où les témoins, qui tiennent le type
-                // concret, compilaient sans rien dire.
-                appendsBrandOutro: true,
+                // **La carte de fin est DUE** (#7052) : on partage une STORY
+                // publiée, et l'habillage `.story` la porte. L'exception —
+                // l'œuvre seule d'un réel, d'un post, d'une scène de post — est
+                // l'autre cas de `StoryExportDressing`, jamais un `false` posé ici.
+                appendsBrandOutro: plan.appendsBrandOutro,
                 onProgress: { [weak self] fraction in
                     self?.progress = fraction
                 },

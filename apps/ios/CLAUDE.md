@@ -88,6 +88,29 @@ xcodebuild test-without-building -project apps/ios/Meeshy.xcodeproj -scheme Mees
 `** TEST FAILED **` + `Testing cancelled because the build failed` (exit 65) = le bundle de tests n'a pas compilé/linké. Lire la ligne `error:` juste au-dessus et corriger la compile — ne pas fouiller la logique des tests.
 - **Piège accès cross-file** : un `@State private var` d'une `View` SwiftUI est **inaccessible depuis un fichier d'extension `View+Xxx.swift`** (même module). Symptôme CI : `'<prop>' is inaccessible due to 'private' protection level`. Fix : retirer `private` (internal par défaut) sur toute propriété stockée touchée par un fichier extension frère. Cas vécu `composerFocusTrigger` (StoryViewerView ↔ StoryViewerView+Content.swift), corrigé 2026-06-23.
 
+### Piloter un iPhone branché depuis le Mac (#10682)
+
+`devicectl` n'a aucune entrée tactile, et `idb` ne voit que les simulateurs. Pour toucher l'écran d'un iPhone réel sans les mains du porteur, on passe par la télécommande XCUITest `MeeshyUIDeviceTests/DeviceRemote.swift`. C'est un serveur TCP lancé sur l'appareil, que `iproxy` relie au Mac par USB. Elle n'est dans aucun gate.
+
+```bash
+R=apps/ios/scripts/iphone-remote/iphone-remote.sh
+$R start                                        # compile, installe la build du dépôt, lance le serveur (≈ 2 min)
+$R url meeshy://conversation/<id>               # lien profond
+$R tap "Sticker"                                # toucher par libellé ou identifiant d'accessibilité
+$R xy 220 545                                   # toucher en POINTS (capture en pixels ÷ 3 sur un Pro Max)
+$R swipe 90 690 330 690                         # glisser rapide ; drag x1 y1 x2 y2 s pour un glisser lent
+$R tree | grep Button                           # arbre d'accessibilité
+$R shot nom                                     # capture → $IPHONE_REMOTE_OUT/nom.png
+$R log RECETTE                                  # journal de Meeshy filtré
+$R stop
+```
+
+- `start` **remplace l'app de l'iPhone** par la build du dépôt (Debug), sur l'environnement que l'app avait déjà choisi (staging ou production). En production, n'écrire qu'aux comptes de test convenus avec le porteur.
+- Ce qui n'a pas d'identifiant d'accessibilité ne se touche que par coordonnées, et un décalage de mise en page fait tomber le toucher à côté. Poser un `accessibilityIdentifier` sur tout ce qu'une recette doit atteindre (#10683).
+- Un NSLog temporaire (préfixe `RECETTE`) lu par `$R log RECETTE` mesure ce que l'écran ne montre pas. Il ne se commite jamais.
+- **iPhone relié en Wi-Fi** (`devicectl device info details` → `Transport Type: localNetwork`) : `iproxy` ne passe que par USB. Viser le tunnel CoreDevice avec `IPHONE_REMOTE_HOST=<Tunnel IP Address>` (l'adresse change à chaque reconnexion).
+- **Meeshy s'anime sans cesse**, donc XCUITest attend en vain qu'elle soit « au repos » avant chaque geste. Lancer le serveur avec `TEST_RUNNER_IPHONE_REMOTE_SPRINGBOARD=1` : les touchers passent par le tremplin, par coordonnées (`xy`, `dxy`, `press`, `swipe`). Dans ce mode, `url` fait tomber le serveur : ouvrir les liens avec `xcrun devicectl device process launch --payload-url <lien> me.meeshy.app`, et capturer l'écran avec `xcrun devicectl device capture screenshot`.
+
 ## Naming Conventions
 
 Based on [Swift.org API Design Guidelines](https://www.swift.org/documentation/api-design-guidelines/):
@@ -884,7 +907,7 @@ Meeshy a **deux** systemes de toasts in-app, separes par **source d'evenement**.
 
 Les composants suivants gerent l'**entite** Notification (CRUD, listing, preferences) — distincts du toast in-app. A ne pas confondre :
 
-- `NotificationModels`, `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
+- `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
 - `NotificationCoordinator` (unread count global, badge, widget)
 - `PushNotificationManager` (APN/Firebase plumbing)
 - `NotificationService` (REST CRUD)
@@ -933,11 +956,21 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
   `<TEAMID>.me.meeshy.app`, d'où le `keychain-access-groups` ajouté aux entitlements),
   liste les vraies conversations (`recent_conversations` enrichie par
   `conversation_snapshots`), et poste elle-même `POST /api/v1/conversations/:id/messages`.
-  Elle n'ouvre JAMAIS l'app.
-  - **Portée lot 1 : texte + URL.** L'`Info.plist` n'annonce que `SupportsText` +
-    `SupportsWebURL` — s'annoncer pour une image qu'on ne sait pas envoyer ferait
-    apparaître Meeshy dans la feuille de partage de Photos pour y échouer. Les images et
-    vidéos reviendront avec le pipeline TUS (lot 2), leur règle d'activation EN MÊME TEMPS.
+  - **Depuis #10947, elle monte L'ÉCRAN DE PARTAGE UNIQUE** — la même `ShareSheetView` que
+    l'app, ses fichiers PORTABLES compilés dans la cible un par un (`project.yml`, garde
+    `ShareExtensionScreenGuardTests`), avec ses propres coutures : `ExtensionShareDirectory`
+    (cliché `share_directory` que l'app dépose dans l'App Group — conversations, amis,
+    carnet apparié, au nom du compte connecté —, repli sur `recent_conversations`, puis le
+    serveur avec le jeton de la session) et `ExtensionShareDispatcher` (une fiche
+    `SharePendingShare` pour tout le partage). Elle lie MeeshySDK + MeeshyUI, et ses mots
+    viennent du catalogue de l'APP (`Bundle.meeshyShare` remonte de l'`.appex` à l'app) :
+    elle n'a plus de `Localizable.xcstrings` à elle. Elle n'ouvre l'app que pour RELAYER
+    (`ShareRelayHandoff`, `meeshy://share-relay`) : sans session (« Connectez-vous pour
+    envoyer · Ouvrir Meeshy ») et vers une conversation chiffrée (D7 — elle n'a pas les
+    clés, jamais de clair d'ici), et pour le studio (`ShareComposeHandoff`).
+  - **Portée : texte, URL, images, vidéos, fichiers** (`Info.plist`, 20 par type). Les
+    plafonds communs (D10 : 20 fichiers, 500 Mo, 10 destinataires) ne refusent plus la
+    copie : l'écran les dit et « Retirer les N derniers » les applique (V9).
   - **Échec d'envoi = relais durable, jamais une perte** : `ShareSender` dépose
     `share_pending_sends/<clientMessageId>.json` dans le conteneur App Group ;
     `SharePendingSendConsumer` (app) le verse dans l'`OfflineQueue` au boot et au retour en
@@ -947,8 +980,11 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
     explicitement. L'ancien `ContactPreview.sampleContacts` masquait une lecture morte
     derrière trois contacts crédibles — c'est ce qui a permis à la panne de survivre aux
     itérations d'audit 220i/221i/222i. `ShareExtensionSourceGuardTests` interdit son retour.
-  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) compilés AUSSI
-    dans `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — `ShareViewController`
+  - Helpers purs (`ShareSession`, `ShareConversationStore`, `ShareSender`) et coutures de
+    l'écran (`ExtensionShareDirectory`, `ExtensionShareDispatcher`) compilés AUSSI dans
+    `MeeshyTests` via `project.yml` (motif `NSEDecryptor`) — les coutures y importent le
+    module de l'app par `#if !MEESHY_SHARE_EXTENSION` (`canImport(Meeshy)` est vrai dans
+    l'extension aussi : le module est dans les mêmes produits). `ShareViewController`
     (UIKit+SwiftUI) reste hors du bundle, toute sa logique décidable en a été extraite.
     Ces types sont `nonisolated` **sur le type ET sur leurs extensions** : la cible compile
     sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, le bundle de tests sous `nonisolated`.
@@ -986,6 +1022,14 @@ Les composants suivants gerent l'**entite** Notification (CRUD, listing, prefere
 | Production | gate.meeshy.me | Crash reporting |
 
 ## Code Organization
+> **Cohésion d'abord (directive porteur 2026-10-19, #10988) — PRIORITAIRE sur le budget de lignes.** Garde : `apps/ios/scripts/check_cohesion_budget.sh` (cliquet CI, référence `apps/ios/scripts/cohesion-budget.json`).
+> 1. Un type a UNE responsabilité.
+> 2. Une fonction tient sur un écran : <= 80 lignes (cliquet).
+> 3. Une vue SwiftUI se compose de sous-vues qui reçoivent des valeurs, des `Binding` et des closures.
+> 4. L'état privé reste `private` ; l'élargir pour une extension sœur est une exception justifiée.
+> 5. `Type+X.swift` n'est PAS une décomposition : un type se mesure en UNITÉ (déclaration + extensions du module, cliquet <= 1 500 lignes). Extraire un vrai type cohésif, pas un fichier.
+> 6. Le budget de lignes par fichier (1000–1200) n'est plus qu'un indicateur secondaire.
+
 - `// MARK: - SectionName` to divide file sections
 - Extensions group protocol conformances
 - Private properties/methods clearly marked

@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { Link } from '@/routes/route-table';
 
 import { AuthAmbient } from './auth-chrome';
@@ -83,21 +85,35 @@ export function AuthColumnBar({
 }) {
   return (
     <div className="flex shrink-0 items-center px-2 pt-1">
-      <Link
-        to={to}
-        {...(search === undefined ? {} : { search })}
-        replace
-        className="grid place-items-center rounded-chip"
-        style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
-        aria-label="Fermer"
-      >
-        <Glyph name="x" size={20} />
-      </Link>
+      <AuthCloseChip to={to} {...(search === undefined ? {} : { search })} />
       {title === undefined ? null : (
         <h1 className="flex-1 text-center text-title font-semibold" style={{ color: 'var(--color-ios-ink)', marginRight: 44 }}>
           {title}
         </h1>
       )}
     </div>
+  );
+}
+
+/** LA CROIX QUI REFERME (D-72) — celle de la barre, aussi posée en tête de
+ * l'en-tête public de l'inscription (#10007). */
+export function AuthCloseChip({
+  to,
+  search,
+}: {
+  readonly to: 'login' | 'list';
+  readonly search?: Readonly<Record<string, string | undefined>>;
+}) {
+  return (
+    <Link
+      to={to}
+      {...(search === undefined ? {} : { search })}
+      replace
+      className="grid place-items-center rounded-chip"
+      style={{ minHeight: 44, minWidth: 44, color: 'var(--color-ios-ink-2)' }}
+      aria-label={translate(currentInterfaceLanguage(), 'common.close')}
+    >
+      <Glyph name="x" size={20} />
+    </Link>
   );
 }

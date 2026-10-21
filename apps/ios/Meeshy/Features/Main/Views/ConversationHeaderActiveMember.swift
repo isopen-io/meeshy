@@ -20,6 +20,8 @@ struct ConversationActiveMember: Identifiable {
     /// Clé de « est dans la conversation » (#8892) : `id` est l'identifiant de
     /// PARTICIPATION, le serveur annonce un inscrit par son COMPTE.
     let viewingKey: String
+    /// Son contour équipé, la référence servie avec son message (#10946).
+    var ring: ServedProfileDecorItem? = nil
 
     static func ranked(from messages: [Message], fallbackColor: String, limit: Int = 3) -> [ConversationActiveMember] {
         let tally = messages
@@ -38,7 +40,8 @@ struct ConversationActiveMember: Identifiable {
                     color: entry.first.senderColor ?? fallbackColor,
                     avatarURL: entry.first.senderAvatarURL,
                     profile: .from(message: entry.first),
-                    viewingKey: entry.first.viewingKey
+                    viewingKey: entry.first.viewingKey,
+                    ring: entry.first.senderRing
                 )
             }
     }

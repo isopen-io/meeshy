@@ -71,9 +71,12 @@ export function useReadTracking(params: {
   /** `false` ⇒ AUCUN observateur n'est posé — un fil vide ne doit rien
    * observer (même garde que `useOlderMessages`, `rowCount`). */
   readonly enabled: boolean;
+  /** Le Résumé Vivant est à l'écran : aucune rangée, donc aucune sentinelle
+   * (#10812). */
+  readonly summaryShown?: boolean;
   readonly onMark: (conversationId: string, caughtUpToMessageId: string) => void;
 }): ReadTracking {
-  const { scroller, conversationId, lastMessageId, enabled, onMark } = params;
+  const { scroller, conversationId, lastMessageId, enabled, summaryShown = false, onMark } = params;
 
   const modalLayersOpen = useModalLayersOpen();
 
@@ -149,6 +152,32 @@ export function useReadTracking(params: {
       window.removeEventListener('focus', onForeground);
     };
   }, [attemptMark]);
+
+  /**
+   * LE RÉSUMÉ VIVANT ACCUSE EN PARTANT (#10812) — miroir de
+   * `markCaughtUpFromSummaryOrRiver` (iOS, #3901). Le Résumé ne monte aucune
+   * rangée, donc aucune sentinelle : une conversation ouverte au-delà de son
+   * seuil (Meeshy Global, « 99+ ») ne faisait jamais avancer son curseur, et
+   * la rouvrir rouvrait le Résumé — la pastille restait à vie. La preuve de
+   * consultation est la SORTIE du Résumé après l'avoir affiché : vers le fil,
+   * vers une autre conversation ou vers la liste. La frontière est celle de
+   * la VISITE (le dernier message confirmé connu pendant le Résumé), jamais
+   * celle de la conversation suivante.
+   */
+  const summaryBoundaryRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!summaryShown || conversationId === undefined) return undefined;
+    return () => {
+      const boundary = summaryBoundaryRef.current;
+      summaryBoundaryRef.current = undefined;
+      if (boundary === undefined || sentBoundaryRef.current === boundary) return;
+      sentBoundaryRef.current = boundary;
+      onMarkRef.current(conversationId, boundary);
+    };
+  }, [summaryShown, conversationId]);
+  useEffect(() => {
+    summaryBoundaryRef.current = summaryShown ? lastMessageId : undefined;
+  }, [summaryShown, conversationId, lastMessageId]);
 
   const sentinelRef = useCallback((node: Element | null) => setTarget(node), []);
   return { sentinelRef };

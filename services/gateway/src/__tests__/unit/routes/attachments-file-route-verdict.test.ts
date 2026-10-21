@@ -78,9 +78,17 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
     }
     const value = row[field];
     if (condition !== null && typeof condition === 'object') {
-      const c = condition as { startsWith?: string; in?: unknown[] };
+      const c = condition as { startsWith?: string; in?: unknown[]; gte?: string; lt?: string };
       if (c.startsWith !== undefined) return typeof value === 'string' && value.startsWith(c.startsWith);
       if (c.in !== undefined) return c.in.includes(value);
+      // `prefixRange()` (utils/prefix-range.ts, #11492) remplace `startsWith`
+      // par un intervalle de chaînes `[gte, lt)` pour filePath.
+      if (c.gte !== undefined || c.lt !== undefined) {
+        if (typeof value !== 'string') return false;
+        if (c.gte !== undefined && value < c.gte) return false;
+        if (c.lt !== undefined && value >= c.lt) return false;
+        return true;
+      }
       return false;
     }
     return value === condition;
@@ -157,7 +165,8 @@ describe.each(MOUNTS)('#9315 — %s : un fichier de message suit son porteur', (
     const res = await app.inject({ method: 'GET', url: base + encodeKey(KEY) });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toBe('image/jpeg');
-    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+    // #11265 — clé UUID écrite une fois : cache long ET immuable.
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     await app.close();
   });
 
@@ -356,7 +365,8 @@ describe('#9315 — ce qui n’est pas une pièce jointe garde son régime', () 
       url: '/api/v1/attachments/file/' + encodeKey('2026/10/68f2a81417a557e8ce4ddfc1/post_0b4c1d2e-aaaa-4bbb-8ccc-123456789abc.jpg'),
     });
     expect(res.statusCode).toBe(200);
-    expect(res.headers['cache-control']).toBe('private, max-age=31536000');
+    // #11265 — clé UUID écrite une fois : cache long ET immuable.
+    expect(res.headers['cache-control']).toBe('private, max-age=31536000, immutable');
     await app.close();
   });
 

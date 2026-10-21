@@ -26,7 +26,7 @@ struct MessageDetailSentimentTab: View, Equatable {
             // scaling XXXL déborderait la carte) et décoratif : le sentiment est déjà
             // porté par le libellé + la valeur VoiceOver groupée ci-dessous.
             Text(Self.sentimentEmoji(score))
-                .font(.system(size: 56))
+                .font(MeeshyFont.emoji(56))
                 .accessibilityHidden(true)
 
             Text(label)

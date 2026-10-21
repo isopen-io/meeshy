@@ -9,6 +9,10 @@ import MeeshyUI
 /// mesurée, ne montre rien de plus — il ne devine jamais. Miroir de `apps/web/src/components/game-rarity.tsx`.
 struct GameRarityLine: View {
     let entry: GameRarityEntry?
+    /// L'encre de la ligne. `nil` = la couleur discrète du thème ; une surface
+    /// SOMBRE fixe (la carte indigo de la célébration, #10829) passe la sienne,
+    /// sans quoi la ligne tombe sous le contraste AA.
+    var ink: Color? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -19,12 +23,12 @@ struct GameRarityLine: View {
                 let share = GameText.rarityShare(percent: GameWave2Format.rarityPercent(entry.sharePercent))
                 Text(name + " · " + share)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(ink ?? theme.textMuted)
                     .accessibilityLabel(GameText.rarityAria(name: name, share: share))
             } else {
                 Text(GameText.rarityMeasuring)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundColor(ink ?? theme.textMuted)
             }
         }
     }

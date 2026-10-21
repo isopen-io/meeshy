@@ -66,6 +66,7 @@ const MATRICE: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: true,
+  canManageGame: true,
 };
 
 async function hub(role: string, permissions: AdminPermissions = MATRICE): Promise<HTMLDivElement> {

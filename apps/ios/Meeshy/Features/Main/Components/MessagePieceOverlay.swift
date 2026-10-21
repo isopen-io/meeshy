@@ -24,7 +24,10 @@ struct MessagePieceOverlay: View {
     let accentHex: String
     @Binding var focusedPieceId: String?
     @Binding var isPresented: Bool
+    /// La suppression SERVEUR (`MessageMenuContext.canDeleteOnServer`).
     var canDelete: Bool = false
+    /// Le verdict `forward` de la loi (`MessageMenuContext.canForward`).
+    var canForward: Bool = true
     /// Réagir à la pièce affichée. `nil` ⇒ pas de bande (loi 4).
     var onReact: ((MessageAttachment, String) -> Void)? = nil
     /// Les actions du menu, rendues à l'hôte avec la pièce affichée.
@@ -48,6 +51,7 @@ struct MessagePieceOverlay: View {
          focusedPieceId: Binding<String?>,
          isPresented: Binding<Bool>,
          canDelete: Bool = false,
+         canForward: Bool = true,
          onReact: ((MessageAttachment, String) -> Void)? = nil,
          onAction: ((PrimaryAction, MessageAttachment) -> Void)? = nil) {
         self.message = message
@@ -55,6 +59,7 @@ struct MessagePieceOverlay: View {
         self._focusedPieceId = focusedPieceId
         self._isPresented = isPresented
         self.canDelete = canDelete
+        self.canForward = canForward
         self.onReact = onReact
         self.onAction = onAction
         let start = focusedPieceId.wrappedValue ?? MessagePieceTarget.pieces(of: message).first?.id ?? ""
@@ -77,7 +82,8 @@ struct MessagePieceOverlay: View {
         return MessagePieceMenu.actions(MessagePieceMenu.Context(
             isProtected: isProtected(current),
             exits: message.exitOffer,
-            canDelete: canDelete
+            canDelete: canDelete,
+            canForward: canForward
         ))
     }
 
@@ -110,7 +116,7 @@ struct MessagePieceOverlay: View {
         }
         .ignoresSafeArea()
         .accessibilityAddTraits(.isModal)
-        .accessibilityAction(.escape) { dismiss() }
+        .dismissOnEscape { dismiss() }
         .adaptiveOnChange(of: selection) { _, newValue in
             focusedPieceId = newValue
         }

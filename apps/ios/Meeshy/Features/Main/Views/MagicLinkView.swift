@@ -43,7 +43,7 @@ struct MagicLinkView: View {
     /// suit l'envoi, pour l'adresse à laquelle il est parti.
     @State private var codeEntry: EmailVerificationViewModel?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "magic-link")
+    private static let logger = MeeshyLog.logger(.magicLink)
 
     /// - Parameters:
     ///   - prefilledEmail: l'adresse déjà tapée ailleurs (#8216) — la retaper
@@ -271,11 +271,7 @@ struct MagicLinkView: View {
             Spacer()
             Spacer()
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isEmailFocused = true
-            }
-        }
+        .onAppear(after: .milliseconds(300)) { isEmailFocused = true }
     }
 
     // MARK: - Waiting Step
@@ -469,8 +465,7 @@ struct MagicLinkView: View {
         countdownTask?.cancel()
         countdownTask = Task {
             while countdownRemaining > 0 {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(1)), !Task.isCancelled else { return }
                 countdownRemaining -= 1
             }
             linkExpired = true

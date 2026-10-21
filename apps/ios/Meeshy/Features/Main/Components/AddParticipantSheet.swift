@@ -6,7 +6,7 @@ import MeeshyUI
 
 // MARK: - User Search Result
 
-private struct UserSearchResult: Identifiable, Decodable {
+private struct UserSearchResult: Identifiable, Decodable, ProfileDecorWearer {
     let id: String
     let username: String
     let firstName: String?
@@ -15,6 +15,8 @@ private struct UserSearchResult: Identifiable, Decodable {
     let avatar: String?
     let isOnline: Bool?
     let lastActiveAt: Date?
+    /// Le décor servi avec la personne — son contour équipé (#10945, #10946).
+    let profileDecor: ServedProfileDecor?
 
     var name: String {
         displayName ?? [firstName, lastName].compactMap { $0 }.joined(separator: " ").ifEmptyFallback(username)
@@ -90,12 +92,16 @@ struct AddParticipantSheet: View {
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                    .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.top, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: 28),
+            leading: MeeshySpacing.xl,
+            bottom: MeeshySpacing.sm - MeeshyTapTarget.inset(forVisualSide: 28),
+            trailing: MeeshySpacing.xl - MeeshyTapTarget.inset(forVisualSide: 28)
+        ))
     }
 
     // MARK: - Search Field
@@ -186,13 +192,14 @@ struct AddParticipantSheet: View {
         let color = DynamicColorGenerator.colorForName(user.name)
 
         return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: user.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: user.avatar,
-                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt)
-            )
+                presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                ring: user.avatarRing
+            ) }
             // Presentational avatar — MeeshyAvatar carries its own .accessibilityLabel(name),
             // which the adjacent name/username block already reads. Hide it so VoiceOver
             // announces the name once, not twice (doctrine 143i). Safe: this avatar has no
@@ -350,5 +357,5 @@ struct AddParticipantSheet: View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = MeeshyLog.logger(.participants)
 }

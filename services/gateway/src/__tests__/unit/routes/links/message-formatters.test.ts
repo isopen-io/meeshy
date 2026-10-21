@@ -231,3 +231,20 @@ describe('formatLinkMessageWithDetails', () => {
     expect(result.originalLanguage).toBe('fr');
   });
 });
+
+// #10286 — la lecture d'une conversation par lien de partage ne sert jamais la
+// carte de liens suivis d'un message d'invité anonyme écrit avant la loi.
+describe('formatLinkMessageWithDetails — liens suivis d’un invité anonyme (#10286)', () => {
+  const MAP = [{ url: 'https://evil.example/login', token: 'tok-1' }];
+  const row = (sender: Record<string, unknown>) => ({
+    id: 'msg-1', content: 'voir https://evil.example/login', createdAt: new Date(), metadata: { trackingLinks: MAP }, sender,
+  });
+
+  it('retient la carte d’un message d’anonyme', () => {
+    expect(formatLinkMessageWithDetails(row(makeAnonSender())).metadata).toBeUndefined();
+  });
+
+  it('sert la carte d’un compte inscrit (relation user chargée)', () => {
+    expect(formatLinkMessageWithDetails(row(makeUserSender())).metadata).toEqual({ trackingLinks: MAP });
+  });
+});

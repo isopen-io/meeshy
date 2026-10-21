@@ -217,7 +217,8 @@ struct RenderedPixels {
 final class InertBackdropCapture: BackdropCapturing {
     @discardableResult
     func captureCanvasBackdrop(slide: StorySlide, geometry: CanvasGeometry, time: CMTime,
-                               mode: RenderMode, languages: [String]) -> MTLTexture? { nil }
+                               mode: RenderMode, languages: [String],
+                               contentsScale: CGFloat) -> MTLTexture? { nil }
     func cropRegion(_ frame: CGRect) -> MTLTexture? { nil }
     func invalidate() {}
 }

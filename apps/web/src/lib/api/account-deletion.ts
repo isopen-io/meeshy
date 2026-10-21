@@ -27,7 +27,14 @@ import { reachFailureOf, unreadableFailure, type ReachFailure } from './link-fai
  * montage.
  */
 
-export type AccountDeletionDeps = { readonly source: DataSource; readonly transport: HttpTransport };
+export type AccountDeletionDeps = {
+  readonly source: DataSource;
+  readonly transport: HttpTransport;
+  /** La purge CONFIRMÉE nomme le compte supprimé (`deletedAccountId`, #10264) :
+   * l'appareil le retire, carnet compris (#10237). Confirmer (grâce) ou annuler
+   * n'en nomment aucun. */
+  readonly onAccountDeleted?: (accountId: string) => void;
+};
 
 export const DELETION_ACTIONS = ['confirm', 'cancel', 'purge'] as const;
 
@@ -47,6 +54,7 @@ const ServedResolution = z.object({
   status: z.enum(['CONFIRMED', 'CANCELLED', 'COMPLETED']),
   gracePeriodEndsAt: z.optional(z.nullable(z.string())),
   dataPurged: z.optional(z.boolean()),
+  deletedAccountId: z.optional(z.string()),
 });
 
 export type DeletionResolution = {
@@ -68,6 +76,8 @@ export async function resolveAccountDeletion(deps: AccountDeletionDeps, link: De
   if (!result.ok) return result;
   const parsed = ServedResolution.safeParse(result.data);
   if (!parsed.success) return unreadableFailure('Suppression de compte');
+  const deleted = parsed.data.status === 'COMPLETED' ? (parsed.data.deletedAccountId ?? '') : '';
+  if (deleted !== '') deps.onAccountDeleted?.(deleted);
   return {
     ok: true,
     data: { status: parsed.data.status, gracePeriodEndsAt: parsed.data.gracePeriodEndsAt ?? null, dataPurged: parsed.data.dataPurged ?? false },

@@ -1,7 +1,11 @@
 import { useEffect, useRef } from 'react';
 
 import { translate } from '@/lib/i18n-catalog';
+import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+
+import { GlyphSvg } from './glyph';
+import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
 
 /**
  * LA BARRE DE SÉLECTION (#5814, question 5) — REMPLACE le composeur, jamais
@@ -15,8 +19,11 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * depuis la MÊME clé de catalogue, parce qu'elles servent le même geste à deux
  * étapes (dimension 6).
  *
- * « Supprimer » reste une issue compagnon — aucun transport serveur ce lot
- * (loi 4, un contrôle existe s'il a un effet).
+ * LA CORBEILLE (#10582) ouvre le dialogue de suppression de la sélection
+ * (`MessageDeleteDialog`, « pour tout le monde » / « pour moi ») : elle ne
+ * supprime rien par elle-même. Son nom accessible vit dans le catalogue du fil
+ * (`message.delete.action`) ; l'hôte ne remet le geste qu'une fois ce
+ * catalogue chargé (`useMessageMenu.selectionOffers.delete`).
  *
  * SES TROIS TEXTES VIENNENT DU CATALOGUE (#7555) — ils étaient en dur, en
  * français, sur une barre servie en SEPT langues. Le compteur passe par un
@@ -28,6 +35,7 @@ export function SelectionToolbar({
   onEnd,
   onCopy,
   onForward,
+  onDelete = null,
 }: {
   readonly count: number;
   readonly onEnd: () => void;
@@ -35,6 +43,8 @@ export function SelectionToolbar({
   readonly onCopy: (() => void) | null;
   /** `null` : un message coché ne se transfère pas — le bouton n'est pas rendu (#9573). */
   readonly onForward: (() => void) | null;
+  /** `null` ou absent : rien de coché ne se supprime — la corbeille n'est pas rendue (#10582). */
+  readonly onDelete?: (() => void) | null;
 }) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const language = currentInterfaceLanguage();
@@ -109,6 +119,19 @@ export function SelectionToolbar({
           style={{ minHeight: 44, color: 'var(--accent)' }}
         >
           {translate(language, 'message.menu.copy')}
+        </button>
+      )}
+      {onDelete === null ? null : (
+        <button
+          type="button"
+          onClick={onDelete}
+          data-selection-delete
+          disabled={count === 0}
+          aria-label={translateMessagePieces(language, 'message.delete.action')}
+          className="grid place-items-center rounded-chip disabled:opacity-40"
+          style={{ minHeight: 44, minWidth: 44, color: 'var(--color-error)' }}
+        >
+          <GlyphSvg glyph={THREAD_MENU_GLYPHS.trash} size={20} />
         </button>
       )}
     </div>

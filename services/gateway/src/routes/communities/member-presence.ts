@@ -19,7 +19,7 @@ import { getPresenceVisibilityService, type PresenceViewer } from '../../service
 
 type PresencePrisma = Parameters<typeof getPresenceVisibilityService>[0];
 
-export type MemberUser = { id: string; isOnline: boolean | null; lastActiveAt?: Date | null };
+export type MemberUser = { id: string; isOnline: boolean | null; lastActiveAt?: Date | null; equippedAvatarRing?: string | null };
 
 /**
  * Le profil d'un membre rendu SEUL par une écriture. `resolveForTarget` ne

@@ -283,12 +283,14 @@ export function decodeMessages(raw: readonly Message[]): readonly Message[] {
  * null)` rendait `{}`, qui ne RETIRE rien de ce que `...rest` avait déjà
  * écrit trois lignes plus haut — le défaut 4 de #5668, jamais porté ici.
  *
- * `currentUserRole` est l'unique EXCEPTION : le type le déclare
- * `?: string | null` (`conversation.ts:371`), `null` signifiant « le lecteur
- * n'est pas membre » — une valeur, pas une absence. `sansNull` la laisse
- * survivre ; toute AUTRE clé nullable de `Conversation` n'a aujourd'hui aucune
- * signification déclarée pour `null` distincte de « absent » (relevé contre
- * `conversation.ts`, seul champ à porter `| null`).
+ * DEUX EXCEPTIONS, où `null` est une valeur et non une absence :
+ * `currentUserRole` (`?: string | null`, `conversation.ts:371`, « le lecteur
+ * n'est pas membre ») et `encryptionMode` (`EncryptionMode` porte `null` :
+ * « en clair », servi par la passerelle sur la liste et le détail). Le menu
+ * d'un message lit un régime ABSENT comme inconnu, donc chiffré (#11372) :
+ * effacer le `null` ferait de toute conversation en clair une conversation
+ * chiffrée. Toute AUTRE clé nullable n'a aucune signification déclarée pour
+ * `null` distincte de « absent ».
  */
 export function decodeConversation(raw: Conversation): Conversation {
   /**
@@ -305,7 +307,7 @@ export function decodeConversation(raw: Conversation): Conversation {
     readonly lastMessage?: Conversation['lastMessage'] | null;
   };
   return {
-    ...sansNull(rest, ['currentUserRole']),
+    ...sansNull(rest, ['currentUserRole', 'encryptionMode']),
     ...(rawLastMessage === undefined || rawLastMessage === null
       ? {}
       : { lastMessage: decodeMessage(rawLastMessage) }),

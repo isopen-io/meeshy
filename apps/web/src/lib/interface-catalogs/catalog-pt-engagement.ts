@@ -4,15 +4,15 @@
  * catalogue `catalog-pt.ts`, qu'il RÉPAND.
  */
 const ptEngagement = {
-  'engagement.pill.streak.one': 'Sequência de {count} dia',
-  'engagement.pill.streak.other': 'Sequência de {count} dias',
-  'engagement.pill.points.one': '{total} ponto, {today} hoje',
-  'engagement.pill.points.other': '{total} pontos, {today} hoje',
-  'engagement.pill.total.one': '{total} ponto ganho nesta conversa',
-  'engagement.pill.total.other': '{total} pontos ganhos nesta conversa',
+  'engagement.pill.streak.one': '{count} dia',
+  'engagement.pill.streak.other': '{count} dias',
+  'engagement.pill.points.one': '{total} faísca, {today} hoje',
+  'engagement.pill.points.other': '{total} faíscas, {today} hoje',
+  'engagement.pill.total.one': '{total} faísca ganha nesta conversa',
+  'engagement.pill.total.other': '{total} faíscas ganhas nesta conversa',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.post.points.one': 'Esta publicação te rendeu {count} ponto',
-  'engagement.post.points.other': 'Esta publicação te rendeu {count} pontos',
+  'engagement.post.points.one': 'Esta publicação fez saltar {count} faísca para você',
+  'engagement.post.points.other': 'Esta publicação fez saltar {count} faíscas para você',
 } as const;
 
 export default ptEngagement;

@@ -2,7 +2,7 @@ import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type WheelEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { StreamVideo } from '@/components/call-media-elements';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALL_DEVICES_GLYPHS } from '@/components/glyphs-call-devices';
@@ -11,7 +11,9 @@ import { CALL_VIEW_GLYPHS } from '@/components/glyphs-call-view';
 import { callActions } from '@/lib/calls/call-actions';
 import {
   bubbleOrigin,
+  BUBBLE_SETTLE_TRANSITION,
   bubbleSize,
+  bubbleTranslate,
   fittingTier,
   isBubbleTap,
   nudgeBubble,
@@ -183,13 +185,14 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
         style={{
           width: size.width,
           height: size.height,
-          left: origin.left + (drag?.x ?? 0),
-          top: `calc(${origin.top + (drag?.y ?? 0)}px + env(safe-area-inset-top))`,
+          left: 0,
+          top: 0,
+          translate: bubbleTranslate({ origin, drag }),
           background: BG,
           color: 'var(--color-on-media)',
           transform: pinch === null ? undefined : `scale(${Math.min(1.6, Math.max(0.6, pinch))})`,
           transformOrigin: placement.edge === 'left' ? 'left center' : 'right center',
-          transition: drag === null && pinch === null ? 'left 180ms ease-out, top 180ms ease-out, width 180ms ease-out, height 180ms ease-out' : 'none',
+          transition: drag === null && pinch === null ? BUBBLE_SETTLE_TRANSITION : 'none',
           touchAction: 'none',
         }}
         onWheel={onWheel}
@@ -211,7 +214,7 @@ export function CallBubble({ call }: { readonly call: ActiveCall }) {
         >
           {source === null ? (
             <span className="flex flex-col items-center gap-1">
-              <Avatar initials={initialsOf(call.title)} color={colorForName(call.title)} size={AVATAR[tier]} {...(call.avatar === null ? {} : { src: call.avatar })} />
+              <PeerAvatar presenceKey={call.peerKey ?? undefined} initials={initialsOf(call.title)} color={colorForName(call.title)} size={AVATAR[tier]} {...(call.avatar === null ? {} : { src: call.avatar })} />
               <BubbleClock call={call} />
             </span>
           ) : (

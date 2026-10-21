@@ -155,7 +155,8 @@ nonisolated public enum AnimatedImageDecoder {
     ///   grand côté. Un sticker fait ≤ 512 px ; décoder N images en pleine
     ///   résolution pour les afficher dans 120 pt coûterait N bitmaps inutiles.
     ///   `nil` = taille native.
-    public static func decode(_ data: Data, maxPixelSize: Int? = nil) -> Decoded? {
+    public static func decode(_ data: Data, maxPixelSize: Int? = nil,
+                              bytesBudget: Int = decodedBytesBudget) -> Decoded? {
         // **La porte AVANT la source** (`AnimatedImageEligibility`). Construire
         // un `CGImageSource` pour apprendre qu'un JPEG n'est pas animé se paie
         // à chaque avatar et à chaque vignette du fil ; la porte répond en
@@ -172,10 +173,19 @@ nonisolated public enum AnimatedImageDecoder {
         delays.reserveCapacity(count)
         images.reserveCapacity(count)
 
-        for index in 0..<count {
+        // Un BUDGET d'octets par animation : un GIF de 120 images pesait ~70 Mo décodé, et chaque ligne visible
+        // d'un fil de commentaires en tenait un. Au-delà, une image sur `step` est gardée et porte la durée de
+        // celles qu'elle remplace — l'animation dure autant, avec moins d'images.
+        let frameBytes = frame(from: source, at: 0, maxPixelSize: maxPixelSize)
+            .map { max(1, $0.bytesPerRow * $0.height) } ?? 1
+        let maxFrames = max(2, bytesBudget / frameBytes)
+        let step = max(1, (count + maxFrames - 1) / maxFrames)
+
+        for index in stride(from: 0, to: count, by: step) {
             guard let image = frame(from: source, at: index, maxPixelSize: maxPixelSize) else { continue }
             images.append(image)
-            delays.append(delay(from: source, at: index) ?? AnimatedImageTiming.defaultDelay)
+            let covered = index..<min(count, index + step)
+            delays.append(covered.reduce(0) { $0 + (delay(from: source, at: $1) ?? AnimatedImageTiming.defaultDelay) })
         }
 
         // Une source qui ANNONCE plusieurs images mais n'en rend qu'une n'est
@@ -191,6 +201,9 @@ nonisolated public enum AnimatedImageDecoder {
 
         return Decoded(frames: cycle, duration: plan.duration, loopCount: loops(from: source))
     }
+
+    /// Le poids décodé qu'une animation peut tenir (≈ 48 Mo).
+    public static let decodedBytesBudget = 48 * 1024 * 1024
 
     private static func frame(from source: CGImageSource, at index: Int, maxPixelSize: Int?) -> CGImage? {
         guard let maxPixelSize else {

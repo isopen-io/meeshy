@@ -1,4 +1,7 @@
 import SwiftUI
+import MeeshySDK
+import MeeshyUI
+import os
 
 // **LE COMPOSEUR NE PASSE JAMAIS SOUS L'EN-TÊTE DE LA FEUILLE** (#9736).
 //
@@ -92,7 +95,7 @@ extension View {
             self.frame(width: area.size.width, height: area.size.height, alignment: .bottom)
                 .environment(\.composerPanelYieldsToHost, true)
                 .onAppear { CommentSheetFit.trace("zone", area.frame(in: .global)) }
-                .onChange(of: area.size.height) { _ in CommentSheetFit.trace("zone", area.frame(in: .global)) }
+                .adaptiveOnChange(of: area.size.height) { _, _ in CommentSheetFit.trace("zone", area.frame(in: .global)) }
         }
         .coordinateSpace(name: CommentSheetFit.space)
     }
@@ -130,13 +133,15 @@ extension CommentSheetFit {
     }
 
     /// Les cadres et la détente, lisibles au simulateur :
-    /// `xcrun simctl spawn booted log stream --predicate 'eventMessage CONTAINS "CommentSheetFit"'`.
+    /// `xcrun simctl spawn booted log stream --level debug --predicate 'eventMessage CONTAINS "CommentSheetFit"'`.
     static func trace(_ what: String, _ frame: CGRect?) {
         #if DEBUG
         if let frame {
-            NSLog("[CommentSheetFit] %@ y=%.1f…%.1f h=%.1f", what, frame.minY, frame.maxY, frame.height)
+            MeeshyLog.logger(.commentSheetFit).debug(
+                "[CommentSheetFit] \(what, privacy: .public) y=\(Double(frame.minY), format: .fixed(precision: 1))…\(Double(frame.maxY), format: .fixed(precision: 1)) h=\(Double(frame.height), format: .fixed(precision: 1))"
+            )
         } else {
-            NSLog("[CommentSheetFit] %@", what)
+            MeeshyLog.logger(.commentSheetFit).debug("[CommentSheetFit] \(what, privacy: .public)")
         }
         #endif
     }

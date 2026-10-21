@@ -91,4 +91,39 @@ final class SceneStickerPoseTests: XCTestCase {
         XCTAssertNil(vm.loadedStickerAnimations[fixe])
         XCTAssertEqual(stickers(vm).first { $0.id == fixe }?.provider, SceneStickerPose.packProvider)
     }
+
+    /// **Un sticker cinématique PART animé** (#9210) : le fichier du pack tel
+    /// quel, avec son type — le contrat du web (`packStickerFile`). Réencodé en
+    /// PNG depuis sa première image, il arrivait figé chez tout le monde. Un
+    /// fixe garde le chemin PNG d'hier.
+    func test_aCinematicPackSticker_sendsItsOriginalBytes_aStillOneItsPNG() {
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 2, height: 2)).image { _ in }
+        let octets = Data([0x47, 0x49, 0x46, 0x38])
+        let anime = StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: true,
+                                                 mimeType: "image/gif")
+        let fixe = StickerPackItemImages.Loaded(image: image, data: octets, isAnimated: false,
+                                                mimeType: "image/png")
+        XCTAssertEqual(anime.outgoingFile, StickerSendPipeline.OriginalFile(data: octets, mimeType: "image/gif"))
+        XCTAssertNil(fixe.outgoingFile)
+    }
+
+    /// Le chargement d'un sticker de pack retient le type de son fichier : c'est
+    /// lui qui nomme le fichier envoyé et qui part à l'upload.
+    func test_packStickerLoading_keepsTheItemMimeType() throws {
+        let code = try appSource("Meeshy/Features/Main/Composer/SceneStickerPose.swift")
+        XCTAssertTrue(code.contains("isAnimated:item.isAnimated,mimeType:item.mimeType"),
+                      "le chargement doit porter le genre et le type du fichier du pack")
+        let envoi = try appSource("Meeshy/Features/Main/Views/ConversationView+StickerSheet.swift")
+        XCTAssertTrue(envoi.contains("original:loaded.outgoingFile"),
+                      "l'envoi d'un sticker de pack doit joindre le fichier d'origine quand il anime")
+    }
+
+    private func appSource(_ chemin: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent(chemin)
+        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+    }
 }

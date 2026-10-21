@@ -49,6 +49,8 @@ public final class UserPreferencesManager: ObservableObject {
     internal var consentService: ConsentServiceProviding = ConsentService.shared
     private let encoder = JSONEncoder()
     private var syncTasks: [PreferenceCategory: Task<Void, Never>] = [:]
+    /// Avance à chaque changement local d'une catégorie (`scheduleSyncToBackend`).
+    private var syncGenerations: [PreferenceCategory: Int] = [:]
     private var cancellables = Set<AnyCancellable>()
 
     /// Test-only override for the authentication gate used by
@@ -357,11 +359,11 @@ public final class UserPreferencesManager: ObservableObject {
 
     private func scheduleSyncToBackend(_ category: PreferenceCategory) {
         syncTasks[category]?.cancel()
+        syncGenerations[category, default: 0] &+= 1
         pendingCategories.insert(category)
         persistPendingCategories()
         syncTasks[category] = Task {
-            try? await Task.sleep(nanoseconds: 1_000_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(1)) else { return }
             await syncCategoryToBackend(category)
         }
     }
@@ -378,9 +380,18 @@ public final class UserPreferencesManager: ObservableObject {
         // Cleared here (not right after the debounce sleep) so the category
         // stays "pending" — and protected from `applyRemote` server-wins —
         // for the full round trip, including the network/outbox call below.
+        //
+        // …mais seulement si AUCUN changement plus récent n'a été posé pendant
+        // l'aller-retour : celui-là a sa propre synchro en attente, et lever la
+        // protection laissait une relecture du serveur (retour au premier plan,
+        // reconnexion, écho de ce même envoi) écraser le changement le plus
+        // récent — qui partait ensuite au serveur sous sa forme écrasée.
+        let generation = syncGenerations[category]
         defer {
-            pendingCategories.remove(category)
-            persistPendingCategories()
+            if syncGenerations[category] == generation {
+                pendingCategories.remove(category)
+                persistPendingCategories()
+            }
         }
         guard isUserAuthenticated else { return }
         let cmid = ClientMutationId.generate()

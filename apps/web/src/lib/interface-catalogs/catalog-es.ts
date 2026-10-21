@@ -26,6 +26,7 @@ import esSignup from './catalog-es-signup';
 import esGallery from './catalog-es-gallery';
 import esMessageCard from './catalog-es-message-card';
 import esMentions from './catalog-es-mentions';
+import esShellLabels from './catalog-es-shell-labels';
 import esStudioChrome from './catalog-es-studio-chrome';
 import esEphemeral from './catalog-es-ephemeral';
 import esWriteRestriction from './catalog-es-write-restriction';
@@ -38,6 +39,10 @@ import esContactDiscovery from './catalog-es-contact-discovery';
 import esDownload from './catalog-es-download';
 import esPhonePrompt from './catalog-es-phone-prompt';
 import esUserProfile from './catalog-es-user-profile';
+import esContentRefused from './catalog-es-content-refused';
+import esContentRemoval from './catalog-es-content-removal';
+import esPublicEntry from './catalog-es-public-entry';
+import esThreadSearch from './catalog-es-thread-search';
 
 const es = {
   'announce.messageSent': 'Mensaje enviado',
@@ -304,6 +309,7 @@ const es = {
   'notFound.title': 'Esta dirección no existe.',
 
   'pending.back': 'Volver a las conversaciones',
+  'pending.screen': 'La pantalla está llegando',
 
   'linkPage.home': 'Volver a Meeshy',
   'linkPage.retry': 'Reintentar',
@@ -320,8 +326,6 @@ const es = {
   'trackingLink.opening': 'Abriendo el enlace…',
   'trackingLink.dead.title': 'Este enlace ya no está disponible',
   'trackingLink.dead.body': 'Ha caducado, se ha desactivado o nunca ha existido.',
-  'accountDeletion.incomplete.title': 'Enlace incompleto',
-  'accountDeletion.incomplete.body': 'A este enlace le falta la información necesaria. Inicia sesión para solicitar la eliminación de tu cuenta.',
   'accountDeletion.confirm.title': 'Confirmar la eliminación de tu cuenta',
   'accountDeletion.confirm.body':
     'Tu cuenta se desactivará al final de un periodo de gracia de 30 días. Hasta entonces, el enlace «Cancelar» del correo te permite dar marcha atrás.',
@@ -400,6 +404,8 @@ const es = {
   'profile.avatar.updated': 'Foto de perfil actualizada',
   'profile.avatar.error': 'No se pudo actualizar la foto de perfil',
   'profile.banner.edit': 'Editar banner',
+  'profile.avatar.view': 'Ver la foto de perfil en pantalla completa',
+  'profile.banner.view': 'Ver el banner en pantalla completa',
   'profile.banner.updated': 'Banner actualizado',
   'profile.banner.error': 'No se pudo actualizar el banner',
   'profile.image.uploading': 'Enviando',
@@ -701,55 +707,6 @@ const es = {
   'links.announce.activated': 'Enlace activado',
   'links.announce.toggleFailed': 'No se pudo modificar este enlace',
   'links.announce.offline': 'Sin conexión: no se envió nada.',
-  'links.create.title': 'Nuevo enlace para compartir',
-  'links.create.section.conversation': 'Conversación',
-  'links.create.choose': 'Elegir un grupo o una comunidad',
-  'links.create.picker.title': 'Elegir una conversación',
-  'links.create.picker.empty': 'Ninguna conversación puede recibir un enlace por ahora.',
-  'links.create.section.identity': 'Identidad del enlace',
-  'links.create.name': 'Nombre del enlace',
-  'links.create.name.placeholder': 'p. ej.: Compartir en Twitter',
-  'links.create.description': 'Descripción (opcional)',
-  'links.create.description.placeholder': 'p. ej.: Únete a nuestro grupo…',
-  'links.create.section.access': 'Acceso de invitados',
-  'links.create.section.access.subtitle': 'Lo que los visitantes deben aportar para unirse',
-  'links.create.access.account': 'Cuenta obligatoria',
-  'links.create.access.account.caption': 'Solo los miembros de Meeshy pueden unirse',
-  'links.create.access.nickname': 'Seudónimo obligatorio',
-  'links.create.access.nickname.caption': 'El visitante debe elegir un seudónimo',
-  'links.create.access.email': 'Correo electrónico obligatorio',
-  'links.create.access.email.caption': 'El visitante debe indicar su correo electrónico',
-  'links.create.access.birthday': 'Fecha de nacimiento obligatoria',
-  'links.create.access.birthday.caption': 'Permite el control de edad',
-  'links.create.section.permissions': 'Permisos',
-  'links.create.section.permissions.subtitle': 'Lo que pueden hacer los invitados anónimos',
-  'links.create.permission.messages': 'Enviar mensajes',
-  'links.create.permission.messages.caption': 'Los invitados pueden escribir en la conversación',
-  'links.create.permission.images': 'Enviar imágenes',
-  'links.create.permission.images.caption': 'Los invitados pueden compartir fotos',
-  'links.create.permission.files': 'Enviar archivos',
-  'links.create.permission.files.caption': 'Los invitados pueden enviar documentos',
-  'links.create.permission.history': 'Ver el historial',
-  'links.create.permission.history.caption': 'Los invitados ven los mensajes anteriores',
-  'links.create.section.limits': 'Límites',
-  'links.create.section.limits.subtitle': 'Controla la audiencia y la duración del enlace',
-  'links.create.limit.uses': 'Limitar los usos',
-  'links.create.limit.max.one': 'Como máximo {count} uso',
-  'links.create.limit.max.other': 'Como máximo {count} usos',
-  'links.create.limit.count': 'Número de usos',
-  'links.create.limit.invalid': 'Elige un número entero entre 1 y {max}.',
-  'links.create.expiration': 'Caducidad',
-  'links.create.expiration.never': 'Nunca',
-  'links.create.expiration.h24': '24 horas',
-  'links.create.expiration.d7': '7 días',
-  'links.create.expiration.d30': '30 días',
-  'links.create.expiration.m3': '3 meses',
-  'links.create.button': 'Crear el enlace para compartir',
-  'links.create.inprogress': 'Creando…',
-  'links.create.error.conversation': 'Elige primero una conversación.',
-  'links.create.error.offline': 'Sin conexión: el enlace no se creó.',
-  'links.create.error.refused': 'No puedes crear un enlace para esta conversación.',
-  'links.create.error.default': 'No se pudo crear el enlace. Vuelve a intentarlo.',
 
   'feed.scene.carousel.previous': 'Escena anterior',
   'feed.scene.carousel.next': 'Escena siguiente',
@@ -787,6 +744,8 @@ const es = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'Un reel necesita un vídeo o un sonido de al menos 3 segundos, o al menos dos imágenes.',
   'story.studio.offline': 'Sin conexión — la historia se publicará cuando vuelva la red.',
+  'story.studio.pending.sending': 'La publicación se está enviando.',
+  'story.studio.pending.cancel': 'Cancelar el envío',
   'story.studio.stage': 'Vista previa de la historia',
   'story.studio.background.add': 'Añadir una foto o un vídeo',
   'story.studio.background.label': 'Fondo',
@@ -923,6 +882,8 @@ const es = {
   'story.action.reply': 'Responder',
   'story.action.forward': 'Enviar',
   'story.action.repost': 'Republicar',
+  'story.viewer.repost': 'Republicación',
+  'story.viewer.repostOf': 'Republicado de @{handle}',
   'story.action.views': 'Vistas',
   'story.action.share': 'Compartir',
   'story.action.save': 'Guardar',
@@ -1095,6 +1056,7 @@ const es = {
   'message.detail.language.original': '{language} (original)',
 
   ...esMentions,
+  ...esShellLabels,
   ...esStudioChrome,
   ...esEphemeral,
   ...esWriteRestriction,
@@ -1103,11 +1065,17 @@ const es = {
   ...esConversationCard,
   ...esStoriesMine,
   'settings.tools.sounds': 'Mis sonidos',
+  'settings.section.packs': 'Paquetes y descargas',
+  'settings.packs.shop': 'Tienda de stickers y marcos',
   ...esContactCard,
   ...esQuote,
   ...esCommentRow,
   ...esContactDiscovery,
   ...esUserProfile,
+  ...esContentRefused,
+  ...esContentRemoval,
+  ...esPublicEntry,
+  ...esThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default es;

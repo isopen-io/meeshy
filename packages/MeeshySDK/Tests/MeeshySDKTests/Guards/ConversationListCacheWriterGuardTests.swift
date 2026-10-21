@@ -35,14 +35,17 @@ final class ConversationListCacheWriterGuardTests: XCTestCase {
     ///
     /// Mesuré le 2026-09-18 sur `dev` :
     /// - `ConversationSyncEngine.saveSorted` — le chokepoint réconcilié (1) ;
-    /// - `ConversationListViewModel` — `schedulePersist` (1) et les deux
-    ///   chemins de `loadMore`, épuisé et nominal (2) ;
-    /// - `RootView.ensureUnread` — l'écrivain qui invente la ligne « 1 »,
-    ///   supprimé par #6998 (1).
+    /// - `ConversationListViewModel` — les deux chemins de `loadMore`, épuisé
+    ///   et nominal (2), dans `+Loading` ; et `schedulePersist` (1), parti avec
+    ///   `ConversationListPersister` au découpage par cohésion (#10988) — le
+    ///   total de l'écran reste 3 ;
+    /// - `RootView.ensureUnread` — l'écrivain qui inventait la ligne « 1 » :
+    ///   sa dernière écriture en bloc a disparu (lien à froid, 2026-10-17),
+    ///   le nom est retiré de la table.
     private static let allowance: [String: Int] = [
         "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift": 1,
-        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift": 3,
-        "apps/ios/Meeshy/Features/Main/Views/RootView.swift": 1,
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel+Loading.swift": 2,
+        "apps/ios/Meeshy/Features/Main/ViewModels/ConversationListPersister.swift": 1,
     ]
 
     /// Les deux arbres Swift qui peuvent atteindre `CacheCoordinator`.

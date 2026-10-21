@@ -171,7 +171,8 @@ final class ReelSceneRoutingTests: XCTestCase {
     /// ses deux montages du player les refusent, sans quoi chacune paraîtrait
     /// deux fois.
     func test_theStoryViewer_posesItsOwnChips_once() throws {
-        let viewer = try view("StoryViewerView+Canvas.swift")
+        // Le canvas du lecteur : ses couches (chips audio incluses) vivent dans `+Canvas+Layers`.
+        let viewer = try view("StoryViewerView+Canvas.swift") + view("StoryViewerView+Canvas+Layers.swift")
 
         XCTAssertTrue(viewer.contains("AudioForegroundReaderOverlay("))
         XCTAssertEqual(viewer.components(separatedBy: "MeeshyScenePlayer(").count - 1,
@@ -322,20 +323,66 @@ final class ReelSceneRoutingTests: XCTestCase {
         XCTAssertEqual(handles.values, ["auteur"], "le réel de @auteur sort signé @auteur")
     }
 
-    func test_saveStory_ofAnotherAuthor_watermarksThatAuthor_withoutTheViewerInterlude() async {
+    /// La story d'un autre garde son prélude (#10536) ; il présente son AUTEUR,
+    /// jamais le lecteur qui l'enregistre (#9953), et le filigrane le nomme.
+    func test_saveStory_ofAnotherAuthor_watermarksAndPresentsThatAuthor_neverTheViewer() async {
         let handles = JoinedHandles()
         let exporter = ScriptedStoryExporter()
         let sut = StoryPhotoSaveService(exporter: exporter, photoSaver: StubPhotoSaver(),
                                         toasts: MockFeedbackToast(), preferredLanguages: { [] },
                                         intro: { XCTFail("l'interlude du spectateur ne précède pas la story d'un autre"); return nil },
+                                        authorIntro: { author in
+                                            StoryExportIntroContent(displayName: author.name, username: author.name,
+                                                                    accentColorHex: "6366F1")
+                                        },
                                         watermark: { handle in handles.values.append(handle); return nil })
         let story = StoryItem(id: "story-9681", content: "x", media: [], storyEffects: nil, createdAt: Date())
 
-        sut.save(story: story, authorUsername: "demo-test-staging")
+        sut.save(story: story, author: StoryExportAuthor(userId: "u-9681-auteur", name: "demo-test-staging"))
         for _ in 0..<200 where sut.progress(for: story.id) != nil { await Task.yield() }
 
         XCTAssertEqual(handles.values, ["demo-test-staging"])
+        XCTAssertEqual(exporter.lastIntro?.username, "demo-test-staging")
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, true)
+    }
+
+    // MARK: - Un réel ou un post reste NU, sur ses deux sorties (#10536)
+
+    /// Le pendant de l'habillage rétabli sur les stories : la feuille de partage
+    /// d'un réel rend l'œuvre SEULE — ni interlude, ni carte, aucune identité
+    /// résolue.
+    func test_renderSceneFile_aReel_staysBare_withoutInterludeNorBrandOutro() async {
+        let exporter = ScriptedStoryExporter()
+        let sut = StoryPhotoSaveService(exporter: exporter, photoSaver: StubPhotoSaver(),
+                                        toasts: MockFeedbackToast(), preferredLanguages: { [] },
+                                        intro: { XCTFail("un réel ne porte pas l'interlude du lecteur"); return nil },
+                                        authorIntro: { _ in XCTFail("un réel ne porte pas d'interlude d'auteur"); return nil },
+                                        watermark: { _ in nil })
+
+        let url = await sut.renderSceneFile(of: Self.composedReel())
+
+        XCTAssertNotNil(url)
+        XCTAssertEqual(exporter.prepareCallCount, 1)
         XCTAssertNil(exporter.lastIntro)
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, false)
+        if let url { exporter.cleanupExport(at: url) }
+    }
+
+    func test_savePost_aReel_resolvesNoIdentity_andStaysBare() async {
+        let exporter = ScriptedStoryExporter()
+        let sut = StoryPhotoSaveService(exporter: exporter, photoSaver: StubPhotoSaver(),
+                                        toasts: MockFeedbackToast(), preferredLanguages: { [] },
+                                        intro: { XCTFail("un réel ne porte pas l'interlude du lecteur"); return nil },
+                                        authorIntro: { _ in XCTFail("un réel ne porte pas d'interlude d'auteur"); return nil },
+                                        watermark: { _ in nil })
+        let reel = Self.composedReel()
+
+        sut.save(post: reel)
+        for _ in 0..<200 where sut.progress(for: reel.id) != nil { await Task.yield() }
+
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+        XCTAssertNil(exporter.lastIntro)
+        XCTAssertEqual(exporter.lastAppendsBrandOutro, false)
     }
 
     // MARK: - Partager emporte aussi le fichier, rendu à la demande (#9682)

@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   activeSegmentIndex,
   karaokeSegments,
+  rovingSegmentIndex,
   karaokeTone,
   segmentSeekTarget,
   type TimedSegment,
@@ -177,5 +178,18 @@ describe('karaokeTone — le rôle de chaque segment pendant l’écoute', () =>
 
   test('en lecture : passés pleins, le prononcé ACTIF, les suivants à venir', () => {
     expect([0, 1, 2].map((i) => karaokeTone(i, 1))).toEqual(['past', 'active', 'upcoming']);
+  });
+});
+
+describe('rovingSegmentIndex — le focus itinérant des paroles (#10701)', () => {
+  test('en écriture de droite à gauche, la flèche GAUCHE avance et la DROITE recule', () => {
+    expect(rovingSegmentIndex({ key: 'ArrowLeft', index: 1, count: 3, rtl: true })).toBe(2);
+    expect(rovingSegmentIndex({ key: 'ArrowRight', index: 1, count: 3, rtl: true })).toBe(0);
+    expect(rovingSegmentIndex({ key: 'ArrowLeft', index: 1, count: 3, rtl: false })).toBe(0);
+  });
+
+  test('une touche qui ne parcourt pas les paroles rend null, et des paroles vides aussi', () => {
+    expect(rovingSegmentIndex({ key: 'Escape', index: 0, count: 3, rtl: false })).toBeNull();
+    expect(rovingSegmentIndex({ key: 'ArrowRight', index: 0, count: 0, rtl: false })).toBeNull();
   });
 });

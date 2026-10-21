@@ -98,7 +98,7 @@ final class CallRecordingController: ObservableObject {
     private var changeForwarding: AnyCancellable?
     private(set) var pendingSave: Task<Void, Never>?
     private(set) var pendingStopEmission: Task<Void, Never>?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-recording")
+    private let logger = MeeshyLog.logger(.callRecording)
 
     static let linkAttempts = 3
     static let linkRetryDelayNs: UInt64 = 2_000_000_000
@@ -123,7 +123,7 @@ final class CallRecordingController: ObservableObject {
         self.uploader = uploader ?? CallRecordingTusUploader()
         self.remote = remote ?? CallRecordingRemoteService.shared
         self.viewerId = viewerId ?? { AuthManager.shared.currentUser?.id }
-        self.wait = wait ?? { try? await Task.sleep(nanoseconds: $0) }
+        self.wait = wait ?? { _ = await cancellableSleep(for: .nanoseconds($0)) }
         self.fileDirectory = fileDirectory ?? FileManager.default.temporaryDirectory
         subscription = (events ?? resolvedSocket.callRecordingEvents)
             .receive(on: DispatchQueue.main)

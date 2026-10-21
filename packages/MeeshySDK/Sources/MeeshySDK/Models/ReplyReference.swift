@@ -1,24 +1,24 @@
 import Foundation
 
-// Extrait de `CoreModels.swift` (1 778 lignes, hors budget 1000-1200 — un
-// fichier hors budget est interdit d'ajout). Le lot #4945 fait porter à la
-// citation les FAITS du média cité : on extrait d'abord, on ajoute ensuite.
+// Extrait de `CoreModels.swift` (hors budget de taille — un fichier hors
+// budget est interdit d'ajout). La citation porte les FAITS du média cité :
+// on extrait d'abord, on ajoute ensuite.
 
 // MARK: - Reply Reference
 
 /// `Equatable` SYNTHÉTISÉ, et c'est structurel : chaque hôte qui monte une
 /// citation sous `.equatable()` doit décider si elle a changé, et trois d'entre
 /// eux en recopiaient une PROJECTION champ par champ. La projection d'un hôte
-/// se périme au premier champ ajouté — les sept faits du média (#4945) et la
-/// protection sont arrivés sans que l'hôte audio les reçoive, et sa citation
-/// restait figée sur sa première résolution, vignette d'un média protégé
-/// comprise. Comparer la citation ENTIÈRE ferme la classe : un champ neuf ne
+/// se périme au premier champ ajouté — les sept faits du média et la
+/// protection pourraient arriver sans que l'hôte audio les reçoive, et sa
+/// citation resterait figée sur sa première résolution, vignette d'un média
+/// protégé comprise. Comparer la citation ENTIÈRE ferme la classe : un champ neuf ne
 /// peut plus être oublié par un hôte.
 public struct ReplyReference: Codable, Equatable, Sendable {
     public let messageId: String
     /// Nom, couleur et portrait de l'auteur cité : GRAVÉS, et repeints par la
     /// seule loi `UserUpdatedEvent.repainted(_:)` quand `authorUserId` désigne
-    /// le pair renommé (#9371).
+    /// le pair renommé.
     public internal(set) var authorName: String
     public internal(set) var authorColor: String
     /// Avatar de l'auteur cite, GRAVE dans la citation — jamais re-resolu au
@@ -27,8 +27,8 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// La citation est une feuille `Equatable` a `==` MANUEL : une lecture de
     /// store faite pendant le rendu serait invisible de cette comparaison, et
     /// l'avatar qui arrive apres coup ne redessinerait jamais la cellule. La
-    /// donnee est deja sur le fil (`APIMessageReplyTo.sender`), elle etait
-    /// simplement jetee par les constructeurs.
+    /// donnee est deja sur le fil (`APIMessageReplyTo.sender`) : les
+    /// constructeurs la lisent a la composition.
     ///
     /// **Optionnel, et il doit le rester** : `MeeshyMessage.init(from:)` decode
     /// `replyTo` par `decodeIfPresent`, qui PROPAGE l'echec d'un sous-decodage.
@@ -46,7 +46,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     public let isMe: Bool
     public let attachmentType: String?
 
-    /// L'ANCRE de la citation : la PIÈCE NOMMÉE que cette réponse vise (#6164).
+    /// L'ANCRE de la citation : la PIÈCE NOMMÉE que cette réponse vise.
     ///
     /// Répondre à la troisième photo d'un carrousel de cinq est licite ; la
     /// passerelle grave l'identifiant et la NATURE dans
@@ -63,11 +63,11 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// `attachmentIsProtected` et `ForwardReference.conversationType`.
     ///
     /// `nil` = « on ne sait pas laquelle » ⇒ repli sur le média REPRÉSENTATIF,
-    /// exactement comme avant ce lot. Aucune citation existante ne change de
-    /// rendu.
+    /// exactement comme une citation sans ancre : aucune citation existante ne
+    /// change de rendu.
     public let attachmentId: String?
     public let attachmentThumbnailUrl: String?
-    /// L'adresse du FICHIER cité (#8230) — ce qui donne un poster à une vidéo
+    /// L'adresse du FICHIER cité — ce qui donne un poster à une vidéo
     /// dont la vignette serveur a raté (extraction de la première frame) et
     /// ce qui ouvre en plein écran une pièce absente de la fenêtre chargée.
     ///
@@ -102,12 +102,12 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// relecture du message REEL dans le store.
     public let attachmentIsProtected: Bool?
 
-    /// Les sept FAITS du média cité (#4945) — ce qui permet à la citation de
+    /// Les sept FAITS du média cité — ce qui permet à la citation de
     /// rendre un flou ThumbHash à l'ouverture et une ligne « 1024×768 · 0:42 ·
-    /// 1,2 Mo » sans attendre le réseau. La passerelle les servait
-    /// (`attachmentFullSelect`) et iOS les décodait (`APIMessageAttachment`) ;
-    /// ils étaient jetés une couche avant l'écran, par les trois constructeurs
-    /// à l'identique, parce que le type porteur ne les déclarait pas.
+    /// 1,2 Mo » sans attendre le réseau. La passerelle les sert
+    /// (`attachmentFullSelect`) et iOS les décode (`APIMessageAttachment`) ;
+    /// le type porteur les déclare pour que les trois constructeurs les
+    /// recopient à l'identique jusqu'à l'écran.
     ///
     /// **Tous optionnels, et ils doivent le rester** — même règle que
     /// `authorAvatarUrl` : un blob `replyToJson` gravé avant eux doit se relire
@@ -132,10 +132,10 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// (rendu dédié : emoji + contenu + date) plutôt qu'une story générique.
     /// `storyPublishedAt` porte alors la date de publication du mood.
     public var moodEmoji: String?
-    /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`
-    /// (#7883). `nil` sur toute citation de message et sur les blobs anciens.
+    /// Auteur de la story ou de l'humeur citée — la clé de `StoryReplyAdmission`.
+    /// `nil` sur toute citation de message et sur les blobs anciens.
     public var storyAuthorId: String?
-    /// L'identifiant d'UTILISATEUR de l'auteur cité (#9371), gravé à la
+    /// L'identifiant d'UTILISATEUR de l'auteur cité, gravé à la
     /// RÉCEPTION depuis `replyTo.sender` — jamais `replyTo.senderId`, qui est
     /// l'appartenance à la conversation. C'est la SEULE clé par laquelle
     /// `user:updated` apparie une citation : sans lui, la citation garde le
@@ -144,7 +144,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
     /// ce champ se relit sans lui. Même discipline que `authorAvatarUrl`.
     public var authorUserId: String?
-    /// La story citée a DISPARU sans laisser d'instantané (#7895) : la
+    /// La story citée a DISPARU sans laisser d'instantané : la
     /// passerelle n'a servi que `storyReplyToId`, sans `postReplyTo` — le
     /// message n'en gravait pas et le post n'existe plus. Posé par un seul
     /// producteur, `unavailableStory(storyId:)`.
@@ -153,28 +153,28 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// ce champ doit se relire sans emporter le message entier. `nil` =
     /// disponible — aucune citation existante ne change de rendu.
     public let storyUnavailable: Bool?
-    /// #7927 — le message CITÉ a été supprimé : la citation ne porte plus
+    /// Le message CITÉ a été supprimé : la citation ne porte plus
     /// rien de lui (`tombstoned(at:)`), et l'app rend « Message supprimé ».
     /// Optionnel pour la même raison que `authorAvatarUrl` : un blob gravé
     /// avant lui doit se relire.
     public var quotedMessageDeletedAt: Date?
-    /// #8320 — l'échéance du message cité ÉPHÉMÈRE : passée, la zone lecture
+    /// L'échéance du message cité ÉPHÉMÈRE : passée, la zone lecture
     /// d'un audio cité se ferme (`offersQuotedAudioPlayback(now:)`). Posée
     /// après l'init, comme `quotedMessageDeletedAt` : optionnelle, un blob
     /// gravé avant elle se relit sans emporter le message.
     public var quotedExpiresAt: Date?
-    /// **La nature de disparition du message CITÉ** (#9573), telle que la loi de
+    /// **La nature de disparition du message CITÉ**, telle que la loi de
     /// sortie la lit sur ce que le fil a servi de lui. `nil` = le fil ne l'a pas
     /// déclarée (citation reconstruite pour le temps réel, ligne de cache écrite
     /// avant ce champ) : la citation est alors ILLISIBLE, et son contenu ne sort
     /// pas avec le message qui la porte (`quotedContentMayLeave`).
     public var quotedExitNature: ContentExitLaw.Nature?
-    /// #8320 — les pistes TRADUITES d'un audio cité et la langue d'origine
+    /// Les pistes TRADUITES d'un audio cité et la langue d'origine
     /// qui les départage, pour que la citation joue, hors de la fenêtre
     /// chargée, la MÊME piste que le vocal d'origine (Prisme audio). Jamais
     /// posée pour un média protégé : le fichier EST le secret.
     public var quotedAudioTracks: QuotedAudioTracks?
-    /// **Combien de TUILES (photos, vidéos) porte le message cité** (#9911),
+    /// **Combien de TUILES (photos, vidéos) porte le message cité**,
     /// quand la citation vise le message ENTIER — la face montre la première,
     /// « +N » dit qu'il y en a d'autres. `nil` quand la citation NOMME une
     /// pièce (elle n'en montre qu'une, et c'est la bonne) et pour un contenu
@@ -183,6 +183,15 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// **Optionnel, et il doit le rester** : un blob `replyToJson` gravé avant
     /// ce champ doit toujours se décoder.
     public var quotedPieceCount: Int?
+
+    /// L'auteur cité n'a pas de compte : ses adresses se citent en
+    /// texte brut, jamais cliquables. Optionnel pour les blobs `replyToJson`
+    /// gravés avant ce champ.
+    public var authorIsAnonymous: Bool?
+    /// Le contour équipé de l'auteur cité, GRAVÉ à la réception depuis
+    /// `replyTo.sender.profileDecor` — comme son portrait. Optionnel pour les blobs
+    /// `replyToJson` gravés avant ce champ.
+    public var authorRing: ServedProfileDecorItem?
 
     /// Le nombre de tuiles que « +N » annonce au-delà de la face, ou `nil`.
     public var quotedExtraPieceCount: Int? {
@@ -202,7 +211,7 @@ public struct ReplyReference: Codable, Equatable, Sendable {
     /// refusait d'honorer : une exposition, doublee d'un controle qui ment.
     public var quotedMediaIsProtected: Bool { attachmentIsProtected == true }
 
-    /// Le PRÉDICAT unique « la story citée a-t-elle disparu ? » (#7895), lu
+    /// Le PRÉDICAT unique « la story citée a-t-elle disparu ? », lu
     /// par la carte de scène et par les citations plates des trois modes.
     /// Vrai ⇒ carte compacte « Story indisponible », sans scène ni porte.
     /// Une humeur n'est jamais concernée : elle n'a pas de scène.
@@ -295,14 +304,14 @@ public struct ReplyReference: Codable, Equatable, Sendable {
 public extension ReplyReference {
     /// La pièce jointe que CETTE citation vise, parmi celles du message cité.
     ///
-    /// UN site pour l'ICÔNE et pour l'OUVERTURE (#6164) : `MessageListViewController
+    /// UN site pour l'ICÔNE et pour l'OUVERTURE : `MessageListViewController
     /// .openQuotedMedia` et la composition de la citation doivent résoudre la
     /// MÊME pièce, sans quoi la vignette décrit une photo et le plein écran en
     /// ouvre une autre — le défaut exact que `quotedRepresentative` avait déjà
-    /// fermé pour la règle « premier hors localisation » (2026-08-27).
+    /// fermé pour la règle « premier hors localisation ».
     ///
     /// Trois cas, et le troisième est celui qui compte :
-    /// - identifiant ABSENT ⇒ le représentatif, la règle d'avant, inchangée ;
+    /// - identifiant ABSENT ⇒ le représentatif, inchangé ;
     /// - identifiant PRÉSENT et pièce trouvée ⇒ elle, quel que soit son rang ;
     /// - identifiant PRÉSENT et pièce INTROUVABLE (supprimée, hors fenêtre) ⇒
     ///   `nil`, **jamais** le représentatif. Emprunter la première serait
@@ -387,7 +396,7 @@ public struct ForwardReference: Codable, Sendable {
     /// `MeeshyConversation.ConversationType`. Optionnel : les caches GRDB
     /// antérieurs au champ décodent en `nil` sans migration.
     public let conversationType: String?
-    /// L'identifiant d'UTILISATEUR de l'expéditeur d'origine (#9371), gravé à
+    /// L'identifiant d'UTILISATEUR de l'expéditeur d'origine, gravé à
     /// la réception depuis `forwardedFrom.sender` : la clé par laquelle
     /// `user:updated` repeint la référence. Optionnel : un blob gravé avant
     /// lui se relit sans lui, et la référence garde alors le nom gravé.

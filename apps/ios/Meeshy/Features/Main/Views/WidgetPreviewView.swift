@@ -249,7 +249,9 @@ struct WidgetPreviewView: View {
                     // widget : il doit montrer EXACTEMENT ce que
                     // `WidgetDataManager.publishConversations` publie dans
                     // l'App Group, donc la même résolution de langue.
-                    if let preview = conv.resolvedLastMessagePreview(
+                    // Un message qui disparaît n'y laisse que son libellé (#9622).
+                    if let preview = OutsidePreview.lastMessage(
+                        of: conv,
                         preferredLanguages: preferredContentLanguages
                     ), !preview.isEmpty {
                         Text(preview)

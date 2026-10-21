@@ -27,7 +27,7 @@ export const EMOJI_ONLY_FONT_SIZES = {
 
 /**
  * Le glyphe d'un sticker EMOJI — `BubbleSticker.emojiGlyphSize` (90) rendu
- * DEUX fois plus grand sur le web (#9319, `STICKER_RENDER_SCALE`). Un sticker
+ * DEUX fois plus grand sur le web (#9319). Un sticker
  * garde sa taille : la règle de #9054 ne vise que les messages d'emojis.
  */
 export const STICKER_EMOJI_GLYPH_SIZE = 180;
@@ -250,6 +250,22 @@ function isWithdrawnCitation(obj: MetadataRecord): boolean {
 }
 
 /**
+ * LE POST CITÉ, DE LA CLÉ OU DE SON INSTANTANÉ (#10746) — `GET …/messages` sert
+ * `postReplyTo` (type `STORY`, `previewText`) sans `storyReplyToId` : exiger la
+ * clé nue ne construisait jamais la carte d'une réponse chargée par REST. La clé
+ * prime quand elle est servie ; sinon l'instantané d'une story (ou d'une humeur)
+ * nomme lui-même le post cité.
+ */
+function citedStoryIdOf(message: Pick<Message, 'storyReplyToId' | 'metadata'> & HoistedFields): string | undefined {
+  if (message.storyReplyToId !== undefined) return message.storyReplyToId;
+  const raw = hoistedOf(message, 'postReplyTo');
+  if (raw === undefined || raw === null || typeof raw !== 'object') return undefined;
+  const snapshot = raw as MetadataRecord;
+  const isStory = snapshot.type === 'STORY' || (snapshot.moodEmoji !== null && snapshot.moodEmoji !== undefined);
+  return isStory && typeof snapshot.id === 'string' && snapshot.id !== '' ? snapshot.id : undefined;
+}
+
+/**
  * `postReplyTo` à la racine, `metadata.postReplyTo` en repli
  * (`postReplySnapshot.ts:32-58`). Une HUMEUR
  * (`moodEmoji` non nul) n'a pas de scène — `StoryCitationPlacement.isDetached`
@@ -259,15 +275,16 @@ function isWithdrawnCitation(obj: MetadataRecord): boolean {
 export function storyCitationOf(
   message: Pick<Message, 'storyReplyToId' | 'metadata'> & HoistedFields,
 ): StoryCitation | null {
-  if (message.storyReplyToId === undefined) return null;
+  const citedId = citedStoryIdOf(message);
+  if (citedId === undefined) return null;
   const raw = hoistedOf(message, 'postReplyTo');
   if (raw === undefined || raw === null || typeof raw !== 'object') {
-    return { id: message.storyReplyToId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
+    return { id: citedId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
   }
 
   const obj = raw as MetadataRecord;
   if (isWithdrawnCitation(obj)) {
-    return { id: typeof obj.id === 'string' ? obj.id : message.storyReplyToId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
+    return { id: typeof obj.id === 'string' ? obj.id : citedId, previewText: '', thumbnailUrl: null, createdAt: '', unavailable: true };
   }
   if (obj.moodEmoji !== null && obj.moodEmoji !== undefined) return null;
   if (typeof obj.id !== 'string') return null;
@@ -299,7 +316,7 @@ export type MoodCitation = {
 export function moodCitationOf(
   message: Pick<Message, 'storyReplyToId' | 'metadata'> & HoistedFields,
 ): MoodCitation | null {
-  if (message.storyReplyToId === undefined) return null;
+  if (citedStoryIdOf(message) === undefined) return null;
   const raw = hoistedOf(message, 'postReplyTo');
   if (raw === undefined || raw === null || typeof raw !== 'object') return null;
   const obj = raw as MetadataRecord;
@@ -323,7 +340,7 @@ export type BodyKind =
  * `textOrEmojiBlock` (`FocalRow.swift:604-615`) : sticker d'abord (« un
  * gabarit porte un emoji de repli, si bien qu'un message-sticker peut
  * satisfaire `isEmojiOnly` — le repli servi à la place de la chose »), puis
- * emoji seul SANS citation (`FocalRow.swift:612`), puis texte.
+ * emoji seul — avec ou sans citation : la carte citée se pose au-dessus, l'emoji garde ses tailles (#10628) —, puis texte.
  */
 export function bodyKindOf(
   message: Pick<Message, 'content' | 'metadata' | 'attachments' | 'replyTo'> & HoistedFields,
@@ -339,7 +356,7 @@ export function bodyKindOf(
     attachmentCount: message.attachments?.length ?? 0,
     hasPlace: place !== null,
   });
-  if (emoji !== null && message.replyTo === undefined) {
+  if (emoji !== null) {
     return { kind: 'emoji-only', text: message.content.trim(), fontSize: emoji.fontSize };
   }
 

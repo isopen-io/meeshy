@@ -97,6 +97,20 @@ final class GameWave2OptimisticTests: XCTestCase {
         XCTAssertEqual(next.game.season?.nextReward?.reward.kind, .points)
     }
 
+    /// Les points d'étape sont ceux de LA saison (calendrier servi, #10232) : le geste optimiste ne les ramène pas à 100.
+    func test_afterSeasonClaim_theNextRewardCarriesTheSeasonsOwnStepPoints() {
+        let state = GameWave2Fixture.state(GameWave2Fixture.game(season: GameWave2Fixture.season(steps: 4, claimed: [1, 2], stepPoints: 150)))
+        let next = GameWave2Optimistic.afterSeasonClaim(state, step: 3)
+        XCTAssertEqual(next.game.season?.nextReward?.reward, GameSeasonBlock.Reward(kind: .points, amount: 150))
+        XCTAssertEqual(next.game.season?.stepPoints, 150, "le geste garde les points de la saison")
+    }
+
+    func test_aStepShowsTheSeasonsPoints_andTheLawWhenTheServerDoesNotSendThem() {
+        XCTAssertEqual(GameWave2Fixture.season(stepPoints: 70).stepReward(1), SeasonReward(kind: .points, amount: 70))
+        XCTAssertEqual(GameWave2Fixture.season().stepReward(1), SeasonReward(kind: .points, amount: GameSeason.stepPoints))
+        XCTAssertEqual(GameWave2Fixture.season(stepPoints: 70).stepReward(5), SeasonReward(kind: .fragment, amount: 1))
+    }
+
     func test_afterSeasonClaim_refusesAnUnreachedOrAlreadyClaimedStep() {
         let state = GameWave2Fixture.state(GameWave2Fixture.game(season: GameWave2Fixture.season(steps: 4, claimed: [1, 2])))
         XCTAssertEqual(GameWave2Optimistic.afterSeasonClaim(state, step: 9), state)
@@ -174,7 +188,8 @@ final class GameWave2OptimisticTests: XCTestCase {
         let lawful = GameGlory.standing(glory: state.game.glory.glory + GameGlory.points.prestige, mythic: false)
         XCTAssertEqual(next.game.glory.rank, lawful.rank, "le rang suit la Gloire du Prestige, par la loi (#9636)")
         XCTAssertEqual(next.game.glory.division5, lawful.division5)
-        XCTAssertEqual(next.meesh, state.meesh)
+        XCTAssertEqual(next.meesh?.balance, state.meesh?.balance, "le solde reste")
+        XCTAssertEqual(next.meesh?.mintCost, next.game.mint.price, "le compteur de Meeshes lit le prix suivant du héro")
     }
 
     func test_afterPrestige_closesTheLeagueAndTheDuoUntilTheRecordIsBack() {
@@ -190,5 +205,49 @@ final class GameWave2OptimisticTests: XCTestCase {
         XCTAssertEqual(GameWave2Optimistic.afterPrestige(state), state)
         let maxed = GameWave2Fixture.state(GameWave2Fixture.atLevel100(prestige: 5))
         XCTAssertEqual(GameWave2Optimistic.afterPrestige(maxed), maxed)
+    }
+
+    // MARK: - Le Prestige devant une passerelle des étincelles (#10902)
+
+    private func sparkedAtLevel100(debt: Int = 0) -> GameState {
+        let base = GameWave2Fixture.atLevel100(prestige: 1)
+        let pocket = base.level.score
+        let game = GameFixture.sparked(base, pocket: pocket, cycle: 1_500_000, lifetime: 2_000_000, debt: debt,
+                                       levelRecord: 100, levelMaxLifetime: 104)
+        return GameWave2Fixture.state(game)
+    }
+
+    func test_afterPrestige_onASparksServer_keepsTheLeagueAndTheDuoOpen_theLifetimeMaxSurvives() {
+        let state = sparkedAtLevel100()
+        let next = GameWave2Optimistic.afterPrestige(state)
+        XCTAssertEqual(next.game.level.prestige, 2)
+        XCTAssertEqual(next.game.league, state.game.league, "le niveau max à vie ouvre toujours la ligue")
+        XCTAssertEqual(next.game.duo, state.game.duo, "et le duo")
+    }
+
+    func test_afterPrestige_onASparksServer_emptiesThePocketAndTheCycle_keepsTheLifetimeAndTheDebt() {
+        let next = GameWave2Optimistic.afterPrestige(sparkedAtLevel100(debt: 75))
+        XCTAssertEqual(next.game.level.sparks, 0)
+        XCTAssertEqual(next.game.level.sparksCycle, 0)
+        XCTAssertEqual(next.game.level.sparksLifetime, 2_000_000)
+        XCTAssertEqual(next.game.level.sparksDebt, 75)
+        XCTAssertEqual(next.game.level.levelMaxLifetime, 104)
+        XCTAssertEqual(next.game.level.ladder?.levelMaxLifetime, 104)
+        XCTAssertEqual(next.game.mint.blockedBy, .debt, "la dette survit au passage et bloque toujours la frappe")
+    }
+
+    func test_afterPrestige_onASparksServer_announcesTheNextCoinAtTheLevelOneFactor() {
+        let state = sparkedAtLevel100()
+        let next = GameWave2Optimistic.afterPrestige(state)
+        let number = state.game.mint.number
+        XCTAssertEqual(next.game.mint.number, number, "le passage ne frappe rien : la prochaine pièce reste la même")
+        XCTAssertEqual(next.game.mint.price, GameMint.effectivePrice(forNumber: number, level: 1))
+        XCTAssertEqual(next.game.boosts.tailwind, 1)
+    }
+
+    func test_afterPrestige_onASparksServer_rereadsTheReservesOnTheGloryOfThePassage() {
+        let next = GameWave2Optimistic.afterPrestige(sparkedAtLevel100())
+        XCTAssertEqual(next.game.treasury.access, GameTreasury.reserveAccess(glory: next.game.glory.glory))
+        XCTAssertEqual(next.game.treasury.held, sparkedAtLevel100().game.treasury.held)
     }
 }

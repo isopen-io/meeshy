@@ -18,6 +18,18 @@
  *  3. Dépliée, la pastille d'en-tête disparaît — les rangées revenues portent
  *     déjà la leur, le compte n'est jamais dit deux fois.
  *  4. Au clavier : le bouton s'atteint, `Entrée` replie de nouveau.
+ *
+ * TOUTE SECTION SE REPLIE (#10103) :
+ *  5. Les catégories du compte (« Travail », « Proches ») sont des sections,
+ *     entre Épingles et Aujourd'hui, dans l'ordre déclaré.
+ *  6. Chaque en-tête est un bouton de 44 px au moins, dont `aria-controls`
+ *     désigne une liste qui EXISTE, repliée comme dépliée.
+ *  7. Une section PAR DATE se replie, et le reste après un rechargement
+ *     (mémoire de l'appareil) ; une CATÉGORIE se replie aussi.
+ *  8. La recherche déplie le temps de chercher, puis rend la liste rangée.
+ *  9. Un filtre ne déplie rien : « Non lus » garde la section repliée et son
+ *     compte ne dit que ce que le filtre garde.
+ * 10. Le dépliage d'un geste s'anime ; sous `prefers-reduced-motion`, non.
  */
 
 import { launchChromium } from './lib/browser.mjs';
@@ -39,7 +51,7 @@ const SUBJECT = 'c-deploiement';
 const browser = await launchChromium();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'fr-FR' });
 const page = await context.newPage();
-await page.goto(`${served.base}/`, { waitUntil: 'load' });
+await page.goto(`${served.base}/chats`, { waitUntil: 'load' });
 await page.waitForSelector(`[data-row="${PINNED_ROW}"]`);
 
 const toggleState = () =>
@@ -98,6 +110,88 @@ await page.keyboard.press('Enter');
 await page.waitForSelector(`[data-row="${SUBJECT}"]`, { state: 'detached' });
 check((await toggleState()).expanded === 'false', 'au clavier, Entrée replie la section');
 
+// ------------------------------------------- 5. les catégories du compte
+await page.click(TOGGLE);
+await page.waitForSelector(`[data-row="${SUBJECT}"]`);
+const order = await page.$$eval('[data-sticker]', (els) => els.map((el) => el.getAttribute('data-sticker')));
+const at = (id) => order.indexOf(id);
+check(
+  at('category:cat-travail') > at('pinned') && at('category:cat-proches') > at('category:cat-travail') && at('lentille.today') > at('category:cat-proches'),
+  `les catégories viennent après Épingles et avant Aujourd'hui, dans l'ordre déclaré (${order.join(' → ')})`,
+);
+const travailLabel = await page.$eval('[data-sticker="category:cat-travail"] button', (el) => el.textContent?.trim());
+check(travailLabel === 'Travail', `la section porte le nom de la catégorie (${travailLabel})`);
+check((await page.$('[data-section="category:cat-travail"] [data-row="c-annonces"]')) !== null, 'c-annonces est rangée dans « Travail »');
+
+// ------------------------------------------- 6. un vrai bouton, partout
+const toggles = await page.$$eval('[data-section-toggle]', (els) =>
+  els.map((el) => ({
+    id: el.getAttribute('data-section-toggle'),
+    height: el.getBoundingClientRect().height,
+    controls: el.getAttribute('aria-controls'),
+    controlled: document.getElementById(el.getAttribute('aria-controls') ?? '') !== null,
+    expanded: el.getAttribute('aria-expanded'),
+  })),
+);
+check(toggles.length === order.length, `chaque section a son bouton (${toggles.length} boutons pour ${order.length} sections)`);
+check(toggles.every((t) => t.height >= 44), `chaque bouton fait au moins 44 px (${toggles.map((t) => `${t.id}:${t.height}`).join(', ')})`);
+check(toggles.every((t) => t.controlled), 'chaque aria-controls désigne une liste qui existe');
+
+// ------------------------------------------- 7. par date, et après rechargement
+const TODAY = '[data-section-toggle="lentille.today"]';
+const todayRow = await page.$eval('[data-section="lentille.today"] [data-row]', (el) => ({
+  id: el.getAttribute('data-row'),
+  name: el.querySelector('[data-name]')?.textContent?.trim() ?? '',
+}));
+const TODAY_ROW = `[data-row="${todayRow.id}"]`;
+await page.click(TODAY);
+await page.waitForSelector(TODAY_ROW, { state: 'detached' });
+check(await page.$eval(TODAY, (el) => document.getElementById(el.getAttribute('aria-controls') ?? '')?.hidden === true), 'repliée, la liste commandée reste là, masquée');
+await page.reload({ waitUntil: 'load' });
+await page.waitForSelector(`[data-row="${PINNED_ROW}"]`);
+check((await page.$eval(TODAY, (el) => el.getAttribute('aria-expanded'))) === 'false', "Aujourd'hui revient REPLIÉE après rechargement (mémoire de l'appareil)");
+check((await page.$(TODAY_ROW)) === null, 'repliée après rechargement : ses rangées ne sont pas montées');
+const CATEGORY = '[data-section-toggle="category:cat-travail"]';
+await page.click(CATEGORY);
+await page.waitForSelector('[data-row="c-annonces"]', { state: 'detached' });
+check((await page.$eval(CATEGORY, (el) => el.getAttribute('aria-expanded'))) === 'false', 'une catégorie se replie aussi');
+
+// ------------------------------------------- 8. la recherche déplie le temps de chercher
+const SEARCH = 'input[type="search"]';
+await page.fill(SEARCH, todayRow.name);
+await page.waitForSelector(TODAY_ROW);
+check((await page.$('[data-section-toggle]')) === null, `pendant la recherche (« ${todayRow.name} »), la rangée repliée se montre et aucun en-tête ne se replie`);
+await page.fill(SEARCH, '');
+await page.waitForSelector(TODAY_ROW, { state: 'detached' });
+check((await page.$eval(TODAY, (el) => el.getAttribute('aria-expanded'))) === 'false', 'recherche effacée : la liste revient telle qu’on l’avait rangée');
+
+// ------------------------------------------- 9. un filtre ne déplie rien
+await page.click('nav[aria-label="Filtres"] button:text-is("Non lus")');
+await page.waitForSelector(`${TODAY} [data-unread]`);
+const unreadFiltered = await page.$eval(TODAY, (el) => ({ expanded: el.getAttribute('aria-expanded'), badge: el.querySelector('[data-unread]')?.getAttribute('data-unread') }));
+check(unreadFiltered.expanded === 'false' && Number(unreadFiltered.badge) > 0, `« Non lus » garde Aujourd'hui repliée, son compte à côté du chevron (${JSON.stringify(unreadFiltered)})`);
+await page.click('nav[aria-label="Filtres"] button:text-is("Tous")');
+
+// ------------------------------------------- 10. l'animation, et le mouvement réduit
+await page.click(TODAY);
+await page.waitForSelector(TODAY_ROW);
+const animation = await page.$eval(TODAY, (el) => getComputedStyle(document.getElementById(el.getAttribute('aria-controls') ?? '')).animationName);
+check(animation === 'lens-section-unfold', `déplier d'un geste anime la liste (${animation})`);
+await page.click(CATEGORY);
+await page.evaluate(() => localStorage.removeItem('meeshy.lens.folded-sections'));
+
+const reduced = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: 'light', locale: 'fr-FR', reducedMotion: 'reduce' });
+const quiet = await reduced.newPage();
+await quiet.goto(`${served.base}/chats`, { waitUntil: 'load' });
+await quiet.waitForSelector(TODAY_ROW);
+await quiet.click(TODAY);
+await quiet.waitForSelector(TODAY_ROW, { state: 'detached' });
+await quiet.click(TODAY);
+await quiet.waitForSelector(TODAY_ROW);
+const still = await quiet.$eval(TODAY, (el) => getComputedStyle(document.getElementById(el.getAttribute('aria-controls') ?? '')).animationName);
+check(still === 'none', `sous prefers-reduced-motion, le dépliage ne s'anime pas (${still})`);
+await reduced.close();
+
 await browser.close();
 served.close();
 
@@ -106,4 +200,4 @@ if (failures.length > 0) {
   for (const e of failures) console.error(`    · ${e}`);
   process.exit(1);
 }
-console.log('\n  Une section repliée porte le compte de ce qu’elle cache, à jour sans la déplier.\n');
+console.log('\n  Toute section se replie, et repliée elle porte le compte de ce qu’elle cache, à jour sans la déplier.\n');

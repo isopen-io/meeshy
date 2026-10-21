@@ -22,6 +22,7 @@ jest.mock('../../../utils/password-hash', () => ({
 
 import { purgeAccountIsolatedData } from '../../../services/AccountPurgeService';
 import { GAME_PURGED_MODELS } from '../../../services/game/GamePurge';
+import { fakeFileStore, fakePackDb } from './pack-privacy.fakes';
 
 const PARTI = '507f1f77bcf86cd799439011';
 const AUTRE = '507f1f77bcf86cd799439022';
@@ -84,11 +85,20 @@ function base() {
     userContact,
     contactJoinNotice,
     notification,
+    // Les traductions partagées (#9899) : un compte sans participant.
+    participant: table([]),
+    sharedTranslation: table([]),
+    postImpression: table([]),
+    postEngagement: table([]),
+    postView: table([]),
+    contentEvent: table([]),
     // Le jeu (#9384) : des collections vides.
     ...Object.fromEntries(
       [...GAME_PURGED_MODELS, 'gameDuo', 'leagueGroupWeek', 'affiliateVisitSession', 'mythicSeat', 'mythicEdition'].map((model) => [model, table([])]),
     ),
     user: { updateMany: async () => ({ count: 1 }) },
+    // Les packs (#10151) : des collections vides.
+    ...(({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack }) => ({ userStickerPack, userSticker, stickerPack, stickerPackItem, userPackOwnership, communityAppearancePack }))(fakePackDb({})),
   };
   return { prisma, userContact, contactJoinNotice, notification };
 }
@@ -97,7 +107,7 @@ describe('purgeAccountIsolatedData — le carnet et les notifications du compte 
   it("ne laisse aucune fiche, aucune annonce ni aucune notification du compte", async () => {
     const { prisma, userContact, contactJoinNotice, notification } = base();
 
-    await purgeAccountIsolatedData(prisma as never, PARTI);
+    await purgeAccountIsolatedData(prisma as never, PARTI, { packFiles: fakeFileStore([]).store });
 
     expect(userContact.state.rows.filter((row) => row.ownerId === PARTI)).toEqual([]);
     expect(contactJoinNotice.state.rows.filter((row) => row.recipientId === PARTI || row.joinerId === PARTI)).toEqual([]);
@@ -107,7 +117,7 @@ describe('purgeAccountIsolatedData — le carnet et les notifications du compte 
   it("retire les annonces « X a rejoint » faites à d'autres au sujet du compte supprimé", async () => {
     const { prisma, notification } = base();
 
-    await purgeAccountIsolatedData(prisma as never, PARTI);
+    await purgeAccountIsolatedData(prisma as never, PARTI, { packFiles: fakeFileStore([]).store });
 
     const ids = notification.state.rows.map((row) => row.id);
     expect(ids).not.toContain('m3');
@@ -117,7 +127,7 @@ describe('purgeAccountIsolatedData — le carnet et les notifications du compte 
   it("laisse intactes les lignes des autres comptes qui ne parlent pas de lui", async () => {
     const { prisma, userContact, contactJoinNotice, notification } = base();
 
-    await purgeAccountIsolatedData(prisma as never, PARTI);
+    await purgeAccountIsolatedData(prisma as never, PARTI, { packFiles: fakeFileStore([]).store });
 
     expect(userContact.state.rows.map((row) => row.id)).toEqual(['c3']);
     expect(contactJoinNotice.state.rows.map((row) => row.id)).toEqual(['n3']);
@@ -129,8 +139,8 @@ describe('purgeAccountIsolatedData — le carnet et les notifications du compte 
   it('le dit dans son bilan, et une seconde passe ne trouve plus rien (idempotent)', async () => {
     const { prisma } = base();
 
-    const first = await purgeAccountIsolatedData(prisma as never, PARTI);
-    const second = await purgeAccountIsolatedData(prisma as never, PARTI);
+    const first = await purgeAccountIsolatedData(prisma as never, PARTI, { packFiles: fakeFileStore([]).store });
+    const second = await purgeAccountIsolatedData(prisma as never, PARTI, { packFiles: fakeFileStore([]).store });
 
     expect(first).toMatchObject({
       addressBookContactsDeleted: 2,

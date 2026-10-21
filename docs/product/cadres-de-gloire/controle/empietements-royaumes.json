@@ -1,0 +1,272 @@
+[
+ {
+  "file": "royaumes-ambassadeur-1",
+  "overlap": 103,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   88,
+   712,
+   460,
+   716
+  ],
+  "windowPx": 160216,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-ambassadeur-2",
+  "overlap": 39,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   89,
+   712,
+   456,
+   719
+  ],
+  "windowPx": 165387,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-ambassadeur-3",
+  "overlap": 39,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   96,
+   701,
+   101,
+   713
+  ],
+  "windowPx": 157641,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-ambassadeur-4",
+  "overlap": 138,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   92,
+   713,
+   456,
+   719
+  ],
+  "windowPx": 177223,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-ambassadeur-5",
+  "overlap": 73,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   92,
+   716,
+   458,
+   722
+  ],
+  "windowPx": 180978,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-legende-1",
+  "overlap": 18,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   140,
+   717,
+   150,
+   719
+  ],
+  "windowPx": 162443,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-legende-2",
+  "overlap": 47,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   134,
+   678,
+   404,
+   686
+  ],
+  "windowPx": 142865,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-legende-3",
+  "overlap": 58,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   87,
+   705,
+   446,
+   719
+  ],
+  "windowPx": 165037,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-legende-4",
+  "overlap": 65,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   136,
+   714,
+   398,
+   717
+  ],
+  "windowPx": 154531,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-legende-5",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 171216,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-mythe-a",
+  "overlap": 52,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   150,
+   710,
+   405,
+   713
+  ],
+  "windowPx": 157591,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-mythe-b",
+  "overlap": 45,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   89,
+   404,
+   451,
+   449
+  ],
+  "windowPx": 147080,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 158250,
+  "layout": "perches",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-oracle-a",
+  "overlap": 44,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   150,
+   706,
+   451,
+   718
+  ],
+  "windowPx": 165189,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-oracle-b",
+  "overlap": 7,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   440,
+   713,
+   445,
+   716
+  ],
+  "windowPx": 156895,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-oracle-c",
+  "overlap": 56,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   92,
+   421,
+   448,
+   448
+  ],
+  "windowPx": 153984,
+  "layout": "cotes",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-orateur-a",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 160046,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-orateur-b",
+  "overlap": 61,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   144,
+   716,
+   401,
+   720
+  ],
+  "windowPx": 137663,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "royaumes-orateur-c",
+  "overlap": 15,
+  "face": 0,
+  "depth": 2,
+  "bbox": [
+   99,
+   694,
+   101,
+   704
+  ],
+  "windowPx": 145359,
+  "layout": "ruban",
+  "verdict": "ok"
+ }
+]

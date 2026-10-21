@@ -31,6 +31,7 @@ public struct NotificationRowView: View, Equatable {
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
 
     /// STOCKÉE à la construction (#8724) : la règle de la ligne
     /// (`APINotification.rowPresentation`) ne se rejoue pas à chaque rendu.
@@ -157,12 +158,15 @@ public struct NotificationRowView: View, Equatable {
         ZStack(alignment: .topTrailing) {
             switch presentation.leading {
             case .avatar:
-                MeeshyAvatar(
-                    name: notification.senderName ?? notifType.rawValue,
-                    context: .notification,
-                    accentColor: notifType.accentHex,
-                    avatarURL: notification.senderAvatar
-                )
+                MeeshyLivePresence {
+                    MeeshyAvatar(
+                        name: notification.senderName ?? notifType.rawValue,
+                        context: .notification,
+                        accentColor: notifType.accentHex,
+                        avatarURL: notification.senderAvatar,
+                        presenceState: notification.senderId.flatMap { presenceResolver?($0) }
+                    )
+                }
             case .milestone(let symbol):
                 milestoneMedallion(symbol)
             case .signature:

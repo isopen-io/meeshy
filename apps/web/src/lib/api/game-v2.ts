@@ -29,7 +29,7 @@ import { LEAGUE_KEYS } from '@meeshy/shared/utils/game/league';
 import { SEASON_STEPS } from '@meeshy/shared/utils/game/season';
 import { SHOWCASE_VISIBILITIES } from '@meeshy/shared/utils/game/trophies';
 
-import { isBool, isFraction, isInt, isOneOf, isRec, isText, orNull, shape, type Rec } from './game-guards';
+import { isBool, isFraction, isInt, isOneOf, isRec, isText, optional, orNull, shape, type Rec } from './game-guards';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -297,6 +297,8 @@ const isUserShowcase = (value: unknown): value is UserShowcaseResponse =>
       500,
     ),
     order: arrayOf(isTrophyKey, 500),
+    // La constellation (#10053) : absente d'un refus ou d'un ancien serveur, sinon des étoiles entières.
+    constellation: optional((v) => shape(v, { stars: (n) => isInt(n, 0, 1_000_000) })),
   });
 const isPrestigeResponse = (value: unknown): value is PrestigeResponse =>
   shape(value, {

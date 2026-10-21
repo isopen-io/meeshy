@@ -15,6 +15,7 @@ import { retentionPurgeArmed, sweepRetention } from './retention-sweep';
 import { GameLeagueJob } from './game-league';
 import { GameNightlyJob } from './game-nightly';
 import { GameMissionWindowJob } from './game-mission-window';
+import { GamePhotoMomentsJob } from './game-photo-moments';
 import { BackupStatusCheckJob } from './backup-status-check';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
@@ -39,6 +40,8 @@ export class BackgroundJobsManager {
   private gameLeagueJob: GameLeagueJob;
   private gameNightlyJob: GameNightlyJob;
   private gameMissionWindowJob: GameMissionWindowJob;
+  /** Les étapes franchies app fermée (#10175) : éteint tant que GAME_PHOTO_PUSH ne vaut pas « on ». */
+  private gamePhotoMomentsJob: GamePhotoMomentsJob;
   /** Le contrôle de la sauvegarde nocturne, chaque jour à 5 h heure de Paris (#9668). */
   private backupStatusCheckJob: BackupStatusCheckJob;
   /**
@@ -79,6 +82,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob = new GameLeagueJob(prisma);
     this.gameNightlyJob = new GameNightlyJob(prisma);
     this.gameMissionWindowJob = new GameMissionWindowJob(prisma);
+    this.gamePhotoMomentsJob = new GamePhotoMomentsJob(prisma);
     this.backupStatusCheckJob = new BackupStatusCheckJob({ prisma, emailService });
   }
 
@@ -102,6 +106,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob.start();
     this.gameNightlyJob.start();
     this.gameMissionWindowJob.start();
+    this.gamePhotoMomentsJob.start();
     this.backupStatusCheckJob.start();
 
     // Toutes les six heures : une session dont l'échéance est passée cesse de
@@ -198,6 +203,7 @@ export class BackgroundJobsManager {
     this.gameLeagueJob.stop();
     this.gameNightlyJob.stop();
     this.gameMissionWindowJob.stop();
+    this.gamePhotoMomentsJob.stop();
     this.backupStatusCheckJob.stop();
 
     if (this.sessionSweepInterval) {

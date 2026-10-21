@@ -280,8 +280,12 @@ describe('GET /users/me/stats/achievements — budget de lignes lues', () => {
     expect(res.statusCode).toBe(200);
     expect(aAppele(journal, 'post', 'count')).toBe(false);
     // Six agrégations, pas neuf : les trois `post.count` servent `postsCount` /
-    // `reelsCount` / `storiesCount`, qu'aucun succès ne lit.
-    expect(journal.lectures).toHaveLength(6);
+    // `reelsCount` / `storiesCount`, qu'aucun succès ne lit — plus la lecture
+    // des identités du compte (`participant.findMany`, une ligne par
+    // conversation rejointe) qui permet de compter par `senderId` indexé
+    // plutôt que par la relation `sender` (un `$lookup` par message).
+    expect(journal.lectures).toHaveLength(7);
+    expect(aAppele(journal, 'participant', 'findMany')).toBe(true);
   });
 });
 

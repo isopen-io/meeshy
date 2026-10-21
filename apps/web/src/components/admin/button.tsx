@@ -4,6 +4,14 @@ import { BRAND, EDGE, INK, SURFACE } from './tone';
 
 export type AdminButtonTone = 'primary' | 'secondary' | 'danger';
 
+/** `'md'` (défaut) : 44 px, le geste d'une ligne. `'lg'` : 52 px, le GROS bouton d'une carte ou d'une feuille (#10562). */
+export type AdminButtonSize = 'md' | 'lg';
+
+const SIZE: Readonly<Record<AdminButtonSize, { readonly height: number; readonly className: string }>> = {
+  md: { height: 44, className: 'rounded-chip px-4' },
+  lg: { height: 52, className: 'rounded-card px-5' },
+};
+
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2';
 
 const TONE_STYLE: Readonly<Record<AdminButtonTone, { readonly className: string; readonly style: Readonly<Record<string, string>> }>> = {
@@ -21,13 +29,15 @@ const TONE_STYLE: Readonly<Record<AdminButtonTone, { readonly className: string;
  * **LE BOUTON D'ADMINISTRATION** (#8876) — un seul dessin pour les gestes des fiches, de la
  * composition d'une diffusion et du barème : 44 px de haut, un aplat de la marque pour l'action
  * principale (un seul par écran), une surface bordée pour la secondaire, le ton du danger pour
- * ce qui retire ou ferme. Compact : jamais étiré sur la largeur d'une carte.
+ * ce qui retire ou ferme. Compact : jamais étiré sur la largeur d'une carte. `size="lg"` (52 px)
+ * dessine les GROS boutons des cartes et des feuilles (#10562).
  *
  * `busy` désactive ET se dit (`aria-busy`) : un geste en cours ne repart pas.
  */
 export function AdminButton({
   type = 'button',
   tone = 'secondary',
+  size = 'md',
   disabled = false,
   busy = false,
   label,
@@ -37,6 +47,7 @@ export function AdminButton({
 }: {
   readonly type?: 'button' | 'submit';
   readonly tone?: AdminButtonTone;
+  readonly size?: AdminButtonSize;
   readonly disabled?: boolean;
   readonly busy?: boolean;
   /** Le nom accessible quand le texte visible ne le dit pas assez. */
@@ -55,8 +66,8 @@ export function AdminButton({
       aria-busy={busy}
       {...(label === undefined ? {} : { 'aria-label': label })}
       {...(onClick === undefined ? {} : { onClick })}
-      className={`inline-flex items-center justify-center gap-2 rounded-chip px-4 text-body font-semibold disabled:cursor-not-allowed ${FOCUS} ${palette.className}`.trim()}
-      style={{ ...palette.style, minHeight: 44, opacity: inactive ? 0.45 : 1, outlineColor: BRAND }}
+      className={`inline-flex items-center justify-center gap-2 ${SIZE[size].className} text-body font-semibold disabled:cursor-not-allowed ${FOCUS} ${palette.className}`.trim()}
+      style={{ ...palette.style, minHeight: SIZE[size].height, opacity: inactive ? 0.45 : 1, outlineColor: BRAND }}
     >
       {children}
     </button>

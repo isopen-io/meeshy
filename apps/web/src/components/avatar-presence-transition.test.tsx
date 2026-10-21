@@ -5,7 +5,7 @@ import type { UserPresenceStatus } from '@/lib/api/types';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
-import { Avatar, HEADER_HERE_DOT_RATIO } from './avatar';
+import { Avatar } from './avatar';
 
 /**
  * **LE POINT DE PRÉSENCE CHANGE EN SE MONTRANT** (#9047) — demande porteur du
@@ -33,7 +33,6 @@ const avatar = (state: {
   readonly here?: boolean;
   readonly hereActive?: boolean;
   readonly hereFocused?: boolean;
-  readonly hereDotRatio?: number;
   readonly presence?: UserPresenceStatus;
   readonly mood?: string;
 }) => (
@@ -91,8 +90,8 @@ describe('le point de présence en mouvement', () => {
 });
 
 /**
- * **DEUX FOIS PLUS GROS, POSÉ SUR LE CERCLE, ET VIVANT QUAND IL SE PASSE QUELQUE
- * CHOSE** (#9061, demande porteur 2026-10-01).
+ * **POSÉ SUR LE CERCLE, ET VIVANT QUAND IL SE PASSE QUELQUE CHOSE** (#9061,
+ * demande porteur 2026-10-01) — sa taille a été divisée par deux (#10943).
  */
 describe('le point indigo « ici »', () => {
   const geometry = (dot: Element | null) => {
@@ -100,12 +99,6 @@ describe('le point indigo « ici »', () => {
     const width = Number.parseFloat(style?.width ?? 'NaN');
     return { width, centre: Number.parseFloat(style?.left ?? 'NaN') + width / 2, middle: Number.parseFloat(style?.top ?? 'NaN') + width / 2 };
   };
-
-  test('il est deux fois plus gros que les autres points de présence', async () => {
-    const here = geometry((await mounter.mount(avatar({ here: true }))).querySelector('[data-presence="here"]'));
-    const online = geometry((await mounter.mount(avatar({ presence: 'online' }))).querySelector('[data-presence="online"]'));
-    expect(here.width).toBeCloseTo(online.width * 2, 5);
-  });
 
   test('son centre est sur le cercle, à 45°', async () => {
     const { centre, middle } = geometry((await mounter.mount(avatar({ here: true }))).querySelector('[data-presence="here"]'));
@@ -179,10 +172,27 @@ describe('le point indigo « ici »', () => {
     expect(css).toMatch(/\.presence-dot-active::before\s*\{[^}]*animation:\s*none/);
   });
 
-  test('dans l’en-tête, le point « ici » est plus discret (#9065)', async () => {
-    const host = await mounter.mount(avatar({ here: true, hereDotRatio: HEADER_HERE_DOT_RATIO }));
-    const width = Number.parseFloat((host.querySelector('[data-presence="here"]') as HTMLElement).style.width);
-    expect(width).toBeCloseTo(44 * 0.4, 1);
+  /* LE POINT « ICI » EST DEUX FOIS PLUS PETIT, ET RESTE UN PEU PLUS GROS QUE
+     LA PASTILLE (#10943, porteur 2026-10-18) — 0,52 puis 0,40 dans l'en-tête
+     avant lui ; une seule taille désormais, en-tête compris. */
+  const dotWidth = (host: HTMLElement, state: string) =>
+    Number.parseFloat((host.querySelector(`[data-presence="${state}"]`) as HTMLElement).style.width);
+
+  test('le point « ici » fait la moitié de l’ancien, et reste plus gros que la pastille (#10943)', async () => {
+    const here = dotWidth(await mounter.mount(avatar({ here: true })), 'here') / 44;
+    const online = dotWidth(await mounter.mount(avatar({ presence: 'online' })), 'online') / 44;
+    const away = dotWidth(await mounter.mount(avatar({ presence: 'away' })), 'away') / 44;
+    expect(here).toBeGreaterThan(online);
+    expect(here).toBeGreaterThan(away);
+    expect(here).toBeGreaterThan(0.52 / 2);
+    expect(here).toBeLessThan((0.52 / 2) * 1.25);
+  });
+
+  test('une seule taille du point « ici », en-tête compris (#10943)', () => {
+    const avatarSource = readFileSync(new URL('./avatar.tsx', import.meta.url), 'utf8');
+    const headerSource = readFileSync(new URL('./thread-header.tsx', import.meta.url), 'utf8');
+    expect(avatarSource).not.toMatch(/HEADER_HERE_DOT_RATIO|hereDotRatio/);
+    expect(headerSource).not.toMatch(/HEADER_HERE_DOT_RATIO|hereDotRatio/);
   });
 
   test('la pulsation se répète et se tait en mouvement réduit', () => {

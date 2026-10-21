@@ -17,8 +17,8 @@ describe('user_mentioned — libellé par type de contenu', () => {
     { postType: 'POST', expected: 'publication' },
     { postType: 'REEL', expected: 'réel' },
     { postType: 'STORY', expected: 'story' },
-    { postType: 'STATUS', expected: 'statut' },
-    { postType: 'MOOD', expected: 'statut' },
+    { postType: 'STATUS', expected: 'humeur' },
+    { postType: 'MOOD', expected: 'humeur' },
   ] as const;
 
   for (const { postType, expected } of cases) {

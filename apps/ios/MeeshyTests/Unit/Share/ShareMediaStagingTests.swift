@@ -1,4 +1,6 @@
 import XCTest
+@testable import Meeshy
+import os
 
 /// `loadFileRepresentation` SUPPRIME l'URL fournie au retour de sa closure :
 /// la copie doit être faite DANS la closure, de façon synchrone, par flux.
@@ -104,6 +106,50 @@ final class ShareMediaStagingTests: XCTestCase {
         XCTAssertEqual(staged.relPath, "cid_abc/0.bin")
     }
 
+    /// L'extension vient du nom de fichier que l'app hôte a choisi : seule une
+    /// extension courte, minuscule, alphanumérique se garde (#11134).
+    func test_fileExtension_replacesAnythingButAShortLowercaseAlphanumeric() {
+        let hostile = ["..", "a/b", String(repeating: "x", count: 40), "jpé", "j p", "-1"]
+        hostile.forEach { ext in
+            XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: ext, mime: "image/png"), "png", ext)
+            XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: ext, mime: "application/octet-stream"), "bin", ext)
+        }
+        XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: "JPG", mime: "image/png"), "jpg")
+        XCTAssertEqual(ShareMediaStaging.fileExtension(sourceExtension: "mp4", mime: "image/png"), "mp4")
+    }
+
+    func test_stage_aShareIdThatClimbsOut_isRefusedAndWritesNothingOutside() throws {
+        let dir = try makeDirectory()
+        let source = try makeFile(bytes: 16, ext: "jpg", in: dir)
+        let mediaRoot = try makeDirectory().appendingPathComponent("share_pending_media", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaRoot, withIntermediateDirectories: true)
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: source, into: mediaRoot, shareId: "../evade",
+            index: 0, mime: "image/jpeg", freeBytes: 1_000_000_000
+        )) { error in
+            XCTAssertEqual(error as? ShareMediaStagingError, .destinationOutsideShare)
+        }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: mediaRoot.deletingLastPathComponent().appendingPathComponent("evade").path))
+    }
+
+    func test_stage_aShareDirectoryThatIsASymlink_isRefused() throws {
+        let dir = try makeDirectory()
+        let source = try makeFile(bytes: 16, ext: "jpg", in: dir)
+        let mediaRoot = try makeDirectory()
+        let elsewhere = try makeDirectory()
+        try FileManager.default.createSymbolicLink(
+            at: mediaRoot.appendingPathComponent("cid_abc"), withDestinationURL: elsewhere)
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: source, into: mediaRoot, shareId: "cid_abc",
+            index: 0, mime: "image/jpeg", freeBytes: 1_000_000_000
+        )) { error in
+            XCTAssertEqual(error as? ShareMediaStagingError, .destinationOutsideShare)
+        }
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: elsewhere.path), [])
+    }
+
     /// Un disque plein transformerait la copie en fichier TRONQUÉ, donc en
     /// pièce jointe corrompue livrée sans un mot. Le refus est explicite.
     func test_stage_withoutEnoughFreeSpace_refusesBeforeCopying() throws {
@@ -117,7 +163,7 @@ final class ShareMediaStagingTests: XCTestCase {
         )) { error in
             XCTAssertEqual(
                 error as? ShareMediaStagingError,
-                .insufficientFreeSpace(needed: 4096 + ShareLimits.freeSpaceMarginBytes, free: 4096)
+                .insufficientFreeSpace(needed: 4096 + ShareUploadBudget.freeSpaceMarginBytes, free: 4096)
             )
         }
         XCTAssertFalse(FileManager.default.fileExists(
@@ -125,9 +171,118 @@ final class ShareMediaStagingTests: XCTestCase {
             "aucun octet ne doit être écrit quand la place manque")
     }
 
+    // MARK: - Une copie interrompue ne laisse rien (#11429)
+
+    /// Un dossier s'ouvre mais ne se lit pas : la destination est déjà créée
+    /// quand la lecture échoue. Rien ne doit en rester dans l'App Group.
+    func test_stage_aCopyThatFailsMidway_leavesNoPartialFile() throws {
+        let unreadable = try makeDirectory()
+        let mediaRoot = try makeDirectory()
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: unreadable, into: mediaRoot, shareId: "cid_abc",
+            index: 0, mime: "image/jpeg", freeBytes: .max
+        ))
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: mediaRoot.appendingPathComponent("cid_abc").path), [],
+            "la copie partielle doit être supprimée"
+        )
+    }
+
+    func test_streamCopy_whenAdmitRefusesTheNextChunk_stopsBeforeWritingIt() throws {
+        let dir = try makeDirectory()
+        let source = try makeFile(bytes: 1000, ext: "bin", in: dir)
+        let destination = dir.appendingPathComponent("copy.bin")
+        struct Refused: Error {}
+
+        XCTAssertThrowsError(try ShareMediaStaging.streamCopy(from: source, to: destination, bufferSize: 400) { total in
+            if total > 400 { throw Refused() }
+        })
+        XCTAssertEqual(try Data(contentsOf: destination).count, 400, "la tranche refusée n'est jamais écrite")
+    }
+
+    // MARK: - Budget cumulé (#11429)
+
+    func test_byteBudget_reservesAtomically_underConcurrentDemands() {
+        let budget = ShareByteBudget(limit: 1_000)
+        let granted = OSAllocatedUnfairLockCounter()
+
+        DispatchQueue.concurrentPerform(iterations: 200) { _ in
+            if budget.reserve(7) { granted.increment() }
+        }
+
+        XCTAssertEqual(granted.value, 142, "1000 / 7 = 142 réservations, jamais une de plus")
+        XCTAssertEqual(budget.reservedBytes, 994)
+    }
+
+    /// Huit copies concurrentes de 100 Kio sous un plafond de 300 Kio : trois
+    /// passent, les cinq autres sont refusées sans laisser un octet.
+    func test_stage_concurrentCopies_neverExceedTheCumulativeBudget() throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeDirectory()
+        let size = 100 * 1024
+        let sources = try (0..<8).map { _ in try makeFile(bytes: size, ext: "jpg", in: dir) }
+        let budget = ShareByteBudget(limit: 3 * size)
+        let outcomes = OutcomeBox()
+
+        DispatchQueue.concurrentPerform(iterations: sources.count) { index in
+            do {
+                let staged = try ShareMediaStaging.stage(
+                    source: sources[index], into: mediaRoot, shareId: "cid_abc",
+                    index: index, mime: "image/jpeg", freeBytes: .max, budget: budget
+                )
+                outcomes.append(.success(staged))
+            } catch let error as ShareMediaStagingError {
+                outcomes.append(.failure(error))
+            } catch {
+                outcomes.append(.failure(.copyFailed(error.localizedDescription)))
+            }
+        }
+
+        let results = outcomes.values
+        let copied = results.compactMap { try? $0.get() }
+        let refused = results.compactMap { result -> ShareMediaStagingError? in
+            guard case .failure(let error) = result else { return nil }
+            return error
+        }
+        XCTAssertEqual(copied.count, 3)
+        XCTAssertEqual(refused.count, 5)
+        XCTAssertTrue(refused.allSatisfy(\.isOverBudget), "\(refused)")
+        let onDisk = try FileManager.default.contentsOfDirectory(atPath: mediaRoot.appendingPathComponent("cid_abc").path)
+        XCTAssertEqual(onDisk.count, 3, "aucune copie refusée ne laisse de fichier")
+        XCTAssertEqual(budget.reservedBytes, 3 * size)
+    }
+
+    func test_stage_aFailedCopy_givesItsReservationBack() throws {
+        let unreadable = try makeDirectory()
+        let mediaRoot = try makeDirectory()
+        let budget = ShareByteBudget(limit: 1_000)
+
+        XCTAssertThrowsError(try ShareMediaStaging.stage(
+            source: unreadable, into: mediaRoot, shareId: "cid_abc",
+            index: 0, mime: "image/jpeg", freeBytes: .max, budget: budget
+        ))
+        XCTAssertEqual(budget.reservedBytes, 0)
+    }
+
+    func test_shortfalls_sayHowManyFilesTheBudgetLeftBehind_andThatOthersFailed() {
+        XCTAssertEqual(
+            ShareExtensionIncoming.shortfalls(from: [
+                .byteBudgetExceeded(total: 2, limit: 1), .copyFailed("x"), .byteBudgetExceeded(total: 3, limit: 1),
+            ]),
+            [.overBudget(uncopied: 2), .unprepared]
+        )
+        XCTAssertEqual(
+            ShareExtensionIncoming.shortfalls(from: [.refusedSource, .refusedSource]),
+            [.refusedSource],
+            "un chemin refusé se dit pour ce qu'il est, pas comme un fichier à télécharger"
+        )
+        XCTAssertEqual(ShareExtensionIncoming.shortfalls(from: []), [])
+    }
+
     func test_requiredFreeBytes_addsTheSafetyMargin() {
         XCTAssertEqual(ShareMediaStaging.requiredFreeBytes(for: 1_000),
-                       1_000 + ShareLimits.freeSpaceMarginBytes)
+                       1_000 + ShareUploadBudget.freeSpaceMarginBytes)
     }
 
     // MARK: - iCloud non téléchargé
@@ -260,4 +415,16 @@ final class ShareMediaStagingTests: XCTestCase {
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: shareDir.path))
     }
+}
+
+private final class OSAllocatedUnfairLockCounter: Sendable {
+    private let count = OSAllocatedUnfairLock(initialState: 0)
+    var value: Int { count.withLock { $0 } }
+    func increment() { count.withLock { $0 += 1 } }
+}
+
+private final class OutcomeBox: Sendable {
+    private let results = OSAllocatedUnfairLock(initialState: [Result<ShareStagedMedia, ShareMediaStagingError>]())
+    var values: [Result<ShareStagedMedia, ShareMediaStagingError>] { results.withLock { $0 } }
+    func append(_ result: Result<ShareStagedMedia, ShareMediaStagingError>) { results.withLock { $0.append(result) } }
 }

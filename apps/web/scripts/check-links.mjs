@@ -169,6 +169,14 @@ try {
       const slug = `${scheme}-${width}x${height}`;
       const context = await browser.newContext({ viewport: { width, height }, colorScheme: scheme, locale: 'fr-FR' });
       await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
+      /* LE DÉPLOIEMENT DÉCLARE SON ORIGINE PUBLIQUE (#10208) — comme le fait
+         l'entrypoint du conteneur depuis `MEESHY_WEB_URL`. Sans elle, une page
+         servie sur une IP partage l'adresse de la page (le bon défaut sur
+         site) : l'invariant « l'origine PUBLIQUE, jamais celle de la page »
+         se prouve donc avec l'origine déclarée. */
+      await context.route('**/config.js', (route) =>
+        route.fulfill({ contentType: 'application/javascript', body: `window.__MEESHY_RUNTIME__ = { webUrl: ${JSON.stringify(PUBLIC_ORIGIN)} };` }),
+      );
       const page = await context.newPage();
       page.setDefaultTimeout(10_000);
       const errors = [];

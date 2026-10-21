@@ -11,7 +11,9 @@
  * touchés dans un message (`internal-link.ts`, #7849) : un chemin que l'app
  * ne sert pas ne navigue pas.
  */
+import { carriesEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { internalPathOf } from '@/lib/links/internal-link';
+import { canonicalAppPath } from '@/lib/links/legacy-paths';
 import type { CoqueNative } from '@/lib/native-shell';
 
 export const PONT_LIENS = 'MeeshyLinks';
@@ -29,17 +31,28 @@ const lire = (href: string): URL | null => {
 /**
  * `meeshy://c/abc` — l'hôte est le premier segment, comme le lit
  * `DeepLinkRouter.swift` côté iOS : l'adresse équivalente est `/c/abc`.
+ *
+ * Lu sur l'adresse BRUTE, jamais sur `url.host` (#10626) : une WebView d'avant
+ * Chrome 130 lit un schéma non spécial avec un hôte VIDE et un chemin
+ * `//c/abc`, et le lien d'un widget ou d'une notification rouvrait alors la
+ * liste. Le reste est relu sous une origine factice, ce qui sépare chemin,
+ * requête et fragment de la même façon partout.
  */
-const cheminDuSchemaCourt = (url: URL, isAppPath: (path: string) => boolean): string | null => {
-  const pathname = `/${url.host}${url.pathname === '/' ? '' : url.pathname}`;
-  return isAppPath(pathname) ? `${pathname}${url.search}${url.hash}` : null;
+const cheminDuSchemaCourt = (href: string, isAppPath: (path: string) => boolean): string | null => {
+  const reste = href.slice(SCHEMA_COURT.length).replace(/^\/+/, '');
+  const url = lire(`https://lien.invalid/${reste}`);
+  // Un lien à jeton d'e-mail n'entre jamais par `meeshy://` (#10870, miroir de
+  // `DeepLinkRouter.swift`) : n'importe quelle page ou app ouvre ce schéma.
+  if (url === null || carriesEmailLinkSecret(url.pathname)) return null;
+  const chemin = canonicalAppPath(url.pathname);
+  return isAppPath(chemin) ? `${chemin}${url.search}${url.hash}` : null;
 };
 
 /** Le chemin in-app d'un lien reçu par la coque, ou `null` s'il ne mène à aucun écran. */
 export function cheminDuLienEntrant(href: string, isAppPath: (path: string) => boolean): string | null {
   const url = lire(href);
   if (url === null) return null;
-  if (url.protocol === SCHEMA_COURT) return cheminDuSchemaCourt(url, isAppPath);
+  if (url.protocol === SCHEMA_COURT) return cheminDuSchemaCourt(href, isAppPath);
   return internalPathOf(href, { origins: [], isAppPath });
 }
 

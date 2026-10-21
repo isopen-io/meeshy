@@ -14,6 +14,14 @@
  * `.except()` est ce qui garantit qu'un autorisé assis dans la room du fil ne
  * reçoive pas les deux.
  *
+ * #10205, FAIL-CLOSED — l'effectif ne voyage QUE vers les rooms PERSONNELLES
+ * des comptes (`user:<User.id>`) encore participants, résolues au moment de
+ * l'émission. La room du FIL — où peuvent siéger un invité, ou une socket dont
+ * l'appartenance a changé depuis son `join` — ne reçoit qu'une copie SANS
+ * effectif, qui exclut les rooms déjà servies. Le sujet d'un départ
+ * (`participant-left` / `-banned`) n'est plus participant : il reçoit la copie
+ * sans effectif.
+ *
  * @jest-environment node
  */
 
@@ -35,157 +43,126 @@ function makeRecorder() {
 
 const conversationId = 'c_1';
 const event = 'conversation:participant-left';
+const joined = 'conversation:participant-joined';
 
-const member = (id: string, userId: string | null) => ({ id, userId, role: 'member', user: { role: 'USER' } });
+const member = (id: string, userId: string | null, role = 'member', platformRole = 'USER') =>
+  ({ id, userId, role, user: userId ? { role: platformRole } : null });
 
-describe('emitConversationMemberCountEvent', () => {
-  it('plafonne pour tout le monde quand personne n\'est autorisé', () => {
-    const { io, emissions } = makeRecorder();
+const emit = (params: { participants: any[]; memberCount: number; event?: string; payload?: Record<string, unknown> }) => {
+  const { io, emissions } = makeRecorder();
+  emitConversationMemberCountEvent({
+    io,
+    conversationId,
+    participants: params.participants,
+    event: (params.event ?? event) as never,
+    payload: params.payload ?? { conversationId, userId: 'u_gone' },
+    memberCount: params.memberCount,
+  });
+  return emissions;
+};
 
-    emitConversationMemberCountEvent({
-      io,
-      conversationId,
-      participants: [member('p_1', 'u_1'), member('p_anon', null)],
-      event,
-      payload: { conversationId, userId: 'u_gone' },
-      memberCount: 250,
-    });
+const counted = (emissions: Emission[]) => emissions.filter((e) => 'memberCount' in e.payload);
+const countless = (emissions: Emission[]) => emissions.filter((e) => !('memberCount' in e.payload));
 
-    expect(emissions).toHaveLength(1);
-    expect(emissions[0].rooms).toEqual(['conversation:c_1', 'user:u_1', 'user:p_anon']);
-    expect(emissions[0].excluded).toEqual([]);
-    expect(emissions[0].payload).toEqual({
-      conversationId,
-      userId: 'u_gone',
-      memberCount: 199,
-      memberCountCapped: true,
-    });
+describe('emitConversationMemberCountEvent — l\'effectif ne part que vers les comptes participants', () => {
+  it('ne nomme JAMAIS la room du fil dans une chaîne qui porte l\'effectif', () => {
+    for (const memberCount of [12, 250]) {
+      const emissions = emit({
+        participants: [member('p_1', 'u_1'), member('p_admin', 'u_admin', 'admin'), member('p_anon', null)],
+        memberCount,
+      });
+      for (const e of counted(emissions)) {
+        expect(e.rooms).not.toContain('conversation:c_1');
+        expect(e.rooms.every((room) => room.startsWith('user:u_'))).toBe(true);
+      }
+    }
   });
 
-  it('sert l\'effectif ENTIER à l\'admin du groupe dans une seconde chaîne', () => {
-    const { io, emissions } = makeRecorder();
+  it('un invité (participant sans compte) ne reçoit que la copie SANS effectif', () => {
+    const emissions = emit({ participants: [member('p_1', 'u_1'), member('p_anon', null)], memberCount: 12 });
 
-    emitConversationMemberCountEvent({
-      io,
-      conversationId,
-      participants: [
-        member('p_1', 'u_1'),
-        { id: 'p_admin', userId: 'u_admin', role: 'admin', user: { role: 'USER' } },
-      ],
-      event,
-      payload: { conversationId, userId: 'u_gone' },
+    expect(counted(emissions).flatMap((e) => e.rooms)).not.toContain('user:p_anon');
+    const copy = countless(emissions);
+    expect(copy).toHaveLength(1);
+    expect(copy[0].rooms).toEqual(['conversation:c_1', 'user:p_anon']);
+    expect(copy[0].payload).toEqual({ conversationId, userId: 'u_gone' });
+  });
+
+  it('la copie sans effectif EXCLUT toutes les rooms déjà servies — une copie par socket', () => {
+    const emissions = emit({
+      participants: [member('p_1', 'u_1'), member('p_admin', 'u_admin', 'admin')],
       memberCount: 250,
     });
 
-    expect(emissions).toHaveLength(2);
+    const copy = countless(emissions)[0];
+    expect(copy.rooms).toEqual(['conversation:c_1']);
+    expect([...copy.excluded].sort()).toEqual(['user:u_1', 'user:u_admin']);
+  });
 
-    const capped = emissions[0];
-    expect(capped.rooms).toEqual(['conversation:c_1', 'user:u_1']);
-    // Sans l'exclusion, l'admin qui a le FIL ouvert recevrait la copie
-    // plafonnée par la room de conversation, en plus de la sienne.
-    expect(capped.excluded).toEqual(['user:u_admin']);
-    expect(capped.payload.memberCount).toBe(199);
-    expect(capped.payload.memberCountCapped).toBe(true);
+  it('plafonne pour les comptes non autorisés, sert l\'entier aux autorisés, au-delà du plafond', () => {
+    const emissions = emit({
+      participants: [
+        member('p_1', 'u_1'),
+        member('p_creator', 'u_creator', 'creator'),
+        member('p_mod', 'u_mod', 'member', 'MODERATOR'),
+        member('p_admin', 'u_admin', 'member', 'ADMIN'),
+        member('p_boss', 'u_boss', 'member', 'BIGBOSS'),
+        member('p_audit', 'u_audit', 'member', 'AUDIT'),
+      ],
+      memberCount: 250,
+    });
 
-    const exact = emissions[1];
-    expect(exact.rooms).toEqual(['user:u_admin']);
-    expect(exact.excluded).toEqual([]);
+    const [capped, exact] = counted(emissions);
+    expect(capped.rooms).toEqual(['user:u_1', 'user:u_audit']);
+    expect(capped.payload).toEqual({ conversationId, userId: 'u_gone', memberCount: 199, memberCountCapped: true });
+    expect(exact.rooms).toEqual(['user:u_creator', 'user:u_mod', 'user:u_admin', 'user:u_boss']);
     expect(exact.payload).toEqual({ conversationId, userId: 'u_gone', memberCount: 250 });
   });
 
-  it('autorise aussi le creator et les rôles plateforme ADMIN/BIGBOSS/MODERATOR', () => {
-    const { io, emissions } = makeRecorder();
+  it('sous le plafond, UNE chaîne porte l\'effectif à tous les comptes', () => {
+    const emissions = emit({ participants: [member('p_1', 'u_1'), member('p_admin', 'u_admin', 'admin')], memberCount: 12 });
 
-    emitConversationMemberCountEvent({
-      io,
-      conversationId,
-      participants: [
-        member('p_1', 'u_1'),
-        { id: 'p_creator', userId: 'u_creator', role: 'creator', user: { role: 'USER' } },
-        { id: 'p_mod', userId: 'u_mod', role: 'member', user: { role: 'MODERATOR' } },
-        { id: 'p_admin', userId: 'u_admin', role: 'member', user: { role: 'ADMIN' } },
-        { id: 'p_boss', userId: 'u_boss', role: 'member', user: { role: 'BIGBOSS' } },
-        { id: 'p_audit', userId: 'u_audit', role: 'member', user: { role: 'AUDIT' } },
-      ],
-      event,
-      payload: { conversationId },
-      memberCount: 250,
-    });
-
-    expect(emissions[0].rooms).toEqual(['conversation:c_1', 'user:u_1', 'user:u_audit']);
-    expect(emissions[1].rooms).toEqual([
-      'user:u_creator',
-      'user:u_mod',
-      'user:u_admin',
-      'user:u_boss',
+    expect(counted(emissions)).toEqual([
+      { rooms: ['user:u_1', 'user:u_admin'], excluded: [], event, payload: { conversationId, userId: 'u_gone', memberCount: 12 } },
     ]);
-    expect(emissions[1].payload.memberCount).toBe(250);
   });
 
-  // Sous le plafond, `presentMemberCount` rend la MÊME valeur aux deux
-  // audiences : la scission n'a plus rien à séparer. Une conversation de 12
-  // personnes — c'est-à-dire l'immense majorité des fanouts — payait deux
-  // filtres sur la liste des participants, deux constructions de chaîne et
-  // deux emits pour délivrer deux fois le même octet. Le chemin rapide est
-  // donc une chaîne UNIQUE, sans exclusion, exactement l'ancien fanout.
-  it('n\'émet qu\'UNE chaîne quand l\'effectif tient sous le plafond', () => {
-    const { io, emissions } = makeRecorder();
+  it('garde la chaîne comptée unique à 199 pile et rescinde à 200', () => {
+    const participants = [member('p_1', 'u_1'), member('p_admin', 'u_admin', 'admin')];
+    expect(counted(emit({ participants, memberCount: 199 }))).toHaveLength(1);
+    expect(counted(emit({ participants, memberCount: 200 }))).toHaveLength(2);
+  });
 
-    emitConversationMemberCountEvent({
-      io,
-      conversationId,
-      participants: [
-        member('p_1', 'u_1'),
-        { id: 'p_admin', userId: 'u_admin', role: 'admin', user: { role: 'USER' } },
-      ],
-      event,
-      payload: { conversationId },
+  it('le sujet d\'un DÉPART n\'est plus participant : ses appareils reçoivent la copie sans effectif', () => {
+    for (const departure of ['conversation:participant-left', 'conversation:participant-banned']) {
+      const emissions = emit({
+        participants: [member('p_1', 'u_1'), member('p_gone', 'u_gone')],
+        memberCount: 12,
+        event: departure,
+        payload: { conversationId, userId: 'u_gone' },
+      });
+
+      expect(counted(emissions).flatMap((e) => e.rooms)).toEqual(['user:u_1']);
+      expect(countless(emissions)[0].rooms).toEqual(['conversation:c_1', 'user:u_gone']);
+    }
+  });
+
+  it('le sujet d\'une ARRIVÉE est participant : il reçoit l\'effectif', () => {
+    const emissions = emit({
+      participants: [member('p_1', 'u_1'), member('p_new', 'u_new')],
       memberCount: 12,
+      event: joined,
+      payload: { conversationId, userId: 'u_new' },
     });
 
-    expect(emissions).toHaveLength(1);
-    expect(emissions[0].rooms).toEqual(['conversation:c_1', 'user:u_1', 'user:u_admin']);
-    expect(emissions[0].excluded).toEqual([]);
-    expect(emissions[0].payload).toEqual({ conversationId, memberCount: 12 });
+    expect(counted(emissions)[0].rooms).toEqual(['user:u_1', 'user:u_new']);
   });
 
-  // La borne, des deux côtés : à 199 pile la chaîne reste unique, à 200 la
-  // scission reprend — sinon le chemin rapide servirait l'entier à tout le
-  // monde d'un cran au-dessus du plafond.
-  it('garde la chaîne unique à 199 pile et rescinde à 200', () => {
-    const participants = [
-      member('p_1', 'u_1'),
-      { id: 'p_admin', userId: 'u_admin', role: 'admin', user: { role: 'USER' } },
-    ];
+  it('sans aucun compte participant, rien ne porte l\'effectif', () => {
+    const emissions = emit({ participants: [member('p_anon', null)], memberCount: 3 });
 
-    const atCap = makeRecorder();
-    emitConversationMemberCountEvent({
-      io: atCap.io,
-      conversationId,
-      participants,
-      event,
-      payload: { conversationId },
-      memberCount: 199,
-    });
-    expect(atCap.emissions).toHaveLength(1);
-    expect(atCap.emissions[0].payload).toEqual({ conversationId, memberCount: 199 });
-
-    const overCap = makeRecorder();
-    emitConversationMemberCountEvent({
-      io: overCap.io,
-      conversationId,
-      participants,
-      event,
-      payload: { conversationId },
-      memberCount: 200,
-    });
-    expect(overCap.emissions).toHaveLength(2);
-    expect(overCap.emissions[0].payload).toEqual({
-      conversationId,
-      memberCount: 199,
-      memberCountCapped: true,
-    });
-    expect(overCap.emissions[1].payload).toEqual({ conversationId, memberCount: 200 });
+    expect(counted(emissions)).toEqual([]);
+    expect(countless(emissions)).toHaveLength(1);
   });
 
   it('ne fait rien sans émetteur', () => {
@@ -194,7 +171,7 @@ describe('emitConversationMemberCountEvent', () => {
         io: null,
         conversationId,
         participants: [member('p_1', 'u_1')],
-        event,
+        event: event as never,
         payload: {},
         memberCount: 3,
       })

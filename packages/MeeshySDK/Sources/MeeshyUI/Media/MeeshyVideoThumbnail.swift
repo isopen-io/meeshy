@@ -67,6 +67,9 @@ public struct MeeshyVideoThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
+        .accessibilityAddTraits(onTap == nil ? [] : .isButton)
+        .accessibilityAction { onTap?() }
+        .accessibilityLabel(onTap == nil ? "" : String(localized: "media.video.play", bundle: .module))
         .task(id: videoUrlString) { await extractThumbnailIfNeeded() }
     }
 
@@ -273,8 +276,7 @@ public struct MeeshyVideoThumbnail: View {
     // MARK: - Duration formatting
 
     private static func formatDuration(milliseconds: Int) -> String {
-        let total = milliseconds / 1000
-        return String(format: "%d:%02d", total / 60, total % 60)
+        DurationFormat.clock(wholeSeconds: milliseconds / 1000)
     }
 }
 

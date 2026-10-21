@@ -16,6 +16,7 @@ import {
 } from '@meeshy/shared/types/engagement-scale';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites, type CounterWrite } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { EngagementScaleService } from '../../../../services/engagement/EngagementScaleService';
 import {
   nextConversationEngagement,
@@ -66,13 +67,12 @@ function makeCreditPrisma(options: {
   conversationRow?: Record<string, unknown> | null;
   engagementScore?: number;
 } = {}) {
-  const counterUpsert = jest.fn().mockResolvedValue({ count: 2 });
+  const counterWrite = jest.fn().mockResolvedValue({ count: 2 });
   const runCommandRaw = jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 50 } });
   const userUpdate = jest.fn().mockResolvedValue({});
   const conversationUpsert = jest.fn().mockResolvedValue({});
   const prisma = {
     engagementCounter: {
-      upsert: counterUpsert,
       findMany: jest.fn().mockResolvedValue((options.recentAxes ?? []).map((axisKey) => ({ axisKey }))),
     },
     engagementMilestone: {
@@ -91,9 +91,9 @@ function makeCreditPrisma(options: {
       update: userUpdate,
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: runCommandRaw,
+    $runCommandRaw: routeCounterWrites(counterWrite, runCommandRaw),
   } as unknown as PrismaClient;
-  return { prisma, counterUpsert, runCommandRaw, userUpdate, conversationUpsert };
+  return { prisma, counterWrite, runCommandRaw, userUpdate, conversationUpsert };
 }
 
 function fixedScale(scale: EngagementScale) {
@@ -113,8 +113,8 @@ function fakeIO() {
   return { io, emitted };
 }
 
-function creditedPoints(counterUpsert: jest.Mock): number {
-  return (counterUpsert.mock.calls[0][0] as { create: { points: number } }).create.points;
+function creditedPoints(counterWrite: jest.Mock): number {
+  return (counterWrite.mock.calls[0][0] as CounterWrite).points;
 }
 
 describe('EngagementScaleService — le barème effectif', () => {
@@ -194,15 +194,15 @@ describe('le crédit applique le barème', () => {
     const scale = scaleWith({
       operations: { 'tool.sticker': { points: 7, multiplied: false, cap: null, variantPoints: {} } },
     });
-    const { prisma, counterUpsert, runCommandRaw } = makeCreditPrisma({
+    const { prisma, counterWrite, runCommandRaw } = makeCreditPrisma({
       recentAxes: ['content.post', 'comment.text', 'conversation.private'],
     });
 
     await new EngagementService(prisma, { scale: fixedScale(scale) }).recordActivity('u-1', 'tool.sticker');
 
-    expect(creditedPoints(counterUpsert)).toBe(7);
-    const cmd = runCommandRaw.mock.calls[0][0] as { update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }> };
-    expect(cmd.update[0].$set.engagementScore.$add[1]).toBe(7);
+    expect(creditedPoints(counterWrite)).toBe(7);
+    const cmd = runCommandRaw.mock.calls[0][0] as { update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }> };
+    expect(cmd.update[0].$set.sparksSincePrestige.$add[1]).toBe(7);
   });
 
   it('le plafond de facteur du NIVEAU borne l\'élan', async () => {
@@ -210,18 +210,18 @@ describe('le crédit applique le barème', () => {
       operations: { 'tool.sticker': { points: 10, multiplied: true, cap: null, variantPoints: {} } },
       multiplier: { levelCaps: [{ minLevel: 0, maxFactor: 2 }] },
     });
-    const { prisma, counterUpsert } = makeCreditPrisma({
+    const { prisma, counterWrite } = makeCreditPrisma({
       recentAxes: ['content.post', 'comment.text', 'conversation.private'],
       engagementScore: 0,
     });
 
     await new EngagementService(prisma, { scale: fixedScale(scale) }).recordActivity('u-2', 'tool.sticker');
 
-    expect(creditedPoints(counterUpsert)).toBe(20);
+    expect(creditedPoints(counterWrite)).toBe(20);
   });
 
   it('aux défauts, le crédit reste celui d\'avant le barème', async () => {
-    const { prisma, counterUpsert } = makeCreditPrisma({ recentAxes: ['content.post'] });
+    const { prisma, counterWrite } = makeCreditPrisma({ recentAxes: ['content.post'] });
 
     await new EngagementService(prisma, { scale: fixedScale(DEFAULT_ENGAGEMENT_SCALE) }).recordActivity(
       'u-3',
@@ -229,7 +229,7 @@ describe('le crédit applique le barème', () => {
     );
 
     // contenu + outil actifs : ×2
-    expect(creditedPoints(counterUpsert)).toBe(DEFAULT_ENGAGEMENT_SCALE.operations['tool.sticker'].points * 2);
+    expect(creditedPoints(counterWrite)).toBe(DEFAULT_ENGAGEMENT_SCALE.operations['tool.sticker'].points * 2);
   });
 });
 
@@ -239,7 +239,7 @@ describe('le plafond journalier par conversation', () => {
   });
 
   it('plafond atteint aujourd\'hui ⇒ le geste ne crédite RIEN', async () => {
-    const { prisma, counterUpsert, runCommandRaw, userUpdate, conversationUpsert } = makeCreditPrisma({
+    const { prisma, counterWrite, runCommandRaw, userUpdate, conversationUpsert } = makeCreditPrisma({
       conversationRow: {
         totalPoints: 2,
         dayPoints: 2,
@@ -254,14 +254,14 @@ describe('le plafond journalier par conversation', () => {
       conversationId: 'c-1',
     });
 
-    expect(counterUpsert).not.toHaveBeenCalled();
+    expect(counterWrite).not.toHaveBeenCalled();
     expect(runCommandRaw).not.toHaveBeenCalled();
     expect(userUpdate).not.toHaveBeenCalled();
     expect(conversationUpsert).not.toHaveBeenCalled();
   });
 
   it('le plafond d\'hier ne compte plus aujourd\'hui', async () => {
-    const { prisma, counterUpsert, conversationUpsert } = makeCreditPrisma({
+    const { prisma, counterWrite, conversationUpsert } = makeCreditPrisma({
       conversationRow: {
         totalPoints: 2,
         dayPoints: 2,
@@ -278,7 +278,7 @@ describe('le plafond journalier par conversation', () => {
       { conversationId: 'c-1' },
     );
 
-    expect(counterUpsert).toHaveBeenCalledTimes(1);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
     const write = conversationUpsert.mock.calls[0][0] as { update: Record<string, unknown> };
     expect(write.update).toMatchObject({
       totalPoints: 3,
@@ -290,11 +290,11 @@ describe('le plafond journalier par conversation', () => {
   });
 
   it('sans conversation, aucun plafond ni état de conversation', async () => {
-    const { prisma, counterUpsert, conversationUpsert } = makeCreditPrisma();
+    const { prisma, counterWrite, conversationUpsert } = makeCreditPrisma();
 
     await new EngagementService(prisma, { scale: fixedScale(capped) }).recordActivity('u-1', 'tool.reaction');
 
-    expect(counterUpsert).toHaveBeenCalledTimes(1);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
     expect(conversationUpsert).not.toHaveBeenCalled();
   });
 });
@@ -401,7 +401,7 @@ describe('l\'annonce de l\'état au crédité', () => {
 describe('le barème écrit par l\'administration gouverne le crédit suivant', () => {
   it('un poids modifié s\'applique au geste suivant, sans redémarrage', async () => {
     let row: { config: unknown; updatedAt: Date; updatedById: string } | null = null;
-    const { prisma, counterUpsert } = makeCreditPrisma();
+    const { prisma, counterWrite } = makeCreditPrisma();
     const withStore = Object.assign(prisma, {
       engagementScaleConfig: {
         findUnique: jest.fn(async () => row),
@@ -416,14 +416,14 @@ describe('le barème écrit par l\'administration gouverne le crédit suivant', 
     const service = new EngagementService(withStore, { emitIO: () => undefined });
 
     await service.recordActivity('u1', 'content.text_message');
-    expect(creditedPoints(counterUpsert)).toBe(DEFAULT_ENGAGEMENT_SCALE.operations['content.text_message'].points);
+    expect(creditedPoints(counterWrite)).toBe(DEFAULT_ENGAGEMENT_SCALE.operations['content.text_message'].points);
 
     await engagementScaleServiceFor(withStore).write(
       scaleWith({ operations: { 'content.text_message': { points: 42, multiplied: false, cap: null, variantPoints: {} } } }),
       'admin-1',
     );
-    counterUpsert.mockClear();
+    counterWrite.mockClear();
     await service.recordActivity('u1', 'content.text_message');
-    expect(creditedPoints(counterUpsert)).toBe(42);
+    expect(creditedPoints(counterWrite)).toBe(42);
   });
 });

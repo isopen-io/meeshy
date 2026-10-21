@@ -1,5 +1,6 @@
 import {
   authorSelect,
+  postAuthorSelect,
   storyAuthorSelect,
   mediaSelect,
   mediaInclude,
@@ -92,6 +93,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'height',
         'thumbnailUrl',
         'thumbHash',
+        'imageVariants',
         'duration',
         'order',
         'caption',
@@ -156,7 +158,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
     });
 
     it('includes author identity on every comment preview', () => {
-      expect(commentsPreviewInclude.select.author).toEqual({ select: authorSelect });
+      expect(commentsPreviewInclude.select.author).toEqual({ select: postAuthorSelect });
     });
 
     it('surfaces translations + originalLanguage so the Prisme resolver can render', () => {
@@ -242,6 +244,9 @@ describe('posts/postIncludes — canonical shared selects', () => {
           // inexistant que la validation serveur existe pour supprimer.
           // La forme partagée est verrouillée par `repostReferenceInclude.test.ts`.
           'postMentions',
+          // #10315 — lus pour décider si l'original se sert encore, retirés par la projection.
+          'visibility',
+          'moderationHiddenAt',
         ].sort(),
       );
     });
@@ -320,7 +325,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
     it('composes every Post scalar (minus storyViews) with the five shared relation blocks', () => {
       expect(postInclude).toEqual({
         ...postScalarSelect,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
         media: mediaInclude,
         comments: commentsPreviewInclude,
         repostOf: repostOfInclude,

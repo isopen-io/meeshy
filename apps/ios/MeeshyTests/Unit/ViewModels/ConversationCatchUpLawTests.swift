@@ -170,4 +170,29 @@ final class ConversationCatchUpLawTests: XCTestCase {
             "Le modèle doit CONSULTER la loi, jamais rejouer sa cascade."
         )
     }
+
+    // MARK: - #10818 — quitter la conversation depuis le Résumé
+
+    /// Le Résumé ne rend aucune bulle : seule la SORTIE prouve qu'il a été lu.
+    /// Un retour direct à la liste, sans « Reprendre le fil », rattrape aussi.
+    func test_exitCatchesUp_fromTheSummary_isTrue() {
+        XCTAssertTrue(ConversationCatchUpLaw.exitCatchesUp(mode: .summary))
+    }
+
+    /// Ailleurs, la preuve vient d'ailleurs : les bulles (lot `seen`) et la
+    /// Rivière (atteindre le présent). Quitter la Rivière en cours de route ne
+    /// dit pas qu'on a tout lu.
+    func test_exitCatchesUp_fromAnyOtherMode_isFalse() {
+        for mode in ConversationReadingMode.allCases where mode != .summary {
+            XCTAssertFalse(ConversationCatchUpLaw.exitCatchesUp(mode: mode), "\(mode)")
+        }
+    }
+
+    /// La vue CONSULTE la loi à sa sortie par navigation, jamais au passage en
+    /// arrière-plan.
+    func test_guard_navigationExitConsultsTheLaw() throws {
+        let view = AppSourceGuard.stripComments(try AppSourceGuard.conversationViewSource())
+        XCTAssertTrue(view.contains("leaveConversationByNavigation()"))
+        XCTAssertTrue(view.contains("ConversationCatchUpLaw.exitCatchesUp(mode: readingModeController.mode)"))
+    }
 }

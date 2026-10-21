@@ -14,7 +14,7 @@ import os
 @MainActor
 enum StickerNearbyPlaces {
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "sticker-nearby")
+    private static let log = MeeshyLog.logger(.stickerNearby)
 
     /// Combien de lieux la palette propose. Cinq : au-delà, la rangée de
     /// capsules devient une liste à parcourir, et le chemin nominal (« le plus

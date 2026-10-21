@@ -62,6 +62,7 @@
 const PUSH_ROUTE_PATTERNS = {
   thread: '/c/$conversation',
   story: '/story/$post',
+  mood: '/mood/$post',
   post: '/post/$post',
   discover: '/discover',
   userProfile: '/u/$username',
@@ -87,6 +88,8 @@ const EPHEMERAL_ONLY_TYPES = [
   'friend_new_story',
   'friend_new_mood',
 ];
+/** JUMEAU de `MOOD_TYPES` (#10813) : la nouvelle humeur d'un contact a sa page. */
+const MOOD_TYPES = ['friend_new_mood'];
 const REQUEST_TYPES = ['friend_request', 'contact_request'];
 const PROFILE_TYPES = ['contact_joined', 'contact_recently_active'];
 const PROGRESSION_TYPES = [
@@ -313,7 +316,13 @@ function demandes() {
 /** JUMEAU de `resolveTarget()` + son repli de tap (`pushTapTarget()`). */
 function resolvePushTarget(data) {
   const postId = texte(data.postId);
-  if (postId !== '') return { route: surfaceSociale(data), params: { post: postId }, search: {} };
+  if (postId !== '' && MOOD_TYPES.indexOf(texte(data.type)) >= 0) return { route: 'mood', params: { post: postId }, search: {} };
+  if (postId !== '') {
+    const surface = surfaceSociale(data);
+    /* `?from=notification` (#10483) — le détail compte son impression en
+       `notification`, comme le lien de la liste (`TargetLink`). */
+    return { route: surface, params: { post: postId }, search: surface === 'post' ? { from: 'notification' } : {} };
+  }
 
   const conversationId = texte(data.conversationId);
   if (conversationId !== '') return { route: 'thread', params: { conversation: conversationId }, search: {} };
@@ -900,22 +909,131 @@ async function ouvrir(data, adresse) {
   client.postMessage({ type: NOTIFICATION_CLICKED_MESSAGE, url: url, data: data });
 }
 
+/**
+ * L'ENTONNOIR DES NOTIFICATIONS (#10507) — reçue, affichée, ouverte, écartée.
+ * Le worker n'a ni session ni file d'envoi : il ÉCRIT l'événement dans
+ * IndexedDB (`meeshy-telemetry` / `outbox` / `notification-events`, JUMEAU de
+ * `src/lib/notifications/notification-telemetry.ts`), et la page le verse
+ * dans la file v2 à son prochain chargement. Borné à 100 événements ; rien
+ * d'autre que l'identifiant de la notification, son type et le contenu visé
+ * — jamais un titre ni un corps.
+ */
+const TELEMETRIE_DB_NAME = 'meeshy-telemetry';
+const TELEMETRIE_DB_VERSION = 1;
+const TELEMETRIE_STORE_NAME = 'outbox';
+const TELEMETRIE_KEY = 'notification-events';
+const TELEMETRIE_CAP = 100;
+const OBJECT_ID = /^[0-9a-fA-F]{24}$/;
+const CODE_TECHNIQUE = /^[A-Za-z0-9_.:-]{1,64}$/;
+
+let fileTelemetrie = Promise.resolve();
+
+function identifiantEvenement() {
+  if (self.crypto && typeof self.crypto.randomUUID === 'function') return self.crypto.randomUUID();
+  const hex = (n) => Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+  return hex(8) + '-' + hex(4) + '-4' + hex(3) + '-' + (8 + Math.floor(Math.random() * 4)).toString(16) + hex(3) + '-' + hex(12);
+}
+
+function ouvrirTelemetrie() {
+  return new Promise((resolve) => {
+    if (typeof self.indexedDB === 'undefined') { resolve(null); return; }
+    let requete;
+    try {
+      requete = self.indexedDB.open(TELEMETRIE_DB_NAME, TELEMETRIE_DB_VERSION);
+    } catch {
+      resolve(null);
+      return;
+    }
+    requete.onupgradeneeded = () => {
+      const db = requete.result;
+      if (!db.objectStoreNames.contains(TELEMETRIE_STORE_NAME)) db.createObjectStore(TELEMETRIE_STORE_NAME);
+    };
+    requete.onerror = () => resolve(null);
+    requete.onsuccess = () => resolve(requete.result.objectStoreNames.contains(TELEMETRIE_STORE_NAME) ? requete.result : null);
+  });
+}
+
+function lireEtEcrire(db, transformer) {
+  return new Promise((resolve) => {
+    try {
+      const magasin = db.transaction(TELEMETRIE_STORE_NAME, 'readwrite').objectStore(TELEMETRIE_STORE_NAME);
+      const lecture = magasin.get(TELEMETRIE_KEY);
+      lecture.onsuccess = () => {
+        const avant = Array.isArray(lecture.result) ? lecture.result : [];
+        const ecriture = magasin.put(transformer(avant), TELEMETRIE_KEY);
+        ecriture.onsuccess = () => resolve();
+        ecriture.onerror = () => resolve();
+      };
+      lecture.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function evenementDeNotification(data, action) {
+  const id = texte(data.notificationId);
+  if (!OBJECT_ID.test(id)) return null;
+  const postId = texte(data.postId);
+  const type = texte(data.type);
+  return {
+    type: 'notification',
+    action: action,
+    eventId: identifiantEvenement(),
+    occurredAt: new Date().toISOString(),
+    target: { kind: 'notification', id: id, ...(OBJECT_ID.test(postId) ? { parent: { kind: 'post', id: postId } } : {}) },
+    surface: 'notifications',
+    channel: 'webpush',
+    ...(CODE_TECHNIQUE.test(type) ? { notificationType: type } : {}),
+  };
+}
+
+/** Best-effort, sérialisé : un échec d'IndexedDB ne touche jamais la bannière. */
+function noterNotification(data, actions) {
+  const evenements = actions.map((action) => evenementDeNotification(data, action)).filter((e) => e !== null);
+  if (evenements.length === 0) return Promise.resolve();
+  fileTelemetrie = fileTelemetrie
+    .then(() => ouvrirTelemetrie())
+    .then((db) => {
+      if (db === null) return undefined;
+      return lireEtEcrire(db, (avant) => avant.concat(evenements).slice(-TELEMETRIE_CAP)).then(() => db.close());
+    })
+    .catch(() => undefined);
+  return fileTelemetrie;
+}
+
+async function noterReception(payload) {
+  if (payload === null) return;
+  const data = objet(payload.data);
+  const affichee = await banniereAffichee(texte(data.notificationId)).catch(() => null);
+  await noterNotification(data, affichee === null ? ['received'] : ['received', 'displayed']);
+}
+
 self.addEventListener('push', (evenement) => {
-  evenement.waitUntil(afficher(charge(evenement)));
+  const payload = charge(evenement);
+  evenement.waitUntil(Promise.resolve(afficher(payload)).finally(() => noterReception(payload)));
+});
+
+self.addEventListener('notificationclose', (evenement) => {
+  evenement.waitUntil(noterNotification(objet(evenement.notification.data), ['dismissed']));
 });
 
 self.addEventListener('notificationclick', (evenement) => {
   evenement.notification.close();
   const data = objet(evenement.notification.data);
   const action = texte(evenement.action);
+  const ouverture = noterNotification(data, ['opened']);
   evenement.waitUntil(
-    texte(data.type) === CALL_PUSH_TYPE
-      ? ouvrirAppel(data, action)
-      : action === CALL_BACK_ACTION
-        ? rappeler(data)
-        : action === OPEN_MAP_ACTION || action === JOIN_ACTION || (action === REPLY_ACTION && texte(data.conversationId) !== '')
-          ? agirSurContenu(data, action)
-          : ouvrir(data),
+    Promise.all([
+      ouverture,
+      texte(data.type) === CALL_PUSH_TYPE
+        ? ouvrirAppel(data, action)
+        : action === CALL_BACK_ACTION
+          ? rappeler(data)
+          : action === OPEN_MAP_ACTION || action === JOIN_ACTION || (action === REPLY_ACTION && texte(data.conversationId) !== '')
+            ? agirSurContenu(data, action)
+            : ouvrir(data),
+    ]),
   );
 });
 
@@ -932,6 +1050,7 @@ self.meeshyPushTarget = {
   REQUEST_FILTER_PARAM: REQUEST_FILTER_PARAM,
   EPHEMERAL_ENTITIES: EPHEMERAL_ENTITIES,
   EPHEMERAL_ONLY_TYPES: EPHEMERAL_ONLY_TYPES,
+  MOOD_TYPES: MOOD_TYPES,
   REQUEST_TYPES: REQUEST_TYPES,
   PROFILE_TYPES: PROFILE_TYPES,
   GAME_LEAGUE_TYPES: GAME_LEAGUE_TYPES,

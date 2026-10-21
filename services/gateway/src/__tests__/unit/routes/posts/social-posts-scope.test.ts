@@ -141,7 +141,7 @@ describe('GET /social/posts?scope=home', () => {
     expect(body.pagination).toEqual({ limit: 5, hasMore: true, nextCursor: 'cur-1', form: 'keyset' });
     // Un scope sans tombstones sert les clés quand même, à vide — critère 5 :
     // « généralisé à tous les scopes », jamais réservé aux stories.
-    expect(body.meta).toEqual({ deletedIds: [], deletedIdsTruncated: false });
+    expect(body.meta).toMatchObject({ deletedIds: [], deletedIdsTruncated: false });
     expect(res.headers['cache-control']).toContain('private');
     await app.close();
   });
@@ -193,7 +193,7 @@ describe('GET /social/posts?scope=stories', () => {
     mockGetStories.mockResolvedValueOnce({ items: [], hasMore: false, nextCursor: null, deletedIds: ['gone-1'], deletedIdsTruncated: true });
     const app = await buildApp();
     const res = await app.inject({ method: 'GET', url: '/social/posts?scope=stories' });
-    expect(res.json().meta).toEqual({ deletedIds: ['gone-1'], deletedIdsTruncated: true });
+    expect(res.json().meta).toMatchObject({ deletedIds: ['gone-1'], deletedIdsTruncated: true });
     expect(res.json().meta.deletedStoryIds).toBeUndefined();
     await app.close();
   });

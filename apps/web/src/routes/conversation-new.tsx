@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { useStore } from 'zustand/react';
 
 import { Glyph } from '@/components/glyph';
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { createDirectConversation, createGroupConversation, CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { apiDeps } from '@/lib/api/deps';
 import { flattenFriendRequests, friendRequestsQueryOptions, type PersonSummary } from '@/lib/api/friend-requests';
@@ -26,6 +26,8 @@ import { useOnline } from '@/lib/net/online';
 import { coldStateOf, type ColdState } from '@/lib/view/cold-state';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
 import { useExhaustPages } from '@/lib/view/use-exhaust-pages';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { GroupComposer } from '@/routes/conversation-new-group';
 import { Link, href, navigate } from '@/routes/route-table';
@@ -234,14 +236,14 @@ export default function ConversationNewScreen() {
       <header className="flex shrink-0 items-center gap-3 px-4 pt-3 pb-2">
         <Link
           to="list"
-          aria-label="Retour"
+          aria-label={translate(currentInterfaceLanguage(), 'common.back')}
           className="grid size-11 shrink-0 place-items-center rounded-chip"
           style={{ color: 'var(--color-ios-ink)' }}
         >
           <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
         </Link>
         <h1 className="flex-1 truncate text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-          {mode === 'direct' ? 'Nouvelle conversation' : 'Nouveau groupe'}
+          {translate(currentInterfaceLanguage(), mode === 'direct' ? 'newConversation.title.direct' : 'newConversation.title.group')}
         </h1>
       </header>
 
@@ -254,8 +256,8 @@ export default function ConversationNewScreen() {
             type="search"
             value={query}
             onInput={(e) => setQuery(e.currentTarget.value)}
-            placeholder="Un ami, un nom, un identifiant…"
-            aria-label="Rechercher un contact"
+            placeholder={translate(currentInterfaceLanguage(), 'newConversation.search.placeholder')}
+            aria-label={translate(currentInterfaceLanguage(), 'newConversation.search.label')}
             className="w-full bg-transparent py-2 text-body outline-none"
             style={{ color: 'var(--color-ios-ink)' }}
           />
@@ -368,7 +370,7 @@ function FriendsSection(props: {
   if (props.state === 'loading') {
     return (
       <p aria-live="polite" className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Chargement de vos amis…
+        {translate(currentInterfaceLanguage(), 'newConversation.friends.loading')}
       </p>
     );
   }
@@ -376,12 +378,10 @@ function FriendsSection(props: {
     return (
       <div role="alert" className="grid justify-items-center gap-3 px-6 py-6 text-center">
         <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-          {props.state === 'offline' ? 'Hors ligne' : 'Vos amis sont indisponibles'}
+          {translate(currentInterfaceLanguage(), props.state === 'offline' ? 'common.offline' : 'newConversation.friends.unavailable')}
         </p>
         <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-          {props.state === 'offline'
-            ? 'Vos amis s’afficheront à la reconnexion.'
-            : 'Réessayez, ou cherchez quelqu’un par son nom.'}
+          {translate(currentInterfaceLanguage(), props.state === 'offline' ? 'newConversation.friends.offline.body' : 'newConversation.friends.error.body')}
         </p>
         {props.state === 'error' ? <RetryButton onRetry={props.onRetry} /> : null}
       </div>
@@ -390,21 +390,21 @@ function FriendsSection(props: {
   if (!props.hasAnyFriend) {
     return props.filtering ? null : (
       <p className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Aucun ami pour l’instant — tapez au moins deux caractères pour chercher quelqu’un.
+        {translate(currentInterfaceLanguage(), 'newConversation.friends.none')}
       </p>
     );
   }
   if (props.friends.length === 0) {
     return props.typedEnough ? null : (
       <p className="px-4 py-4 text-center text-body" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Aucun ami ne correspond — tapez au moins deux caractères pour chercher au-delà.
+        {translate(currentInterfaceLanguage(), 'newConversation.friends.noMatch')}
       </p>
     );
   }
   return (
     <section aria-labelledby="nouvelle-conversation-amis">
       <h2 id="nouvelle-conversation-amis" className="px-4 pt-3 pb-1 text-caption font-semibold" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Vos amis
+        {translate(currentInterfaceLanguage(), 'newConversation.friends.heading')}
       </h2>
       <ul>
         {props.friends.map((person) => (
@@ -436,7 +436,7 @@ function OthersSection(props: {
   return (
     <section aria-labelledby="nouvelle-conversation-autres">
       <h2 id="nouvelle-conversation-autres" className="px-4 pt-3 pb-1 text-caption font-semibold" style={{ color: 'var(--color-ios-ink-3)' }}>
-        Autres personnes
+        {translate(currentInterfaceLanguage(), 'newConversation.others.heading')}
       </h2>
       <ul>
         {props.isError ? (
@@ -445,12 +445,10 @@ function OthersSection(props: {
               <Glyph name="warningCircle" size={28} />
             </span>
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              {props.online ? 'Recherche indisponible' : 'Hors ligne'}
+              {translate(currentInterfaceLanguage(), props.online ? 'newConversation.search.unavailable' : 'common.offline')}
             </p>
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {props.online
-                ? 'Réessayez dans un instant — personne n’a été ajouté.'
-                : 'La recherche reprendra à la reconnexion.'}
+              {translate(currentInterfaceLanguage(), props.online ? 'newConversation.search.error.body' : 'newConversation.search.offline.body')}
             </p>
             <RetryButton onRetry={props.onRetry} />
           </li>
@@ -463,12 +461,12 @@ function OthersSection(props: {
             texte, pas un spinner : une recherche neuve n'a pas de cache.
           */
           <li aria-live="polite" className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-3)' }}>
-            Recherche en cours…
+            {translate(currentInterfaceLanguage(), 'newConversation.search.pending')}
           </li>
         ) : props.others.length === 0 ? (
           props.friendsShown === 0 ? (
             <li className="px-4 py-6 text-center text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Personne ne correspond à « {props.term} ».
+              {translate(currentInterfaceLanguage(), 'newConversation.search.noMatch', { term: props.term })}
             </li>
           ) : null
         ) : (
@@ -518,7 +516,9 @@ function PersonRow(props: {
         className="flex w-full items-center gap-3 px-4 py-3 text-start disabled:opacity-50"
         style={{ minHeight: 44 }}
       >
-        <Avatar
+        <PeerAvatar
+          presenceKey={props.person.id}
+          ringRef={props.person.ring}
           initials={initialsOf(name)}
           color={colorForName(name)}
           size={40}
@@ -553,7 +553,7 @@ function RetryButton(props: { readonly onRetry: () => void }) {
       className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
       style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
     >
-      Réessayer
+      {translate(currentInterfaceLanguage(), 'common.retry')}
     </button>
   );
 }

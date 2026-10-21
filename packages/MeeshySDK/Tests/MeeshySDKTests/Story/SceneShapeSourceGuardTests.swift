@@ -64,6 +64,10 @@ final class SceneShapeSourceGuardTests: XCTestCase {
             // gouverne un menu de recadrage — elle ne gouverne que la scène.
             "MeeshyUI/Media/MediaTypes.swift",
             "MeeshySDK/Models/MediaCrop.swift",
+            // La borne PAYSAGE du hero d'une carte de message (#10915) : 0,5625 y
+            // est la hauteur / largeur d'un média 16:9 au-delà duquel le hero est
+            // recadré, miroir de `HERO_RATIO_MIN` du web — pas la scène 9:16.
+            "MeeshySDK/MessageCard/MessageCardHero.swift",
         ]
 
         XCTAssertEqual(Set(porteurs), deliberes,

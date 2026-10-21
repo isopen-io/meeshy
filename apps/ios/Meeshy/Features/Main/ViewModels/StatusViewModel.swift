@@ -47,8 +47,10 @@ class StatusViewModel: ObservableObject {
     private let isOffline: @Sendable () -> Bool
 
     /// Groupement, persistance et flush (arrière-plan / relance) portés par
-    /// `ImpressionBatcher`.
-    private lazy var impressions = ImpressionBatcher(source: "status", postService: postService)
+    /// `ImpressionBatcher` — la file PARTAGÉE de l'humeur sur un avatar
+    /// (`SharedImpressionBatchers.moodAvatar`), que les hôtes sans ce modèle
+    /// alimentent aussi : une seule file, une seule clé de persistance.
+    private let impressions: ReachImpressionRecording
 
     /// A mood is "stuck offline" (recoverable as a draft) once it has been
     /// unsent for longer than this — the "pas envoyé dans la minute → offline"
@@ -72,8 +74,14 @@ class StatusViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
         postService: PostServiceProviding = PostService.shared,
-        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline }
+        isOffline: @escaping @Sendable () -> Bool = { NetworkMonitor.shared.isOffline },
+        moodImpressions: ReachImpressionRecording? = nil
     ) {
+        if let moodImpressions {
+            self.impressions = moodImpressions
+        } else {
+            self.impressions = SharedImpressionBatchers.moodAvatar
+        }
         self.mode = mode
         self.statusService = statusService
         self.socialSocket = socialSocket
@@ -89,9 +97,10 @@ class StatusViewModel: ObservableObject {
     // `viewCount` comme les autres. Aucune surface ne les alimentait — la barre
     // de moods était le seul contenu du produit dont la portée restait à zéro.
     //
-    // Même contrat que le feed : une impression par APPARITION du pill, groupée
-    // sur 3 s ; la vue UNIQUE part à l'ouverture du popover (dédupliquée côté
-    // serveur par `PostView`, donc rejouable sans risque).
+    // Même contrat que le feed : une impression par APPARITION de l'humeur sur
+    // un avatar (`countsImpression`), groupée sur 3 s, sans dédoublonnage ; la
+    // vue part à CHAQUE ouverture de la bulle, depuis son site unique
+    // (`StatusBubbleController.show`).
 
     /// Le mood `statusId` est apparu à l'écran.
     func trackImpression(_ statusId: String) {
@@ -102,11 +111,6 @@ class StatusViewModel: ObservableObject {
     /// groupement est perdu.
     func flushImpressions() async {
         await impressions.flushNow()
-    }
-
-    /// Le mood `statusId` a été ouvert (popover) — vue unique par utilisateur.
-    func markStatusViewed(_ statusId: String) {
-        Task { [postService] in try? await postService.viewPost(postId: statusId, duration: nil) }
     }
 
     // MARK: - Load Statuses
@@ -153,7 +157,7 @@ class StatusViewModel: ObservableObject {
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 if mode == .friends { myStatus = statuses.first }
-                try? await CacheCoordinator.shared.statuses.save(entries, for: cacheKey)
+                await bestEffort("statusViewModel.statuses.save", category: .cache) { try await CacheCoordinator.shared.statuses.save(entries, for: cacheKey) }
             } else {
                 if statuses.isEmpty {
                     error = String(localized: "status.load.error", defaultValue: "Impossible de charger les statuts")
@@ -273,7 +277,14 @@ class StatusViewModel: ObservableObject {
 
             if let entry = post.toStatusEntry() {
                 myStatus = entry
-                statuses.insert(entry, at: 0)
+                // L'écho socket de SA propre humeur (salle de l'auteur) peut
+                // arriver avant la réponse REST : l'insérer une seconde fois
+                // donnait deux lignes au même id.
+                if let existing = statuses.firstIndex(where: { $0.id == entry.id }) {
+                    statuses[existing] = entry
+                } else {
+                    statuses.insert(entry, at: 0)
+                }
                 await saveCacheSnapshot()
             }
         } catch {
@@ -432,8 +443,7 @@ class StatusViewModel: ObservableObject {
     func clearStatus() async {
         guard let status = myStatus else { return }
 
-        let snapshot = statuses
-        let previousStatus = myStatus
+        let index = statuses.firstIndex { $0.id == status.id }
         statuses.removeAll { $0.id == status.id }
         myStatus = nil
 
@@ -441,15 +451,20 @@ class StatusViewModel: ObservableObject {
             try await statusService.delete(statusId: status.id)
             await saveCacheSnapshot()
         } catch {
-            statuses = snapshot
-            myStatus = previousStatus
+            // Défaire CE retrait : les humeurs arrivées par socket pendant
+            // l'attente restent, et une humeur publiée entre-temps n'est pas
+            // remplacée par l'ancienne.
+            if let index {
+                statuses = OptimisticRollback.restoring(status, at: index, into: statuses)
+            }
+            if myStatus == nil { myStatus = status }
             FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Impossible de supprimer le statut", bundle: .main))
         }
     }
 
     private func saveCacheSnapshot() async {
         let cacheKey = "statuses_\(mode)"
-        try? await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey)
+        await bestEffort("statusViewModel.statuses.save.2", category: .cache) { try await CacheCoordinator.shared.statuses.save(statuses, for: cacheKey) }
     }
 
     // MARK: - Current User Info (for preview)
@@ -468,9 +483,16 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Lookup Methods
 
-    func statusForUser(userId: String) -> StatusEntry? {
+    /// L'humeur VIVANTE d'un utilisateur. Une humeur expire (`expiresAt`), mais
+    /// la liste n'est relue qu'au démarrage et au tirer pour rafraîchir — et
+    /// le cache la sert d'abord : sans ce filtre, l'avatar d'un ami gardait
+    /// une humeur éteinte au démarrage hors ligne ou après un jour au premier
+    /// plan. Même règle que l'humeur du tray (`StoryViewModel+Viewing`).
+    func statusForUser(userId: String, now: Date = Date()) -> StatusEntry? {
         guard let offset = statusIndexByUserId[userId], offset < statuses.count else { return nil }
-        return statuses[offset]
+        let entry = statuses[offset]
+        if let expiresAt = entry.expiresAt, expiresAt <= now { return nil }
+        return entry
     }
 
     // MARK: - Mood Tap Handler

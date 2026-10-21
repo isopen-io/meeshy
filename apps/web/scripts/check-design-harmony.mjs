@@ -101,6 +101,10 @@ export const EXEMPT_PATHS = [
     reason: "l'accent d'une conversation est DÉRIVÉ de ses métadonnées (langue, type, thème) — une couleur calculée, jamais un rôle de chrome",
   },
   {
+    prefix: 'lib/view/author-ink.ts',
+    reason: "la teinte d'un auteur est DÉRIVÉE de son identifiant (`authorAccentColor`) et rapprochée de l'encre jusqu'à l'AA ; ses hexadécimaux sont les fonds de MESURE, gardés égaux aux jetons par `author-ink.test.ts` — une couleur calculée, jamais un rôle de chrome",
+  },
+  {
     prefix: 'lib/languages.ts',
     reason: "la couleur d'identité d'une langue (projection de LanguageDisplay iOS) : une donnée du catalogue, entrée de l'accent dérivé",
   },

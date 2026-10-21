@@ -8,6 +8,8 @@ struct CallDetailSheet: View {
     let record: APICallRecord
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     @State private var networkJournal: CallNetworkJournalPresentation?
     @State private var transcript: CallTranscript?
     private var theme: ThemeManager { ThemeManager.shared }
@@ -66,14 +68,17 @@ struct CallDetailSheet: View {
 
     private var header: some View {
         let name = record.displayName(fallback: unknownCallerFallback)
+        let peerUserId: String? = record.peer?.userId
         return VStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: name,
                 context: .profileSheet,
                 accentColor: accentHex,
                 avatarURL: record.avatarURL,
-                presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
-            )
+                moodEmoji: peerUserId.flatMap { moodEmojiResolver?($0) },
+                presenceState: peerUserId.flatMap { PresenceManager.shared.knownPresenceState(for: $0) },
+                onMoodTap: peerUserId.flatMap { moodTapResolver?($0) }
+            ) }
             Text(name)
                 .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold))
                 .foregroundColor(theme.textPrimary)
@@ -99,7 +104,7 @@ struct CallDetailSheet: View {
     private var redialButtons: some View {
         HStack(spacing: MeeshySpacing.md) {
             redialButton(isVideo: false, title: String(localized: "call.start.audio", defaultValue: "Appel vocal", bundle: .main), icon: "phone.fill")
-            redialButton(isVideo: true, title: String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), icon: "video.fill")
+            redialButton(isVideo: true, title: String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), icon: "video.fill")
         }
     }
 
@@ -135,7 +140,7 @@ struct CallDetailSheet: View {
                 icon: record.isVideo ? "video.fill" : "phone.fill",
                 label: String(localized: "calls.detail.type", defaultValue: "Type", bundle: .main),
                 value: record.isVideo
-                    ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
+                    ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
                     : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
             )
             detailRow(
@@ -153,7 +158,7 @@ struct CallDetailSheet: View {
             if let data = record.dataLabel {
                 detailRow(
                     icon: "arrow.up.arrow.down",
-                    label: String(localized: "calls.detail.data", defaultValue: "Donnees", bundle: .main),
+                    label: String(localized: "calls.detail.data", defaultValue: "Données", bundle: .main),
                     value: data
                 )
             }

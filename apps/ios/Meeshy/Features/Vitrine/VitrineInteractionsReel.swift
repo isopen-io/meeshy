@@ -50,7 +50,7 @@ extension VitrineInteractions {
         publier(choixDuReel)
         await VitrineRendu.shared.attendre([.reelPublie])
         VitrineTournage.etape("reel")
-        try? await Task.sleep(for: tenueDuReel)
+        guard await cancellableSleep(for: tenueDuReel) else { return }
     }
 }
 #endif

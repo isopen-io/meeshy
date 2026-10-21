@@ -1,5 +1,4 @@
 #!/usr/bin/env bun
-/** @jsxImportSource preact */
 /**
  * PRÉCHAUFFE les sept pages institutionnelles en HTML STATIQUE.
  *
@@ -26,9 +25,12 @@ import { gzipSync } from 'node:zlib';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { render } from 'preact-render-to-string';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import packageJson from '../package.json';
+import { OG_IMAGE_SIZE } from '../src/landing/landing-document';
+import { BRAND_OG_IMAGE_PATH } from '../src/share-preview/share-preview';
+import { SHARE_PREVIEW_COPY } from '../src/share-preview/share-preview-copy';
 import budgets from '../budgets.json';
 
 import { InstitutionalPage } from '../src/institutional/page';
@@ -42,6 +44,7 @@ import { PAGE_TERMS } from '../src/institutional/terms';
 import type { ContentPage } from '../src/institutional/type';
 import { meeViewFiles } from '../src/institutional/mee-views';
 import { INLINE_SCHEME_BOOTSTRAP } from '../src/lib/inline-scheme-bootstrap.js';
+import { loadInterfaceCatalog } from '../src/lib/i18n-catalog';
 import { resolveDistDir } from './lib/resolve-dist-dir.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -62,6 +65,10 @@ const DIST = resolveDistDir(HERE, process.argv);
  * l'application, au SEUL point de build qui compose ces pages (#5606, § E3).
  */
 const VERSION = packageJson.version;
+
+/* Les pages sont des documents FRANÇAIS : le pied de marque lit l'annonce de
+   son lien au catalogue d'interface (`brand.credit.hint`, #10827). */
+await loadInterfaceCatalog('fr');
 
 /**
  * LE PLAFOND PAR PAGE (revue de #5606, défaut 3) — jusqu'ici gzip était
@@ -123,8 +130,11 @@ function producedSheet(): string {
 const escape = (s: string): string =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+/** Un texte tel que `react-dom/server` l'écrit dans le corps — l'apostrophe y devient `&#x27;`. */
+const served = (s: string): string => escape(s).replace(/'/g, '&#x27;');
+
 function document(route: string, page: ContentPage, sheet: string): string {
-  const body = render(<InstitutionalPage page={page} version={VERSION} />);
+  const body = renderToStaticMarkup(<InstitutionalPage page={page} version={VERSION} />);
   const url = `${ORIGIN}/${route}`;
   /* « À propos de Meeshy · Meeshy » : le suffixe de marque ne s'ajoute qu'aux
      titres qui ne la portent pas déjà. Un onglet qui bégaie le nom du produit
@@ -144,8 +154,16 @@ function document(route: string, page: ContentPage, sheet: string): string {
 <meta property="og:title" content="${escape(title)}">
 <meta property="og:description" content="${escape(page.description)}">
 <meta property="og:url" content="${escape(url)}">
-<meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#0b0c14" media="(prefers-color-scheme: dark)">
+<meta property="og:image" content="${escape(`${ORIGIN}${BRAND_OG_IMAGE_PATH}`)}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="${OG_IMAGE_SIZE.width}">
+<meta property="og:image:height" content="${OG_IMAGE_SIZE.height}">
+<meta property="og:image:alt" content="${escape(SHARE_PREVIEW_COPY.fr.brandImageAlt)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escape(title)}">
+<meta name="twitter:description" content="${escape(page.description)}">
+<meta name="twitter:image" content="${escape(`${ORIGIN}${BRAND_OG_IMAGE_PATH}`)}">
+<meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <link rel="icon" href="/favicon-48.png" type="image/png" sizes="48x48">
 <style>${sheet}</style>
@@ -207,11 +225,11 @@ function check(route: string, html: string, page: ContentPage): void {
   const failures: string[] = [];
 
   if (body.length < 500) failures.push(`corps quasi vide (${body.length} caractères)`);
-  if (!body.includes(escape(page.title))) failures.push('le titre de la page est absent du corps');
+  if (!body.includes(served(page.title))) failures.push('le titre de la page est absent du corps');
   // Chaque section doit avoir laissé une trace : un bloc perdu en silence est
   // exactement ce qu'un `switch` non exhaustif produirait.
   for (const section of page.sections) {
-    if (!body.includes(escape(section.title))) failures.push(`section absente : « ${section.title} »`);
+    if (!body.includes(served(section.title))) failures.push(`section absente : « ${section.title} »`);
   }
   if (!html.includes(`<link rel="canonical" href="${ORIGIN}/${route}">`)) failures.push('canonical absent ou faux');
   if (!html.includes('property="og:url"')) failures.push('og:url absent');
@@ -222,6 +240,11 @@ function check(route: string, html: string, page: ContentPage): void {
     failures.push("le script d'amorçage du schéma est absent ou altéré");
   }
   if (!html.includes('property="og:description"')) failures.push('og:description absent');
+  /* L'APERÇU D'UN LIEN PARTAGÉ (#10192) : une image 1200 × 630, servie par
+     l'image web (adresse ABSOLUE : la coque, qui ne l'embarque pas, la lit
+     aussi en ligne), et la grande carte qui la montre. */
+  if (!html.includes(`<meta property="og:image" content="${ORIGIN}${BRAND_OG_IMAGE_PATH}">`)) failures.push('og:image absent');
+  if (!html.includes('<meta name="twitter:card" content="summary_large_image">')) failures.push('twitter:card absent');
   // ZÉRO script externe : c'est la promesse de ces pages. Le seul `<script>`
   // toléré est le thème, inline.
   if (/<script[^>]+src=/.test(html)) failures.push('un script EXTERNE est référencé');

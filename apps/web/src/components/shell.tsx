@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import { useStore } from 'zustand/react';
 
 import { useEmailGatePresenter } from '@/lib/activation/email-gate-presenter';
 import { useActivationInviteArmed } from '@/lib/activation/invite-gate';
 import { useAppUpdateAnnounced } from '@/lib/app-update/pending-store';
 import { apiDeps } from '@/lib/api/deps';
+import { departureStore } from '@/lib/conversation-departure';
 import { sessionStore } from '@/lib/api/session';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadNotificationRowCatalog } from '@/lib/i18n-notification-row-catalog';
@@ -12,12 +13,15 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { conversationPreviewStore } from '@/lib/notifications/conversation-preview';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { skipLinkLabel } from '@/lib/skip-link';
-import { showsFloatingMenus } from '@/lib/view/floating-gate';
+import { floatingMenusHost, floatingMenusRouteKey } from '@/lib/view/floating-gate';
+import { isWide, subscribeWide } from '@/lib/view/split-query';
 import { useSyncPillArmed } from '@/lib/view/sync-pill-gate';
 import { useRoute } from '@/lib/router';
 
 import { CallLayer } from './call-layer';
+import { LazyFloatingMenus as FloatingMenus, loadFloatingMenus } from './floating-menus-lazy';
 import { loadConversationPreviewHost } from './conversation-preview-chunks';
+import { MoodPeekHost } from './mood-peek-host';
 import { ProfilePeekHost } from './profile-peek-host';
 import { SendSheetHost } from './send-sheet-host';
 import { TopBand } from './top-band';
@@ -80,18 +84,13 @@ const SyncPill = lazy(chargerPastille);
  * de l'application : les attendre au premier appui ferait clignoter la
  * navigation entière au démarrage.
  *
- * **`showsFloatingMenus` seul reste en statique**, exactement comme
+ * **`floatingMenusHost` seul reste en statique**, exactement comme
  * `useSyncPillArmed` : il ne connaît ni glyphe, ni libellé, ni géométrie — il
- * répond OUI ou NON sur une clé de route, et c'est son OUI qui rend le reste.
+ * répond OÙ (la fenêtre, la colonne de la liste, nulle part) sur une clé de
+ * route, et c'est sa réponse qui rend le reste. Leur chargement vit dans
+ * `floating-menus-lazy.ts` depuis #10117 : le cadre côte à côte pose les mêmes
+ * menus dans la colonne de la liste, sur le même chunk.
  */
-const chargerMenus = () =>
-  /* Les menus se disent dans la langue d'interface (#6206) : leur catalogue
-     est attendu avec leur chunk, en parallèle — `import()` comme le catalogue
-     sont idempotents, le préchargement ci-dessous ne paie rien deux fois. */
-  Promise.all([import('./floating-menus'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
-    default: m.FloatingMenus,
-  }));
-const FloatingMenus = lazy(chargerMenus);
 
 /**
  * ...ET LA BANNIÈRE DE MISE À JOUR (#6936), troisième exception à la minceur,
@@ -180,17 +179,36 @@ const ConversationPreviewHost = lazy(() =>
   })),
 );
 
+/**
+ * ...ET LE DÉPART D'UNE CONVERSATION (#7285, #7837) : la confirmation de
+ * « Quitter » / « Supprimer » et l'échec qui ramène la rangée valent pour la
+ * liste ET le fil, côte à côte sur grand écran — une seule couche, montée ici.
+ * `departureStore` seul est statique ; la demande va chercher l'hôte.
+ */
+const ConversationDepartureHost = lazy(() =>
+  Promise.all([import('./conversation-departure-host'), loadInterfaceCatalog(currentInterfaceLanguage())]).then(([m]) => ({
+    default: m.ConversationDepartureHost,
+  })),
+);
+
 export default function Shell({ children }: { children: ReactNode }) {
   const connecte = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiDeps.source === 'fixtures';
   const [bandeau, setBandeau] = useState(0);
   const banniereNotification = useStore(inAppBannerStore, (state) => state.current !== null);
   const apercuOuvert = useStore(conversationPreviewStore, (state) => state.conversationId !== null);
+  const departEnCours = useStore(departureStore, (state) => state.request !== null || state.failure !== null);
   const pastilleArmee = useSyncPillArmed();
   const majAnnoncee = useAppUpdateAnnounced();
   const invitationArmee = useActivationInviteArmed();
   const gardeEmail = useEmailGatePresenter();
-  const routeKey = useRoute().key;
-  const menusArmes = showsFloatingMenus(routeKey);
+  const route = useRoute();
+  const routeKey = route.key;
+  /* SUR ORDINATEUR, LE CADRE CÔTE À CÔTE POSE LES MENUS DANS LA COLONNE DE LA
+     LISTE (#10117) : la coquille ne les pose sur la fenêtre que hors du cadre,
+     par la même règle — jamais deux couches. */
+  const large = useSyncExternalStore(subscribeWide, isWide, () => false);
+  const invite = useStore(sessionStore, (state) => state.session.status === 'guest');
+  const menusArmes = floatingMenusHost({ routeKey: floatingMenusRouteKey(route), wide: large, guest: invite }) === 'screen';
 
   /* APRÈS le premier pixel, pendant qu'on est encore en ligne. L'effet ne
      s'exécute pas au rendu serveur, donc le préchauffage institutionnel n'en
@@ -198,7 +216,7 @@ export default function Shell({ children }: { children: ReactNode }) {
      le module déjà résolu au lieu de rouvrir une requête. */
   useEffect(() => {
     void chargerPastille();
-    void chargerMenus();
+    void loadFloatingMenus();
   }, []);
 
   return (
@@ -233,6 +251,9 @@ export default function Shell({ children }: { children: ReactNode }) {
           routes (`profile-peek-host.tsx`) — la feuille, elle, est chargée au
           premier toucher. */}
       <ProfilePeekHost />
+      {/* L'HUMEUR TOUCHÉE S'OUVRE PAR-DESSUS L'ÉCRAN (#10528), comme la bulle
+          d'iOS (`StatusBubbleController`) — chargée au premier toucher. */}
+      <MoodPeekHost />
       {/* L'APPEL AU-DESSUS DE TOUT (#6382) — un appel survit à la navigation
           et un appel entrant s'affiche sur toutes les routes, comme
           `CallPresentationLayer.swift`. Sans appel, rien n'est chargé. */}
@@ -269,6 +290,11 @@ export default function Shell({ children }: { children: ReactNode }) {
       {apercuOuvert ? (
         <Suspense fallback={null}>
           <ConversationPreviewHost />
+        </Suspense>
+      ) : null}
+      {departEnCours ? (
+        <Suspense fallback={null}>
+          <ConversationDepartureHost />
         </Suspense>
       ) : null}
       {/* LA FEUILLE D'ENVOI (#8884) : transfert, partage, publication — toute

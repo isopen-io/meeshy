@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
-import { createCallRecording, createCallRecordingStore, type CallRecorderHandle, type CallRecordingOutcome } from './call-recording';
+import { createCallRecording, type CallRecorderHandle, type CallRecordingOutcome } from './call-recording';
+import { createCallRecordingStore } from './call-recording-store';
 import { createCallStore, type ActiveCall } from './call-store';
 
 /**

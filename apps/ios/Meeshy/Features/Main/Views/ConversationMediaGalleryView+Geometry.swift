@@ -4,10 +4,10 @@ import MeeshyUI
 
 // MARK: - Le PLATEAU de la galerie média
 //
-// Extrait de `ConversationMediaGalleryView.swift` (#6141), qui était à 991
-// lignes sur un plafond de 1 200 : la géographie du plateau n'y tenait pas sans
+// Extrait de `ConversationMediaGalleryView.swift` pour tenir son budget de
+// lignes : la géographie du plateau n'y tenait pas sans
 // pousser le fichier hors budget. La découpe suit la même règle que celle des
-// pages au #4014 — une responsabilité par fichier — et les membres qu'elle
+// pages — une responsabilité par fichier — et les membres qu'elle
 // expose deviennent `internal` par la seule mécanique de l'extension.
 
 /// **Ce que la galerie DEMANDE au solveur de cadrage.**
@@ -32,7 +32,7 @@ import MeeshyUI
 /// qu'il n'en couvre jamais plus du tiers. Si l'overlay grandit, le plancher
 /// suit ; il n'y a pas deux constantes à tenir d'accord.
 ///
-/// Son jumeau sur l'autre axe (#6692) se dérive de la même façon : la colonne
+/// Son jumeau sur l'autre axe se dérive de la même façon : la colonne
 /// d'actions et ses deux gouttières tiennent dans le tiers latéral du cadre.
 /// Voir `minimumFrameWidth`.
 enum MediaGalleryStage {
@@ -56,15 +56,15 @@ enum MediaGalleryStage {
     /// Le cadre ne descend jamais sous trois fois son overlay.
     static var minimumFrameHeight: CGFloat { overlayHeight * 3 }
 
-    /// **Ni sous la LARGEUR que sa colonne d'actions exige** (#6692) — le
+    /// **Ni sous la LARGEUR que sa colonne d'actions exige** — le
     /// jumeau du plancher de hauteur, sur l'autre axe.
     ///
     /// Ce qui se pose sur le cadre a une largeur autant qu'une hauteur. Sans ce
-    /// plancher, une image très haute (900 × 3 600) ne gardait que la largeur de
-    /// son média ajusté, environ 128 pt à la recette : le nom, la date et la
-    /// ligne de format passaient chacun sur deux lignes, la dernière débordait
+    /// plancher, une image très haute (900 × 3 600) ne garderait que la largeur de
+    /// son média ajusté, environ 128 pt : le nom, la date et la
+    /// ligne de format passeraient chacun sur deux lignes, la dernière déborderait
     /// sous le coin arrondi, et la colonne réagir · répondre · composer se
-    /// posait au MILIEU de l'image.
+    /// poserait au MILIEU de l'image.
     ///
     /// La valeur se DÉRIVE de la colonne : sa cible, décollée du bord par une
     /// gouttière et du milieu par une autre, tient dans le TIERS latéral du
@@ -85,7 +85,20 @@ enum MediaGalleryStage {
         (gutter + MediaStageActionColumn.width + gutter) / MediaStageSeek.lateralFraction
     }
 
-    /// **La bande de progression, elle non plus, n'est pas un nombre** (#6162).
+    /// **Une vidéo n'a pas de plancher : son cadre épouse son ratio.**
+    ///
+    /// Les deux planchers protègent ce qui se pose SUR le cadre. Le chrome, lui,
+    /// s'aligne sur le plateau et flotte par-dessus ; et sur une vidéo,
+    /// un cadre plus haut que l'image n'est pas un hors-champ habillé, ce sont
+    /// des bandes autour de l'image qu'on est venu regarder (une 16:9 tenait dans
+    /// 206 pt et recevait 330 pt de cadre). Le média n'est ni rogné ni agrandi :
+    /// seul le cadre cesse de dépasser l'image. Les autres natures gardent leurs
+    /// planchers.
+    static func minimumFrame(for kind: AttachmentKind) -> (height: CGFloat, width: CGFloat) {
+        kind == .video ? (0, 0) : (minimumFrameHeight, minimumFrameWidth)
+    }
+
+    /// **La bande de progression, elle non plus, n'est pas un nombre.**
     ///
     /// Elle vaut ce que la barre du SDK occupe réellement
     /// (`TransportLayout.barHeight`). Recopier 48 marcherait aujourd'hui et
@@ -122,18 +135,23 @@ enum MediaGalleryStage {
     static func corridors(safeTop: CGFloat,
                           safeBottom: CGFloat,
                           attachments: [MessageAttachment]) -> MediaStageFraming.Corridors {
+        corridors(safeTop: safeTop, safeBottom: safeBottom, lot: GalleryLotShape(attachments))
+    }
+
+    static func corridors(safeTop: CGFloat,
+                          safeBottom: CGFloat,
+                          lot: GalleryLotShape) -> MediaStageFraming.Corridors {
         MediaStageFraming.Corridors(
             safeTop: safeTop,
             top: topCorridorHeight,
-            rail: attachments.count > 1 ? FilmstripMetrics.reservedHeight : 0,
-            transport: carriesDuration(attachments) ? transportBandHeight : 0,
+            rail: lot.isSeries ? FilmstripMetrics.reservedHeight : 0,
+            transport: lot.carriesDuration ? transportBandHeight : 0,
             safeBottom: safeBottom,
             gutter: gutter
         )
     }
 
     /// **Ce que le plateau prend EN HAUT — et ce qu'il rend en plein cadre**
-    /// (#6142).
     ///
     /// Les deux retraits tombent à zéro dès que l'état bascule, et c'est ce qui
     /// fait du plein cadre autre chose qu'un fondu de chrome : tant que le pager
@@ -145,7 +163,7 @@ enum MediaGalleryStage {
         presentation.showsPlateau ? corridors.safeTop + corridors.top : 0
     }
 
-    /// Et EN BAS — le rail, la bande de progression (#6162), la zone sûre, plus
+    /// Et EN BAS — le rail, la bande de progression, la zone sûre, plus
     /// la gouttière qui décolle le cadre de ce qui le suit.
     static func bottomInset(presentation: StagePresentation,
                             corridors: MediaStageFraming.Corridors) -> CGFloat {
@@ -163,7 +181,7 @@ enum MediaGalleryStage {
         return CGFloat(width) / CGFloat(height)
     }
 
-    /// **Le rapport que le solveur reçoit pour une PAGE** (#6709).
+    /// **Le rapport que le solveur reçoit pour une PAGE.**
     ///
     /// Une page scène est une pièce SYNTHÉTIQUE, sans dimensions : lui demander
     /// `ratio(of:)` rendrait `nil`, et le cadre prendrait toute la zone libre au
@@ -171,15 +189,14 @@ enum MediaGalleryStage {
     /// valeur (`GallerySceneItem.aspect`, dont `PostGalleryLot.sceneAspect` est
     /// le site unique) ; celui d'une image ou d'une vidéo, de ses dimensions.
     /// **Le rapport d'une page — TOUJOURS celui du canvas, cardée ou en plein
-    /// cadre** (#6806, superseded #6896/lot #6904).
+    /// cadre.**
     ///
-    /// Avant #6896, une scène qui n'était qu'une image se présentait au
-    /// rapport de son IMAGE sur une CARTE (`SceneFraming.presentationAspect`,
-    /// désormais sans appelant hors tests) et à celui de son CANVAS en plein
-    /// cadre — deux réponses selon la surface. La décision porteur du
-    /// 2026-09-17 retire l'exception : la scène est TOUJOURS 9:16
-    /// (`SceneShape.aspect`, `PostGalleryLot.sceneAspect`, `surface(inFullFrame:)`
-    /// ignore désormais son paramètre) — mesurée une fois pour de bon par
+    /// Une scène est TOUJOURS 9:16 (`SceneShape.aspect`,
+    /// `PostGalleryLot.sceneAspect`, `surface(inFullFrame:)` ignore son
+    /// paramètre) : une scène qui n'est qu'une image ne se présente pas au
+    /// rapport de son IMAGE sur une CARTE (`SceneFraming.presentationAspect` n'a
+    /// plus d'appelant hors tests) et à celui de son CANVAS en plein cadre —
+    /// deux réponses selon la surface. Mesuré une fois pour de bon par
     /// `GallerySceneBackdropUnicityTests.test_cardeeEtPleinCadre_rendentExactementLaMemeSurface`.
     ///
     /// Une pièce jointe ordinaire ne connaît pas cette question : son rapport
@@ -200,8 +217,10 @@ enum MediaGalleryStage {
     static func resolve(viewport: CGSize,
                         mediaRatio: CGFloat?,
                         presentation: MediaStageFraming.Presentation,
-                        corridors: MediaStageFraming.Corridors) -> MediaStageFraming.Result {
-        MediaStageFraming.resolve(
+                        corridors: MediaStageFraming.Corridors,
+                        kind: AttachmentKind = .image) -> MediaStageFraming.Result {
+        let floors = minimumFrame(for: kind)
+        return MediaStageFraming.resolve(
             MediaStageFraming.Input(
                 viewport: viewport,
                 mediaRatio: mediaRatio ?? freeRegionRatio(viewport: viewport,
@@ -210,13 +229,13 @@ enum MediaGalleryStage {
                 corridors: corridors,
                 presentation: presentation,
                 cardedCornerRadius: cornerRadius,
-                minimumFrameHeight: minimumFrameHeight,
-                minimumFrameWidth: minimumFrameWidth
+                minimumFrameHeight: floors.height,
+                minimumFrameWidth: floors.width
             )
         )
     }
 
-    /// **Ce qui se peint DERRIÈRE le média, dans son cadre** (#6143, spec § 2.1).
+    /// **Ce qui se peint DERRIÈRE le média, dans son cadre** (spec § 2.1).
     ///
     /// Le hors-champ est habillé, jamais noir par défaut : le ThumbHash du média
     /// quand il en porte un, le noir sinon. Le noir n'est pas un repli honteux —
@@ -244,17 +263,17 @@ enum MediaGalleryStage {
     }
 
     /// **Le nom de l'espace du PLATEAU** — la région qui porte le cadre et le chrome
-    /// (#6760), où la colonne d'actions mesure sa place (#6709).
+    /// où la colonne d'actions mesure sa place.
     nonisolated static let cadreSpace = "media.stage.cadre"
 
-    /// **Ce que la colonne d'actions a SOUS elle** (#6709, recette du 2026-09-16).
+    /// **Ce que la colonne d'actions a SOUS elle.**
     ///
-    /// Depuis #6760, le chrome s'aligne sur le PLATEAU, et non plus sur le cadre : la
+    /// Le chrome s'aligne sur le PLATEAU, et non sur le cadre : la
     /// colonne se pose au bas de la région. Sous un cadre plus court que la région — un
     /// panorama —, elle tombe HORS du cadre, sur le sol noir de la galerie. Sa teinte
-    /// (#6693) doit suivre ce qui y est peint, jamais un média qu'elle ne couvre pas. Sur
+    /// doit suivre ce qui y est peint, jamais un média qu'elle ne couvre pas : sur
     /// la page panorama 4:1 d'un post, teintée d'après la vignette claire du panorama,
-    /// son glyphe sombre se lisait à 1,16:1 sur le noir (cadre arrêté à y ≈ 598, colonne
+    /// son glyphe sombre se lirait à 1,16:1 sur le noir (cadre arrêté à y ≈ 598, colonne
     /// à y 649).
     ///
     /// La règle lit trois zones sur la région mesurée. Le cadre et son média y sont posés
@@ -292,6 +311,15 @@ enum MediaGalleryStage {
         return MediaChromeBackdrop(key: attachment.id, thumbHash: empreinte, bitmapURL: nil)
     }
 
+    /// **Le viewport du solveur est celui que la galerie MESURE.**
+    ///
+    /// La fenêtre lue dans un `body` n'invalide rien quand elle change de taille
+    /// (Split View, Stage Manager, rotation) : les cotes resteraient celles de
+    /// l'ouverture. Elle ne sert donc que de repli avant la première mesure.
+    static func viewport(measured: CGSize, window: CGSize) -> CGSize {
+        measured.width > 0 && measured.height > 0 ? measured : window
+    }
+
     private static func freeRegionRatio(viewport: CGSize,
                                         presentation: MediaStageFraming.Presentation,
                                         corridors: MediaStageFraming.Corridors) -> CGFloat {
@@ -306,7 +334,7 @@ enum MediaGalleryStage {
 
 // MARK: - Le hors-champ, habillé
 
-/// **La couche qui habille le hors-champ d'un média** (#6143).
+/// **La couche qui habille le hors-champ d'un média.**
 ///
 /// Elle se pose SOUS le média, à l'intérieur du cadre : ce qui déborde est
 /// clippé par le cadre arrondi de la page. Le noir d'abord — c'est le fond du
@@ -353,6 +381,26 @@ struct MediaStageBackdrop: View {
     }
 }
 
+// MARK: - Le cadre plié à son conteneur
+
+/// **Le cadre d'une page tient dans la place qu'elle reçoit RÉELLEMENT.**
+///
+/// Le solveur calcule contre le viewport de la galerie ; une page peut recevoir
+/// moins — page protégée dans la couche sécurisée, fenêtre redimensionnée. Le
+/// conteneur se mesure ici et le cadre s'y plie (`MediaStageFraming.Result.fitted`),
+/// centré : un conteneur assez grand rend les cotes du solveur intactes.
+struct FittedMediaStage<Content: View>: View {
+    let stage: MediaStageFraming.Result
+    @ViewBuilder let content: (MediaStageFraming.Result) -> Content
+
+    var body: some View {
+        GeometryReader { proxy in
+            content(stage.fitted(in: proxy.size))
+                .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+    }
+}
+
 // MARK: - Le plateau, côté vue
 
 extension ConversationMediaGalleryView {
@@ -362,13 +410,18 @@ extension ConversationMediaGalleryView {
     /// dimensionné contre le second poserait le rail hors cadre.
     var stageCorridors: MediaStageFraming.Corridors {
         MediaGalleryStage.corridors(
-            safeTop: DeviceLayout.safeAreaTop,
-            safeBottom: DeviceLayout.safeAreaBottom,
-            attachments: allAttachments
+            safeTop: galleryInsets.top,
+            safeBottom: galleryInsets.bottom,
+            lot: lotShape
         )
     }
 
-    /// **L'état que le SOLVEUR reçoit — site unique** (#6789).
+    /// Le viewport que le solveur reçoit — mesuré par la racine.
+    var stageViewport: CGSize {
+        MediaGalleryStage.viewport(measured: measuredViewport, window: DeviceLayout.windowSize)
+    }
+
+    /// **L'état que le SOLVEUR reçoit — site unique.**
     ///
     /// Le voile d'une ouverture efface le CHROME sans libérer sa place :
     /// `MediaStageVeil.geometryPresentation` prend les ouvertures et ne les lit
@@ -377,7 +430,7 @@ extension ConversationMediaGalleryView {
     /// NE FAISANT RIEN ne se teste pas — et se perd au premier lot qui ajoute un
     /// site.
     ///
-    /// **Les DEUX ouvertures y entrent** (#6817) : une barre de réponse qui
+    /// **Les DEUX ouvertures y entrent** : une barre de réponse qui
     /// libérerait la place du plateau ferait changer le média de taille à chaque
     /// montée du clavier, pendant qu'on écrit à son sujet.
     var stageGeometryPresentation: StagePresentation {
@@ -399,51 +452,50 @@ extension ConversationMediaGalleryView {
     /// Le cadre de CE média. Chaque page a le sien : une vidéo 16:9 et une scène
     /// 9:16 gardent les mêmes couloirs, seul le cadre change entre elles.
     ///
-    /// **L'état d'immersion entre ici** (#6142) : `framing` le projette sur le
+    /// **L'état d'immersion entre ici** : `framing` le projette sur le
     /// solveur, donc franchir une porte change des COTES. Un état qui n'aurait
     /// commandé que du chrome aurait laissé la loi de cadrage sans interrupteur.
     ///
-    /// **Une page scène reçoit le rapport de SA scène** (#6709) : sa pièce est
+    /// **Une page scène reçoit le rapport de SA scène** : sa pièce est
     /// synthétique, sans dimensions — `mediaRatio(of:scenes:)` le sait.
     func stage(for attachment: MessageAttachment) -> MediaStageFraming.Result {
         MediaGalleryStage.resolve(
-            viewport: DeviceLayout.windowSize,
+            viewport: stageViewport,
             mediaRatio: MediaGalleryStage.mediaRatio(of: attachment,
                                                      scenes: sceneContext?.scenes ?? [:],
                                                      presentation: stageGeometryPresentation),
             presentation: stageGeometryPresentation.framing,
-            corridors: stageCorridors
+            corridors: stageCorridors,
+            kind: sceneContext?.scenes[attachment.id] == nil ? attachment.kind : .image
         )
     }
 
-    /// **Le cadre d'une page SCÈNE — la loi de forme, pas le solveur** (#6904).
+    /// **Le cadre d'une page SCÈNE — la loi de forme, pas le solveur.**
     ///
     /// Une scène ne se cadre pas comme une pièce jointe : `GallerySceneStage`
     /// projette `SceneShape.layout(in:)`, qui tient les DEUX viewports d'UNE
     /// même carte — cadrée, elle tient entière dans la zone libre du plateau ;
     /// immersive, la MÊME carte occupe le viewport entier, sans couloir ni
-    /// chrome (elle grandit, elle ne se remplit pas — #6896, directive du
-    /// 2026-09-17). `stage(for:)` reste la réponse des pages image et vidéo, et
+    /// chrome (elle grandit, elle ne se remplit pas). `stage(for:)` reste la
+    /// réponse des pages image et vidéo, et
     /// celle du CHROME du plateau, qui se pose sur la même zone.
     ///
-    /// **Le fond n'est PLUS élu ici** (directive porteur du 2026-09-17, lot
-    /// #6904). La galerie choisissait le hachage étiré quand la scène en
-    /// portait un ; le lecteur de stories choisissait la couleur dominante. La
-    /// même carte avait donc deux fonds selon la surface qui l'ouvrait, et
-    /// aucun témoin ne pouvait rougir — chacun était juste chez lui. La loi le
-    /// nomme désormais (`SceneShape.cardedBackdrop`), et le sol noir d'une
+    /// **Le fond n'est pas élu ici.** Une galerie qui choisirait le hachage étiré
+    /// quand la scène en porte un, pendant que le lecteur de stories choisit la
+    /// couleur dominante, donnerait à la même carte deux fonds selon la surface
+    /// qui l'ouvre, sans qu'aucun témoin ne puisse rougir — chacun serait juste
+    /// chez lui. La loi le nomme (`SceneShape.cardedBackdrop`), et le sol noir d'une
     /// scène sans empreinte vit dans `SceneBackdropView`, où il vaut pour les
     /// trois fonds à la fois.
     ///
-    /// **Sans paramètre** (revue du tour 3) : la phrase qui en justifiait un
-    /// ici — « c'est la scène qui porte l'empreinte avec laquelle ce fond se
-    /// calcule » — décrivait `SceneCard(thumbHash: item.thumbHash)`, monté à
-    /// côté par l'appelant, jamais lu PAR cette fonction. Le cadre d'une scène
-    /// ne dépend que du plateau (viewport, présentation, couloirs) : deux
+    /// **Sans paramètre** : le cadre d'une scène ne dépend que du plateau
+    /// (viewport, présentation, couloirs) — l'empreinte, portée par
+    /// `SceneCard(thumbHash: item.thumbHash)`, est montée à côté par l'appelant
+    /// et jamais lue PAR cette fonction : deux
     /// scènes ouvertes dans le même état reçoivent le même cadre.
     func sceneStage() -> GallerySceneStage.Frame {
         GallerySceneStage.frame(
-            viewport: DeviceLayout.windowSize,
+            viewport: stageViewport,
             presentation: stageGeometryPresentation,
             corridors: stageCorridors
         )
@@ -452,7 +504,7 @@ extension ConversationMediaGalleryView {
     /// Le cadre de la page OUVERTE — celui que l'overlay habille.
     var currentStage: MediaStageFraming.Result {
         guard currentIndex < allAttachments.count else {
-            return MediaGalleryStage.resolve(viewport: DeviceLayout.windowSize,
+            return MediaGalleryStage.resolve(viewport: stageViewport,
                                              mediaRatio: nil,
                                              presentation: stageGeometryPresentation.framing,
                                              corridors: stageCorridors)
@@ -460,11 +512,11 @@ extension ConversationMediaGalleryView {
         return stage(for: allAttachments[currentIndex])
     }
 
-    /// **Le cadre dit à la légende combien de place il a** (#6141).
+    /// **Le cadre dit à la légende combien de place il a.**
     ///
     /// Dépliée, elle est CLIPPÉE par le cadre arrondi. Le plafond de 420 pt du
     /// composant partagé a été écrit pour un hôte plein écran ; sur un cadre à
-    /// son plancher (330), il coupait une phrase au milieu — une troncature
+    /// son plancher (330), il couperait une phrase au milieu — une troncature
     /// SILENCIEUSE, exactement ce que `MediaCaptionOverlay` existe pour éviter.
     var cadreCaptionMaxHeight: CGFloat {
         min(420, max(120, currentStage.frame.height - MediaGalleryStage.overlayHeight))
@@ -480,7 +532,7 @@ extension ConversationMediaGalleryView {
     /// couleur, même transparente, teste les touches et volerait au pager tous
     /// les gestes du cadre.
     ///
-    /// **La colonne d'actions est le second occupant du cadre** (#6161). Elle
+    /// **La colonne d'actions est le second occupant du cadre.** Elle
     /// est déclarée ICI, donc à l'INTÉRIEUR du `.frame` et du `.clipShape` qui
     /// suivent : elle est dimensionnée par `currentStage.frame` comme tout le
     /// reste du cadre, et les coins arrondis la rognent comme ils rognent la
@@ -489,22 +541,20 @@ extension ConversationMediaGalleryView {
     /// n'y a aucune cote à tenir d'accord.
     ///
     /// **Le play/pause est le troisième occupant, et le seul qui soit CENTRÉ**
-    /// (#6162). Il ne rejoint pas la pile ancrée en bas : c'est l'affordance
+    /// Il ne rejoint pas la pile ancrée en bas : c'est l'affordance
     /// première d'un lecteur, elle se pose au milieu de l'image — là où l'œil
     /// est déjà, et là où aucun joueur au monde ne met autre chose. Le cadre
     /// centre son média, donc le centre du cadre EST le centre du média : la
     /// couche n'a aucune cote à tenir d'accord avec le solveur.
-    /// **#6760 — le chrome s'aligne sur le PLATEAU, jamais sur le média.**
+    /// **Le chrome s'aligne sur le PLATEAU, jamais sur le média.**
     ///
-    /// Directive porteur (2026-09-15) : « les details de l'auteur et les actions
-    /// doivent être aligné sur le plateau ! […] le plateau est la scene ! »
-    ///
-    /// Les deux blocs étaient jusqu'ici DANS le `.frame(currentStage.frame)`,
-    /// c'est-à-dire bornés par le cadre du MÉDIA — donc déplacés par la forme du
-    /// fichier. Mesuré sur la capture du porteur, une pièce 900 × 3 600 : la
-    /// colonne d'actions se posait à x ≈ 615, le bord du média, quand le plateau
-    /// s'arrête à 690. Une pièce large les aurait repoussées : le repère que
-    /// l'utilisateur apprend bougeait d'un média à l'autre.
+    /// Les détails de l'auteur et les actions sont alignés sur le plateau — le
+    /// plateau est la scène. Dans le `.frame(currentStage.frame)`, ils seraient
+    /// bornés par le cadre du MÉDIA — donc déplacés par la forme du
+    /// fichier : sur une pièce 900 × 3 600, la
+    /// colonne d'actions se poserait à x ≈ 615, le bord du média, quand le plateau
+    /// s'arrête à 690. Une pièce large les repousserait : le repère que
+    /// l'utilisateur apprend bougerait d'un média à l'autre.
     ///
     /// Le média garde son cadre et son arrondi ; le chrome prend le plateau. La
     /// loi qui le dit — et le témoin d'INVARIANCE qui la prouve — vit dans
@@ -523,7 +573,7 @@ extension ConversationMediaGalleryView {
             }
             .frame(width: stageChromeWidth)
         }
-        // L'espace où la colonne mesure sa place (#6709) : la région du plateau, qui
+        // L'espace où la colonne mesure sa place : la région du plateau, qui
         // porte à la fois le cadre et le chrome. Sa taille suffit à dire où le cadre
         // et son média sont peints — tous deux posés au milieu — et
         // `MediaGalleryStage.columnBackdrop` y lit ce qui est sous la colonne.
@@ -536,18 +586,18 @@ extension ConversationMediaGalleryView {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    /// **CE QUE LA PIÈCE A RÉCOLTÉ, VISIBLE SANS REFERMER** (#6789, directive
-    /// porteur 2026-09-16 : « lorsqu'on choisi la réaction, ce doit s'afficher
-    /// sur l'attachement en plein ecran et dans la conversation »).
+    /// **CE QUE LA PIÈCE A RÉCOLTÉ, VISIBLE SANS REFERMER** : lorsqu'on choisit
+    /// la réaction, elle s'affiche sur l'attachement en plein écran et dans la
+    /// conversation.
     ///
-    /// Le résumé arrivait déjà jusqu'ici — `reactionSummary` et
+    /// Le résumé arrive jusqu'ici — `reactionSummary` et
     /// `currentUserReactions` sont des champs de la MÊME pièce que la bulle rend
-    /// —, et aucun site du visualiseur ne les lisait. On réagissait, l'écran ne
-    /// changeait pas, et il fallait refermer pour voir que le geste avait
+    /// —, et le visualiseur les lit : sans cela, on réagirait, l'écran ne
+    /// changerait pas, et il faudrait refermer pour voir que le geste avait
     /// marché : un contrôle dont l'effet n'atteint aucun pixel (loi 4, lue à
     /// l'envers).
     ///
-    /// **Alignée sur le PLATEAU, pas sur le média** (#6760) : elle rejoint la
+    /// **Alignée sur le PLATEAU, pas sur le média** : elle rejoint la
     /// pile qui porte déjà la colonne d'actions et le bloc auteur, dans la
     /// largeur `stageChromeWidth`. Posée sur le cadre du média, elle aurait
     /// changé de place d'une pièce à l'autre — et se serait cognée au bloc
@@ -585,49 +635,44 @@ extension ConversationMediaGalleryView {
 
     /// Le plateau : la région libre entre les couloirs, gouttière comprise.
     /// C'est la surface que le ThumbHash habille déjà (`MediaStageBackdrop`) —
-    /// le chrome s'y aligne désormais aussi.
+    /// le chrome s'y aligne aussi.
     var plateauSize: CGSize {
-        CGSize(width: max(0, DeviceLayout.windowSize.width - 2 * MediaGalleryStage.gutter),
+        CGSize(width: max(0, stageViewport.width - 2 * MediaGalleryStage.gutter),
                height: max(0, currentStage.frame.height))
     }
 
     /// **Ce qui se pose sur le cadre part avec lui** (spec § 2.2) : la légende,
     /// l'auteur et sa date, la ligne format / dimensions / poids. Les actions
     /// réagir · répondre · composer restent sur le cadre elles aussi, mais dans
-    /// leur propre couche — `cadreActionColumn`, montée au-dessus de ce bloc
-    /// (#6161) : elles sont une COLONNE, et les mettre dans ce `VStack` les
+    /// leur propre couche — `cadreActionColumn`, montée au-dessus de ce bloc :
+    /// elles sont une COLONNE, et les mettre dans ce `VStack` les
     /// remettrait en ligne.
     ///
-    /// **La progression, elle, est descendue au couloir** (#6162) : elle
+    /// **La progression, elle, vit au couloir** : elle
     /// commande le TEMPS, pas le cadrage, et posée ici elle couvrait l'image
     /// qu'on est venu regarder. Ce qui reste au cadre est ce qui DÉCRIT le
     /// média ; ce qui le PARCOURT est au plateau, avec le rail.
     ///
-    /// **LE VOILE A QUITTÉ CE BLOC** (#6904 tour 5, directive porteur du
-    /// 2026-09-18 : « il faut bien faire attention à l'ombre dégradé pour rendre
-    /// le texte lisible qui doit être mis sur tous l'écran à partir du bas de
-    /// l'écran »).
+    /// **LE VOILE N'EST PAS DANS CE BLOC.** Le dégradé qui rend le texte lisible
+    /// se pose sur tout l'écran, à partir du bas de l'écran.
     ///
-    /// Il était posé ici plutôt que sur le bloc bas lui-même, et l'argument
-    /// tenait pour ce qu'il visait — un dégradé se pose sur la COUCHE, pas sur ce
-    /// qui l'occupe. Mais la couche était encore le CADRE, donc le dégradé était
-    /// borné DEUX fois : il s'arrêtait au bord du bloc (au-dessus du couloir de la
-    /// pellicule, donc pas au bas de l'écran) et il ne prenait que la largeur de
-    /// la carte (378 pt sur 402 en cadré, donc pas les gouttières). La bonne
-    /// couche est l'ÉCRAN, et le composant qui la sert existe déjà : c'est celui
-    /// de la story (`StoryReaderScrims`, monté par `stageScrimsLayer` —
+    /// Posé ici, il serait borné DEUX fois : il s'arrêterait au bord du bloc
+    /// (au-dessus du couloir de la pellicule, donc pas au bas de l'écran) et il ne
+    /// prendrait que la largeur de la carte (378 pt sur 402 en cadré, donc pas
+    /// les gouttières). La bonne couche est l'ÉCRAN, et le composant qui la sert
+    /// est celui de la story (`StoryReaderScrims`, monté par `stageScrimsLayer` —
     /// `+Scrims.swift`). Deux voiles superposés noirciraient deux fois le bas, et
-    /// la story n'en a qu'un : celui-ci est donc PARTI, pas déplacé.
+    /// la story n'en a qu'un.
     ///
     /// > Un dégradé se pose sur la couche qu'il doit RENDRE LISIBLE, et la
     /// > légende d'un plein écran se lit sur l'écran, pas sur le cadre.
     ///
-    /// L'exigence qu'il portait — **ne prendre AUCUNE touche** — n'est pas perdue
-    /// : un `LinearGradient` est une vue rendue, donc testée aux touches au même
+    /// L'exigence — **ne prendre AUCUNE touche** — est tenue par le composant : un
+    /// `LinearGradient` est une vue rendue, donc testée aux touches au même
     /// titre qu'un `Color.clear`, et posé dans une couche hit-testable au-dessus
-    /// du pager il faisait des ~110 pt du bas du cadre une zone morte (ni la
-    /// porte du tap de #6142, ni le glissement horizontal qui feuillette n'y
-    /// atteignaient le pager). `StoryReaderScrims` la satisfait par
+    /// du pager il ferait des ~110 pt du bas du cadre une zone morte (ni la
+    /// porte du tap, ni le glissement horizontal qui feuillette n'y
+    /// atteindraient le pager). `StoryReaderScrims` la satisfait par
     /// construction : `.allowsHitTesting(false)` et `.accessibilityHidden(true)`
     /// sont DANS le composant, hors de portée d'un hôte qui les oublierait — ce
     /// qui est strictement mieux que de la redemander à chaque site.
@@ -640,18 +685,21 @@ extension ConversationMediaGalleryView {
 
     /// **Le couloir bas : la pellicule, et rien d'autre.**
     ///
-    /// Elle a quitté le bloc du média (#6141). Elle y partageait la colonne avec
-    /// la légende et l'auteur, si bien qu'une légende dépliée pouvait la
+    /// Elle n'est pas dans le bloc du média : elle y partagerait la colonne avec
+    /// la légende et l'auteur, si bien qu'une légende dépliée pourrait la
     /// comprimer — or c'est le seul contrôle du bas qui sert à NAVIGUER. Au
     /// plateau, sa hauteur est réservée avant que le cadre ne prenne le reste :
     /// plus rien ne peut la lui reprendre.
     @ViewBuilder
     var railCorridor: some View {
-        if allAttachments.count > 1 {
+        // La bande naît avec la largeur MESURÉE de la galerie (sa colonne, son plein écran) : montée avant la
+        // mesure, elle se calerait sur la fenêtre puis garderait cet ancrage (vignette décalée d'un pas).
+        if allAttachments.count > 1, measuredViewport.width > 0 {
             ConversationMediaFilmstrip(
                 attachments: allAttachments,
                 currentPageID: $currentPageID,
-                accentColor: accentColor
+                accentColor: accentColor,
+                containerWidth: measuredViewport.width
             )
         }
     }

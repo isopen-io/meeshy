@@ -75,6 +75,9 @@ struct GameChip: View {
 struct GameActionButton: View {
     let title: String
     var busyTitle: String?
+    /// Ce que le geste rapporte, en petit SOUS le titre, dans le bouton (« +1 000 de gloire », #11180) : la récompense
+    /// se lit sur l'action qui la donne, jamais à côté.
+    var detail: String?
     var busy = false
     var disabled = false
     var tint: Color = MeeshyColors.warning
@@ -94,8 +97,16 @@ struct GameActionButton: View {
                 if busy {
                     ProgressView().tint(Self.ink)
                 }
-                Text(busy ? (busyTitle ?? title) : title)
-                    .multilineTextAlignment(.center)
+                VStack(spacing: 0) {
+                    Text(busy ? (busyTitle ?? title) : title)
+                        .multilineTextAlignment(.center)
+                    if let detail {
+                        Text(detail)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                            .opacity(0.8)
+                            .multilineTextAlignment(.center)
+                    }
+                }
             }
             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
             .foregroundColor(Self.ink)
@@ -156,6 +167,10 @@ struct GameFactChipItem: Equatable, Identifiable {
     /// La valeur dit un MANQUE : la pastille prend la teinte d'alerte.
     var short = false
     var element: GameElementDetail?
+    /// CE QU'IL MANQUE, en une PHRASE qui nomme son but (#10540) — « Il manque 1 Meesh pour acheter un gel. ». La
+    /// pastille la dit alors en entier, à la place du couple libellé / valeur : un manque sans cible se lisait à côté
+    /// de trois autres chiffres sans dire lequel il visait.
+    var sentence: String?
 
     var id: String { label }
 }
@@ -163,39 +178,47 @@ struct GameFactChipItem: Equatable, Identifiable {
 /// Les rangées de ce qu'un geste dépense ou exige. Pur : les chiffres viennent de la loi (`GameSpend`), le
 /// libellé du catalogue — miroir de `apps/web/src/components/game-spend-line.tsx`.
 enum GameSpendRows {
-    /// En poche · Coûte · Restera — ou, le solde ne suffisant pas, En poche · Coûte · Il te manque.
+    /// Le manque d'un geste, dit en une phrase qui nomme sa cible : la pastille la porte en entier.
+    static func missingItem(sentence: String, amount: String, detail: GameDetailFactKey) -> GameFactChipItem {
+        GameFactChipItem(label: sentence, value: amount, detail: detail, short: true, sentence: sentence)
+    }
+
+    /// Ce que tu as · Il faut — ou, le solde ne suffisant pas, la même paire puis CE QU'IL MANQUE en une phrase. Jamais
+    /// ce qui RESTERA après le geste : aucun calcul sur une fiche (épopée § 3.3, #11180), la soustraction vit dans les
+    /// règles. `missing` est OBLIGATOIRE (#10540) : il reçoit le manque dans son unité et rend la phrase entière,
+    /// cible comprise — aucun geste ne dit « Il manque » sans dire pour quoi. `between` : une donnée de plus entre
+    /// le solde et le prix (les points à convertir d'une frappe, la part du solde qui paie).
     static func spend(
         _ spend: SpendPreview,
         format: @MainActor (Int) -> String,
         formatMissing: (@MainActor (Int) -> String)? = nil,
         heldFact: GameDetailFactKey = .spendHeld,
-        missingFact: GameDetailFactKey = .spendMissing
+        missingFact: GameDetailFactKey = .spendMissing,
+        between: GameFactChipItem? = nil,
+        missing: @MainActor (String) -> String
     ) -> [GameFactChipItem] {
-        let missing: String
+        let amount: String
         if let formatMissing {
-            missing = formatMissing(spend.missing)
+            amount = formatMissing(spend.missing)
         } else {
-            missing = format(spend.missing)
+            amount = format(spend.missing)
         }
-        let last = spend.affordable
-            ? GameFactChipItem(label: ConceptText.factAfter, value: format(spend.after), detail: .spendAfter)
-            : GameFactChipItem(label: ConceptText.factMissing, value: missing, detail: missingFact, short: true)
-        return [
-            GameFactChipItem(label: ConceptText.factBalance, value: format(spend.held), detail: heldFact),
-            GameFactChipItem(label: ConceptText.factCost, value: format(spend.cost), detail: .spendCost),
-            last,
-        ]
+        let last = spend.affordable ? nil : missingItem(sentence: missing(amount), amount: amount, detail: missingFact)
+        let head = GameFactChipItem(label: ConceptText.factBalance, value: format(spend.held), detail: heldFact)
+        let cost = GameFactChipItem(label: ConceptText.factCost, value: format(spend.cost), detail: .spendCost)
+        return [head, between, cost, last].compactMap { $0 }
     }
 
-    /// Ton niveau (ou ton record) · Requis · Il te manque — le manque se tait quand l'exigence est remplie.
+    /// Ton niveau (ou ton record) · Requis, puis ce qu'il manque pour l'ouvrir — le manque se tait quand l'exigence
+    /// est remplie.
     static func requirement(_ requirement: RequirementPreview, record: Bool = false) -> [GameFactChipItem] {
         let current = record
             ? GameFactChipItem(label: ConceptText.factRecord, value: GameCopy.formatCount(requirement.current), detail: .levelRecord)
             : GameFactChipItem(label: ConceptText.name(.level), value: GameCopy.formatCount(requirement.current), detail: .levelNow)
         let required = GameFactChipItem(label: ConceptText.factRequired, value: GameCopy.formatCount(requirement.required), detail: .levelRequired)
         guard !requirement.met else { return [current, required] }
-        return [current, required,
-                GameFactChipItem(label: ConceptText.factMissing, value: GameCopy.levels(requirement.missing), detail: .spendMissing, short: true)]
+        let amount = GameCopy.levels(requirement.missing)
+        return [current, required, missingItem(sentence: ConceptText.spendMissingUnlock(missing: amount), amount: amount, detail: .spendMissing)]
     }
 }
 
@@ -211,14 +234,23 @@ struct GameFactChipRow: View {
         FlowLayout(spacing: MeeshySpacing.xs) {
             ForEach(items) { item in
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(item.label)
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
-                    Text(item.value)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(GameChip.minimumScale)
+                    if let sentence = item.sentence {
+                        // Le manque est une phrase : elle se lit en entier, sur autant de lignes qu'il faut.
+                        Text(sentence)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                            .foregroundColor(theme.textPrimary)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text(item.label)
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
+                            .foregroundColor(theme.textMuted)
+                        Text(item.value)
+                            .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+                            .foregroundColor(theme.textPrimary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(GameChip.minimumScale)
+                    }
                 }
                 .padding(.horizontal, MeeshySpacing.sm)
                 .padding(.vertical, MeeshySpacing.xxs)

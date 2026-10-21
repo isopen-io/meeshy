@@ -1,4 +1,4 @@
-import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
+import { hasPerReaderEphemeralDeadline, inheritedEphemeralExpiresAt } from '@meeshy/shared/utils/ephemeral-countdown';
 import type {
   LastMessageAttachmentSummary,
   LastMessageCallSummary,
@@ -15,6 +15,7 @@ import {
   summarizeAttachments,
 } from '../../routes/conversations/utils/last-message-nature';
 import {
+  toIsoOrNull,
   resolveLastMessagePreviewPrism,
   resolvePreviewMediaFields,
   type LastMessagePreviewPrism,
@@ -68,6 +69,12 @@ export interface LastMessageStickerFields {
 export interface PreviewGroupReaderContext {
   /** Ce lecteur a déjà ouvert ce message (`loadViewOnceConsumptions`). */
   readonly viewOnceConsumed?: boolean;
+  /**
+   * #8686 — la mort, pour CE lecteur, de la chaîne que le message cite (#8630,
+   * `loadSealedQuoteAudience`). Présente ⇒ la ligne part « expirée », comme
+   * `GET /conversations` la sert : aucun texte, l'échéance de cette mort.
+   */
+  readonly quotedDeathAt?: Date | null;
 }
 
 export type LastMessagePreviewGroup = LastMessagePreviewPrism &
@@ -83,6 +90,12 @@ const WITHHELD_PRISM: LastMessagePreviewPrism = {
 
 function isEphemeral(message: PreviewGroupMessage | null | undefined): boolean {
   return message != null && hasPerReaderEphemeralDeadline(message);
+}
+
+/** L'échéance servie à une réponse morte avec ce qu'elle cite : la plus proche des deux, comme le REST. */
+function diedWithItsQuoteAt(message: PreviewGroupMessage | null | undefined, quotedDeathAt: Date): string | null {
+  const own = isEphemeral(message) || message?.expiresAt == null ? null : new Date(message.expiresAt);
+  return toIsoOrNull(inheritedEphemeralExpiresAt([own, quotedDeathAt]));
 }
 
 /**
@@ -109,7 +122,8 @@ export function resolveLastMessagePreviewGroup(
   now: Date = new Date(),
   reader: PreviewGroupReaderContext = {},
 ): LastMessagePreviewGroup {
-  const withheld = message != null && isPreviewWithheld(resolvePreviewProtection(message, now));
+  const quotedDeathAt = reader.quotedDeathAt ?? null;
+  const withheld = message != null && isPreviewWithheld(resolvePreviewProtection({ ...message, quotedDeathAt }, now));
   const media = resolvePreviewMediaFields(message, withheld);
   const place = withheld ? null : sharedPlaceFromMetadata(message?.metadata);
   const nature = message ? resolveLastMessageNature(message) : null;
@@ -122,6 +136,7 @@ export function resolveLastMessagePreviewGroup(
     // servir (même règle que `message:new`). Le client décompte depuis SA
     // réception, et `message:countdown-started` lui porte l'échéance serveur.
     ...(isEphemeral(message) ? { lastMessageExpiresAt: null } : {}),
+    ...(quotedDeathAt ? { lastMessageExpiresAt: diedWithItsQuoteAt(message, quotedDeathAt) } : {}),
     lastMessageType: message?.messageType ?? null,
     lastMessageEffectFlags: message?.effectFlags ?? null,
     lastMessageEphemeralDuration: message?.ephemeralDuration ?? null,

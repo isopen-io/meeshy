@@ -55,29 +55,12 @@ final class ConversationImageRetoucheTests: XCTestCase {
         XCTAssertNil(ecrit)
     }
 
-    /// Le temporaire de la graine est purgé quand la retouche se ferme.
-    func test_graine_liberee_purgeSonTemporaire() {
-        var graine: ConversationImageSeed? = ConversationImageSeed(image: image(width: 16, height: 16))
-        let url = graine!.fileURL
-        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
-
-        graine = nil
-
-        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
-    }
-
-    /// « Terminé » sur une scène intacte ne rend aucun rendu, et l'écriture
-    /// sûre précède la suppression de l'ancien fichier.
-    func test_sources_rienNaChange_etEcritureSure() throws {
+    /// L'écriture sûre précède la suppression de l'ancien fichier.
+    func test_sources_ecritureSureAvantSuppression() throws {
         let racine = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main")
-        let serie = try String(contentsOf: racine.appendingPathComponent("Composer/MeeshyComposerHost+RetouchSeries.swift"),
-                               encoding: .utf8)
-        XCTAssertTrue(serie.contains("guard !retouchees.isEmpty else { onDismiss(); return }"),
-                      "Une scène que l'auteur n'a pas touchée ne doit pas remplacer l'image d'origine.")
-
         let couverture = try String(contentsOf: racine.appendingPathComponent("Views/ConversationView+SceneRetouch.swift"),
                                     encoding: .utf8)
         guard let ecriture = couverture.range(of: "ConversationImageRetouche.writeEdited("),

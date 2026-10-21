@@ -57,7 +57,11 @@ extension CallManager {
             Logger.calls.info("SDP offer buffered for call: \(callId), waiting for user to accept")
 
         case .connecting:
-            // User already accepted but SDP arrived late — create answer immediately
+            // User already accepted but SDP arrived late — create answer immediately.
+            // L'offre est là : le minuteur d'offre n'a plus d'objet, et laissé armé il
+            // coupait à 30 s une liaison ICE simplement lente.
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = nil
             let previousToggleConnecting = videoToggleTask
             let previousHoldConnecting = holdVideoTask
             let previousSurvivalConnecting = survivalVideoTask
@@ -168,7 +172,7 @@ extension CallManager {
             }
             var waitedNs: UInt64 = 0
             while !socket.isConnected && waitedNs < 30_000_000_000 && !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 200_000_000)
+                _ = await cancellableSleep(for: .milliseconds(200))
                 waitedNs += 200_000_000
             }
             guard let self, !Task.isCancelled else { return }
@@ -189,5 +193,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

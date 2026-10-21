@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import type { EphemeralDeadline } from '@meeshy/shared/utils/ephemeral-deadline';
 
 import { FocalRow } from './focal-row';
@@ -576,9 +577,25 @@ describe('FocalRow — retirer une réaction en tapant sa capsule (#5865)', () =
     expect(seen).toEqual(['👍']);
   });
 
-  test('la capsule ❤️ (pas la mienne) reste un <span> inerte — aucun bouton', () => {
+  test('tap sur la capsule ❤️ d’AUTRUI ⇒ onReact("❤️") : on pose la même réaction d’un geste (#10583)', () => {
+    const seen: string[] = [];
+    const el = mount((emoji) => seen.push(emoji));
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    expect(theirs).not.toBeNull();
+    act(() => {
+      theirs.click();
+    });
+    expect(seen).toEqual(['❤️']);
+  });
+
+  test('clic droit sur une capsule ⇒ la liste de qui a réagi, pour CE message (#10583)', () => {
     const el = mount(() => {});
-    expect(el.querySelector('button[aria-label*="❤️"]')).toBeNull();
+    const theirs = el.querySelector('button[aria-label="Réagir avec ❤️"]') as HTMLButtonElement;
+    act(() => {
+      theirs.dispatchEvent(new Event('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    expect(reactorsSheetStore.getState().messageId).toBe('m-reactions');
+    reactorsSheetStore.getState().close();
   });
 });
 
@@ -885,7 +902,7 @@ describe('FocalRow — les états du message (#5936)', () => {
        glyphe (#7881) : la rangée réserve ce qu'il peint. */
     expect(withPicture).toContain('font-size:180px');
     expect(withPicture).not.toContain('width:60px');
-    expect(withPicture).not.toContain('width:224px');
+    expect(withPicture).not.toContain('width:140px');
 
     const bare = renderFull({ ...BASE_MESSAGE, content: '🔥', metadata: { sticker: { emoji: '🔥' } } });
     expect(bare).toContain('data-sticker-emoji');
@@ -920,7 +937,7 @@ describe('FocalRow — les états du message (#5936)', () => {
       ],
     });
     expect(pictureOnly).toContain('<img');
-    expect(pictureOnly).toContain('width="224"');
+    expect(pictureOnly).toContain('width="140"');
     expect(pictureOnly).not.toContain('data-sticker-emoji');
   });
 

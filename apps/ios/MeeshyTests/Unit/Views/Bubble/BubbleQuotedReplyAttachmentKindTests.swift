@@ -166,7 +166,7 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(path)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     /// ANCRE POSITIVE — à passer AVANT tout comptage ou toute assertion
@@ -606,31 +606,35 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
     /// (« ouvrir le fil », « répondre à nouveau ») sans qu'aucune garde ne
     /// bouge : le composant, lui, resterait à trois.
     func test_loiDesZones_chaqueHoteNePoseQuUneSeuleZone3() throws {
-        let hosts: [(path: String, marker: String, floor: Int, jump: String)] = [
+        let hosts: [(path: String, marker: String, floor: Int, jump: String, sites: Int)] = [
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift",
                 "struct BubbleStandardLayout", 20_000,
-                "onStoryReplyTap?(reply.reference.messageId)"
+                // Depuis #10628 la carte citée de la bulle et celle de l'emoji
+                // en réponse partagent UN geste (`openQuotedTarget`). Le type
+                // se lit comme son unité (#10678) : la bulle texte et l'emoji
+                // en réponse y posent chacun leur unique appel.
+                "openQuotedTarget(reply)", 2
             ),
             (
                 "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
                 "func mediaWithReplyContainer", 5_000,
-                "onStoryReplyTap?(reply.reference.messageId)"
+                "onStoryReplyTap?(reply.reference.messageId)", 1
             ),
             (
                 "Meeshy/Features/Main/Views/ConversationMediaViews.swift",
                 "struct AudioMediaView", 20_000,
-                "onStoryReplyTap?(ref.messageId)"
+                "onStoryReplyTap?(ref.messageId)", 1
             )
         ]
 
         for host in hosts {
             let code = try anchored(host.path, host.marker, floor: host.floor)
             XCTAssertEqual(
-                code.components(separatedBy: host.jump).count - 1, 1,
-                "\(host.path) doit poser EXACTEMENT une zone 3 (retour au message cité) autour de la " +
-                "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : 0 = la citation " +
-                "n'est plus suivable, 2+ = un second point actionnable pour une seule capacité."
+                code.components(separatedBy: host.jump).count - 1, host.sites,
+                "\(host.path) doit poser EXACTEMENT \(host.sites) zone(s) 3 (retour au message cité) autour de la " +
+                "citation. \(code.components(separatedBy: host.jump).count - 1) trouvée(s) : moins = la citation " +
+                "n'est plus suivable, plus = un second point actionnable pour une seule capacité."
             )
             XCTAssertTrue(
                 code.contains("onQuotedAuthorTap: onQuotedAuthorTap"),
@@ -642,6 +646,19 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
                 "\(host.path) doit transmettre onQuotedMediaTap — sans ce fil, la miniature est décorative."
             )
         }
+    }
+
+    /// Le geste partagé de la zone 3 retourne bien au message cité — une seule
+    /// fois pour la story, une seule pour le message : sans lui, l'appel que
+    /// compte la garde ci-dessus n'ouvrirait rien.
+    func test_loiDesZones_leGestePartageRetourneAuMessageCite() throws {
+        let code = try anchored(
+            "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+EmojiReply.swift",
+            "func openQuotedTarget(_ reply: BubbleContent.Reply)", floor: 500
+        )
+        XCTAssertEqual(code.components(separatedBy: "onStoryReplyTap?(reply.reference.messageId)").count - 1, 1)
+        XCTAssertEqual(code.components(separatedBy: "onReplyTap?(reply.reference.messageId)").count - 1, 1)
+        XCTAssertTrue(code.contains("guard reply.reference.opensQuotedTarget else { return }"))
     }
 
     // MARK: - Le fil jusqu'à l'hôte de résolution
@@ -663,15 +680,17 @@ final class BubbleQuotedReplyZoneLawTests: XCTestCase {
 
         let host = try anchored(
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
-            "onQuotedMediaTap: { [weak self] ref in", floor: 50_000
+            "let quotedMediaTapHandler: (ReplyReference) -> Void = { [weak self] ref in", floor: 50_000
         )
         XCTAssertTrue(
-            host.contains("onQuotedAuthorTap: { [weak self] ref in"),
+            host.contains("onQuotedAuthorTap: quotedAuthorTapHandler,") && host.contains("let quotedAuthorTapHandler"),
             "le contrôleur doit monter la zone 1 sur la peau BULLE — c'est la peau servie par défaut " +
             "(programme bêta OFF ⇒ `readingModes` OFF ⇒ `.bubbles`), donc celle où le câblage compte le plus."
         )
         XCTAssertTrue(
-            host.contains("onQuotedMediaTap: { [weak self] ref in"),
+            // La fermeture est sortie de la cellule (cycle contrôleur → cellule → fermeture, c97e31e6ca) : la rangée
+            // reçoit le gestionnaire faible, jamais une fermeture qui capture le contrôleur.
+            host.contains("onQuotedMediaTap: quotedMediaTapHandler,"),
             "le contrôleur doit monter la zone 2 sur la peau BULLE."
         )
     }

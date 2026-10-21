@@ -186,7 +186,9 @@ nonisolated enum RiverConversationMapping {
     /// SUIVANT n'ouvre pas de groupe. Un avis système ouvre toujours un groupe
     /// (la loi ne le rattache à personne), donc il coupe celui qui le précède.
     static func groupPositions(bubbles: [RiverLaneResolver.RiverBubble]) -> [String: RiverGroupPosition] {
-        Dictionary(uniqueKeysWithValues: bubbles.enumerated().map { index, bubble in
+        // `uniquingKeysWith`, comme `contents` : un identifiant en double (écho socket et REST d'un même message)
+        // trappait ici quand `contents`, plus bas, le tolérait. La première position fait foi.
+        Dictionary(bubbles.enumerated().map { index, bubble in
             let next = bubbles.indices.contains(index + 1) ? bubbles[index + 1] : nil
             let isFollowed = next.map { !$0.isFirstInGroup && !$0.isSystem } ?? false
             let position: RiverGroupPosition
@@ -197,7 +199,7 @@ nonisolated enum RiverConversationMapping {
             case (false, false): position = .tail
             }
             return (bubble.messageId, position)
-        })
+        }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Ce que le lecteur voit dans chaque bulle — texte PRISME (résolu par
@@ -217,6 +219,7 @@ nonisolated enum RiverConversationMapping {
         text: (MeeshyMessage) -> String,
         time: (Date) -> String,
         presence: (MeeshyMessage) -> PresenceState? = { _ in nil },
+        here: (MeeshyMessage) -> ConversationHere = { _ in .absent },
         storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     ) -> [RiverBubbleContent] {
         let byId = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
@@ -287,19 +290,22 @@ nonisolated enum RiverConversationMapping {
                 protection: message.holdsViewOnce ? message.protection().withoutViewOnce : message.protection(),
                 isBurning: message.isBurning,
                 viewOnceChip: message.isViewOnceSealed ? .sealed : (message.isViewOnceOpened ? .opened : nil),
-                offersCopy: message.exitOffer.offers(.copy),
                 isViewOnceRevealed: message.isViewOnceRevealed && message.holdsViewOnce && !message.isViewOnceOpened,
                 protectedTap: protectedTap(of: message),
                 tapAfterReveal: tapAfterReveal(of: message),
                 linkEmbed: linkEmbed(of: message, text: text),
+                linksAreInert: message.senderIsAnonymous || !message.senderHasAccount,
                 contactCards: RiverContactCards(items: contactCards(of: message)),
                 capturesBlocked: message.exitOffer.capture.shieldsCapture(),
+                emojiFontSize: emojiFontSize(of: message, text: text),
                 identity: bubble.isSystem ? nil : RiverBubbleIdentity(
                     avatarURL: message.senderAvatarURL,
                     presence: presence(message),
                     storyRing: storyRing(message),
                     profileUser: ProfileSheetUser.from(message: message),
-                    userId: message.senderIsAnonymous ? nil : (message.senderUserId ?? message.senderId)
+                    userId: message.senderIsAnonymous ? nil : (message.senderUserId ?? message.senderId),
+                    isHere: here(message),
+                    ring: message.senderRing
                 )
             )
         }
@@ -329,7 +335,10 @@ nonisolated enum RiverConversationMapping {
         if let joinNotice = content.joinNotice { return .join(joinNotice) }
         if let callNotice = content.callNotice { return .call(callNotice) }
         // #9617 — un avis de capture se compose chez le lecteur, comme dans le fil.
-        return .plain(BubbleContent.captureNoticeText(for: message) ?? text(message))
+        // #7759 — la ligne d'arrivées aussi.
+        return .plain(BubbleContent.captureNoticeText(for: message)
+            ?? BubbleContent.arrivalsNoticeText(for: message)
+            ?? text(message))
     }
 
     /// R-6 — la citation mène à sa cible : le curseur du message cité,
@@ -424,7 +433,11 @@ nonisolated enum RiverConversationMapping {
         let viewerId: String
         let texts: [String]
         let presences: [PresenceState?]
+        let heres: [ConversationHere]
         let rings: [StoryRingState]
+        /// Le contour servi voyage avec le message, mais une relecture le repeint sans en
+        /// changer l'identifiant : la clé porte sa valeur (#10946).
+        let decorRings: [ServedProfileDecorItem?]
     }
 
     static func contentsKey(
@@ -433,17 +446,21 @@ nonisolated enum RiverConversationMapping {
         viewerId: String,
         text: (MeeshyMessage) -> String,
         presence: (MeeshyMessage) -> PresenceState? = { _ in nil },
+        here: (MeeshyMessage) -> ConversationHere = { _ in .absent },
         storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     ) -> ContentsKey {
         var texts: [String] = []
         var presences: [PresenceState?] = []
+        var heres: [ConversationHere] = []
         var rings: [StoryRingState] = []
         texts.reserveCapacity(messages.count)
         presences.reserveCapacity(messages.count)
+        heres.reserveCapacity(messages.count)
         rings.reserveCapacity(messages.count)
         for message in messages {
             texts.append(displayedText(of: message, text: text))
             presences.append(presence(message))
+            heres.append(here(message))
             rings.append(storyRing(message))
         }
         return ContentsKey(
@@ -451,7 +468,9 @@ nonisolated enum RiverConversationMapping {
             viewerId: viewerId,
             texts: texts,
             presences: presences,
-            rings: rings
+            heres: heres,
+            rings: rings,
+            decorRings: messages.map(\.senderRing)
         )
     }
 
@@ -464,7 +483,8 @@ nonisolated enum RiverConversationMapping {
         guard !message.protection().requiresVeil else { return nil }
         let displayed = displayedText(of: message, text: text)
         guard !displayed.isEmpty else { return nil }
-        let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap)
+        let resolved = BubbleContent.text(raw: displayed, trackedLinks: message.trackedLinkMap,
+                                           authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount)
         return resolved.firstLinkURL == nil ? nil : resolved
     }
 
@@ -485,6 +505,13 @@ nonisolated enum RiverConversationMapping {
     @MainActor static func contactCards(of message: MeeshyMessage) -> [MessageAttachment] {
         guard !message.protection().requiresVeil, !message.holdsViewOnce else { return [] }
         return message.attachments.filter(\.isContactCard)
+    }
+
+    /// #10637 — la taille d'un emoji seul, lue chez `BubbleContent` (jamais
+    /// recalculée) ; rien quand le texte est voilé ou absent.
+    @MainActor static func emojiFontSize(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> CGFloat? {
+        guard !displayedText(of: message, text: text).isEmpty else { return nil }
+        return BubbleContent.emojiOnlyResult(of: message).fontSize
     }
 
     static func displayedText(of message: MeeshyMessage, text: (MeeshyMessage) -> String) -> String {

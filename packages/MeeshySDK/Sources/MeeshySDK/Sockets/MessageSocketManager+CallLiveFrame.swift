@@ -81,26 +81,19 @@ extension MessageSocketManager: CallLiveFrameSocketProviding {
         CallLiveFrameSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallLiveFrameHandlers(on socket: SocketIOClient) {
-        socket.on("call:frame-selected") { [weak self] data, _ in
-            self?.decode(CallLiveFrameSelectedEvent.self, from: data) { event in
+    var callLiveFrameRoutes: [SocketInboundRoute] {
+        [
+            route(.callFrameSelected, CallLiveFrameSelectedEvent.self) { _, event in
                 CallLiveFrameSocketChannel.events.send(event)
-            }
-        }
+            },
+        ]
     }
 
     public func selectCallLiveFrame(callId: String, frameId: String?, texts: CallLiveFrameTexts?, reply: CallLiveFrameReply? = nil) async throws {
         guard let socket else { throw CallControlRefusal(code: "NO_SOCKET") }
         let payload = Self.callLiveFramePayload(callId: callId, frameId: frameId, texts: texts, reply: reply)
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            socket.emitWithAck("call:frame-select", payload).timingOut(after: 10) { items in
-                if let refusal = Self.callControlRefusal(items.first) {
-                    continuation.resume(throwing: refusal)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(.callFrameSelect, payload, as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 10)
+        if let refusal = Self.callControlRefusal(ack) { throw refusal }
     }
 
     /// `frameId: nil` part en `NSNull` : la passerelle exige la clé, `null` retire le cadre.

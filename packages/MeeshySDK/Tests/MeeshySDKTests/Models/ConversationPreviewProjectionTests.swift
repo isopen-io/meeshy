@@ -54,6 +54,29 @@ final class ConversationPreviewProjectionTests: XCTestCase {
         XCTAssertEqual(preview.segments, [.text("Bonjour", language: "fr")])
     }
 
+    func test_stickerWithOnlyItsLibraryId_isNamedStickerNotPhoto() {
+        let row = conversation(preview: "") {
+            $0.lastMessageAttachments = [MeeshyMessageAttachment(
+                id: "att-1", originalName: "s.png", mimeType: "image/png", fileSize: 7168, width: 512, height: 512
+            )]
+            $0.lastMessageNature = LastMessageNature(messageType: "image", sticker: ConversationPreviewSticker())
+        }
+
+        let preview = compose(row)
+
+        XCTAssertEqual(preview.icon, .sticker)
+        XCTAssertEqual(preview.segments, [.label("attachment.sticker")])
+    }
+
+    func test_restLastMessage_withStickerId_carriesTheStickerIntoTheNature() throws {
+        let json = #"{"id":"m1","createdAt":"2026-10-16T10:00:00Z","messageType":"image","sticker":{"stickerId":"6ad11ed4cfca42ca9678fdc2"}}"#
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let last = try decoder.decode(APIConversationLastMessage.self, from: Data(json.utf8))
+
+        XCTAssertNotNil(last.nature?.sticker)
+    }
+
     func test_voiceMessage_withoutText_saysItsNatureAndDuration() {
         let row = conversation(preview: "") {
             $0.lastMessageAttachments = [MeeshyMessageAttachment(

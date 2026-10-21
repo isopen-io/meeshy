@@ -31,8 +31,7 @@ extension MeeshyComposerHost {
             isHydrated: hydration != nil,
             resumesDraft: draftId != nil,
             isSeeded: mediaSeed != nil || moodSeed != nil,
-            opensOnMood: selectedFormat == .status,
-            returnsToConversation: returnsToConversation
+            opensOnMood: selectedFormat == .status
         )
     }
 
@@ -149,5 +148,51 @@ extension MeeshyComposerHost {
                 autosave.waitForPendingWrites()
             }
             .onDisappear { flushAutosave() }
+            .closesForConversationOpening(.composer, answer: { conversationOpeningYield }, close: {
+                ComposerConversationYield.close(atelierWritesItsDraft: atelierWritesItsDraft,
+                                                trigger: publishTrigger) {
+                    flushAutosave()
+                    onDismiss()
+                }
+            })
+    }
+
+    /// Une conversation qui s'ouvre ne referme le meuble que s'il sait rendre
+    /// ce qu'il tient (#10539) : la porte vierge, dont le brouillon s'écrit à la
+    /// fermeture et se relit à la réouverture — et l'ATELIER, qui écrit le sien
+    /// par sa propre sortie (#10543). Toute autre porte — une graine du meuble
+    /// — RETIENT : rien ne se perd, et la conversation s'ouvre quand l'auteur
+    /// a fini.
+    var conversationOpeningYield: PresentedSurfaceYield {
+        ComposerConversationYield.decide(autosaveOpening, atelierWritesItsDraft: atelierWritesItsDraft)
+    }
+
+    var atelierWritesItsDraft: Bool {
+        ComposerConversationYield.atelierWritesItsDraft(mounted: mountedComposerView,
+                                                        exitIsArmed: publishTrigger.offersExit)
+    }
+}
+
+nonisolated enum ComposerConversationYield {
+    static func decide(_ opening: ComposerAutosaveOpening,
+                       atelierWritesItsDraft: Bool = false) -> PresentedSurfaceYield {
+        opening == .restores || atelierWritesItsDraft ? .closes : .retains
+    }
+
+    /// L'atelier monté ET armé sait écrire son brouillon (`StoryDraftStore`),
+    /// proposé à la réouverture.
+    static func atelierWritesItsDraft(mounted: ComposerMountedView,
+                                      exitIsArmed: Bool) -> Bool {
+        mounted == .atelier && exitIsArmed
+    }
+
+    /// La sortie de l'atelier écrit son brouillon PUIS referme ; sans elle, le
+    /// meuble referme par son propre chemin.
+    @MainActor
+    static func close(atelierWritesItsDraft: Bool,
+                      trigger: ComposerPublishTrigger,
+                      hostClose: () -> Void) {
+        if atelierWritesItsDraft, trigger.requestExit() { return }
+        hostClose()
     }
 }

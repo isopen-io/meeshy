@@ -28,7 +28,6 @@ final class DeepLinkSingleParserTests: XCTestCase {
         "meeshy://post/p5", "meeshy://p/p6", "meeshy://feeds/post/p7",
         "meeshy://story/s5", "meeshy://reel/r3", "meeshy://community/cm2",
         "meeshy://hashtag/soleil", "meeshy://conversations/unread", "meeshy://conversations/recent",
-        "meeshy://auth/magic-link?token=tok1",
         "https://meeshy.me/auth/magic-link?token=tok2", "https://meeshy.me/auth/magic-link/tok3"
     ]
 

@@ -240,6 +240,25 @@ struct ConversationReadLedgerTotalTests {
         #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 1)
     }
 
+    /// iPad multi-fenêtre : deux scènes, deux conversations à l'écran — aucune ne pèse sur l'icône, et chacune
+    /// rejoint le décompte quand SA fenêtre se ferme.
+    @Test("Deux fenêtres : les deux conversations affichées sortent du décompte")
+    func openSetExcludesEveryShownConversation() {
+        let ledger = makeLedger([row("a", 2), row("b", 3), row("c", 4)])
+        ledger.apply(.localOpenSet(conversationIds: ["a", "b"]))
+        #expect(ledger.openConversationIds == ["a", "b"])
+        #expect(ledger.openConversationId == nil, "plusieurs fenêtres : pas de conversation unique")
+        #expect(ledger.counts()["a"] == 0)
+        #expect(ledger.counts()["b"] == 0)
+        #expect(ledger.total(excludingOpen: true, excludingMuted: false) == 4)
+        #expect(ledger.conversationUnreadTotal(excludingOpen: true) == 1)
+        ledger.apply(.localOpenSet(conversationIds: ["b"]))
+        #expect(ledger.state(for: "a")?.isOpen == false)
+        #expect(ledger.total(excludingOpen: true, excludingMuted: false) == 6)
+        ledger.apply(.forget(conversationId: "b"))
+        #expect(ledger.openConversationIds.isEmpty)
+    }
+
     @Test("Le registre ne tient qu'UN openConversationId")
     func singleOpenConversationId() {
         let ledger = makeLedger([row("a", 1), row("b", 1)])

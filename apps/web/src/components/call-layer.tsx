@@ -4,7 +4,7 @@ import { useStore } from 'zustand/react';
 
 import { callBackPromptStore } from '@/lib/calls/call-back-prompt';
 import { CALL_LAYER_Z } from '@/lib/calls/call-presentation';
-import { callRecordingStore } from '@/lib/calls/call-recording-live';
+import { callRecordingStore } from '@/lib/calls/call-recording-store';
 import { useCallPresentation } from '@/lib/calls/use-call-presentation';
 import { loadCallControlsCatalog } from '@/lib/i18n-call-controls-catalog';
 import { loadCallRecordingCatalog } from '@/lib/i18n-call-recording-catalog';

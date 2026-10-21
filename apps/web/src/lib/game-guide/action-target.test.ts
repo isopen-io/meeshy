@@ -25,7 +25,7 @@ describe('les destinations', () => {
   });
 
   test('les missions : la carte des missions', () => {
-    for (const action of ['see-missions', 'open-first-mission', 'regain-levels', 'do-easy-mission-or-freeze', 'do-easiest-mission'] as const) {
+    for (const action of ['see-missions', 'open-first-mission', 'do-easy-mission-or-freeze', 'do-easiest-mission'] as const) {
       expect(guideActionTarget(action)).toEqual({ kind: 'fiche', concept: 'missions' });
     }
   });
@@ -47,7 +47,6 @@ describe('les destinations', () => {
   });
 
   test('les badges : leur fiche (la page des badges est à un toucher, sous elle)', () => {
-    expect(guideActionTarget('relight-badge')).toEqual({ kind: 'fiche', concept: 'badges' });
   });
 
   test('le premier geste se fait AILLEURS : la liste des conversations', () => {

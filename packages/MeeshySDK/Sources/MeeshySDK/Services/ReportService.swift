@@ -22,12 +22,21 @@ public protocol ReportServiceProviding: Sendable {
 ///
 /// `/admin/reports` reste servie en adaptateur mince le temps que les versions
 /// déjà installées disparaissent.
-public final class ReportService: ReportServiceProviding, @unchecked Sendable {
+public final class ReportService: ReportServiceProviding, Sendable {
     public static let shared = ReportService()
     private let api: APIClientProviding
+    /// #10503 — un signalement ABOUTI d'un contenu social devient un signal
+    /// négatif (`report_submit`, code du motif seul, jamais le texte libre).
+    /// Un message ou une conversation : rien ne part.
+    private let socialEvents: SocialEventsV2Hub
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
         self.api = api
+        self.socialEvents = socialEvents
+    }
+
+    private func emitReported(_ kind: SocialTargetKind, id: String, reportType: String) {
+        socialEvents.emit(SocialInteractionEvents.negative(.reportSubmit, on: SocialTarget(kind: kind, id: id), reasonCode: reportType))
     }
 
     public func reportMessage(messageId: String, reportType: String, reason: String? = nil) async throws {
@@ -48,6 +57,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reason: reason
         )
         let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.profile, id: userId, reportType: reportType)
     }
 
     public func reportPost(postId: String, reportType: String, reason: String? = nil) async throws {
@@ -58,6 +68,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reason: reason
         )
         let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.post, id: postId, reportType: reportType)
     }
 
     public func reportStory(storyId: String, reportType: String, reason: String? = nil) async throws {
@@ -68,6 +79,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reason: reason
         )
         let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.story, id: storyId, reportType: reportType)
     }
 
     /// Un commentaire de post, de réel ou de story (#8709) — la passerelle le
@@ -80,6 +92,7 @@ public final class ReportService: ReportServiceProviding, @unchecked Sendable {
             reason: reason
         )
         let _: APIResponse<ReportResponseData> = try await api.post(ReportsEndpoint.root, body: body)
+        emitReported(.comment, id: commentId, reportType: reportType)
     }
 
     public func reportConversation(conversationId: String, reportType: String, reason: String? = nil) async throws {

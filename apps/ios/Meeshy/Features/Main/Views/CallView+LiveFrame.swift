@@ -56,7 +56,8 @@ extension CallView {
     @ViewBuilder
     var liveFrameSurface: some View {
         if callManager.isVideoUIActive, layer.activeMode == nil, let design = liveFrameDisplay.design {
-            CallLiveFrameSurface(design: design, people: liveFramePeople, texts: liveFrameTexts, sources: liveFrameSources)
+            CallLiveFrameSurface(design: design, people: liveFramePeople, texts: liveFrameTexts, sources: liveFrameSources,
+                                 chromeInsets: (Self.chromeTopInset, Self.chromeBottomInset))
                 .allowsHitTesting(false)
                 .accessibilityElement()
                 .accessibilityLabel(CallLiveFrameCopy.surface(design.name))
@@ -93,8 +94,7 @@ extension CallView {
             CallLiveFrameNotice(text: CallLiveFrameCopy.answered(answer.reply, by: answer.from))
                 .transition(.opacity)
                 .task(id: answer) {
-                    try? await Task.sleep(nanoseconds: 4_000_000_000)
-                    guard !Task.isCancelled else { return }
+                    guard await cancellableSleep(for: .seconds(4)), !Task.isCancelled else { return }
                     withAnimation(.easeInOut(duration: 0.25)) { liveFrame.dismissAnswer() }
                 }
         } else if layer.activeMode == nil, case .suspended(_, let reason) = liveFrameDisplay {

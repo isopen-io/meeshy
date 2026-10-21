@@ -119,9 +119,9 @@ final class SkeletonLoadMoreGuardTests: XCTestCase {
     /// Un `withAnimation` à courbe infinie posé dans `onAppear` anime TOUTE la
     /// transaction en cours — dans le fil paresseux, celle qui fait aussi
     /// naître les rangées voisines, qui hériteraient d'une animation sans fin.
-    /// Chaque placeholder d'image du fil scintille au moment exact où sa
-    /// rangée naît. Les deux reflets du SDK portent leur courbe par
-    /// `.animation(_:value:)`, bornée au reflet.
+    /// Depuis #9869, les deux tenues publiques délèguent à `LoadingSheen`,
+    /// l'unique reflet du SDK, dont le balayage est une `CABasicAnimation`
+    /// posée sur sa propre couche : aucune transaction SwiftUI n'est animée.
     func test_lesRefletsDeChargement_nOuvrentJamaisDeTransactionAnimee() throws {
         let sdk = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
@@ -142,14 +142,17 @@ final class SkeletonLoadMoreGuardTests: XCTestCase {
             let body = String(rest[..<end])
             XCTAssertFalse(body.contains("withAnimation("),
                            "\(site.type) démarre son reflet par une transaction animée : elle fuit sur les rangées voisines du fil.")
-            XCTAssertTrue(body.contains(".animation(ShimmerCycle.sweep("),
-                          "\(site.type) doit porter sa courbe sur le reflet lui-même.")
+            XCTAssertTrue(body.contains("LoadingSheen(style:"),
+                          "\(site.type) doit déléguer à l'unique reflet du SDK.")
         }
+        let sheen = try String(contentsOf: sdk.appendingPathComponent("Primitives/LoadingSheen.swift"), encoding: .utf8)
+        XCTAssertFalse(sheen.contains("withAnimation("),
+                       "LoadingSheen anime sa propre couche, jamais une transaction SwiftUI.")
     }
 
-    func test_shimmerCycle_auRepos_nAnimeRien_enCourse_boucle() {
-        XCTAssertNil(ShimmerCycle.sweep(duration: 1.5, running: false),
-                     "le retour au repos (onDisappear) ne doit pas rejouer la courbe infinie")
-        XCTAssertNotNil(ShimmerCycle.sweep(duration: 1.5, running: true))
+    func test_leReflet_neBalaieQuePendantUnVraiChargement() {
+        XCTAssertTrue(LoadingSheenLaw.animates(phase: .loading, reduceMotion: false))
+        XCTAssertFalse(LoadingSheenLaw.animates(phase: .failed, reduceMotion: false))
+        XCTAssertFalse(LoadingSheenLaw.animates(phase: .deferred, reduceMotion: false))
     }
 }

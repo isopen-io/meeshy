@@ -3,6 +3,9 @@ import { useEffect, useState } from 'react';
 import lentilleTokens from '@meeshy/shared/design/lentille-tokens.json';
 
 import { ROW_HEIGHT } from './lens-row';
+import { SECTION_TOGGLE_MIN_HEIGHT } from './lens-sticker';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE SQUELETTE DE LA LISTE (#5650, F5/§5 étape 9) — CACHE VIDE seulement
@@ -72,7 +75,14 @@ function SkeletonSectionStub() {
         fontSize: sticker.size,
         fontWeight: sticker.weight,
         letterSpacing: `${sticker.letterSpacingEm}em`,
-        padding: `${sticker.padding.vertical}px ${sticker.padding.horizontal}px`,
+        // Toute section de la liste d'un compte se replie (#10103) : la hauteur
+        // du bandeau réel vient de son BOUTON, et le padding vertical du jeton
+        // n'y passe plus. Le fantôme suit, sans quoi la première rangée
+        // descend de l'écart (20 px mesurés par `check-gateway-build.mjs`).
+        padding: `0 ${sticker.padding.horizontal}px`,
+        minHeight: SECTION_TOGGLE_MIN_HEIGHT,
+        display: 'flex',
+        alignItems: 'center',
       }}
     >
       {/* MÊME ÉLÉMENT, MÊME TYPOGRAPHIE que `LensSticker` — c'est ce qui
@@ -109,7 +119,7 @@ export function LensSkeletonRows() {
 
 export function LensSkeleton() {
   return (
-    <ul id="contenu" aria-busy="true" aria-label="Chargement des conversations" className="flex flex-1 flex-col overflow-hidden px-2">
+    <ul id="contenu" aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'list.loading')} className="flex flex-1 flex-col overflow-hidden px-2">
       <LensSkeletonRows />
     </ul>
   );

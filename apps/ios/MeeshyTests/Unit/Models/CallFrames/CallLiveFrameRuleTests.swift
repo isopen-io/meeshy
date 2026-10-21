@@ -14,7 +14,7 @@ final class CallLiveFrameRuleTests: XCTestCase {
         bucket: CallFrameBucket = .duo,
         motion: CallFrameOrnamentMotion = .still,
         scene: [CallFrameSceneLayer] = [],
-        surfaces: [CallFrameSurface] = [.capture],
+        surfaces: [CallFrameSurface] = [.capture, .live],
         cost: CallFrameCost? = nil
     ) -> CallFrameDesign {
         CallFrameDesign(
@@ -58,16 +58,33 @@ final class CallLiveFrameRuleTests: XCTestCase {
 
     // MARK: - Ce qui se propose
 
-    func test_isEligible_duoWithoutDeclaredCost_isOffered() {
-        XCTAssertTrue(CallLiveFrameRule.isEligible(makeDesign()))
+    /// #10195 — directive porteur 2026-10-11 : un cadre de capture seule ne sert JAMAIS l'appel,
+    /// même léger, même sans coût déclaré. Le direct se lit dans `surfaces`, par la loi d'usage.
+    func test_isEligible_captureOnlyWithoutDeclaredCost_isNotOffered() {
+        XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(surfaces: [.capture])))
     }
 
-    func test_isEligible_lightCost_isOffered() {
-        XCTAssertTrue(CallLiveFrameRule.isEligible(makeDesign(cost: .light)))
+    func test_isEligible_captureOnlyLightCost_isNotOffered() {
+        XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(surfaces: [.capture], cost: .light)))
     }
 
-    func test_isEligible_richCostWithoutLiveSurface_isNotOffered() {
-        XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(cost: .rich)))
+    func test_isEligible_captureOnlyRichCost_isNotOffered() {
+        XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(surfaces: [.capture], cost: .rich)))
+    }
+
+    func test_isEligible_captureAndLive_isOfferedLiveAndInCapture() {
+        let design = makeDesign(surfaces: [.capture, .live], cost: .light)
+        XCTAssertTrue(CallLiveFrameRule.isEligible(design))
+        XCTAssertTrue(FrameUsageLaw.canUseFrame(design.usage, .call))
+        XCTAssertTrue(FrameUsageLaw.canUseFrame(design.usage, .capture(.photo)))
+        XCTAssertTrue(FrameUsageLaw.canUseFrame(design.usage, .capture(.video)))
+    }
+
+    func test_usage_captureOnly_servesCaptureButNeverTheCall() {
+        let usage = makeDesign(surfaces: [.capture], cost: .light).usage
+        XCTAssertFalse(FrameUsageLaw.canUseFrame(usage, .call))
+        XCTAssertTrue(FrameUsageLaw.canUseFrame(usage, .capture(.photo)))
+        XCTAssertTrue(FrameUsageLaw.canUseFrame(usage, .capture(.video)))
     }
 
     func test_isEligible_richCostDeclaringLive_isOffered() {
@@ -76,6 +93,13 @@ final class CallLiveFrameRuleTests: XCTestCase {
 
     func test_isEligible_groupFrame_isNotOffered() {
         XCTAssertFalse(CallLiveFrameRule.isEligible(makeDesign(bucket: .comite)))
+    }
+
+    /// Mesuré avant #10195 sous l'ancienne règle (duo + coût léger ou absent) : 45 cadres.
+    /// Le catalogue déclare désormais ses surfaces, et le direct en garde exactement autant.
+    func test_frames_catalogue_offersTheSameFortyFiveDuoFramesLive() {
+        XCTAssertEqual(CallLiveFrameRule.frames().count, 45)
+        XCTAssertTrue(CallLiveFrameRule.frames().allSatisfy { $0.isOffered(on: .live) })
     }
 
     func test_frames_catalogue_offersAtLeastOneDuoFrame() {
@@ -111,8 +135,8 @@ final class CallLiveFrameRuleTests: XCTestCase {
         XCTAssertFalse(CallLiveFrameRule.mayHold(frameId: design.id, isOffered: false, in: [design]))
     }
 
-    func test_mayHold_notAFrameTooHeavyForLive() {
-        let design = makeDesign(cost: .rich)
+    func test_mayHold_notACaptureOnlyFrame() {
+        let design = makeDesign(surfaces: [.capture], cost: .light)
         XCTAssertFalse(CallLiveFrameRule.mayHold(frameId: design.id, isOffered: true, in: [design]))
     }
 

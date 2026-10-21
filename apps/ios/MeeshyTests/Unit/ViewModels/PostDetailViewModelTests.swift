@@ -142,9 +142,7 @@ final class PostDetailViewModelTests: XCTestCase {
 
         await sut.registerDetailOpen("p1")
 
-        XCTAssertEqual(mock.recordImpressionCallCount, 1)
-        XCTAssertEqual(mock.lastRecordImpressionPostId, "p1")
-        XCTAssertEqual(mock.lastRecordImpressionSource, "detail")
+        XCTAssertEqual(mock.recordedImpressions, [.impression(postId: "p1", source: "detail", surface: .detail)])
     }
 
     func test_registerDetailOpen_optimisticallyBumpsTotalViewAndImpression() async {
@@ -1469,6 +1467,18 @@ final class PostDetailViewModelTests: XCTestCase {
         sut.applyCommentTranslationUpdate(commentId: "r1", language: "en", text: "Hi")
 
         XCTAssertEqual(sut.repliesMap["root"]?.first?.translatedContent, "Hi")
+    }
+
+    /// Cycle 4 — la traduction d'une langue non préférée est gardée : un
+    /// changement de langue la sert sans re-fetch.
+    func test_applyCommentTranslationUpdate_nonPreferredLanguage_isKeptForALanguageChange() {
+        let (sut, _) = makeSUT(preferredLanguages: ["en"])
+        sut.comments = [FeedComment(id: "c1", author: "bob", content: "Salut", originalLanguage: "fr")]
+
+        sut.applyCommentTranslationUpdate(commentId: "c1", language: "es", text: "Hola")
+
+        XCTAssertNil(sut.comments.first?.translatedContent)
+        XCTAssertEqual(sut.comments.first?.resolved(preferredLanguages: ["es"]).displayContent, "Hola")
     }
 
     // MARK: - subscribeToSocket → post:translation-updated (#6531)

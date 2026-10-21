@@ -97,4 +97,36 @@ struct GameIntegrationModelsTests {
         """)
         #expect(profile.standing?.prestige == 5)
     }
+
+    @Test("les points d'un membre se lisent quand le serveur les sert (soi, un ami) — #10231")
+    func servedPointsAreRead() throws {
+        let profile = try decode(UserGameProfileResponse.self, """
+        {"visible":true,"standing":{"level":3,"tier":"etincelle","prestige":0,"flame":null,"rank":"murmure","division":3,"ladder":{"level":3,"tier":"etincelle"},"points":976},"treasury":null}
+        """)
+        #expect(profile.standing?.points == 976)
+    }
+
+    @Test("sans points servis (un lecteur qui n'est pas ami), aucun point n'est inventé")
+    func absentPointsStayAbsent() throws {
+        let profile = try decode(UserGameProfileResponse.self, """
+        {"visible":true,"standing":{"level":3,"tier":"etincelle","prestige":0,"flame":null,"rank":"murmure","division":3},"treasury":null}
+        """)
+        #expect(profile.standing?.points == nil)
+    }
+
+    @Test("des points négatifs reçus du réseau ne se lisent pas")
+    func negativePointsAreDropped() throws {
+        let profile = try decode(UserGameProfileResponse.self, """
+        {"visible":true,"standing":{"level":3,"tier":"etincelle","prestige":0,"flame":null,"rank":"murmure","division":3,"points":-4},"treasury":null}
+        """)
+        #expect(profile.standing?.points == nil)
+    }
+
+    @Test("les points survivent au cache disque : l'encodage les garde")
+    func pointsSurviveTheCache() throws {
+        let standing = GameStanding(level: 3, tier: .etincelle, prestige: 0, flame: nil, rank: .murmure, division: .iii, points: 976)
+        let data = try JSONEncoder().encode(standing)
+        let decoded = try JSONDecoder().decode(GameStanding.self, from: data)
+        #expect(decoded.points == 976)
+    }
 }

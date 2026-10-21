@@ -66,12 +66,44 @@ final class TypingAnnouncementLawTests: XCTestCase {
         )
     }
 
-    /// Un accent, pas un changement de taille : la pastille vit dans le couloir
-    /// étroit sous la Dynamic Island. `1.5` (la valeur de #4018) y touchait les
-    /// bords sur les petits écrans, et c'est ce qui a motivé deux des reprises.
-    func test_emphasisScale_staysAnAccentNotAResize() {
-        XCTAssertGreaterThan(TypingAnnouncementLaw.emphasisScale, 1)
-        XCTAssertLessThanOrEqual(TypingAnnouncementLaw.emphasisScale, 1.25)
+    /// « Préserver la taille initiale et l'augmenter juste par ×1,1 par rapport
+    /// à la taille initiale lorsqu'on a de la frappe » (#10840, retour porteur
+    /// 2026-10-16). ×1,18 (#6188) puis ×1,5 (#4018) avant lui.
+    func test_emphasisScale_isOnePointOneTimesTheRestingSize() {
+        XCTAssertEqual(TypingAnnouncementLaw.emphasisScale, 1.1, accuracy: 0.0001)
+    }
+
+    // MARK: - Les points d'activité ne font pas respirer la capsule
+
+    /// « Préserver la taille initiale quand des utilisateurs écrivent » : les
+    /// points « . .. ... » qui suivent « @alice » changeaient la LARGEUR de la
+    /// capsule deux fois par seconde pendant toute la frappe. La place des trois
+    /// points est réservée ; seuls les points visibles changent.
+    func test_activityDots_neverOutgrowTheirReservedSlot() {
+        for phase in 0..<12 {
+            let visible = SyncPillActivityDots.visible(phase: phase)
+            XCTAssertFalse(visible.isEmpty)
+            XCTAssertLessThanOrEqual(visible.count, SyncPillActivityDots.reserved.count)
+            XCTAssertTrue(SyncPillActivityDots.reserved.hasPrefix(visible))
+        }
+    }
+
+    /// Le libellé ne se compose plus en concaténant les points : c'est cette
+    /// concaténation qui faisait varier la largeur rendue.
+    func test_syncPill_neverAppendsTheDotsToTheLabel() throws {
+        let source = try String(contentsOfFile: Self.syncPillSourcePath, encoding: .utf8)
+
+        XCTAssertFalse(source.contains("label + (showsDots"),
+                       "SyncPill concatène encore les points au libellé : la capsule respire à chaque tic")
+        XCTAssertTrue(source.contains("SyncPillActivityDots.reserved"),
+                      "SyncPill ne réserve pas la place des trois points")
+    }
+
+    private static var syncPillSourcePath: String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/SyncPill.swift").path
     }
 
     /// Sans palier, l'œil qui regarde ailleurs au mauvais moment ne voit rien :

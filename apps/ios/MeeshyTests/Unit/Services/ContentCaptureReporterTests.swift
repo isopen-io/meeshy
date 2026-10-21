@@ -296,4 +296,64 @@ final class ContentCaptureReporterTests: XCTestCase {
         guard case .plain(let text)? = river else { return XCTFail("un avis de capture se rend en ligne simple") }
         XCTAssertEqual(text, expected)
     }
+
+    // MARK: - La ligne d'arrivées de Meeshy Global (#7759)
+
+    private func arrivalsNotice(_ names: [String], count: Int) throws -> ArrivalsNoticeMetadata {
+        let arrivals = names.enumerated()
+            .map { #"{"participantId":"p-\#($0.offset)","displayName":"\#($0.element)"}"# }
+            .joined(separator: ",")
+        let json = #"{"kind":"members-arrived","arrivals":[\#(arrivals)],"count":\#(count),"windowStartedAt":"2026-09-28T09:00:00.000Z"}"#
+        return try JSONDecoder().decode(ArrivalsNoticeMetadata.self, from: Data(json.utf8))
+    }
+
+    /// Le `content` stocké est le repli FRANÇAIS ; un lecteur anglais lit la
+    /// phrase composée depuis la métadonnée, avec les clés de la ligne de liste.
+    func test_arrivalsNoticeText_composesInTheReadersLanguage_notTheFrenchFallback() throws {
+        var line = message(Self.plainId, source: .system)
+        line.content = "Aïcha, Tom et 12 autres viennent d’arriver — dis-leur salut"
+        line.arrivalsNotice = try arrivalsNotice(["Aïcha", "Tom", "Léa"], count: 14)
+        let english = ConversationPreviewStrings(language: "en") { key in
+            key == .systemMembersArrivedMany ? "{first}, {second} and {others} others just arrived — say hi" : key.rawValue
+        }
+        XCTAssertEqual(
+            BubbleContent.arrivalsNoticeText(for: line, strings: english),
+            "Aïcha, Tom and 12 others just arrived — say hi"
+        )
+    }
+
+    func test_arrivalsNoticeText_withoutReadableMetadata_fallsBackToContent() {
+        XCTAssertNil(BubbleContent.arrivalsNoticeText(for: message(Self.plainId, source: .system)))
+    }
+
+    /// Bulles, Focal et Script lisent `text.raw` ; la Rivière appelle
+    /// `systemNotice` : les quatre disent la phrase composée, jamais le repli.
+    func test_arrivalsLine_allFourModes_renderTheComposedSentence() throws {
+        var line = message(Self.plainId, source: .system)
+        line.content = "repli"
+        line.arrivalsNotice = try arrivalsNotice(["Tom", "Aïcha"], count: 2)
+        let expected = try XCTUnwrap(BubbleContent.arrivalsNoticeText(for: line))
+        XCTAssertNotEqual(expected, "repli")
+
+        let bubble = BubbleContent(message: line, translations: [], preferredTranslation: nil, currentUserId: "p-me")
+        XCTAssertEqual(bubble.kind, .system)
+        XCTAssertEqual(bubble.text?.raw, expected)
+
+        let river = RiverConversationMapping.systemNotice(for: line, viewerId: "p-me", timeString: "09:04") { $0.content }
+        guard case .plain(let text)? = river else { return XCTFail("une ligne d'arrivées se rend en ligne simple") }
+        XCTAssertEqual(text, expected)
+    }
+
+    /// Une ligne COMPLÉTÉE en direct (`message:edited`) emporte sa métadonnée
+    /// avec son contenu — sinon la bulle dirait l'ancien compte.
+    func test_openConversation_completedArrivalsLine_persistsItsNoticeWithTheContent() throws {
+        let handler = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Meeshy/Features/Main/ViewModels/ConversationSocketHandler.swift"),
+            encoding: .utf8
+        )
+        XCTAssertTrue(handler.contains("arrivalsNotice: apiMsg.arrivalsNotice"))
+    }
 }

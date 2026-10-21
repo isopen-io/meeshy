@@ -53,6 +53,8 @@ nonisolated enum ReelEngineOwnershipPolicy {
 struct ReelFeedVideoSurface: View {
     let media: FeedMedia
     let isActive: Bool
+    /// #10504 — le contenu dont la lecture est mesurée (`playback`).
+    var playbackTarget: SocialTarget? = nil
 
     /// Reporté au parent (D3, S2) : `true` quand CETTE instance possède
     /// RÉELLEMENT le moteur partagé et qu'il joue bien SA vidéo
@@ -218,6 +220,7 @@ struct ReelFeedVideoSurface: View {
             // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la
             // pièce jointe qu'elle qualifie : ce moteur est partagé (#7212).
             manager.setServedConsumption(attachment.currentUserConsumption, for: media.id)
+            manager.setPlaybackSubject(playbackTarget.map { PlaybackQoESubject(target: $0, surface: SocialSurface(.feed), mediaId: media.id) })
         }
         updateEngineOwnership(true)
         // Loop DOIT être (ré)affirmé APRÈS `load()` : `load()` appelle `cleanup()`
@@ -236,10 +239,9 @@ struct ReelFeedVideoSurface: View {
         // (DoD S2 rejet, constat majeur #2).
         ReelFeedSoundButtonPolicy.apply(soundOn: soundOn, to: manager)
         manager.shouldLoop = true
-        // D5 : aucun armement explicite de `.duckOthers` ici — `apply()`
+        // D5 : aucun armement explicite de la session ici — `apply()`
         // ci-dessus a déjà résolu `isMuted`/`isForceMuted` AVANT cet appel, et
-        // `manager.play()` (SharedAVPlayerManager) arme lui-même `.duckOthers`,
-        // gated sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
+        // `manager.play()` arme lui-même la session (loi #11039), lue sur `effectiveMuted` AU COMPLET (isMuted OU isForceMuted) — pas
         // seulement sur `isForceMuted` comme le faisait l'ancien appel explicite
         // ici, qui pouvait armer la session pour une vidéo restée silencieuse
         // quand `isMuted` seul valait `true` (DoD S2 rejet, constat majeur #2).

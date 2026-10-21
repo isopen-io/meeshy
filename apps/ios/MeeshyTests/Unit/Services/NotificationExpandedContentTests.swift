@@ -210,6 +210,117 @@ final class NotificationExpandedContentTests: XCTestCase {
                        [MeeshyNotificationAction.reply.rawValue, MeeshyNotificationAction.markRead.rawValue])
     }
 
+    // MARK: - Éphémère : un décompte vivant, et rien d'autre (#7455)
+
+    /// La charge d'un éphémère telle que la NSE la laisse : protégée (clé de
+    /// localisation, bit de cycle de vie), durée déclarée par la passerelle,
+    /// échéance LOCALE gravée sous `EphemeralBannerDeadline.userInfoKey`.
+    private func ephemeralPayload(deadline: Date, _ extra: [String: Any] = [:]) -> [AnyHashable: Any] {
+        let base: [String: Any] = [
+            "type": "new_message", "conversationId": "c1", "messageId": "m1",
+            "notificationLocKey": "notification.ephemeral_message",
+            "effectFlags": "1", "ephemeralDuration": "300",
+            EphemeralBannerDeadline.userInfoKey: deadline.timeIntervalSince1970,
+        ]
+        return base.merging(extra) { _, new in new }
+    }
+
+    func test_resolve_ephemeralWithDeadline_isTheLiveCountdown() {
+        let deadline = Date(timeIntervalSince1970: 1_800_000_300)
+        XCTAssertEqual(resolve(ephemeralPayload(deadline: deadline)), .ephemeral(deadline: deadline))
+    }
+
+    /// Un éphémère qui porte aussi une position ou un vocal ne montre QUE son
+    /// décompte : le contenu est protégé, seule l'échéance se déploie.
+    func test_resolve_ephemeralCarryingADetail_showsOnlyTheCountdown() {
+        let deadline = Date(timeIntervalSince1970: 1_800_000_300)
+        let withPlace = ephemeralPayload(deadline: deadline, ["locationLat": "48.8584", "locationLon": "2.2945"])
+        let withVoice = ephemeralPayload(deadline: deadline, [
+            "attachmentUrl": "https://gate.meeshy.me/api/v1/attachments/file/a%2Fvocal.m4a",
+            "attachmentMimeType": "audio/mp4",
+        ])
+        XCTAssertEqual(resolve(withPlace), .ephemeral(deadline: deadline))
+        XCTAssertEqual(resolve(withVoice), .ephemeral(deadline: deadline))
+    }
+
+    /// L'échéance se lit sous ses deux formes : un `userInfo` traverse une
+    /// sérialisation, et le décompte ne doit pas dépendre du sérialiseur.
+    func test_resolve_ephemeralDeadlineAsString_isTheLiveCountdown() {
+        let payload = ephemeralPayload(deadline: .distantPast,
+                                       [EphemeralBannerDeadline.userInfoKey: "1800000300"])
+        XCTAssertEqual(resolve(payload), .ephemeral(deadline: Date(timeIntervalSince1970: 1_800_000_300)))
+    }
+
+    func test_expirySleep_beforeTheDeadline_sleepsUntilIt() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: now.addingTimeInterval(30), now: now), 30_000_000_000)
+    }
+
+    func test_expirySleep_pastTheDeadline_isZero() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: now.addingTimeInterval(-5), now: now), 0)
+    }
+
+    func test_expirySleep_absurdDeadlines_areCapped_neverTrapping() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let cap = NotificationExpandedContent.expirySleepCapNanoseconds
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: .distantFuture, now: now), cap)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: Date(timeIntervalSinceReferenceDate: .greatestFiniteMagnitude), now: now), cap)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: Date(timeIntervalSinceReferenceDate: .infinity), now: now), cap)
+        XCTAssertEqual(NotificationExpandedContent.expirySleepNanoseconds(deadline: Date(timeIntervalSinceReferenceDate: .nan), now: now), cap)
+    }
+
+    func test_countdownRange_beforeTheDeadline_runsFromNowToTheDeadline() {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let deadline = now.addingTimeInterval(300)
+        XCTAssertEqual(NotificationExpandedContent.countdownRange(deadline: deadline, now: now), now...deadline)
+    }
+
+    /// `Text(timerInterval:)` prend un intervalle FERMÉ : une borne basse
+    /// au-delà de la haute PIÈGE à la construction. Une échéance passée rend
+    /// donc un intervalle nul à l'échéance, jamais un intervalle inversé.
+    func test_countdownRange_pastTheDeadline_isEmptyAtTheDeadline_neverInverted() {
+        let deadline = Date(timeIntervalSince1970: 1_800_000_000)
+        let now = deadline.addingTimeInterval(42)
+        XCTAssertEqual(NotificationExpandedContent.countdownRange(deadline: deadline, now: now), deadline...deadline)
+    }
+
+    func test_refinedCategory_ephemeralMessage_isTheEphemeralCategory_despiteItsProtection() {
+        let payload = ephemeralPayload(deadline: .distantFuture)
+        for type in ["new_message", "message_reply", "reply"] {
+            XCTAssertEqual(NotificationDetailPolicy.refinedCategory("MEESHY_MESSAGE", type: type, userInfo: payload),
+                           "MEESHY_EPHEMERAL", type)
+        }
+    }
+
+    /// La NSE choisit la catégorie AVANT de graver l'échéance : la catégorie
+    /// se lit donc sur la DURÉE déclarée par la passerelle. Une durée nulle,
+    /// vide ou absente n'est pas un éphémère ; une réaction non plus.
+    func test_refinedCategory_withoutADeclaredDuration_orForAReaction_isNotEphemeral() {
+        for duration in ["0", "", "-5"] {
+            XCTAssertEqual(NotificationDetailPolicy.refinedCategory(
+                "MEESHY_MESSAGE", type: "new_message",
+                userInfo: ephemeralPayload(deadline: .distantFuture, ["ephemeralDuration": duration])
+            ), "MEESHY_MESSAGE", "ephemeralDuration=\(duration)")
+        }
+        XCTAssertEqual(NotificationDetailPolicy.refinedCategory(
+            "MEESHY_MESSAGE", type: "message_reaction", userInfo: ephemeralPayload(deadline: .distantFuture)
+        ), "MEESHY_MESSAGE")
+        XCTAssertEqual(NotificationDetailPolicy.refinedCategory(
+            "MEESHY_MENTION", type: "user_mentioned", userInfo: ephemeralPayload(deadline: .distantFuture)
+        ), "MEESHY_MENTION")
+    }
+
+    func test_ephemeralCategory_isRegisteredWithReplyAndMarkRead() throws {
+        let reply = UNTextInputNotificationAction(identifier: MeeshyNotificationAction.reply.rawValue, title: "Répondre", options: [])
+        let markRead = UNNotificationAction(identifier: MeeshyNotificationAction.markRead.rawValue, title: "Lu", options: [])
+        let categories = NotificationDetailCategories.categories(reply: reply, markRead: markRead)
+        let ephemeral = try XCTUnwrap(categories.first { $0.identifier == MeeshyNotificationCategory.ephemeral.rawValue })
+        XCTAssertEqual(ephemeral.identifier, NotificationDetailPolicy.ephemeralCategory)
+        XCTAssertEqual(ephemeral.actions.map(\.identifier),
+                       [MeeshyNotificationAction.reply.rawValue, MeeshyNotificationAction.markRead.rawValue])
+    }
+
     // MARK: - Contrat : l'extension embarquée déclare ces catégories
 
     /// Les catégories que l'extension de contenu DÉCLARE (Info.plist) sont
@@ -227,6 +338,7 @@ final class NotificationExpandedContentTests: XCTestCase {
             MeeshyNotificationCategory.audio.rawValue,
             MeeshyNotificationCategory.location.rawValue,
             MeeshyNotificationCategory.contact.rawValue,
+            MeeshyNotificationCategory.ephemeral.rawValue,
         ])
         XCTAssertEqual(attributes["UNNotificationExtensionUserInteractionEnabled"] as? Bool, true)
     }

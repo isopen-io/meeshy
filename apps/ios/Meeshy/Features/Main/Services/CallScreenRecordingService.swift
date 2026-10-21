@@ -66,7 +66,7 @@ final class CallScreenRecordingService: CallRecordingServiceProviding {
     private var writer: CallScreenSampleWriter?
     private var targetURL: URL?
     private var fallbackActive = false
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-recording")
+    private let logger = MeeshyLog.logger(.callRecording)
 
     nonisolated deinit {}
 
@@ -82,7 +82,7 @@ final class CallScreenRecordingService: CallRecordingServiceProviding {
             return
         }
         let rawURL = fileURL.deletingPathExtension().appendingPathExtension("brut.mov")
-        let sampleWriter = try CallScreenSampleWriter(url: rawURL, plan: plan, screenSize: UIScreen.main.nativeBounds.size)
+        let sampleWriter = try CallScreenSampleWriter(url: rawURL, plan: plan)
         writer = sampleWriter
         targetURL = fileURL
         screenRecorder.isMicrophoneEnabled = true
@@ -141,20 +141,20 @@ nonisolated final class CallScreenSampleWriter: @unchecked Sendable {
     private let queue = DispatchQueue(label: "me.meeshy.call-recording.writer")
     private let writer: AVAssetWriter
     private let plan: CallScreenCapturePlan
-    private let inputs: [CallScreenCaptureTrack: AVAssetWriterInput]
+    private var inputs: [CallScreenCaptureTrack: AVAssetWriterInput]
     private var sessionStarted = false
     private var cancelled = false
 
-    /// `screenSize` est lu par l'appelant, sur le fil principal : `UIScreen`
-    /// n'est pas lisible depuis ce type `nonisolated`.
-    init(url: URL, plan: CallScreenCapturePlan, screenSize: CGSize) throws {
+    /// La piste vidéo prend la taille des IMAGES capturées, lue sur le premier
+    /// tampon vidéo (qui ouvre la session d'un plan vidéo). Elle venait de
+    /// `UIScreen.main.nativeBounds` — l'écran physique en portrait, faux pour
+    /// un iPad en paysage, une fenêtre Split View / Stage Manager ou un écran
+    /// externe : l'enregistrement sortait bandé ou mis à l'échelle.
+    init(url: URL, plan: CallScreenCapturePlan) throws {
         try? FileManager.default.removeItem(at: url)
         writer = try AVAssetWriter(outputURL: url, fileType: .mov)
         self.plan = plan
         var made: [CallScreenCaptureTrack: AVAssetWriterInput] = [:]
-        if plan.kind == .video {
-            made[.video] = Self.videoInput(screenSize: screenSize)
-        }
         made[.appAudio] = Self.audioInput()
         made[.micAudio] = Self.audioInput()
         for input in made.values where writer.canAdd(input) {
@@ -167,7 +167,16 @@ nonisolated final class CallScreenSampleWriter: @unchecked Sendable {
         guard let track = plan.track(for: type), CMSampleBufferDataIsReady(buffer) else { return }
         nonisolated(unsafe) let buffer = buffer
         queue.async { [self] in
-            guard !cancelled, let input = inputs[track] else { return }
+            guard !cancelled else { return }
+            if track == .video, inputs[.video] == nil, !sessionStarted,
+               let size = Self.videoSize(of: buffer) {
+                let video = Self.videoInput(screenSize: size)
+                if writer.canAdd(video) {
+                    writer.add(video)
+                    inputs[.video] = video
+                }
+            }
+            guard let input = inputs[track] else { return }
             if !sessionStarted {
                 guard plan.anchors.contains(track), writer.startWriting() else { return }
                 writer.startSession(atSourceTime: CMSampleBufferGetPresentationTimeStamp(buffer))
@@ -195,6 +204,14 @@ nonisolated final class CallScreenSampleWriter: @unchecked Sendable {
             cancelled = true
             if writer.status == .writing { writer.cancelWriting() }
         }
+    }
+
+    /// Les dimensions des images d'un tampon vidéo, `nil` sans description.
+    static func videoSize(of buffer: CMSampleBuffer) -> CGSize? {
+        guard let format = CMSampleBufferGetFormatDescription(buffer) else { return nil }
+        let dimensions = CMVideoFormatDescriptionGetDimensions(format)
+        guard dimensions.width > 0, dimensions.height > 0 else { return nil }
+        return CGSize(width: Int(dimensions.width), height: Int(dimensions.height))
     }
 
     private static func videoInput(screenSize bounds: CGSize) -> AVAssetWriterInput {

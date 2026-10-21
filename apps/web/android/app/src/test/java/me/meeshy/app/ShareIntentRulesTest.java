@@ -10,13 +10,20 @@ import org.junit.Test;
 public class ShareIntentRulesTest {
 
     @Test
-    public void onlyAnImageOrAVideoIsCopied() {
+    public void everyTypedFileIsCopied() {
         assertTrue(ShareIntentRules.isAcceptedMime("image/png"));
         assertTrue(ShareIntentRules.isAcceptedMime("video/mp4"));
-        assertTrue(ShareIntentRules.isAcceptedMime("image/*"));
-        assertFalse(ShareIntentRules.isAcceptedMime("text/plain"));
-        assertFalse(ShareIntentRules.isAcceptedMime("application/pdf"));
+        assertTrue(ShareIntentRules.isAcceptedMime("audio/mp4"));
+        assertTrue(ShareIntentRules.isAcceptedMime("application/pdf"));
+        assertTrue(ShareIntentRules.isAcceptedMime("text/plain"));
+        assertFalse(ShareIntentRules.isAcceptedMime(""));
         assertFalse(ShareIntentRules.isAcceptedMime(null));
+    }
+
+    @Test
+    public void theBoundsAreTheSharedLimits() {
+        assertEquals(20, ShareIntentRules.MAX_FILES);
+        assertEquals(500L * 1024 * 1024, ShareIntentRules.MAX_TOTAL_BYTES);
     }
 
     @Test
@@ -71,5 +78,15 @@ public class ShareIntentRulesTest {
         assertFalse(ShareIntentRules.isForeignContent("content", "me.meeshy.app.fileprovider", "me.meeshy.app"));
         assertFalse(ShareIntentRules.isForeignContent("content", "me.meeshy.app", "me.meeshy.app"));
         assertFalse(ShareIntentRules.isForeignContent("content", null, "me.meeshy.app"));
+    }
+
+    @Test
+    public void aCopyIsKeptSkippedOrEndsTheShareLikeThePwa() {
+        // Le service worker de la PWA (sw-share-target.js, filesOf) : un fichier vide
+        // n'occupe pas de place, le premier qui ferait depasser arrete le partage (#11142).
+        assertEquals(ShareIntentRules.CopyVerdict.KEEP, ShareIntentRules.verdictOf(1));
+        assertEquals(ShareIntentRules.CopyVerdict.SKIP, ShareIntentRules.verdictOf(0));
+        assertEquals(ShareIntentRules.CopyVerdict.SKIP, ShareIntentRules.verdictOf(ShareIntentRules.UNREADABLE));
+        assertEquals(ShareIntentRules.CopyVerdict.STOP, ShareIntentRules.verdictOf(ShareIntentRules.OVER_BUDGET));
     }
 }

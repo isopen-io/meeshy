@@ -13,10 +13,12 @@ const deps = (rows: Row[], invited: string[]) => ({
       findUnique: async () => ({ conversationId: CONV, status: 'active', invitedUserIds: invited }),
     },
     participant: {
-      findFirst: async ({ where }: { where: { userId: string; conversationId: string; isActive?: boolean } }) =>
+      // #10473 — la clé se lit par `userId`, ou par une branche `OR` qui
+      // choisit sa colonne (`participantKeyWhere`).
+      findFirst: async ({ where }: { where: { userId?: string; OR?: Array<{ userId?: string }>; conversationId: string; isActive?: boolean } }) =>
         rows.find(
           (r) =>
-            r.userId === where.userId &&
+            (where.OR ? where.OR.some((branch) => branch.userId === r.userId) : r.userId === where.userId) &&
             r.conversationId === where.conversationId &&
             (where.isActive === undefined || r.isActive === where.isActive)
         ) ?? null,

@@ -23,6 +23,7 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import crypto from 'crypto';
+import { Prisma } from '@meeshy/shared/prisma/client';
 
 jest.mock('../../../utils/password-hash', () => ({
   ...(jest.requireActual('../../../utils/password-hash') as Record<string, unknown>),
@@ -32,6 +33,7 @@ jest.mock('../../../utils/password-hash', () => ({
 
 import { PasswordResetService } from '../../../services/PasswordResetService';
 import { PhonePasswordResetService } from '../../../services/PhonePasswordResetService';
+import { matchesMongoWhere } from '../../helpers/mongo-where';
 
 type Row = Record<string, unknown>;
 
@@ -61,12 +63,32 @@ const makeAccount = (overrides: Row = {}): Row => ({
   ...overrides
 });
 
+// #10475 — les lignes de jetons sont TENUES et les écritures conditionnelles
+// ÉVALUÉES : un jeton sorti de `create` n'a pas de clé `usedAt`.
+const conditionalWrite = (rows: Row[]) =>
+  jest.fn(async ({ where, data }: { where: Row; data: Row }) => {
+    const row = rows.find((candidate) => matchesMongoWhere(candidate, where));
+    if (!row) return { count: 0 };
+    Object.assign(row, data);
+    return { count: 1 };
+  });
+
 const makeHarness = (account: Row) => {
   const tokens: Row[] = [];
+  const phoneRow: Row = {
+    id: 'phone-1',
+    userId: account.id,
+    codeHash: crypto.createHash('sha256').update(CODE_SMS).digest('hex'),
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+    isRevoked: false,
+    verificationStep: 'CODE_PENDING',
+    codeAttempts: 0
+  };
+  const markPhoneRow = conditionalWrite([phoneRow]);
   const tx = {
     user: { update: jest.fn(async (_args: { where: Row; data: Row }) => ({})) },
     passwordHistory: { create: jest.fn(async (_args: Row) => ({})) },
-    passwordResetToken: { update: jest.fn(async (_args: Row) => ({})) },
+    passwordResetToken: { update: jest.fn(async (_args: Row) => ({})), updateMany: conditionalWrite(tokens) },
     userSession: { updateMany: jest.fn(async (_args: Row) => ({ count: 0 })) }
   };
   const prisma = {
@@ -84,30 +106,28 @@ const makeHarness = (account: Row) => {
       updateMany: jest.fn(async (_args: Row) => ({ count: 0 })),
       count: jest.fn(async (_args: Row) => 0),
       create: jest.fn(async ({ data }: { data: Row }) => {
-        const row = { id: `reset-${tokens.length + 1}`, usedAt: null, isRevoked: false, ...data };
+        const row = { id: `reset-${tokens.length + 1}`, isRevoked: false, ...data };
         tokens.push(row);
         return row;
       }),
       findUnique: jest.fn(
         async ({ where }: { where: { tokenHash: string }; include: { user: { select: Row } } }) => {
           const row = tokens.find((candidate) => candidate.tokenHash === where.tokenHash);
-          return row ? { ...row, user: account } : null;
+          return row ? { ...row, usedAt: row.usedAt ?? null, user: account } : null;
         }
       )
     },
     phonePasswordResetToken: {
       findUnique: jest.fn(async (_args: Row) => ({
-        id: 'phone-1',
-        userId: account.id,
-        codeHash: crypto.createHash('sha256').update(CODE_SMS).digest('hex'),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-        usedAt: null,
-        isRevoked: false,
-        verificationStep: 'CODE_PENDING',
-        codeAttempts: 0,
+        ...phoneRow,
+        usedAt: phoneRow.usedAt ?? null,
         user: { id: account.id, email: account.email }
       })),
-      updateMany: jest.fn(async (_args: Row) => ({ count: 1 })),
+      // La consommation d'une tentative de code (`codeAttempts`) réussit ; le
+      // marquage du jeton est évalué sur la ligne.
+      updateMany: jest.fn(async (args: { where: Row; data: Row }) =>
+        'codeAttempts' in args.data ? { count: 1 } : markPhoneRow(args)
+      ),
       update: jest.fn(async (_args: Row) => ({}))
     },
     passwordHistory: { findMany: jest.fn(async (_args: Row) => []) },
@@ -139,7 +159,9 @@ const demander = (harness: Harness) =>
 
 const jetonDuLien = (harness: Harness): string => {
   const envoi = harness.email.sendPasswordResetEmail.mock.calls.at(-1)?.[0];
-  return new URL(String(envoi?.resetLink), 'https://meeshy.test').searchParams.get('token') ?? '';
+  // #10859 — le jeton voyage dans le FRAGMENT du lien, jamais dans sa requête.
+  const lien = new URL(String(envoi?.resetLink), 'https://meeshy.test');
+  return new URLSearchParams(lien.hash.slice(1)).get('token') ?? '';
 };
 
 const jetonDuParcoursSms = async (harness: Harness): Promise<string> => {
@@ -271,5 +293,57 @@ describe('consommer le lien livré par e-mail prouve la possession de la boîte 
 
     const lecture = harness.prisma.passwordResetToken.findUnique.mock.calls[0]?.[0];
     expect(lecture?.include?.user?.select?.emailVerifiedAt).toBe(true);
+  });
+});
+
+/**
+ * #10475 — un jeton de réinitialisation ne sert qu'UNE fois, même présenté deux
+ * fois en même temps. La lecture de `usedAt` suivie d'un `update` nu laissait
+ * deux requêtes concurrentes passer toutes deux : deux mots de passe écrits
+ * pour un lien, deux jetons de réinitialisation émis pour un code SMS.
+ */
+describe('un jeton de réinitialisation ne sert qu’une fois, même présenté deux fois en même temps (#10475)', () => {
+  it('deux réinitialisations CONCURRENTES par le même lien : un seul mot de passe écrit', async () => {
+    const harness = makeHarness(makeAccount({ password: HASH_EN_BASE, emailVerifiedAt: verifieeLe }));
+    await demander(harness);
+    const token = jetonDuLien(harness);
+
+    const resultats = await Promise.all([definir(harness, token), definir(harness, token)]);
+
+    expect(resultats.filter((resultat) => resultat.success)).toHaveLength(1);
+    expect(resultats.filter((resultat) => !resultat.success)).toEqual([
+      expect.objectContaining({ error: 'Invalid or expired reset token' })
+    ]);
+    expect(harness.tx.user.update).toHaveBeenCalledTimes(1);
+    expect(harness.tokens[0].usedAt).toBeInstanceOf(Date);
+  });
+
+  it('deux vérifications CONCURRENTES du même code SMS : un seul jeton de réinitialisation émis', async () => {
+    const harness = makeHarness(makeAccount());
+    const verifier = () => harness.phone.verifyCode({ tokenId: 'phone-1', code: CODE_SMS, ipAddress: IP, userAgent: 'jest' });
+
+    const resultats = await Promise.all([verifier(), verifier()]);
+
+    expect(resultats.filter((resultat) => resultat.success)).toHaveLength(1);
+    expect(resultats.filter((resultat) => !resultat.success)).toEqual([
+      expect.objectContaining({ success: false, error: 'token_expired' })
+    ]);
+    expect(harness.prisma.passwordResetToken.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('sur MongoDB, le perdant reçoit un CONFLIT D’ÉCRITURE (P2034) : il est refusé comme un jeton déjà consommé', async () => {
+    const harness = makeHarness(makeAccount({ password: HASH_EN_BASE, emailVerifiedAt: verifieeLe }));
+    await demander(harness);
+    harness.prisma.$transaction.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Transaction failed due to a write conflict or a deadlock', {
+        code: 'P2034',
+        clientVersion: 'test'
+      })
+    );
+
+    const resultat = await definir(harness, jetonDuLien(harness));
+
+    expect(resultat).toEqual({ success: false, error: 'Invalid or expired reset token', code: 'RESET_TOKEN_INVALID' });
+    expect(harness.email.sendPasswordChangedEmail).not.toHaveBeenCalled();
   });
 });

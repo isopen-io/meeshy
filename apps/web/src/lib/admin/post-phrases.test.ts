@@ -28,6 +28,8 @@ const row = (overrides: Partial<AdminPostRow> = {}): AdminPostRow => ({
   moodEmoji: null,
   isPinned: false,
   deletedAt: null,
+  moderationHiddenAt: null,
+  moderationPriorVisibility: null,
   expiresAt: null,
   likeCount: 0,
   commentCount: 0,

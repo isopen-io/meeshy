@@ -2,8 +2,8 @@ import XCTest
 @testable import Meeshy
 
 /// Garde de source pour l'ouverture de « Plus… » : la GRILLE COMPLÈTE, sur les
-/// DEUX call sites de l'action `.more` (overlay appui-long custom + menu
-/// contextuel natif iOS 26). Le saut direct vers « Vues » introduit le
+/// DEUX call sites de l'action `.more` (overlay appui-long custom + « Plus… »
+/// du double toucher — le menu contextuel natif iOS 26, mort, est parti en #11214). Le saut direct vers « Vues » introduit le
 /// 2026-08-11 a été ANNULÉ le 2026-08-19 (décision user) — seuls les accès
 /// directs explicites (tap coches ✓✓ `onShowReadStatus`, « info message »
 /// `onShowMessageInfo`) conservent leur saut vers `.views`.
@@ -48,9 +48,10 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
     // MARK: - Site 1 : overlay appui-long custom (`onShowMore`)
 
     func test_overlayOnShowMore_opensFullGrid() throws {
-        let view = try source("Features/Main/Views/ConversationView.swift")
+        // Le menu d'appui long est composé par `ConversationOverlayMenu`, extrait de l'hôte.
+        let view = try source("Features/Main/Views/ConversationView+OverlayMenu.swift")
         guard let body = closureBody(after: "onShowMore: {", in: view) else {
-            XCTFail("ConversationView must define the onShowMore closure passed to MessageOverlayMenu")
+            XCTFail("ConversationOverlayMenu must define the onShowMore closure passed to MessageOverlayMenu")
             return
         }
         XCTAssertTrue(
@@ -64,34 +65,31 @@ final class MessageMoreJumpsToViewsGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Site 2 : menu contextuel natif iOS 26 (`case .more:` → Button)
+    // MARK: - Site 2 : « Plus… » du double toucher (menu système, #6117)
+    //
+    // #11214 — le menu contextuel natif iOS 26 (`ConversationView+NativeMessageMenu`)
+    // n'avait aucun appelant ; il a quitté le dépôt. Le second site VIVANT de
+    // « Plus… » est le double toucher, que la couche de la liste câble.
 
-    func test_nativeMoreButton_opensFullGrid() throws {
-        let view = try source("Features/Main/Views/ConversationView+NativeMessageMenu.swift")
-        guard let caseRange = view.range(of: "case .more:") else {
-            XCTFail("ConversationView's native menu builder must define a `case .more:` branch")
-            return
-        }
-        let afterCase = String(view[caseRange.upperBound...])
-        guard let body = closureBody(after: "Button {", in: afterCase) else {
-            XCTFail("The .more case must wrap its action in a Button { } closure")
+    func test_doubleTapMore_opensFullGrid() throws {
+        let view = try source("Features/Main/Views/ConversationView+MessageListLayer.swift")
+        guard let body = closureBody(after: "onOpenMoreSheet: { messageId in", in: view) else {
+            XCTFail("La couche de la liste doit définir la closure onOpenMoreSheet du double toucher")
             return
         }
         XCTAssertTrue(
             body.contains("moreSheetInitialItem = nil"),
-            "The native .more Button must open the FULL grid (initialItem = nil) — same " +
-            "revert as the overlay site, on the iOS 26 native contextMenu path."
+            "Le « Plus… » du double toucher doit ouvrir la GRILLE complète (initialItem = nil) — " +
+            "sans quoi une ouverture « Traduire » précédente le ferait tomber sur la vue Langue."
         )
-        XCTAssertFalse(
-            body.contains(".views"),
-            "The native .more Button must no longer route to .views."
-        )
+        XCTAssertFalse(body.contains(".views"), "Le « Plus… » du double toucher ne route pas vers .views.")
     }
 
     // MARK: - Accès directs préservés + ancien ternaire banni
 
     func test_directAccessesStillJumpToViews_andTernaryIsGone() throws {
-        let view = try source("Features/Main/Views/ConversationView.swift")
+        // Les accès directs sont câblés dans la couche de la liste, extraite de l'hôte.
+        let view = try source("Features/Main/Views/ConversationView+MessageListLayer.swift")
         for marker in ["onShowMessageInfo: {", "onShowReadStatus: {"] {
             guard let body = closureBody(after: marker, in: view) else {
                 XCTFail("ConversationView must keep the \(marker.dropLast(3)) direct-access closure")

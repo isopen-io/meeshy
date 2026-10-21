@@ -228,7 +228,7 @@ const f = {
   'admin.monitoring.routes.blind.other': 'Autre limite signalée',
 
   'admin.monitoring.backups.title': 'Sauvegardes',
-  'admin.monitoring.backups.hint': 'La production se sauvegarde chaque nuit à minuit, heure de Paris. Un contrôle à 5 h prévient les administrateurs en cas de problème.',
+  'admin.monitoring.backups.hint': 'Une sauvegarde complète — base vérifiée, médias, configuration — part chaque nuit ; « Prochaine sauvegarde » dit quand. Un contrôle à 5 h, heure de Paris, prévient les administrateurs en cas de problème.',
   'admin.monitoring.backups.state.ok': 'Réussie',
   'admin.monitoring.backups.state.failed': 'En échec',
   'admin.monitoring.backups.state.stale': 'Trop ancienne',

@@ -46,7 +46,8 @@ extension UserUpdatedEvent {
             avatar: avatar.applied(to: participant.avatar),
             conversationRole: participant.conversationRole, isOnline: participant.isOnline,
             lastActiveAt: participant.lastActiveAt, joinedAt: participant.joinedAt,
-            isActive: participant.isActive, type: participant.type
+            isActive: participant.isActive, type: participant.type,
+            profileDecor: participant.profileDecor
         )
         let unchanged = repainted.username == participant.username
             && repainted.firstName == participant.firstName
@@ -238,7 +239,8 @@ extension MeeshyUser {
             voiceSampleUrl: voiceSampleUrl,
             voiceSampleDurationMs: voiceSampleDurationMs,
             voiceQuality: voiceQuality,
-            activation: activation
+            activation: activation,
+            profileDecor: profileDecor
         )
     }
 }

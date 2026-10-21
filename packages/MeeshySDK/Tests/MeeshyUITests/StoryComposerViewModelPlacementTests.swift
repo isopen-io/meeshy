@@ -70,4 +70,45 @@ final class StoryComposerViewModelPlacementTests: XCTestCase {
         XCTAssertEqual(vm.currentEffects.audioPlayerObjects?.first?.x ?? -1, 0.5, accuracy: 0.0001,
                        "le trio de glissement ne porte qu'un état éphémère")
     }
+
+    // MARK: - La fenêtre de temps, pour les cinq familles (#9144)
+
+    private func scene() -> StoryComposerViewModel {
+        let lieu = SharedPlace(latitude: 48.8, longitude: 2.3, name: "Gare")
+        return composer {
+            $0.textObjects = [StoryTextObject(id: "t", text: "salut")]
+            $0.mediaObjects = [StoryMediaObject(id: "m", kind: .image, aspectRatio: 0.75)]
+            $0.stickerObjects = [StorySticker(id: "s", emoji: "🔥")]
+            $0.locationObjects = [StoryLocationObject(id: "l", place: lieu)]
+            $0.audioPlayerObjects = [audio("a")]
+        }
+    }
+
+    /// Le texte avait seul un chemin d'écriture : le témoin s'écrit sur les
+    /// QUATRE autres, là où le défaut vivait.
+    func test_setSceneObjectTiming_writesTheWindowOfEveryFamily() {
+        let vm = scene()
+        for id in ["t", "m", "s", "l", "a"] {
+            vm.setSceneObjectTiming(id: id, startTime: 1.5, duration: 2)
+            let objet = vm.currentEffects.sceneObject(id: id)
+            XCTAssertEqual(objet?.startTime ?? -1, 1.5, accuracy: 0.0001, id)
+            XCTAssertEqual(objet?.duration ?? -1, 2, accuracy: 0.0001, id)
+        }
+    }
+
+    /// Le retour à « permanent » est un chemin : `nil` efface la fenêtre.
+    func test_setSceneObjectTiming_nilMakesTheObjectPermanentAgain() {
+        let vm = scene()
+        vm.setSceneObjectTiming(id: "s", startTime: 1, duration: 2)
+        vm.setSceneObjectTiming(id: "s", startTime: nil, duration: nil)
+        XCTAssertNil(vm.currentEffects.stickerObjects?.first?.startTime)
+        XCTAssertNil(vm.currentEffects.stickerObjects?.first?.duration)
+    }
+
+    func test_setSceneObjectTiming_onAnUnknownId_changesNothing() {
+        let vm = scene()
+        let avant = vm.currentEffects
+        vm.setSceneObjectTiming(id: "inconnu", startTime: 1, duration: 1)
+        XCTAssertEqual(vm.currentEffects, avant)
+    }
 }

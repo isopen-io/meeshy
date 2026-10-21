@@ -88,7 +88,7 @@ public enum NearbyDensityCellSize: Sendable, CaseIterable, Equatable {
 /// `APIPost` (et de faire porter à toutes les autres surfaces un champ qui n'a
 /// de sens que sur celle-ci).
 public struct NearbyPost: Decodable, Sendable, Identifiable {
-    private static let log = Logger(subsystem: "me.meeshy.sdk", category: "nearby-decode")
+    private static let log = MeeshyLog.logger(.nearbyDecode, subsystem: .sdk)
 
     public let post: APIPost
     /// Distance renvoyée par `$geoNear`, calculée depuis `Post.geoPoint` —
@@ -334,13 +334,19 @@ public protocol NearbyDiscoveryServiceProviding: Sendable {
 /// produit. Quel rayon, quel mode d'affichage, quoi dire quand c'est vide —
 /// tout cela vit côté app, avec les singletons Meeshy. Ici, des paramètres
 /// opaques et rien d'autre.
-public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unchecked Sendable {
+public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, Sendable {
     public static let shared = NearbyDiscoveryService()
 
     private let api: APIClientProviding
+    /// #10501 — de quelle page vient chaque publication à proximité.
+    private let listings: ListingContextProviding
 
-    public init(api: APIClientProviding = APIClient.shared) {
+    public init(
+        api: APIClientProviding = APIClient.shared,
+        listings: ListingContextProviding = ListingContextLedger.shared
+    ) {
         self.api = api
+        self.listings = listings
     }
 
     public func nearby(
@@ -350,7 +356,7 @@ public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unc
         cursor: Int = 0,
         limit: Int = 20
     ) async throws -> PaginatedAPIResponse<[NearbyPost]> {
-        try await api.request(
+        let page: PaginatedAPIResponse<[NearbyPost]> = try await api.request(
             PostsEndpoint.nearby,
             method: "GET",
             body: nil,
@@ -362,6 +368,12 @@ public final class NearbyDiscoveryService: NearbyDiscoveryServiceProviding, @unc
                 limit: limit
             )
         )
+        listings.note(
+            surface: .nearby,
+            feedRequestId: page.meta?.feedRequestId,
+            items: page.data.map { ListedItem(id: $0.post.id, rankingSource: $0.post.rankingSource) }
+        )
+        return page
     }
 
     public func density(

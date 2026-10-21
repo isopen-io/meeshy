@@ -10,6 +10,7 @@ import { createActMounter } from '@/test-support/act-mount';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { ADMIN_PERMISSIONS_QUERY_KEY } from '@/lib/api/admin';
 import { receptionOf } from '@/lib/view/ephemeral-reception';
+import { createFakeIntersectionObservers } from '@/test-support/fake-intersection-observer';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { AdminConversationReading } from './admin-conversation-reading';
@@ -227,7 +228,7 @@ function transportSouverain(): { readonly transport: HttpTransport; readonly cal
 
 const VIEWER: Viewer = { id: 'u-membre', handle: 'membre', displayName: 'Le membre', isAnonymous: false };
 
-async function lire(readerLanguages: readonly string[], readerLocale: string, prisme: 'membre' | 'lecteur' = 'membre') {
+async function lire(readerLanguages: readonly string[], prisme: 'membre' | 'lecteur' = 'membre') {
   const { transport, calls } = transportSouverain();
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
@@ -236,7 +237,6 @@ async function lire(readerLanguages: readonly string[], readerLocale: string, pr
         language="fr"
         prisme={prisme}
         readerLanguages={readerLanguages}
-        readerLocale={readerLocale}
         viewer={VIEWER}
         deps={{ source: 'gateway', transport }}
       />
@@ -261,7 +261,6 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
           language="fr"
           prisme="membre"
           readerLanguages={['de', 'es']}
-          readerLocale="de"
           viewer={VIEWER}
           deps={{ source: 'gateway', transport }}
         />
@@ -272,7 +271,7 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
   });
 
   test('le motif VALIDÉ part en querystring, et le formulaire disparaît', async () => {
-    const { host, calls } = await lire(['de', 'es'], 'de');
+    const { host, calls } = await lire(['de', 'es']);
     expect(calls().length).toBeGreaterThan(0);
     expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: MOTIF }).toString());
     // FIGÉ : il n'y a plus de champ à modifier une fois la lecture demandée.
@@ -280,9 +279,27 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
   });
 });
 
+describe('un ADMIN ne se justifie pas : le motif proposé est déjà écrit (#11410)', () => {
+  test('le champ s’ouvre rempli, « Lire » part d’un seul geste avec le motif proposé', async () => {
+    appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="membre" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.value).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(false);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    expect(calls()[0]?.path).toContain(new URLSearchParams({ reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' }).toString());
+  });
+});
+
 describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('sert le RANG 2 du membre — ni son rang 1 absent, ni la langue de l’administrateur', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const texte = host.textContent ?? '';
 
     expect(texte).toContain('Hola');
@@ -295,7 +312,7 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   test('LE CONTRASTE — le MÊME corpus au prisme de l’administrateur rend un AUTRE texte', async () => {
     // Sans ce second montage, le témoin ci-dessus verdirait aussi bien si le
     // composant ignorait `readerLanguages` et servait toujours l'espagnol.
-    const { host } = await lire(['fr'], 'fr');
+    const { host } = await lire(['fr']);
     const texte = host.textContent ?? '';
 
     expect(texte).toContain('Bonjour');
@@ -303,13 +320,13 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
   });
 
   test('rend LA BULLE du produit, pas une ligne à plat — l’auteur est là', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-row="m-traduit"]')).not.toBe(null);
     expect(host.textContent ?? '').toContain('Alice');
   });
 
   test('DIT dans quelle langue il sert — un administrateur ne doit pas prendre une traduction pour l’original', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-admin-reading-prism]')?.textContent).toContain('de › es');
   });
 
@@ -325,7 +342,7 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
    * le cas où elle est juste.
    */
   test('mais PAS quand le prisme est celui du lecteur — il n’y a aucun membre à annoncer', async () => {
-    const { host } = await lire(['fr'], 'fr', 'lecteur');
+    const { host } = await lire(['fr'], 'lecteur');
     // Le fil EST peint : sans ce constat, l'absence du bandeau se confondrait
     // avec un écran vide (leçon 261 — un verdict qui ne peut pas tomber).
     expect(host.textContent ?? '').toContain('Bonjour');
@@ -335,7 +352,7 @@ describe('LA VRAIE VUE, AU PRISME DU MEMBRE', () => {
 
 describe('UN MESSAGE PROTÉGÉ REND SA MENTION — jamais une bulle vide', () => {
   test('la mention est PEINTE', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.textContent ?? '').toContain('Contenu retenu');
   });
 
@@ -343,12 +360,12 @@ describe('UN MESSAGE PROTÉGÉ REND SA MENTION — jamais une bulle vide', () =>
     // Le contenu n'est pas masqué à l'affichage, il est ABSENT de la charge.
     // Offrir « Toucher pour révéler » découvrirait une bulle vide — le contrôle
     // sans effet que la loi 4 interdit.
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-protected="hidden"]')).toBe(null);
   });
 
   test('le libellé LU dit la même chose que le libellé PEINT', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const rangee = host.querySelector('[data-row="m-chiffre"] [role="article"], [role="article"][aria-label]');
     const etiquettes = [...host.querySelectorAll('[role="article"]')].map((n) => n.getAttribute('aria-label') ?? '');
     expect(rangee).not.toBe(null);
@@ -361,7 +378,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
     // Le point d'accroche UNIQUE de l'exclusion. Sans ce témoin, celui qui
     // suit verdirait aussi bien parce que la clé est exclue que parce
     // qu'aucune requête n'a jamais été mise en cache.
-    await lire(['de', 'es'], 'de');
+    await lire(['de', 'es']);
     const clefs = appQueryClient
       .getQueryCache()
       .getAll()
@@ -370,7 +387,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
   });
 
   test('le contenu servi est REFUSÉ par le prédicat de déshydratation', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     // Le contenu EST à l'écran — sans quoi ce témoin verdirait sur un écran vide.
     expect(host.textContent ?? '').toContain('Hola');
 
@@ -390,7 +407,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
     // Sans lui, le témoin ci-dessus verdirait aussi si `dehydrate` ne rendait
     // jamais rien : « aucun contenu souverain » et « aucun contenu du tout »
     // produisent la même chaîne.
-    await lire(['de', 'es'], 'de');
+    await lire(['de', 'es']);
     appQueryClient.setQueryData(['conversations', 'c-ordinaire'], { repere: 'Hola-ordinaire' });
 
     const etat = JSON.stringify(dehydrate(appQueryClient, { shouldDehydrateQuery: persistableQuery }));
@@ -415,7 +432,7 @@ describe('RIEN DE CE QUI EST LU NE TOUCHE LE DISQUE', () => {
  */
 describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
   test('aucun bouton de prise de langue — ni pastille, ni drapeau', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     // Le message TRADUIT est bien à l'écran : sans lui, ce témoin verdirait
     // sur une page vide (leçon 261 — un verdict qui ne peut pas tomber).
     expect(host.textContent ?? '').toContain('Hola');
@@ -424,7 +441,7 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
   });
 
   test('mais le FAIT de la traduction reste dit — l’indicateur du Prisme survit', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelectorAll('[data-prism-indicator]').length).toBeGreaterThan(0);
   });
 
@@ -438,10 +455,10 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
    * rougir ce témoin, et c'est voulu — il faudra alors dire lequel, et prouver
    * qu'il fait quelque chose.
    */
-  const GESTES_OFFERTS = ['Précédents', 'Suivants', 'Ouvrir plan.png', "Lire l'audio", 'Vitesse de lecture', 'Ouvrir en plein écran'];
+  const GESTES_OFFERTS = ['Fil', 'Médias', 'Ouvrir plan.png', 'Lire l’audio', 'Vitesse de lecture', 'Ouvrir en plein écran'];
 
   test('la fenêtre n’offre QUE les gestes dont l’effet existe', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const inconnus = [...host.querySelectorAll('button')]
       .map((bouton) => (bouton.getAttribute('aria-label') ?? bouton.textContent ?? '').trim())
       .filter((nom) => !GESTES_OFFERTS.includes(nom));
@@ -464,18 +481,18 @@ describe('la lecture souveraine ne peint AUCUN contrôle sans effet', () => {
  */
 describe('la lecture souveraine rend aussi ce qui n’est pas du texte', () => {
   test('l’image du message atteint le DOM', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-attachment="a-image"]')).not.toBe(null);
     expect(host.innerHTML).toContain('PIXEL-SOUVERAIN');
   });
 
   test('le vocal est JOUABLE — un <audio> avec sa source', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     expect(host.querySelector('[data-attachment="a-vocal"] audio')).not.toBe(null);
   });
 
   test('et la piste servie suit le prisme DU MEMBRE, jamais l’original', async () => {
-    const { host } = await lire(['de', 'es'], 'de');
+    const { host } = await lire(['de', 'es']);
     const audio = host.querySelector('[data-attachment="a-vocal"] audio');
     expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-ES');
   });
@@ -483,7 +500,7 @@ describe('la lecture souveraine rend aussi ce qui n’est pas du texte', () => {
   test('CONTRASTE — au prisme de l’administrateur (fr), c’est l’ORIGINAL qui est servi', async () => {
     // `fr` n'a aucune piste : la règle du Prisme est alors de servir
     // l'original, jamais `translations.first` (règle critique 1).
-    const { host } = await lire(['fr'], 'fr');
+    const { host } = await lire(['fr']);
     const audio = host.querySelector('[data-attachment="a-vocal"] audio');
     expect(audio?.getAttribute('src') ?? '').toContain('VOCAL-SOUVERAIN');
   });
@@ -500,7 +517,6 @@ describe('le rang souverain lit sans motif (spec 2026-10-04 § 4)', () => {
           language="fr"
           prisme="membre"
           readerLanguages={['de', 'es']}
-          readerLocale="de"
           viewer={VIEWER}
           deps={{ source: 'gateway', transport }}
         />
@@ -529,7 +545,6 @@ async function lireAvec(reponse: ApiResult<unknown>) {
         language="fr"
         prisme="lecteur"
         readerLanguages={['fr']}
-        readerLocale="fr"
         viewer={VIEWER}
         deps={{ source: 'gateway', transport: transportRendant(reponse) }}
       />
@@ -604,5 +619,138 @@ describe('un message éphémère, en lecture souveraine', () => {
     expect(host.textContent ?? '').toContain('Je disparais dans trente secondes');
     expect(host.querySelector('[data-admin-ephemeral="m-ephemere"]')?.textContent).toMatch(/éphémère · 30\s?s/i);
     expect(receptionOf('m-ephemere')).toBe(null);
+  });
+});
+
+/**
+ * **LE FIL SE REMONTE D'UN GESTE** (#11457, demande porteur 2026-10-21 : « on scroll du
+ * plus récent en bas au plus ancien en haut »). La lecture s'ouvre sur la page la plus
+ * RÉCENTE ; une prise posée en TÊTE du fil demande la page plus ancienne quand elle entre
+ * dans la vue, et la page arrive AU-DESSUS. Plus de « Précédent / Suivant ».
+ *
+ * L'observateur est un faux qui sait ce qu'il observe : `emitAll(1)` met la prise dans la
+ * vue, exactement ce que fait un défilement vers le haut.
+ */
+describe('le fil souverain se remonte en continu (#11457)', () => {
+  const observers = createFakeIntersectionObservers();
+  let natif: typeof IntersectionObserver | undefined;
+  beforeEach(() => {
+    observers.reset();
+    natif = globalThis.IntersectionObserver;
+    globalThis.IntersectionObserver = observers.FakeIntersectionObserver as unknown as typeof IntersectionObserver;
+  });
+  afterEach(() => {
+    if (natif !== undefined) globalThis.IntersectionObserver = natif;
+  });
+
+  const [ANCIEN] = CHARGE.data.slice(-1);
+  const RECENT = {
+    ...ANCIEN,
+    id: 'm-recent',
+    content: 'Dernier mot',
+    translations: [],
+    attachmentCount: 0,
+    attachments: [],
+    createdAt: '2026-06-02T12:00:00.000Z',
+  };
+  const PAGE_RECENTE = { data: [RECENT], pagination: { total: 3, offset: 0, limit: 30, hasMore: true } };
+  /* Le message CHIFFRÉ porte ici une pièce : sans elle, « la pellicule n'expose pas un
+     message retenu » verdirait aussi bien sans la garde. */
+  const [CHIFFRE, TRADUIT] = CHARGE.data;
+  const RETENU_AVEC_PIECE = {
+    ...CHIFFRE,
+    attachmentCount: 1,
+    attachments: [{ ...TRADUIT?.attachments[0], id: 'a-secret', messageId: 'm-chiffre', fileUrl: 'data:image/png;base64,SECRET' }],
+  };
+  const PAGE_ANCIENNE = { data: [RETENU_AVEC_PIECE, TRADUIT], pagination: { total: 3, offset: 30, limit: 30, hasMore: false } };
+
+  function transportEnDeuxPages() {
+    const calls: HttpRequest[] = [];
+    const transport = (async () => ({ ok: false, status: 0, error: 'jamais appelé' })) as unknown as HttpTransport;
+    transport.request = (async (req: HttpRequest): Promise<ApiResult<unknown>> => {
+      calls.push(req);
+      if (!req.path.startsWith(`/api/v1/admin/conversations/${CONVERSATION}/messages`)) return { ok: false, status: 404, error: 'non prévu' };
+      return { ok: true, data: req.path.includes('offset=30') ? PAGE_ANCIENNE : PAGE_RECENTE };
+    }) as HttpTransport['request'];
+    return { transport, calls: () => calls };
+  }
+
+  async function ouvrir() {
+    const { transport, calls } = transportEnDeuxPages();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading conversationId={CONVERSATION} language="fr" prisme="lecteur" readerLanguages={['fr']} viewer={VIEWER} deps={{ source: 'gateway', transport }} />
+      </QueryClientProvider>,
+    );
+    mounter.type(host, '[data-admin-reason]', MOTIF);
+    await mounter.click(host.querySelector('[data-admin-reason-submit]') as HTMLElement | null);
+    await mounter.settle();
+    return { host, calls };
+  }
+
+  const remonter = async () => {
+    observers.emitAll(1);
+    await mounter.settle();
+  };
+
+  test('s’ouvre sur la page la plus RÉCENTE, sans bouton de pagination', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.textContent ?? '').toContain('Dernier mot');
+    expect(host.textContent ?? '').not.toContain('Bonjour');
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(1);
+    expect(host.querySelector('[data-admin-messages-prev]')).toBeNull();
+    expect(host.querySelector('[data-admin-messages-next]')).toBeNull();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('idle');
+  });
+
+  test('remonter demande la page plus ANCIENNE, sous le même motif, et la pose AU-DESSUS', async () => {
+    const { host, calls } = await ouvrir();
+    await remonter();
+    const lectures = calls().filter((c) => c.path.includes('/messages'));
+    expect(lectures).toHaveLength(2);
+    expect(lectures[1]?.path).toContain('offset=30');
+    expect(lectures[1]?.path).toContain('reason=');
+    const texte = host.textContent ?? '';
+    expect(texte).toContain('Bonjour');
+    expect(texte.indexOf('Bonjour')).toBeLessThan(texte.indexOf('Dernier mot'));
+  });
+
+  test('remonté jusqu’au bout, le fil DIT qu’il commence là, et ne demande plus rien', async () => {
+    const { host, calls } = await ouvrir();
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent ?? '').toBe('');
+    await remonter();
+    expect(host.querySelector('[data-thread-older]')?.getAttribute('data-thread-older')).toBe('exhausted');
+    expect(host.querySelector('[data-admin-reading-start]')?.textContent).toContain('Début de la conversation');
+    await remonter();
+    expect(calls().filter((c) => c.path.includes('/messages'))).toHaveLength(2);
+  });
+
+  test('l’onglet « Médias » montre les pièces transmises — image en vignette, vocal en rangée — et jamais celles d’un message RETENU', async () => {
+    const { host } = await ouvrir();
+    await remonter();
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    expect(host.querySelector('[data-admin-reading-tab="media"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]')).not.toBeNull();
+    expect(host.querySelector('[data-media-hub-row="m-traduit:a-vocal"]')).not.toBeNull();
+    expect(host.querySelectorAll('[data-media-hub-tile^="m-chiffre"], [data-media-hub-row^="m-chiffre"]')).toHaveLength(0);
+  });
+
+  test('toucher une vignette ramène au FIL, sur le message qui la porte', async () => {
+    const { host } = await ouvrir();
+    await remonter();
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    await mounter.click(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]') as HTMLElement | null);
+    await mounter.settle();
+    expect(host.querySelector('[data-admin-reading-tab="thread"]')?.getAttribute('aria-selected')).toBe('true');
+    expect(host.querySelector('[data-admin-reading-media]')).toBeNull();
+  });
+
+  test('l’onglet « Médias » remonte AUSSI le temps : sa prise du bas demande la page plus ancienne', async () => {
+    const { host, calls } = await ouvrir();
+    await mounter.click(host.querySelector('[data-admin-reading-tab="media"]') as HTMLElement | null);
+    expect(host.querySelector('[data-admin-reading-media-empty]')).toBeNull();
+    await remonter();
+    expect(calls().filter((c) => c.path.includes('offset=30'))).toHaveLength(1);
+    expect(host.querySelector('[data-media-hub-tile="m-traduit:a-image"]')).not.toBeNull();
   });
 });

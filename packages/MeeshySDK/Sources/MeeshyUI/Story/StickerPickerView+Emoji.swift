@@ -42,6 +42,7 @@ extension StickerPickerView {
                     .accessibilityLabel(String(localized: "story.sticker.a11y",
                                                defaultValue: "Autocollant \(emoji)",
                                                bundle: .module))
+                    .accessibilityIdentifier(StickerAccessibilityID.emoji(emoji))
                 }
             }
             // **Plus de marge horizontale ICI** (2026-09-05) : la feuille est
@@ -98,7 +99,7 @@ extension StickerPickerView {
                 // détourage fantôme après chaque geste.
                 guard let liftSelection, let stickerLibrary else { return }
                 defer { self.liftSelection = nil }
-                guard let data = try? await liftSelection.loadTransferable(type: Data.self) else { return }
+                guard let data = try? await PickedMedia.loadImageData(liftSelection) else { return }
                 // `nil` du détourage = aucun sujet trouvé : c'est l'APP qui le
                 // dit à l'utilisateur (elle possède le toast), la grille
                 // reste simplement inchangée.
@@ -145,6 +146,7 @@ extension StickerPickerView {
                                 defaultValue: "Autocollant de votre bibliothèque",
                                 bundle: .module
                             ))
+                            .accessibilityIdentifier(StickerAccessibilityID.library(item.id))
                         }
                     }
                     .padding(.vertical, 4)

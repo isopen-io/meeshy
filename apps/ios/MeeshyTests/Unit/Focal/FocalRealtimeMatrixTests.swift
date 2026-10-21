@@ -46,7 +46,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     }
 
     private func source(_ url: URL) throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     // MARK: - F01 — message entrant temps réel, focus suit si au fond
@@ -225,7 +225,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// exactement la garde F07 « carrousel multi-pistes » — vérifié ici sur
     /// un `.mixed` à 3 pistes audio (arité jamais exercée par
     /// `FocalAudioRoutingTests`, qui s'arrête à 2).
-    func test_F07_mixedThreeTrackAudio_isNeverCarousel() {
+    func test_F07_mixedThreeTrackAudio_isNeverStack() {
         let content = BubbleContent(
             messageId: "m", kind: .standard, text: nil, translation: nil, reply: nil,
             attachments: .mixed(
@@ -242,8 +242,8 @@ final class FocalRealtimeMatrixTests: XCTestCase {
             meta: BubbleContent.Meta(timeString: "10:00", deliveryStatus: nil), isMe: false, senderName: "A", callNotice: nil, joinNotice: nil
         )
         XCTAssertNotEqual(
-            FocalAudioRouting.mode(for: content), .carousel,
-            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir un carrousel — le carrousel est " +
+            FocalAudioRouting.mode(for: content), .stack,
+            "F07 : un `.mixed` à 3 pistes audio ne doit JAMAIS devenir une pile — la pile est " +
             "réservé au cas `.audio` PUR (garde déjà exercée à 2 pistes par FocalAudioRoutingTests, " +
             "confirmée ici à 3)"
         )
@@ -390,9 +390,15 @@ final class FocalRealtimeMatrixTests: XCTestCase {
         let views = rowRoot().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent("Views")
         // La fin de passe (re-visée) vit dans l'extension `+ScrollSettle`
-        // depuis #9907 : le témoin lit l'hôte ET son extension.
-        let code = try source(views.appendingPathComponent("MessageListViewController.swift"))
-            + source(views.appendingPathComponent("MessageListViewController+ScrollSettle.swift"))
+        // depuis #9907 : le témoin lit l'hôte SEUL et cette extension — pas
+        // l'unité entière, où `+UnreadSeparator` pose son propre atterrissage,
+        // étranger aux deux sauts comptés ici (#10758).
+        let code = try [
+            "MessageListViewController.swift",
+            "MessageListViewController+ScrollSettle.swift",
+        ]
+        .map { AppSourceGuard.stripComments(try String(contentsOf: views.appendingPathComponent($0), encoding: .utf8)) }
+        .joined(separator: "\n")
         XCTAssertFalse(
             code.contains("landOnFocusBand"),
             "F12 : `landOnFocusBand` appartient au pass retiré — il ne doit pas réapparaître dans l'hôte."
@@ -492,7 +498,7 @@ final class FocalRealtimeMatrixTests: XCTestCase {
     /// silencieusement (refactor de ce fichier) se voie immédiatement.
     func test_allFifteenMatrixIds_haveAtLeastOneAnchorTestInThisFile() throws {
         let selfURL = URL(fileURLWithPath: #filePath)
-        let code = try String(contentsOf: selfURL, encoding: .utf8)
+        let code = try AppSourceGuard.text(at: selfURL)
         let declaredIds = (1...15).map { String(format: "F%02d", $0) }
         let missing = declaredIds.filter { !code.contains("func test_\($0)_") }
         XCTAssertTrue(

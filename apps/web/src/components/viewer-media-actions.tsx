@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { recordEmojiUsage, topEmojis } from '@/lib/emoji-usage';
 import { appQueryClient } from '@/lib/api/query-client';
 import { translate } from '@/lib/i18n-catalog';
 import { fetchPiece, savePiece, type NoticeKey } from '@/lib/media/save-piece';
+import { servedMediaFile } from '@/lib/media/served-media';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
@@ -42,7 +43,17 @@ import { ViewerMenu, ViewerReactionTray } from './viewer-chrome-menu';
  */
 export type { NoticeKey } from '@/lib/media/save-piece';
 
-function SaveMenu({ page, language, announce }: { readonly page: MediaViewerPage; readonly language: InterfaceLanguage; readonly announce: (key: NoticeKey) => void }) {
+function SaveMenu({
+  page,
+  language,
+  announce,
+  onOverlayChange,
+}: {
+  readonly page: MediaViewerPage;
+  readonly language: InterfaceLanguage;
+  readonly announce: (key: NoticeKey) => void;
+  readonly onOverlayChange?: ((open: boolean) => void) | undefined;
+}) {
   const saving = useRef(false);
   const save = (): void => {
     if (saving.current) return;
@@ -55,6 +66,7 @@ function SaveMenu({ page, language, announce }: { readonly page: MediaViewerPage
   return (
     <ViewerMenu
       label={translate(language, 'feed.post.more_options')}
+      onOpenChange={onOverlayChange}
       items={[
         {
           key: 'save',
@@ -75,14 +87,24 @@ function ActionRail({
   onClose,
   announce,
   hidden,
+  onOverlayChange,
 }: {
   readonly page: MediaViewerPage;
   readonly language: InterfaceLanguage;
   readonly onClose: () => void;
   readonly announce: (key: NoticeKey) => void;
   readonly hidden: boolean;
+  readonly onOverlayChange?: ((open: boolean) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  const overlayChangeRef = useRef(onOverlayChange);
+  overlayChangeRef.current = onOverlayChange;
+  /* La traînée ouverte TIENT le chrome de l'hôte (#10629) — il ne s'efface pas sous elle. */
+  useEffect(() => {
+    if (!open) return undefined;
+    overlayChangeRef.current?.(true);
+    return () => overlayChangeRef.current?.(false);
+  }, [open]);
   const [mine, setMine] = useState<readonly string[]>(page.attachment.currentUserReactions ?? []);
   const [reactions, setReactions] = useState(rankedReactions);
   const [composing, setComposing] = useState(false);
@@ -125,7 +147,7 @@ function ActionRail({
           announce(fetched.notice === 'media.viewer.offline' ? fetched.notice : 'media.viewer.compose_failed');
           return;
         }
-        offerStudioSeed(new File([fetched.blob], fetched.fileName, { type: page.attachment.mimeType }));
+        offerStudioSeed(servedMediaFile(fetched.blob, fetched.fileName, { type: page.attachment.mimeType }));
         onClose();
         navigate(href('storyCompose'));
       })
@@ -192,6 +214,7 @@ export default function ViewerMediaActions({
   onClose,
   announce,
   hidden = false,
+  onOverlayChange,
 }: {
   readonly slot: 'menu' | 'rail';
   readonly page: MediaViewerPage;
@@ -200,10 +223,12 @@ export default function ViewerMediaActions({
   /** La région vivante UNIQUE de la visionneuse — chaque issue s'y dit. */
   readonly announce: (key: NoticeKey) => void;
   readonly hidden?: boolean;
+  /** Une ouverture (traînée d'émojis, menu « … ») : l'hôte garde son chrome à l'écran tant qu'elle vit. */
+  readonly onOverlayChange?: (open: boolean) => void;
 }) {
   return slot === 'menu' ? (
-    <SaveMenu page={page} language={language} announce={announce} />
+    <SaveMenu page={page} language={language} announce={announce} onOverlayChange={onOverlayChange} />
   ) : (
-    <ActionRail page={page} language={language} onClose={onClose} announce={announce} hidden={hidden} />
+    <ActionRail page={page} language={language} onClose={onClose} announce={announce} hidden={hidden} onOverlayChange={onOverlayChange} />
   );
 }

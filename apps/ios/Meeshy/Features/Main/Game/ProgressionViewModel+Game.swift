@@ -85,7 +85,8 @@ extension ProgressionViewModel {
             spent("chest")
             if let snapshot, let game = snapshot.game {
                 let state = GameOptimistic.withChestReward(
-                    GameState(game: game, meesh: snapshot.meesh), reward: response.reward, score: response.score
+                    GameState(game: game, meesh: snapshot.meesh), reward: response.reward, score: response.score,
+                    starFragments: response.starFragments
                 )
                 commit(state, over: snapshot)
             }

@@ -1,0 +1,42 @@
+import type { RowMenuCatalog } from '../i18n-row-menu-catalog';
+
+/** LE MENU D'UNE LIGNE ET LES PUCES DE LA LISTE, ESPAGNOL (#10593). */
+const es = {
+  'rowMenu.details': 'Detalles',
+  'rowMenu.rename': 'Renombrar',
+  'rowMenu.favorite': 'Favorito',
+  'rowMenu.favorite.remove': 'Quitar de favoritos',
+  'rowMenu.moveTo': 'Mover a…',
+  'rowMenu.moveTo.mine': 'Mis conversaciones',
+  'rowMenu.block': 'Bloquear',
+  'rowMenu.unblock': 'Desbloquear',
+  'rowMenu.invite': 'Invitar',
+  'rowMenu.manageMembers': 'Gestionar los miembros',
+  'rowMenu.adminOpen': 'Abrir en la administración',
+  'rowMenu.leave': 'Salir',
+  'rowMenu.peek': 'Vista previa de la conversación',
+  'rowMenu.peek.open': 'Abrir la conversación',
+  'rowMenu.peek.e2ee': 'Cifrada de extremo a extremo',
+  'rowMenu.peek.empty': 'Aún no hay mensajes',
+  'rowMenu.back': 'Atrás',
+  'rowMenu.block.title': '¿Bloquear este usuario?',
+  'rowMenu.block.message': 'Esta persona ya no podrá enviarte mensajes. La conversación pasa a tus archivos.',
+  'rowMenu.rename.title': 'Renombrar la conversación',
+  'rowMenu.rename.label': 'Nombre',
+  'rowMenu.rename.hint': 'Déjalo vacío para recuperar su nombre original.',
+  'rowMenu.rename.save': 'Guardar',
+  'listFilter.nav': 'Filtros',
+  'listFilter.all': 'Todos',
+  'listFilter.unread': 'No leídos',
+  'listFilter.favorites': 'Favoritos',
+  'listFilter.personal': 'Personal',
+  'listFilter.private': 'Privadas',
+  'listFilter.open': 'Abiertas',
+  'listFilter.global': 'Globales',
+  'listFilter.channels': 'Canales',
+  'listFilter.pinned': 'Fijados',
+  'listFilter.archived': 'Archivadas',
+  'listRow.muted': 'Silenciada',
+} as const satisfies RowMenuCatalog;
+
+export default es;

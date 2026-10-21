@@ -2,11 +2,12 @@ import SwiftUI
 import Combine
 import MeeshySDK
 
-public struct AnonymousJoinFormView: View {
-    @ObservedObject var viewModel: JoinFlowViewModel
+public struct AnonymousJoinFormView<ViewModel: JoinFlowModeling>: View {
+    @ObservedObject var viewModel: ViewModel
     let onBack: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @FocusState private var focusedField: FormField?
 
     private var isDark: Bool { theme.mode.isDark }
@@ -15,7 +16,7 @@ public struct AnonymousJoinFormView: View {
         case firstName, lastName, username, email
     }
 
-    public init(viewModel: JoinFlowViewModel, onBack: @escaping () -> Void) {
+    public init(viewModel: ViewModel, onBack: @escaping () -> Void) {
         self.viewModel = viewModel
         self.onBack = onBack
     }
@@ -79,7 +80,7 @@ public struct AnonymousJoinFormView: View {
 
             formField(
                 icon: "person.fill",
-                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prenom", bundle: .module),
+                placeholder: String(localized: "joinFlow.form.firstName", defaultValue: "Prénom", bundle: .module),
                 text: $viewModel.firstName,
                 field: .firstName,
                 autocapitalization: .words
@@ -238,20 +239,9 @@ public struct AnonymousJoinFormView: View {
                 // Endonyms — a language is always listed in its own name, so these
                 // are `verbatim` on purpose: they must never be localized, and
                 // must never land in Localizable.xcstrings as translatable keys.
-                Text(verbatim: "Français").tag("fr")
-                Text(verbatim: "English").tag("en")
-                Text(verbatim: "Español").tag("es")
-                Text(verbatim: "Deutsch").tag("de")
-                Text(verbatim: "Italiano").tag("it")
-                Text(verbatim: "Português").tag("pt")
-                Text(verbatim: "Nederlands").tag("nl")
-                Text(verbatim: "Polski").tag("pl")
-                Text(verbatim: "Türkçe").tag("tr")
-                Text(verbatim: "Русский").tag("ru")
-                Text(verbatim: "العربية").tag("ar")
-                Text(verbatim: "中文").tag("zh")
-                Text(verbatim: "日本語").tag("ja")
-                Text(verbatim: "한국어").tag("ko")
+                ForEach(JoinFlowLanguages.offered, id: \.code) { option in
+                    Text(verbatim: option.endonym).tag(option.code)
+                }
             }
             .tint(MeeshyColors.indigo400)
         }

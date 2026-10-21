@@ -16,6 +16,13 @@ public final class EngagementOutboxSink: EngagementSinking {
     public func checkpoint(_ s: EngagementSession) async { await outbox.checkpoint(s) }
     public func finalizeSession(_ s: EngagementSession) async { await outbox.finalizeSession(s) }
     public func requestFlush() async { await EngagementFlushTrigger.flushNow() }
+    /// #10764 — le premier contact, dans une requête À LUI : un serveur qui ne
+    /// sait pas fusionner une session refuse `dwell-start`, et ce refus ne doit
+    /// emporter rien d'autre. Sans réessai : la mesure finale, durable, porte
+    /// la même clé et compte l'ouverture si ce premier envoi s'est perdu.
+    public func announceSession(_ s: EngagementSession) async {
+        _ = try? await PostService.shared.recordSocialEvents([.dwellStart(s)], credential: .account)
+    }
 }
 
 /// Dispatches a finalized session to the network, dropping cross-user rows.
@@ -48,7 +55,9 @@ enum EngagementFlushTrigger {
         guard online else { EngagementRetryScheduler.shared.scheduleSoon(); return }
         let uid = AuthManager.shared.currentUser?.id   // captured String? is Sendable
         let dispatcher = EngagementDispatcher(
-            record: { sessions in try await PostService.shared.recordEngagement(sessions) },
+            record: { sessions in
+                _ = try await PostService.shared.recordSocialEvents(sessions.map(SocialEvent.dwell), credential: .account)
+            },
             currentUserId: { uid })
         await EngagementOutbox.shared.flush { sessions in await dispatcher.dispatch(sessions) }
     }
@@ -77,8 +86,7 @@ final class EngagementRetryScheduler {
     func scheduleSoon() {
         timer?.cancel()
         timer = Task {
-            try? await Task.sleep(nanoseconds: 30 * 1_000_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(30)), !Task.isCancelled else { return }
             await EngagementFlushTrigger.flushNow()
         }
     }

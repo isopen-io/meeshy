@@ -6,17 +6,18 @@ import { attachmentSrc } from '@/lib/api/media-url';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { notificationAccent, notificationFamily } from '@/lib/notifications/categories';
-import { openConversationPreview } from '@/lib/notifications/conversation-preview';
 import { bannerActions, bannerAudio } from '@/lib/notifications/content-detail';
 import { inAppBannerStore } from '@/lib/notifications/in-app-banner';
 import { BANNER_LIFETIME_MS, bannerPresentation, bannerSwipeOutcome, type BannerPresentation } from '@/lib/notifications/in-app-banner-view';
+import { previewNotificationConversation } from '@/lib/notifications/open-target';
 import type { NotificationRecord } from '@/lib/notifications/record';
 import { notificationTarget } from '@/lib/notifications/target';
 import { initialsOf } from '@/lib/view/conversation';
 import { prefersReducedMotion } from '@/lib/view/reduced-motion';
+import { useTopModalHost } from '@/lib/view/top-modal-host';
 import { markNotificationReadAction } from '@/lib/view/use-notifications';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { GlyphSvg } from './glyph';
 import { GLYPHS } from './glyphs';
 import { milestoneGlyph } from './milestone-glyph';
@@ -56,7 +57,7 @@ function Leading({ notification, banner, accent }: { readonly notification: Noti
   const avatar = notification.actor?.avatar ?? null;
   return (
     <span className="relative shrink-0" style={{ filter: 'drop-shadow(0 2px 4px var(--color-scrim-soft))' }}>
-      <Avatar initials={initialsOf(notification.actor?.displayName ?? banner.headline)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
+      <PeerAvatar presenceKey={notification.actor?.id} initials={initialsOf(notification.actor?.displayName ?? banner.headline)} color={accent} size={44} {...(avatar === null ? {} : { src: avatar })} />
       <span
         data-banner-type-badge
         aria-hidden="true"
@@ -148,7 +149,7 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
   const previewId = notification.context.conversationId;
   const openPreview = () => {
     if (previewId === undefined) return;
-    openConversationPreview(previewId);
+    previewNotificationConversation(previewId);
     onDismiss();
   };
 
@@ -334,9 +335,12 @@ export function NotificationBanner({ notification, onDismiss }: { readonly notif
 export function NotificationToastHost() {
   const current = useStore(inAppBannerStore, (state) => state.current);
   const dismiss = useStore(inAppBannerStore, (state) => state.dismiss);
+  /* Hors de `#root` : une visionneuse ouverte le rend inerte, et la bannière
+     doit rester touchable au-dessus d'elle (comme l'appel, `call-layer.tsx`).
+     Et DANS la modale du dessus quand il y en a une (#10539) : sous un
+     `<dialog>` modal, `<body>` est inerte et recouvert (`top-modal-host.ts`). */
+  const host = useTopModalHost();
   if (current === null) return null;
   const banner = <NotificationBanner key={current.id} notification={current} onDismiss={dismiss} />;
-  /* Hors de `#root` : une visionneuse ouverte le rend inerte, et la bannière
-     doit rester touchable au-dessus d'elle (comme l'appel, `call-layer.tsx`). */
-  return typeof document === 'undefined' ? banner : createPortal(banner, document.body);
+  return createPortal(banner, host);
 }

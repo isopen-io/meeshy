@@ -37,3 +37,45 @@
     transition: none;
   }
 }
+
+/*
+ * LA CONVERSATION OUVERTE À CÔTÉ (#10073) — sur grand écran, la liste reste
+ * montée à gauche du fil, et la rangée du fil courant se marque d'une BANDE
+ * teintée à son accent, pleine largeur et à la hauteur de sa case de 84 : le
+ * conteneur visuel mesure 100 et déborde de 8 de chaque côté (`VISUAL_HEIGHT`,
+ * `lens-row.tsx`), d'où `inset-block: 8px`. Une sélection de liste, jamais
+ * une carte : ni rayon, ni bordure, ni retrait latéral (#10191 — Meeshy
+ * Global ouverte se lisait dans un cadre arrondi). World Wide, épinglée en
+ * tête (#10004), n'a plus de peau à elle : une rangée ordinaire, que seule son
+ * épingle distingue. `data-active` n'est posé que si l'adresse est celle de
+ * CE fil — au téléphone la liste n'est jamais montée sur `/c/:id`, donc rien
+ * n'y change. `z-index: -1` pose la bande sous le contenu, dans le contexte
+ * d'empilement que la transformée de la scène donne à la rangée.
+ */
+.lens-row[data-active]::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block: 8px;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+:root.light .lens-row[data-active]::before {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+/*
+ * L'APPUI LONG EST CELUI DE MEESHY (#11211) — au doigt, tenir une ligne ouvre
+ * son aperçu (`useLongPress`, `lens-row.tsx`). Safari iOS y poserait sinon sa
+ * bulle de lien (« Ouvrir dans un nouvel onglet ») et sa sélection de texte,
+ * par-dessus la grappe. Seulement sans survol : à la souris, le texte d'une
+ * ligne reste sélectionnable.
+ */
+@media (any-hover: none) {
+  [data-row] {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}

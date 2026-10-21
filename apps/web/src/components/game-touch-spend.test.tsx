@@ -26,44 +26,63 @@ afterEach(() => {
 
 const text = (html: string): string => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 
+const forAFreeze = { fact: 'spend_missing', line: (missing: string): string => `Il manque ${missing} pour prendre une Veilleuse.` } as const;
+
 /**
- * CE QU'UN GESTE DÉPENSE, AVANT LE GESTE (#9705) — ce qu'on a, ce que ça coûte,
- * ce qui restera ; ou, quand le solde ne suffit pas, combien il manque.
+ * CE QU'UN GESTE DÉPENSE, AVANT LE GESTE (#9705) — ce qu'on a, ce que ça coûte ;
+ * ou, quand le solde ne suffit pas, combien il manque. Jamais ce qui restera : une
+ * soustraction n'est pas un fait de la fiche (#11178, épopée § 3.3).
  */
 describe('la ligne de dépense', () => {
-  test('dit le solde, le prix et ce qui restera quand le geste est possible', () => {
-    const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={5} cost={3} format={meeshCount} />));
-    expect(page).toContain('En poche 5 Meeshes');
-    expect(page).toContain('Coûte 3 Meeshes');
-    expect(page).toContain('Restera 2 Meeshes');
+  test('dit le solde et le prix quand le geste est possible — jamais ce qui restera', () => {
+    const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={5} cost={3} format={meeshCount} missing={forAFreeze} />));
+    expect(page).toContain('Tu as 5 Meeshes');
+    expect(page).toContain('Il faut 3 Meeshes');
+    expect(page).not.toContain('2 Meeshes');
     expect(page).not.toContain('Il manque');
   });
 
-  test('dit combien il manque, au lieu de ce qui restera, quand le solde ne suffit pas', () => {
-    const page = text(renderToStaticMarkup(<GameSpendLine concept="season" held={4} cost={10} format={meeshCount} />));
-    expect(page).toContain('En poche 4 Meeshes');
-    expect(page).toContain('Coûte 10 Meeshes');
-    expect(page).toContain('Il manque 6 Meeshes');
+  test('dit combien il manque ET pour quoi, au lieu de ce qui restera, quand le solde ne suffit pas (#10540)', () => {
+    const page = text(renderToStaticMarkup(<GameSpendLine concept="flame" held={4} cost={10} format={meeshCount} missing={forAFreeze} />));
+    expect(page).toContain('Tu as 4 Meeshes');
+    expect(page).toContain('Il faut 10 Meeshes');
+    expect(page).toContain('Il manque 6 Meeshes pour prendre une Veilleuse.');
     expect(page).not.toContain('Restera');
   });
 
-  test('le manque peut se dire dans une autre unité que le solde (les points convertibles d’une frappe)', () => {
+  test('le manque peut se dire dans une autre unité que le solde (les points à convertir d’une frappe)', () => {
     const page = text(
       renderToStaticMarkup(
-        <GameSpendLine concept="meesh" held={5000} cost={1221} spendable={900} format={(n) => `${n} pts`} formatMissing={(n) => `${n} convertibles`} />,
+        <GameSpendLine
+          concept="meesh"
+          held={5000}
+          cost={1221}
+          spendable={900}
+          format={(n) => `${n} pts`}
+          formatMissing={(n) => `${n} à convertir`}
+          between={{ fact: 'convertible', label: 'À convertir', value: '900 pts' }}
+          missing={{ fact: 'mint_missing', line: (missing) => `Il manque ${missing} à ta lumière pour frapper la Meesh n° 4.` }}
+        />,
       ),
     );
-    expect(page).toContain('En poche 5000 pts');
-    expect(page).toContain('Il manque 321 convertibles');
+    expect(page).toContain('Tu as 5000 pts');
+    expect(page).toContain('À convertir 900 pts');
+    expect(page).toContain('Il manque 321 à convertir à ta lumière pour frapper la Meesh n° 4.');
+  });
+
+  test('ce qu’il manque se touche et ouvre SES précisions', async () => {
+    const host = await mount(<GameSpendLine concept="flame" held={0} cost={1} format={meeshCount} missing={forAFreeze} />);
+    await click(host.querySelector<HTMLElement>('[data-game-missing="spend_missing"]'));
+    expect(detailStore.get()?.detail.name).toBe('Il manque 1 Meesh pour prendre une Veilleuse.');
+    expect(detailStore.get()?.detail.what).toBe('C’est ce qu’il te manque pour faire ce geste.');
   });
 
   test('chaque valeur se touche et ouvre SES précisions', async () => {
-    const host = await mount(<GameSpendLine concept="flame" held={5} cost={3} format={meeshCount} />);
+    const host = await mount(<GameSpendLine concept="flame" held={5} cost={3} format={meeshCount} missing={forAFreeze} />);
     const chips = Array.from(host.querySelectorAll<HTMLElement>('[data-game-spend] [data-detail]'));
-    expect(chips).toHaveLength(3);
-    await click(chips[2] ?? null);
-    expect(detailStore.get()?.detail.name).toBe('Restera');
-    expect(detailStore.get()?.detail.what).toBe('C’est ce qu’il te restera après ce geste.');
+    expect(chips).toHaveLength(2);
+    await click(chips[1] ?? null);
+    expect(detailStore.get()?.detail.name).toBe('Il faut');
   });
 });
 
@@ -72,7 +91,7 @@ describe('la ligne d’exigence', () => {
     const page = text(renderToStaticMarkup(<GameRequirementLine concept="missions" current={3} required={5} />));
     expect(page).toContain('Niveau 3');
     expect(page).toContain('Requis 5');
-    expect(page).toContain(`Il manque ${levelsLabel(2)}`);
+    expect(page).toContain(`Il manque ${levelsLabel(2)} pour l’ouvrir.`);
   });
 
   test('se tait sur le manque quand l’exigence est remplie', () => {
@@ -82,6 +101,6 @@ describe('la ligne d’exigence', () => {
 
   test('le niveau compté peut être le RECORD (la ligue, le duo)', () => {
     const page = text(renderToStaticMarkup(<GameRequirementLine concept="league" current={8} required={10} record />));
-    expect(page).toContain('Record 8');
+    expect(page).toContain('Au plus haut 8');
   });
 });

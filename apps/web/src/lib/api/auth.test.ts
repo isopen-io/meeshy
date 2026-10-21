@@ -374,7 +374,7 @@ describe('validateMagicLink() — POST /auth/magic-link/validate (routes/magic-l
 
     const result = await auth.validateMagicLink('tok-abc');
 
-    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/magic-link/validate', body: { token: 'tok-abc' } });
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/magic-link/validate', body: { token: 'tok-abc' }, credential: null });
     expect(result.ok).toBe(true);
     expect(store.getState().session).toEqual({
       status: 'authenticated',
@@ -421,11 +421,12 @@ describe('validateMagicLink() — POST /auth/magic-link/validate (routes/magic-l
     expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
 
-  test('(d) magasin déjà authenticated (autre compte) ⇒ clearSession() AVANT la requête', async () => {
+  test('(d) magasin authenticated, lien d’un AUTRE compte (#10451) ⇒ aucune purge avant la preuve, et la session prouvée n’est PAS posée', async () => {
     const store = memoryStore();
     store
       .getState()
       .establish({ user: { id: 'u-old', username: 'old' }, token: 'jwt-old', sessionToken: 'sess-old', expiresIn: 86_400 });
+    const before = store.getState().session;
 
     const seenSessionStatusAtCallTime: string[] = [];
     const transport = {
@@ -446,12 +447,62 @@ describe('validateMagicLink() — POST /auth/magic-link/validate (routes/magic-l
     };
     const auth = createAuthClient({ transport, store });
 
-    await auth.validateMagicLink('tok-new');
+    const result = await auth.validateMagicLink('tok-new');
 
-    expect(seenSessionStatusAtCallTime).toEqual(['anonymous']);
+    expect(result.ok).toBe(true);
+    expect(seenSessionStatusAtCallTime).toEqual(['authenticated']);
+    expect(store.getState().session).toBe(before);
+  });
+
+  test('(e) magasin authenticated, lien du MÊME compte ⇒ rotation, sans question', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt-old', sessionToken: 'sess-old', expiresIn: 60 });
+    const { transport } = stubTransport([
+      { ok: true, data: { user: { id: 'u-1', username: 'ada' }, token: 'jwt-rot', sessionToken: 'sess-rot', expiresIn: 86_400 }, status: 200 },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.validateMagicLink('tok-rot');
+
     const session = store.getState().session;
-    expect(session.status).toBe('authenticated');
-    expect(session.status === 'authenticated' && session.user).toEqual({ id: 'u-new', username: 'new' });
+    expect(session.status === 'authenticated' ? [session.user.id, session.token, session.sessionToken] : null).toEqual(['u-1', 'jwt-rot', 'sess-rot']);
+  });
+
+  test('(f) magasin authenticated, lien INVALIDE ⇒ session intacte, et la requête ne présente aucun jeton (un refus ne ferme rien)', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt-a', sessionToken: 'sess-a', expiresIn: 60 });
+    const before = store.getState().session;
+    const { transport, calls } = stubTransport([{ ok: false, status: 400, error: 'This link has expired.' }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.validateMagicLink('tok-bidon');
+
+    expect(result.ok).toBe(false);
+    expect(store.getState().session).toBe(before);
+    expect(calls[0]?.credential).toBeNull();
+  });
+
+  test('(g) magasin authenticated, second facteur d’un AUTRE compte ⇒ la session ouverte reste (aucun pending2fa posé)', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt-a', sessionToken: 'sess-a', expiresIn: 60 });
+    const before = store.getState().session;
+    const { transport } = stubTransport([
+      {
+        ok: true,
+        data: {
+          requires2FA: true,
+          twoFactorToken: 'tok-2fa',
+          user: { id: 'u-2', username: 'eve', email: 'e@x.io', firstName: 'E', lastName: 'V', displayName: 'Eve' },
+          message: 'code',
+        },
+        status: 200,
+      },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.validateMagicLink('tok-2fa');
+
+    expect(store.getState().session).toBe(before);
   });
 });
 
@@ -487,7 +538,7 @@ describe('verifyEmail() — POST /auth/verify-email (magic-link.ts:307-364, Auth
 
     const result = await auth.verifyEmail({ email: 'ada@x.io', code: '123456' });
 
-    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/verify-email', body: { email: 'ada@x.io', code: '123456' } });
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/verify-email', body: { email: 'ada@x.io', code: '123456' }, credential: null });
     expect(result).toEqual({ ok: true, data: { message: 'Email vérifié' }, status: 200 });
     expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
@@ -565,7 +616,7 @@ describe('verifyEmail() — la vérification OUVRE la session (#8034, contrat #8
 
     await auth.verifyEmail({ email: 'neuf@x.io', token: 'tok-123' });
 
-    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/verify-email', body: { email: 'neuf@x.io', token: 'tok-123' } });
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/verify-email', body: { email: 'neuf@x.io', token: 'tok-123' }, credential: null });
     const session = store.getState().session;
     expect(session.status).toBe('authenticated');
     expect(session.status === 'authenticated' ? [session.token, session.sessionToken, session.user.id, session.expiresAt] : null).toEqual([
@@ -608,6 +659,56 @@ describe('verifyEmail() — la vérification OUVRE la session (#8034, contrat #8
     expect(store.getState().session).toEqual({ status: 'anonymous' });
   });
 
+  test('un lien de vérification servi pour un AUTRE compte que le compte ouvert (#10451) ⇒ la session ouverte reste', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt-a', sessionToken: 'sess-a', expiresIn: 60 });
+    const before = store.getState().session;
+    const { transport } = stubTransport([{ ok: true, data: sessionData, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyEmail({ email: 'neuf@x.io', token: 'tok-123' });
+
+    expect(result.ok).toBe(true);
+    expect(store.getState().session).toBe(before);
+  });
+
+  test('le MÊME compte (sa propre adresse) ⇒ rotation', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-9', username: 'neuf' }, token: 'jwt-old', sessionToken: 'sess-old', expiresIn: 60 });
+    const { transport } = stubTransport([{ ok: true, data: sessionData, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', code: '123456' });
+
+    const session = store.getState().session;
+    expect(session.status === 'authenticated' ? session.token : null).toBe('jwt-v');
+  });
+
+  test('un compte à SECOND FACTEUR (#10474) ⇒ la saisie du code attend, aucune session posée', async () => {
+    const store = memoryStore();
+    const challenge = { verified: true, requires2FA: true, twoFactorToken: 'tf-1', user: { id: 'u-9', username: 'neuf', email: 'neuf@x.io' } };
+    const { transport } = stubTransport([{ ok: true, data: challenge, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', code: '123456' });
+
+    const session = store.getState().session;
+    expect(session.status === 'pending2fa' ? [session.twoFactorToken, session.user.id] : session.status).toEqual(['tf-1', 'u-9']);
+  });
+
+  test('le second facteur d’un AUTRE compte que le compte ouvert (#10474) ⇒ la session ouverte reste', async () => {
+    const store = memoryStore();
+    store.getState().establish({ user: { id: 'u-1', username: 'ada' }, token: 'jwt-a', sessionToken: 'sess-a', expiresIn: 60 });
+    const before = store.getState().session;
+    const challenge = { verified: true, requires2FA: true, twoFactorToken: 'tf-1', user: { id: 'u-9', username: 'neuf' } };
+    const { transport } = stubTransport([{ ok: true, data: challenge, status: 200 }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyEmail({ email: 'neuf@x.io', token: 'tok' });
+
+    expect(store.getState().session).toBe(before);
+  });
+
   test('un échec n’écrit rien', async () => {
     const store = memoryStore();
     const { transport } = stubTransport([{ ok: false, status: 400, error: 'Invalid' }]);
@@ -632,17 +733,42 @@ describe('resendVerification() — POST /auth/resend-verification (magic-link.ts
   });
 });
 
-describe('verifyResetToken() — GET /auth/reset-password/verify-token (password-reset.ts:341-401)', () => {
-  test('jeton dans la query string, jamais dans le corps (méthode GET)', async () => {
+describe('verifyResetToken() — POST /auth/reset-password/verify-token, le jeton dans le CORPS (#10859)', () => {
+  test('jeton dans le corps, jamais dans une adresse journalisée', async () => {
     const store = memoryStore();
     const { transport, calls } = stubTransport([{ ok: true, data: { valid: true, requires2FA: false }, status: 200 }]);
     const auth = createAuthClient({ transport, store });
 
     const result = await auth.verifyResetToken('abc123');
 
-    expect(calls[0]).toEqual({ method: 'GET', path: '/api/v1/auth/reset-password/verify-token?token=abc123' });
+    expect(calls[0]).toEqual({ method: 'POST', path: '/api/v1/auth/reset-password/verify-token', body: { token: 'abc123' } });
     expect(result.ok).toBe(true);
     expect(result.ok && result.data.valid).toBe(true);
+  });
+
+  test('passerelle d’avant #10859 (POST inconnu, 404) : repli sur le GET, le temps de la transition', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([
+      { ok: false, status: 404, error: 'Route POST:/api/v1/auth/reset-password/verify-token not found' },
+      { ok: true, data: { valid: true, requires2FA: false }, status: 200 },
+    ]);
+    const auth = createAuthClient({ transport, store });
+
+    const result = await auth.verifyResetToken('abc 123');
+
+    expect(calls.map((call) => call.method)).toEqual(['POST', 'GET']);
+    expect(calls[1]).toEqual({ method: 'GET', path: '/api/v1/auth/reset-password/verify-token?token=abc%20123' });
+    expect(result.ok && result.data.valid).toBe(true);
+  });
+
+  test('un autre échec ne retombe JAMAIS sur le GET', async () => {
+    const store = memoryStore();
+    const { transport, calls } = stubTransport([{ ok: false, status: 429, error: 'trop' }]);
+    const auth = createAuthClient({ transport, store });
+
+    await auth.verifyResetToken('abc123');
+
+    expect(calls.map((call) => call.method)).toEqual(['POST']);
   });
 
   test('un jeton EXPIRÉ rend `valid:false` — pas une erreur HTTP (§ description de la route)', async () => {

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import type { Message } from '@/lib/api/types';
+
 import { DESTRUCTION_MS, destructionPhaseOf } from './ephemeral-destruction';
 import { peekEphemeralDeadline, type EphemeralMessageFields } from './ephemeral-reception';
+import { deadlineThroughQuotes, lookupOf } from './quote-cascade';
 
 /**
  * **UN ÉPHÉMÈRE PARTI QUITTE LE FIL** (#8900) — directive porteur 2026-09-30 :
@@ -15,6 +18,11 @@ import { peekEphemeralDeadline, type EphemeralMessageFields } from './ephemeral-
  * la phase celle de `destructionPhaseOf`. Une rangée qui BRÛLE reste (l'effet
  * se voit) ; une rangée PARTIE sort, et le fil, le Résumé et le cache persisté
  * (`lib/api/ephemeral-cache.ts`) la retirent par cette seule fonction.
+ *
+ * #10433 — une RÉPONSE part avec ce qu'elle cite (`quote-cascade.ts`) : le fil
+ * et le cache lisent l'échéance d'une rangée À TRAVERS ses citations, si bien
+ * que la mort locale d'un éphémère emporte ses réponses sans attendre le
+ * `message:expired` de la passerelle.
  */
 
 export function isEphemeralGone(input: {
@@ -34,40 +42,46 @@ export function isEphemeralGone(input: {
   );
 }
 
-type LivingInput<M extends EphemeralMessageFields> = {
+type LivingInput<M extends Message> = {
   readonly messages: readonly M[];
-  readonly isMine: (message: M) => boolean;
+  readonly isMine: (message: Message) => boolean;
   readonly now: number;
   readonly destroyingIds: ReadonlySet<string>;
 };
 
 /**
  * Le fil SANS ses rangées parties — la MÊME identité quand rien ne part : le
- * `useMemo` de `place()` et le `memo` des rangées tiennent.
+ * `useMemo` de `place()` et le `memo` des rangées tiennent. Une réponse part
+ * avec ce qu'elle cite (#10433) : chaque maillon se lit dans ce même fil.
  */
-export function livingMessages<M extends EphemeralMessageFields>(
-  input: LivingInput<M> & { readonly expiredIds: ReadonlySet<string> },
+export function livingMessages<M extends Message>(
+  input: LivingInput<M> & { readonly expiredIds: ReadonlySet<string>; readonly lookup?: ReadonlyMap<string, Message> },
 ): readonly M[] {
+  const lookup = input.lookup ?? lookupOf(input.messages);
   const gone = (message: M): boolean =>
-    isEphemeralGone({
-      message,
-      isMine: input.isMine(message),
+    destructionPhaseOf({
+      deadline: deadlineThroughQuotes(message, { isMine: input.isMine, now: input.now, lookup }),
       now: input.now,
       destroying: input.destroyingIds.has(message.id),
       expired: input.expiredIds.has(message.id),
-    });
+    }) === 'gone';
   return input.messages.some(gone) ? input.messages.filter((message) => !gone(message)) : input.messages;
 }
 
 /**
- * L'instant où la PROCHAINE rangée vivante part — son échéance plus la
- * combustion. `null` : rien à attendre. Une rangée qui brûle déjà est laissée
- * à `useEphemeralDestruction`, dont la minuterie l'inscrit dans `expiredIds`.
+ * L'instant où la PROCHAINE rangée vivante part — son échéance, ou celle de ce
+ * qu'elle cite, plus la combustion. `null` : rien à attendre. Une rangée qui
+ * brûle déjà est laissée à `useEphemeralDestruction`, dont la minuterie
+ * l'inscrit dans `expiredIds`. `lookup` : le fil où se lisent les citations
+ * (par défaut, `messages`).
  */
-export function nextEphemeralGoneAt<M extends EphemeralMessageFields>(input: LivingInput<M>): number | null {
+export function nextEphemeralGoneAt<M extends Message>(
+  input: LivingInput<M> & { readonly lookup?: ReadonlyMap<string, Message> },
+): number | null {
+  const lookup = input.lookup ?? lookupOf(input.messages);
   const instants = input.messages
     .filter((message) => !input.destroyingIds.has(message.id))
-    .map((message) => peekEphemeralDeadline({ message, isMine: input.isMine(message), now: input.now }))
+    .map((message) => deadlineThroughQuotes(message, { isMine: input.isMine, now: input.now, lookup }))
     .flatMap((deadline) => (deadline.state === 'scheduled' ? [deadline.expiresAtMs + DESTRUCTION_MS] : []));
   return instants.length === 0 ? null : Math.min(...instants);
 }
@@ -89,9 +103,9 @@ const timeoutSchedule: Schedule = (run, ms) => {
  * rendu des rangées qui pose la réception d'un message nouvellement peint, et
  * l'attente doit la voir. Le calcul ne parcourt que les messages à échéance.
  */
-export function useLivingMessages<M extends EphemeralMessageFields>(params: {
+export function useLivingMessages<M extends Message>(params: {
   readonly messages: readonly M[];
-  readonly isMine: (message: M) => boolean;
+  readonly isMine: (message: Message) => boolean;
   readonly destroyingIds: ReadonlySet<string>;
   readonly expiredIds: ReadonlySet<string>;
   readonly clock?: () => number;
@@ -107,10 +121,11 @@ export function useLivingMessages<M extends EphemeralMessageFields>(params: {
     [messages, isMine, now, destroyingIds, expiredIds],
   );
   const timed = useMemo(() => living.filter(hasEphemeralClock), [living]);
+  const lookup = useMemo(() => lookupOf(living), [living]);
 
   useEffect(() => {
     const at = clock();
-    const due = nextEphemeralGoneAt({ messages: timed, isMine, now: at, destroyingIds });
+    const due = nextEphemeralGoneAt({ messages: timed, isMine, now: at, destroyingIds, lookup });
     if (due === null) return undefined;
     return schedule(() => setNow(clock()), Math.max(0, due - at));
   });
@@ -118,7 +133,9 @@ export function useLivingMessages<M extends EphemeralMessageFields>(params: {
   return living;
 }
 
-const hasEphemeralClock = (message: EphemeralMessageFields): boolean =>
+const hasEphemeralClock = (message: Message): boolean =>
+  message.replyToId != null ||
+  message.replyTo != null ||
   message.expiresAt != null ||
   (typeof message.ephemeralDuration === 'number' && message.ephemeralDuration > 0) ||
   (message.effectFlags ?? 0) !== 0;

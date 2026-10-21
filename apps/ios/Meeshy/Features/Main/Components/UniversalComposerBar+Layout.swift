@@ -73,6 +73,7 @@ extension UniversalComposerBar {
         .modifier(ComposerDropTargetModifier(accentColor: servedAccentHex, onIngest: onIngest))
         .onAppear {
             isMinimized = startMinimized
+            ownKeyboard.adopt(host: hostKeyboard)
         }
         // **Le ménage disparaît avec ce qu'il nettoyait** (#4560) : le `Timer`
         // qui vivait ici n'enregistrait rien — il comptait des secondes pour un

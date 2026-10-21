@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #7969
 // ajoute `message:cited-post-withdrawn`. Responsabilité tenue ici : le retrait
@@ -26,12 +25,9 @@ public struct MessageCitedPostWithdrawnEvent: Decodable, Sendable, Equatable {
 
 extension MessageSocketManager {
 
-    func registerCitedPostHandlers(on socket: SocketIOClient) {
-        socket.on("message:cited-post-withdrawn") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(MessageCitedPostWithdrawnEvent.self, from: data) { [weak self] event in
-                self?.messageCitedPostWithdrawn.send(event)
-            }
-        }
+    var citedPostRoutes: [SocketInboundRoute] {
+        [
+            route(.messageCitedPostWithdrawn, MessageCitedPostWithdrawnEvent.self) { $0.messageCitedPostWithdrawn.send($1) },
+        ]
     }
 }

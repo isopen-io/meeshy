@@ -11,19 +11,58 @@ import MeeshyUI
 /// seulement par la couleur. Toucher une étape à réclamer la réclame ; le bouton nomme la prochaine.
 ///
 /// Aucune saison ouverte (`season` absente) est une VALEUR, pas une panne : la prochaine commence bientôt.
+///
+/// `focus` : la saison qu'un lien du Jeu nomme (#9947). Passée, elle montre mon palmarès ; future, son thème et sa
+/// date d'ouverture ; en cours, l'écran ci-dessous, inchangé (`GameSeasonFocusScreen`, #10018).
 struct GameSeasonPage: View {
+    var focus: GamePageFocus? = nil
+
     var body: some View {
         GamePageShell(title: GameText.seasonTitle, identifier: "game.season.page") {
             GameWave2Host { model, game in
-                GameSeasonScreen(model: model, game: game)
+                // Restée ouverte, la page se repeint à la fermeture du dimanche 20 h (#10225) : c'est le seul instant
+                // où l'état d'une saison change, la `TimelineView` y relit l'horloge locale.
+                TimelineView(GameSeasonFlipSchedule()) { context in
+                    GameSeasonFocusScreen(model: model, game: game, focus: focus?.seasonNumber, moment: .local(context.date))
+                }
             }
         }
+    }
+}
+
+/// LES INSTANTS OÙ UNE PAGE SAISON SE REPEINT (#10225) — maintenant, puis chaque fermeture de semaine (dimanche
+/// 20 h local, `GameLeague.nextWeekClose`), seule bascule possible de l'état d'une saison. Miroir du minuteur web
+/// (`apps/web/src/lib/game/season-clock.ts`).
+struct GameSeasonFlipSchedule: TimelineSchedule {
+    var calendar: Calendar = .current
+
+    func entries(from startDate: Date, mode: TimelineScheduleMode) -> AnyIterator<Date> {
+        var next: Date? = startDate
+        let calendar = calendar
+        return AnyIterator {
+            guard let current = next else { return nil }
+            next = Self.nextClose(after: current, calendar: calendar)
+            return current
+        }
+    }
+
+    /// La prochaine fermeture de semaine, STRICTEMENT après `date`, en date locale.
+    static func nextClose(after date: Date, calendar: Calendar = .current) -> Date? {
+        let close = GameLeague.nextWeekClose(after: .local(date, calendar: calendar))
+        let parts = close.dayKey.split(separator: "-").compactMap { Int($0) }
+        guard parts.count == 3 else { return nil }
+        let at = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2],
+                                                     hour: close.minuteOfDay / 60, minute: close.minuteOfDay % 60))
+        guard let at, at > date else { return nil }
+        return at
     }
 }
 
 struct GameSeasonScreen: View {
     @ObservedObject var model: GameWave2Model
     let game: GameBlock
+    /// L'instant qui juge l'état de la saison (#10225) — l'horloge locale par défaut.
+    var moment: LeagueMoment? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
@@ -32,7 +71,7 @@ struct GameSeasonScreen: View {
                 GameSeasonPath(model: model, season: season)
                 GameSeasonSeal(model: model, season: season, held: game.treasury.held)
             } else if let upcoming = game.seasonUpcoming {
-                GameSeasonUpcoming(upcoming: upcoming)
+                GameSeasonUpcoming(upcoming: upcoming, moment: moment)
             } else {
                 GameCard(title: GameText.seasonTitle) {
                     GameNote(text: GameText.seasonNone)
@@ -47,14 +86,28 @@ struct GameSeasonScreen: View {
 
 /// Avant l'ouverture de la saison 1 (lundi 2026-12-21), le serveur sert `seasonUpcoming` : l'écran dit
 /// laquelle vient, quand, et sur quel thème — jamais un vide. Une donnée de calendrier, la même pour tous.
+///
+/// Son état se calcule à l'horloge locale (#10131) : le jour de l'ouverture, la carte gardée hors ligne devient celle
+/// d'une saison OUVERTE (`GameSeasonOpened`), sans attendre le réseau.
 struct GameSeasonUpcoming: View {
     let upcoming: GameUpcomingSeasonBlock
+    var moment: LeagueMoment? = nil
 
     static func line(_ upcoming: GameUpcomingSeasonBlock, locale: Locale = .current) -> String {
         GameText.seasonUpcoming(number: GameCopy.formatCount(upcoming.number), date: GameWave2Format.day(upcoming.startDay, locale: locale))
     }
 
     var body: some View {
+        let tense = GameSeason.liveTense(served: .upcoming, startDay: upcoming.startDay, endDay: upcoming.endDay,
+                                         at: moment ?? .local())
+        if tense == .upcoming {
+            card
+        } else {
+            GameSeasonOpened(season: upcoming)
+        }
+    }
+
+    private var card: some View {
         GameCard(tint: MeeshyColors.brandPrimary, title: GameText.seasonTitle) {
             Text(Self.line(upcoming))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -68,6 +121,28 @@ struct GameSeasonUpcoming: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("game.season.upcoming")
+    }
+}
+
+/// Une saison OUVERTE dont le bloc gardé ne porte pas encore le parcours (#10131) : hors ligne, le jour de son
+/// ouverture. Son numéro, son état, son thème et ses dates ; le parcours se lit au retour du réseau. Miroir de
+/// `GameSeasonOpened` (`apps/web/src/components/game-season.tsx`).
+struct GameSeasonOpened: View {
+    let season: GameUpcomingSeasonBlock
+
+    var body: some View {
+        GameCard(tint: MeeshyColors.brandPrimary, title: GameText.archiveSeasonCurrentTitle(number: GameCopy.formatCount(season.number))) {
+            if let theme = GameWave2Format.seasonTheme(season.themeKey) {
+                Text(GameText.seasonTheme(theme: theme))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
+                    .foregroundColor(MeeshyColors.brandPrimary)
+            }
+            GameNote(text: GameText.archiveSeasonDates(start: GameWave2Format.day(season.startDay),
+                                                       end: GameWave2Format.day(season.endDay)))
+            GameNote(text: GameText.archiveSeasonOpenedNote)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("game.season.opened")
     }
 }
 
@@ -127,7 +202,8 @@ private struct GameSeasonPath: View {
             LazyVGrid(columns: columns, spacing: MeeshySpacing.xsPlus) {
                 ForEach(1...GameSeason.steps, id: \.self) { step in
                     GameSeasonStepButton(
-                        step: step, state: GameSeasonStepState.of(step: step, in: season), online: model.isOnline,
+                        step: step, reward: season.stepReward(step), state: GameSeasonStepState.of(step: step, in: season),
+                        online: model.isOnline,
                         busy: model.pending.claimingStep == step, detail: GameElementDetails.seasonStep(step, in: season)
                     ) {
                         Task { await model.claim(step: step) }
@@ -144,6 +220,8 @@ private struct GameSeasonPath: View {
 /// (bouton), à venir (éteinte) ; les récompenses spéciales — fragment, gel, coupe — portent leur marque.
 private struct GameSeasonStepButton: View {
     let step: Int
+    /// Sa récompense, aux points de LA saison (`GameSeasonBlock.stepReward`, #10232).
+    let reward: SeasonReward?
     let state: GameSeasonStepState
     let online: Bool
     let busy: Bool
@@ -167,8 +245,6 @@ private struct GameSeasonStepButton: View {
         case .locked: theme.textMuted
         }
     }
-
-    private var reward: SeasonReward? { GameSeason.stepReward(step) }
 
     private var mark: String {
         if state == .claimed { return "✓" }
@@ -251,7 +327,8 @@ private struct GameSeasonSeal: View {
             } else {
                 // Avant l'achat : les Meeshes en poche, le prix et ce qui restera — ou combien il en manque (#9705).
                 let spend = GameSpend.preview(held: held, cost: season.sealPrice)
-                GameFactChipRow(concept: .season, items: GameSpendRows.spend(spend, format: GameCopy.meeshes), identifier: "game.season.seal.spend")
+                GameFactChipRow(concept: .season, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: { ConceptText.spendMissingSeal(missing: $0) }),
+                                identifier: "game.season.seal.spend")
                 GameActionButton(
                     title: GameText.seasonSealBuy(price: GameCopy.meeshes(season.sealPrice)), busy: model.pending.seal,
                     disabled: !model.isOnline || !spend.affordable, tint: MeeshyColors.warning, identifier: "game.season.seal.buy"

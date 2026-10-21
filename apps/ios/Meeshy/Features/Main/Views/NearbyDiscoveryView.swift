@@ -78,9 +78,12 @@ struct SeeNearbyContextMenu: ViewModifier {
 /// le squelette n'apparaît qu'au démarrage à froid — quand il n'y a réellement
 /// rien.
 struct NearbyDiscoveryView: View {
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @StateObject private var viewModel: NearbyDiscoveryViewModel
     @State private var selectedPostId: String?
+    /// #10483 — un post listé ou épinglé ici est un affichage de la surface
+    /// « autour de moi ».
+    @StateObject private var impressions = ImpressionBatcher(source: "search", surface: .nearby)
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -141,6 +144,10 @@ struct NearbyDiscoveryView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.mode)
         .animation(.easeInOut(duration: 0.2), value: viewModel.section)
         .task { await viewModel.load() }
+        .adaptiveOnChange(of: selectedPostId) { _, postId in
+            if let postId { impressions.record(postId) }
+        }
+        .onDisappear { Task { await impressions.flushNow() } }
     }
 
     // MARK: - Surface : carte ou liste
@@ -202,7 +209,10 @@ struct NearbyDiscoveryView: View {
                             distanceMeters: viewModel.distanceMeters(for: post.id)
                         ) {
                             HapticFeedback.light()
-                            router.push(.postDetail(post.id, post))
+                            router.openPostDetail(post, from: .nearby)
+                        }
+                        .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) {
+                            viewModel.posts.firstIndex { $0.id == post.id }
                         }
                         .onAppear {
                             guard post.id == viewModel.posts.last?.id else { return }
@@ -412,14 +422,15 @@ struct NearbyDiscoveryView: View {
     private func selectedPostCard(_ post: FeedPost) -> some View {
         Button {
             HapticFeedback.light()
-            router.push(.postDetail(post.id, post))
+            router.openPostDetail(post, from: .nearby)
         } label: {
             HStack(spacing: MeeshySpacing.md) {
                 MeeshyAvatar(
                     name: post.author,
                     context: .custom(40),
                     accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
+                    avatarURL: post.authorAvatarURL,
+                    ring: post.authorRing
                 )
                 .accessibilityHidden(true)
 
@@ -655,7 +666,8 @@ struct NearbyPostRow: View {
                     name: post.author,
                     context: .custom(40),
                     accentColor: post.authorColor,
-                    avatarURL: post.authorAvatarURL
+                    avatarURL: post.authorAvatarURL,
+                    ring: post.authorRing
                 )
                 .accessibilityHidden(true)
 

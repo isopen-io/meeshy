@@ -206,6 +206,14 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
     /// (l'epsilon du round 1) et la règle « ne pas antidater un partage
     /// repris ».
     public var waitingForFanoutOriginSince: Date?
+    /// #10321 — l'auteur a retiré cette publication PENDANT son envoi.
+    /// `nil` tant que personne n'a rien demandé. Une ligne `.inflight` ne se
+    /// supprime pas sous les pieds du dispatcher (il lit ses fichiers) : on la
+    /// MARQUE, le dispatcher relit la marque avant chaque téléversement et avant
+    /// le `POST`, et le flusher la retire sans émettre `.applied`. La marque
+    /// survit à un redémarrage : une ligne reprise par le reclaim des périmés
+    /// s'arrête au premier point de contrôle.
+    public var cancelRequestedAt: Date?
 
     public init(
         id: String = UUID().uuidString,
@@ -220,7 +228,8 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
         nextAttemptAt: Date = Date(),
-        waitingForFanoutOriginSince: Date? = nil
+        waitingForFanoutOriginSince: Date? = nil,
+        cancelRequestedAt: Date? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -235,5 +244,6 @@ public struct OutboxRecord: Codable, FetchableRecord, PersistableRecord, Sendabl
         self.updatedAt = updatedAt
         self.nextAttemptAt = nextAttemptAt
         self.waitingForFanoutOriginSince = waitingForFanoutOriginSince
+        self.cancelRequestedAt = cancelRequestedAt
     }
 }

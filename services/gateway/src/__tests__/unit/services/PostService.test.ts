@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { counterWrite, postCounterWritesOf } from '../../helpers/posts-counter-writes';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
@@ -103,6 +104,7 @@ function makePrisma(opts: {
   };
 
   return {
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ ok: 1 }),
     post: {
       findFirst: jest.fn<any>().mockResolvedValue(
         opts.postFindFirst !== undefined ? opts.postFindFirst : defaultPost,
@@ -158,6 +160,7 @@ function makePrisma(opts: {
       create: jest.fn<any>().mockResolvedValue({}),
     },
     postEngagement: {
+      findFirst: async () => null,
       findUnique: jest.fn<any>().mockResolvedValue(null),
       upsert: jest.fn<any>().mockResolvedValue({}),
     },
@@ -726,9 +729,7 @@ describe('recordView', () => {
     expect(prisma.postView.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ postId: 'post-1', userId: 'viewer-1' }) }),
     );
-    expect(prisma.post.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { viewCount: { increment: 1 } } }),
-    );
+    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([counterWrite(['post-1'], { viewCount: { increment: 1 }, uniqueViewCount: { increment: 1 } })]);
   });
 
   it('returns false and updates duration for repeat view', async () => {
@@ -746,6 +747,7 @@ describe('recordView', () => {
     expect(prisma.postView.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { duration: 5000 } }),
     );
+    expect(postCounterWritesOf(prisma.$runCommandRaw)).toEqual([counterWrite(['post-1'], { viewCount: { increment: 1 } })]);
   });
 
   it('caps duration at 300_000 ms', async () => {

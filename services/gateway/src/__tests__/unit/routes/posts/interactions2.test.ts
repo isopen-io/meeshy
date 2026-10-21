@@ -21,7 +21,6 @@ const mockLikePost = jest.fn<any>();
 const mockUnlikePost = jest.fn<any>();
 const mockGetPostById = jest.fn<any>();
 const mockRecordView = jest.fn<any>();
-const mockRecordAnonymousOpen = jest.fn<any>();
 const mockPinPost = jest.fn<any>();
 const mockUnpinPost = jest.fn<any>();
 const mockGetPostViews = jest.fn<any>();
@@ -32,7 +31,7 @@ const mockShareWithTrackingLink = jest.fn<any>();
 const mockGetPostShareLink = jest.fn<any>();
 const mockRecordEngagementBatch = jest.fn<any>();
 const mockWithMutationLog = jest.fn<any>();
-
+jest.mock('../../../../services/posts/moderationHold', () => ({ ...(jest.requireActual('../../../../services/posts/moderationHold') as object), mayRepostSource: async () => true, audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }) })); // #10315 — gates witnessed in moderationHold.test.ts
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     likePost: (...a: any[]) => mockLikePost(...a),
@@ -41,7 +40,6 @@ jest.mock('../../../../services/PostService', () => ({
     unbookmarkPost: jest.fn<any>().mockResolvedValue({ bookmarkCount: 0 }),
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     sharePost: (...a: any[]) => mockSharePost(...a),
     shareWithTrackingLink: (...a: any[]) => mockShareWithTrackingLink(...a),
@@ -134,7 +132,8 @@ function makeNotificationService() {
 
 function makePrisma() {
   return {
-    postImpression: {
+    anonymousPostOpen: { create: jest.fn<any>().mockResolvedValue({}), updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 1 }),
     },
@@ -165,7 +164,8 @@ function makePrisma() {
  * d'audience posé sur le favori, l'impression et le partage (issue #4146).
  */
 const publicAcl = (id: string) => ({
-  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+  id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null, deletedAt: null,
+  repostOfId: null, originalRepostOfId: null, repostOf: null, author: { isActive: true, deletedAt: null, deactivatedAt: null },
 });
 
 /**
@@ -230,7 +230,6 @@ beforeEach(() => {
     id: POST_ID, type: 'POST', authorId: AUTHOR_ID, viewCount: 1,
   });
   mockRecordView.mockResolvedValue(true);
-  mockRecordAnonymousOpen.mockResolvedValue(true);
   mockPinPost.mockResolvedValue({ id: POST_ID });
   mockUnpinPost.mockResolvedValue({ id: POST_ID });
   mockGetPostViews.mockResolvedValue({ items: [], total: 0, hasMore: false });
@@ -676,7 +675,7 @@ describe('Error catch blocks — anonymous-view, impression, batch, share', () =
   afterAll(async () => { await app.close(); });
 
   it('POST /posts/:postId/anonymous-view — returns 500 on service error', async () => {
-    mockRecordAnonymousOpen.mockRejectedValueOnce(new Error('DB error'));
+    prisma.post.findMany.mockRejectedValueOnce(new Error('DB error'));
     const res = await app.inject({
       method: 'POST',
       url: `/posts/${POST_ID}/anonymous-view`,

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminFormActions, AdminFormSheet, AdminReasonField, AdminTextInput, motiveState } from '@/components/admin/form';
-import { AdminEmptyState, AdminSkeleton } from '@/components/admin/states';
+import { AdminSkeleton } from '@/components/admin/states';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { personLabel } from '@/lib/admin/interpret/labels';
 import { sentenceCase } from '@/lib/admin/interpret/language';
@@ -22,7 +22,7 @@ import { adminUserDetailQueryKey } from '@/lib/api/admin-user-detail';
 import { apiDeps } from '@/lib/api/deps';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { useOnline } from '@/lib/net/online';
-import { useAdminReach } from '@/lib/admin/use-admin-reach';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 
 /**
  * **BANNIR, LEVER, CONSULTER** (#6819) — la feuille, ouverte depuis la fiche.
@@ -116,8 +116,8 @@ export function AdminUserBanSheet({
   const premierJour = tomorrowOf(now());
   /* Le rang souverain bannit sans motif (spec 2026-10-04 § 4) : le champ reste, FACULTATIF —
      un motif commencé se valide encore (trois caractères), un champ vide part sans `reason`. */
-  const souverain = useAdminReach().isSovereign;
-  const motive = motiveState({ text: motif, minLength: MOTIF_MINIMUM, required: true, sovereign: souverain, whenSovereign: 'optional' });
+  const { sovereign: souverain, fallback: motifPropose } = useAdminMotive(language);
+  const motive = motiveState({ text: motif, minLength: MOTIF_MINIMUM, required: true, sovereign: souverain, whenSovereign: 'optional', fallback: motifPropose });
 
   /**
    * Les deux clés sont EN DUR, et ce n'est pas une simplification : passées en
@@ -174,6 +174,7 @@ export function AdminUserBanSheet({
         required
         sovereign={souverain}
         whenSovereign="optional"
+        fallback={motifPropose}
         data={{ 'data-admin-ban-reason': '' }}
       />
 
@@ -201,13 +202,21 @@ export function AdminUserBanSheet({
           disabled: !motive.ready,
           onClick: () => void bannir(),
         }}
+        onCancel={onClose}
       />
 
-      <section className="grid gap-2 pt-2" aria-label={translateAdmin(language, 'admin.ban.title')}>
+      {/* L'HISTORIQUE, TITRÉ (#11410) : relu sur la capture à 375 px, l'état vide sans titre se
+          lisait comme un troisième bouton entre « Bannir » et « Annuler ». */}
+      <section className="grid gap-2 pt-2" aria-labelledby="admin-ban-history" data-admin-ban-history="">
+        <h3 id="admin-ban-history" className="text-caption font-semibold uppercase" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.people.ban.history')}
+        </h3>
         {historique.isPending ? (
           <AdminSkeleton rows={2} language={language} />
         ) : (historique.data ?? []).length === 0 ? (
-          <AdminEmptyState title={translateAdmin(language, 'admin.ban.none')} />
+          <p className="text-caption" style={{ color: INK2 }} data-admin-ban-empty="">
+            {translateAdmin(language, 'admin.ban.none')}
+          </p>
         ) : (
           (historique.data ?? []).map((ban) => (
             <BanRow
@@ -220,8 +229,6 @@ export function AdminUserBanSheet({
           ))
         )}
       </section>
-
-      <AdminFormActions language={language} onCancel={onClose} />
     </AdminFormSheet>
   );
 }

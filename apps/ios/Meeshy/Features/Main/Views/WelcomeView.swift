@@ -17,7 +17,8 @@ import MeeshyUI
 struct WelcomeView: View {
     @Binding var hasCompletedOnboarding: Bool
 
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     @State private var isShowingSignup = false
 
@@ -86,7 +87,12 @@ struct WelcomeView: View {
                     open()
                 }
             )
+            .feedbackToastOverlay()
         }
+        // #8037 — l'accueil est présenté en `fullScreenCover` par la racine,
+        // qui recouvre son hôte des toasts : un lien de connexion refusé,
+        // ouvert sans compte, se levait derrière lui.
+        .feedbackToastOverlay()
     }
 
     // MARK: - Boutons

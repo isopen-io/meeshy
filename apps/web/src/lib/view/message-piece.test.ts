@@ -11,11 +11,14 @@ import {
   pieceMenuItems,
   piecePreviewBox,
   piecesMayOpen,
+  soleSaveablePieceOf,
   targetedPieceOf,
   withPieceRestored,
   withoutPiece,
 } from './message-piece';
 import { NO_MEDIA_OFFERS } from './viewer-page-offers';
+import { messageActionsOf, type MenuViewer } from './message-action-scope';
+import { menuScope } from '@/test-support/menu-viewer';
 
 /**
  * #9907, #9908, #9906 — CHAQUE PIÈCE D'UN MESSAGE SE VISE SEULE. Ces témoins
@@ -134,16 +137,28 @@ describe('pieceMenuItems — le menu d’une pièce (#9908)', () => {
   });
 });
 
-describe('pieceDeletable — qui supprime une pièce après l’envoi (#9906)', () => {
+describe('pieceDeletable — qui supprime une pièce après l’envoi (#9906, #11210)', () => {
+  /** Les verdicts de la loi partagée (`messageActionsFor`) pour ce lecteur — jamais une règle d'auteur locale. */
+  const verdictsFor = (subject: Message, viewer: Partial<MenuViewer> = {}) =>
+    messageActionsOf(subject, menuScope({ id: 'u-moi', ...viewer }), { now: Date.parse('2026-10-10T10:00:00.000Z') }).verdicts;
+
   test('l’auteur, sur un message connu de la passerelle', () => {
-    expect(pieceDeletable({ message: lot(3), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(true);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3)), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(true);
   });
 
-  test('ni un autre lecteur, ni un envoi encore local, ni un message supprimé', () => {
-    expect(pieceDeletable({ message: lot(3), piece: piece('a-3'), viewerId: 'u-autre' })).toBe(false);
-    expect(pieceDeletable({ message: lot(3, { id: 'cid_123' }), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
-    expect(pieceDeletable({ message: lot(3, { deletedAt: new Date() }), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
-    expect(pieceDeletable({ message: lot(3), piece: piece('a-3', 'image/jpeg', { uploadedBy: 'u-autre' }), viewerId: 'u-moi' })).toBe(false);
+  test('ni un autre lecteur, ni un envoi encore local, ni un message supprimé, ni la pièce qu’un autre a déposée', () => {
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3), { id: 'u-autre' }), piece: piece('a-3'), viewerId: 'u-autre' })).toBe(false);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3, { id: 'cid_123' })), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3, { deletedAt: new Date() })), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3)), piece: piece('a-3', 'image/jpeg', { uploadedBy: 'u-autre' }), viewerId: 'u-moi' })).toBe(false);
+  });
+
+  test('un modérateur de la conversation ne supprime pas la pièce d’un autre : la passerelle ne l’admet qu’à celui qui l’a déposée', () => {
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3), { id: 'u-autre', conversationRole: 'moderator' }), piece: piece('a-3'), viewerId: 'u-autre' })).toBe(false);
+  });
+
+  test('un lecteur sans compte ne supprime rien, même ce qu’il a envoyé', () => {
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3), { hasAccount: false, isAnonymous: true }), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
   });
 });
 
@@ -198,5 +213,40 @@ describe('piecesMayOpen — un contenu protégé n’ouvre pas l’aperçu par p
   test('UNE pièce protégée ferme tout le lot', () => {
     const one = lot(3);
     expect(piecesMayOpen({ ...one, attachments: one.attachments!.map((a, i) => (i === 2 ? { ...a, isBlurred: true } : a)) }, NOW)).toBe(false);
+  });
+});
+
+describe('soleSaveablePieceOf — « Enregistrer » au menu d’un message à UNE pièce (#10599)', () => {
+  test('une photo seule s’enregistre depuis le menu du message', () => {
+    expect(soleSaveablePieceOf(lot(1), NOW)?.id).toBe('a-1');
+  });
+
+  test('un vocal ou un fichier seul aussi — iOS compte toute pièce', () => {
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'audio/mp4')] }, NOW)?.id).toBe('a-1');
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'application/pdf')] }, NOW)?.id).toBe('a-1');
+  });
+
+  test('zéro ou deux pièces : rien — un lot s’enregistre pièce par pièce', () => {
+    expect(soleSaveablePieceOf(lot(0), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(2), NOW)).toBeNull();
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1'), piece('a-2', 'audio/mp4')] }, NOW)).toBeNull();
+  });
+
+  test('jamais sur une vue unique, un flou (même révélé), un chiffré, un éphémère ou un supprimé', () => {
+    expect(soleSaveablePieceOf(lot(1, { isViewOnce: true }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { isBlurred: true }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { isEncrypted: true }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { expiresAt: new Date(NOW + 3_600_000) }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf(lot(1, { deletedAt: new Date(NOW - 1000) }), NOW)).toBeNull();
+  });
+
+  test('la protection se lit aussi sur la PIÈCE', () => {
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'image/jpeg', { isBlurred: true })] }, NOW)).toBeNull();
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'image/jpeg', { isViewOnce: true })] }, NOW)).toBeNull();
+  });
+
+  test('un envoi encore local, ou une pièce sans fichier, ne s’enregistre pas', () => {
+    expect(soleSaveablePieceOf(lot(1, { id: 'cid_123' }), NOW)).toBeNull();
+    expect(soleSaveablePieceOf({ ...lot(1), attachments: [piece('a-1', 'image/jpeg', { fileUrl: '' })] }, NOW)).toBeNull();
   });
 });

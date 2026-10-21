@@ -85,7 +85,10 @@ enum Route: Hashable {
     case progressionNotebook
     /// Une page de la vague 2 du jeu (#9481) — Ligue, Saison, Vitrine, Atlas, Prestige, Réglages. Poussée dans la
     /// pile comme les autres pages du jeu, jamais présentée en feuille.
-    case gamePage(GamePage)
+    ///
+    /// `focus` : la saison ou la semaine de ligue sur laquelle la page s'ouvre — un lien du Jeu (#9947) ; `nil`,
+    /// l'en cours.
+    case gamePage(GamePage, focus: GamePageFocus? = nil)
     /// La FICHE d'un concept de Progression (#9564) — niveau, points, Meeshes, gloire… : le deuxième niveau, poussé
     /// au-dessus de la première page. `section` : la section où une entrée extérieure (notification, bandeau du
     /// joueur) pose le regard ; `nil` : la fiche s'ouvre en haut.
@@ -117,6 +120,10 @@ enum Route: Hashable {
         commentId: String?,
         parentCommentId: String?
     )
+    /// La page plein écran d'une humeur reçue (#10814) : bannière et avatar de
+    /// l'auteur, texte décoré, pluie de son emoji, et un champ qui répond en
+    /// privé. Ouverte par la notification « nouvelle humeur ».
+    case moodSpotlight(statusId: String)
 }
 
 extension Route {
@@ -174,8 +181,8 @@ extension Route {
         case .progressionRules:
             return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
         case .progressionNotebook:
-            return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
-        case .gamePage(let page):
+            return String(localized: "game.notebook.page_title", defaultValue: "La Chronique", bundle: .main)
+        case .gamePage(let page, _):
             return page.title
         case .progressionConcept(let concept, _):
             return ConceptText.name(concept)
@@ -205,6 +212,8 @@ extension Route {
             return String(localized: "route.title.friend_requests", defaultValue: "Demandes d'amis", bundle: .main)
         case .storyNotificationTarget:
             return String(localized: "route.title.story", defaultValue: "Story", bundle: .main)
+        case .moodSpotlight:
+            return String(localized: "route.title.mood", defaultValue: "Humeur", bundle: .main)
         }
     }
 }
@@ -216,12 +225,37 @@ final class Router: ObservableObject {
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
+    private(set) lazy var commands = RouterCommands(router: self)
     @Published var path: [Route] = [] {
         didSet {
             AnalyticsManager.shared.trackRoute(path.last)
         }
     }
-    @Published var deepLinkProfileUser: ProfileSheetUser?
+    @Published var deepLinkProfileUser: ProfileSheetUser? {
+        didSet { if refusesProfiles, deepLinkProfileUser != nil { deepLinkProfileUser = nil } }
+    }
+
+    /// Le routeur du fil d'un INVITÉ sans compte (#10205, directive porteur du
+    /// 2026-10-11) : « il ne faut pas permettre d'afficher les profils
+    /// utilisateurs […] sauf [aux] membres de Meeshy ». Le refus vit ICI, au
+    /// seul canal par lequel toute fiche passe — avatar d'une bulle, citation,
+    /// avis d'arrivée, Rivière, plein écran audio — plutôt qu'à chacune de ces
+    /// portes, qu'une porte ajoutée demain aurait oublié de garder.
+    let refusesProfiles: Bool
+
+    /// Ce qui est présenté par-dessus la navigation (#10539).
+    private let surfaces: PresentedSurfaceRegistryProviding
+
+    /// La fenêtre de ce routeur (#10543) : la racine la pose dans
+    /// l'environnement, et une ouverture ne referme que les surfaces qui s'y
+    /// sont présentées — pas celles de l'autre fenêtre d'un iPad.
+    let surfaceScope = PresentedSurfaceScope()
+
+    init(refusesProfiles: Bool = false,
+         surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared) {
+        self.refusesProfiles = refusesProfiles
+        self.surfaces = surfaces
+    }
 
     /// La fiche d'un participant SANS COMPTE, à ouvrir.
     ///
@@ -231,9 +265,12 @@ final class Router: ObservableObject {
     /// identité vit dans UNE conversation et se demande par le couple
     /// `(conversationId, participantId)`. Les faire transiter par le même canal
     /// obligeait à donner un `userId` à qui n'en a pas.
-    @Published var participantProfileTarget: ParticipantProfileTarget?
+    @Published var participantProfileTarget: ParticipantProfileTarget? {
+        didSet { if refusesProfiles, participantProfileTarget != nil { participantProfileTarget = nil } }
+    }
 
-    @Published var pendingShareContent: SharedContentType? = nil
+    /// Ce que le lien profond de partage remet à l'écran de partage unique (#10947).
+    @Published var pendingShareContent: ShareSubject? = nil
 
     /// Reply context awaiting consumption by the next ConversationView that
     /// appears (on tap of a story's reply button). Cleared when the conversation
@@ -257,7 +294,7 @@ final class Router: ObservableObject {
     /// iPad two-column mode: called when pop/popToRoot is requested.
     var onPopRequested: (() -> Void)?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
+    private static let logger = MeeshyLog.logger(.router)
 
     var currentRoute: Route? { path.last }
 
@@ -288,7 +325,26 @@ final class Router: ObservableObject {
         !path.isEmpty && !isHubRoute
     }
 
+    /// Une conversation poussée — liste, pastille de synchronisation,
+    /// recherche, communauté — passe par le site qui libère l'écran (#10543) :
+    /// rien de présenté, elle s'empile sur-le-champ, comme avant.
     func push(_ route: Route) {
+        guard case .conversation = route else {
+            place(route)
+            return
+        }
+        clearPresentedSurfaces { [weak self] beneathClosingSurface in
+            guard beneathClosingSurface else {
+                self?.place(route)
+                return
+            }
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { self?.place(route) }
+        }
+    }
+
+    private func place(_ route: Route) {
         if currentRoute == route { return }
 
         // iPad intercept: if the callback handles the route, skip NavigationStack push
@@ -417,17 +473,46 @@ final class Router: ObservableObject {
         return pendingHighlightConversationId.map { $0 == conversationId } ?? true
     }
 
+    /// **LE site qui libère l'écran devant une conversation** (#10539) — et
+    /// devant le post, le réel ou la story qu'une notification ouvre (#10543).
+    ///
+    /// Story, réel, galerie, plein écran d'une conversation, feuille, fiche de
+    /// profil : tout ce qui s'est déclaré dans CETTE fenêtre se referme, puis
+    /// `open` pose la cible. Aucun appelant ne referme lui-même — toast, push,
+    /// lien profond, réponse et `push(.conversation)` passent tous ici.
+    /// `beneathClosingSurface` : une surface part, la cible se pose dessous
+    /// SANS animation et c'est la fermeture qui la révèle — une seule
+    /// transition à l'écran, jamais deux qui se croisent.
+    ///
+    /// L'appel, lui, vit dans sa propre fenêtre et ne se déclare pas : il reste.
+    func clearPresentedSurfaces(thenOpen open: @escaping @MainActor (_ beneathClosingSurface: Bool) -> Void) {
+        surfaces.clearForConversation(in: surfaceScope) { [weak self] closedSurfaces in
+            guard let self else { return }
+            let closesProfile = deepLinkProfileUser != nil || participantProfileTarget != nil
+            if deepLinkProfileUser != nil { deepLinkProfileUser = nil }
+            if participantProfileTarget != nil { participantProfileTarget = nil }
+            open(closedSurfaces || closesProfile)
+        }
+    }
+
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
+        clearPresentedSurfaces { [weak self] beneathClosingSurface in
+            self?.showConversation(conversation, highlightMessageId: highlightMessageId,
+                                   beneathClosingSurface: beneathClosingSurface)
+        }
+    }
+
+    private func showConversation(_ conversation: Conversation, highlightMessageId: String?,
+                                  beneathClosingSurface: Bool) {
         pendingHighlightMessageId = highlightMessageId
         pendingHighlightConversationId = highlightMessageId == nil ? nil : conversation.id
 
-        // iPad deux colonnes : les routes sont forwardees via `onRouteRequested`
-        // (pas de NavigationStack `path`) — comportement inchange.
+        // iPad deux colonnes : la route est remise d'UN geste à `onRouteRequested`, qui pose la
+        // conversation dans la colonne de détail. L'ancien `popToRoot()` + `push` différé y remettait
+        // d'abord `activeConversation` à nil : 50 ms de fil d'actualité et de liste, leurs chargements
+        // relancés, et la conversation déjà ouverte démontée au lieu d'atterrir en place.
         if onRouteRequested != nil {
-            popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.push(.conversation(conversation))
-            }
+            place(.conversation(conversation))
             return
         }
 
@@ -436,7 +521,13 @@ final class Router: ObservableObject {
         // mutations rapprochees → "NavigationRequestObserver tried to update
         // multiple times per frame". `NavigationStack(path:)` recoit
         // desormais une transition atomique.
-        path = [.conversation(conversation)]
+        guard beneathClosingSurface else {
+            path = [.conversation(conversation)]
+            return
+        }
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) { path = [.conversation(conversation)] }
     }
 
     /// Replaces the whole nav stack with a single route. On iPhone this is ONE
@@ -446,10 +537,10 @@ final class Router: ObservableObject {
     /// unchanged. Also lands on the target directly instead of flashing root.
     func replaceStack(with route: Route) {
         if onRouteRequested != nil {
-            popToRoot()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                self.push(route)
-            }
+            // iPad : la route REMPLACE le panneau, comme le même lien venu de
+            // l'extérieur. `popToRoot()` y retire un niveau — le panneau, ou à
+            // défaut la conversation ouverte, qu'un lien interne fermait.
+            push(route)
             return
         }
         path = [route]
@@ -509,13 +600,13 @@ final class Router: ObservableObject {
                     await self?.handleConversationDeepLink(id, draftText: draftText)
                 }
 
-            case .magicLink, .emailVerificationLink:
-                // Tapé in-app, donc déjà connecté (#8035) : `SignInLinkOpener`
-                // décide s'il faut d'abord déconnecter le compte courant.
-                Self.logger.info("Deep link sign-in link received")
-                if let link = SignInLink(destination) {
-                    Task { await SignInLinkOpener.open(link) }
-                }
+            case .magicLink, .emailVerificationLink, .passwordResetLink:
+                // Voie IN-APP (#10874) : un lien d'e-mail touché dans un contenu
+                // n'ouvre ni session ni écran de réinitialisation — il part au
+                // navigateur intégré. `InAppLinks` l'y envoie déjà ; ce cas en
+                // est le second verrou, pour tout appelant qui l'oublierait.
+                Self.logger.info("In-app email link sent to the browser")
+                EmailLinkBrowser.present(url)
 
             case .share(let text, let urlString):
                 Self.logger.info("Deep link share received")
@@ -555,10 +646,25 @@ final class Router: ObservableObject {
             case .hashtag(let tag):
                 push(.hashtagResults(tag: tag))
 
+            case .game(let link):
+                openGame(at: GameNavigationMap.entry(for: link))
+
+            case .packShop(let domain, let pack):
+                openPackShop(domain: domain, pack: pack)
+
             case .referral, .call, .external:
                 break
             }
         }
+    }
+
+    // MARK: - Vitrine des packs (#10632)
+
+    /// Ouvre Réglages puis la vitrine unique, filtrée sur `domain` : le lanceur
+    /// porte la demande jusqu'à `SettingsView`, qui présente `PacksSettingsView`.
+    func openPackShop(domain: PackDomain?, pack: String? = nil) {
+        PackShopLauncher.shared.request(domain: domain, pack: pack)
+        replaceStack(with: .settings)
     }
 
     // MARK: - Conversation Deep Link
@@ -602,7 +708,7 @@ final class Router: ObservableObject {
         popToRoot()
 
         if let urlString, let url = URL(string: urlString) {
-            pendingShareContent = .url(url)
+            pendingShareContent = .link(url)
         } else if let text, !text.isEmpty {
             pendingShareContent = .text(text)
         } else {

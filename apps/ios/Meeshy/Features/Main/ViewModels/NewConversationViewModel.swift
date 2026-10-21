@@ -117,8 +117,7 @@ final class NewConversationViewModel: ObservableObject {
         isSearching = true
         searchFailed = false
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(350))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .milliseconds(350)), !Task.isCancelled, let self else { return }
             await self.performSearch(query: trimmed)
         }
     }
@@ -139,11 +138,17 @@ final class NewConversationViewModel: ObservableObject {
                 body: nil,
                 queryItems: queryItems
             )
+            // Une frappe plus récente a pris la main : ses résultats arrivent.
+            guard !Task.isCancelled else { return }
             let currentUserId = currentUserIdProvider()
             searchResults = response.data.filter { $0.id != currentUserId }
             isSearching = false
             searchFailed = false
         } catch {
+            // La requête ANNULÉE par la frappe suivante n'est pas une panne :
+            // elle vidait la liste et montrait « recherche impossible » le
+            // temps que la suivante réponde, à chaque lettre.
+            guard !Task.isCancelled, !(error is CancellationError) else { return }
             searchResults = []
             isSearching = false
             searchFailed = true

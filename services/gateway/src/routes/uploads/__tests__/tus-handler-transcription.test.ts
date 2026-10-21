@@ -26,6 +26,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 
 type CapturedTusOptions = {
   onUploadCreate: (req: any, upload: any) => Promise<{ metadata?: Record<string, string> }>;
@@ -111,7 +112,7 @@ function buildFakePrisma() {
     messageAttachment: { create: jest.fn<any>().mockResolvedValue({ id: 'created-attachment' }) },
     postMedia: { create: jest.fn<any>().mockResolvedValue({ id: 'created-post-media' }) },
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue(liveSession()),
       update: jest.fn<any>().mockReturnValue({ catch: jest.fn() }),
     },
   };
@@ -122,7 +123,7 @@ function headersFrom(map: Record<string, string>) {
 }
 
 function registeredHeaders() {
-  return { authorization: `Bearer ${jwt.sign({ userId: 'user-registered' }, JWT_SECRET)}` };
+  return { authorization: `Bearer ${jwt.sign({ userId: '5f00000000000000000000a0', sid: LIVE_SID }, JWT_SECRET)}` };
 }
 
 describe('tus-handler — transcription faite sur l’appareil', () => {

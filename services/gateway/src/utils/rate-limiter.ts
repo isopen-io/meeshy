@@ -17,6 +17,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
+import { createHash } from 'crypto';
 import { enhancedLogger } from './logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'RateLimiter' });
@@ -811,6 +812,54 @@ export function createVerifyEmailAddressRateLimiter(redis?: Redis): RateLimiter 
         const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : 'none';
         return `email:${email}`;
       }
+    },
+    redis
+  );
+}
+
+/**
+ * `GET|POST /auth/reset-password/verify-token` par ADRESSE IP (#10864) — la
+ * route dit d'un jeton s'il est valide sans le consommer : c'est un oracle, et
+ * une machine qui y énumère des jetons se borne ici. 20 essais par quart
+ * d'heure et par IP, GET et POST dans le même seau.
+ */
+export function createResetTokenVerifyIpRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 20,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:reset-verify:ip',
+      message: 'Trop de vérifications de lien de réinitialisation. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) => `ip:${request.ip || 'unknown'}`
+    },
+    redis
+  );
+}
+
+function resetTokenOf(request: FastifyRequest): string {
+  const body = request.body as { token?: unknown } | undefined;
+  const query = request.query as { token?: unknown } | undefined;
+  const token = typeof body?.token === 'string' ? body.token : query?.token;
+  return typeof token === 'string' ? token : '';
+}
+
+/**
+ * `GET|POST /auth/reset-password/verify-token` par JETON (#10864) — un même
+ * jeton sondé depuis une flotte d'adresses converge dans un seul seau : 10
+ * vérifications par quart d'heure, largement assez pour la personne qui
+ * recharge sa page. La clé est une EMPREINTE séparée par domaine, jamais le
+ * jeton ni le `tokenHash` que la base indexe : le magasin de compteurs ne
+ * garde rien qui ouvre un compte.
+ */
+export function createResetTokenVerifyTokenRateLimiter(redis?: Redis): RateLimiter {
+  return new RateLimiter(
+    {
+      max: 10,
+      windowMs: 15 * 60 * 1000,
+      keyPrefix: 'auth:reset-verify:token',
+      message: 'Trop de vérifications de ce lien de réinitialisation. Veuillez réessayer dans 15 minutes.',
+      keyGenerator: (request) =>
+        `token:${createHash('sha256').update(`reset-verify-rate:${resetTokenOf(request)}`).digest('hex')}`
     },
     redis
   );

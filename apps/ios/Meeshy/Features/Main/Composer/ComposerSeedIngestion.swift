@@ -84,7 +84,7 @@ enum ComposerSeedIngestion {
     @MainActor
     private static func foundsScene(_ payload: StoryComposerSeed.Payload?) -> Bool {
         switch payload {
-        case .image, .video: return true
+        case .image, .video, .scene: return true
         case .audio: return false
         case nil: return false
         }

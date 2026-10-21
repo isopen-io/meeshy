@@ -1,5 +1,7 @@
 import { lazy, Suspense, useState, type ReactNode, type Ref } from 'react';
 
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
 import type { CanvasDocument } from '@/lib/canvas/document';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -8,10 +10,11 @@ import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 
 import '@/styles/viewer-chrome.css';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import type { SoundCreditControl } from './background-sound-credit';
 import { CHROME_ACTION_HIT_CLASS } from './chrome-action';
-import { Glyph } from './glyph';
+import { Glyph, GlyphSvg } from './glyph';
+import { FEED_GLYPHS } from './glyphs-feed';
 import { PersonName } from './person-name';
 
 const BackgroundSoundCredit = lazy(() => import('./background-sound-credit'));
@@ -45,7 +48,7 @@ export const VIEWER_GLASS = 'glass-call';
 /** Ce que le rail réserve au bord de fin : 44 de cible + 8 de marge + 8 de respiration. */
 export const VIEWER_RAIL_CORRIDOR = 60;
 
-type Placement = 'overlay' | 'corridor';
+type Placement = 'overlay' | 'corridor' | 'floating';
 
 /** Les PRISES qu'un gate tape déjà (`data-story-action`, `data-reel-gesture`…) — posées telles quelles sur le contrôle. */
 export type ViewerProbe = Readonly<Record<`data-${string}`, string>>;
@@ -67,7 +70,15 @@ export type ViewerIdentityModel = {
   readonly avatarColor?: string;
   /** Présent ⇒ l'avatar et le nom mènent au profil ; absent (sa propre story) ⇒ rien. */
   readonly profileUsername?: string;
+  /** LA PERSONNE DONT LA PRÉSENCE SE LIT (#10944) — l'auteur, dans la carte
+   * vivante ; absente (soi, un porteur sans identifiant) ⇒ aucun point. */
+  readonly presenceKey?: string;
+  /** SON CONTOUR ÉQUIPÉ (#10946) — la référence servie avec la personne ; absente ⇒ l'avatar nu. */
+  readonly ringRef?: ServedProfileDecorItem;
   readonly time?: { readonly iso: string; readonly label: string };
+  /** Une republication (#10524) : son crédit suit la date — icône, « @handle »
+   * quand la source le sert, et `label` pour le lecteur d'écran. */
+  readonly repost?: { readonly handle: string | null; readonly label: string };
 };
 
 /** Avatar 32, nom, heure — sur UNE ligne : l'heure qualifie l'auteur, elle n'est pas un sous-titre. */
@@ -95,11 +106,20 @@ export function ViewerIdentity({
           {identity.time.label}
         </time>
       )}
+      {identity.repost === undefined ? null : (
+        <span data-viewer-repost="" className="viewer-ink-muted viewer-ink-shadow flex min-w-0 items-center gap-1 self-center text-check">
+          <GlyphSvg glyph={FEED_GLYPHS.arrowsClockwise} size={11} className="shrink-0" />
+          {identity.repost.handle === null ? null : <span aria-hidden="true" className="truncate">@{identity.repost.handle}</span>}
+          <span className="sr-only">{identity.repost.label}</span>
+        </span>
+      )}
     </div>
   );
   return (
     <div data-viewer-identity="" className="pointer-events-auto flex min-w-0 flex-1 items-center gap-2" onPointerDown={stop}>
-      <Avatar
+      <PeerAvatar
+        presenceKey={identity.presenceKey}
+        ringRef={identity.ringRef}
         initials={identity.initials}
         color={identity.avatarColor ?? 'var(--color-ios-brand)'}
         size={32}
@@ -338,14 +358,14 @@ export function ViewerTopBar({
   readonly placement?: Placement;
 }) {
   const chrome = useYield(hidden);
-  const overlay = placement === 'overlay';
+  const placed = { overlay: 'viewer-scrim-top absolute inset-x-0 top-0 z-10 pb-11', floating: 'absolute inset-x-0 top-0 z-10 pb-1', corridor: 'relative z-10 pb-1' }[placement];
   return (
     <div
       {...probe}
       data-viewer-top-bar=""
       data-chrome-yields={chrome['data-chrome-yields']}
       inert={chrome.inert}
-      className={`viewer-chrome pointer-events-none flex flex-col gap-2 px-3 ${overlay ? 'viewer-scrim-top absolute inset-x-0 top-0 z-10 pb-11' : 'relative z-10 pb-1'}`}
+      className={`viewer-chrome pointer-events-none flex flex-col gap-2 px-3 ${placed}`}
       style={{ paddingTop: 'calc(var(--safe-top, 0px) + 8px)', ...chrome.style }}
     >
       {above}
@@ -419,14 +439,18 @@ export function ViewerBottomBar({
   const onReply = held ? undefined : reply?.onReply;
   const hasRow = caption !== undefined || rail !== undefined;
   if (!hasRow && onReply === undefined && children === undefined) return null;
-  const overlay = placement === 'overlay';
+  const placed = {
+    overlay: `${SCRIM_CLASS[scrim]} absolute inset-x-0 bottom-0 z-10 pt-10`,
+    floating: 'absolute inset-x-0 bottom-0 z-10',
+    corridor: 'relative z-10',
+  }[placement];
   return (
     <div
       {...probe}
       data-viewer-bottom-bar=""
       data-chrome-yields={chrome['data-chrome-yields']}
       inert={chrome.inert}
-      className={`viewer-chrome pointer-events-none flex flex-col gap-3 ${overlay ? `${SCRIM_CLASS[scrim]} absolute inset-x-0 bottom-0 z-10 pt-10` : 'relative z-10'}`}
+      className={`viewer-chrome pointer-events-none flex flex-col gap-3 ${placed}`}
       style={{ paddingBottom: 'calc(var(--safe-bottom, 0px) + 12px)', ...chrome.style }}
     >
       {hasRow ? (

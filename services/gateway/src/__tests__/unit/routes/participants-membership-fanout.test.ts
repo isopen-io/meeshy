@@ -19,6 +19,7 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../helpers/room-deliveries';
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import { findFirstHonouringWhere } from '../../helpers/find-first-honouring-where';
 import { matchesMongoWhere } from '../../helpers/mongo-where';
@@ -256,16 +257,25 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
   it('émet conversation:participant-joined vers les rooms PERSONNELLES des membres', async () => {
     await addTarget();
 
-    const joined = emitted.filter((e) => e.event === 'conversation:participant-joined');
-    expect(joined).toHaveLength(1);
-    expect(joined[0].rooms).toEqual([
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-joined'));
+    expect([...delivered.keys()].sort()).toEqual([
       `conversation:${CONV_ID}`,
       `user:${ACTOR_ID}`,
-      `user:${WITNESS_ID}`,
       // Le participant sans compte est nommé par son `Participant.id` :
       // l'adresser par `userId` sauterait une room qui EXISTE.
       `user:${ANON_PARTICIPANT_ID}`,
-    ]);
+      `user:${WITNESS_ID}`,
+    ].sort());
+  });
+
+  it('l\'effectif ne part que vers les COMPTES — ni la room du fil, ni l\'invité (#10205)', async () => {
+    await addTarget();
+
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-joined'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ANON_PARTICIPANT_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`)).toHaveProperty('memberCount');
+    expect(delivered.get(`user:${WITNESS_ID}`)).toHaveProperty('memberCount');
   });
 
   it('ÉCARTE le nouvel arrivant de l\'éventail', async () => {
@@ -361,21 +371,13 @@ describe('POST /conversations/:id/participants — l\'ajout devient comptable', 
 
     await addTarget();
 
-    const joined = emitted.filter((e) => e.event === 'conversation:participant-joined');
-    expect(joined).toHaveLength(2);
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-joined'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
 
-    const capped = joined[0];
-    expect(capped.payload.memberCount).toBe(199);
-    expect(capped.payload.memberCountCapped).toBe(true);
-    expect(capped.rooms).toContain(`conversation:${CONV_ID}`);
-    expect(capped.rooms).not.toContain(`user:${ACTOR_ID}`);
-    expect(capped.excepts).toEqual([`user:${ACTOR_ID}`]);
-
-    const exact = joined[1];
-    expect(exact.rooms).toEqual([`user:${ACTOR_ID}`]);
+    const exact = delivered.get(`user:${ACTOR_ID}`);
     // 250 dans l'éventail + l'arrivant, que l'éventail écarte : 251.
-    expect(exact.payload.memberCount).toBe(251);
-    expect(exact.payload.memberCountCapped).toBeUndefined();
+    expect(exact.memberCount).toBe(251);
+    expect(exact.memberCountCapped).toBeUndefined();
   });
 
   it('demande le rôle de conversation ET le rôle plateforme de l\'éventail', async () => {
@@ -442,9 +444,8 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       createMockReply()
     );
 
-    const left = emitted.filter((e) => e.event === 'conversation:participant-left');
-    expect(left).toHaveLength(1);
-    // La room du fil reste en TÊTE, et la room personnelle du RETIRÉ ferme la
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'));
+    // La room du fil reste servie, et la room personnelle du RETIRÉ ferme la
     // chaîne. Cette dernière a longtemps manqué sur l'argument que « la room du
     // fil porte le retiré lui-même, encore dedans jusqu'à l'éviction qui suit
     // l'emit ». C'est vrai de l'appareil qui a le FIL ouvert, et faux de tous
@@ -452,13 +453,16 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     // personnelles des membres restants (« l'écran de liste a quitté la room »).
     // Il n'avait été appliqué qu'à ceux dont le COMPTEUR bouge, jamais à celui
     // dont l'APPARTENANCE s'arrête.
-    expect(left[0].rooms).toEqual([
+    expect([...delivered.keys()].sort()).toEqual([
       `conversation:${CONV_ID}`,
       `user:${ACTOR_ID}`,
       `user:${ANON_PARTICIPANT_ID}`,
       `user:${TARGET_ID}`,
-    ]);
-    expect(left[0].payload).toMatchObject({
+    ].sort());
+    // Le retiré n'est plus participant : il apprend son départ, pas l'effectif.
+    expect(delivered.get(`user:${TARGET_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`)).toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`)).toMatchObject({
       conversationId: CONV_ID,
       userId: TARGET_ID,
       displayName: 'Removed User',
@@ -492,9 +496,9 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       createMockReply()
     );
 
-    const left = emitted.find((e) => e.event === 'conversation:participant-left')!;
-    expect(left.payload.memberCount).toBe(199);
-    expect(left.payload.memberCountCapped).toBe(true);
+    const left = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left')).get(`user:${ACTOR_ID}`);
+    expect(left.memberCount).toBe(199);
+    expect(left.memberCountCapped).toBe(true);
   });
 
   it('sert l\'effectif ENTIER des restants à l\'admin du GROUPE', async () => {
@@ -529,13 +533,10 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
       createMockReply()
     );
 
-    const left = emitted.filter((e) => e.event === 'conversation:participant-left');
-    expect(left).toHaveLength(2);
-    expect(left[0].payload.memberCount).toBe(199);
-    expect(left[0].excepts).toEqual([`user:${ACTOR_ID}`]);
-    expect(left[1].rooms).toEqual([`user:${ACTOR_ID}`]);
-    expect(left[1].payload.memberCount).toBe(250);
-    expect(left[1].payload.memberCountCapped).toBeUndefined();
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'));
+    expect(delivered.get(`conversation:${CONV_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${ACTOR_ID}`).memberCount).toBe(250);
+    expect(delivered.get(`user:${ACTOR_ID}`).memberCountCapped).toBeUndefined();
   });
 
   it("n'émet qu'UNE fois — un appareil du retiré resté dans la room ne double pas", async () => {
@@ -553,6 +554,6 @@ describe('DELETE /conversations/:id/participants/:userId — le retrait atteint 
     // copies au socket assis dans les deux rooms, et un client qui RETIRE la
     // ligne sur cet événement la retirerait deux fois — anodin ici, mais la
     // même forme porte `memberCount` pour les restants.
-    expect(emitted.filter((e) => e.event === 'conversation:participant-left')).toHaveLength(1);
+    expect(() => roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'))).not.toThrow();
   });
 });

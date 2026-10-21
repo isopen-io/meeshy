@@ -10,7 +10,9 @@ import { Link, href, navigate } from '@/routes/route-table';
 import { useProfileController } from '@/routes/user-profile-controller';
 import { ProfileHero } from '@/routes/user-profile-header';
 import { ProfileBlockedCard, ProfileRelationSection, ProfileSelfSection, ProfileStatsSection } from '@/routes/user-profile-sections';
-import { ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
+import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
+
+import { GameBannerOwnSlot, GameBannerVisitorSlot } from './game-profile-slots';
 
 import { GlyphSvg } from './glyph';
 import { FEED_GLYPHS } from './glyphs-feed';
@@ -32,20 +34,34 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
   const language = currentInterfaceLanguage();
   const online = useOnline();
   const profile = useProfileController(username, language);
-  const { view, person, name, accent, presence, relation, actions, signedIn, busy, onAction } = profile;
+  const { view, person, seed, name, accent, presence, mood, relation, actions, signedIn, busy, onAction } = profile;
+  const isSelf = view.data?.isSelf === true;
   const onSignIn = useCallback(() => navigate(href('login')), []);
 
   return (
-    <Sheet title={person === undefined ? translate(language, 'userProfile.title') : name} bodyAs="div" onClose={onClose}>
+    <Sheet title={person === undefined && seed === null ? translate(language, 'userProfile.title') : name} bodyAs="div" onClose={onClose}>
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div data-profile-peek={person?.username ?? ''} className="min-h-0 flex-1 overflow-y-auto px-4">
           {person !== undefined ? (
             <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
               {online ? null : <ProfileOfflineBanner language={language} />}
-              <ProfileHero profile={person} name={name} accent={accent} presence={presence} />
+              <ProfileHero
+                profile={person}
+                name={name}
+                accent={accent}
+                presence={presence}
+                mood={mood}
+                game={
+                  relation.kind === 'blocked' ? null : isSelf ? (
+                    <GameBannerOwnSlot enabled={signedIn} />
+                  ) : signedIn ? (
+                    <GameBannerVisitorSlot userId={person.id} enabled />
+                  ) : null
+                }
+              />
               {relation.kind === 'blocked' ? (
                 <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
-              ) : view.data?.isSelf === true ? (
+              ) : isSelf ? (
                 <ProfileSelfSection language={language} />
               ) : (
                 <ProfileRelationSection
@@ -61,7 +77,7 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 />
               )}
               {relation.kind === 'blocked' ? null : (
-                <ProfileStatsSection language={language} stats={view.data?.stats ?? null} createdAt={person.createdAt} loading={view.isFetching} />
+                <ProfileStatsSection language={language} stats={profile.stats} createdAt={person.createdAt} loading={profile.statsLoading} />
               )}
               <Link
                 to="userProfile"
@@ -79,6 +95,11 @@ export function ProfilePeekSheet({ username, onClose }: { readonly username: str
                 {translate(language, 'userProfile.peek.openPage')}
                 <GlyphSvg glyph={FEED_GLYPHS.caretRight} size={16} className="rtl:-scale-x-100" />
               </Link>
+            </div>
+          ) : seed !== null ? (
+            <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
+              <ProfileHero profile={seed} name={name} accent={accent} presence={null} />
+              <ProfileBodySkeleton language={language} />
             </div>
           ) : view.isError ? (
             <ProfileFailureNotice language={language} failure={profileFailureOf(view.error, online)} onRetry={() => void view.refetch()} />

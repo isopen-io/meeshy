@@ -2,6 +2,7 @@
  * Search routes for communities
  */
 import { FastifyInstance } from 'fastify';
+import { issueSearchId } from '../../services/social/searchFingerprint.js';
 import { communityMemberSchema, errorResponseSchema, userMinimalSchema } from '@meeshy/shared/types/api-schemas';
 import { applyPresenceVisibilityAsOffline } from '@meeshy/shared/utils/presence-visibility';
 import { validatePagination } from '../../utils/pagination';
@@ -83,6 +84,12 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
                 limit: { type: 'number' },
                 offset: { type: 'number' },
                 hasMore: { type: 'boolean' }
+              }
+            },
+            meta: {
+              type: 'object',
+              properties: {
+                searchId: { type: 'string', description: 'Identifiant opaque et signé de la recherche (#10506), recopié par l’événement discovery' }
               }
             }
           }
@@ -201,7 +208,9 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         )
       }));
 
-      return sendPaginatedSuccess(reply, communitiesWithCount, createPaginationMeta(totalCount, offsetNum, limitNum, communities.length));
+      return sendPaginatedSuccess(reply, communitiesWithCount, createPaginationMeta(totalCount, offsetNum, limitNum, communities.length), {
+        meta: { searchId: issueSearchId(q) },
+      });
     } catch (error) {
       logger.error('Error searching communities', error as Error);
       return sendInternalError(reply, 'Failed to search communities');

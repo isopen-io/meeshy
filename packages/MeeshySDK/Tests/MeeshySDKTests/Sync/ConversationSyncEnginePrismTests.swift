@@ -171,7 +171,13 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
         // lui attendaient avec.
         XCTAssertTrue(sinks.allSatisfy { $0.contains("preferredLanguages: preferredLanguages") },
                       "le puits `.upsertAPIMessages` doit remettre le prisme PORTÉ par l'opération")
-        XCTAssertFalse(persistence.contains("Self.readerPrism()"),
+        // L'acteur est découpé en `MessagePersistenceActor+*.swift` (#10988) et
+        // `upsertFromAPIMessages` vit dans `+Migration` : l'interdit se lit sur
+        // l'UNITÉ entière — le fichier principal seul le rendrait vert en silence.
+        let persistenceUnit = try Self.unit(of: "Persistence/MessagePersistenceActor")
+        XCTAssertTrue(persistenceUnit.contains("func upsertFromAPIMessages("),
+                      "l'unité doit porter le puits — une lecture qui ne le voit pas ne garde rien")
+        XCTAssertFalse(persistenceUnit.contains("Self.readerPrism()"),
                        "aucune lecture du MainActor dans la boucle d'écriture — le prisme se résout à la mise en file")
 
         // Et le prisme mis en file est LA descente de la bulle (`ReaderPrism`),
@@ -204,6 +210,24 @@ final class ConversationSyncEnginePrismTests: XCTestCase {
 
     /// Chaque appel `needle(...)`, parenthèses équilibrées, pour qu'un appel
     /// écrit sur deux lignes soit lu en entier.
+    /// `Type.swift` et tous ses `Type+*.swift` du même dossier, concaténés.
+    private static func unit(of relativeBase: String) throws -> String {
+        let principal = "\(relativeBase).swift"
+        let folder = (relativeBase as NSString).deletingLastPathComponent
+        let base = (relativeBase as NSString).lastPathComponent
+        let directory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/\(folder)")
+        let parts = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix(base + "+") && $0.hasSuffix(".swift") }
+            .sorted()
+            .map { "\(folder)/\($0)" }
+        return try ([principal] + parts).map { try source($0) }.joined(separator: "\n")
+    }
+
     private static func callSites(of needle: String, in source: String) -> [String] {
         var sites: [String] = []
         var searchRange = source.startIndex..<source.endIndex

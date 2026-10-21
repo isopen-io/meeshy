@@ -1,0 +1,177 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essentials",
+      "description": "The basic patterns and gradients."
+    },
+    "heritages": {
+      "name": "Heritage",
+      "description": "Patterns from around the world."
+    },
+    "nature-et-ciel": {
+      "name": "Nature and sky",
+      "description": "Maps, leaves, trellises and stars."
+    },
+    "illustrations": {
+      "name": "Illustrations",
+      "description": "Landscapes drawn in line."
+    },
+    "bannieres-essentielles": {
+      "name": "Essential banners",
+      "description": "Six banners for your profile."
+    },
+    "contours-essentiels": {
+      "name": "Essential rings",
+      "description": "Six rings for your avatar."
+    },
+    "animes": {
+      "name": "Animated",
+      "description": "Wallpapers that breathe softly."
+    },
+    "bannieres-animees": {
+      "name": "Animated banners",
+      "description": "A subtle glint sweeps across the banner."
+    },
+    "contours-animes": {
+      "name": "Animated rings",
+      "description": "A golden arc travels around the avatar."
+    },
+    "contours-haussmannien": {
+      "name": "Haussmann ring",
+      "description": "The Parisian façade: dressed stone, cast iron and keystone."
+    },
+    "cadres-haussmannien": {
+      "name": "Haussmann banner frame",
+      "description": "The Parisian façade: dressed stone, cast iron and keystone."
+    },
+    "contours-arabe": {
+      "name": "Arabesque ring",
+      "description": "Alhambra interlace, eight-pointed stars and a lobed arch."
+    },
+    "cadres-arabe": {
+      "name": "Arabesque banner frame",
+      "description": "Alhambra interlace, eight-pointed stars and a lobed arch."
+    },
+    "contours-grec": {
+      "name": "Greek ring",
+      "description": "Meander, palmettes and Ionic volutes."
+    },
+    "cadres-grec": {
+      "name": "Greek banner frame",
+      "description": "Meander, palmettes and Ionic volutes."
+    },
+    "contours-ancestral": {
+      "name": "Ancestral African ring",
+      "description": "Earth-painted bogolan and an adinkra sign."
+    },
+    "cadres-ancestral": {
+      "name": "Ancestral African banner frame",
+      "description": "Earth-painted bogolan and an adinkra sign."
+    },
+    "contours-technologique": {
+      "name": "African tech ring",
+      "description": "Neon Ndebele steps and circuit traces."
+    },
+    "cadres-technologique": {
+      "name": "African tech banner frame",
+      "description": "Neon Ndebele steps and circuit traces."
+    },
+    "contours-rituel": {
+      "name": "African ritual ring",
+      "description": "Fringed raffia, cowries, beads and a wooden mask."
+    },
+    "cadres-rituel": {
+      "name": "African ritual banner frame",
+      "description": "Fringed raffia, cowries, beads and a wooden mask."
+    },
+    "contours-celte": {
+      "name": "Celtic ring",
+      "description": "Endless braid and spiral triskeles."
+    },
+    "cadres-celte": {
+      "name": "Celtic banner frame",
+      "description": "Endless braid and spiral triskeles."
+    }
+  },
+  "designs": {
+    "monogramme": "Monogram",
+    "chevrons": "Chevrons",
+    "aurore": "Aurora",
+    "maille": "Mesh",
+    "art-deco": "Art Deco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topography",
+    "feuillage": "Foliage",
+    "treillis": "Trellis",
+    "constellation": "Constellation",
+    "horizon": "Horizon",
+    "baobab": "Baobab",
+    "brume-vivante": "Living mist",
+    "aurore-vive": "Vivid aurora"
+  },
+  "rings": {
+    "filet": "Hairline",
+    "double-filet": "Double hairline",
+    "perle": "Pearls",
+    "aurore": "Aurora",
+    "deco": "Deco",
+    "laurier": "Laurel",
+    "halo-or": "Golden halo",
+    "haussmannien": "Haussmann",
+    "haussmannien-anime": "Haussmann, animated",
+    "arabe": "Arabesque",
+    "arabe-anime": "Arabesque, animated",
+    "grec": "Greek",
+    "grec-anime": "Greek, animated",
+    "ancestral": "Ancestral African",
+    "ancestral-anime": "Ancestral African, animated",
+    "technologique": "African tech",
+    "technologique-anime": "African tech, animated",
+    "rituel": "African ritual",
+    "rituel-anime": "African ritual, animated",
+    "celte": "Celtic",
+    "celte-anime": "Celtic, animated"
+  },
+  "gamut": {
+    "indigo": "Meeshy Indigo",
+    "bleu-nuit": "Midnight blue",
+    "azur": "Azure",
+    "lagon": "Lagoon",
+    "emeraude": "Emerald",
+    "olive": "Olive",
+    "moutarde": "Mustard",
+    "sable": "Sand",
+    "terracotta": "Terracotta",
+    "corail": "Coral",
+    "rose-poudre": "Dusty rose",
+    "framboise": "Raspberry",
+    "prune": "Plum",
+    "lavande": "Lavender",
+    "ardoise": "Slate",
+    "graphite": "Graphite"
+  },
+  "modes": {
+    "signature": "Signature",
+    "solid": "Solid color",
+    "photo": "Conversation photo"
+  },
+  "avatarUsage": "Profile ring",
+  "frames": {
+    "haussmannien": "Haussmann",
+    "haussmannien-anime": "Haussmann, animated",
+    "arabe": "Arabesque",
+    "arabe-anime": "Arabesque, animated",
+    "grec": "Greek",
+    "grec-anime": "Greek, animated",
+    "ancestral": "Ancestral African",
+    "ancestral-anime": "Ancestral African, animated",
+    "technologique": "African tech",
+    "technologique-anime": "African tech, animated",
+    "rituel": "African ritual",
+    "rituel-anime": "African ritual, animated",
+    "celte": "Celtic",
+    "celte-anime": "Celtic, animated"
+  }
+}

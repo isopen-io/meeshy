@@ -190,6 +190,40 @@ describe('CommentComposer — le vocal (#9318)', () => {
     await attendre(() => host.querySelector('[data-comment-notice]') !== null);
     expect(host.querySelector('[data-comment-notice]')?.textContent).toBe('Micro refusé — autorisez-le dans les réglages');
   });
+
+  /* #10824 — dans la coque Android, deux refus et Android ne redemande plus :
+     seule la fiche de l'app rend le micro, comme au composeur du fil (#8882). */
+  test('dans la coque Android, un micro refusé offre « Réglages », qui ouvre la fiche de l’app', async () => {
+    const calls: string[] = [];
+    Reflect.set(globalThis, 'Capacitor', {
+      getPlatform: () => 'android',
+      PluginHeaders: [{ name: 'MeeshyNotificationSettings', methods: [{ name: 'openApp' }] }],
+      nativePromise: (plugin: string, method: string) => {
+        calls.push(`${plugin}.${method}`);
+        return Promise.resolve({});
+      },
+    });
+    try {
+      const { engine } = micro({ ok: false, reason: 'refused' });
+      const host = await monter({ recording: { engine } });
+      await cliquer(host.querySelector('[data-comment-voice]'));
+      await attendre(() => host.querySelector('[data-comment-open-settings]') !== null);
+      const settings = host.querySelector('[data-comment-open-settings]');
+      expect(settings?.textContent).toBe('Réglages');
+      await cliquer(settings);
+      expect(calls).toEqual(['MeeshyNotificationSettings.openApp']);
+    } finally {
+      Reflect.deleteProperty(globalThis, 'Capacitor');
+    }
+  });
+
+  test('dans le navigateur, le micro refusé n’offre pas de « Réglages » : sa demande de permission rejoue', async () => {
+    const { engine } = micro({ ok: false, reason: 'refused' });
+    const host = await monter({ recording: { engine } });
+    await cliquer(host.querySelector('[data-comment-voice]'));
+    await attendre(() => host.querySelector('[data-comment-notice]') !== null);
+    expect(host.querySelector('[data-comment-open-settings]')).toBeNull();
+  });
 });
 
 describe('CommentComposer — l’emoji (#9318)', () => {

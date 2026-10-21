@@ -52,8 +52,7 @@ extension CallManager {
             let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
 
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: nanos)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(nanos)), !Task.isCancelled else { return }
 
                 switch self.callState {
                 case .offering:
@@ -76,13 +75,21 @@ extension CallManager {
                         didAttemptConnectingRestart = false
                         continue
                     }
+                    // Appelé qui attend encore l'offre : l'horloge ne démarre
+                    // qu'à son arrivée, le minuteur d'offre tient cette phase.
+                    if self.isAwaitingRemoteOffer {
+                        connectingSince = nil
+                        didAttemptConnectingRestart = false
+                        break
+                    }
                     let since = connectingSince ?? Date()
                     connectingSince = since
                     let elapsed = Date().timeIntervalSince(since)
                     switch CallReliabilityPolicy.evaluateConnecting(
                         secondsInConnecting: elapsed,
                         didAttemptRestart: didAttemptConnectingRestart,
-                        failAfterSeconds: self.connectingFailBudget
+                        failAfterSeconds: self.connectingFailBudget,
+                        awaitingRemoteOffer: self.isAwaitingRemoteOffer
                     ) {
                     case .waiting:
                         break
@@ -259,7 +266,7 @@ extension CallManager {
             hasExistingStartDate: callStartDate != nil
         ) {
             callStartDate = Date()
-            analyticsConnectedDate = callStartDate
+            analytics.connectedDate = callStartDate
             callDuration = 0
         }
         // Snapshots analytics périodiques — idempotent (les reconnexions
@@ -282,8 +289,7 @@ extension CallManager {
         durationTask?.cancel()
         durationTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .seconds(1)), !Task.isCancelled else { return }
                 guard let self else { return }
                 // Défense en profondeur : un callStartDate momentanément nil ne
                 // doit PAS tuer la boucle (l'ancien `return` gelait le chrono à
@@ -322,8 +328,7 @@ extension CallManager {
         heartbeatTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 let nanos = UInt64(interval * 1_000_000_000)
-                try? await Task.sleep(nanoseconds: nanos)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(nanos)), !Task.isCancelled else { return }
                 guard let self, let callId = self.currentCallId else { return }
                 // Use the dedicated `call:heartbeat` event. The previous
                 // `call:signal` with a "heartbeat" type was rejected by the
@@ -350,5 +355,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

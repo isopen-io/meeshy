@@ -90,6 +90,29 @@ export class DailyBudgetManager {
     await pipeline.exec();
   }
 
+  // #10287 — dépense LLM du jour, en dollars, toutes conversations et tous chemins confondus.
+  private llmSpendKey(): string {
+    return `${BUDGET_PREFIX}global:llm-cost-usd:${todayKey()}`;
+  }
+
+  async getLlmSpendToday(): Promise<number> {
+    const raw = await this.redis.get(this.llmSpendKey());
+    const value = raw === null ? 0 : parseFloat(raw);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  async canSpendLlm(budgetUsd: number) {
+    const spentUsd = await this.getLlmSpendToday();
+    return { allowed: spentUsd < budgetUsd, spentUsd, budgetUsd };
+  }
+
+  async recordLlmSpend(costUsd: number): Promise<void> {
+    if (!(costUsd > 0)) return;
+    const key = this.llmSpendKey();
+    await this.redis.incrbyfloat(key, costUsd);
+    await this.redis.expire(key, BUDGET_TTL);
+  }
+
   async getTodayStats(conversationId: string) {
     const date = todayKey();
     const [messageCount, userCount] = await Promise.all([

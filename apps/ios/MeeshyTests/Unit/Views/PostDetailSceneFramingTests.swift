@@ -133,6 +133,85 @@ final class PostDetailSceneFramingTests: XCTestCase {
         XCTAssertEqual(relevee.sceneTop, 156)
     }
 
+    // MARK: - Le clavier ne rétrécit pas la scène (#8647)
+
+    /// Le clavier d'un commentaire pousse le composer vers le haut et rétrécit
+    /// la zone de défilement (684 → 348 pt sur l'iPhone 16 Pro) : relevée telle
+    /// quelle, la scène se recalculait plus petite et le contenu se remettait en
+    /// page pendant la frappe. Tant que le composer a le focus, la hauteur ne
+    /// descend plus.
+    func test_leClavierDUnCommentaire_neRetrecitPasLaScene() throws {
+        let avant = try taille(portrait, page())
+        let clavier = page().recordingViewport(CGSize(width: 402, height: 348), composerIsFocused: true)
+        XCTAssertEqual(clavier.viewport.height, 684, "la hauteur relevée a suivi le clavier")
+        XCTAssertEqual(try taille(portrait, clavier), avant, "la scène a changé de taille pendant la saisie")
+    }
+
+    /// **Le panneau « + » ne rétrécit pas la scène non plus** (#10544). Il
+    /// prend la place du clavier APRÈS avoir rendu le focus : la zone se
+    /// raccourcissait sans focus, et la scène se recalculait plus petite.
+    func test_lePanneauDesPieces_neRetrecitPasLaScene() throws {
+        let avant = try taille(portrait, page())
+        let panneau = page().recordingInputPanel(open: true)
+            .recordingViewport(CGSize(width: 402, height: 348), composerIsFocused: false)
+        XCTAssertEqual(panneau.viewport.height, 684, "la hauteur relevée a suivi le panneau")
+        XCTAssertEqual(try taille(portrait, panneau), avant, "la scène a changé de taille à l'ouverture du panneau")
+    }
+
+    /// Panneau refermé, la page reprend ce qu'elle mesure.
+    func test_lePanneauReferme_laZoneSeReleveTelleQuelle() {
+        let refermee = page().recordingInputPanel(open: true).recordingInputPanel(open: false)
+            .recordingViewport(CGSize(width: 402, height: 600), composerIsFocused: false)
+        XCTAssertEqual(refermee.viewport, CGSize(width: 402, height: 600))
+    }
+
+    /// Le détail dit le panneau à la règle AVANT qu'il ne se monte
+    /// (`onShowAttachments` est synchrone), et sa fermeture après.
+    func test_leDetail_ditLePanneauALaRegle() throws {
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { url.deleteLastPathComponent() }
+        let source = try String(contentsOf: url.appendingPathComponent(
+            "Meeshy/Features/Main/Views/PostDetailView+CommentComposer.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("onShowAttachments: { sceneMeasures = sceneMeasures.recordingInputPanel(open: true) }"))
+        XCTAssertTrue(source.contains("onAttachmentsVisibilityChange: { sceneMeasures = sceneMeasures.recordingInputPanel(open: $0) }"))
+    }
+
+    /// Le clavier rentré, la page reprend ce qu'elle mesure.
+    func test_horsSaisie_laZoneDeDefilementSeReleveTelleQuelle() {
+        let relevee = page().recordingViewport(CGSize(width: 402, height: 600), composerIsFocused: false)
+        XCTAssertEqual(relevee.viewport, CGSize(width: 402, height: 600))
+    }
+
+    /// Pendant la saisie, ce qui GRANDIT et ce qui change de LARGEUR (rotation,
+    /// iPad en Split View) se relève toujours : seul le rétrécissement vertical
+    /// est celui du clavier.
+    func test_pendantLaSaisie_uneRotationOuUnAgrandissementSeRelevent() {
+        let plusHaute = page().recordingViewport(CGSize(width: 402, height: 720), composerIsFocused: true)
+        XCTAssertEqual(plusHaute.viewport, CGSize(width: 402, height: 720))
+        let tournee = page().recordingViewport(CGSize(width: 874, height: 300), composerIsFocused: true)
+        XCTAssertEqual(tournee.viewport, CGSize(width: 874, height: 300))
+    }
+
+    /// Une page jamais mesurée prend sa première mesure, focus ou non.
+    func test_laPremiereMesure_seReleveMemeEnSaisie() {
+        let premiere = PostDetailSceneFraming.Measures()
+            .recordingViewport(CGSize(width: 402, height: 348), composerIsFocused: true)
+        XCTAssertEqual(premiere.viewport, CGSize(width: 402, height: 348))
+    }
+
+    /// Le détail RELÈVE sa zone de défilement par cette règle, avec le focus du
+    /// composer — pas par une affectation directe, qui suivait le clavier.
+    func test_leDetail_releveSaZoneDeDefilementParLaRegleDuClavier() throws {
+        var url = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { url.deleteLastPathComponent() }
+        let source = try String(contentsOf: url.appendingPathComponent(
+            "Meeshy/Features/Main/Views/PostDetailView.swift"), encoding: .utf8)
+        XCTAssertFalse(source.contains("sceneMeasures.viewport = $0"),
+                       "une affectation directe fait suivre le clavier à la scène (#8647)")
+        XCTAssertTrue(source.contains("recordingViewport($0, composerIsFocused: composerIsFocused)"),
+                      "la zone de défilement se relève par la règle du clavier")
+    }
+
     // MARK: - Le rapport servi (#6697, #6897)
 
     /// **#6897 — le cadre du canvas mono-scène suit ce que le canvas RENDU,

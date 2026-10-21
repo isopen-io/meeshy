@@ -21,9 +21,12 @@ import { generateDefaultConversationTitle } from '@meeshy/shared/utils/conversat
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
 import type { ConversationParams } from './types';
 import { conversationDetailWithEngagementResponseSchema, loadViewerEngagementsOrEmpty } from './engagement';
-import { conversationDetailInclude } from './core-selects';
+import { conversationDetailInclude, conversationUserPreferencesSelect } from './core-selects';
 import { loadReadCursorBoundaries } from './read-cursor-projection';
 import { loadViewerBirthDate } from './viewerWriteRestriction';
+import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 import { viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
 import {
   parseStrictFieldList,
@@ -207,6 +210,9 @@ export const CONVERSATION_DETAIL_SERVED_FIELDS = [
   // Ce que le lecteur n'a pas le droit d'écrire ici (#9927) — composé depuis
   // le type de la conversation et sa date de naissance déclarée.
   'viewerWriteRestriction',
+  // Le fond et l'accent PERSONNELS du lecteur (#10736) — un fil ouvert par son
+  // adresse (`/c/:id`) n'a que cette route : sans eux il se peint en Signature.
+  'userPreferences',
 ] as const;
 
 /**
@@ -240,6 +246,7 @@ export const conversationDetailPlan: ColumnPlan<typeof conversationDetailColumns
     lastReadMessageCreatedAt: [],
     viewerEngagement: [],
     viewerWriteRestriction: ['type'],
+    userPreferences: [],
   },
 };
 
@@ -376,9 +383,15 @@ export function registerConversationDetailRoute(
         return refuserCommeIntrouvable(reply);
       }
 
+      const sertPreferences = isFieldServed(champs, 'userPreferences') && !authRequest.authContext.isAnonymous;
       const conversation = await prisma.conversation.findFirst({
         where: { id: conversationId },
-        select: selectForFields(conversationDetailPlan, champs)
+        select: {
+          ...selectForFields(conversationDetailPlan, champs),
+          ...(sertPreferences
+            ? { userPreferences: { where: { userId }, take: 1, select: conversationUserPreferencesSelect } }
+            : {})
+        }
       }) as Record<string, any> | null;
 
       if (!conversation) {
@@ -510,15 +523,17 @@ export function registerConversationDetailRoute(
             return chargedParticipants.map((m: any) => {
               const liveOnline = fastify.presenceChecker?.isOnline(m.userId ?? m.id);
               const vis = presenceFor(detailPresenceViewer, presenceVis, m.userId);
+              const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
               return {
                 ...m,
+                ...(profileDecor === undefined ? {} : { profileDecor }),
                 isOnline: vis.showOnline ? (liveOnline === undefined ? m.isOnline : liveOnline) : false,
                 lastActiveAt: vis.showLastSeenTimestamp ? m.lastActiveAt : null
               };
             });
           })();
 
-      const { _count, participants: _rawParticipants, ...conversationData } = conversation;
+      const { _count, participants: _rawParticipants, userPreferences: rawPreferences, ...conversationData } = conversation;
 
       /**
        * La charge est COMPOSÉE de ce qui a été calculé, puis RESTREINTE par la
@@ -530,18 +545,24 @@ export function registerConversationDetailRoute(
        * l'est dès que `title` est demandé — et c'est la restriction qui empêche
        * ce détour d'élargir la réponse au-delà de ce que l'appelant a nommé.
        */
+      // #10205 — un invité (sans compte) ne reçoit que SA ligne et aucun effectif.
       const charge: Record<string, unknown> = { ...conversationData };
-      if (gatedParticipants !== undefined) charge.participants = gatedParticipants;
+      if (gatedParticipants !== undefined) charge.participants = membersServedToViewer(gatedParticipants, authRequest.authContext);
       if (sertTitre) charge.title = displayTitle;
+      if (sertPreferences) {
+        charge.userPreferences = ((rawPreferences ?? []) as ReadonlyArray<Record<string, unknown>>).map(
+          ({ clearHistoryBefore: _clear, readingMode: _mode, ...served }) => served
+        );
+      }
       if (sertEffectif) {
         // Même cap 199+ que la liste : deux surfaces, une seule présentation,
         // et le même droit de voir l'effectif ENTIER (`canViewExactMemberCount`).
-        Object.assign(charge, presentMemberCount(_count.participants, {
+        Object.assign(charge, memberCountServedToViewer(presentMemberCount(_count.participants, {
           viewerSeesExactCount: canViewExactMemberCount({
             platformRole: authRequest.authContext.registeredUser?.role ?? null,
             conversationRole: callerConversationRole
           })
-        }));
+        }), authRequest.authContext));
       }
       // Le rang était résolu ici depuis toujours — pour décider du plafond
       // d'effectif juste au-dessus — et n'était pas servi. Les clients

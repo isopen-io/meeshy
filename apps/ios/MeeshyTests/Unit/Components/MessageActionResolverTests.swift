@@ -44,12 +44,12 @@ final class MessageActionResolverTests: XCTestCase {
 
     func test_primaryActions_receivedText_isTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx())
-        XCTAssertEqual(a, [.select, .translate, .copy, .exportImage, .more])
+        XCTAssertEqual(a, [.reply, .select, .translate, .copy, .exportImage, .more])
     }
 
     func test_primaryActions_ownEditableText_isEditTranslateCopyMore() {
         let a = MessageActionResolver.primaryActions(ctx(isMine: true, canEdit: true, canDelete: true))
-        XCTAssertEqual(a, [.edit, .select, .translate, .copy, .exportImage, .more])
+        XCTAssertEqual(a, [.reply, .edit, .select, .translate, .copy, .exportImage, .more])
     }
 
     // MARK: - Exporter en image
@@ -57,7 +57,7 @@ final class MessageActionResolverTests: XCTestCase {
     func test_primaryActions_quickExport_onlyWithASavedDefaultFormat() {
         var withDefault = ctx()
         withDefault.hasDefaultExportFormat = true
-        XCTAssertEqual(MessageActionResolver.primaryActions(withDefault), [.select, .translate, .copy, .exportImage, .exportQuick, .more])
+        XCTAssertEqual(MessageActionResolver.primaryActions(withDefault), [.reply, .select, .translate, .copy, .exportImage, .exportQuick, .more])
         XCTAssertFalse(MessageActionResolver.primaryActions(ctx()).contains(.exportQuick))
     }
 
@@ -77,7 +77,7 @@ final class MessageActionResolverTests: XCTestCase {
 
     func test_primaryActions_singleMediaNoText_isSaveMediaMore() {
         let a = MessageActionResolver.primaryActions(ctx(hasText: false, hasMedia: true, saveableAttachmentCount: 1))
-        XCTAssertEqual(a, [.select, .saveMedia, .more])
+        XCTAssertEqual(a, [.reply, .select, .saveMedia, .more])
     }
 
     func test_primaryActions_multiMediaNoText_dropsSaveMedia_selectCoversTheFallback() {
@@ -85,7 +85,7 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertFalse(a.contains(.saveMedia), "multi-attachment passe par la galerie, pas le menu")
         // Le repli pin est SANS OBJET depuis que `.select` garantit `out`
         // non vide (voir le résolveur) — la liste se limite à Sélectionner + Plus…
-        XCTAssertEqual(a, [.select, .more], "aucune action clé au-delà de Sélectionner, toujours offerte")
+        XCTAssertEqual(a, [.reply, .select, .more], "aucune action clé au-delà de Répondre et Sélectionner")
     }
 
     func test_primaryActions_imageOnly_dropsTranslate() {
@@ -140,7 +140,7 @@ final class MessageActionResolverTests: XCTestCase {
             ctx(hasText: false, hasMedia: true,
                 saveableAttachmentCount: 1, canComposeMedia: true))
 
-        XCTAssertEqual(a, [.select, .saveMedia, .compose, .more])
+        XCTAssertEqual(a, [.reply, .select, .saveMedia, .compose, .more])
     }
 
     /// Le voisinage n'est pas décoratif : « Composer » suit immédiatement
@@ -169,7 +169,7 @@ final class MessageActionResolverTests: XCTestCase {
             ctx(hasText: false, hasMedia: true,
                 saveableAttachmentCount: 1, canComposeMedia: false))
 
-        XCTAssertEqual(a, [.select, .saveMedia, .more])
+        XCTAssertEqual(a, [.reply, .select, .saveMedia, .more])
     }
 
     // MARK: - LA règle d'offre : UN site, trois lecteurs
@@ -392,7 +392,9 @@ final class MessageActionResolverTests: XCTestCase {
     }
 
     func test_moreSections_mediaBeforeMessageDelete_whenBothPresent() {
-        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true, hasMedia: true)))
+        var author = ctx(isMine: true, canDelete: true, hasMedia: true)
+        author.canDeleteForEveryone = true
+        let items = actionItems(MessageActionResolver.moreSections(author))
         guard let mediaIdx = items.firstIndex(of: .media), let msgIdx = items.firstIndex(of: .delete) else {
             return XCTFail("media et delete attendus")
         }
@@ -576,6 +578,95 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertEqual(ComposableAttachment.target(in: message)?.id,
                        ComposableAttachment.seedPlan(in: message)?.media?.id)
     }
+
+    // MARK: - #11214 — la loi partagée : Répondre en tête, six entrées, actions du type
+
+    private func lawCtx(_ adjust: (inout MessageMenuContext) -> Void) -> MessageMenuContext {
+        var context = ctx(isMine: true, canEdit: true, canDelete: true, hasMedia: true,
+                          saveableAttachmentCount: 1, canComposeMedia: true)
+        context.hasDefaultExportFormat = true
+        context.hasPaintableMedia = true
+        adjust(&context)
+        return context
+    }
+
+    func test_primaryActions_replyLeads_whenTheLawAdmitsIt() {
+        XCTAssertEqual(MessageActionResolver.primaryActions(ctx()).first, .reply)
+        var mute = ctx()
+        mute.canReply = false
+        XCTAssertFalse(MessageActionResolver.primaryActions(mute).contains(.reply))
+        XCTAssertFalse(actionItems(MessageActionResolver.moreSections(mute)).contains(.reply))
+    }
+
+    func test_primaryActions_aFailedSend_leadsWithRetry() {
+        var failed = ctx(isMine: true)
+        failed.isFailed = true
+        failed.canReply = false
+        XCTAssertEqual(MessageActionResolver.primaryActions(failed).first, .retry)
+    }
+
+    func test_primaryActions_neverExceedSixBeforeMore() {
+        let crowded = lawCtx { $0.kindActions = [.openLink, .copyLink] }
+        let actions = MessageActionResolver.primaryActions(crowded)
+        XCTAssertLessThanOrEqual(actions.filter { $0 != .more }.count, MessageActionPolicy.maxPrimaryActions)
+        XCTAssertEqual(actions.last, .more)
+        XCTAssertEqual(actions.first, .reply)
+    }
+
+    /// Au-delà de six, ce qui a un jumeau dans « Plus… » y passe d'abord :
+    /// enregistrer et composer n'ont pas de jumeau, « Imager » et « Copier » si.
+    func test_primaryActions_overflow_keepsWhatHasNoTwinInMore() {
+        let actions = MessageActionResolver.primaryActions(lawCtx { _ in })
+        XCTAssertTrue(actions.contains(.saveMedia))
+        XCTAssertTrue(actions.contains(.compose))
+        XCTAssertTrue(actions.contains(.edit))
+        XCTAssertFalse(actions.contains(.exportQuick))
+        XCTAssertTrue(actionItems(MessageActionResolver.moreSections(lawCtx { _ in })).contains(.imager))
+    }
+
+    func test_primaryActions_typeActions_followReply() {
+        let link = lawCtx { $0.kindActions = [.openLink, .copyLink] }
+        XCTAssertEqual(Array(MessageActionResolver.primaryActions(link).prefix(3)), [.reply, .openLink, .copyLink])
+    }
+
+    func test_aPlace_opensInMaps_andOffersNoMediaDeletionNorCopy() {
+        let place = lawCtx {
+            $0.isLocation = true
+            $0.kindActions = [.openInMaps, .copyAddress]
+        }
+        let primary = MessageActionResolver.primaryActions(place)
+        XCTAssertTrue(primary.contains(.openInMaps))
+        XCTAssertFalse(primary.contains(.copy))
+        XCTAssertFalse(actionItems(MessageActionResolver.moreSections(place)).contains(.media),
+                       "un lieu n'a pas de média à supprimer")
+    }
+
+    func test_aDeletedMessage_offersOnlyDeleteForMe() {
+        var gone = ctx(isMine: true, canDelete: true)
+        gone.isGone = true
+        XCTAssertEqual(MessageActionResolver.primaryActions(gone), [.more])
+        XCTAssertEqual(MessageActionResolver.moreSections(gone), [.actions([.delete])])
+    }
+
+    func test_theLawsVerdicts_retirePinStarAndReport() {
+        var guest = ctx()
+        guest.canPin = false
+        guest.canStar = false
+        guest.canReport = false
+        let sections = MessageActionResolver.moreSections(guest)
+        let items = actionItems(sections)
+        for item in [MoreItem.pin, .unpin, .star, .unstar] { XCTAssertFalse(items.contains(item)) }
+        XCTAssertFalse(sections.contains { if case .moderation = $0 { return true }; return false })
+    }
+
+    func test_endToEnd_retiresServerTranscription_keepsOnDeviceSentiment() {
+        var sealed = ctx(hasTimebasedMedia: true)
+        sealed.serverFeaturesAbsent = true
+        let info = infoItems(MessageActionResolver.moreSections(sealed))
+        XCTAssertFalse(info.contains(.transcription))
+        XCTAssertTrue(info.contains(.sentiment), "le sentiment se calcule sur l'appareil (NLTagger)")
+        XCTAssertTrue(info.contains(.language), "la traduction servie du texte reste lisible")
+    }
 }
 
 // MARK: - La loi de sortie, projetée sur l'application (#9573)
@@ -671,9 +762,9 @@ final class MessageExitOfferTests: XCTestCase {
 
     /// Le flou et le chiffrement gardent leurs restrictions, composées avec la loi.
     func test_matrix_blurAndEncryption_composeWithTheLaw() {
-        XCTAssertEqual(offered(message(effects: MessageEffects(flags: .blurred)).exitOffer), [],
-                       "un message flouté ne laisse rien sortir (#8009)")
-        XCTAssertEqual(offered(message(attachments: [photo(isBlurred: true)]).exitOffer), [])
+        XCTAssertEqual(offered(message(effects: MessageEffects(flags: .blurred)).exitOffer), [.forward],
+                       "un message flouté se transfère, flou hérité, et rien d'autre ne sort (#8009, D8 de #10949)")
+        XCTAssertEqual(offered(message(attachments: [photo(isBlurred: true)]).exitOffer), [.forward])
         XCTAssertEqual(offered(message(isEncrypted: true).exitOffer), Set(MessageExit.allCases).subtracting([.publish]),
                        "un message chiffré ne se publie pas")
         XCTAssertEqual(offered(message(attachments: [photo(isEncrypted: true)]).exitOffer),
@@ -715,7 +806,8 @@ final class MessageExitOfferTests: XCTestCase {
 
     func test_menus_ordinary_renderEveryExit() {
         let ordinary = message(of: .ordinary, attachments: [photo()])
-        XCTAssertEqual(primaryExits(ordinary), exitActions)
+        XCTAssertEqual(primaryExits(ordinary), [.copy, .saveMedia, .compose],
+                       "au-delà de six entrées, « Imager » et l'export rapide passent dans « Plus… »")
         XCTAssertEqual(moreExits(ordinary), exitItems)
     }
 
@@ -758,63 +850,28 @@ final class MessageExitOfferTests: XCTestCase {
 
     // MARK: - Sélection multiple
 
-    func test_selection_offersForward_onlyWhenEveryMessageForwards() {
+    /// D6 (#10949) : une sélection mixte s'ouvre sur l'écran de partage, qui
+    /// RETIRE le protégé avec son motif et envoie le reste ; seule une sélection
+    /// où rien ne sort retire l'action. D8 : un flouté se transfère.
+    func test_selection_offersForward_whenAtLeastOneMessageForwards() {
         let ordinary = message(of: .ordinary, id: "a")
         let timed = message(of: .timedFlame, id: "b")
         XCTAssertTrue(MessageExitOffer.selectionOffersForward([]))
         XCTAssertTrue(MessageExitOffer.selectionOffersForward([ordinary, timed]))
         for nature in [Nature.afterReadFlame, .viewOnce] {
-            XCTAssertFalse(MessageExitOffer.selectionOffersForward([ordinary, message(of: nature, id: "c"), timed]),
-                           "\(nature) : un seul message non transférable retire l'action")
+            XCTAssertTrue(MessageExitOffer.selectionOffersForward([ordinary, message(of: nature, id: "c"), timed]),
+                          "\(nature) : le protégé est retiré par l'écran, le reste part")
+            XCTAssertFalse(MessageExitOffer.selectionOffersForward([message(of: nature, id: "c")]),
+                           "\(nature) : rien ne sort, l'action n'est pas rendue")
         }
-        XCTAssertFalse(MessageExitOffer.selectionOffersForward([ordinary, message("d", effects: MessageEffects(flags: .blurred))]))
+        XCTAssertTrue(MessageExitOffer.selectionOffersForward([message("d", effects: MessageEffects(flags: .blurred))]))
     }
 
-    // MARK: - Feuille de transfert
-
-    func test_forwardSheet_ordinary_hasNoDurationRow_andPublishes() {
-        let offer = ForwardSheetOffer(message: message(of: .ordinary))
-        XCTAssertTrue(offer.durationChoices.isEmpty)
-        XCTAssertNil(offer.selectedDuration(chosen: nil))
-        XCTAssertTrue(offer.publishes)
-        XCTAssertTrue(offer.imaginesDiscussion)
-    }
-
-    func test_forwardSheet_timedFlame_offersTiersUpToTheSource_preselected_andNothingElse() {
-        let offer = ForwardSheetOffer(message: message(of: .timedFlame))
-        XCTAssertEqual(offer.durationChoices.map(\.seconds), [15, 30, 60, 300])
-        XCTAssertEqual(offer.selectedDuration(chosen: nil), 300, "la durée de la source est présélectionnée")
-        XCTAssertEqual(offer.selectedDuration(chosen: 30), 30)
-        XCTAssertEqual(offer.selectedDuration(chosen: 3600), 300, "un palier au-dessus de la source n'est pas un choix")
-        XCTAssertFalse(offer.publishes)
-        XCTAssertFalse(offer.imaginesDiscussion)
-    }
-
-    func test_forwardSheet_offTierSource_showsItsDurationFirst() {
-        let flame = message(effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 45))
-        let offer = ForwardSheetOffer(message: flame)
-        XCTAssertEqual(offer.durationChoices.map(\.seconds), [45, 15, 30])
-        XCTAssertEqual(offer.selectedDuration(chosen: nil), 45)
-    }
-
-    func test_forwardSheet_batch_isBoundedByItsLongestFlame() {
-        let short = message("a", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 30))
-        let long = message("b", effects: MessageEffects(flags: .ephemeral, ephemeralDuration: 300))
-        let offer = ForwardSheetOffer(message: short, additionalMessages: [message(of: .ordinary, id: "c"), long])
-        XCTAssertEqual(offer.durationChoices.map(\.seconds), [15, 30, 60, 300])
-        XCTAssertFalse(offer.publishes, "le message désigné est une flamme")
-    }
-
-    func test_forwardSheet_refusedBatch_hasNoDurationRow() {
-        let offer = ForwardSheetOffer(message: message(of: .timedFlame, id: "a"),
-                                      additionalMessages: [message(of: .viewOnce, id: "b")])
-        XCTAssertFalse(offer.forward.isAllowed)
-        XCTAssertTrue(offer.durationChoices.isEmpty)
-    }
+    // MARK: - Rangée de durée de l'écran de partage
 
     func test_durationRow_speaksAWholeDuration() {
-        XCTAssertFalse(ForwardDurationRow.spokenDuration(seconds: 30).isEmpty)
-        XCTAssertNotEqual(ForwardDurationRow.spokenDuration(seconds: 30), ForwardDurationRow.spokenDuration(seconds: 300))
+        XCTAssertFalse(ShareDurationRow.spokenDuration(seconds: 30).isEmpty)
+        XCTAssertNotEqual(ShareDurationRow.spokenDuration(seconds: 30), ShareDurationRow.spokenDuration(seconds: 300))
     }
 
     // MARK: - Visionneuses
@@ -1000,23 +1057,29 @@ final class MessageExitOfferTests: XCTestCase {
     /// une requête d'enregistrement lui-même : tous passent par le transport.
     func test_conversationSurfaces_neverExitWithoutTheTransport() throws {
         for path in ["Views/ConversationView.swift", "Views/ConversationView+MessageRow.swift",
-                     "Views/ConversationView+NativeMessageMenu.swift", "Components/MessageOverlayMenu.swift",
-                     "Components/MessageMoreSheet.swift"] {
+                     "Components/MessageOverlayMenu.swift",
+                     "Components/MessageMoreSheet.swift", "Views/ConversationView+MessageSheets.swift",
+                     "Views/ConversationView+OverlayMenu.swift", "Views/ConversationView+MessageListLayer.swift"] {
             let code = try source(path)
             XCTAssertFalse(code.contains("UIPasteboard.general.string="), "\(path) : la copie passe par MessageExitTransport.copy")
             XCTAssertFalse(code.contains("mediaSaveCoordinator.save("),
                            "\(path) : l'enregistrement passe par MessageExitTransport.save")
         }
-        let host = try source("Views/ConversationView.swift")
-        XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.copy(").count - 1, 2)
+        // Les menus du message (feuilles, overlay d'appui long) ont quitté l'hôte : son unité les compte.
+        let host = try source("Views/ConversationView.swift") + source("Views/ConversationView+MessageSheets.swift")
+            + source("Views/ConversationView+OverlayMenu.swift")
+        // #11233 — les deux « Copier » du message copient le texte AFFICHÉ, par le site unique.
+        XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.copyDisplayed(msg,in:viewModel)").count - 1, 2)
         XCTAssertEqual(host.components(separatedBy: "MessageExitTransport.save(msg,through:mediaSaveCoordinator)").count - 1, 2)
         XCTAssertTrue(host.contains("onShare:{ifMessageExitTransport.mayShare(msg){overlayState.shareMessage=msg}}"))
     }
 
-    func test_river_copyIsGuardedInTheGestureToo() throws {
+    /// #11224 — la Rivière n'a plus de menu à elle : sa copie est celle du menu
+    /// unifié, gardée par le transport. Elle n'écrit plus dans le presse-papiers.
+    func test_river_neverCopiesByItself_theUnifiedMenuDoes() throws {
         let code = try source("Riviere/View/RiverBubbleView.swift")
-        XCTAssertTrue(code.contains("ifcontent.viewOnceChip==nil,content.offersCopy{Button{ifcontent.offersCopy{UIPasteboard.general.string=content.text}}"))
-        XCTAssertEqual(code.components(separatedBy: "UIPasteboard").count - 1, 1)
+        XCTAssertFalse(code.contains("UIPasteboard"))
+        XCTAssertTrue(code.contains("onLongPress(content.bubble.messageId)"))
     }
 
     func test_gallery_bothTransportsAskTheGate_andTheMenuHandsItToTheCoordinator() throws {
@@ -1029,7 +1092,7 @@ final class MessageExitOfferTests: XCTestCase {
     }
 
     func test_audioFullscreen_saveIsGatedInButtonAndGesture() throws {
-        let code = try source("Views/AudioFullscreenView.swift")
+        let code = try source("Views/AudioFullscreenPage.swift") + source("Views/AudioFullscreenPage+Transcription.swift")
         XCTAssertTrue(code.contains("ContentExitGated(contentId:attachment.id){downloadButton}"))
         XCTAssertTrue(code.contains("privatefuncrequestSave(){saveCoordinator.exitGate=exitGateguardexitGate.mayLeave(attachment.id)else{return}"))
         XCTAssertEqual(code.components(separatedBy: "saveCoordinator.requestSave(").count - 1, 1)
@@ -1079,7 +1142,7 @@ final class MessageExitOfferTests: XCTestCase {
         XCTAssertEqual(openCoordinators, coordinators)
         // L'aperçu AVANT envoi : le seul portillon ouvert de l'écran de
         // conversation, nommé par son type et réservé au média du composeur.
-        let host = try source("Views/ConversationView.swift")
+        let host = try source("Views/ConversationView.swift") + source("Views/ConversationView+Presentations.swift")
         XCTAssertEqual(host.components(separatedBy: "ComposerPreviewExit.gate").count - 1, 1)
         XCTAssertTrue(host.contains(".conversationCover(item:$composerState.previewMedia)"))
         XCTAssertTrue(host.contains("ImageFullscreen(imageUrl:media.url,accentColor:accentColor).contentExitGate(ComposerPreviewExit.gate)"))

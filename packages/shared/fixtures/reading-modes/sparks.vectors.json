@@ -1,0 +1,1199 @@
+{
+  "$format": "{ law, ...paramètres } — la loi des étincelles (mint-cost-factor, mint-price, sparks-of, sparks-mint-preview, treasury-access, treasury-lock, sparks-credit, sparks-prestige). `expected` est la sortie de la loi TypeScript (utils/game/sparks.ts, treasury.ts).",
+  "vectors": [
+    {
+      "_label": "facteur de coût au niveau 0",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 0
+      },
+      "expected": {
+        "permille": 500
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 1",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 1
+      },
+      "expected": {
+        "permille": 505
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 10",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 10
+      },
+      "expected": {
+        "permille": 550
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 50",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 50
+      },
+      "expected": {
+        "permille": 750
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 99",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 99
+      },
+      "expected": {
+        "permille": 995
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 100",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 100
+      },
+      "expected": {
+        "permille": 1000
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 101",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 101
+      },
+      "expected": {
+        "permille": 1000
+      }
+    },
+    {
+      "_label": "facteur de coût au niveau 500",
+      "input": {
+        "law": "mint-cost-factor",
+        "level": 500
+      },
+      "expected": {
+        "permille": 1000
+      }
+    },
+    {
+      "_label": "prix de la 1re pièce au niveau 1",
+      "input": {
+        "law": "mint-price",
+        "number": 1,
+        "level": 1
+      },
+      "expected": {
+        "price": 617
+      }
+    },
+    {
+      "_label": "prix de la 1re pièce au niveau 100",
+      "input": {
+        "law": "mint-price",
+        "number": 1,
+        "level": 100
+      },
+      "expected": {
+        "price": 1221
+      }
+    },
+    {
+      "_label": "prix de la 11e pièce au niveau 50",
+      "input": {
+        "law": "mint-price",
+        "number": 11,
+        "level": 50
+      },
+      "expected": {
+        "price": 1190
+      }
+    },
+    {
+      "_label": "prix de la 101e pièce au niveau 1 (plafond de rang)",
+      "input": {
+        "law": "mint-price",
+        "number": 101,
+        "level": 1
+      },
+      "expected": {
+        "price": 8361
+      }
+    },
+    {
+      "_label": "prix de la 101e pièce au niveau 100 (plafond de rang)",
+      "input": {
+        "law": "mint-price",
+        "number": 101,
+        "level": 100
+      },
+      "expected": {
+        "price": 16556
+      }
+    },
+    {
+      "_label": "étincelles d'un compte à jour",
+      "input": {
+        "law": "sparks-of",
+        "engagementScore": 200,
+        "sparksSincePrestige": 9000,
+        "sparksEarnedLifetime": 12000
+      },
+      "expected": {
+        "pocket": 200,
+        "cycle": 9000,
+        "lifetime": 12000,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "étincelles d'un compte d'avant le rattrapage",
+      "input": {
+        "law": "sparks-of",
+        "engagementScore": 800
+      },
+      "expected": {
+        "pocket": 800,
+        "cycle": 800,
+        "lifetime": 800,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "étincelles au-delà d'un Int32",
+      "input": {
+        "law": "sparks-of",
+        "engagementScore": 10,
+        "sparksSincePrestige": 2147483700,
+        "sparksEarnedLifetime": 4000000000
+      },
+      "expected": {
+        "pocket": 10,
+        "cycle": 2147483700,
+        "lifetime": 4000000000,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "frappe : poche au niveau 9, la frappe le fait baisser",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 8200,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 1,
+        "price": 665,
+        "basePrice": 1221,
+        "costFactor": 0.545,
+        "costLevel": 9,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 9,
+        "levelAfter": 8,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : poche vide, niveau 1",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 0,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 1,
+        "price": 617,
+        "basePrice": 1221,
+        "costFactor": 0.505,
+        "costLevel": 1,
+        "edition": "silver",
+        "canMint": false,
+        "missingPoints": 617,
+        "levelBefore": 1,
+        "levelAfter": 1,
+        "levelsLost": 0,
+        "gloryGained": 0,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : la 100e pièce entre au Coffre sans le rang",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 90000,
+        "mintedLifetime": 99,
+        "held": 99,
+        "glory": 500,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 100,
+        "price": 8416,
+        "basePrice": 12948,
+        "costFactor": 0.65,
+        "costLevel": 30,
+        "edition": "gold",
+        "canMint": false,
+        "missingPoints": 0,
+        "levelBefore": 30,
+        "levelAfter": 30,
+        "levelsLost": 0,
+        "gloryGained": 0,
+        "locked": {
+          "tier": "coffre",
+          "minHeld": 100,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : la 100e pièce entre au Coffre avec Voix I",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 90000,
+        "mintedLifetime": 99,
+        "held": 99,
+        "glory": 13200,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 100,
+        "price": 8416,
+        "basePrice": 12948,
+        "costFactor": 0.65,
+        "costLevel": 30,
+        "edition": "gold",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 30,
+        "levelAfter": 28,
+        "levelsLost": 2,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : bloquée par une dette d'étincelles",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 90000,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499,
+        "debt": 250
+      },
+      "expected": {
+        "number": 1,
+        "price": 794,
+        "basePrice": 1221,
+        "costFactor": 0.65,
+        "costLevel": 30,
+        "edition": "silver",
+        "canMint": false,
+        "missingPoints": 0,
+        "levelBefore": 30,
+        "levelAfter": 30,
+        "levelsLost": 0,
+        "gloryGained": 0,
+        "locked": null,
+        "blockedBy": "debt",
+        "sparksDebt": 250
+      }
+    },
+    {
+      "_label": "étincelles avec une dette",
+      "input": {
+        "law": "sparks-of",
+        "engagementScore": 40,
+        "sparksDebt": 250
+      },
+      "expected": {
+        "pocket": 40,
+        "cycle": 40,
+        "lifetime": 40,
+        "debt": 250
+      }
+    },
+    {
+      "_label": "frappe : numéro indépendant de la bourse",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 90000,
+        "mintedLifetime": 7,
+        "held": 3,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 8,
+        "price": 794,
+        "basePrice": 1221,
+        "costFactor": 0.65,
+        "costLevel": 30,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 30,
+        "levelAfter": 29,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "réserves sans rang",
+      "input": {
+        "law": "treasury-access",
+        "glory": 0
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": true,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": true,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": true,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "réserves à Voix II (n'ouvre pas le Coffre)",
+      "input": {
+        "law": "treasury-access",
+        "glory": 11400
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": true,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": true,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": true,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "réserves à Voix I (ouvre le Coffre)",
+      "input": {
+        "law": "treasury-access",
+        "glory": 13200
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": false,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": true,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": true,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "réserves à Polyglotte III (ouvre le Trésor)",
+      "input": {
+        "law": "treasury-access",
+        "glory": 94000
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": false,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": false,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": true,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "réserves à Ambassadeur IV (ne rouvre pas la Réserve)",
+      "input": {
+        "law": "treasury-access",
+        "glory": 150000
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": false,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": false,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": true,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "réserves à Ambassadeur III (ouvre la Réserve)",
+      "input": {
+        "law": "treasury-access",
+        "glory": 170000
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": false,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": false,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": false,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "réserves du Mythe",
+      "input": {
+        "law": "treasury-access",
+        "glory": 0,
+        "mythic": true
+      },
+      "expected": [
+        {
+          "key": "bourse",
+          "minHeld": 1,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "escarcelle",
+          "minHeld": 10,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffret",
+          "minHeld": 50,
+          "locked": false,
+          "requires": null
+        },
+        {
+          "key": "coffre",
+          "minHeld": 100,
+          "locked": false,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        },
+        {
+          "key": "tresor",
+          "minHeld": 500,
+          "locked": false,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        },
+        {
+          "key": "reserve",
+          "minHeld": 1000,
+          "locked": false,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      ]
+    },
+    {
+      "_label": "verrou : la 99e est libre",
+      "input": {
+        "law": "treasury-lock",
+        "held": 98,
+        "glory": 0
+      },
+      "expected": {
+        "lock": null
+      }
+    },
+    {
+      "_label": "verrou : la 100e sans rang",
+      "input": {
+        "law": "treasury-lock",
+        "held": 99,
+        "glory": 0
+      },
+      "expected": {
+        "lock": {
+          "tier": "coffre",
+          "minHeld": 100,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        }
+      }
+    },
+    {
+      "_label": "verrou : la 500e sous Polyglotte III",
+      "input": {
+        "law": "treasury-lock",
+        "held": 499,
+        "glory": 13200
+      },
+      "expected": {
+        "lock": {
+          "tier": "tresor",
+          "minHeld": 500,
+          "requires": {
+            "rank": "polyglotte",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      }
+    },
+    {
+      "_label": "verrou : la 1000e sous Ambassadeur III",
+      "input": {
+        "law": "treasury-lock",
+        "held": 999,
+        "glory": 94000
+      },
+      "expected": {
+        "lock": {
+          "tier": "reserve",
+          "minHeld": 1000,
+          "requires": {
+            "rank": "ambassadeur",
+            "division": 2,
+            "division5": 3
+          }
+        }
+      }
+    },
+    {
+      "_label": "verrou : la 1000e avec Ambassadeur III",
+      "input": {
+        "law": "treasury-lock",
+        "held": 999,
+        "glory": 170000
+      },
+      "expected": {
+        "lock": null
+      }
+    },
+    {
+      "_label": "verrou : le Mythe ouvre toutes les réserves",
+      "input": {
+        "law": "treasury-lock",
+        "held": 999,
+        "glory": 0,
+        "mythic": true
+      },
+      "expected": {
+        "lock": null
+      }
+    },
+    {
+      "_label": "verrou : déjà au Coffre sans le rang, la 101e reste barrée",
+      "input": {
+        "law": "treasury-lock",
+        "held": 100,
+        "glory": 0
+      },
+      "expected": {
+        "lock": {
+          "tier": "coffre",
+          "minHeld": 100,
+          "requires": {
+            "rank": "voix",
+            "division": 1,
+            "division5": 1
+          }
+        }
+      }
+    },
+    {
+      "_label": "frappe : l'étape retient au 9, la 1re Meesh la fait et le niveau d'après MONTE",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 16900,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499,
+        "steps": {
+          "missionsDone": 0,
+          "flameRecord": 0,
+          "glory": 0,
+          "rank": "murmure"
+        }
+      },
+      "expected": {
+        "number": 1,
+        "price": 665,
+        "basePrice": 1221,
+        "costFactor": 0.545,
+        "costLevel": 9,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 9,
+        "levelAfter": 12,
+        "levelsLost": 0,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : étapes faites jusqu'au 19, le niveau d'après se lit sous le même palier",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 62500,
+        "mintedLifetime": 3,
+        "held": 3,
+        "glory": 0,
+        "levelCap": 499,
+        "steps": {
+          "missionsDone": 0,
+          "flameRecord": 0,
+          "glory": 0,
+          "rank": "murmure"
+        }
+      },
+      "expected": {
+        "number": 4,
+        "price": 726,
+        "basePrice": 1221,
+        "costFactor": 0.595,
+        "costLevel": 19,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 19,
+        "levelAfter": 19,
+        "levelsLost": 0,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : la Gloire de la frappe fait passer Écho, et rouvre le palier du 30",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 122500,
+        "mintedLifetime": 3,
+        "held": 3,
+        "glory": 1999,
+        "levelCap": 499,
+        "steps": {
+          "missionsDone": 1,
+          "flameRecord": 0,
+          "glory": 1999,
+          "rank": "murmure"
+        }
+      },
+      "expected": {
+        "number": 4,
+        "price": 788,
+        "basePrice": 1221,
+        "costFactor": 0.645,
+        "costLevel": 29,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 29,
+        "levelAfter": 34,
+        "levelsLost": 0,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : la poche (niveau 2) couvre juste le prix",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 623,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 1,
+        "price": 623,
+        "basePrice": 1221,
+        "costFactor": 0.51,
+        "costLevel": 2,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 2,
+        "levelAfter": 1,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : il manque une étincelle",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 622,
+        "mintedLifetime": 0,
+        "held": 0,
+        "glory": 0,
+        "levelCap": 499
+      },
+      "expected": {
+        "number": 1,
+        "price": 623,
+        "basePrice": 1221,
+        "costFactor": 0.51,
+        "costLevel": 2,
+        "edition": "silver",
+        "canMint": false,
+        "missingPoints": 1,
+        "levelBefore": 2,
+        "levelAfter": 2,
+        "levelsLost": 0,
+        "gloryGained": 0,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "frappe : plein tarif au-delà du niveau 100, sous le plafond d'Oracle",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 2250007,
+        "mintedLifetime": 120,
+        "held": 40,
+        "glory": 380000,
+        "levelCap": null
+      },
+      "expected": {
+        "number": 121,
+        "price": 16556,
+        "basePrice": 16556,
+        "costFactor": 1,
+        "costLevel": 150,
+        "edition": "silver",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 150,
+        "levelAfter": 149,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    },
+    {
+      "_label": "crédit sans dette : poche, cycle et total à vie montent du gain",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 200,
+        "cycle": 9000,
+        "lifetime": 12000,
+        "debt": 0,
+        "points": 150
+      },
+      "expected": {
+        "pocket": 350,
+        "cycle": 9150,
+        "lifetime": 12150,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "crédit sous une dette plus forte : la poche ne bouge pas, la dette baisse",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 40,
+        "cycle": 900,
+        "lifetime": 1200,
+        "debt": 250,
+        "points": 150
+      },
+      "expected": {
+        "pocket": 40,
+        "cycle": 1050,
+        "lifetime": 1350,
+        "debt": 100
+      }
+    },
+    {
+      "_label": "crédit qui solde la dette : le reste va en poche",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 40,
+        "cycle": 900,
+        "lifetime": 1200,
+        "debt": 100,
+        "points": 150
+      },
+      "expected": {
+        "pocket": 90,
+        "cycle": 1050,
+        "lifetime": 1350,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "crédit d'un compte d'avant le rattrapage : le cycle se pose sur la poche",
+      "input": {
+        "law": "sparks-credit",
+        "pocket": 800,
+        "cycle": 0,
+        "lifetime": 0,
+        "debt": 0,
+        "points": 36
+      },
+      "expected": {
+        "pocket": 836,
+        "cycle": 836,
+        "lifetime": 836,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "Prestige : poche et cycle repartent de zéro, total à vie et dette restent",
+      "input": {
+        "law": "sparks-prestige",
+        "pocket": 1000200,
+        "cycle": 1400000,
+        "lifetime": 3000000,
+        "debt": 0
+      },
+      "expected": {
+        "pocket": 0,
+        "cycle": 0,
+        "lifetime": 3000000,
+        "debt": 0
+      }
+    },
+    {
+      "_label": "Prestige sous une dette : elle survit au passage",
+      "input": {
+        "law": "sparks-prestige",
+        "pocket": 1000200,
+        "cycle": 1000200,
+        "lifetime": 1000200,
+        "debt": 75
+      },
+      "expected": {
+        "pocket": 0,
+        "cycle": 0,
+        "lifetime": 1000200,
+        "debt": 75
+      }
+    },
+    {
+      "_label": "frappe : le Mythe frappe la 1000e",
+      "input": {
+        "law": "sparks-mint-preview",
+        "sparks": 4000000,
+        "mintedLifetime": 999,
+        "held": 999,
+        "glory": 0,
+        "levelCap": null,
+        "mythic": true
+      },
+      "expected": {
+        "number": 1000,
+        "price": 16556,
+        "basePrice": 16556,
+        "costFactor": 1,
+        "costLevel": 200,
+        "edition": "prism",
+        "canMint": true,
+        "missingPoints": 0,
+        "levelBefore": 200,
+        "levelAfter": 199,
+        "levelsLost": 1,
+        "gloryGained": 1000,
+        "locked": null,
+        "blockedBy": null,
+        "sparksDebt": 0
+      }
+    }
+  ]
+}

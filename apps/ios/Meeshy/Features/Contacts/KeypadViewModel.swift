@@ -35,7 +35,7 @@ final class KeypadViewModel: ObservableObject {
         self.userService = userService
     }
 
-    deinit {
+    nonisolated deinit {
         searchTask?.cancel()
     }
 
@@ -86,8 +86,7 @@ final class KeypadViewModel: ObservableObject {
     func scheduleSearch() {
         searchTask?.cancel()
         searchTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }
             await self?.search()
         }
     }

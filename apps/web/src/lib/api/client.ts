@@ -3,7 +3,11 @@ import { withEmailGate } from '../activation/email-gated-transport';
 
 import { apiConfig } from './config';
 import { createHttpTransport, type ApiFailure, type ApiResult, type Credential, type HttpTransport } from './http';
+import { navigate } from '../router';
+
 import { endRevokedSession } from './account-caches';
+import { retireDeletedAccountLater } from './account-deleted';
+import { endGuestAccess } from './guest-access-end';
 import { VIEWER_ID } from './fixtures-base';
 import { ownerCredentialOf, ownerScopeOf, type OwnerCredential } from './owner-session';
 import { sessionIdentityKey, sessionStore, type SessionState } from './session';
@@ -89,6 +93,8 @@ export const httpTransport: HttpTransport = withEmailGate(
     identity: () => sessionIdentityKey(sessionStore.getState().session),
     deviceLocale: currentDeviceLocale,
     onUnauthorized: () => endRevokedSession(sessionStore),
+    onAccountDeleted: retireDeletedAccountLater,
+    onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
   }),
   { ask: emailGate.ask, emailUnproven: () => sessionEmailUnproven(sessionStore.getState().session) },
 );

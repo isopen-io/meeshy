@@ -5,6 +5,10 @@
       "id": "futuriste.hud",
       "mood": "futuriste",
       "name": "HUD",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -158,6 +162,10 @@
       "id": "futuriste.hologramme",
       "mood": "futuriste",
       "name": "Hologramme",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "arch",
@@ -283,6 +291,10 @@
       "id": "futuriste.orbite",
       "mood": "futuriste",
       "name": "Orbite",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "orbit",
@@ -402,6 +414,9 @@
       "id": "futuriste.essaim",
       "mood": "futuriste",
       "name": "Essaim",
+      "surfaces": [
+        "capture"
+      ],
       "base": {
         "layout": {
           "arrangement": "honeycomb",

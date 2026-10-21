@@ -59,12 +59,15 @@ extension CallManager {
     /// the banner lingers until its 15s auto-dismiss and "End & Answer" would
     /// end the healthy active call to join one already torn down server-side.
     func clearPendingIncomingCall(ifMatching callId: String) {
+        // PENDANT la passation de « Raccrocher et répondre », `pendingIncomingCall` est déjà vide : seul le jeton
+        // nomme l'appel. Le lever AVANT le garde du bandeau — sinon la passation sonnait pour un appel raccroché.
+        if answeringPendingCallId == callId {
+            answeringPendingCallId = nil
+            Logger.calls.info("Waiting call ended remotely during the handoff — answer cancelled (callId=\(callId))")
+        }
         guard pendingIncomingCall?.callId == callId else { return }
         pendingIncomingCall = nil
         showCallWaitingBanner = false
-        if answeringPendingCallId == callId {
-            answeringPendingCallId = nil
-        }
         Logger.calls.info("Waiting call ended remotely — call-waiting banner dismissed (callId=\(callId))")
     }
 
@@ -77,7 +80,7 @@ extension CallManager {
         endCall()
 
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.endAndAnswerPendingHandoffSeconds))
+            _ = await cancellableSleep(for: .seconds(QualityThresholds.endAndAnswerPendingHandoffSeconds))
             guard let self else { return }
             // The waiting call may have been ended, answered elsewhere, or
             // replaced by a newer incoming call while we were asleep — only
@@ -91,15 +94,20 @@ extension CallManager {
                 callId: pending.callId,
                 fromUserId: pending.fromUserId,
                 fromUsername: pending.fromUsername,
-                isVideo: pending.isVideo,
+                isVideo: pending.kind.isVideo,
                 iceServers: pending.iceServers,
                 conversationId: pending.conversationId
             )
+            // La passation remet l'appel à sonner ; l'utilisateur a déjà choisi
+            // de répondre — y répondre, sans second appui sur Accepter.
+            guard self.currentCallId == pending.callId,
+                  case .ringing(isOutgoing: false) = self.callState else { return }
+            self.answerCall()
         }
     }
 
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

@@ -92,6 +92,14 @@ struct StickerPackModelsTests {
         #expect(pack.sendableItems.map(\.key) == ["bonjour", "danse"])
     }
 
+    /// **Seul un sticker CINÉMATIQUE anime** (#9210) : sa vignette joue dans la
+    /// feuille et son fichier part tel quel. Un fixe, un Instant ou un genre
+    /// inconnu restent une image.
+    @Test func onlyCinematicItems_areAnimated() throws {
+        let pack: StickerPack = try decode(Self.detailJSON)
+        #expect(pack.items.map(\.isAnimated) == [false, true, false])
+    }
+
     // MARK: - Le gabarit d'un sticker de pack
 
     @Test func templateID_isTheWebContract() {

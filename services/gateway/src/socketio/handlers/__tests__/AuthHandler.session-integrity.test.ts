@@ -22,6 +22,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { StatusService } from '../../../services/StatusService';
@@ -51,13 +52,14 @@ const createMockPrisma = (): PrismaClient => ({
     findUnique: jest.fn(),
     findMany: jest.fn().mockResolvedValue([])
   },
+  userSession: { findFirst: jest.fn(async () => liveSession()) },
   callParticipant: {
     findMany: jest.fn().mockResolvedValue([])
   }
 } as unknown as PrismaClient);
 
 const activeUserRow = (overrides: Record<string, unknown> = {}) => ({
-  id: 'user-123',
+  id: 'aaaaaaaaaaaaaaaaaaaa0123',
   systemLanguage: 'en',
   regionalLanguage: null,
   customDestinationLanguage: null,
@@ -102,7 +104,7 @@ describe('AuthHandler — intégrité de session (#3625)', () => {
       userSockets
     });
 
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
   });
 
   afterEach(() => {
@@ -165,7 +167,7 @@ describe('AuthHandler — intégrité de session (#3625)', () => {
     it('emits auth:token-expired and disconnects once the JWT exp elapses', async () => {
       jest.useFakeTimers();
       const nowSeconds = Math.floor(Date.now() / 1000);
-      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', exp: nowSeconds + 5 } as any);
+      jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123', exp: nowSeconds + 5 } as any);
 
       const mockSocket = createMockSocket({
         handshake: { auth: { token: 'valid-jwt-token' } }
@@ -186,7 +188,7 @@ describe('AuthHandler — intégrité de session (#3625)', () => {
 
     it('never disconnects a socket whose JWT carries no exp', async () => {
       jest.useFakeTimers();
-      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+      jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
 
       const mockSocket = createMockSocket({
         handshake: { auth: { token: 'valid-jwt-token' } }
@@ -204,7 +206,7 @@ describe('AuthHandler — intégrité de session (#3625)', () => {
     it('disarms the expiry timer on socket disconnect — a departed socket is never force-disconnected later', async () => {
       jest.useFakeTimers();
       const nowSeconds = Math.floor(Date.now() / 1000);
-      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', exp: nowSeconds + 5 } as any);
+      jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123', exp: nowSeconds + 5 } as any);
 
       const mockSocket = createMockSocket({
         handshake: { auth: { token: 'valid-jwt-token' } }
@@ -234,7 +236,7 @@ describe('AuthHandler — intégrité de session (#3625)', () => {
       jest.useFakeTimers();
       const nowSeconds = Math.floor(Date.now() / 1000);
       const THIRTY_DAYS_S = 30 * 24 * 60 * 60;
-      jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123', exp: nowSeconds + THIRTY_DAYS_S } as any);
+      jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123', exp: nowSeconds + THIRTY_DAYS_S } as any);
 
       const mockSocket = createMockSocket({
         handshake: { auth: { token: 'valid-jwt-token' } }

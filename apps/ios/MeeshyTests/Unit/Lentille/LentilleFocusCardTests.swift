@@ -350,6 +350,21 @@ final class LentilleFocusCardTests: XCTestCase {
         )
     }
 
+    /// #8024 — l'icône de synchronisation de la carte a disparu avec la carte
+    /// (2026-08-23) et le glyphe d'outbox a quitté la rangée (amendement L09).
+    /// L'action qu'elle portait n'avait plus aucun appelant : une méthode
+    /// publique sans déclencheur se lit comme un contrôle qui existe. L'outbox
+    /// se vide toute seule ; aucune affordance de liste ne la promet.
+    func test_noListAffordancePromisesAForcedSync_theOrphanActionIsGone() throws {
+        let viewModel = normalizedCode(try String(
+            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift"),
+            encoding: .utf8
+        ))
+        XCTAssertFalse(viewModel.contains("func forceSync("), "aucune action de synchronisation sans icône qui l'appelle")
+        let row = normalizedCode(try rowSource("LentilleConversationRow.swift"))
+        XCTAssertFalse(row.contains("onForceSync"), "la rangée ne porte plus d'icône de synchronisation")
+    }
+
     /// La magnification HÉRITE des features de la rangée parce qu'elle EST la
     /// rangée : rien de ce que la rangée sait faire n'est recopié dans
     /// `Lentille/Mode/`. Ce témoin garde l'absence de recopie — c'est elle qui
@@ -453,11 +468,9 @@ final class LentilleFocusCardTests: XCTestCase {
         try String(contentsOf: Self.rowDirectory.appendingPathComponent(file), encoding: .utf8)
     }
 
+    /// L'UNITÉ de la liste : le chrome de défilement (hôte d'élection) vit dans `+ScrollChrome`.
     private func listViewSource() throws -> String {
-        try String(
-            contentsOf: Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift"),
-            encoding: .utf8
-        )
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func normalizedCode(_ source: String) -> String {

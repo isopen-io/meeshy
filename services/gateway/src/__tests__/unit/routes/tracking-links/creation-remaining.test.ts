@@ -144,10 +144,12 @@ describe('DELETE /tracking-links/:token — registered', () => {
     expect(mockDeleteLink).toHaveBeenCalledWith(TOKEN);
   });
 
-  it('returns 200 when link has no createdBy (public link)', async () => {
+  it('returns 403 when link has no createdBy — an ownerless link belongs to no ordinary account (#10291)', async () => {
+    mockDeleteLink.mockClear();
     mockGetByToken.mockResolvedValueOnce({ ...mockLink, createdBy: null });
     const res = await app.inject({ method: 'DELETE', url: `/tracking-links/${TOKEN}` });
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(403);
+    expect(mockDeleteLink).not.toHaveBeenCalled();
   });
 
   it('returns 500 on unexpected error', async () => {

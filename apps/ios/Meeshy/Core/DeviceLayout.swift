@@ -1,11 +1,8 @@
 import SwiftUI
 import UIKit
+import MeeshyUI
 
 enum DeviceLayout {
-    static var isPad: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
-    }
-
     /// The scene the app is actually on screen in.
     ///
     /// Resolved by `activationState`, never by `connectedScenes.first`:
@@ -22,9 +19,16 @@ enum DeviceLayout {
     /// allocation-free on the nominal path, per the repo's "keep body pure and
     /// fast" rule.
     static var activeWindowScene: UIWindowScene? {
-        for windowScene in windowScenes where windowScene.activationState == .foregroundActive {
-            return windowScene
-        }
+        pickActive(windowScenes, isForeground: { $0.activationState == .foregroundActive }, holdsKey: { $0.keyWindow != nil })
+    }
+
+    /// Quelle scène est « la » scène active. Avec une fenêtre détachée, DEUX scènes de l'app peuvent être au premier
+    /// plan à la fois (Split View, Stage Manager) : celle qui tient la fenêtre CLÉ est celle où l'utilisateur agit — une
+    /// feuille présentée, une mesure prise, vont là. À défaut, la première au premier plan. Deux passes sans allocation.
+    static func pickActive<S: Sequence>(_ scenes: S, isForeground: (S.Element) -> Bool,
+                                        holdsKey: (S.Element) -> Bool) -> S.Element? {
+        for scene in scenes where isForeground(scene) && holdsKey(scene) { return scene }
+        for scene in scenes where isForeground(scene) { return scene }
         return nil
     }
 
@@ -34,6 +38,9 @@ enum DeviceLayout {
     private static var windowScenes: some Sequence<UIWindowScene> {
         UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }
     }
+
+    /// Plus d'une scène connectée : une fenêtre détachée existe, la principale peut ne pas être devant.
+    static var hasSeveralScenes: Bool { windowScenes.dropFirst().contains { _ in true } }
 
     /// Every visible window of every connected scene.
     ///
@@ -110,7 +117,7 @@ enum DeviceLayout {
     /// Prefer a `GeometryReader`'s own `size` wherever one is already in scope:
     /// this is the answer for views that have no container measurement to read.
     static var windowSize: CGSize {
-        measurementWindow?.bounds.size ?? UIScreen.main.bounds.size
+        measurementWindow?.bounds.size ?? WindowMetrics.physicalDisplay.points
     }
 
     /// Bottom safe-area inset of the window the app is actually rendered in.
@@ -137,6 +144,7 @@ enum DeviceLayout {
         measurementWindow?.safeAreaInsets.top ?? 0
     }
 
+
     static func bubbleMaxWidth(containerWidth: CGFloat, sizeClass: UserInterfaceSizeClass?) -> CGFloat {
         let ratio: CGFloat = sizeClass == .regular ? 0.62 : 0.70
         let cap: CGFloat = sizeClass == .regular ? 560 : .infinity
@@ -150,7 +158,67 @@ enum DeviceLayout {
     /// row's `Spacer(minLength:)` as soon as the window is narrower than the
     /// screen. Callers that can measure their own container should keep using
     /// `bubbleMaxWidth(containerWidth:sizeClass:)`.
-    static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?) -> CGFloat {
-        bubbleMaxWidth(containerWidth: windowSize.width, sizeClass: sizeClass)
+    static func bubbleMaxWidth(sizeClass: UserInterfaceSizeClass?, containerWidth: CGFloat? = nil) -> CGFloat {
+        bubbleMaxWidth(containerWidth: containerWidth ?? windowSize.width, sizeClass: sizeClass)
+    }
+}
+
+/// The bottom safe-area inset as the LAYOUT measures it, for views rendered
+/// inside `.ignoresSafeArea()`.
+///
+/// Reading `DeviceLayout.safeAreaBottom` during a `body` pass asks UIKit for the
+/// window's `safeAreaInsets`, which resolves the status bar through SwiftUI's
+/// preferences and re-enters the graph update in progress: the story viewer
+/// crashed there on 2026-10-10 (« Thread stack size exceeded », #10566), the
+/// call screen and the mini-player froze there before it (#8772, #9048).
+struct BottomSafeAreaInsetKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+extension View {
+    /// Writes the container's bottom inset — keyboard excluded — into `inset`.
+    /// Apply it OUTSIDE the `.ignoresSafeArea()` that flattens the inner readers.
+    func measuringBottomSafeArea(into inset: Binding<CGFloat>) -> some View {
+        background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: BottomSafeAreaInsetKey.self, value: proxy.safeAreaInsets.bottom)
+            }
+            .ignoresSafeArea(.keyboard)
+        )
+        .onPreferenceChange(BottomSafeAreaInsetKey.self) { measured in
+            if inset.wrappedValue != measured { inset.wrappedValue = measured }
+        }
+    }
+}
+
+// MARK: - Les marges de la fenêtre qui porte la vue
+
+/// Les marges sûres PUBLIÉES par la racine de la fenêtre (`\.sceneSafeAreaInsets`, mesurées hors de `body`), chaque
+/// bord se repliant SEUL sur la fenêtre clé tant qu'aucune mesure n'existe. Un repli qui lirait les deux bords d'un
+/// coup demanderait à UIKit la marge basse pendant le rendu d'une vue qui ne voulait que la haute — l'aller-retour
+/// qui réentre la mise à jour en cours et fige le rendu (#10566, #8772, #9048 ; vécu sur la bande du haut).
+struct WindowInsets {
+    let published: EdgeInsets?
+    var top: CGFloat { published?.top ?? DeviceLayout.safeAreaTop }
+    var bottom: CGFloat { published?.bottom ?? DeviceLayout.safeAreaBottom }
+}
+
+// MARK: - La largeur de la liste qui porte la bulle
+
+/// La largeur RÉELLE de la liste de messages, posée par sa cellule (`MessageListViewController`) : la bulle se mesure à
+/// elle — la colonne de l'iPad, une fenêtre détachée, Split View. Mesurées contre la fenêtre (ou contre la colonne de la
+/// fenêtre PRINCIPALE, quand une fenêtre détachée était plus étroite), les bulles s'étiraient jusqu'au `Spacer` de la
+/// rangée et l'écart qui sépare envoyé et reçu disparaissait. `nil` hors d'une liste : la fenêtre.
+private struct BubbleContainerWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat? = nil
+}
+
+extension EnvironmentValues {
+    var bubbleContainerWidth: CGFloat? {
+        get { self[BubbleContainerWidthKey.self] }
+        set { self[BubbleContainerWidthKey.self] = newValue }
     }
 }

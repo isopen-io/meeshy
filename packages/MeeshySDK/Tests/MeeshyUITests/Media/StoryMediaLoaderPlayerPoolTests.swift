@@ -4,7 +4,8 @@ import XCTest
 @testable import MeeshySDK
 
 /// **Le pool des lecteurs préparés (#9702)** — `StoryMediaLoader` tient, par
-/// URL distante, au plus trois `AVPlayer` dont la première image est décodée.
+/// URL distante, au plus `PlayerPoolCapacity.players(for:)` `AVPlayer` dont la
+/// première image est décodée — trois sur un appareil de tier haut (#11281).
 /// C'est la ressource que le passage de réel à réel consomme : un lecteur
 /// préparé sur le RÉSEAU, un lecteur périmé qui chasse un utile, ou un lecteur
 /// jeté au lieu d'être rendu, et le geste suivant repart à froid.
@@ -17,6 +18,19 @@ final class StoryMediaLoaderPlayerPoolTests: XCTestCase {
 
     private func assetURL(of player: AVPlayer?) -> URL? {
         (player?.currentItem?.asset as? AVURLAsset)?.url
+    }
+
+    /// Le pool à une taille FIXÉE le temps d'un témoin, puis rendu à la loi du
+    /// tier : un hôte de CI qui chauffe ne doit pas changer ce qu'on mesure.
+    private func withPoolCapacity(_ capacity: Int, _ body: (StoryMediaLoader) -> Void) {
+        let loader = StoryMediaLoader.shared
+        loader.clearPlayerCache()
+        loader.setPlayerPoolCapacity { capacity }
+        defer {
+            loader.clearPlayerCache()
+            loader.setPlayerPoolCapacity { PlayerPoolCapacity.players(for: DeviceMediaTier.current) }
+        }
+        body(loader)
     }
 
     // MARK: - (c) Un balayage rapide annule le préchauffage
@@ -83,15 +97,86 @@ final class StoryMediaLoaderPlayerPoolTests: XCTestCase {
     }
 
     func test_returnPlayer_staysBoundedToThreePlayers_oldestFirst() {
-        let loader = StoryMediaLoader.shared
-        loader.clearPlayerCache()
-        let urls = (0..<4).map { _ in remoteURL() }
+        withPoolCapacity(3) { loader in
+            let urls = (0..<4).map { _ in remoteURL() }
 
-        urls.forEach { loader.returnPlayer(AVPlayer(), for: $0) }
+            urls.forEach { loader.returnPlayer(AVPlayer(), for: $0) }
 
-        XCTAssertNil(loader.cachedPlayer(for: urls[0]), "le plus ancien est évincé : les décodeurs sont bornés")
-        XCTAssertNotNil(loader.cachedPlayer(for: urls[3]))
-        loader.clearPlayerCache()
+            XCTAssertNil(loader.cachedPlayer(for: urls[0]), "le plus ancien est évincé : les décodeurs sont bornés")
+            XCTAssertNotNil(loader.cachedPlayer(for: urls[3]))
+        }
+    }
+
+    /// Le pool déborde en rendant le lecteur le plus LOIN du réel affiché,
+    /// jamais celui du réel qu'on vient de quitter (#10354).
+    func test_insert_withDistances_evictsTheFarthest_notTheReelJustLeft() {
+        withPoolCapacity(3) { loader in
+            let previous = remoteURL(), next = remoteURL(), far = remoteURL(), nextNext = remoteURL()
+            loader.setRetentionDistances([
+                previous.absoluteString: -1, next.absoluteString: 1,
+                far.absoluteString: 5, nextNext.absoluteString: 2,
+            ])
+            defer { loader.setRetentionDistances([:]) }
+
+            [previous, far, next, nextNext].forEach { loader.returnPlayer(AVPlayer(), for: $0) }
+
+            XCTAssertNil(loader.peekCachedPlayer(for: far), "le plus loin part, même arrivé après")
+            XCTAssertNotNil(loader.peekCachedPlayer(for: previous), "le réel quitté garde son lecteur")
+            XCTAssertNotNil(loader.peekCachedPlayer(for: next))
+            XCTAssertNotNil(loader.peekCachedPlayer(for: nextNext))
+        }
+    }
+
+    // MARK: - (d) La taille du pool suit le tier de l'appareil (#11281)
+
+    func test_playerPoolCapacity_law_lowOne_midTwo_highAndProThree() {
+        XCTAssertEqual(PlayerPoolCapacity.players(for: .low), 1)
+        XCTAssertEqual(PlayerPoolCapacity.players(for: .mid), 2)
+        XCTAssertEqual(PlayerPoolCapacity.players(for: .high), 3)
+        XCTAssertEqual(PlayerPoolCapacity.players(for: .pro), 3)
+    }
+
+    func test_playerPoolCapacity_neverGrowsWhenTheTierDrops() {
+        let sizes = DeviceMediaTier.allCases.map(PlayerPoolCapacity.players(for:))
+        XCTAssertEqual(sizes, sizes.sorted(), "un tier plus faible ne tient jamais plus de décodeurs")
+        XCTAssertGreaterThanOrEqual(sizes.min() ?? 0, 1, "même un appareil bas garde le réel suivant prêt")
+    }
+
+    /// Sans loi posée par un hôte, le pool lit la source UNIQUE du tier — jamais
+    /// une constante qui survivrait à la perte de son câblage.
+    func test_playerPoolCapacity_byDefault_followsTheLiveTier() {
+        XCTAssertEqual(StoryMediaLoader.shared.playerPoolCapacity,
+                       PlayerPoolCapacity.players(for: DeviceMediaTier.current))
+    }
+
+    func test_lowTier_keepsOnlyTheNextReel_theOneJustLeftYields() {
+        withPoolCapacity(PlayerPoolCapacity.players(for: .low)) { loader in
+            let previous = remoteURL(), next = remoteURL()
+            loader.setRetentionDistances([previous.absoluteString: -1, next.absoluteString: 1])
+            defer { loader.setRetentionDistances([:]) }
+
+            loader.returnPlayer(AVPlayer(), for: previous)
+            loader.returnPlayer(AVPlayer(), for: next)
+
+            XCTAssertNil(loader.peekCachedPlayer(for: previous), "à distance égale, le plus ancien cède")
+            XCTAssertNotNil(loader.peekCachedPlayer(for: next), "le balayage vers l'avant reste instantané")
+        }
+    }
+
+    /// Un appareil qui chauffe descend de tier : le pool rend ses lecteurs en
+    /// trop dès que sa loi change, sans attendre le prochain préchauffage.
+    func test_setPlayerPoolCapacity_shrinking_releasesTheSurplusAtOnce() {
+        withPoolCapacity(3) { loader in
+            let urls = (0..<3).map { _ in remoteURL() }
+            urls.forEach { loader.returnPlayer(AVPlayer(), for: $0) }
+
+            loader.setPlayerPoolCapacity { 1 }
+
+            XCTAssertNil(loader.peekCachedPlayer(for: urls[0]))
+            XCTAssertNil(loader.peekCachedPlayer(for: urls[1]))
+            XCTAssertNotNil(loader.peekCachedPlayer(for: urls[2]))
+            XCTAssertEqual(loader.playerPoolCapacity, 1)
+        }
     }
 
     func test_discardCachedPlayer_freesItsPlace() {

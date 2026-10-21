@@ -173,7 +173,6 @@ const monte = (mode: ConversationReadingMode, messages: readonly Message[]) =>
     <ThreadModes
       mode={mode}
       viewer={VIEWER}
-      readerLocale="fr"
       placed={messages.map(placeOf)}
       virtualizer={virtualizerOf(messages.length)}
       scene={SCENE}

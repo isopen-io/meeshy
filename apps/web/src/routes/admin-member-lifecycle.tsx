@@ -15,6 +15,7 @@ import { useOnline } from '@/lib/net/online';
 import type { AnnouncementTone } from '@/lib/view/use-live-announcer';
 
 import { GLASS_CARD_CLASS, GLASS_CARD_EDGE } from './admin-member-parts';
+import { GESTURE_ROW } from './admin-member-quick-edit';
 
 /**
  * **SUPPRIMER OU RESTAURER UN COMPTE** (audit 2026-10-04) — la passerelle servait
@@ -40,11 +41,14 @@ export function AdminMemberLifecycle({
   language,
   onAnnounce,
   deps = apiDeps,
+  embedded = false,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: AdminLanguage;
   readonly onAnnounce: (message: string, tone?: AnnouncementTone) => void;
   readonly deps?: AdminDeps;
+  /** Posé DANS la carte d'édition rapide (#10562) : ni carte propre, de GROS boutons. */
+  readonly embedded?: boolean;
 }) {
   const reach = useAdminReach();
   const online = useOnline();
@@ -93,15 +97,15 @@ export function AdminMemberLifecycle({
     <section
       aria-label={translateAdmin(language, 'admin.people.lifecycle.title')}
       data-admin-lifecycle={deleted ? 'deleted' : 'alive'}
-      className={`${GLASS_CARD_CLASS} flex flex-wrap items-center gap-2 p-4`}
-      style={GLASS_CARD_EDGE}
+      className={embedded ? GESTURE_ROW : `${GLASS_CARD_CLASS} flex flex-wrap items-center gap-2 p-4`}
+      {...(embedded ? {} : { style: GLASS_CARD_EDGE })}
     >
       {deleted ? (
-        <AdminButton tone="primary" disabled={!online || running} data={{ 'data-admin-action': 'restore-user' }} onClick={() => setPending('restore')}>
+        <AdminButton tone="primary" size={embedded ? 'lg' : 'md'} disabled={!online || running} data={{ 'data-admin-action': 'restore-user' }} onClick={() => setPending('restore')}>
           {translateAdmin(language, 'admin.people.restore.action')}
         </AdminButton>
       ) : (
-        <AdminButton tone="danger" disabled={!online || running} data={{ 'data-admin-action': 'delete-user' }} onClick={() => setPending('delete')}>
+        <AdminButton tone="danger" size={embedded ? 'lg' : 'md'} disabled={!online || running} data={{ 'data-admin-action': 'delete-user' }} onClick={() => setPending('delete')}>
           {translateAdmin(language, 'admin.people.delete.action')}
         </AdminButton>
       )}

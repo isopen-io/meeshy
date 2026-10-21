@@ -18,11 +18,14 @@
 #   - teste la production après bascule et revient en arrière seul si le test
 #     échoue (l'hôte revient déjà seul si la santé Docker ne vient pas).
 #
-# La webapp n'est PAS promouvable : son image de staging porte
-# `VITE_API_BASE=https://gate.staging.meeshy.me`, figée au build (docker.yml).
+# La webapp est promouvable depuis #10208 : son origine d'API se déclare au
+# démarrage du conteneur, l'image recettée sur staging est donc celle de la
+# production. Elle bascule APRÈS la passerelle ; l'hôte refuse une image
+# antérieure, dont l'origine reste figée au build.
 #
 # Retour arrière en une commande :
-#   gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback
+#   gh workflow run promote-production.yml --ref dev -f action=rollback -f gateway=rollback -f agent=rollback
+#   (passerelle et agent ensemble, toujours : l'hôte refuse l'un sans l'autre — #10290)
 # =============================================================================
 
 name: Promote to production
@@ -45,6 +48,10 @@ on:
         required: false
         type: string
       agent:
+        description: 'promote : sha256:<digest validé sur staging> ; rollback : rollback ; vide = ne pas toucher'
+        required: false
+        type: string
+      webapp:
         description: 'promote : sha256:<digest validé sur staging> ; rollback : rollback ; vide = ne pas toucher'
         required: false
         type: string
@@ -83,6 +90,7 @@ jobs:
       IN_GATEWAY: ${{ inputs.gateway }}
       IN_TRANSLATOR: ${{ inputs.translator }}
       IN_AGENT: ${{ inputs.agent }}
+      IN_WEBAPP: ${{ inputs.webapp }}
       RECETTE: ${{ inputs.recette }}
       FEU_VERT: ${{ inputs.feu_vert_porteur }}
       PORTEUR: ${{ vars.PORTEUR_GITHUB_LOGIN }}
@@ -110,7 +118,7 @@ jobs:
           DIGEST_RE='^sha256:[0-9a-f]{64}$'
           MOTS=""
           SERVICES=""
-          for SVC in translator agent gateway; do
+          for SVC in translator agent gateway webapp; do
             VAR="IN_${SVC^^}"
             VAL="${!VAR:-}"
             [ -z "$VAL" ] && continue
@@ -255,6 +263,11 @@ jobs:
             exit "$RC"
           fi
           grep -o 'service=[a-z]*' <(grep '^PROMU ' bascule.txt) | cut -d= -f2 | xargs > promus.txt || true
+          # #10290 — le retour arrière porte toujours le COUPLE passerelle + agent : l'hôte refuse
+          # l'un sans l'autre, et ne fait rien pour celui que la promotion n'a pas basculé.
+          if grep -qwE 'gateway|agent' promus.txt; then
+            { tr ' ' '\n' < promus.txt; echo gateway; echo agent; } | sed '/^$/d' | sort -u | xargs > promus.couple && mv promus.couple promus.txt
+          fi
 
       - name: Test de fumée de la production
         id: fumee
@@ -291,7 +304,20 @@ jobs:
                 || ECHEC="$ECHEC routes"
             fi
           fi
+          # L'agent n'est pas joignable d'Internet (#10242, #10289) : sa santé se lit sur l'hôte.
+          if grep -q '^PROMU service=agent' bascule.txt; then
+            ~/.ssh/hote-prod status > etat-apres.txt 2>/dev/null || true
+            grep '^ETAT service=agent ' etat-apres.txt | grep -q 'prod_sante=healthy' || ECHEC="$ECHEC agent-pas-healthy"
+          fi
           curl -fsS --max-time 10 -o /dev/null "$WEB_URL/" || ECHEC="$ECHEC frontend"
+          # La webapp SERVIE est-elle la révision promue, et sert-elle sa
+          # configuration de démarrage (#10208) ?
+          if grep -q '^PROMU service=webapp' bascule.txt; then
+            ATTENDU=$(sed -n 's/^PLAN service=webapp .* revision=\([0-9a-f]\{40\}\).*/\1/p' plan.txt)
+            SERVI=$(curl -fsS --max-time 10 "$WEB_URL/build-info.json" | jq -r '.build.commit // empty')
+            [ "$SERVI" = "$ATTENDU" ] || ECHEC="$ECHEC webapp-servie=$SERVI≠$ATTENDU"
+            curl -fsS --max-time 10 "$WEB_URL/config.js" | grep -q '__MEESHY_RUNTIME__' || ECHEC="$ECHEC webapp-config.js"
+          fi
 
           if [ -n "$ECHEC" ]; then
             echo "::error::test de fumée en échec :$ECHEC — retour arrière"
@@ -334,5 +360,5 @@ jobs:
               echo ""; echo "### ${F%.txt}"; echo '```'; cat "$F"; echo '```'
             done
             echo ""
-            echo "Retour arrière : \`gh workflow run promote-production.yml --ref dev -f action=rollback -f <service>=rollback\`"
+            echo "Retour arrière : \`gh workflow run promote-production.yml --ref dev -f action=rollback -f <service>=rollback\` — passerelle et agent toujours ensemble (\`-f gateway=rollback -f agent=rollback\`, #10290)"
           } >> "$GITHUB_STEP_SUMMARY"

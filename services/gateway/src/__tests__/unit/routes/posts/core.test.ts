@@ -134,7 +134,9 @@ async function buildApp(opts: {
   const { authenticated = true, withSocialEvents = false } = opts;
 
   const app = Fastify({ logger: false });
-  const prisma = {} as any;
+  // La cible d'un DELETE se relit par `select: { authorId, type }` (#11149) :
+  // l'acteur en est l'auteur. Toute autre lecture de post reste introuvable.
+  const prisma = { post: { findFirst: async (args?: { select?: Record<string, boolean> }) => (Object.keys(args?.select ?? {}).join() === 'authorId,type' ? { authorId: USER_ID, type: 'POST' } : null) } } as any;
   const requiredAuth = makePreValidationAuth(authenticated);
 
   app.decorate('notificationService', {
@@ -1513,7 +1515,7 @@ describe('PUT /posts/:postId — broadcastPostUpdated rejects (line 281)', () =>
 describe('DELETE /posts/:postId — broadcastStoryDeleted rejects (line 322)', () => {
   it('returns 200 and swallows broadcast story deleted rejection', async () => {
     const storyApp = Fastify({ logger: false });
-    const prisma = {} as any;
+    const prisma = { post: { findFirst: async () => ({ authorId: USER_ID, type: 'POST' }) } } as any;
     storyApp.decorate('socialEvents', {
       broadcastPostCreated: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryCreated: jest.fn<any>().mockResolvedValue(undefined),
@@ -1538,7 +1540,7 @@ describe('DELETE /posts/:postId — broadcastStoryDeleted rejects (line 322)', (
 describe('DELETE /posts/:postId — broadcastStatusDeleted rejects (line 320)', () => {
   it('returns 200 and swallows broadcast status deleted rejection', async () => {
     const statusApp = Fastify({ logger: false });
-    const prisma = {} as any;
+    const prisma = { post: { findFirst: async () => ({ authorId: USER_ID, type: 'POST' }) } } as any;
     statusApp.decorate('socialEvents', {
       broadcastPostCreated: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryCreated: jest.fn<any>().mockResolvedValue(undefined),
@@ -1563,7 +1565,7 @@ describe('DELETE /posts/:postId — broadcastStatusDeleted rejects (line 320)', 
 describe('DELETE /posts/:postId — broadcastPostDeleted rejects (line 324)', () => {
   it('returns 200 and swallows broadcast post deleted rejection', async () => {
     const postApp = Fastify({ logger: false });
-    const prisma = {} as any;
+    const prisma = { post: { findFirst: async () => ({ authorId: USER_ID, type: 'POST' }) } } as any;
     postApp.decorate('socialEvents', {
       broadcastPostCreated: jest.fn<any>().mockResolvedValue(undefined),
       broadcastStoryCreated: jest.fn<any>().mockResolvedValue(undefined),

@@ -279,3 +279,37 @@ describe('ScenePlayer — les effets', () => {
     expect(overlayLayers(el)).toEqual([]);
   });
 });
+
+/**
+ * LE FOND PIVOTÉ (#9160) — `transform.rotation` du fond, là où iOS écrit
+ * `StoryMediaObject.rotation` : un quart de tour couche la boîte du fond, et
+ * le média y tourne entier.
+ */
+describe('ScenePlayer — le fond pivoté', () => {
+  const turned = (rotation: number, extra: Record<string, unknown> = {}) => ({ ...background({ aspectRatio: 4 / 3, ...extra }), transform: { ...IDENTITY, rotation } });
+
+  test('un 4:3 tourné d’un quart se pose debout (3:4) dans la carte, le média tourné dedans', () => {
+    const el = mount(player([turned(270, { transform: { videoFitMode: 'fit' } })]));
+    const box = el.querySelector<HTMLElement>('[data-scene-background-rotation="270"]');
+    expect(box).not.toBeNull();
+    expect(box?.style.width).toBe('100%');
+    expect(Number.parseFloat(box?.style.height ?? '')).toBeCloseTo(75, 3);
+    const spin = box?.querySelector<HTMLElement>('[data-scene-background-spin]');
+    expect(spin?.style.transform).toBe('rotate(270deg)');
+    expect(spin?.querySelector('img[src="fond.png"]')).not.toBeNull();
+  });
+
+  test('un fond au rapport inconnu tourne la carte entière : il s’y ajuste par son propre cadrage', () => {
+    const el = mount(player([{ ...background(), transform: { ...IDENTITY, rotation: 90 } }]));
+    const box = el.querySelector<HTMLElement>('[data-scene-background-rotation="90"]');
+    expect([box?.style.width, box?.style.height]).toEqual(['100%', '100%']);
+    const spin = box?.querySelector<HTMLElement>('[data-scene-background-spin]');
+    expect(Number.parseFloat(spin?.style.width ?? '')).toBeCloseTo(1600 / 9, 3);
+    expect(Number.parseFloat(spin?.style.height ?? '')).toBeCloseTo(56.25, 3);
+  });
+
+  test('un fond droit ne prend aucune boîte de rotation', () => {
+    const el = mount(player([background({ aspectRatio: 4 / 3 })]));
+    expect(el.querySelector('[data-scene-background-rotation]')).toBeNull();
+  });
+});

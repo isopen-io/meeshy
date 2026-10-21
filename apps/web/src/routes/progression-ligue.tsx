@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
+import { isLeagueWeekKeyParam } from '@meeshy/shared/utils/game/game-links';
+import type { GameLeagueWeekArchive } from '@meeshy/shared/types/game-archive';
+
+import { GameArchiveRetry, GameLeagueWeekRecord, leagueShown, needsLeagueWeekArchive, type ArchiveRead } from '@/components/game-archive';
 import { GameDuo } from '@/components/game-duo';
 import { GameFriendsLeague, type FriendsState } from '@/components/game-friends-league';
 import { GameLeague, type WeekState } from '@/components/game-league';
@@ -9,15 +13,18 @@ import { shownLevelOf } from '@/lib/game/ladder';
 import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import type { EngagementWithGame } from '@/lib/api/engagement';
+import { leagueWeekArchiveQueryKey, loadLeagueWeekArchive } from '@/lib/api/game-archive';
 import { LEAGUE_FRIENDS_QUERY_KEY, LEAGUE_WEEK_QUERY_KEY, loadLeagueFriends, loadLeagueWeek } from '@/lib/api/game-v2-queries';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
+import { useOptionalRoute } from '@/lib/router';
 import { gameText } from '@/lib/view/game-copy';
 import { useMinute } from '@/lib/view/use-minute';
 import { useGameFriends } from '@/routes/game-friends';
 import { useGameV2Actions, type GameV2Actions } from '@/routes/game-v2-actions';
 import { ProgressionPage } from '@/routes/progression-page';
+import { ProgressionSkeleton } from '@/routes/progression-parts';
 
 import type { LeagueFriendsResponse, LeagueWeekResponse } from '@meeshy/shared/types/game';
 
@@ -156,6 +163,38 @@ export function LigueBody(props: LigueBodyProps) {
   );
 }
 
+/**
+ * LA SEMAINE QU'UN LIEN NOMME (#10018) — passée : mon résultat gravé (ligue,
+ * rang, zone, coupe), sa purge, ou l'absence de place ; en cours (ou sans
+ * lien) : la page d'avant, inchangée. Cache-first : la dernière lecture
+ * persistée sert hors ligne.
+ */
+export function LigueWeekFocus(props: {
+  readonly progress: EngagementWithGame;
+  readonly focus: string | null;
+  readonly read: ArchiveRead<GameLeagueWeekArchive>;
+  readonly onRetry: () => void;
+  readonly current: () => ReactNode;
+}) {
+  const shown = leagueShown(props.focus, props.progress.game, props.read);
+  if (shown.kind === 'week') return <GameLeagueWeekRecord archive={shown.week} />;
+  if (shown.kind === 'error') return <GameArchiveRetry id="game-league-archive-error" message={shown.message} onRetry={props.onRetry} />;
+  if (shown.kind === 'loading') return <ProgressionSkeleton />;
+  return <>{props.current()}</>;
+}
+
+function LigueFocusScreenBody({ progress }: { readonly progress: EngagementWithGame }) {
+  const asked = useOptionalRoute()?.params['semaine'];
+  const focus = asked !== undefined && isLeagueWeekKeyParam(asked) ? asked : null;
+  const archive = useQuery({
+    queryKey: leagueWeekArchiveQueryKey(focus ?? ''),
+    enabled: focus !== null && needsLeagueWeekArchive(focus, progress.game),
+    queryFn: async ({ signal }): Promise<GameLeagueWeekArchive> => unwrap(await loadLeagueWeekArchive({ ...apiDeps, signal, weekKey: focus ?? '' })),
+  });
+  const read: ArchiveRead<GameLeagueWeekArchive> = { data: archive.data, error: archive.data === undefined && archive.isError && !archive.isFetching ? (archive.error?.message ?? '') : null };
+  return <LigueWeekFocus progress={progress} focus={focus} read={read} onRetry={() => void archive.refetch()} current={() => <LigueScreenBody progress={progress} />} />;
+}
+
 function LigueScreenBody({ progress }: { readonly progress: EngagementWithGame }) {
   const [tab, setTab] = useState<Tab>('mine');
   const online = useOnline();
@@ -210,7 +249,7 @@ export default function ProgressionLigueScreen() {
         return current === undefined || current === null ? null : `${current.rank} / ${current.groupSize}`;
       }}
     >
-      {(progress) => <LigueScreenBody progress={progress} />}
+      {(progress) => <LigueFocusScreenBody progress={progress} />}
     </ProgressionPage>
   );
 }

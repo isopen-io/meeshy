@@ -17,7 +17,7 @@
 import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import axios from 'axios';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService } from './GeoIPService';
@@ -25,9 +25,15 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import { hashPassword, verifyPassword } from '../utils/password-hash';
 import { unsetOrNull } from '../utils/prisma-unset';
 import { validatePasswordStrength } from '../utils/password-strength';
-import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../utils/recipient-language';
+import { RECIPIENT_LANG_SELECT, recipientLanguage, type RecipientLanguagePrefs } from '../utils/recipient-language';
 import { emailProofFields, settleEmailAddressProof } from './auth/email-address-proof';
 import { scheduleContactJoinedAnnouncement } from './notifications/contact-joined';
+import { emailSecretLink } from '../utils/email-secret-link';
+import {
+  createResetSecondFactorAttempts,
+  RESET_SECOND_FACTOR_MAX_ATTEMPTS,
+  type ResetSecondFactorAttempts
+} from './auth/reset-second-factor-attempts';
 
 // Logger dédié pour PasswordResetService
 const logger = enhancedLogger.child({ module: 'PasswordResetService' });
@@ -72,13 +78,51 @@ export interface PasswordResetCompletion {
   userAgent: string;
 }
 
+/**
+ * Pourquoi un `POST /auth/reset-password` est refusé (#10866) — servi en `code`
+ * à côté du texte historique (`error`, inchangé pour les clients déjà
+ * publiés) : l'écran distingue le lien mort, le mot de passe refusé et le code
+ * 2FA faux sans lire une phrase anglaise.
+ */
+export type PasswordResetRefusalCode =
+  | 'RESET_PASSWORD_MISMATCH'
+  | 'RESET_PASSWORD_WEAK'
+  | 'RESET_PASSWORD_REUSED'
+  | 'RESET_TOKEN_INVALID'
+  | 'ACCOUNT_LOCKED'
+  | 'TWO_FACTOR_REQUIRED'
+  | 'TWO_FACTOR_INVALID'
+  | 'TWO_FACTOR_ATTEMPTS_EXHAUSTED'
+  | 'RESET_UNAVAILABLE';
+
+type PasswordResetCompletionResult =
+  | { success: true; message: string; userId: string; error?: undefined; code?: undefined }
+  | { success: false; error: string; code: PasswordResetRefusalCode; message?: undefined; userId?: undefined };
+
+type SecondFactorHolder = RecipientLanguagePrefs & {
+  id: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+};
+
+const INVALID_RESET_TOKEN = 'Invalid or expired reset token';
+const RESET_FAILED = 'An error occurred while resetting your password. Please try again.';
+
+const refuse = (code: PasswordResetRefusalCode, error: string): PasswordResetCompletionResult => ({
+  success: false,
+  error,
+  code
+});
+
 export class PasswordResetService {
   constructor(
     private prisma: PrismaClient,
     private cache: CacheStore,
     private emailService: EmailService,
     private geoIPService: GeoIPService,
-    private captchaSecret: string
+    private captchaSecret: string,
+    private secondFactorAttempts: ResetSecondFactorAttempts = createResetSecondFactorAttempts()
   ) {}
 
   /**
@@ -232,7 +276,7 @@ export class PasswordResetService {
         await this.emailService.sendPasswordResetEmail({
           to: user.email,
           name: `${user.firstName} ${user.lastName}`,
-          resetLink: `${process.env.FRONTEND_URL}/reset-password?token=${token}`,
+          resetLink: emailSecretLink({ base: process.env.FRONTEND_URL || 'https://meeshy.me', path: '/reset-password', secret: { token } }),
           expiryMinutes: TOKEN_EXPIRY_MINUTES,
           language: recipientLanguage(user, 'en'),
           intent: hasPassword ? 'reset' : 'set'
@@ -265,7 +309,7 @@ export class PasswordResetService {
    */
   async completePasswordReset(
     request: PasswordResetCompletion
-  ): Promise<{ success: boolean; message?: string; error?: string; userId?: string }> {
+  ): Promise<PasswordResetCompletionResult> {
     const {
       token,
       newPassword,
@@ -279,16 +323,13 @@ export class PasswordResetService {
     try {
       // 1. Validate passwords match
       if (newPassword !== confirmPassword) {
-        return { success: false, error: 'Passwords do not match' };
+        return refuse('RESET_PASSWORD_MISMATCH', 'Passwords do not match');
       }
 
       // 2. Validate password strength
       const passwordValidation = validatePasswordStrength(newPassword);
       if (!passwordValidation.isValid) {
-        return {
-          success: false,
-          error: `Password requirements: ${passwordValidation.errors.join(', ')}`
-        };
+        return refuse('RESET_PASSWORD_WEAK', `Password requirements: ${passwordValidation.errors.join(', ')}`);
       }
 
       // 3. Hash submitted token
@@ -319,7 +360,7 @@ export class PasswordResetService {
           ipAddress,
           tokenHash: tokenHash.substring(0, 8) // Log first 8 chars only
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       // 5. Check token expiry
@@ -327,7 +368,7 @@ export class PasswordResetService {
         await this.logSecurityEvent(resetToken.userId, 'PASSWORD_RESET_EXPIRED_TOKEN', 'LOW', {
           ipAddress
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       // 6. Check if token already used
@@ -336,7 +377,7 @@ export class PasswordResetService {
           ipAddress,
           originalUse: resetToken.usedAt.toISOString()
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       // 7. Check if token is revoked
@@ -345,7 +386,7 @@ export class PasswordResetService {
           ipAddress,
           revokedReason: resetToken.revokedReason
         });
-        return { success: false, error: 'Invalid or expired reset token' };
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
       }
 
       const user = resetToken.user;
@@ -353,32 +394,23 @@ export class PasswordResetService {
       // 8. Check account lockout
       const isLocked = await this.checkAccountLockout(user.id);
       if (isLocked) {
-        return { success: false, error: 'Account is locked. Please contact support.' };
+        return refuse('ACCOUNT_LOCKED', 'Account is locked. Please contact support.');
       }
 
-      // 9. Verify 2FA if enabled
+      // 9. Verify 2FA if enabled — chaque code consomme un essai du JETON,
+      // réservé avant la vérification (#10866).
       if (user.twoFactorEnabledAt) {
         if (!twoFactorCode) {
-          return { success: false, error: '2FA code required' };
+          return refuse('TWO_FACTOR_REQUIRED', '2FA code required');
         }
-
-        const is2FAValid = await this.verify2FA(user.id, twoFactorCode);
-        if (!is2FAValid) {
-          await this.logSecurityEvent(user.id, 'TWO_FA_FAILED', 'HIGH', {
-            context: 'password_reset',
-            ipAddress
-          });
-          return { success: false, error: 'Invalid 2FA code' };
-        }
+        const refusal = await this.checkSecondFactor({ resetTokenId: resetToken.id, user, twoFactorCode, ipAddress });
+        if (refusal) return refusal;
       }
 
       // 10. Check password history (prevent reuse)
       const isPasswordUnique = await this.checkPasswordHistory(user.id, newPassword);
       if (!isPasswordUnique) {
-        return {
-          success: false,
-          error: 'Password was used recently. Please choose a different password.'
-        };
+        return refuse('RESET_PASSWORD_REUSED', 'Password was used recently. Please choose a different password.');
       }
 
       // 11. Detect anomalies
@@ -418,6 +450,17 @@ export class PasswordResetService {
       const provenAt = new Date();
       const mailboxProof = token.startsWith(EMAIL_LINK_TOKEN_PREFIX) ? emailProofFields(user, provenAt) : {};
       await this.prisma.$transaction(async (tx) => {
+        // #10475 — le jeton se consomme D'ABORD, par une écriture
+        // CONDITIONNELLE : deux réinitialisations concurrentes passaient toutes
+        // deux la lecture de `usedAt` (étape 4) et écrivaient chacune un mot de
+        // passe. Celle qui perd annule sa transaction avant toute autre écriture.
+        // `usedAt` d'un jeton frais est ABSENT du document : `unsetOrNull`.
+        const consumed = await tx.passwordResetToken.updateMany({
+          where: { id: resetToken.id, isRevoked: false, ...unsetOrNull('usedAt') },
+          data: { usedAt: new Date() }
+        });
+        if (consumed.count !== 1) throw new ResetTokenAlreadyConsumed();
+
         // Update password
         await tx.user.update({
           where: { id: user.id },
@@ -445,12 +488,6 @@ export class PasswordResetService {
             ipAddress,
             userAgent
           }
-        });
-
-        // Mark token as used
-        await tx.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() }
         });
 
         // Invalidate all user sessions
@@ -498,17 +535,92 @@ export class PasswordResetService {
       };
 
     } catch (error) {
+      if (error instanceof ResetTokenAlreadyConsumed || isWriteConflict(error)) {
+        return refuse('RESET_TOKEN_INVALID', INVALID_RESET_TOKEN);
+      }
       logger.error('[PasswordResetService] Error in completePasswordReset', error);
-      return {
-        success: false,
-        error: 'An error occurred while resetting your password. Please try again.'
-      };
+      return refuse('RESET_UNAVAILABLE', RESET_FAILED);
     }
   }
 
   // =====================================
   // HELPER METHODS
   // =====================================
+
+  /**
+   * Le code 2FA d'une réinitialisation (#10866). L'essai est RÉSERVÉ avant la
+   * vérification — un rang atomique par jeton — et rendu quand le code est
+   * juste. Au-delà du plafond, ou au dernier code faux, le jeton est révoqué :
+   * il faut redemander un lien. Un compteur muet refuse (fail-closed).
+   */
+  private async checkSecondFactor(params: {
+    resetTokenId: string;
+    user: SecondFactorHolder;
+    twoFactorCode: string;
+    ipAddress: string;
+  }): Promise<PasswordResetCompletionResult | null> {
+    const { resetTokenId, user, twoFactorCode, ipAddress } = params;
+    const rank = await this.secondFactorAttempts.reserve(resetTokenId);
+    if (rank === null) {
+      logger.error('[PasswordResetService] Second-factor attempt counter unavailable — reset refused');
+      return refuse('RESET_UNAVAILABLE', RESET_FAILED);
+    }
+    if (rank > RESET_SECOND_FACTOR_MAX_ATTEMPTS) {
+      await this.revokeAfterSecondFactorFailures({ resetTokenId, user, ipAddress });
+      return this.secondFactorExhausted();
+    }
+
+    const is2FAValid = await this.verify2FA(user.id, twoFactorCode);
+    if (is2FAValid) {
+      await this.secondFactorAttempts.release(resetTokenId);
+      return null;
+    }
+
+    await this.logSecurityEvent(user.id, 'TWO_FA_FAILED', 'HIGH', {
+      context: 'password_reset',
+      attempt: rank,
+      ipAddress
+    });
+    if (rank < RESET_SECOND_FACTOR_MAX_ATTEMPTS) {
+      return refuse('TWO_FACTOR_INVALID', 'Invalid 2FA code');
+    }
+    await this.revokeAfterSecondFactorFailures({ resetTokenId, user, ipAddress });
+    return this.secondFactorExhausted();
+  }
+
+  private secondFactorExhausted(): PasswordResetCompletionResult {
+    return refuse('TWO_FACTOR_ATTEMPTS_EXHAUSTED', 'Too many invalid 2FA codes. Please request a new reset link.');
+  }
+
+  /** Révoque le jeton UNE fois ; seul l'appel qui le révoque journalise et prévient le titulaire. */
+  private async revokeAfterSecondFactorFailures(params: {
+    resetTokenId: string;
+    user: SecondFactorHolder;
+    ipAddress: string;
+  }): Promise<void> {
+    const { resetTokenId, user, ipAddress } = params;
+    const revoked = await this.prisma.passwordResetToken.updateMany({
+      where: { id: resetTokenId, isRevoked: false },
+      data: { isRevoked: true, revokedReason: 'TWO_FACTOR_FAILURES' }
+    });
+    if (revoked.count !== 1) return;
+
+    await this.logSecurityEvent(user.id, 'PASSWORD_RESET_2FA_ATTEMPTS_EXHAUSTED', 'HIGH', {
+      ipAddress,
+      maxAttempts: RESET_SECOND_FACTOR_MAX_ATTEMPTS
+    });
+    try {
+      await this.emailService.sendSecurityAlertEmail({
+        to: user.email,
+        name: `${user.firstName} ${user.lastName}`,
+        alertType: 'Password reset link disabled',
+        details: `A password reset link for your account was disabled after ${RESET_SECOND_FACTOR_MAX_ATTEMPTS} invalid two-factor codes. If this was not you, your mailbox may be compromised.`,
+        language: recipientLanguage(user, 'en')
+      });
+    } catch (error) {
+      logger.error('[PasswordResetService] Failed to send 2FA exhaustion alert', error);
+    }
+  }
 
   private genericSuccessResponse() {
     return {
@@ -816,3 +928,15 @@ export class PasswordResetService {
     }
   }
 }
+
+/** Le jeton a été consommé par une AUTRE réinitialisation entre la lecture et l'écriture (#10475). */
+class ResetTokenAlreadyConsumed extends Error {}
+
+/**
+ * #10475 — sur MongoDB, la réinitialisation qui PERD la course ne voit pas
+ * toujours `count: 0` : sa transaction peut lever un conflit d'écriture
+ * (P2034) sur la ligne du jeton que la gagnante vient de consommer. Rien n'a
+ * été écrit, et la réponse est celle d'un jeton déjà consommé.
+ */
+const isWriteConflict = (error: unknown): boolean =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034';

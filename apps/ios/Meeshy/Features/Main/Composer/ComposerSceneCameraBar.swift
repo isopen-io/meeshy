@@ -58,7 +58,8 @@ struct ComposerSceneCameraBar: View {
     var rendering = false
     var onDone: () -> Void = {}
     /// **La flèche ⬇︎ de la retouche** (#9684) : la prise, avec ses effets et
-    /// son cadre, rejoint Photos — une fois, puis ✓.
+    /// son cadre, rejoint Photos ; déjà enregistrée avec ce cadre, la flèche
+    /// disparaît, et revient quand le cadre change (#10284).
     var saveState = ComposerTakeSaveState.idle
     var onSave: (() -> Void)?
 
@@ -88,7 +89,7 @@ struct ComposerSceneCameraBar: View {
 
     private var row: ComposerCaptureTopRow.Input {
         ComposerCaptureTopRow.Input(stage: stage, editing: editing, pendingSegments: segments.count,
-                                    offersSizeToggle: offersSizeToggle, offersSave: onSave != nil)
+                                    offersSizeToggle: offersSizeToggle, offersSave: onSave != nil && saveState.showsSave)
     }
 
     private var trailingItems: [ComposerCaptureTopItem] { ComposerCaptureTopRow.trailing(row) }
@@ -123,8 +124,7 @@ struct ComposerSceneCameraBar: View {
         }
         .task(id: sliderTimer.generation) { @MainActor in
             let echeance = sliderTimer.generation
-            try? await Task.sleep(nanoseconds: UInt64(ComposerFlashSliderTimer.lifetime * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(ComposerFlashSliderTimer.lifetime)), !Task.isCancelled else { return }
             sliderTimer.expire(echeance, voiceOver: voiceOverEnabled)
         }
     }
@@ -206,8 +206,9 @@ struct ComposerSceneCameraBar: View {
     }
 
     /// **⬇︎ Enregistrer dans Photos**, à gauche de « Terminé » : la flèche, puis
-    /// une roue pendant l'écriture (le rendu d'une vidéo prend du temps), puis ✓.
-    /// Une prise ne s'enregistre qu'une fois ; pendant « Terminé », elle attend.
+    /// une roue pendant l'écriture (le rendu d'une vidéo prend du temps) ; une
+    /// fois la prise dans Photos avec ce cadre, le bouton s'en va (#10284).
+    /// Pendant « Terminé », elle attend.
     private func saveButton(_ action: @escaping () -> Void) -> some View {
         Button {
             HapticFeedback.light()
@@ -315,7 +316,7 @@ struct ComposerSceneCameraBar: View {
             Text(LocalizedNumber.duration(seconds: elapsed))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white)
-            Text(ComposerSceneCameraCopy.segmentCount(compte))
+            Text(ComposerCaptureTopRow.segmentBadge(compte))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
                 .foregroundStyle(.white.opacity(0.85))
         }
@@ -325,10 +326,11 @@ struct ComposerSceneCameraBar: View {
         .frame(height: 32)
         .adaptiveLiquidGlass(in: Capsule())
         .frame(minHeight: MeeshyControlSize.tapTarget)
-        // VoiceOver lit « 0:12 » comme une heure : la minuterie se DIT en mots.
+        // L'écran montre « 3 – » ; VoiceOver dit « 3 segments » (#10310), puis
+        // la minuterie EN MOTS — il lirait « 0:12 » comme une heure.
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(LocalizedNumber.spokenDuration(seconds: elapsed))
-        .accessibilityValue(ComposerSceneCameraCopy.segmentCount(compte))
+        .accessibilityLabel(ComposerSceneCameraCopy.segmentCount(compte))
+        .accessibilityValue(LocalizedNumber.spokenDuration(seconds: elapsed))
         .accessibilityAddTraits(.updatesFrequently)
     }
 }

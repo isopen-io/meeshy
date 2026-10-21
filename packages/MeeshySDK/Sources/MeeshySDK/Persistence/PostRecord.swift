@@ -43,6 +43,17 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
     /// hydraté du cache afficherait « aucune personne » alors que le post en
     /// cible plusieurs. Texte nullable → les lignes antérieures décodent nil.
     public var visibilityUserIdsJson: String?
+    /// Compteurs de PORTÉE que le cache ne gardait pas (#10400) : seul
+    /// `viewCount` y vivait, et le repli hors ligne reconstruisait des posts à
+    /// « N likes · 0 impression ». `nil` = jamais reçu (ligne antérieure à la
+    /// colonne, ou serveur qui ne l'a pas servi) — distinct d'un vrai zéro.
+    public var impressionCount: Int?
+    public var postOpenCount: Int?
+    public var playCount: Int?
+    public var qualifiedViewCount: Int?
+    /// Le contour équipé de l'auteur (#10946), en JSON `ServedProfileDecorItem` : le repli hors
+    /// ligne ne perd pas le contour. `nil` = sans contour ou ligne antérieure à la colonne.
+    public var authorRingJson: String?
 
     public init(
         id: String, authorId: String,
@@ -62,7 +73,12 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         createdAt: Date, updatedAt: Date?,
         changeVersion: Int64,
         locationJson: String? = nil,
-        visibilityUserIdsJson: String? = nil
+        visibilityUserIdsJson: String? = nil,
+        impressionCount: Int? = nil,
+        postOpenCount: Int? = nil,
+        playCount: Int? = nil,
+        qualifiedViewCount: Int? = nil,
+        authorRing: ServedProfileDecorItem? = nil
     ) {
         self.id = id
         self.authorId = authorId
@@ -96,6 +112,11 @@ public struct PostRecord: Codable, FetchableRecord, PersistableRecord, Sendable 
         self.changeVersion = changeVersion
         self.locationJson = locationJson
         self.visibilityUserIdsJson = visibilityUserIdsJson
+        self.impressionCount = impressionCount
+        self.postOpenCount = postOpenCount
+        self.playCount = playCount
+        self.qualifiedViewCount = qualifiedViewCount
+        self.authorRingJson = authorRing.flatMap { try? JSONEncoder().encode($0) }.flatMap { String(data: $0, encoding: .utf8) }
     }
 }
 
@@ -107,6 +128,11 @@ public extension PostRecord {
     var visibilityUserIds: [String]? {
         guard let visibilityUserIdsJson, let data = visibilityUserIdsJson.data(using: .utf8) else { return nil }
         return try? JSONDecoder().decode([String].self, from: data)
+    }
+
+    var authorRing: ServedProfileDecorItem? {
+        guard let authorRingJson, let data = authorRingJson.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(ServedProfileDecorItem.self, from: data)
     }
 
     var location: SharedPlace? {

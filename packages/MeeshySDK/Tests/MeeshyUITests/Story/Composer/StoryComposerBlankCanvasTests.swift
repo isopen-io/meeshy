@@ -78,6 +78,7 @@ final class StoryComposerBlankCanvasTests: XCTestCase {
 
     func test_theComposerNoLongerShipsAnEmptyStateToolMenu() throws {
         let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+            + (try ComposerSourceGuard.source("StoryComposerBlankCanvasStarters.swift"))
         for symbol in ["emptyStateLargePicker", "largeToolTile",
                        "shouldShowEmptyStateLargePicker", "emptyStateTileCopy",
                        "story.composer.empty."] {
@@ -115,9 +116,9 @@ final class StoryComposerBlankCanvasTests: XCTestCase {
     /// recouvre le canvas entier. La visibilité est désormais STRUCTURELLE : hors
     /// page blanche, il n'y a plus de vue du tout à qui parler.
     func test_theBlankCanvasStartersCarryNoGestureOutsideTheirGate() throws {
-        let code = try ComposerSourceGuard.source("StoryComposerView+Canvas.swift")
+        let code = try ComposerSourceGuard.source("StoryComposerBlankCanvasStarters.swift")
         let body = try XCTUnwrap(
-            ComposerSourceGuard.functionBody(named: "var blankCanvasStarters:", in: code),
+            ComposerSourceGuard.functionBody(named: "var body:", in: code),
             "Les amorces de page blanche ont disparu.")
         let gated = try XCTUnwrap(
             ComposerSourceGuard.functionBody(named: "if offersContentStarters", in: body),

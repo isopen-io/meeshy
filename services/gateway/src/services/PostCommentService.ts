@@ -1,7 +1,7 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import type { MobileTranscription } from '../routes/posts/types';
-import { authorSelect, commentMediaInclude, NOT_DELETED } from './posts/postIncludes';
+import { commentMediaInclude, NOT_DELETED, postAuthorSelect } from './posts/postIncludes';
 import { TrackingLinkService } from './TrackingLinkService';
 import { syncCommentTrackingLinks } from './posts/publicationTrackingLinks';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
@@ -18,6 +18,7 @@ import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubj
 import { assertReactionAllowed } from '../utils/reaction-limit-guard.js';
 import { EngagementService } from './engagement/EngagementService';
 import { creditPostEngagement, creditSource, reclaimContentCredits, removalReclaimsAuthorCredits, type PostEngagementRecorder } from './posts/postEngagementCredits';
+import { creditEngagedReaderView } from './posts/postViewCredit';
 
 const log = enhancedLogger.child({ module: 'PostCommentService' });
 
@@ -39,7 +40,7 @@ const CREATED_COMMENT_SELECT = {
   createdAt: true,
   metadata: true,
   postId: true,
-  author: { select: authorSelect },
+  author: { select: postAuthorSelect },
 } as const;
 
 export class PostCommentService {
@@ -200,6 +201,8 @@ export class PostCommentService {
       where: { id: postId },
       data: { commentCount: { increment: 1 } },
     }));
+    // #10404 — commenter le post d'un autre, c'est l'avoir vu.
+    await creditEngagedReaderView(this.prisma, { postId, userId: authorId, authorId: post.authorId });
     if (parentId) {
       await this.afterBirth('parent.replyCount', comment.id, () => this.prisma.postComment.update({
         where: { id: parentId },
@@ -293,7 +296,7 @@ export class PostCommentService {
         // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
         // écrites avant elle.
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
       },
     });
 
@@ -372,7 +375,7 @@ export class PostCommentService {
         createdAt: true,
         metadata: true,
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
       },
     });
     if (!comment) return null;
@@ -426,7 +429,7 @@ export class PostCommentService {
         // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
         // écrites avant elle.
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
         media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
@@ -509,7 +512,7 @@ export class PostCommentService {
         // sur la LIGNE relue — une garde d'écriture ne dit rien des lignes
         // écrites avant elle.
         postId: true,
-        author: { select: authorSelect },
+        author: { select: postAuthorSelect },
         media: commentMediaInclude,
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -554,12 +557,18 @@ export class PostCommentService {
     // CHAQUE appel — le service n'est enregistré qu'au démarrage du socket,
     // après la construction des routes.
     announcer: RetractedNotificationAnnouncer | undefined = getSharedNotificationService(),
+    // Le retrait PAR LA MODÉRATION (#10394, `routes/admin/moderation-acts.ts`) : la
+    // garde d'auteur cède à la décision d'un modérateur, déjà autorisée en amont
+    // (`canModerateContent`, hiérarchie), et la reprise des crédits suit la règle
+    // `removalReclaimsAuthorCredits` sous modération.
+    options: { readonly byModeration?: boolean } = {},
   ) {
+    const byModeration = options.byModeration === true;
     const comment = await this.prisma.postComment.findFirst({
       where: { id: commentId, deletedAt: NOT_DELETED },
     });
     if (!comment) return null;
-    if (comment.authorId !== userId) throw new Error('FORBIDDEN');
+    if (comment.authorId !== userId && !byModeration) throw new Error('FORBIDDEN');
 
     // Soft-delete the WHOLE reply subtree, not just the target comment.
     // `addComment` increments `post.commentCount` for EVERY comment — top-level
@@ -603,8 +612,8 @@ export class PostCommentService {
     // auteur, oui ; les réponses des AUTRES qu'elle emporte, non. Une
     // suppression rejouée ne reprend rien.
     [{ id: commentId, authorId: comment.authorId }, ...descendantAuthors]
-      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration: false }))
-      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), {}, this.engagement));
+      .filter(({ authorId }) => removalReclaimsAuthorCredits({ removedBy: userId, authorId, byModeration }))
+      .forEach(({ id, authorId }) => reclaimContentCredits(this.prisma, authorId, creditSource.comment(id), this.engagement));
 
     await this.prisma.post.update({
       where: { id: comment.postId },
@@ -772,7 +781,7 @@ export class PostCommentService {
 
     await this.prisma.commentReaction.deleteMany({ where: { commentId, userId, emoji: cible } });
     // Retirer le like reprend ce qu'il a rapporté (#9584).
-    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), {}, this.engagement);
+    reclaimContentCredits(this.prisma, userId, creditSource.commentReaction(pile[0]!.id), this.engagement);
     // `removedEmoji` voyage AVEC le commentaire, exactement comme sur le chemin
     // des publications (`PostService.unlikePost`). La route diffuse ce que le
     // serveur a FAIT, jamais ce que le client a DEMANDÉ : sans lui, un retrait

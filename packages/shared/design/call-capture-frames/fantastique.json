@@ -5,6 +5,10 @@
       "id": "fantastique.tarot",
       "mood": "fantastique",
       "name": "Tarot",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -216,6 +220,10 @@
       "id": "fantastique.grimoire",
       "mood": "fantastique",
       "name": "Grimoire",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -362,6 +370,10 @@
       "id": "fantastique.portail",
       "mood": "fantastique",
       "name": "Portail",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "orbit",
@@ -502,6 +514,10 @@
       "id": "fantastique.pacte",
       "mood": "fantastique",
       "name": "Pacte",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "column",

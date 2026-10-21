@@ -22,7 +22,7 @@ nonisolated enum CallFrameTextsRule {
             groupName: grouped ? name : nil,
             isGroup: grouped,
             date: date,
-            accentHex: conversation.flatMap { Self.accent($0.colorPalette) }
+            accentHex: conversation.flatMap { Self.accent($0.displayPalette) }
         )
     }
 

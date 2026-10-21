@@ -121,6 +121,8 @@ export function decodeAdminPermissions(raw: unknown): AdminPermissions {
     // perdait au décodage — silencieusement, puisqu'une clé absente d'un type
     // rend `undefined` que personne ne lit.
     canManageAgent: lire('canManageAgent'),
+    // La garde des routes `/admin/game/*` (#10232) : le calendrier des saisons.
+    canManageGame: lire('canManageGame'),
   };
 }
 

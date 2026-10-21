@@ -1,6 +1,12 @@
-import { Avatar } from '@/components/avatar';
+import { useContext } from 'react';
+
+import { RingedAvatar } from '@/components/peer-avatar';
+import { AuthorRingsContext } from '@/lib/profile-decor/author-ring';
 import type { FaceRampEntry } from '@/lib/summary/types';
 import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresenceOf } from '@/lib/view/use-presence';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * « ILS T'ATTENDENT » — miroir `FaceRampView.swift` (#5695, étape 8). Rail
@@ -22,9 +28,9 @@ export function FaceRamp({
 }) {
   if (entries.length === 0) return null;
   return (
-    <section data-face-ramp aria-label="Ils t'attendent" className="flex flex-col gap-2">
+    <section data-face-ramp aria-label={translate(currentInterfaceLanguage(), 'summary.faces')} className="flex flex-col gap-2">
       <h3 className="text-title font-black" style={{ color: 'var(--color-ios-ink)', opacity: 0.92 }}>
-        Ils t&rsquo;attendent
+        {translate(currentInterfaceLanguage(), 'summary.faces')}
       </h3>
       <div className="flex gap-3 overflow-x-auto px-0.5">
         {entries.map((entry) => {
@@ -44,19 +50,13 @@ export function FaceRamp({
               onClick={() => onTap(entry)}
               aria-label={
                 entry.awaitingCount === 1
-                  ? `${entry.displayName}, 1 message t'attend`
-                  : `${entry.displayName}, ${entry.awaitingCount} messages t'attendent`
+                  ? translate(currentInterfaceLanguage(), 'summary.face.one', { name: entry.displayName })
+                  : translate(currentInterfaceLanguage(), 'summary.face.other', { name: entry.displayName, count: String(entry.awaitingCount) })
               }
               className="relative flex min-h-11 w-12 shrink-0 flex-col items-center gap-1"
             >
               <span className="relative">
-                <Avatar
-                  initials={initialsOf(entry.displayName)}
-                  color={entry.colorHex}
-                  size={44}
-                  {...(photo === undefined ? {} : { src: photo })}
-                  presence={entry.presence}
-                />
+                <FaceAvatar entry={entry} photo={photo} />
                 {entry.awaitingCount > 0 ? (
                   <span
                     aria-hidden
@@ -85,3 +85,26 @@ export function FaceRamp({
 }
 
 export default FaceRamp;
+
+/**
+ * LE VISAGE ET SON CONTOUR ÉQUIPÉ (#10946) — celui que la conversation sert avec
+ * ses participants (`AuthorRingsContext`). Un composant à part : la rampe reste
+ * sans hook, donc dépliable par ses témoins. Sa pastille est VIVANTE (#11412) :
+ * la carte vivante par son identifiant, la charge REST sinon, à l'horloge de
+ * toutes les pastilles — jamais le statut figé au montage du résumé.
+ */
+function FaceAvatar({ entry, photo }: { readonly entry: FaceRampEntry; readonly photo: string | undefined }) {
+  const rings = useContext(AuthorRingsContext);
+  const presence = usePresenceOf({ userId: entry.id, participant: entry.participant });
+  return (
+    <RingedAvatar
+      ringRef={rings.get(entry.id)}
+      initials={initialsOf(entry.displayName)}
+      color={entry.colorHex}
+      size={44}
+      {...(photo === undefined ? {} : { src: photo })}
+      presence={presence}
+    />
+  );
+}
+

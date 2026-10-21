@@ -41,6 +41,7 @@ import { registerUserBanRoutes } from './user-bans';
 import { registerUserSessionRoutes } from './user-sessions';
 import { registerUserPasswordProposalRoutes } from './user-password-proposals';
 import { registerUserProfileReadRoutes } from './user-profile-reads';
+import { registerUserPublicationRoutes } from './user-publications';
 import { registerUserMemberStatsRoutes } from './user-member-stats';
 import { registerUserMemberPreferencesRoutes } from './user-member-preferences';
 import { registerUserProfileImageRoutes } from './user-profile-images';
@@ -177,6 +178,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // Fiche utilisateur de l'espace d'administration web (#7873, #7845) :
   // communautés et profil vocal, deux lectures de plus sous `canViewUsers`.
   registerUserProfileReadRoutes(fastify, { userAuditService });
+  // #10315 — ses publications, et les trois gestes réversibles de modération.
+  registerUserPublicationRoutes(fastify);
 
   // Page membre de l'administration web (#7845) : compteurs de la fiche, et
   // préférences lues / écrites sous les gardes des écritures de compte.

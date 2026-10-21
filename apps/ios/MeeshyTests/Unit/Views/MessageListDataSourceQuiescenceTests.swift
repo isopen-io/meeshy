@@ -152,10 +152,16 @@ final class MessageListDataSourceQuiescenceTests: XCTestCase {
     func test_applySnapshotSortAvantSaConstruction() throws {
         // Ancre sur la SIGNATURE, jamais sur sa PORTÉE (#7222 : `applySnapshot`
         // est passée `internal` — voir `ConversationSelectionGuardTests`).
-        let body = try Self.body(of: "func applySnapshot(", in: Self.stripped(
-            "Meeshy/Features/Main/Views/MessageListViewController.swift"))
+        // e29680f424 (#11129) : la prépa est une étape nommée et mémoïsée,
+        // `snapshotPrep()` — c'est elle qui paye `reversed` ; la garde doit
+        // précéder son APPEL.
+        let unit = try Self.stripped("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let body = try Self.body(of: "func applySnapshot(", in: unit)
         let garde = try XCTUnwrap(body.range(of: "guard rendersThread else { return }"))
-        let prepa = try XCTUnwrap(body.range(of: "store.messages.reversed()"))
+        let prepa = try XCTUnwrap(body.range(of: "snapshotPrep()"))
+        let etape = try Self.body(of: "func snapshotPrep(", in: unit)
+        XCTAssertNotNil(etape.range(of: "store.messages.reversed()"),
+                        "L'étape nommée porte la construction O(n) que la garde épargne.")
 
         XCTAssertTrue(garde.lowerBound < prepa.lowerBound,
                       "La garde précède la construction, sinon on paye la prépa pour rien.")
@@ -271,5 +277,25 @@ final class MessageListDataSourceQuiescenceTests: XCTestCase {
         let store = MessageStore(conversationId: "c1", persistence: persistence)
         await store.refreshFromDB()
         return store
+    }
+
+    // MARK: - La largeur change sous la liste (cycle 4, iPad)
+
+    /// Fenêtre redimensionnée, rotation, colonnes : les cellules à l'écran
+    /// gardaient la largeur max de leur configuration. Une largeur NOUVELLE
+    /// et mesurée les re-héberge ; ni la largeur nulle d'avant le premier
+    /// layout, ni un écart sous le point.
+    func test_widthChangeRehostsBubbles_onlyForANewMeasuredWidth() {
+        XCTAssertTrue(MessageListViewController.widthChangeRehostsBubbles(from: 0, to: 390), "premier layout mesuré")
+        XCTAssertTrue(MessageListViewController.widthChangeRehostsBubbles(from: 700, to: 420), "fenêtre rétrécie")
+        XCTAssertTrue(MessageListViewController.widthChangeRehostsBubbles(from: 420, to: 980), "fenêtre élargie")
+        XCTAssertFalse(MessageListViewController.widthChangeRehostsBubbles(from: 390, to: 0), "pas encore mesurée")
+        XCTAssertFalse(MessageListViewController.widthChangeRehostsBubbles(from: 390, to: 390.4), "même largeur")
+    }
+
+    func test_viewDidLayoutSubviews_reconfiguresTheVisibleCells_whenTheWidthChanges() throws {
+        let host = try Self.stripped("Meeshy/Features/Main/Views/MessageListViewController.swift")
+        let start = try XCTUnwrap(host.range(of: "override func viewDidLayoutSubviews() {"))
+        XCTAssertTrue(String(host[start.upperBound...].prefix(200)).contains("reconfigureVisibleCellsIfWidthChanged()"))
     }
 }

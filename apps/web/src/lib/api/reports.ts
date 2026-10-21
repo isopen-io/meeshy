@@ -48,7 +48,8 @@ export type ReportOutcome = 'done' | 'throttled' | 'offline' | 'failed';
 
 export type ReportDeps = {
   readonly source: DataSource;
-  readonly transport: HttpTransport;
+  /** Seule la requête sert : le fil injecte son transport de témoin sans fabriquer un `HttpTransport` entier. */
+  readonly transport: Pick<HttpTransport, 'request'>;
 };
 
 /**
@@ -100,8 +101,23 @@ export function reportComment(params: {
   return sendReport({ ...rest, reportedType: 'comment', entityId: commentId });
 }
 
+/**
+ * Signale un MESSAGE (#7558) — le « Signaler » de la feuille « Plus… » du fil.
+ * La passerelle exige que le signalant participe à la conversation du message
+ * (`routes/reports/target.ts`, `'message'`), ce que le fil ouvert garantit.
+ */
+export function reportMessage(params: {
+  readonly messageId: string;
+  readonly reason: ReportReason;
+  readonly details?: string;
+  readonly deps: ReportDeps;
+}): Promise<ReportOutcome> {
+  const { messageId, ...rest } = params;
+  return sendReport({ ...rest, reportedType: 'message', entityId: messageId });
+}
+
 async function sendReport(params: {
-  readonly reportedType: 'user' | 'post' | 'comment';
+  readonly reportedType: 'user' | 'post' | 'comment' | 'message';
   readonly entityId: string;
   readonly reason: ReportReason;
   readonly details?: string;

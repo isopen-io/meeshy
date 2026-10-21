@@ -100,7 +100,7 @@ public final class StoryTextLayer: CATextLayer {
     public func configure(with text: StoryTextObject,
                           geometry: CanvasGeometry,
                           mode: RenderMode,
-                          renderScale: CGFloat = UIScreen.main.scale) {
+                          renderScale: CGFloat = StoryCanvasDisplayScale.ambient) {
         self.textObject = text
         self.renderScale = renderScale
 
@@ -597,6 +597,17 @@ public final class StoryTextLayer: CATextLayer {
         glassBackdropLayer?.setBackdropTexture(texture)
     }
 
+    /// `true` pour un texte en verre : seul porteur d'une couche à nourrir.
+    var hasGlassBackdrop: Bool { glassBackdropLayer != nil }
+
+    /// Ce que la lecture a déjà donné au verre de ce texte (#9864).
+    var glassBackdropFeedStamp: StoryGlassFeedStamp? { glassBackdropLayer?.feedStamp }
+
+    @MainActor
+    func setBackdropTexture(_ texture: MTLTexture?, stamp: StoryGlassFeedStamp) {
+        glassBackdropLayer?.setBackdropTexture(texture, stamp: stamp)
+    }
+
     // MARK: - Helpers
 
     /// Corner radius of the framing box, derived from the text object's
@@ -918,23 +929,6 @@ public final class StoryTextLayer: CATextLayer {
     /// Logique identique à l'ancien `parseHexColor` MainActor.
     nonisolated static func parseHexColorNonisolated(_ hex: String?) -> UIColor? {
         guard let hex else { return nil }
-        var trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("#") { trimmed.removeFirst() }
-        guard trimmed.count == 6 || trimmed.count == 8 else { return nil }
-        var rgb: UInt64 = 0
-        guard Scanner(string: trimmed).scanHexInt64(&rgb) else { return nil }
-        let r, g, b, a: CGFloat
-        if trimmed.count == 8 {
-            r = CGFloat((rgb & 0xFF000000) >> 24) / 255
-            g = CGFloat((rgb & 0x00FF0000) >> 16) / 255
-            b = CGFloat((rgb & 0x0000FF00) >> 8) / 255
-            a = CGFloat(rgb & 0x000000FF) / 255
-        } else {
-            r = CGFloat((rgb & 0xFF0000) >> 16) / 255
-            g = CGFloat((rgb & 0x00FF00) >> 8) / 255
-            b = CGFloat(rgb & 0x0000FF) / 255
-            a = 1.0
-        }
-        return UIColor(red: r, green: g, blue: b, alpha: a)
+        return HexColor(hex: hex)?.uiColor
     }
 }

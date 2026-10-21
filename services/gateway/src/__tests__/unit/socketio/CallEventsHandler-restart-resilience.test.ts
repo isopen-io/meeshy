@@ -158,6 +158,7 @@ function makePrisma(overrides: {
     },
     participant: {
       findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }),
+      findMany: jest.fn<any>().mockResolvedValue([{ id: PARTICIPANT_ID }]),
     },
     $transaction: jest.fn<any>(async (fn: any) => fn({
       callParticipant: { update: jest.fn(), count: jest.fn<any>().mockResolvedValue(0) },

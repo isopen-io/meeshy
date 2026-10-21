@@ -144,6 +144,7 @@ jest.mock('../../../services/PresenceVisibilityService', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
+  ...jest.requireActual<object>('@meeshy/shared/types/api-schemas'),
   conversationListResponseSchema: { type: 'object' },
   conversationResponseSchema: { type: 'object' },
   errorResponseSchema: { type: 'object' },
@@ -826,7 +827,7 @@ describe('registerCoreRoutes', () => {
       user: null,
     };
 
-    it('sert l\'effectif ENTIER à un admin de groupe ANONYME présent dans le top-5', async () => {
+    it('ne sert AUCUN effectif à un admin de groupe ANONYME — sans compte Meeshy (#10205), sa seule ligne', async () => {
       prisma.conversation.findMany.mockResolvedValue([
         makeConversation({ _count: { participants: 250 }, participants: [anonymousAdminParticipant] }),
       ]);
@@ -834,8 +835,8 @@ describe('registerCoreRoutes', () => {
       const reply = makeReply();
       await getListHandler(fastify)(makeAnonymousRequest(), reply);
 
-      expect(reply._body.data[0].memberCount).toBe(250);
-      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+      expect(reply._body.data[0]).not.toHaveProperty('memberCount');
+      expect(reply._body.data[0].participants.map((p: any) => p.id)).toEqual([PARTICIPANT_ID]);
     });
 
     it('interroge la COLONNE `id` au repli batché pour un lecteur anonyme', async () => {
@@ -857,8 +858,8 @@ describe('registerCoreRoutes', () => {
       expect(prisma.participant.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ where: expect.objectContaining({ id: PARTICIPANT_ID }) })
       );
-      expect(reply._body.data[0].memberCount).toBe(250);
-      expect(reply._body.data[0].memberCountCapped).toBeUndefined();
+      expect(reply._body.data[0]).not.toHaveProperty('memberCount');
+      expect(reply._body.data[0]).not.toHaveProperty('memberCountCapped');
     });
 
     it('sert l\'effectif exact sans drapeau à un admin plateforme', async () => {
@@ -1746,11 +1747,10 @@ describe('registerCoreRoutes', () => {
         expect(row.lastMessage.sender.isOnline).toBe(false);
       });
 
-      it('viewer anonyme ⇒ cachée, et le service reçoit un viewer nul', async () => {
+      it('viewer anonyme ⇒ aucun co-participant servi (#10205), expéditeur caché, viewer nul', async () => {
         const row = await list(makeViewerRequest('anonymous'));
 
-        expect(row.participants[0].isOnline).toBe(false);
-        expect(row.participants[0].lastActiveAt).toBeNull();
+        expect(row.participants).toEqual([]);
         expect(row.lastMessage.sender.isOnline).toBe(false);
         expect(mockResolveForTargets.mock.calls[0][0]).toBeNull();
       });
@@ -2126,11 +2126,10 @@ describe('registerCoreRoutes', () => {
         expect(served.lastActiveAt).toBeNull();
       });
 
-      it('viewer anonyme ⇒ cachée, et le service reçoit un viewer nul', async () => {
+      it('viewer anonyme ⇒ aucun co-participant servi (#10205), et le service reçoit un viewer nul', async () => {
         const served = await detail(makeViewerRequest('anonymous', { params: { id: CONV_ID } }));
 
-        expect(served.isOnline).toBe(false);
-        expect(served.lastActiveAt).toBeNull();
+        expect(served).toBeUndefined();
         expect(mockResolveForTargets).toHaveBeenCalledWith(null, [OTHER_USER_ID]);
       });
 

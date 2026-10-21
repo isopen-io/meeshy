@@ -1,0 +1,6800 @@
+{
+  "generated": "GÉNÉRÉ par `bun run import:glory-frames` depuis l’export du générateur — ne pas éditer.",
+  "schema": 1,
+  "collection": "abysses",
+  "atmosphere": "abysses",
+  "frames": [
+    {
+      "id": "abysses.ambassadeur-5",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "c142164470cf9a81.webp",
+        "bytes": 17014,
+        "sha256": "c142164470cf9a8194d28202103d24415357ad4affc0c14898d91541bd062674"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.ambassadeur-5.name",
+        "story": "game.frame.abysses.ambassadeur-5.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 5
+      },
+      "option": "V",
+      "motifs": [],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              174,
+              510,
+              732,
+              932
+            ],
+            "mask": {
+              "src": "5328fcfe06037fdc.webp",
+              "bytes": 664,
+              "sha256": "5328fcfe06037fdcb9c9239fc8ca6812646415c9e847eb2b9c63cc46b9d72c5f",
+              "box": [
+                174,
+                510,
+                732,
+                932
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "b5a0ec9dc34284c7.webp",
+              "bytes": 84174,
+              "sha256": "b5a0ec9dc34284c78d2920bcdc1f238d8987e9c5414aa3bc75a0e4977f7d7d6b",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "6fd9c0353c762cf2.webp",
+              "bytes": 4002,
+              "sha256": "6fd9c0353c762cf23937ce1df029d2cf609c3dc0fa33db8b46e22eab0f172027",
+              "box": [
+                174,
+                510,
+                732,
+                932
+              ]
+            },
+            "grade": [
+              {
+                "src": "3a88e25c38c456c2.webp",
+                "bytes": 8226,
+                "sha256": "3a88e25c38c456c2ba2061773e4c9ca0e03fb010807f28059f9846d19c44dd56",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "e5a9711687773e06.webp",
+                "bytes": 99386,
+                "sha256": "e5a9711687773e06e409a4f3b4aa7563482f95774f0a4c6853610a390b6eab4a",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "33b7d5fd7ee38cd8.webp",
+                "bytes": 32624,
+                "sha256": "33b7d5fd7ee38cd8dfedc9a13b047dfc4e4eb8c2c9be3160887d1f7a5fc707e2",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "ead55b2cae6f8697.webp",
+                "bytes": 16240,
+                "sha256": "ead55b2cae6f86976a35208e7b3f951f5eb79c83341312131039ea245c98ef57",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "3eb0a966dbdeca36.webp",
+                "bytes": 12160,
+                "sha256": "3eb0a966dbdeca3662dc4f59f811944d2081e46466713045c88142dc7143f376",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  320
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              173,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 8.41,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                211,
+                1570,
+                658,
+                108
+              ],
+              "contrast": 8.88,
+              "sample": "Ambassadeur V"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1696,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1670,
+                228,
+                34
+              ],
+              "contrast": 8.2,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.ambassadeur-4",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "5e3b5febc1855842.webp",
+        "bytes": 24698,
+        "sha256": "5e3b5febc185584297ada821db51a9015ad0be66c9d43c11897cbd62175a72ce"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.ambassadeur-4.name",
+        "story": "game.frame.abysses.ambassadeur-4.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 4
+      },
+      "option": "IV",
+      "motifs": [],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              174,
+              510,
+              732,
+              932
+            ],
+            "mask": {
+              "src": "8a0eeb1f9fc1a1ad.webp",
+              "bytes": 2498,
+              "sha256": "8a0eeb1f9fc1a1adfd948eee80e641ffa34be43e8098a796945a7771d5536fcf",
+              "box": [
+                174,
+                510,
+                732,
+                932
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "5fdf269ae481e49a.webp",
+              "bytes": 180870,
+              "sha256": "5fdf269ae481e49a7c0104bd14770be8bdfdb926ec3c8cf4ca0e6b6ba03019b4",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "77fad02a25cb33fd.webp",
+              "bytes": 6416,
+              "sha256": "77fad02a25cb33fd7e2595bc6c83ca9a81a397ae1d6214e5063717e921f39c3f",
+              "box": [
+                174,
+                510,
+                732,
+                932
+              ]
+            },
+            "grade": [
+              {
+                "src": "c23b63fb95b2fa03.webp",
+                "bytes": 18408,
+                "sha256": "c23b63fb95b2fa0334ef4239c26fffe8f9880e3e35235f13dd379c65c7881ab8",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "9ab1593a889238e0.webp",
+                "bytes": 105542,
+                "sha256": "9ab1593a889238e095aeb2caffec08066ae30ae28eb6409f712ce60ef2d41ee2",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "0dbf3c54a0b85e4d.webp",
+                "bytes": 26134,
+                "sha256": "0dbf3c54a0b85e4d864b0cb2b4920dfffe497ed65b5301ecc5b757191b4f6532",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "ead55b2cae6f8697.webp",
+                "bytes": 16240,
+                "sha256": "ead55b2cae6f86976a35208e7b3f951f5eb79c83341312131039ea245c98ef57",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "f8c044ea9075fb7e.webp",
+                "bytes": 12320,
+                "sha256": "f8c044ea9075fb7e4f2786b5f14b22a334ac5c70a16b00c6f1c68eb6b1da140a",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              173,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 7.21,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                196,
+                1570,
+                688,
+                108
+              ],
+              "contrast": 7.66,
+              "sample": "Ambassadeur IV"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                364,
+                1660,
+                355,
+                70
+              ],
+              "contrast": 16.9,
+              "sample": "Le voyage continue"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.71,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "ruban",
+            "layouts": {
+              "ruban": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    30,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    814,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.ambassadeur-3",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "fedbf32cbb8bf688.webp",
+        "bytes": 25306,
+        "sha256": "fedbf32cbb8bf68877690ed9dcb9cee18cb1789f8d99968570bbd3ac90b78ab6"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.ambassadeur-3.name",
+        "story": "game.frame.abysses.ambassadeur-3.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 3
+      },
+      "option": "III",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              172,
+              536,
+              736,
+              908
+            ],
+            "mask": {
+              "src": "78952bf68c44063a.webp",
+              "bytes": 138,
+              "sha256": "78952bf68c44063a7e29f5d05b8b28d0f61ece240bfa34cff89f878692c2dd9d",
+              "box": [
+                172,
+                536,
+                736,
+                908
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "53c4da70e01c15a7.webp",
+              "bytes": 205874,
+              "sha256": "53c4da70e01c15a713a9e77356d00665444542cbb7326715f98a0d130a6894dd",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "103c6eaede3d7e61.webp",
+              "bytes": 2996,
+              "sha256": "103c6eaede3d7e61600675c8e3ea9e0b7329daf2a9bf3dd0ab6ae62519dd2962",
+              "box": [
+                172,
+                536,
+                736,
+                908
+              ]
+            },
+            "grade": [
+              {
+                "src": "da0745571a2bb0ac.webp",
+                "bytes": 5482,
+                "sha256": "da0745571a2bb0acc7dead572c3e1f87a9b24e7359b7084bcf0444e8b6661c14",
+                "box": [
+                  172,
+                  536,
+                  736,
+                  908
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "3ba088f20cf9757e.webp",
+                "bytes": 117946,
+                "sha256": "3ba088f20cf9757e7b44b0642cae6b1d3fe7365f2df0ce42cf08c6bf8457bbc8",
+                "box": [
+                  172,
+                  536,
+                  736,
+                  908
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "d0a61ca77cb774a6.webp",
+                "bytes": 2842,
+                "sha256": "d0a61ca77cb774a6eb54940dbb8e79051cf63ff3f36c26707a5588593620822b",
+                "box": [
+                  172,
+                  536,
+                  736,
+                  908
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "4d710b1929d4e668.webp",
+                "bytes": 16078,
+                "sha256": "4d710b1929d4e6688c22898635acf19b4cc913689c9194a57dd09b047b386a1d",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "35d7caae3c82b811.webp",
+                "bytes": 12372,
+                "sha256": "35d7caae3c82b81102f0c5ce21122f619e4e3621aae3280cc096936f8d2f241a",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              177,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 7.26,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                194,
+                1570,
+                690,
+                108
+              ],
+              "contrast": 7.75,
+              "sample": "Ambassadeur III"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                391,
+                1660,
+                301,
+                70
+              ],
+              "contrast": 16.61,
+              "sample": "Merci la famille"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.66,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "libre",
+            "layouts": {
+              "libre": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    36,
+                    316,
+                    208,
+                    208
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    836,
+                    316,
+                    208,
+                    208
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.ambassadeur-2",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "43695fdfd196959b.webp",
+        "bytes": 19802,
+        "sha256": "43695fdfd196959bcd11bddec5d4867aaf638bb4a30cdca89131c95f215c3d4e"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.ambassadeur-2.name",
+        "story": "game.frame.abysses.ambassadeur-2.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 2
+      },
+      "option": "II",
+      "motifs": [],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              0,
+              0,
+              1080,
+              1920
+            ],
+            "mask": {
+              "src": "fe11091cb6796274.webp",
+              "bytes": 1194,
+              "sha256": "fe11091cb6796274332067690b8e150144a323df5f9733c32c14d1930367b08c",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "5af9031b7c9dbd1f.webp",
+              "bytes": 115252,
+              "sha256": "5af9031b7c9dbd1f870f3d573519d97cfd23efe6f9ce50eef6fd886d93fcfd2b",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "a8469cb3e681318c.webp",
+              "bytes": 8910,
+              "sha256": "a8469cb3e681318c5216dd4388b38c485c181509667bab43045453a730af86f8",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "grade": [
+              {
+                "src": "9f3ff4f0831c3186.webp",
+                "bytes": 6136,
+                "sha256": "9f3ff4f0831c3186126dd92a0d7a14dcfefe77042e7e98e9aab7b41390f2488f",
+                "box": [
+                  0,
+                  0,
+                  1080,
+                  1920
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "d4bc8c15390116ca.webp",
+                "bytes": 436,
+                "sha256": "d4bc8c15390116cae2fecc865c1b410ee55b1bb9506c5120edd7c3ae721c8ff4",
+                "box": [
+                  1025,
+                  0,
+                  55,
+                  56
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "eef5b21c431f37c1.webp",
+                "bytes": 51432,
+                "sha256": "eef5b21c431f37c1640621b6f70fe6d88d537fb3f61005c18d538dce511f320d",
+                "box": [
+                  0,
+                  0,
+                  1080,
+                  1920
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "ead55b2cae6f8697.webp",
+                "bytes": 16240,
+                "sha256": "ead55b2cae6f86976a35208e7b3f951f5eb79c83341312131039ea245c98ef57",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "f8c044ea9075fb7e.webp",
+                "bytes": 12320,
+                "sha256": "f8c044ea9075fb7e4f2786b5f14b22a334ac5c70a16b00c6f1c68eb6b1da140a",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              177,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 8.46,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                209,
+                1570,
+                659,
+                108
+              ],
+              "contrast": 9.12,
+              "sample": "Ambassadeur II"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                383,
+                1660,
+                317,
+                70
+              ],
+              "contrast": 17.29,
+              "sample": "Pour toi, maman"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.84,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "selfie",
+            "layouts": {
+              "selfie": {
+                "meo": {
+                  "sticker": "meo-selfie",
+                  "box": [
+                    732,
+                    1160,
+                    336,
+                    336
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.ambassadeur-1",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "621940a6ca09fdfd.webp",
+        "bytes": 19240,
+        "sha256": "621940a6ca09fdfdc4a64e67e6198a4a40d0ebe02cab7e45d4ab675249953c6c"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.ambassadeur-1.name",
+        "story": "game.frame.abysses.ambassadeur-1.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 1
+      },
+      "option": "I",
+      "motifs": [],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              545,
+              734,
+              902
+            ],
+            "mask": {
+              "src": "126a82d2d9642c96.webp",
+              "bytes": 114,
+              "sha256": "126a82d2d9642c96a04529c30aad3fe2431a728bbb7d8a5ff07a6acc44719cee",
+              "box": [
+                173,
+                545,
+                734,
+                902
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "grade:3",
+            "grade:4",
+            "grade:5",
+            "grade:6",
+            "decor",
+            "crest",
+            "front:under-birds",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "b76fa28672efe30f.webp",
+              "bytes": 108058,
+              "sha256": "b76fa28672efe30fdac836d21deaf5f0702460f69deb61bbedb56040a1985246",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "39bca44e43d69490.webp",
+              "bytes": 3024,
+              "sha256": "39bca44e43d69490e7430802baa9f9610bb13dac7ce28bc87fe3ee517ecf6b10",
+              "box": [
+                173,
+                545,
+                734,
+                902
+              ]
+            },
+            "grade": [
+              {
+                "src": "b30562b627e16602.webp",
+                "bytes": 132,
+                "sha256": "b30562b627e16602668b68c9abee9b59fdee0d128e8112d5e1265a210c79b88b",
+                "box": [
+                  173,
+                  546,
+                  4,
+                  900
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "efc706abb7b73793.webp",
+                "bytes": 126,
+                "sha256": "efc706abb7b7379372338037cccc6774d281e9ff82a38ee90f6c93fe65e38960",
+                "box": [
+                  173,
+                  548,
+                  2,
+                  896
+                ],
+                "blend": "multiply"
+              },
+              {
+                "src": "d0d54a9addd2c649.webp",
+                "bytes": 1594,
+                "sha256": "d0d54a9addd2c649d2af5248844b1e0cc2cd278e71abaef3f5e50bf1c2eb4dbc",
+                "box": [
+                  173,
+                  545,
+                  734,
+                  901
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "e8f8af93d4913fa0.webp",
+                "bytes": 126,
+                "sha256": "e8f8af93d4913fa0ffaac34bb4032b1b7e8d9e29cb511afa59e9958dbf7e1808",
+                "box": [
+                  905,
+                  548,
+                  2,
+                  896
+                ],
+                "blend": "multiply"
+              },
+              {
+                "src": "5731cf6539e8cd45.webp",
+                "bytes": 6890,
+                "sha256": "5731cf6539e8cd45e5f8f8716b26f620e580555c32ab2f417a5654bc8f186ae8",
+                "box": [
+                  173,
+                  545,
+                  734,
+                  902
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "a0d640316d6793b4.webp",
+                "bytes": 125468,
+                "sha256": "a0d640316d6793b4783a3d6dbfe7e2469ecd2037b87f46554905d412701c7bc8",
+                "box": [
+                  173,
+                  545,
+                  734,
+                  902
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "9c6d25eddbc690b0.webp",
+                "bytes": 2326,
+                "sha256": "9c6d25eddbc690b067c01d94368ccc5e25889dfae133e97fb53ae9695f62b221",
+                "box": [
+                  173,
+                  545,
+                  734,
+                  902
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "under-birds": {
+                "src": "00d0c1aa439631a6.webp",
+                "bytes": 3666,
+                "sha256": "00d0c1aa439631a6c5c93ff3f9a03a77708a4b4e447f776006031a96765c4136",
+                "box": [
+                  477,
+                  26,
+                  126,
+                  81
+                ]
+              },
+              "over-birds": {
+                "src": "962b8b230fe771f4.webp",
+                "bytes": 16042,
+                "sha256": "962b8b230fe771f4b7928be4913366be9270b1007a50a146958bc29ab7b81ba9",
+                "box": [
+                  2,
+                  6,
+                  1076,
+                  1914
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "1ceee9c8fd4fa364.webp",
+                "bytes": 14526,
+                "sha256": "1ceee9c8fd4fa364ff2a6fd5221daa374c275f5130c3f5c5fa0a4b1320657cd8",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              193,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 6.69,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                225,
+                1570,
+                628,
+                108
+              ],
+              "contrast": 7.4,
+              "sample": "Ambassadeur I"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                352,
+                1660,
+                380,
+                70
+              ],
+              "contrast": 14.24,
+              "sample": "On l'a fait ensemble"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 7.38,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-fete",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.orateur-a",
+      "usage": {
+        "kind": "rank",
+        "rank": "orateur"
+      },
+      "thumb": {
+        "src": "ccd0ae732a14c714.webp",
+        "bytes": 22918,
+        "sha256": "ccd0ae732a14c714cc70615f787d75e56cf00e0f57306e00108cd5f7bdb8ca43"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.orateur-a.name",
+        "story": "game.frame.abysses.orateur-a.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "orateur",
+        "division": null
+      },
+      "option": "A",
+      "motifs": [],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              174,
+              510,
+              732,
+              932
+            ],
+            "mask": {
+              "src": "0f3d592e1545fed8.webp",
+              "bytes": 802,
+              "sha256": "0f3d592e1545fed88583163b6cbb2ca9c76bcba9e2673ccb384ceb491aceb951",
+              "box": [
+                174,
+                510,
+                732,
+                932
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "e5150782a6a10a1e.webp",
+              "bytes": 165996,
+              "sha256": "e5150782a6a10a1e42db061fb70c506edacd950ec63c2f5f1aabdd7135e0983d",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "ef6c4c42b18ecef9.webp",
+              "bytes": 4166,
+              "sha256": "ef6c4c42b18ecef93ac6bcd822c43ff5e372cfff263bd837239a6cdb475e358c",
+              "box": [
+                174,
+                510,
+                732,
+                932
+              ]
+            },
+            "grade": [
+              {
+                "src": "6be8e13952eb5299.webp",
+                "bytes": 15024,
+                "sha256": "6be8e13952eb5299a61dd5fa26c90165df4e667ef11c446a30e340870b5f46e6",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "63556c191ef93441.webp",
+                "bytes": 121534,
+                "sha256": "63556c191ef93441cb454935c6a88ce0ab8ea1b77193596433b30c33e9390f8b",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "e1b7204b12ea3f0c.webp",
+                "bytes": 26548,
+                "sha256": "e1b7204b12ea3f0c12581a00c352a22774fc0a1be1721437e03934a9a1c0925f",
+                "box": [
+                  174,
+                  510,
+                  732,
+                  932
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "ead55b2cae6f8697.webp",
+                "bytes": 16240,
+                "sha256": "ead55b2cae6f86976a35208e7b3f951f5eb79c83341312131039ea245c98ef57",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "871650c005c09770.webp",
+                "bytes": 12508,
+                "sha256": "871650c005c097704f3b5141278816e2ff754c76ae1c6bd86e1175fa80d7fa63",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              177,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 7.39,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                353,
+                1570,
+                377,
+                108
+              ],
+              "contrast": 8.13,
+              "sample": "Orateur"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                324,
+                1660,
+                437,
+                70
+              ],
+              "contrast": 16.78,
+              "sample": "Écoute la mer chanter"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.66,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "libre",
+            "layouts": {
+              "libre": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    746,
+                    1230,
+                    300,
+                    300
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    34,
+                    1230,
+                    300,
+                    300
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.orateur-b",
+      "usage": {
+        "kind": "rank",
+        "rank": "orateur"
+      },
+      "thumb": {
+        "src": "12f4473f7571da84.webp",
+        "bytes": 18914,
+        "sha256": "12f4473f7571da84e689f3c0ec83eb161bbda13b393ad22b933cfb2646979c6f"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.orateur-b.name",
+        "story": "game.frame.abysses.orateur-b.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "orateur",
+        "division": null
+      },
+      "option": "B",
+      "motifs": [],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              174,
+              530,
+              732,
+              912
+            ],
+            "mask": {
+              "src": "d484968f03ec9bcc.webp",
+              "bytes": 268,
+              "sha256": "d484968f03ec9bcc2dd7afd57ee2b4d97b01ce790283e8fa56cf8fec0afb73a8",
+              "box": [
+                174,
+                530,
+                732,
+                912
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "front:under-birds",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "f8cdfe1c41a4911f.webp",
+              "bytes": 107402,
+              "sha256": "f8cdfe1c41a4911fc91868a40176c1e7a3fa9c40c5d9bef7c89730e893057930",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "3ca5860a986d5a80.webp",
+              "bytes": 3230,
+              "sha256": "3ca5860a986d5a801d8b4969a4999a6b88048a177402ea4e1e4b5b6e81ff766b",
+              "box": [
+                174,
+                530,
+                732,
+                912
+              ]
+            },
+            "grade": [
+              {
+                "src": "4dfe16f0a00d08d0.webp",
+                "bytes": 6394,
+                "sha256": "4dfe16f0a00d08d0a64038bbce4fa6f40c692b451567eb37173b5194ecf87edf",
+                "box": [
+                  174,
+                  530,
+                  732,
+                  912
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "e6c81d67147fc8f1.webp",
+                "bytes": 93450,
+                "sha256": "e6c81d67147fc8f10f6933ab989a69a1006aab17f52ca594a9e03baa7e8005ec",
+                "box": [
+                  174,
+                  530,
+                  732,
+                  912
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "95092f60006917c4.webp",
+                "bytes": 8680,
+                "sha256": "95092f60006917c46c35c445eb1ba1d26b213d3e0c452fe891464839ac7fa03a",
+                "box": [
+                  174,
+                  530,
+                  732,
+                  912
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "under-birds": {
+                "src": "7abee9f47761ba2c.webp",
+                "bytes": 8054,
+                "sha256": "7abee9f47761ba2c70aaa8ee8ae5743f9d15e24e93b19d582352d53573ac89a7",
+                "box": [
+                  178,
+                  46,
+                  805,
+                  1395
+                ]
+              },
+              "over-birds": {
+                "src": "ead55b2cae6f8697.webp",
+                "bytes": 16240,
+                "sha256": "ead55b2cae6f86976a35208e7b3f951f5eb79c83341312131039ea245c98ef57",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "6b9faf7d8a508cb4.webp",
+                "bytes": 12332,
+                "sha256": "6b9faf7d8a508cb40e01ee9b2af2edec636ffe2183d413936713f535d0aebd98",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  320
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              193,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 8.31,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                353,
+                1570,
+                377,
+                108
+              ],
+              "contrast": 8.86,
+              "sample": "Orateur"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1696,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1670,
+                228,
+                34
+              ],
+              "contrast": 7.78,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.orateur-c",
+      "usage": {
+        "kind": "rank",
+        "rank": "orateur"
+      },
+      "thumb": {
+        "src": "a6abc5acc5422b63.webp",
+        "bytes": 18836,
+        "sha256": "a6abc5acc5422b63723be02676368174819bdb8f7c59d6c83d596dc0eb0384a2"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.orateur-c.name",
+        "story": "game.frame.abysses.orateur-c.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "orateur",
+        "division": null
+      },
+      "option": "C",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              174,
+              518,
+              732,
+              924
+            ],
+            "mask": {
+              "src": "d9a9ecafee4ad9f8.webp",
+              "bytes": 260,
+              "sha256": "d9a9ecafee4ad9f8b28a201c4c7a03b09674b22e7951a77adf709288dd221cac",
+              "box": [
+                174,
+                518,
+                732,
+                924
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "87cdd4b91d702907.webp",
+              "bytes": 120296,
+              "sha256": "87cdd4b91d7029074b49795f412e535493a1762f9129c4359ce78d9c9492ab2b",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "1c1b760915cd3ec2.webp",
+              "bytes": 3292,
+              "sha256": "1c1b760915cd3ec2a5314b35fd676522f2c9efc1c7336c314053c9920c8e86b1",
+              "box": [
+                174,
+                518,
+                732,
+                924
+              ]
+            },
+            "grade": [
+              {
+                "src": "a78fdae93d54dfb4.webp",
+                "bytes": 5912,
+                "sha256": "a78fdae93d54dfb4a0cbdae02040424f58dac3feb1233af1b741e67b9a8b7bb8",
+                "box": [
+                  174,
+                  518,
+                  732,
+                  924
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "32ccbfde01f47548.webp",
+                "bytes": 86148,
+                "sha256": "32ccbfde01f47548f5844ab2c3d53737c3515ed19ca011739192f1b58025a2d4",
+                "box": [
+                  174,
+                  518,
+                  732,
+                  924
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "4676f35f8b0df820.webp",
+                "bytes": 8132,
+                "sha256": "4676f35f8b0df82089e238ac8565ac142a87a1296812e0522466ebcaf5cb5004",
+                "box": [
+                  174,
+                  518,
+                  732,
+                  924
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "ead55b2cae6f8697.webp",
+                "bytes": 16240,
+                "sha256": "ead55b2cae6f86976a35208e7b3f951f5eb79c83341312131039ea245c98ef57",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "871650c005c09770.webp",
+                "bytes": 12508,
+                "sha256": "871650c005c097704f3b5141278816e2ff754c76ae1c6bd86e1175fa80d7fa63",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              177,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 8.21,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                353,
+                1570,
+                377,
+                108
+              ],
+              "contrast": 8.74,
+              "sample": "Orateur"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                323,
+                1660,
+                439,
+                70
+              ],
+              "contrast": 16.59,
+              "sample": "Le jour se lève sur nous"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.54,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    12,
+                    56,
+                    176,
+                    176
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    892,
+                    56,
+                    176,
+                    176
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.oracle-a",
+      "usage": {
+        "kind": "rank",
+        "rank": "oracle"
+      },
+      "thumb": {
+        "src": "6c16aa1f09546aab.webp",
+        "bytes": 16020,
+        "sha256": "6c16aa1f09546aaba96f85344101b8426b7e131d7d596836286136b67a5388e4"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.oracle-a.name",
+        "story": "game.frame.abysses.oracle-a.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "oracle",
+        "division": null
+      },
+      "option": "A",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              510,
+              734,
+              933
+            ],
+            "mask": {
+              "src": "d36d8b76c4a85c03.webp",
+              "bytes": 838,
+              "sha256": "d36d8b76c4a85c0330ea4613fc299cba8f3752b66955988d36e706a93f9950c5",
+              "box": [
+                173,
+                510,
+                734,
+                933
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "39f7fe489d5d3782.webp",
+              "bytes": 72822,
+              "sha256": "39f7fe489d5d3782deefe84b1715a600dc5ab9cc2da9cf4ee4ff6d3858907321",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "12cdbbab256d86ce.webp",
+              "bytes": 4228,
+              "sha256": "12cdbbab256d86ce8c36e7dcdf11ede555ce39c75d25e1a6b381cb593361bf3d",
+              "box": [
+                173,
+                510,
+                734,
+                933
+              ]
+            },
+            "grade": [
+              {
+                "src": "b3c378aabbcdcd66.webp",
+                "bytes": 14648,
+                "sha256": "b3c378aabbcdcd66ac3ca8baa53c0671716d71298163dfe68a4cb7b55f312d80",
+                "box": [
+                  173,
+                  510,
+                  734,
+                  933
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "02e42f09b19bc485.webp",
+                "bytes": 139076,
+                "sha256": "02e42f09b19bc485c64a37fdb3d07337a5fa6cb880dbbe487265863c94d1ed38",
+                "box": [
+                  173,
+                  510,
+                  734,
+                  933
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "30879afc13dc3204.webp",
+                "bytes": 24458,
+                "sha256": "30879afc13dc320414bd48f75b356721e0e78dfe83420182ab08161834cdbbd5",
+                "box": [
+                  173,
+                  510,
+                  734,
+                  933
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "71d5a39ee3720e60.webp",
+                "bytes": 13782,
+                "sha256": "71d5a39ee3720e601899ad9deb66444c9fa4d5e2b97d746196470ca8f94779ed",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "1e99685cd9f546b2.webp",
+                "bytes": 12312,
+                "sha256": "1e99685cd9f546b2b4a9c76d7d23bf2fc4681631154313cbf61e30d1105d6898",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#9FF4FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 13.44,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#C9D3E0FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                381,
+                1570,
+                318,
+                108
+              ],
+              "contrast": 11.58,
+              "sample": "Oracle"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                386,
+                1660,
+                309,
+                70
+              ],
+              "contrast": 16.63,
+              "sample": "Jusqu'aux étoiles"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#9FF4FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 13.28,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "ruban",
+            "layouts": {
+              "ruban": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    30,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    814,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.oracle-b",
+      "usage": {
+        "kind": "rank",
+        "rank": "oracle"
+      },
+      "thumb": {
+        "src": "9ea003f041d787be.webp",
+        "bytes": 15534,
+        "sha256": "9ea003f041d787be701cc10adca0f9c99c9dc3dd7917e7431097822f5b4cd7d4"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.oracle-b.name",
+        "story": "game.frame.abysses.oracle-b.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "oracle",
+        "division": null
+      },
+      "option": "B",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              521,
+              734,
+              926
+            ],
+            "mask": {
+              "src": "df7289fe7b5d13a2.webp",
+              "bytes": 1774,
+              "sha256": "df7289fe7b5d13a2e225d482980142e53aa1abdf50a5b6550f4a4a93a3175926",
+              "box": [
+                173,
+                521,
+                734,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "add53f3278d9b272.webp",
+              "bytes": 67822,
+              "sha256": "add53f3278d9b2723bf0a97090bf7cac6e80ea8aa3a722c910a3039e545e6889",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "face6f290753c1b9.webp",
+              "bytes": 5424,
+              "sha256": "face6f290753c1b9740aebd4f07d9a071171d68eb4a76019838d4c9fed3cc8cd",
+              "box": [
+                173,
+                521,
+                734,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "644e6d34ac58b8ac.webp",
+                "bytes": 46556,
+                "sha256": "644e6d34ac58b8ac8ce9ca731246de201dcb7a5aa2f08486f0cdc7ca87fe4b24",
+                "box": [
+                  173,
+                  521,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "04247182dc066319.webp",
+                "bytes": 80092,
+                "sha256": "04247182dc06631979b8db26205f48f7156c253769164f9b034aebd2cb5ba560",
+                "box": [
+                  173,
+                  521,
+                  734,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "604a300b507cb933.webp",
+                "bytes": 52848,
+                "sha256": "604a300b507cb93363ef59579b78262450ed6be94b48d1b9e47878832ddf4b6d",
+                "box": [
+                  173,
+                  521,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "71d5a39ee3720e60.webp",
+                "bytes": 13782,
+                "sha256": "71d5a39ee3720e601899ad9deb66444c9fa4d5e2b97d746196470ca8f94779ed",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "c39c5ca781b55751.webp",
+                "bytes": 12142,
+                "sha256": "c39c5ca781b55751cc3cb89e560d49761cc59ad741415a01fbacd8070fc3c3e1",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  320
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#CFC6FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 10.39,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#C9D3E0FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                381,
+                1570,
+                318,
+                108
+              ],
+              "contrast": 11.61,
+              "sample": "Oracle"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1696,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#CFC6FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1670,
+                228,
+                34
+              ],
+              "contrast": 10.06,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "cotes",
+            "layouts": {
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    -60,
+                    720,
+                    280,
+                    280
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-love",
+                  "box": [
+                    860,
+                    800,
+                    280,
+                    280
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.oracle-c",
+      "usage": {
+        "kind": "rank",
+        "rank": "oracle"
+      },
+      "thumb": {
+        "src": "c5ac1abe5a1950d5.webp",
+        "bytes": 15040,
+        "sha256": "c5ac1abe5a1950d5cf3cccca167830e2c6a9d31aaa4caf1c96aa7a7f9a5fba99"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.oracle-c.name",
+        "story": "game.frame.abysses.oracle-c.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "oracle",
+        "division": null
+      },
+      "option": "C",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              517,
+              734,
+              926
+            ],
+            "mask": {
+              "src": "95927b3355b3de20.webp",
+              "bytes": 194,
+              "sha256": "95927b3355b3de205dc1b7e8dcee30d437f83708e0b58dd51f420c14068b9d99",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "aece36ae0ffa29e9.webp",
+              "bytes": 72116,
+              "sha256": "aece36ae0ffa29e92de5586d8bd76fc31b9fb884dea6735c74af6be99fc85309",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "d35c21aa79ebd317.webp",
+              "bytes": 3194,
+              "sha256": "d35c21aa79ebd31748f5598b89acf9a1334ec5b40a98c16da74da535c9c47cd8",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "31b3e9296789ac65.webp",
+                "bytes": 5394,
+                "sha256": "31b3e9296789ac658e8a5d19b211f5909095d655d3ac88ff8654e884dfbb28fa",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "2840cfd7c7808624.webp",
+                "bytes": 155262,
+                "sha256": "2840cfd7c780862442db15a4f5e932bfc38444547019655bc9161f17f04a89f0",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "cfbd39db90a3e06b.webp",
+                "bytes": 3434,
+                "sha256": "cfbd39db90a3e06b923009286a5a9c1c7cd1c4953bb8c04cdb4f5b1b6b1d8b9d",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "71d5a39ee3720e60.webp",
+                "bytes": 13782,
+                "sha256": "71d5a39ee3720e601899ad9deb66444c9fa4d5e2b97d746196470ca8f94779ed",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "1e99685cd9f546b2.webp",
+                "bytes": 12312,
+                "sha256": "1e99685cd9f546b2b4a9c76d7d23bf2fc4681631154313cbf61e30d1105d6898",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#FFE7A8FF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 13.63,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#C9D3E0FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                381,
+                1570,
+                318,
+                108
+              ],
+              "contrast": 11.48,
+              "sample": "Oracle"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                438,
+                1660,
+                212,
+                70
+              ],
+              "contrast": 17.2,
+              "sample": "Tout est lié"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#FFE7A8FF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 13.55,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.legende-5",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "a4ecd24784621391.webp",
+        "bytes": 15140,
+        "sha256": "a4ecd2478462139173af3f1cd82a91b0002d9c2c404c067574c01278ba9a857a"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.legende-5.name",
+        "story": "game.frame.abysses.legende-5.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 5
+      },
+      "option": "V",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              517,
+              734,
+              926
+            ],
+            "mask": {
+              "src": "806b2aefe187bc01.webp",
+              "bytes": 242,
+              "sha256": "806b2aefe187bc014509840329974cae6553dd96738169a53bda3d26043eac58",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "46e5eadee6694351.webp",
+              "bytes": 64674,
+              "sha256": "46e5eadee6694351293ecde33cd1a2daaf4f72fb5c8f42e58f80bb8c70f4ed80",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "593e8f2dbc741b08.webp",
+              "bytes": 3272,
+              "sha256": "593e8f2dbc741b0840809475c223003985ad97ac5fec1460d1c597097f171b3f",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "70595a611f075d8e.webp",
+                "bytes": 5768,
+                "sha256": "70595a611f075d8e1f3003616a715cc11cdcd66a17021e1a17385c5ef7289070",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "0b84a98859968320.webp",
+                "bytes": 134706,
+                "sha256": "0b84a9885996832043af166dba7b17ed129506efae928e48dd775d992b6468a3",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "611a391530a9a3b9.webp",
+                "bytes": 7724,
+                "sha256": "611a391530a9a3b91af60842b656d72dce24ad2687f76735aa35af01e18be8bd",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "adf2e101061a0486.webp",
+                "bytes": 13878,
+                "sha256": "adf2e101061a0486e6dcc19c52c2b3b77550248be44080f9155b7f6d16f4e8fc",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "194940ed00d7c769.webp",
+                "bytes": 12164,
+                "sha256": "194940ed00d7c769e125cdccd3c2f1e5cf92a538d8aa36e421326ff8fc2079e2",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  320
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 9.31,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#BDB4E8FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                318,
+                1570,
+                446,
+                108
+              ],
+              "contrast": 9.89,
+              "sample": "Légende V"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1696,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1670,
+                228,
+                34
+              ],
+              "contrast": 8.45,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-yo",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.legende-4",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "269b2309e88a2025.webp",
+        "bytes": 16182,
+        "sha256": "269b2309e88a202597adb32eb17d069050ecd3ee24ff524239fae529d2bd6dab"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.legende-4.name",
+        "story": "game.frame.abysses.legende-4.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 4
+      },
+      "option": "IV",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              517,
+              734,
+              926
+            ],
+            "mask": {
+              "src": "1968812a896ec5c8.webp",
+              "bytes": 840,
+              "sha256": "1968812a896ec5c851aff46781eafcf482a7d8eb88accc20bf119ebdb5ae4b20",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "76f47d80ef1a7226.webp",
+              "bytes": 71086,
+              "sha256": "76f47d80ef1a7226bd57918ba0d8b92a12c5109de215e70515a1bd3ff930a741",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "786d530e3bef9f62.webp",
+              "bytes": 4160,
+              "sha256": "786d530e3bef9f627b4ed0143e6502c9fb609dbc323f15ed3af0a01c6ffa104f",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "4b8812d61d9040bd.webp",
+                "bytes": 15044,
+                "sha256": "4b8812d61d9040bdef383da8e33f37a379a65589467f081bde5ff0f999bb0374",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "6916107d70eae513.webp",
+                "bytes": 114102,
+                "sha256": "6916107d70eae5137961b76585adb87aab442481f20b4ea2d2804441305b7559",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "2f4ad387aeb4f84f.webp",
+                "bytes": 25274,
+                "sha256": "2f4ad387aeb4f84f3f46016318084ae963a7cb03065ffa734cb824586c12d30b",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "adf2e101061a0486.webp",
+                "bytes": 13878,
+                "sha256": "adf2e101061a0486e6dcc19c52c2b3b77550248be44080f9155b7f6d16f4e8fc",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "6e4e41cced8bba4b.webp",
+                "bytes": 12316,
+                "sha256": "6e4e41cced8bba4bf424d9f6475e3efead1d4af69a071dfd0200cdf81dcbdec3",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 9.33,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#BDB4E8FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                303,
+                1570,
+                476,
+                108
+              ],
+              "contrast": 9.95,
+              "sample": "Légende IV"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                355,
+                1660,
+                375,
+                70
+              ],
+              "contrast": 17.85,
+              "sample": "Ma perle, c'est vous"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.36,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "cotes",
+            "layouts": {
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-amoureuse",
+                  "box": [
+                    -60,
+                    720,
+                    280,
+                    280
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-love",
+                  "box": [
+                    860,
+                    800,
+                    280,
+                    280
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.legende-3",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "6d9e08e5182c855b.webp",
+        "bytes": 16688,
+        "sha256": "6d9e08e5182c855b0229c3ef8b60c31eacb06ba30b44aea1333c4a56269e4617"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.legende-3.name",
+        "story": "game.frame.abysses.legende-3.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 3
+      },
+      "option": "III",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              517,
+              734,
+              926
+            ],
+            "mask": {
+              "src": "1549befab40b62e4.webp",
+              "bytes": 226,
+              "sha256": "1549befab40b62e434b5a08c30b2b6675c42f56fa9b9f5e9da6f3708bd0c7507",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "77bc9c24c1bb7fc3.webp",
+              "bytes": 81614,
+              "sha256": "77bc9c24c1bb7fc34ecdf03d54cf095b9c2ed763ecfc6370aaf9aa3630e423ce",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "3dba9248b265c161.webp",
+              "bytes": 3252,
+              "sha256": "3dba9248b265c16108bdeffaba99282d26e7c0f7d4ce13a8436287e96ae8abde",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "54590e403287f5e9.webp",
+                "bytes": 6160,
+                "sha256": "54590e403287f5e957d0e11bfa980dede01a2be669be88ce6153764fd0436466",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "8b9fc850671015ae.webp",
+                "bytes": 139832,
+                "sha256": "8b9fc850671015ae93d10ba61d9efe75e7ffe2fa3dfb3c2287e8aea3332a68b9",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "d98fc831445c197a.webp",
+                "bytes": 6938,
+                "sha256": "d98fc831445c197aaa7099ac98757308354f6ae05ab2e0acd92ff922f1d52765",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "adf2e101061a0486.webp",
+                "bytes": 13878,
+                "sha256": "adf2e101061a0486e6dcc19c52c2b3b77550248be44080f9155b7f6d16f4e8fc",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "194940ed00d7c769.webp",
+                "bytes": 12164,
+                "sha256": "194940ed00d7c769e125cdccd3c2f1e5cf92a538d8aa36e421326ff8fc2079e2",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  320
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 9.32,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#BDB4E8FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                301,
+                1570,
+                478,
+                108
+              ],
+              "contrast": 9.96,
+              "sample": "Légende III"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1696,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1670,
+                228,
+                34
+              ],
+              "contrast": 8.48,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    24,
+                    56,
+                    216,
+                    216
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    840,
+                    56,
+                    216,
+                    216
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.legende-2",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "dfd805967e96a255.webp",
+        "bytes": 16522,
+        "sha256": "dfd805967e96a25528a8f4636b933bb356e7fa401bb5f18931a670320164d548"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.legende-2.name",
+        "story": "game.frame.abysses.legende-2.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 2
+      },
+      "option": "II",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              517,
+              734,
+              926
+            ],
+            "mask": {
+              "src": "e809a702e1789f54.webp",
+              "bytes": 458,
+              "sha256": "e809a702e1789f540b9284ec655b71d15c380a08cdbb0f42550c4f23152ae2d6",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "1bb563cd3a720fbb.webp",
+              "bytes": 80142,
+              "sha256": "1bb563cd3a720fbb786887b8537b58167a79d7d5afa419864c3a18d5efaec017",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "37d06844d8fc0b1c.webp",
+              "bytes": 3418,
+              "sha256": "37d06844d8fc0b1c5bcd60b1e4e896836f5eabae4434c466f899f5c0c9af9d73",
+              "box": [
+                173,
+                517,
+                734,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "090a4d5c9cd8ed98.webp",
+                "bytes": 6332,
+                "sha256": "090a4d5c9cd8ed988288c249561c56bc0a7673ca9c5658766f36762ce5900962",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "434f02d23b909b7f.webp",
+                "bytes": 149090,
+                "sha256": "434f02d23b909b7f2a5ce2ca92335e1d397563a21afdcfd46c57e5b06983b19f",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "70f047f24faaf6f3.webp",
+                "bytes": 8910,
+                "sha256": "70f047f24faaf6f369bb7588bb24869f761b92703e5243e13d4862519f5a15fa",
+                "box": [
+                  173,
+                  517,
+                  734,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "adf2e101061a0486.webp",
+                "bytes": 13878,
+                "sha256": "adf2e101061a0486e6dcc19c52c2b3b77550248be44080f9155b7f6d16f4e8fc",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "6e4e41cced8bba4b.webp",
+                "bytes": 12316,
+                "sha256": "6e4e41cced8bba4bf424d9f6475e3efead1d4af69a071dfd0200cdf81dcbdec3",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              185,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 9.33,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#BDB4E8FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                317,
+                1570,
+                446,
+                108
+              ],
+              "contrast": 9.96,
+              "sample": "Légende II"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                362,
+                1660,
+                360,
+                70
+              ],
+              "contrast": 18.03,
+              "sample": "Merci d'y avoir cru"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.33,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "ruban",
+            "layouts": {
+              "ruban": {
+                "mee": {
+                  "sticker": "mee-lettre",
+                  "box": [
+                    30,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-muscles",
+                  "box": [
+                    814,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.legende-1",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "507f44aea83117f4.webp",
+        "bytes": 16728,
+        "sha256": "507f44aea83117f4120a6d96d718a530cd8c917f8dd96adfa0f9b54f2c4c4cd1"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.legende-1.name",
+        "story": "game.frame.abysses.legende-1.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 1
+      },
+      "option": "I",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              173,
+              529,
+              734,
+              914
+            ],
+            "mask": {
+              "src": "85501fe681a32102.webp",
+              "bytes": 778,
+              "sha256": "85501fe681a32102bd211d66aa8f5f43f4633275ff8b0e9ca25ff3b316422907",
+              "box": [
+                173,
+                529,
+                734,
+                914
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "da5445c061fc3641.webp",
+              "bytes": 74386,
+              "sha256": "da5445c061fc36418e5a09cf25d2e58b7f7d926bf80c9894a909cf027044ad47",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "f575c074ef6134a5.webp",
+              "bytes": 4114,
+              "sha256": "f575c074ef6134a532c279d4f3ca6f06b3b9a8a391f86c89ef07e59025ff624f",
+              "box": [
+                173,
+                529,
+                734,
+                914
+              ]
+            },
+            "grade": [
+              {
+                "src": "e43dd20ba7b9caee.webp",
+                "bytes": 14516,
+                "sha256": "e43dd20ba7b9caeef6a306f2a74eb2be36ab0eef30493dbdd1e237d8306ba0da",
+                "box": [
+                  173,
+                  529,
+                  734,
+                  914
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "5c9a479614490506.webp",
+                "bytes": 113502,
+                "sha256": "5c9a479614490506e048bf42355c8ec2cbc610bcb4ff01da8065bf01733b3a1e",
+                "box": [
+                  173,
+                  529,
+                  734,
+                  914
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "592074077101a3d5.webp",
+                "bytes": 23766,
+                "sha256": "592074077101a3d580e7ab2238844e4fabde7173098119df74b784c1aa029415",
+                "box": [
+                  173,
+                  529,
+                  734,
+                  914
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "c647475e97b20cdf.webp",
+                "bytes": 14490,
+                "sha256": "c647475e97b20cdf4e5c94d75b5bc56a37e7cefabd921445a0a56d5f3b454b32",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "6e4e41cced8bba4b.webp",
+                "bytes": 12316,
+                "sha256": "6e4e41cced8bba4bf424d9f6475e3efead1d4af69a071dfd0200cdf81dcbdec3",
+                "box": [
+                  66,
+                  1470,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              213,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1562,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1536,
+                490,
+                34
+              ],
+              "contrast": 9.01,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1648,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#F6F2FFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#BDB4E8FF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                332,
+                1570,
+                416,
+                108
+              ],
+              "contrast": 9.75,
+              "sample": "Légende I"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                358,
+                1660,
+                369,
+                70
+              ],
+              "contrast": 17.83,
+              "sample": "Plus loin que la mer"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1752,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#BFA8FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1728,
+                214,
+                30
+              ],
+              "contrast": 8.44,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.mythe-a",
+      "usage": {
+        "kind": "rank",
+        "rank": "mythe"
+      },
+      "thumb": {
+        "src": "321951a11aeec7c9.webp",
+        "bytes": 22354,
+        "sha256": "321951a11aeec7c963d2245d31cf246dabd9ef78568cd0fa962f7764c0ec841a"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.mythe-a.name",
+        "story": "game.frame.abysses.mythe-a.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "mythe",
+        "division": null
+      },
+      "option": "A",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              172,
+              528,
+              736,
+              920
+            ],
+            "mask": {
+              "src": "58e4404ef11144ce.webp",
+              "bytes": 248,
+              "sha256": "58e4404ef11144ced86e34fd859f6e3987f19ad1ad3cc13dc040c6bf2374911f",
+              "box": [
+                172,
+                528,
+                736,
+                920
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "87ce5684ebcf75e6.webp",
+              "bytes": 148652,
+              "sha256": "87ce5684ebcf75e6ae9fb88de2bf904650763f8c48c3b2a6225f4a3a6b139e4e",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "449c0f62d8e186d8.webp",
+              "bytes": 3242,
+              "sha256": "449c0f62d8e186d8a49360543d904121334aed6987eba4ea7d9c9d418cfad96f",
+              "box": [
+                172,
+                528,
+                736,
+                920
+              ]
+            },
+            "grade": [
+              {
+                "src": "0c13ed28fa0d1604.webp",
+                "bytes": 5466,
+                "sha256": "0c13ed28fa0d160480b754932e1953c7c57ae7dac0e6a0aee20294491cf4a110",
+                "box": [
+                  172,
+                  528,
+                  736,
+                  920
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "0a3352eb9a5d1f35.webp",
+                "bytes": 109058,
+                "sha256": "0a3352eb9a5d1f357d090f21743d2a58cc7602997e27be477c01343022ba40a2",
+                "box": [
+                  172,
+                  528,
+                  736,
+                  920
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "cac937b5d8948285.webp",
+                "bytes": 11282,
+                "sha256": "cac937b5d89482853387a92b32e1523baf77f538673391bc6b4324d8e1f6a1f0",
+                "box": [
+                  172,
+                  528,
+                  736,
+                  920
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "e8f3947b9e9cd195.webp",
+                "bytes": 14988,
+                "sha256": "e8f3947b9e9cd19591effb56a32fe5244b86cb640e29f75c6dc560c87925cb38",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "dccae39bb3cd4eda.webp",
+                "bytes": 14464,
+                "sha256": "dccae39bb3cd4eda6aa96da62480617ade22cf81c4a3a9958e222b42cf5a2d85",
+                "box": [
+                  66,
+                  1478,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              454,
+              230,
+              172,
+              230
+            ]
+          },
+          "text": {
+            "plate.1": {
+              "x": 540,
+              "baseline": 1522,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 28,
+                "tracking": 3
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                448,
+                1494,
+                184,
+                38
+              ],
+              "contrast": 17.85,
+              "sample": "Nº 42 / 100"
+            },
+            "kicker": {
+              "x": 540,
+              "baseline": 1578,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#CFC2FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1552,
+                490,
+                34
+              ],
+              "contrast": 11.49,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1656,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#D9CCFFFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                281,
+                1578,
+                517,
+                108
+              ],
+              "contrast": 12.89,
+              "sample": "Mythe nº 42"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                352,
+                1668,
+                382,
+                70
+              ],
+              "contrast": 18.88,
+              "sample": "Du quark au quasar"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1760,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#CFC2FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1736,
+                214,
+                30
+              ],
+              "contrast": 10.65,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "selfie",
+            "layouts": {
+              "selfie": {
+                "pair": {
+                  "sticker": "duo-mee-selfie",
+                  "box": [
+                    690,
+                    1114,
+                    380,
+                    380
+                  ],
+                  "rotate": 0,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.mythe-b",
+      "usage": {
+        "kind": "rank",
+        "rank": "mythe"
+      },
+      "thumb": {
+        "src": "82eba201f2853d6d.webp",
+        "bytes": 18102,
+        "sha256": "82eba201f2853d6d2d0a1ab6c094c3a6c908511b93ca7c1c50e029817592dc79"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.mythe-b.name",
+        "story": "game.frame.abysses.mythe-b.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "mythe",
+        "division": null
+      },
+      "option": "B",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              172,
+              528,
+              736,
+              920
+            ],
+            "mask": {
+              "src": "6af0563ecc2fd574.webp",
+              "bytes": 806,
+              "sha256": "6af0563ecc2fd57451a94a948fc16ca6f537f923c5d95241fb3b65373740ca41",
+              "box": [
+                172,
+                528,
+                736,
+                920
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "546fec9a49744e71.webp",
+              "bytes": 85756,
+              "sha256": "546fec9a49744e71baabeeff0369fb16fe9ca60855b6a6eace7f759977dca5ef",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "e0bbe6d139f325b7.webp",
+              "bytes": 4142,
+              "sha256": "e0bbe6d139f325b7867f1ddd24fbd46c3924754b6448dc9c41bbacd3f1a334e7",
+              "box": [
+                172,
+                528,
+                736,
+                920
+              ]
+            },
+            "grade": [
+              {
+                "src": "fe7e279699c97934.webp",
+                "bytes": 14942,
+                "sha256": "fe7e279699c97934db3715a81f79ed17a4973d1a7351e3fb932c2a51ee92e2bb",
+                "box": [
+                  172,
+                  528,
+                  736,
+                  920
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "c3c764e47711e626.webp",
+                "bytes": 107042,
+                "sha256": "c3c764e47711e6269ca0e679fe75ca23d081ea7206076a37fa920ca3cbe3b542",
+                "box": [
+                  172,
+                  528,
+                  736,
+                  920
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "8faf6c17cc903a96.webp",
+                "bytes": 24940,
+                "sha256": "8faf6c17cc903a967ed3242172a15141211a003b7870c0ce24e1c98f955a7e2b",
+                "box": [
+                  172,
+                  528,
+                  736,
+                  920
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "e8f3947b9e9cd195.webp",
+                "bytes": 14988,
+                "sha256": "e8f3947b9e9cd19591effb56a32fe5244b86cb640e29f75c6dc560c87925cb38",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "fe7f6c74bca6388c.webp",
+                "bytes": 14110,
+                "sha256": "fe7f6c74bca6388ca62e6ea8b721f0c8238fd0264542487df1401eb6b6064b1f",
+                "box": [
+                  66,
+                  1478,
+                  948,
+                  320
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              452,
+              195,
+              176,
+              236
+            ]
+          },
+          "text": {
+            "plate.1": {
+              "x": 540,
+              "baseline": 1522,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 28,
+                "tracking": 3
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                448,
+                1494,
+                184,
+                38
+              ],
+              "contrast": 17.85,
+              "sample": "Nº 42 / 100"
+            },
+            "kicker": {
+              "x": 540,
+              "baseline": 1578,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#CFC2FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1552,
+                490,
+                34
+              ],
+              "contrast": 11.7,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1656,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#D9CCFFFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                281,
+                1578,
+                517,
+                108
+              ],
+              "contrast": 12.87,
+              "sample": "Mythe nº 42"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1704,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#CFC2FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1678,
+                228,
+                34
+              ],
+              "contrast": 10.53,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "cotes",
+            "layouts": {
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    -60,
+                    720,
+                    280,
+                    280
+                  ],
+                  "rotate": 18,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    860,
+                    800,
+                    280,
+                    280
+                  ],
+                  "rotate": 342,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "abysses.mythe-c",
+      "usage": {
+        "kind": "rank",
+        "rank": "mythe"
+      },
+      "thumb": {
+        "src": "1e424e767470d88a.webp",
+        "bytes": 18122,
+        "sha256": "1e424e767470d88a6d69198b80b0502dd33944061d44f8419d01417bc4ba0ecf"
+      },
+      "i18n": {
+        "name": "game.frame.abysses.mythe-c.name",
+        "story": "game.frame.abysses.mythe-c.story"
+      },
+      "collection": "abysses",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "mythe",
+        "division": null
+      },
+      "option": "C",
+      "motifs": [
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              196,
+              528,
+              704,
+              920
+            ],
+            "mask": {
+              "src": "b46a6fbb525033e4.webp",
+              "bytes": 230,
+              "sha256": "b46a6fbb525033e43a1c1bd1ebc27c6f1f190824edb01c339535a3b1c00c37a6",
+              "box": [
+                196,
+                528,
+                704,
+                920
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "front:over-birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "9ae53bda7affc711.webp",
+              "bytes": 93844,
+              "sha256": "9ae53bda7affc71176d222e91f4cb4bd283f78c505621c33112a48908e0729ed",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "e6bf944b97e2dc19.webp",
+              "bytes": 3104,
+              "sha256": "e6bf944b97e2dc19f99ffe276596ffddabe4e7303864291548a00792a002496f",
+              "box": [
+                196,
+                528,
+                704,
+                920
+              ]
+            },
+            "grade": [
+              {
+                "src": "a6ac76c86309c929.webp",
+                "bytes": 5846,
+                "sha256": "a6ac76c86309c9290ccfc3dd20f01e41ae5e59186f0f9ac9d6c31c041345fd9c",
+                "box": [
+                  196,
+                  528,
+                  704,
+                  920
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "b6ef4b76d021f7fd.webp",
+                "bytes": 102544,
+                "sha256": "b6ef4b76d021f7fd67b92e5d48a218fa6a4915d212819e75442a1eb31e1e580e",
+                "box": [
+                  196,
+                  528,
+                  704,
+                  920
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "ce584997bc09e213.webp",
+                "bytes": 11372,
+                "sha256": "ce584997bc09e213d8e4a4c279c027d6682279e8482922be23e6cbb1d332f140",
+                "box": [
+                  196,
+                  528,
+                  704,
+                  920
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "e8f3947b9e9cd195.webp",
+                "bytes": 14988,
+                "sha256": "e8f3947b9e9cd19591effb56a32fe5244b86cb640e29f75c6dc560c87925cb38",
+                "box": [
+                  3,
+                  7,
+                  1074,
+                  1913
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "dccae39bb3cd4eda.webp",
+                "bytes": 14464,
+                "sha256": "dccae39bb3cd4eda6aa96da62480617ade22cf81c4a3a9958e222b42cf5a2d85",
+                "box": [
+                  66,
+                  1478,
+                  948,
+                  368
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              452,
+              195,
+              176,
+              236
+            ]
+          },
+          "text": {
+            "decor.1": {
+              "x": 108,
+              "baseline": 86,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                61,
+                66,
+                31
+              ],
+              "contrast": 2.07,
+              "sample": "1026 m"
+            },
+            "decor.2": {
+              "x": 108,
+              "baseline": 406,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                381,
+                64,
+                31
+              ],
+              "contrast": 1.87,
+              "sample": "1021 m"
+            },
+            "decor.3": {
+              "x": 108,
+              "baseline": 606,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                581,
+                57,
+                31
+              ],
+              "contrast": 15.61,
+              "sample": "109 m"
+            },
+            "decor.4": {
+              "x": 108,
+              "baseline": 846,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                824,
+                33,
+                28
+              ],
+              "contrast": 15.27,
+              "sample": "1 m"
+            },
+            "decor.5": {
+              "x": 108,
+              "baseline": 1066,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                1041,
+                63,
+                31
+              ],
+              "contrast": 13.4,
+              "sample": "10-5 m"
+            },
+            "decor.6": {
+              "x": 108,
+              "baseline": 1286,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                1261,
+                71,
+                31
+              ],
+              "contrast": 10.7,
+              "sample": "10-10 m"
+            },
+            "decor.7": {
+              "x": 108,
+              "baseline": 1482,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                1457,
+                70,
+                31
+              ],
+              "contrast": 16.78,
+              "sample": "10-15 m"
+            },
+            "decor.8": {
+              "x": 108,
+              "baseline": 1866,
+              "anchor": "start",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 21,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#BFFBFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                108,
+                1841,
+                71,
+                31
+              ],
+              "contrast": 7.99,
+              "sample": "10-35 m"
+            },
+            "plate.1": {
+              "x": 540,
+              "baseline": 1522,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 28,
+                "tracking": 3
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                448,
+                1494,
+                184,
+                38
+              ],
+              "contrast": 17.85,
+              "sample": "Nº 42 / 100"
+            },
+            "kicker": {
+              "x": 540,
+              "baseline": 1578,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 8
+              },
+              "fill": {
+                "solid": "#CFC2FFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                295,
+                1552,
+                490,
+                34
+              ],
+              "contrast": 11.66,
+              "sample": "NOUVEAU RANG · ABYSSES"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1656,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#D9CCFFFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.8"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                281,
+                1578,
+                517,
+                108
+              ],
+              "contrast": 12.87,
+              "sample": "Mythe nº 42"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF6DAFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                352,
+                1668,
+                381,
+                70
+              ],
+              "contrast": 18.88,
+              "sample": "À toutes les échelles"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1760,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#CFC2FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1736,
+                214,
+                30
+              ],
+              "contrast": 10.62,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    116,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": -10,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    724,
+                    64,
+                    240,
+                    240
+                  ],
+                  "rotate": 10,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    }
+  ]
+}

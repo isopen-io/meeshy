@@ -31,5 +31,9 @@ extension ScrollOffsetRelay {
     func relayFeedOffset(_ value: CGFloat) {
         guard value != offset else { return }
         offset = value
+        // #10509 — le même relais nourrit le résumé de défilement du fil :
+        // `value` est le `minY` de la sentinelle, négatif vers le bas. Le
+        // rappel de défilement arrive toujours sur le fil principal.
+        MainActor.assumeIsolated { ListingScrollTracker.feed.noteOffset(-value) }
     }
 }

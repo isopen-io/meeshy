@@ -39,7 +39,7 @@ struct CallPresentationLayer: ViewModifier {
         miniPlayerCurrentConversationId: @escaping () -> String?,
         miniPlayerCoordinator: ConversationAudioCoordinator? = nil,
         playerBannerHosted: Bool = false,
-        onPlayerBannerTap: @escaping () -> Void = {},
+        onPlayerBannerTap: @escaping (GamePlayerBanner.Piece) -> Void = { _ in },
         calls: CallManagerHost = .shared,
         incomingCallGate: IncomingCallWakeGate = .shared
     ) {
@@ -71,7 +71,7 @@ struct CallPresentationLayer: ViewModifier {
     /// n'a lui-même aucun accès au routeur, et ne doit pas en observer un (voir plus haut le churn d'appel).
     let playerBannerHosted: Bool
     /// Un toucher sur la bannière ouvre Progression.
-    let onPlayerBannerTap: () -> Void
+    let onPlayerBannerTap: (GamePlayerBanner.Piece) -> Void
 
     /// L'aplat de la bannière À L'ÉCRAN, remonté par son emplacement : la bande de la barre d'état le reprend.
     @State private var bannerSurface: Color?
@@ -171,7 +171,7 @@ struct CallPresentationLayer: ViewModifier {
                 isHosted: playerBannerHosted,
                 isFree: !pillShowing && audioBarContext == nil,
                 topInset: topInset,
-                onTap: onPlayerBannerTap,
+                onSelect: onPlayerBannerTap,
                 onSurfaceChange: { bannerSurface = $0 }
             )
             content

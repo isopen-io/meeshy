@@ -324,3 +324,18 @@ describe('MoodQuote — l’humeur citée, dans la peau d’une citation (#7881)
     expect(html).toContain('Humeur');
   });
 });
+
+describe('StickerArtwork — le sticker se touche (#10630)', () => {
+  test('un sticker est un bouton de fiche, sans bulle ni visionneuse', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{}} picture={picture('t1')} side={224} />);
+    expect(html).toContain('<button');
+    expect(html).toContain('data-sticker-open');
+    expect(html).not.toContain('data-media-viewer');
+  });
+
+  test('l’aperçu de la fiche n’est pas lui-même un bouton', () => {
+    const html = renderToStaticMarkup(<StickerArtwork sticker={{}} picture={picture('t2')} side={256} interactive={false} />);
+    expect(html).not.toContain('data-sticker-open');
+    expect(html).toContain('<img');
+  });
+});

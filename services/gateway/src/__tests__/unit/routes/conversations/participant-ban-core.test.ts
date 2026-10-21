@@ -53,7 +53,7 @@ function fabriquerSocket() {
   const ordre: string[] = [];
 
   const chaine = (rooms: string[]) => ({
-    to: (room: string) => chaine([...rooms, room]),
+    to: (room: string) => chaine([...rooms, room]), except: () => chaine(rooms),
     emit: (event: string, payload: unknown) => {
       emissions.push({ rooms, event, payload });
       ordre.push(`emit:${event}`);
@@ -102,7 +102,7 @@ function fabriquerPrisma(options: {
       update: jest.fn<any>().mockResolvedValue({}),
       findMany: jest.fn<any>().mockResolvedValue([{ id: 'part-acteur', userId: ACTEUR_ID }]),
     },
-    conversationShareLink: { update: jest.fn<any>().mockResolvedValue({}) },
+    conversationShareLink: { updateMany: jest.fn<any>().mockResolvedValue({ count: 1 }) },
   };
 }
 
@@ -140,11 +140,59 @@ describe('bannirParticipant — appelé DIRECTEMENT, sans Fastify (#4713)', () =
       where: { id: CIBLE_PART_ID },
       data: expect.objectContaining({ isActive: false }),
     });
-    expect(prisma.conversationShareLink.update).toHaveBeenCalledWith({
-      where: { id: 'lien-1' },
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { id: 'lien-1', conversationId: CONV_ID },
       data: { isActive: false },
     });
     expect(mockInvalidateParticipantLookup).toHaveBeenCalledWith(CIBLE_PART_ID, CONV_ID);
+  });
+
+  it('ferme le lien d’entrée d’un invité entré avec le seul champ de session (#10465)', async () => {
+    const ligneComplete = {
+      ...CIBLE_ACTIVE,
+      userId: null,
+      shareLinkId: null,
+      anonymousSession: { shareLinkId: 'lien-session' },
+    };
+    const projeter = (ligne: Record<string, unknown>, select: Record<string, unknown>): Record<string, unknown> =>
+      Object.fromEntries(
+        Object.entries(select)
+          .filter(([cle]) => cle in ligne)
+          .map(([cle, valeur]) => {
+            const champ = ligne[cle];
+            const sousSelection = (valeur as { select?: Record<string, unknown> }).select;
+            return [cle, sousSelection && champ ? projeter(champ as Record<string, unknown>, sousSelection) : champ];
+          }),
+      );
+    const prisma = fabriquerPrisma();
+    prisma.participant.findFirst = jest.fn<any>()
+      .mockResolvedValueOnce({ id: 'part-acteur', role: 'moderator' })
+      .mockImplementationOnce(async (args: any) => projeter(ligneComplete, args.select));
+
+    const verdict = await bannirParticipant(demande(prisma, fabriquerSocket().passerelle));
+
+    expect(verdict.genre).toBe('ok');
+    if (verdict.genre !== 'ok') return;
+    expect(verdict.donnees.closedShareLinkId).toBe('lien-session');
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { id: 'lien-session', conversationId: CONV_ID },
+      data: { isActive: false },
+    });
+  });
+
+  it('ne ferme pas un lien d’une AUTRE conversation que porterait la ligne bannie (#10465)', async () => {
+    const prisma = fabriquerPrisma({ cible: { ...CIBLE_ACTIVE, shareLinkId: 'lien-ailleurs' } });
+    prisma.conversationShareLink.updateMany.mockResolvedValue({ count: 0 });
+
+    const verdict = await bannirParticipant(demande(prisma, fabriquerSocket().passerelle));
+
+    expect(verdict.genre).toBe('ok');
+    if (verdict.genre !== 'ok') return;
+    expect(verdict.donnees.closedShareLinkId).toBeNull();
+    expect(prisma.conversationShareLink.updateMany).toHaveBeenCalledWith({
+      where: { id: 'lien-ailleurs', conversationId: CONV_ID },
+      data: { isActive: false },
+    });
   });
 
   it('refuse une cible déjà bannie par un 400', async () => {

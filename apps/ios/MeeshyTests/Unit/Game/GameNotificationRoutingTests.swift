@@ -43,21 +43,25 @@ final class GameNotificationRoutingTests: XCTestCase {
     func test_everyNavigationSwitch_opensTheGameOnItsCompleteChain() throws {
         let five = ".gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow"
         let entry = "router.openGame(at: GameNavigationMap.entry(for:"
+        // L'aiguillage iPhone vit dans `RootNotificationNavigator`, le lien du Jeu dans `RootView` (#9947).
         let iphone = try source("Meeshy/Features/Main/Views/RootView.swift")
+            + "\n" + source("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")
         XCTAssertEqual(iphone.components(separatedBy: "case \(five):").count - 1, 1, "l'aiguillage iPhone (push, liste, bannière)")
-        XCTAssertEqual(iphone.components(separatedBy: entry).count - 1, 2, "jeu et paliers : l'iPhone ouvre l'écran de la carte")
+        XCTAssertEqual(iphone.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPhone ouvre l'écran de la carte")
 
         let ipad = try source("Meeshy/Features/Main/Views/iPadRootView+Navigation.swift")
-        XCTAssertEqual(ipad.components(separatedBy: "case \(five):").count - 1, 3, "liste, bannière in-app et push : trois gestionnaires iPad")
-        XCTAssertEqual(ipad.components(separatedBy: entry).count - 1, 6, "jeu et paliers, sur les trois gestionnaires iPad")
+        XCTAssertEqual(ipad.components(separatedBy: "case \(five):").count - 1, 1, "liste, bannière in-app et push : UN aiguillage iPad, comme l'iPhone")
+        XCTAssertEqual(ipad.components(separatedBy: entry).count - 1, 3, "jeu, paliers et lien du Jeu (#9947) : l'iPad ouvre l'écran de la carte, comme l'iPhone")
         XCTAssertFalse(ipad.contains("rightPanelRoute = .gamePage("), "plus aucune sous-page orpheline ouverte par une notification")
 
         for layers in ["Meeshy/Features/Main/Views/RootLayers/RootViewLayers.swift", "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"] {
-            XCTAssertTrue(try source(layers).contains("onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }"),
-                          "\(layers) : le bandeau du joueur ouvre la fiche du niveau")
+            XCTAssertTrue(try source(layers).contains("onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }"),
+                          "\(layers) : chaque pièce du bandeau ouvre SA fiche (#10846)")
         }
-        XCTAssertTrue(try source("Meeshy/Features/Main/Views/ProfileView.swift").contains("router.openGame(at: .gamePage(.showcase))"),
-                      "« Voir la vitrine » du profil pose la Vitrine sur son chemin complet")
+        // #10093 — le profil ne porte plus de carte de jeu (donc plus de « Voir la vitrine ») : sa porte reste la rangée
+        // Progression, qui ouvre l'écran sans ancre.
+        XCTAssertTrue(try source("Meeshy/Features/Main/Views/ProfileView.swift").contains("ProfileProgressionEntry { router.push(.progression) }"),
+                      "le profil ouvre Progression par sa rangée")
         for host in ["Meeshy/Features/Main/Views/RootLayers/RootRouteDestination.swift", "Meeshy/Features/Main/Views/iPadRootView+Panels.swift"] {
             XCTAssertTrue(try source(host).contains("ProgressionView()"), "\(host) monte Progression sans ancre : la pile porte le chemin")
         }

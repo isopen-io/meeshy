@@ -63,7 +63,6 @@ extension StoryViewModel {
             // dans l'item, il n'était jamais relu — une republication rejouée
             // partait orpheline.
             repostOfId: item.repostOfId,
-            progress: 0,
             phase: .uploading,
             authorId: user?.id ?? "",
             authorName: user?.displayName ?? user?.username ?? "",
@@ -155,7 +154,7 @@ extension StoryViewModel {
                 Task { @MainActor in
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
-                    try? await Task.sleep(for: .seconds(2))
+                    _ = await cancellableSleep(for: .seconds(2))
                     // TOUTES les entrées en échec repartent — la file les
                     // sérialise (une seule monte à la fois) et la revendication
                     // atomique empêche toute course avec le drain de queue.
@@ -167,113 +166,6 @@ extension StoryViewModel {
                 }
             }
             .store(in: &cancellables)
-    }
-
-    // MARK: - Background Upload State
-
-    struct StoryUploadState: Identifiable {
-        let id: String
-        let thumbnailImage: UIImage
-        /// E5 — id de l'item write-ahead dans `StoryPublishQueue` (et le
-        /// tempStoryId de son dossier médias) : retiré au succès/cancel ;
-        /// un kill le laisse en queue → repris au boot.
-        var queueId: String?
-        var queueTempStoryId: String?
-        /// Brouillon d'origine (directive 2026-08-02) : gelé au hand-off, il
-        /// n'est supprimé qu'au SUCCÈS serveur confirmé ; l'annulation le
-        /// dégèle, l'échec permanent le ramène éditable avec son erreur.
-        var draftId: String?
-        /// Republication d'une story d'autrui : id de l'ORIGINAL, transporté
-        /// jusqu'à `createStory` pour que la copie porte son attribution et
-        /// crédite ses vues. `nil` pour une publication nominale.
-        var repostOfId: String?
-        /// E5 — le VM détient-il la revendication de son item en queue ?
-        /// Posée au write-ahead, CONSERVÉE à l'échec dès qu'une slide est
-        /// commise (`releaseQueueClaimIfNothingCommitted`). Un retry ne doit
-        /// re-revendiquer que s'il l'a relâchée : sinon `markInFlight`
-        /// refuserait sa PROPRE revendication et la ligne resterait en
-        /// `.queued`, hors de portée du drain comme du geste « Réessayer ».
-        var ownsQueueClaim: Bool = false
-        var progress: Double
-        var phase: UploadPhase
-
-        let authorId: String
-        let authorName: String
-        let authorAvatar: String?
-
-        /// Variable pour recevoir les slides ENRICHIES (thumbHashes calculés en
-        /// aval du hand-off) avant que l'upload ne démarre.
-        var slides: [StorySlide]
-        let slideImages: [String: UIImage]
-        let loadedImages: [String: UIImage]
-        let loadedVideoURLs: [String: URL]
-        let loadedAudioURLs: [String: URL]
-        /// **Les octets ANIMÉS des stickers collés, keyés par id d'élément**
-        /// (#3956) — vide pour toute publication sans GIF.
-        ///
-        /// `loadedImages` n'en porte que la PREMIÈRE image ; téléverser
-        /// celle-ci publierait un sticker figé après l'avoir composé animé —
-        /// l'aperçu aurait dit vrai et la publication, non.
-        var loadedStickerAnimations: [String: Data] = [:]
-        let originalLanguage: String?
-        let visibility: String
-        let visibilityUserIds: [String]
-        /// Les personnes que l'auteur a DÉCLARÉES, avec leur mode — ce que la
-        /// publication envoie au lieu de deviner les `@handle` des objets
-        /// texte. Vide = aucune référence hors texte ; le serveur relit le
-        /// texte lui-même.
-        var declaredMentions: [PostMentionInput] = []
-        /// **Les mentions PAR SLIDE** (#4068, porteur 2026-09-03).
-        ///
-        /// > Une mention est attachée à la publication. En Story, une
-        /// > publication est une slide ; en Post et en Réel, il n'y en a qu'une.
-        ///
-        /// `declaredMentions` ci-dessus est composer-wide, et la boucle
-        /// d'envoi le semait sur CHAQUE slide : une NOTE posée en pensant à la
-        /// première notifiait trois fois. Vide ⇒ repli sur la liste plate,
-        /// c'est-à-dire sur l'ancien comportement — le cas nominal des formats
-        /// à publication unique.
-        var mentionsBySlide: [String: [PostMentionInput]] = [:]
-        /// Les DEUX textes saisis par l'auteur — texte alternatif et LÉGENDE
-        /// (#4055) —, keyés par ID D'ÉLÉMENT DU COMPOSER. La traduction vers
-        /// les ids `PostMedia` n'est possible qu'après l'upload, qui les
-        /// attribue — `runStoryUpload` la fait juste avant l'envoi
-        /// (`StoryMediaTextMapping.serverKeyed`).
-        ///
-        /// Un porteur NOMMÉ plutôt que deux dictionnaires voisins : cf.
-        /// `ComposerMediaTexts`, dont le doc dit pourquoi l'ordre positionnel
-        /// ne doit pas être ce qui les distingue.
-        var composerMediaTexts: ComposerMediaTexts = .none
-        /// L'opt-in d'extraction de bande-son du post. `nil` = l'auteur n'a rien
-        /// tranché : le défaut serveur s'applique par silence.
-        var allowSoundExtraction: Bool? = nil
-        /// Le FORMAT choisi dans le composer (V3-3), porté jusqu'à l'envoi.
-        /// `.story` par défaut : toute surface qui n'offre pas d'éventail
-        /// publie exactement ce qu'elle publiait.
-        var targetType: PostType = .story
-        /// « Publier AUSSI en réel » (#9476) — le réel part avec la story, sur
-        /// ses propres médias copiés par le serveur. `false` = la story seule.
-        var alsoAsReel: Bool = false
-        /// IDs of slide-Posts already created server-side. Tracked so that:
-        /// (a) `retryUpload()` skips them (otherwise a partial-failure retry creates
-        ///     duplicate slides — what was previously committed plus the same again),
-        /// (b) `cancelUpload()` can DELETE them (otherwise a 5-slide story that
-        ///     fails at slide 3 leaves slides 1-2 visible to friends as orphans).
-        var publishedPostIds: [String] = []
-
-        enum UploadPhase: Sendable, Equatable {
-            /// L'entrée existe pour l'UI mais son intent n'est pas encore
-            /// durable : write-ahead et enrichissement thumbHash en cours. La
-            /// drainer publierait des slides sans thumbHash, sans revendication
-            /// et sans `queueId` (l'intent survivrait alors au succès et serait
-            /// republié au boot). JAMAIS drainable.
-            case preparing
-            /// Persistée, revendiquée, enrichie — en attente de son tour.
-            case queued
-            case uploading
-            case publishing
-            case failed(String)
-        }
     }
 
     // MARK: - Background Publishing
@@ -372,7 +264,6 @@ extension StoryViewModel {
             thumbnailImage: thumbnail,
             draftId: draftId,
             repostOfId: repostOfId,
-            progress: 0,
             phase: .preparing,
             authorId: user?.id ?? "",
             authorName: user?.displayName ?? user?.username ?? "",
@@ -496,6 +387,11 @@ extension StoryViewModel {
         body(&activeUploads[idx])
     }
 
+    func reportUploadProgress(_ fraction: Double, for id: String) {
+        guard activeUploads.contains(where: { $0.id == id }) else { return }
+        uploadProgress.report(fraction, for: id)
+    }
+
     /// Démarre l'upload suivant si aucun ne monte. Les uploads se déroulent un
     /// à la fois, dans l'ordre de publication : le TUS d'une story multi-slides
     /// sature déjà la bande passante, les paralléliser ne ferait que les
@@ -561,7 +457,14 @@ extension StoryViewModel {
             mentionsBySlide: mentionsBySlide,
             composerMediaTexts: composerMediaTexts,
             allowSoundExtraction: allowSoundExtraction,
-            alsoAsReel: alsoAsReel
+            alsoAsReel: alsoAsReel,
+            onUnsavedMedia: { [weak self] outcome in
+                self?.keepCompositionWithUnsavedMedia(
+                    outcome, slides: slides, slideImages: slideImages, loadedImages: loadedImages,
+                    loadedVideoURLs: loadedVideoURLs, loadedAudioURLs: loadedAudioURLs,
+                    visibility: visibility, visibilityUserIds: visibilityUserIds,
+                    originalLanguage: originalLanguage, draftId: draftId)
+            }
         ) else { return }
 
         insertOptimisticOfflineStories(
@@ -594,149 +497,55 @@ extension StoryViewModel {
 
     /// E5 — cœur de persistance du publish (write-ahead) partagé par les DEUX
     /// chemins : offline (enqueue + UX optimiste ci-dessus) et online
-    /// (`publishStoryInBackground` persiste AVANT de lancer l'upload, marque
-    /// l'item in-flight, le retire au succès — un kill mid-upload laisse
-    /// l'item en queue, repris au drain de boot). Retourne les ids de l'item
-    /// persisté, `nil` si l'encodage échoue.
+    /// (`publishStoryInBackground` persiste AVANT de lancer l'upload). Façade de
+    /// `StoryPublishIntentWriter.persist`, qui porte le contrat. Retourne les ids de
+    /// l'item persisté, `nil` si l'encodage échoue.
     func persistPublishIntentToQueue(
-        /// Le format choisi. Persisté DANS l'item de file : il ne vit nulle
-        /// part ailleurs (le brouillon ne le porte pas), donc un rejeu qui ne
-        /// l'emporterait pas republierait une story là où l'auteur avait
-        /// choisi « Post ».
         targetType: PostType = .story,
         slides: [StorySlide],
         slideImages: [String: UIImage],
         loadedImages: [String: UIImage],
         loadedVideoURLs: [String: URL],
         loadedAudioURLs: [String: URL],
-        /// Les octets ANIMÉS des stickers (#8522) : sans eux, le fichier mis en
-        /// file est un PNG fixe et le rejeu publie un sticker figé.
         loadedStickerAnimations: [String: Data] = [:],
         originalLanguage: String? = nil,
         visibility: String,
         visibilityUserIds: [String],
         draftId: String? = nil,
-        /// Republication : id de l'original, persisté DANS l'item de file pour
-        /// survivre à un kill — le rejeu au boot doit republier avec la même
-        /// attribution, pas créer une story orpheline.
         repostOfId: String? = nil,
-        /// Références DÉCLARÉES : elles ne vivent nulle part ailleurs (un badge
-        /// est exclu de la relecture serveur, une note comme un silence n'ont
-        /// aucun texte), donc un rejeu qui ne les porterait pas publierait une
-        /// story qui ne prévient personne.
         declaredMentions: [PostMentionInput] = [],
-        /// Les mentions PAR SLIDE (#4068), persistées pour la même raison :
-        /// sans elles le rejeu retomberait sur la liste plate et re-sèmerait
-        /// une NOTE sur toutes les slides. Vide ⇒ repli assumé.
         mentionsBySlide: [String: [PostMentionInput]] = [:],
-        /// Accessibilité : ces deux champs ne vivent NULLE PART ailleurs (le
-        /// brouillon ne les porte pas), donc un rejeu qui ne les emporterait
-        /// pas publierait une story muette pour les lecteurs d'écran.
         composerMediaTexts: ComposerMediaTexts = .none,
         allowSoundExtraction: Bool? = nil,
-        /// « Aussi en réel » (#9476) — persisté : un rejeu sans lui publierait la story seule.
-        alsoAsReel: Bool = false
+        alsoAsReel: Bool = false,
+        onUnsavedMedia: ((StoryOfflineMediaWriter.Outcome) -> Void)? = nil
     ) async -> (queueId: String, tempStoryId: String)? {
-        // 1. Re-key slide backgrounds.
-        let bgImages = Dictionary(
-            uniqueKeysWithValues: slideImages.map { (slideId, img) in
-                ("slide-bg-\(slideId)", img)
-            }
-        )
-        // Foreground images merged with backgrounds; collisions go to the
-        // foreground value (extremely unlikely — slide ids and effect ids
-        // are both UUIDs).
-        let allImages = bgImages.merging(loadedImages) { _, fg in fg }
-
-        // 2. Persist media on disk in a dedicated offline queue directory per story.
-        // This avoids `StoryDraftStore.saveMedia` which clears the directory, allowing
-        // multiple stories to be queued without data loss.
-        let fm = FileManager.default
-        let docDir = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let tempStoryId = "pending_\(UUID().uuidString)"
-        let offlineDir = docDir.appendingPathComponent("meeshy_offline_queue").appendingPathComponent(tempStoryId)
-        try? fm.createDirectory(at: offlineDir, withIntermediateDirectories: true)
-        
-        // Chaque écriture passait par un `try?` nu : un échec était avalé ET
-        // la référence ajoutée quand même. La story partait en file, on
-        // promettait « publication au retour en ligne », puis le drain la
-        // faisait échouer DÉFINITIVEMENT en `.missingLocalMedia` — travail
-        // perdu, longtemps après, sans signal au moment où c'était réparable.
-        //
-        // Les images de stickers doivent traverser la file SANS être aplaties :
-        // le JPEG n'a pas de canal alpha et c'est ce fichier-là que le drain
-        // téléversera. On nomme tous les ids de stickers — le writer n'agit que
-        // sur ceux dont il détient réellement un bitmap, donc un sticker emoji
-        // n'y change rien. `StorySticker.kind` ne peut pas servir de filtre
-        // ici : il se déduit de `postMediaId`, encore vide avant publication.
-        let stickerIds = Set(slides.flatMap { $0.effects.stickerObjects ?? [] }.map(\.id))
-        let mediaOutcome = StoryOfflineMediaWriter.persist(
-            images: allImages,
-            videos: loadedVideoURLs,
-            audios: loadedAudioURLs,
-            into: offlineDir,
-            alphaPreservingIds: stickerIds,
-            animations: loadedStickerAnimations,
-            fileManager: fm
-        )
-        guard mediaOutcome.isComplete else {
-            Logger.stories.error(
-                "offline.publish aborted — médias non persistés: \(mediaOutcome.failedElementIds.joined(separator: ","), privacy: .public)")
-            // Le dossier partiel ne sert à rien et occuperait le disque.
-            try? fm.removeItem(at: offlineDir)
-            FeedbackToastManager.shared.showError(String(
-                localized: "story.publish.queue.mediaError",
-                defaultValue: "Impossible d'enregistrer les médias de la story — réessayez"
-            ))
-            return nil
-        }
-        let mediaReferences = mediaOutcome.references
-
-        // 3. Encode the slides payload. The custom encoder excludes
-        //    `mediaData`, which is exactly why `mediaReferences` carries
-        //    the disk paths separately.
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        guard let payload = try? encoder.encode(slides) else {
-            FeedbackToastManager.shared.showError(String(
-                localized: "story.publish.queue.encodeError",
-                defaultValue: "Impossible d'enregistrer la story pour publication différée"
-            ))
-            return nil
-        }
-
-        // 4. Enqueue. The queue persists to disk synchronously so a crash
-        //    immediately after this call still preserves the item.
-        let item = StoryPublishQueueItem(
-            visibility: visibility,
-            slidesPayload: payload,
-            repostOfId: repostOfId,
-            mediaReferences: mediaReferences,
-            tempStoryId: tempStoryId,
-            visibilityUserIds: visibilityUserIds,
+        await StoryPublishIntentWriter.persist(
+            targetType: targetType,
+            slides: slides,
+            slideImages: slideImages,
+            loadedImages: loadedImages,
+            loadedVideoURLs: loadedVideoURLs,
+            loadedAudioURLs: loadedAudioURLs,
+            loadedStickerAnimations: loadedStickerAnimations,
             originalLanguage: originalLanguage,
+            visibility: visibility,
+            visibilityUserIds: visibilityUserIds,
             draftId: draftId,
-            mentionsPayload: declaredMentions.isEmpty ? nil : declaredMentions,
-            mentionsBySlidePayload: mentionsBySlide.isEmpty ? nil : mentionsBySlide,
-            mediaAltPayload: composerMediaTexts.payload(.alt),
-            mediaCaptionPayload: composerMediaTexts.payload(.caption),
-            allowSoundExtractionPayload: allowSoundExtraction,
-            targetTypePayload: targetType.rawValue,
-            alsoAsReelPayload: alsoAsReel ? true : nil
+            repostOfId: repostOfId,
+            declaredMentions: declaredMentions,
+            mentionsBySlide: mentionsBySlide,
+            composerMediaTexts: composerMediaTexts,
+            allowSoundExtraction: allowSoundExtraction,
+            alsoAsReel: alsoAsReel,
+            onUnsavedMedia: onUnsavedMedia
         )
-        _ = await StoryPublishQueue.shared.enqueue(item)
-        return (queueId: item.id, tempStoryId: tempStoryId)
     }
 
     /// E5 — supprime le dossier médias `meeshy_offline_queue/<tempStoryId>/`
     /// d'un intent retiré de la queue (succès ou annulation du chemin online).
-    /// Sans ce cleanup, chaque publish online laisserait ses copies de médias
-    /// orphelines sur disque.
     nonisolated static func removeOfflineQueueMediaDirectory(tempStoryId: String) {
-        let docDir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let dir = docDir.appendingPathComponent("meeshy_offline_queue")
-            .appendingPathComponent(tempStoryId)
-        try? FileManager.default.removeItem(at: dir)
+        StoryPublishIntentWriter.removeMediaDirectory(tempStoryId: tempStoryId)
     }
 
     /// Construit l'id optimiste d'une slide à partir de l'id de queue + index.
@@ -938,7 +747,7 @@ extension StoryViewModel {
                 _ = try await self.runStoryUpload(
                     upload,
                     onProgress: { [weak self] progress in
-                        self?.mutateUpload(id: id) { $0.progress = progress }
+                        self?.reportUploadProgress(progress, for: id)
                     },
                     onPhase: { [weak self] phase in
                         self?.mutateUpload(id: id) { $0.phase = phase }
@@ -1066,20 +875,37 @@ extension StoryViewModel {
     }
 }
 
-/// **Ce que dit la file hors ligne, selon ce que l'auteur publie** (#8522).
-/// Un post mis en file s'annonçait « Story enregistrée ».
-nonisolated enum StoryPublishCopy {
-    static func queuedForOffline(_ type: PostType) -> String {
-        switch type {
-        case .story:
-            return String(localized: "story.publish.queue.enqueued",
-                          defaultValue: "Story enregistrée — publication au retour en ligne")
-        case .reel:
-            return String(localized: "reel.publish.queue.enqueued",
-                          defaultValue: "Réel enregistré — publication au retour en ligne")
-        case .post, .status:
-            return String(localized: "post.publish.queue.enqueued",
-                          defaultValue: "Post enregistré — publication au retour en ligne")
+extension StoryViewModel {
+
+    /// **Un média irrécupérable ne fait pas perdre la composition** (#10495).
+    ///
+    /// Sur le chemin hors ligne, le composer est déjà fermé et son
+    /// autosauvegarde jetée quand la file refuse : ne rien faire perdait tout
+    /// le travail. La composition devient un brouillon — avec ce qui a pu être
+    /// gardé — marqué de l'erreur, et le toast dit QUEL média manque.
+    func keepCompositionWithUnsavedMedia(
+        _ outcome: StoryOfflineMediaWriter.Outcome,
+        slides: [StorySlide],
+        slideImages: [String: UIImage],
+        loadedImages: [String: UIImage],
+        loadedVideoURLs: [String: URL],
+        loadedAudioURLs: [String: URL],
+        visibility: String,
+        visibilityUserIds: [String],
+        originalLanguage: String?,
+        draftId: String?
+    ) {
+        let message = StoryPublishCopy.unsavedMedia(outcome.failures.first?.kind ?? .image)
+        let keptId = draftId ?? UUID().uuidString
+        let images = slideImages.reduce(into: loadedImages) { acc, entry in
+            acc["slide-bg-\(entry.key)"] = entry.value
         }
+        draftStore.save(draftId: keptId, slides: slides, visibility: visibility,
+                        visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage)
+        draftStore.saveMedia(draftId: keptId,
+                             images: images.filter { !$0.key.contains("/") },
+                             videoURLs: loadedVideoURLs, audioURLs: loadedAudioURLs)
+        draftStore.recordPublishFailure(draftId: keptId, message: message)
+        FeedbackToastManager.shared.showError(message)
     }
 }

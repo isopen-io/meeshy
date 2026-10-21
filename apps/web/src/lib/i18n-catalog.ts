@@ -94,6 +94,16 @@ export function suspendForInterfaceCatalog(language: InterfaceLanguage): void {
   throw loadInterfaceCatalog(language);
 }
 
+/**
+ * LE CATALOGUE EST-IL DÉJÀ LÀ ? (#10635) — pour la seule pièce qui se rend
+ * AVANT qu'une route l'ait attendu : l'attente d'un écran, repli Suspense du
+ * routeur. Elle ne lit son libellé qu'une fois le catalogue chargé, sans
+ * jamais lever ni servir une autre langue.
+ */
+export function isInterfaceCatalogLoaded(language: InterfaceLanguage): boolean {
+  return loaded.has(language);
+}
+
 const PLACEHOLDER = /\{(\w+)\}/g;
 
 /** Les noms de paramètres d'un texte de catalogue, dans leur ordre d'apparition. */

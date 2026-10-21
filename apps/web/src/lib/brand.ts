@@ -14,6 +14,8 @@
  *   · `renderingMode(.template)` devient un masque CSS côté consommateur, ce
  *     module ne fait que nommer le fichier gabarit qui le nourrit.
  */
+import { translate } from './i18n-catalog';
+import type { InterfaceLanguage } from './interface-language';
 
 /**
  * Le logo in-app — projection de `MeeshyLogo.imageset` (copie octet pour
@@ -31,11 +33,38 @@ export const BRAND_LOGO_PATH = '/brand/logo.png';
 export const BRAND_SIGNATURE_MASK_PATH = '/brand/signature-mask.png';
 
 /**
- * `brand.signature.credit` (`apps/ios/Meeshy/Localizable.xcstrings`) —
- * IDENTIQUE dans les 7 locales iOS (ar, de, en, es, fr, it, pt-BR) : un nom
- * propre, pas une chaîne à faire descendre le Prisme.
+ * LE CRÉDIT DU PIED DE MARQUE (#10096) — « by services.ceo », une MARQUE : il
+ * ne se traduit dans aucune langue et ne descend pas le Prisme. iOS l'écrit
+ * à l'identique, en verbatim (`BrandSignature.credit`).
  */
-export const BRAND_CREDIT = 'Services CEO';
+export const BRAND_CREDIT = 'by services.ceo';
+
+/**
+ * OÙ MÈNE LE CRÉDIT (#10096) — la plateforme, dans un nouvel onglet : le
+ * visiteur ne perd pas la page qu'il lisait. `noopener noreferrer` coupe
+ * `window.opener` (la plateforme ne peut pas renvoyer cet onglet ailleurs) et
+ * ne lui dit pas d'où il vient. Les deux pieds (`institutional/brand-signature.tsx`,
+ * `components/auth-chrome.tsx`) l'ÉTALENT tel quel : la destination n'est
+ * écrite qu'ici, comme `BrandSignature.creditDestination` côté iOS.
+ */
+export const BRAND_CREDIT_LINK = {
+  href: 'https://services.ceo',
+  target: '_blank',
+  rel: 'noopener noreferrer',
+} as const;
+
+/**
+ * CE QUE LE LIEN FAIT, dit au lecteur d'écran À LA SUITE du texte visible
+ * (#10096). Le nom accessible COMMENCE par le crédit lu (WCAG 2.5.3, le libellé
+ * dans le nom : « by services.ceo » dicté à la commande vocale l'active), puis
+ * annonce la sortie de page — dans la langue d'interface (#10827), au
+ * catalogue (`brand.credit.hint`, pendant web de
+ * `brand.signature.credit.accessibilityHint` d'iOS : « dans un nouvel onglet »
+ * plutôt que « dans le navigateur », le visiteur y est déjà).
+ */
+export function brandCreditHint(language: InterfaceLanguage): string {
+  return ` — ${translate(language, 'brand.credit.hint')}`;
+}
 
 /**
  * LES TROIS TRAITS DE LA MARQUE, dans le repère 1024 de
@@ -63,14 +92,17 @@ export function brandVersionLine(version: string): string {
 }
 
 /*
- * CE MODULE NE PORTE PAS DE LIBELLÉ D'ACCESSIBILITÉ, et c'est une décision.
+ * CE MODULE NE PORTE PAS DE LIBELLÉ D'ACCESSIBILITÉ DU BLOC, et c'est une
+ * décision. (Le CRÉDIT, lui, est un lien depuis #10096 : un lien a un rôle, et
+ * son nom se complète par `brandCreditHint`, en texte, jamais en `aria-label`.)
  *
- * `BrandSignature.swift:45-52` combine ses trois lignes en UN élément
- * d'accessibilité (`brand.signature.accessibilityLabel`) parce que SwiftUI
- * ferait sinon trois arrêts de balayage. Le web n'a pas ce problème — deux
- * `<p>` se lisent d'affilée — et un `aria-label` posé sur un conteneur sans
- * rôle y est IGNORÉ (« ARIA in HTML » : nommage interdit sur le rôle
- * `generic`). Un helper rendant ce libellé n'aurait donc eu qu'un seul usage
+ * `BrandSignature.swift` combinait ses trois lignes en UN élément
+ * d'accessibilité ; depuis que le crédit est un lien (#10096), il en rend
+ * deux — la version (`brand.signature.accessibilityLabel`), puis le lien. Le
+ * web n'a jamais eu besoin du premier : la version et le crédit se lisent
+ * d'affilée, et un `aria-label` posé sur un conteneur sans rôle y est IGNORÉ
+ * (« ARIA in HTML » : nommage interdit sur le rôle `generic`). Un helper
+ * rendant ce libellé n'aurait donc eu qu'un seul usage
  * possible : peindre une conformité sans effet. Le texte VISIBLE est le texte
  * LU — voir le doc-comment de `src/institutional/brand-signature.tsx`.
  */

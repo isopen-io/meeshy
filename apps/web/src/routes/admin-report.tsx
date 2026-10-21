@@ -30,6 +30,7 @@ import {
   adminReportSiblingsKey,
   loadAdminReport,
   loadAdminReportSiblings,
+  type AdminReport,
 } from '@/lib/api/admin-reports';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
@@ -38,6 +39,8 @@ import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, 
 import { useOnline } from '@/lib/net/online';
 import { useParams } from '@/lib/router';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { closedStatusOf } from '@/lib/admin/report-acts';
+import { AdminReportActBar } from './admin-report-acts';
 import { AdminAnnouncement } from '@/components/admin/announcement';
 import { href, navigate } from '@/routes/route-table';
 
@@ -230,16 +233,27 @@ export function AdminReportPanel({ language, reportId, deps = apiDeps, now = def
               </>
             }
             actions={
-              <ReportGestures
-                language={language}
-                report={report}
-                deps={deps}
-                viewerId={viewerId}
-                actionChoice={actionChoice}
-                online={online}
-                announce={announcer.announce}
-                onDeleted={() => navigate(href(reach.space === 'adm' ? 'admReports' : 'adminReports'))}
-              />
+              <div className="grid gap-2">
+                {/* TRAITER EN UN GESTE (#10394) : l'action sur le contenu signalé ET la clôture. */}
+                <AdminReportActBar
+                  language={language}
+                  report={report}
+                  onAnnounce={announcer.announce}
+                  deps={deps}
+                  optimistic={{ key: adminReportKey(reportId), apply: (before, act) => (before === null || before === undefined ? before : { ...(before as AdminReport), status: closedStatusOf(act) }) }}
+                  extraInvalidate={[adminReportKey(reportId)]}
+                />
+                <ReportGestures
+                  language={language}
+                  report={report}
+                  deps={deps}
+                  viewerId={viewerId}
+                  actionChoice={actionChoice}
+                  online={online}
+                  announce={announcer.announce}
+                  onDeleted={() => navigate(href(reach.space === 'adm' ? 'admReports' : 'adminReports'))}
+                />
+              </div>
             }
           />
         }

@@ -19,6 +19,10 @@ const ar = {
   'viewerEngagement.empty.subtitle': 'سيظهر هنا الأشخاص الذين يشاهدون هذا المنشور.',
   'viewerEngagement.forbidden': 'لا يمكنك الوصول إلى قائمة من شاهد هذا المنشور.',
   'viewerEngagement.unavailable': 'تفاصيل النشاط غير متاحة مؤقتًا.',
+  'viewerEngagement.visitors.one': 'و{count} زائر بلا حساب',
+  'viewerEngagement.visitors.other': 'و{count} زوار بلا حساب',
+  'viewerEngagement.visitors.only.one': '{count} زائر بلا حساب',
+  'viewerEngagement.visitors.only.other': '{count} زوار بلا حساب',
 } satisfies ViewerEngagementCatalog;
 
 export default ar;

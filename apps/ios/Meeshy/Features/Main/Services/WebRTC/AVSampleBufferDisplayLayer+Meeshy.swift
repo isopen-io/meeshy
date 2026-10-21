@@ -7,51 +7,52 @@
 //  dans `PiPVideoRenderer` (`isReadyForMoreMediaData`, `enqueue`, `flush`,
 //  `flushIfFailed`). Site unique désormais.
 //
-//  `nonisolated` : appelée depuis la serial queue privée de `PiPVideoRenderer`
-//  (jamais MainActor) ET depuis `PiPCallController` (MainActor) — une extension
-//  non annotée serait MainActor par défaut de module (SE-0466), ce qui
-//  forcerait un `await` sur le chemin per-frame du renderer.
+//  Depuis le SDK iOS 27, les propriétés du layer (`sampleBufferRenderer`,
+//  `isReadyForMoreMediaData`, `status`) sont isolées au MainActor, alors que
+//  `PiPVideoRenderer` enfile depuis sa serial queue privée. Le récepteur est donc
+//  résolu UNE fois sur le MainActor (`PiPSampleSink.init`), puis utilisé hors du
+//  main par le protocole `AVQueuedSampleBufferRendering`, que le renderer iOS 17+
+//  comme le layer legacy satisfont sans isolation.
 //
 
 import AVFoundation
 import CoreMedia
+import MeeshySDK
 import os
 
-nonisolated extension AVSampleBufferDisplayLayer {
-    /// `true` si le layer (ou son `sampleBufferRenderer` iOS 17+) peut absorber une frame de plus.
-    var isReadyForMoreMediaDataCompat: Bool {
-        if #available(iOS 17.0, *) { return sampleBufferRenderer.isReadyForMoreMediaData }
-        return isReadyForMoreMediaData
-    }
+nonisolated struct PiPSampleSink: @unchecked Sendable {
+    private let target: any AVQueuedSampleBufferRendering
 
-    /// Enfile un `CMSampleBuffer`, via le `sampleBufferRenderer` iOS 17+ ou directement sur le layer avant.
-    func enqueueCompat(_ sample: CMSampleBuffer) {
+    @MainActor
+    init(layer: AVSampleBufferDisplayLayer) {
         if #available(iOS 17.0, *) {
-            sampleBufferRenderer.enqueue(sample)
+            target = layer.sampleBufferRenderer
         } else {
-            enqueue(sample)
+            target = layer
         }
     }
 
-    /// Vide la file d'attente (iOS 17+ / legacy).
-    func flushCompat() {
-        if #available(iOS 17.0, *) {
-            sampleBufferRenderer.flush()
-        } else {
-            flush()
-        }
+    /// `true` si le récepteur peut absorber une frame de plus.
+    var isReadyForMoreMediaData: Bool { target.isReadyForMoreMediaData }
+
+    func enqueue(_ sample: sending CMSampleBuffer) { target.enqueue(sample) }
+
+    func flush() { target.flush() }
+
+    /// Si le récepteur est en échec, le vide (et journalise).
+    func flushIfFailed() {
+        guard hasFailed else { return }
+        target.flush()
+        Logger.pip.warning("PiP sample buffer sink failed → flush")
     }
 
-    /// Si le renderer/layer est en échec, le vide (et journalise).
-    func flushIfFailedCompat() {
-        if #available(iOS 17.0, *) {
-            if sampleBufferRenderer.status == .failed {
-                sampleBufferRenderer.flush()
-                Logger.pip.warning("PiP sampleBufferRenderer failed → flush")
-            }
-        } else if status == .failed {
-            flush()
-            Logger.pip.warning("PiP displayLayer failed → flush")
+    private var hasFailed: Bool {
+        if #available(iOS 17.0, *), let renderer = target as? AVSampleBufferVideoRenderer {
+            return renderer.status == .failed
         }
+        // Layer legacy (iOS 16) : `status` est isolé au MainActor sous le SDK
+        // iOS 27 ; KVC le lit sans franchir l'isolation (propriété KVO-conforme).
+        guard let raw = (target as? NSObject)?.value(forKey: "status") as? Int else { return false }
+        return raw == AVQueuedSampleBufferRenderingStatus.failed.rawValue
     }
 }

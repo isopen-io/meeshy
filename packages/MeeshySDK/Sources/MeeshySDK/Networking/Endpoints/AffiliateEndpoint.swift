@@ -12,6 +12,7 @@
 import Foundation
 
 public enum AffiliateEndpoint: MeeshyEndpoint, Sendable {
+    case byTokenOg(token: String)
     case clickByToken(token: String)
     case register
     case stats
@@ -22,6 +23,7 @@ public enum AffiliateEndpoint: MeeshyEndpoint, Sendable {
 
     public var path: String {
         switch self {
+        case .byTokenOg(let token): return "/api/v1/affiliate/\(token)/og"
         case .clickByToken(let token): return "/api/v1/affiliate/click/\(token)"
         case .register: return "/api/v1/affiliate/register"
         case .stats: return "/api/v1/affiliate/stats"

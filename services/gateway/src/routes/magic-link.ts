@@ -9,7 +9,21 @@ import { initSessionService, markSessionTrusted } from '../services/SessionServi
 import { rememberPendingDeviceTrust } from './auth/pending-device-trust';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendBadRequest, sendError, sendInternalError } from '../utils/response.js';
-import { userSchema, sessionSchema, errorResponseSchema, pendingSessionTokenProperty } from '@meeshy/shared/types/api-schemas';
+import {
+  userSchema,
+  sessionSchema,
+  errorResponseSchema,
+  pendingSessionTokenProperty,
+  adoptWithinSecondsProperty,
+  linkDeviceHashProperty,
+  linkDeviceSecretProperty,
+  linkConfirmProperty,
+  linkConfirmationProperties
+} from '@meeshy/shared/types/api-schemas';
+import { parseLinkDeviceHash } from '../services/auth/link-device-binding';
+import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } from '../services/auth/legacy-link-client';
+import { provenChallengeAdoption } from '../services/auth/pending-two-factor';
+import { provenSessionAdoption, servedSession } from '../services/auth/session-adoption';
 import { pendingSessionTokenFor } from '../services/auth/email-verification-watch';
 import { AuthService } from '../services/AuthService';
 import { LOGIN_CODE_TTL_MINUTES } from '../services/auth/email-code';
@@ -25,12 +39,17 @@ const requestMagicLinkSchema = z.object({
   /** OÙ REVENIR une fois connecté (#6742) — clampé côté SERVICE
    * (`clampMagicLinkReturnUrl`), jamais cru ici : une valeur hostile n'échoue
    * pas la requête, elle est simplement absente du lien envoyé. */
-  returnUrl: z.string().max(2048).optional()
+  returnUrl: z.string().max(2048).optional(),
+  /** #10872 — l'empreinte du secret que CET appareil garde : son lien s'y conclura sans question. */
+  linkDeviceHash: z.string().regex(/^[0-9a-fA-F]{64}$/, 'Invalid device hash').optional()
 });
 
 const validateMagicLinkSchema = z.object({
-  token: z.string().min(1, 'Token is required')
+  token: z.string().min(1, 'Token is required'),
   // rememberDevice is retrieved from server-side storage, not from client
+  /** #10872 — le secret de l'appareil, et le oui de l'utilisateur après la confirmation. */
+  linkDeviceSecret: z.string().regex(/^[A-Za-z0-9_-]{22,256}$/, 'Invalid device secret').optional(),
+  confirm: z.boolean().optional()
 });
 
 export async function magicLinkRoutes(fastify: FastifyInstance) {
@@ -91,7 +110,8 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
             type: 'string',
             description: 'Internal path to return to after a successful login (#6742). Clamped server-side to a same-origin path; a suspect value is dropped, never trusted.',
             example: '/chat/mshy_equipe_7f3a'
-          }
+          },
+          linkDeviceHash: linkDeviceHashProperty
         }
       },
       response: {
@@ -132,11 +152,12 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       }
 
       const { email } = validationResult.data;
+      const linkDeviceHash = parseLinkDeviceHash(validationResult.data.linkDeviceHash);
 
       const requestContext = await getRequestContext(request);
 
       const issue = await accounts().startAccountFromEmail(
-        { email, door: 'email-only', requestContext, deviceLocale: localeDeLaRequete(request) },
+        { email, door: 'email-only', requestContext, deviceLocale: localeDeLaRequete(request), linkDeviceHash },
         { afterResponse: deferAfterResponse }
       );
 
@@ -212,8 +233,10 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
           token: {
             type: 'string',
             description: 'Magic link token from email'
-          }
+          },
           // rememberDevice is retrieved from server-side storage (set during request)
+          linkDeviceSecret: linkDeviceSecretProperty,
+          confirm: linkConfirmProperty
         }
       },
       response: {
@@ -243,7 +266,15 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
                 // `token`, ni `sessionToken`, ni `session`, ni `expiresIn`.
                 requires2FA: { type: 'boolean', description: 'True when the account carries a second factor — no access token is granted yet', example: true },
                 twoFactorToken: { type: 'string', description: 'Short-lived token identifying the pending login; present it to POST /auth/login/2fa with the user code' },
-                message: { type: 'string', description: 'Human-readable prompt for the second factor' }
+                message: { type: 'string', description: 'Human-readable prompt for the second factor' },
+
+                // #10518 — porté par les DEUX branches : le délai d'adoption
+                // de la session, ou la durée de vie du défi.
+                adoptWithinSeconds: adoptWithinSecondsProperty,
+
+                // #10872 — branche EXCLUSIVE « confirmez le compte » : ni
+                // session, ni jeton, ni défi ; le lien n'a pas été consommé.
+                ...linkConfirmationProperties
               }
             }
           }
@@ -265,20 +296,33 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendBadRequest(reply, validationResult.error.issues[0]?.message || 'Token is required');
       }
 
-      const { token } = validationResult.data;
+      const { token, linkDeviceSecret, confirm } = validationResult.data;
 
       // Get request context
       const requestContext = await getRequestContext(request);
 
+      // #10878 — un ancien binaire iOS (avant #10872) garde la connexion directe, comptée.
+      const consent = linkLoginConsent({ headers: request.headers, confirm, linkDeviceSecret });
+
       // Validate magic link
       const result = await magicLinkService.validateMagicLink({
         token,
-        requestContext
+        requestContext,
+        linkDeviceSecret,
+        confirmed: consent.confirmed
       });
+
+      // #10872 — rien n'est consommé, aucune session : le client montre le
+      // compte cible et rejoue avec `confirm: true` si l'utilisateur dit oui.
+      if (result.requiresConfirmation && result.account) {
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account, intent: result.intent, maskedEmail: result.maskedEmail });
+      }
 
       if (!result.success) {
         return sendBadRequest(reply, result.error);
       }
+
+      countLegacyLinkLogin({ route: 'magic-link-validate', consent, counter: getLegacyLinkLoginCounter() });
 
       // Second facteur attendu : aucune session n'existe, il n'y a donc rien à
       // marquer de confiance — seulement à RETENIR (#4534). Depuis #4471 la
@@ -296,6 +340,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         return sendSuccess(reply, {
           requires2FA: true,
           twoFactorToken: result.twoFactorToken,
+          ...provenChallengeAdoption(),
           user: result.user,
           message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
         });
@@ -326,8 +371,9 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
         user: result.user,
         token: result.token,
         sessionToken: result.sessionToken,
-        session: { ...result.session, isTrusted: rememberDevice },
-        expiresIn
+        session: { ...servedSession(result.session ?? {}), isTrusted: rememberDevice },
+        expiresIn,
+        ...provenSessionAdoption(result.session ?? {}, new Date())
       });
 
     } catch (error) {

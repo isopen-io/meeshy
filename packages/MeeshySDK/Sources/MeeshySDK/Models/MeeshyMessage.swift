@@ -17,7 +17,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public let clientMessageId: String?
     public let conversationId: String
     public var senderId: String
-    public var content: String
+    /// Réécrire le texte sans repasser par le déchiffrement emporte sa
+    /// provenance : aucune empreinte ne survit au clair qu'elle couvrait.
+    public var content: String {
+        didSet {
+            guard contentOrigin != .wire, !contentOrigin.vouches(for: content, messageId: id) else { return }
+            contentOrigin = .wire
+        }
+    }
     public var originalLanguage: String = "fr"
     public var messageType: MessageType = .text
     public var messageSource: MessageSource = .user
@@ -63,6 +70,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// C'est LUI qui décide du glyphe fantôme, jamais le pseudo : le préfixe
     /// `ano_` est lisible mais pas réservé, et un compte peut le porter.
     public var senderIsAnonymous: Bool = false
+    /// L'auteur a PROUVÉ un compte (`sender.type` user ou bot, #10286). Ce
+    /// n'est pas l'inverse de `senderIsAnonymous`, qui n'affirme rien sur un
+    /// type absent : ici l'absence ne prouve rien, donc ses liens restent
+    /// inertes (fail-closed). Ne gouverne QUE les liens.
+    public var senderHasAccount: Bool = true
+    /// Le contour d'avatar équipé de l'auteur (#10713) ; `nil` sans contour ou ancien serveur.
+    public var senderRing: ServedProfileDecorItem?
     public var deliveryStatus: DeliveryStatus = .sent
     public var isMe: Bool = false
     public var deliveredToAllAt: Date?
@@ -93,6 +107,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// phrase se compose chez le lecteur (`CaptureNoticeText`), `content`
     /// n'en est que le repli français.
     public var captureNotice: CaptureNoticeMetadata?
+    /// Ligne d'arrivées regroupées de Meeshy Global (`metadata.kind ==
+    /// "members-arrived"`, #7759) : la phrase se compose chez le lecteur,
+    /// `content` n'en est que le repli français.
+    public var arrivalsNotice: ArrivalsNoticeMetadata?
 
     /// Lieu partagé, restitué depuis la colonne `locationJson` du cache GRDB
     /// (`APIMessage.location` hissé côté serveur). `nil` pour un message sans
@@ -102,7 +120,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// Sticker porté par le message (#4823), restitué depuis la colonne
     /// `stickerJson` du cache GRDB ou depuis `APIMessage.sticker`. `nil` pour
     /// un message sans sticker — et pour un sticker NON RENDABLE, ramené à
-    /// l'absence dès le décodage (`MessageSticker.ifRenderable`) : une bulle
+    /// l'absence dès le décodage (`MessageSticker.ifWireWorthy` : un `stickerId` de
+    /// bibliothèque seul est gardé, son image jointe le rend, #10655) : une bulle
     /// ne dessine jamais un sticker vide.
     public var sticker: MessageSticker?
 
@@ -139,6 +158,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     /// (`APIMessage.consumedByMe`). Non nul, il est permanent : la bulle dit
     /// `(1) · Déjà ouvert`, et le contenu est purgé.
     public var viewOnceOpenedAt: Date?
+
+    /// **D'où vient `content` SUR CET APPAREIL** (#11382) : `.wire` pour tout
+    /// texte reçu, `.decryptedOnDevice` posée par le SEUL déchiffrement
+    /// (`adoptDecryptedContent`) et liée par empreinte au clair ET à l'id.
+    /// Hors de l'init : aucun producteur ne la déclare. Persistée dans le
+    /// cache SEULEMENT à côté du clair qu'elle couvre, absente (`.wire`) sur
+    /// une ligne écrite avant elle ; réécrire `content` la retire.
+    public internal(set) var contentOrigin: MessageContentOrigin = .wire
 
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
@@ -194,6 +221,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 replyTo: ReplyReference? = nil, forwardedFrom: ForwardReference? = nil,
                 senderName: String? = nil, senderUsername: String? = nil, senderColor: String? = nil, senderAvatarURL: String? = nil, senderUserId: String? = nil,
                 senderIsAnonymous: Bool = false,
+                senderHasAccount: Bool = true,
+                senderRing: ServedProfileDecorItem? = nil,
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0, recipientCount: Int = 0,
@@ -201,6 +230,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 callSummary: CallSummaryMetadata? = nil,
                 joinNotice: JoinNoticeMetadata? = nil,
                 captureNotice: CaptureNoticeMetadata? = nil,
+                arrivalsNotice: ArrivalsNoticeMetadata? = nil,
                 location: SharedPlace? = nil,
                 sticker: MessageSticker? = nil,
                 trackedLinkMap: [String: String] = [:]) {
@@ -219,6 +249,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.attachments = attachments; self.reactions = reactions; self.replyTo = replyTo; self.forwardedFrom = forwardedFrom
         self.senderName = senderName; self.senderUsername = senderUsername; self.senderColor = senderColor; self.senderAvatarURL = senderAvatarURL; self.senderUserId = senderUserId
         self.senderIsAnonymous = senderIsAnonymous
+        self.senderHasAccount = senderHasAccount
+        self.senderRing = senderRing
         self.deliveryStatus = deliveryStatus; self.isMe = isMe
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
@@ -227,6 +259,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.callSummary = callSummary
         self.joinNotice = joinNotice
         self.captureNotice = captureNotice
+        self.arrivalsNotice = arrivalsNotice
         self.location = location
         self.sticker = sticker
         self.trackedLinkMap = trackedLinkMap
@@ -240,16 +273,18 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case pinnedAt, pinnedBy, isEncrypted, encryptionMode
         case createdAt, updatedAt, attachments, reactions
         case replyTo, forwardedFrom
-        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId
+        case senderName, senderUsername, senderColor, senderAvatarURL, senderUserId, senderIsAnonymous, senderHasAccount, senderRing
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount, recipientCount
         case cachedTimeString
         case callSummary
         case joinNotice
         case captureNotice
+        case arrivalsNotice
         case location
         case sticker
         case trackedLinkMap
+        case contentOrigin
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -290,8 +325,13 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         senderColor = try c.decodeIfPresent(String.self, forKey: .senderColor)
         senderAvatarURL = try c.decodeIfPresent(String.self, forKey: .senderAvatarURL)
         senderUserId = try c.decodeIfPresent(String.self, forKey: .senderUserId)
+        senderIsAnonymous = try c.decodeIfPresent(Bool.self, forKey: .senderIsAnonymous) ?? false
         deliveryStatus = try c.decodeIfPresent(DeliveryStatus.self, forKey: .deliveryStatus) ?? .sent
         isMe = try c.decodeIfPresent(Bool.self, forKey: .isMe) ?? false
+        // #10286 — blob antérieur : compte inconnu ⇒ liens inertes chez autrui.
+        senderHasAccount = try c.decodeIfPresent(Bool.self, forKey: .senderHasAccount)
+            ?? (isMe || messageSource != .user)
+        senderRing = try? c.decodeIfPresent(ServedProfileDecorItem.self, forKey: .senderRing)
         deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
         readByAllAt = try c.decodeIfPresent(Date.self, forKey: .readByAllAt)
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
@@ -307,6 +347,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // système générique (icône téléphone) avec le repli français.
         joinNotice = try? c.decodeIfPresent(JoinNoticeMetadata.self, forKey: .joinNotice)
         captureNotice = try? c.decodeIfPresent(CaptureNoticeMetadata.self, forKey: .captureNotice)
+        arrivalsNotice = try? c.decodeIfPresent(ArrivalsNoticeMetadata.self, forKey: .arrivalsNotice)
         // Same tolerance as callSummary: a malformed location blob must not
         // fail the whole cached-message decode.
         location = try? c.decodeIfPresent(SharedPlace.self, forKey: .location)
@@ -314,9 +355,10 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         // la relecture du cache, pour qu'une ligne ancienne ou malformée ne
         // ressuscite jamais un sticker vide.
         let cachedSticker: MessageSticker? = try? c.decodeIfPresent(MessageSticker.self, forKey: .sticker)
-        sticker = cachedSticker?.ifRenderable
+        sticker = cachedSticker?.ifWireWorthy
         // Backward-compatible: rows cached before this field decode to `[:]`.
         trackedLinkMap = try c.decodeIfPresent([String: String].self, forKey: .trackedLinkMap) ?? [:]
+        let cachedOrigin = (try? c.decodeIfPresent(MessageContentOrigin.self, forKey: .contentOrigin)) ?? .wire
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -324,6 +366,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         if let legacyBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred), legacyBlurred {
             effects.flags.insert(.blurred)
         }
+        // Une empreinte qui ne couvre plus le texte relu se perd (#11382).
+        contentOrigin = adoptingCachedOrigin(cachedOrigin)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -362,6 +406,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(senderColor, forKey: .senderColor)
         try c.encodeIfPresent(senderAvatarURL, forKey: .senderAvatarURL)
         try c.encodeIfPresent(senderUserId, forKey: .senderUserId)
+        if senderIsAnonymous { try c.encode(true, forKey: .senderIsAnonymous) }
+        try c.encode(senderHasAccount, forKey: .senderHasAccount)
+        try c.encodeIfPresent(senderRing, forKey: .senderRing)
         try c.encode(deliveryStatus, forKey: .deliveryStatus)
         try c.encode(isMe, forKey: .isMe)
         try c.encodeIfPresent(deliveredToAllAt, forKey: .deliveredToAllAt)
@@ -373,10 +420,14 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encodeIfPresent(callSummary, forKey: .callSummary)
         try c.encodeIfPresent(joinNotice, forKey: .joinNotice)
         try c.encodeIfPresent(captureNotice, forKey: .captureNotice)
+        try c.encodeIfPresent(arrivalsNotice, forKey: .arrivalsNotice)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(sticker, forKey: .sticker)
         if !trackedLinkMap.isEmpty {
             try c.encode(trackedLinkMap, forKey: .trackedLinkMap)
+        }
+        if isContentDecryptedOnDevice {
+            try c.encode(contentOrigin, forKey: .contentOrigin)
         }
     }
 
@@ -393,3 +444,4 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
 
 public typealias MeeshyChatMessage = MeeshyMessage
 
+extension MeeshyMessage: CacheIdentifiable {}

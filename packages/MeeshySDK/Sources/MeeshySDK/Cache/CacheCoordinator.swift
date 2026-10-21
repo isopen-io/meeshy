@@ -23,6 +23,12 @@ public actor CacheCoordinator {
     public let comments: GRDBCacheStore<String, FeedComment>
     public let stories: GRDBCacheStore<String, StoryGroup>
     public let stats: GRDBCacheStore<String, UserStats>
+    /// #10093 — les statistiques PUBLIQUES d'un profil visité, clé = userId. Distinct de `stats` (les miennes,
+    /// dix entrées au plus) : visiter onze fiches n'évince pas mes chiffres, et la fiche d'un autre se rouvre peinte.
+    public let profileStats: GRDBCacheStore<String, UserStats>
+    /// #10111 — la fiche d'un participant de conversation, clé = `conversationId/participantId`. Chiffrée : elle
+    /// peut porter l'e-mail et la date de naissance servis au cercle des hôtes.
+    public let participantProfiles: GRDBCacheStore<String, ConversationParticipantProfile>
     /// L'instantané de `GET /me/engagement` (#5698) — badges, série, niveau
     /// de l'utilisateur courant, UNE entrée par compte (`id = "current"`).
     /// Même politique que `stats` : l'écran « Progression » s'ouvre sur le
@@ -300,7 +306,7 @@ public actor CacheCoordinator {
     nonisolated let db: any DatabaseWriter
     private var cancellables = Set<AnyCancellable>()
     private var lifecycleObservers: [NSObjectProtocol] = []
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "cache-coordinator")
+    private let logger = MeeshyLog.logger(.cacheCoordinator, subsystem: .legacySDK)
     private var isStarted = false
     private var currentUserId: String = ""
 
@@ -336,6 +342,8 @@ public actor CacheCoordinator {
         // → un refetch réseau unique au premier lancement, puis tout est chiffré.
         self.stories = GRDBCacheStore(policy: .stories, db: db, namespace: "stories", encrypted: true)
         self.stats = GRDBCacheStore(policy: .userStats, db: db, namespace: "stats")
+        self.profileStats = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "pstats")
+        self.participantProfiles = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "partprof", encrypted: true)
         self.engagementProgress = GRDBCacheStore(policy: .userStats, db: db, namespace: "engagement")
         self.notifications = GRDBCacheStore(policy: .notifications, db: db, namespace: "notif", encrypted: true)
         self.affiliateTokens = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "affil")
@@ -365,9 +373,9 @@ public actor CacheCoordinator {
         // Audio/vidéo : la lecture passe par des file URLs (AVPlayer), pas par
         // des Data résidents — 8 MB suffisent aux petits payloads (vocaux)
         // rejoués, et les 2 × 80 MB de plafonds théoriques disparaissent du
-        // budget mémoire (cible app : < 150 MB).
-        self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024)
-        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024)
+        // budget mémoire (cible app : < 150 MB). Funnel en flux vers un fichier (#9863).
+        self.audio = DiskCacheStore(policy: .mediaAudio, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile)
+        self.video = DiskCacheStore(policy: .mediaVideo, memoryBudgetBytes: 8 * 1024 * 1024, networkTransfer: .streamedToFile)
         self.thumbnails = DiskCacheStore(policy: .thumbnails)
     }
 
@@ -742,7 +750,7 @@ public actor CacheCoordinator {
     var allGRDBStores: [any GRDBDirtyFlushing] {
         [
             conversations, messages, conversationMedia, notifications, feed, stories, participants, profiles,
-            comments, statuses, communities, stats, engagementProgress, drafts,
+            comments, statuses, communities, stats, profileStats, participantProfiles, engagementProgress, drafts,
             callTranscripts, callNetworkJournals, friends, friendRequests, blockedUsers, sessions, userSearch,
             phonebook, affiliates, callHistory, timeline,
             affiliateTokens, shareLinks, trackingLinks, communityLinks,

@@ -17,11 +17,23 @@ extension CallManager {
     // MARK: - Haptic Helpers
 
     func playHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
-        UIImpactFeedbackGenerator(style: style).impactOccurred()
+        switch style {
+        case .light: HapticFeedback.light()
+        case .medium: HapticFeedback.medium()
+        case .heavy: HapticFeedback.heavy()
+        case .rigid: HapticFeedback.rigid()
+        case .soft: UIImpactFeedbackGenerator(style: style).impactOccurred()
+        @unknown default: UIImpactFeedbackGenerator(style: style).impactOccurred()
+        }
     }
 
     func playNotificationHaptic(_ type: UINotificationFeedbackGenerator.FeedbackType) {
-        UINotificationFeedbackGenerator().notificationOccurred(type)
+        switch type {
+        case .success: HapticFeedback.success()
+        case .warning: HapticFeedback.warning()
+        case .error: HapticFeedback.error()
+        @unknown default: UINotificationFeedbackGenerator().notificationOccurred(type)
+        }
     }
 
     // MARK: - Screen Capture Monitoring
@@ -203,5 +215,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

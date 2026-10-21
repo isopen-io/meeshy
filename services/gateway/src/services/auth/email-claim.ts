@@ -61,6 +61,7 @@ import { revokePasswordResetTokensForEmailChange } from '../../utils/password-re
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { emailCodeMatches, emailTokenMatches } from './email-code';
 import { markEmailVerificationWatchesProven } from './email-verification-watch';
+import { linkConfirmation, linkDeviceVerdict, type LinkConfirmation } from './link-device-binding';
 import type { EmailOwner } from './registration-refusal';
 
 const logger = enhancedLogger.child({ module: 'EmailClaim' });
@@ -152,6 +153,9 @@ export type EmailClaimProof = {
   readonly code?: string;
   readonly token?: string;
   readonly password?: string;
+  /** #10872 — voir `EmailProof` : le lien n'est conclu sans question que sur l'appareil demandeur. */
+  readonly linkDeviceSecret?: string;
+  readonly confirmed?: boolean;
 };
 
 /**
@@ -163,6 +167,7 @@ export type EmailClaimOutcome =
   | { readonly kind: 'none' }
   | { readonly kind: 'expired' }
   | { readonly kind: 'lost' }
+  | ({ readonly kind: 'confirmation-required' } & LinkConfirmation)
   | { readonly kind: 'proven'; readonly userId: string; readonly verifiedAt: Date; readonly passwordSet: boolean };
 
 type ClaimantRow = {
@@ -170,10 +175,12 @@ type ClaimantRow = {
   createdAt: Date;
   displayName: string | null;
   username: string;
+  avatar?: string | null;
   password: string | null;
   emailVerificationToken: string | null;
   emailVerificationCode: string | null;
   emailVerificationExpiry: Date | null;
+  emailVerificationDeviceHash?: string | null;
 };
 
 type HolderRow = {
@@ -219,7 +226,7 @@ async function transfer(
       emailVerificationCode: claimant.emailVerificationCode,
     },
     data: {
-      ...(byCode ? { emailVerificationCode: null } : { emailVerificationToken: null }),
+      ...(byCode ? { emailVerificationCode: null } : { emailVerificationToken: null, emailVerificationDeviceHash: null }),
       ...(password ? { password, lastPasswordChange: now } : {}),
     },
   });
@@ -294,10 +301,12 @@ export async function proveEmailClaim(store: EmailClaimStore, proof: EmailClaimP
       createdAt: true,
       displayName: true,
       username: true,
+      avatar: true,
       password: true,
       emailVerificationToken: true,
       emailVerificationCode: true,
       emailVerificationExpiry: true,
+      emailVerificationDeviceHash: true,
     },
   })) as ClaimantRow[];
 
@@ -309,6 +318,17 @@ export async function proveEmailClaim(store: EmailClaimStore, proof: EmailClaimP
   const now = new Date();
   if (!claimant.emailVerificationExpiry || claimant.emailVerificationExpiry.getTime() <= now.getTime()) {
     return { kind: 'expired' };
+  }
+
+  if (
+    !byCode &&
+    linkDeviceVerdict({
+      boundHash: claimant.emailVerificationDeviceHash,
+      presentedSecret: proof.linkDeviceSecret,
+      confirmed: proof.confirmed === true,
+    }) === 'confirmation-required'
+  ) {
+    return { kind: 'confirmation-required', ...linkConfirmation(claimant, { intent: 'claim-email', email }) };
   }
 
   const setsPassword = byCode && typeof proof.password === 'string' && claimant.password === null;

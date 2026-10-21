@@ -70,7 +70,7 @@ extension StoryViewModel {
     /// Ne throw jamais : au pire l'interstitiel affiche username + avatar
     /// du groupe (données déjà en main).
     func resolveGroupIntro(for group: StoryGroup) async -> StoryGroupIntro {
-        var intro = StoryGroupIntro(userId: group.id, username: group.username)
+        var intro = Self.introPlaceholder(for: group)
 
         switch await CacheCoordinator.shared.profiles.load(for: group.id) {
         case .fresh(let users, _), .stale(let users, _):
@@ -81,7 +81,7 @@ extension StoryViewModel {
         if intro.displayName == nil && intro.bannerURL == nil,
            let fetched = try? await introProfileResolver(group.id) {
             Self.applyIntroProfile(fetched, to: &intro)
-            try? await CacheCoordinator.shared.profiles.save([fetched], for: group.id)
+            await bestEffort("storyViewModelViewing.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([fetched], for: group.id) }
         }
 
         if introMoodsByUserId == nil {
@@ -102,10 +102,11 @@ extension StoryViewModel {
     /// Corps réel du seam ci-dessus — `nonisolated static` pour que la valeur
     /// PAR DÉFAUT de la propriété n'évalue rien d'actor-isolé (Swift 6 :
     /// « actor-isolated default value in a main actor-isolated context »).
-    nonisolated static func enqueueMarkStoryViewed(_ storyId: String) async throws {
+    nonisolated static func enqueueMarkStoryViewed(_ storyId: String, entry: ContentEntry) async throws {
         let payload = MarkStoryViewedPayload(
             clientMutationId: ClientMutationId.generate(),
-            storyId: storyId
+            storyId: storyId,
+            entry: entry
         )
         _ = try await OfflineQueue.shared.enqueue(
             .markStoryViewed, payload: payload, conversationId: storyId
@@ -122,24 +123,28 @@ extension StoryViewModel {
     /// UNE impression (non dédupliquée, `source: "story"`) pour CE post-slide — aligne
     /// `impressionCount` de la story sur le détail/réel (« chaque visionnage fait monter
     /// les impressions »). Volontairement SÉPARÉ de `markViewed` (vue UNIQUE, coalescée
-    /// via l'outbox durable) car l'impression doit monter à CHAQUE visionnage, pas une
-    /// seule fois. Fire & forget : l'échec réseau est loggé, jamais toasté (bruit de fond).
+    /// via l'outbox durable) car l'impression doit monter à CHAQUE visionnage.
+    ///
+    /// #10399 — elle partait dans un `Task` qui ne faisait que journaliser son
+    /// échec : hors ligne ou refusée en 429, elle était perdue pendant que sa
+    /// vue jumelle, durable, arrivait. Elle passe désormais par
+    /// `ImpressionBatcher` (persistance, rejeu, découpage, flush en
+    /// arrière-plan). La file partagée survit au lecteur : sa fenêtre de 3 s
+    /// part même quand on vient de le fermer.
     func recordStoryImpression(storyId: String) {
         // #4044 — même frontière que `markViewed` ci-dessous, et pour la même
-        // raison : `POST /posts/:id/impression` fait lever Prisma sur un
-        // identifiant local. Ici l'appel est fire-and-forget, donc rien ne
-        // s'accumule — mais laisser partir la moitié jumelle reviendrait à
-        // corriger le symptôme (la file) en gardant la cause (un id local qui
-        // atteint le serveur). Doctrine : `ObjectID`.
+        // raison : un identifiant local n'atteint aucune route /posts/:id/*.
+        // Doctrine : `ObjectID`.
         guard ObjectID.isValid(storyId) else { return }
-        Task { [postService] in
-            do {
-                try await postService.recordImpression(postId: storyId, source: "story")
-            } catch {
-                Logger.stories.error(
-                    "recordStoryImpression failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        storyImpressions.record(storyId)
+    }
+
+    /// L'entrée de la vue d'une story (#10483) : la marque de la porte qui l'a
+    /// amenée (tap du rail, notification, lien), sinon le rail — le lecteur
+    /// de stories s'ouvre depuis un anneau, et une story atteinte en avançant
+    /// dans le lecteur vient du même listing.
+    func storyViewEntry(for storyId: String) -> ContentEntry {
+        storyViewEntries.consumeMarkedEntry(for: storyId) ?? .listing(.storyRail)
     }
 
     func markViewed(storyId: String) {
@@ -163,9 +168,10 @@ extension StoryViewModel {
         let viewedAt = Date()
         viewedLedger.record(storyId: storyId, ownerId: viewedLedgerOwnerId, at: viewedAt)
         if ObjectID.isValid(storyId) {
+            let entry = storyViewEntry(for: storyId)
             Task { [markViewedOutboxEnqueuer] in
                 do {
-                    try await markViewedOutboxEnqueuer(storyId)
+                    try await markViewedOutboxEnqueuer(storyId, entry)
                 } catch {
                     Logger.stories.error(
                         "markViewed enqueue failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
@@ -325,7 +331,7 @@ extension StoryViewModel {
     }
 
     func groupIndex(forUserId userId: String) -> Int? {
-        storyGroups.firstIndex { $0.id == userId }
+        trayProjection.index(forUserId: userId)
     }
 
     func groupIndex(forStoryId storyId: String) -> Int? {
@@ -335,19 +341,17 @@ extension StoryViewModel {
     }
 
     func hasStories(forUserId userId: String) -> Bool {
-        storyGroups.contains { $0.id == userId }
+        trayProjection.group(forUserId: userId) != nil
     }
 
     func hasUnviewedStories(forUserId userId: String) -> Bool {
-        storyGroups.first { $0.id == userId }?.hasUnviewed ?? false
+        trayProjection.group(forUserId: userId)?.hasUnviewed ?? false
     }
 
     /// Source unique de l'état d'anneau story d'un avatar, toutes surfaces.
     /// `.none` si l'utilisateur n'a aucune story active (groupe absent ou
     /// entièrement expiré), `.unread` s'il reste au moins une story non vue.
     func storyRingState(forUserId userId: String) -> StoryRingState {
-        guard let group = storyGroups.first(where: { $0.id == userId }),
-              !group.isFullyExpired() else { return .none }
-        return group.hasUnviewed ? .unread : .read
+        trayProjection.ringState(forUserId: userId, at: Date())
     }
 }

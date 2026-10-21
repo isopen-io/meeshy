@@ -9,6 +9,7 @@ import { verifyPassword } from '../../utils/password-hash.js';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
+import { buildDeletionPageUrl } from '../../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -19,19 +20,7 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-/**
- * L'adresse de la PAGE qui explique la conséquence avant de l'appliquer.
- *
- * Les liens de courriel visaient auparavant des `GET` du gateway qui MUTAIENT
- * — un pré-chargeur de liens (antivirus de messagerie, Safe Links, prefetch du
- * navigateur) confirmait donc la suppression d'un compte sans qu'aucun humain
- * ne clique. Ils visent désormais une page : c'est le CLIC qui devient le
- * consentement, et la page fait le `POST` (#4183).
- */
-export function buildDeletionPageUrl(action: 'confirm' | 'cancel' | 'purge', token: string): string {
-  const base = process.env.NEXT_PUBLIC_FRONTEND_URL || process.env.FRONTEND_URL || 'https://meeshy.me';
-  return `${base.replace(/\/+$/, '')}/account/deletion?token=${encodeURIComponent(token)}&action=${action}`;
-}
+export { buildDeletionPageUrl };
 
 export async function deleteAccountRoutes(fastify: FastifyInstance) {
 

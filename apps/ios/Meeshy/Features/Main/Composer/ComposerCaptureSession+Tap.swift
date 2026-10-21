@@ -31,7 +31,8 @@ extension ComposerCaptureSession {
             locked: holdPhase == .locked || mode == ComposerShutterGesture.mode(locked: true),
             pendingSegments: segments.count,
             allowsPhoto: allowsPhoto,
-            allowsVideo: allowsVideo)
+            allowsVideo: allowsVideo,
+            frameChosen: look.frame != ComposerPhotoFrame.none)
     }
 
     /// **Le toucher vise ce point de l'aperçu** (#9295, #9464), converti selon

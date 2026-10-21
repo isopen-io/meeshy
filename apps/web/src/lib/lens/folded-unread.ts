@@ -1,8 +1,6 @@
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import type { LensSectionId } from './sections';
-
 /**
  * UNE SECTION REPLIÉE DIT CE QU'ELLE CACHE (#8694, directive porteur
  * 2026-09-29) — miroir de `ConversationListView.foldedSectionUnread` et de
@@ -30,16 +28,8 @@ export function foldedSectionUnread(params: {
 }
 
 /**
- * Même partition que `isSectionCollapsible` iOS : une section CALCULÉE par la
- * loi de la Lentille (préfixe `lentille.`) n'a pas de pliage qui ait un sens —
- * repliée, elle se rouvrirait au prochain chargement. Seule `pinned` se replie.
- */
-export function isLensSectionFoldable(id: LensSectionId): boolean {
-  return !id.startsWith('lentille.');
-}
-
-/**
- * Le nom que le lecteur d'écran lit sur l'en-tête repliable :
+ * Le nom que le lecteur d'écran lit sur l'en-tête repliable — toute section,
+ * depuis #10103 (`section-folds.ts`) :
  * « Épingles, repliée, 12 messages non lus ». Le compte n'est dit que replié
  * et non nul, pour la même raison que la pastille.
  */

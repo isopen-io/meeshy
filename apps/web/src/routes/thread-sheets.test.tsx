@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { act } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { appQueryClient } from '@/lib/api/query-client';
@@ -7,6 +8,9 @@ import { attachmentDefaults, message, translation } from '@/lib/api/fixtures-bas
 import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { messageMenuContextOf } from '@/lib/view/message-actions';
+import { closeReactorsSheet, openReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -29,7 +33,14 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
-  await loadInterfaceCatalog('fr');
+  /* Les feuilles se chargent au geste (`lazy`) : chargées d'avance, leur import
+     froid ne court plus contre le `settle` d'un témoin. */
+  await Promise.all([
+    loadInterfaceCatalog('fr'),
+    loadMessagePiecesCatalog('fr'),
+    import('@/components/message-detail-sheet'),
+    import('@/components/report-sheet'),
+  ]);
 });
 
 afterAll(async () => {
@@ -77,6 +88,8 @@ const ownMessage = (overrides: Partial<Message> = {}): Message =>
 const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => ({
   menuTarget: null,
   menuData: undefined,
+  quickReactionFor: null,
+  onCloseQuickReaction: () => {},
   onCloseMenu: () => {},
   onMenuReact: () => {},
   onMenuAction: () => {},
@@ -91,6 +104,17 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   setExportFor: () => {},
   servedOf: () => undefined,
   starOf: () => null,
+  editOf: () => null,
+  deleteOf: () => null,
+  deleteRequest: null,
+  onDismissDelete: () => {},
+  onConfirmDelete: () => {},
+  pinOf: () => null,
+  reportOf: () => null,
+  reportFor: null,
+  onPickReportReason: () => {},
+  onDismissReport: () => {},
+  menuContextOf: (m) => messageMenuContextOf(m, { now: Date.now() }),
   ...overrides,
 });
 
@@ -101,7 +125,6 @@ const mountSheets = async (menu: ThreadSheetsMenu, messages: readonly Message[])
         messageMenu={menu}
         messages={messages}
         readerLanguages={['en']}
-        readerLocale="fr-FR"
         conversationId="c-deploiement"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
@@ -131,7 +154,6 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         messageMenu={menuOf()}
         messages={[]}
         readerLanguages={['fr']}
-        readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
@@ -149,7 +171,6 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
         messageMenu={menuOf({ detailFor: 'ghost' })}
         messages={[]}
         readerLanguages={['fr']}
-        readerLocale="fr-FR"
         conversationId="c-1"
         viewerId={VIEWER_ID}
         viewerName="Jacques"
@@ -174,10 +195,44 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(has(host, '[data-message-receipts-attachment]')).toBe(false);
   });
 
+  test('« Plus… » offre « Imager » quand le contexte du menu l’admet', async () => {
+    const offered = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage()]);
+    expect(has(offered, '[data-message-create="image"]')).toBe(true);
+  });
+
+  test('« Plus… » lit le contexte du MENU, celui du lecteur (#11372) : ce que le menu retient, la fiche le retient', async () => {
+    const seen: string[] = [];
+    const held = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        menuContextOf: (m) => {
+          seen.push(m.id);
+          return { ...messageMenuContextOf(m, { now: Date.now() }), leaves: false };
+        },
+      }),
+      [ownMessage()],
+    );
+    expect(seen.includes(SERVER_MESSAGE_ID)).toBe(true);
+    expect(has(held, '[data-message-create="image"]')).toBe(false);
+  });
+
   test('la fiche d’un message d’AUTRUI n’a pas d’accusé nominatif (delivery nul ⇒ aucun « Infos du message »)', async () => {
     const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ senderId: 'u-other' })]);
     expect(offersLanguage(host, 'Français (original)')).toBe(true);
     expect(has(host, '[data-message-receipts-title]')).toBe(false);
+  });
+
+  test('la date de la fiche suit la langue d’INTERFACE, jamais le Prisme du lecteur (#10817)', async () => {
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = 'en';
+    try {
+      const sentAt = new Date('2026-09-24T10:00:00.000Z');
+      const host = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage({ createdAt: sentAt })]);
+      const english = new Intl.DateTimeFormat('en', { dateStyle: 'full', timeStyle: 'short' }).format(sentAt);
+      expect(host.textContent?.includes(english) ?? false).toBe(true);
+    } finally {
+      document.documentElement.lang = previous;
+    }
   });
 
   test('choisir une langue depuis la fiche la sert PUIS referme la fiche', async () => {
@@ -237,7 +292,8 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
   test('le menu reçoit le sous-menu de « Transférer » (#9039)', async () => {
     const element = document.createElement('div');
     document.body.appendChild(element);
-    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') => ({ id, labelKey, glyph: 'imageSquare' as const });
+    const item = (id: 'forward' | 'exportDiscussion', labelKey: 'message.menu.forward' | 'message.menu.exportDiscussion') =>
+      ({ id, catalog: 'interface', labelKey, glyph: 'imageSquare', group: 'primary' }) as const;
     await mountSheets(
       menuOf({
         menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
@@ -246,12 +302,28 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
           forwardItems: [item('forward', 'message.menu.forward'), item('exportDiscussion', 'message.menu.exportDiscussion')],
           choices: [],
           subjectLabel: 'Actions',
+          canReact: true,
         },
       }),
       [ownMessage()],
     );
     await mounter.click(document.querySelector<HTMLElement>('.message-menu-list [data-action="forward"]'));
     expect(document.querySelector('.message-menu-list [data-action="exportDiscussion"]') !== null).toBe(true);
+    element.remove();
+  });
+
+  test('réagir refusé (#11206) : le menu se monte SANS rail de réactions', async () => {
+    const element = document.createElement('div');
+    document.body.appendChild(element);
+    await mountSheets(
+      menuOf({
+        menuTarget: { messageId: SERVER_MESSAGE_ID, element, isMine: true },
+        menuData: { items: [], forwardItems: [], choices: [], subjectLabel: 'Actions', canReact: false },
+      }),
+      [ownMessage()],
+    );
+    expect(document.querySelector('[role="menu"]') !== null).toBe(true);
+    expect(document.querySelector('[data-message-menu-rail]')).toBe(null);
     element.remove();
   });
 
@@ -270,10 +342,203 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
       }),
       [ownMessage()],
     );
-    const firstEmoji = host.querySelector<HTMLButtonElement>('button[aria-label]:not([aria-label="Fermer"])');
+    await mounter.settle();
+    const firstEmoji = host.querySelector<HTMLButtonElement>('[data-emoji]');
     const emoji = firstEmoji?.getAttribute('aria-label') ?? '';
     expect(emoji).not.toBe('');
     await mounter.click(firstEmoji);
     expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${emoji}`, 'sheet:null']);
+  });
+});
+
+describe('ThreadMessageSheets — le dialogue de suppression (#10582)', () => {
+  test('aucune demande ⇒ aucun dialogue', async () => {
+    const host = await mountSheets(menuOf(), [ownMessage()]);
+    expect(has(host, '[data-message-delete]')).toBe(false);
+  });
+
+  test('une demande ⇒ le dialogue offre ce que la règle a remis, et confirme auprès du contrôleur', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        deleteRequest: { messageIds: [SERVER_MESSAGE_ID], offer: { forEveryone: false, forMe: true, remove: false } },
+        onConfirmDelete: (mode) => journal.push(mode),
+      }),
+      [ownMessage()],
+    );
+    expect(has(host, '[data-message-delete="everyone"]')).toBe(false);
+    await mounter.click(host.querySelector('[data-message-delete="me"]'));
+    expect(journal).toEqual(['me']);
+  });
+
+  test('« Plus… » remet les gestes du contrôleur à la fiche : Modifier et Supprimer', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({ detailFor: SERVER_MESSAGE_ID, editOf: () => () => journal.push('edit'), deleteOf: () => () => journal.push('delete') }),
+      [ownMessage()],
+    );
+    expect(has(host, '[data-message-act="edit"]')).toBe(true);
+    await mounter.click(host.querySelector('[data-message-act="delete"]'));
+    expect(journal).toEqual(['delete']);
+  });
+});
+
+/**
+ * « ÉPINGLER » ET « SIGNALER » (#7558) — « Plus… » remet les gestes du
+ * contrôleur à la fiche, et une demande de signalement monte la feuille des
+ * motifs, dont le choix revient au contrôleur.
+ */
+describe('ThreadMessageSheets — épingler et signaler (#7558)', () => {
+  const theirs = () => ownMessage({ senderId: 'u-autre' });
+
+  test('« Plus… » remet l’épingle et le signalement du contrôleur à la fiche', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        pinOf: () => ({ action: 'pin', onToggle: () => journal.push('pin') }),
+        reportOf: () => () => journal.push('report'),
+      }),
+      [theirs()],
+    );
+    await mounter.click(host.querySelector('[data-message-act="pin"]'));
+    expect(journal).toEqual(['pin']);
+    expect(has(host, '[data-message-act="report"]')).toBe(true);
+  });
+
+  test('aucune demande ⇒ aucune feuille de motifs', async () => {
+    const host = await mountSheets(menuOf(), [theirs()]);
+    expect(host.ownerDocument.querySelector('[data-report-reason]') !== null).toBe(false);
+  });
+
+  test('une demande ⇒ la feuille « Signaler ce message » ; le motif choisi revient au contrôleur', async () => {
+    const journal: string[] = [];
+    const host = await mountSheets(menuOf({ reportFor: SERVER_MESSAGE_ID, onPickReportReason: (reason) => journal.push(reason) }), [theirs()]);
+    await mounter.settle();
+    expect(host.ownerDocument.body.textContent?.includes('Signaler ce message')).toBe(true);
+    await mounter.click(host.ownerDocument.querySelector('[data-report-reason="harassment"]'));
+    expect(journal).toEqual(['harassment']);
+  });
+
+  test('une demande sur un message qui n’est plus dans le fil ⇒ rien ne s’ouvre', async () => {
+    const host = await mountSheets(menuOf({ reportFor: '66f0a1b2c3d4e5f6a7b8c9ff' }), [theirs()]);
+    expect(host.ownerDocument.querySelector('[data-report-reason]') !== null).toBe(false);
+  });
+});
+
+/**
+ * « QUI A RÉAGI » (#10583) — une pilule maintenue nomme son message
+ * (`reactors-sheet-store.ts`) ; l'hôte des feuilles monte la liste, avec les
+ * comptes que le fil connaît déjà.
+ */
+describe('ThreadMessageSheets — la liste de qui a réagi (#10583)', () => {
+  afterEach(() => closeReactorsSheet());
+
+  const reacted = () => ownMessage({ reactionSummary: { '❤️': 2 } });
+
+  const demande = async (messageId: string) => {
+    await act(async () => {
+      openReactorsSheet(messageId);
+    });
+    await mounter.settle();
+    await mounter.settle();
+  };
+
+  test('aucune demande ⇒ aucune feuille', async () => {
+    const host = await mountSheets(menuOf(), [reacted()]);
+    expect(has(host, '[data-message-reactors-sheet]')).toBe(false);
+  });
+
+  test('une pilule maintenue ⇒ la feuille de CE message, avec ses comptes', async () => {
+    const host = await mountSheets(menuOf(), [reacted()]);
+    await demande(SERVER_MESSAGE_ID);
+    expect(host.querySelector('[data-message-reactors-sheet]')?.getAttribute('data-message-reactors-sheet')).toBe(SERVER_MESSAGE_ID);
+    expect(host.querySelector('[data-message-reactors-group="❤️"] [data-message-reactors-count]')?.textContent).toBe('2');
+  });
+
+  test('un message qui n’est plus dans le fil ⇒ aucune feuille ouverte sur du vide', async () => {
+    const host = await mountSheets(menuOf(), [reacted()]);
+    await demande('66f0a1b2c3d4e5f6a7b8c9ff');
+    expect(has(host, '[data-message-reactors-sheet]')).toBe(false);
+  });
+
+  test('quitter le fil referme la demande : elle ne se rouvre pas dans le fil suivant', async () => {
+    await mountSheets(menuOf(), [reacted()]);
+    await demande(SERVER_MESSAGE_ID);
+    mounter.unmountAll();
+    expect(reactorsSheetStore.getState().messageId).toBeNull();
+  });
+});
+
+describe('ThreadMessageSheets — la barre rapide du double toucher (#10599, porteur 2026-10-14)', () => {
+  const anchorOf = (): HTMLElement => {
+    const anchor = document.createElement('div');
+    anchor.tabIndex = 0;
+    document.body.append(anchor);
+    return anchor;
+  };
+  const quickTile = (): HTMLButtonElement | null => document.body.querySelector<HTMLButtonElement>('[data-reaction-quick-bar] button[role="menuitem"]');
+
+  test('aucune cible ⇒ aucune barre', async () => {
+    await mountSheets(menuOf(), [ownMessage()]);
+    expect(document.body.querySelector('[data-reaction-quick-bar]')).toBeNull();
+  });
+
+  test('une cible ⇒ la barre ; choisir un emoji réagit sur le message puis referme', async () => {
+    const journal: string[] = [];
+    const anchor = anchorOf();
+    await mountSheets(
+      menuOf({
+        quickReactionFor: { messageId: SERVER_MESSAGE_ID, anchor, x: 100 },
+        onMenuReact: (id, emoji, pieceId) => journal.push(`react:${id}:${emoji}:${String(pieceId)}`),
+        onCloseQuickReaction: () => journal.push('close'),
+      }),
+      [ownMessage()],
+    );
+    const tile = quickTile();
+    const emoji = tile?.textContent ?? '';
+    expect(emoji).not.toBe('');
+    await mounter.click(tile);
+    expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${emoji}:undefined`, 'close']);
+    anchor.remove();
+  });
+
+  test('une cible PIÈCE ⇒ la réaction vise la pièce touchée', async () => {
+    const journal: string[] = [];
+    const anchor = anchorOf();
+    await mountSheets(
+      menuOf({
+        quickReactionFor: { messageId: SERVER_MESSAGE_ID, anchor, x: 100, pieceId: ATTACHMENT_ID },
+        onMenuReact: (id, emoji, pieceId) => journal.push(`react:${id}:${emoji}:${String(pieceId)}`),
+      }),
+      [ownMessage()],
+    );
+    const tile = quickTile();
+    await mounter.click(tile);
+    expect(journal).toEqual([`react:${SERVER_MESSAGE_ID}:${tile?.textContent ?? ''}:${ATTACHMENT_ID}`]);
+    anchor.remove();
+  });
+
+  test('« ＋ » de la barre ouvre la feuille complète du message', async () => {
+    const journal: string[] = [];
+    const anchor = anchorOf();
+    await mountSheets(
+      menuOf({
+        quickReactionFor: { messageId: SERVER_MESSAGE_ID, anchor, x: 100 },
+        setReactionSheetFor: (id) => journal.push(`sheet:${String(id)}`),
+        onCloseQuickReaction: () => journal.push('close'),
+      }),
+      [ownMessage()],
+    );
+    await mounter.click(document.body.querySelector('[data-reaction-quick-bar] button[data-add-reaction]'));
+    expect(journal).toEqual([`sheet:${SERVER_MESSAGE_ID}`, 'close']);
+    anchor.remove();
+  });
+
+  test('un message disparu du fil ne garde pas sa barre', async () => {
+    const anchor = anchorOf();
+    await mountSheets(menuOf({ quickReactionFor: { messageId: 'm-parti', anchor, x: 100 } }), [ownMessage()]);
+    expect(document.body.querySelector('[data-reaction-quick-bar]')).toBeNull();
+    anchor.remove();
   });
 });

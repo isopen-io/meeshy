@@ -7,6 +7,24 @@ type AgentApiResponse<T> = {
   message?: string;
 };
 
+/** L'en-tête du secret interne passerelle → agent (`services/agent/src/routes/internal-auth.ts`). */
+export const AGENT_INTERNAL_TOKEN_HEADER = 'x-meeshy-internal-token';
+
+/** Le même minimum que l'agent (`INTERNAL_TOKEN_MIN_LENGTH`) : plus court, il refuserait tout. */
+export const AGENT_INTERNAL_TOKEN_MIN_LENGTH = 32;
+
+/**
+ * #10242 — le secret interne que l'agent exige sur toute route sauf /health
+ * (`services/agent/src/routes/internal-guard.ts`). Lu à chaque appel : absent ou trop court, rien ne part.
+ */
+export function agentInternalToken(): string | null {
+  const token = (process.env.AGENT_INTERNAL_TOKEN ?? '').trim();
+  return token.length >= AGENT_INTERNAL_TOKEN_MIN_LENGTH ? token : null;
+}
+
+/** Le signal de démarrage : la passerelle peut-elle joindre l'agent ? (journalisé une fois par `server.ts`). */
+export const agentInternalTokenConfigured = (): boolean => agentInternalToken() !== null;
+
 export class AgentUnavailableError extends Error {
   constructor(message: string) {
     super(message);
@@ -19,6 +37,8 @@ export class AgentHttpClient {
 
   private async request<T>(path: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
     const { timeoutMs = 5000, ...fetchOptions } = options;
+    const token = agentInternalToken();
+    if (token === null) throw new AgentUnavailableError('AGENT_INTERNAL_TOKEN is not configured on the gateway');
     const controller = new AbortController();
     const timeout = guardedTimeout({ name: 'agent-http-timeout', afterMs: timeoutMs, logger: enhancedLogger, run: () => controller.abort() });
 
@@ -29,10 +49,17 @@ export class AgentHttpClient {
         headers: {
           'Content-Type': 'application/json',
           ...fetchOptions.headers,
+          [AGENT_INTERNAL_TOKEN_HEADER]: token,
         },
       });
 
       const body = await response.json() as AgentApiResponse<T>;
+
+      // Un refus du secret interne est une panne de CONFIGURATION entre services, pas un refus de
+      // l'utilisateur : relayé en 401, il déconnecterait l'administrateur.
+      if (response.status === 401 || (response.status === 503 && body?.message === 'internal-auth-not-configured')) {
+        throw new AgentUnavailableError(`Agent refused the internal token (${response.status})`);
+      }
 
       if (!response.ok) {
         const err = new Error(body.message ?? `Agent responded with ${response.status}`);
@@ -101,6 +128,20 @@ export class AgentHttpClient {
       `/api/agent/conversations/${encodeURIComponent(params.conversationId)}/range-summary${query}`,
       { timeoutMs: 1500 }
     );
+  }
+
+  /**
+   * Une PROPOSITION de saison (#10016) : thème, points d'étape, textes en sept langues. Le service d'agent ne
+   * publie rien ; la passerelle revalide la sortie par la loi et la garde EN ATTENTE d'une validation humaine.
+   */
+  async proposeSeason(input: {
+    readonly number: number;
+    readonly startDay: string;
+    readonly themeKey: string;
+    readonly previousThemes: readonly string[];
+    readonly brief: string | null;
+  }): Promise<{ themeKey: unknown; stepPoints: unknown; copy: unknown; model?: unknown }> {
+    return this.request('/api/agent/game/season-proposal', { method: 'POST', body: JSON.stringify(input), timeoutMs: 90_000 });
   }
 }
 

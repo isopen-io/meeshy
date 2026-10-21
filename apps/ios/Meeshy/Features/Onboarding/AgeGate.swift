@@ -31,7 +31,13 @@ final class AgeGateController: ObservableObject {
     ) {
         self.isAuthenticated = isAuthenticated ?? { AuthManager.shared.isAuthenticated }
         self.signOut = signOut ?? { await AuthManager.shared.logout() }
+        // `AgeGateSignal.signal` poste depuis `APIClient`, donc sur l'exécuteur
+        // de l'appelant de la requête — un actor (`OfflineQueue`) en est un.
+        // Le `Task { @MainActor }` du sink ne protège rien : la fermeture du
+        // sink est elle-même isolée au MainActor et le runtime vérifie
+        // l'exécuteur à son ENTRÉE. Le saut doit précéder le sink.
         center.publisher(for: .meeshyAgeBelowMinimum)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 Task { @MainActor in self?.isShowing = true }
             }

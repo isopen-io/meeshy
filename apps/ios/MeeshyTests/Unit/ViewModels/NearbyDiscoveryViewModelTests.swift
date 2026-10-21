@@ -647,6 +647,28 @@ final class NearbyDiscoveryViewModelTests: XCTestCase {
         XCTAssertEqual(service.lastCursor, 20)
     }
 
+    /// La page 2 du centre A est en vol ; l'utilisateur recentre sur B. Le
+    /// rechargement de B était mis en file et jamais rejoué, et la page de A
+    /// s'ajoutait sous B avec son décalage.
+    func test_loadMore_recenteredDuringThePage_dropsItAndReloadsTheNewCenter() async {
+        let service = FakeNearbyService()
+        service.pins = [NearbyPost(post: makeAPIPost(id: "p1"), distanceMeters: 10)]
+        service.nextCursor = "20"
+        let (sut, _, _, _) = makeSUT(initialCoordinate: Self.paris, service: service)
+        let lyon = CLLocationCoordinate2D(latitude: 45.76, longitude: 4.84)
+        await sut.load()
+
+        service.duringNearby = { [weak sut, service] in
+            service.duringNearby = nil
+            await sut?.recenter(on: lyon)
+        }
+        await sut.loadMore()
+
+        XCTAssertEqual(service.nearbyCallCount, 3, "le recentrage demandé pendant la page est rejoué")
+        XCTAssertEqual(service.lastCoordinate?.latitude, lyon.latitude)
+        XCTAssertEqual(service.lastCursor, 0, "la recherche du nouveau centre repart de son début")
+    }
+
     func test_loadMore_stopsWhenTheCursorIsNotAnOffset() async {
         let service = FakeNearbyService()
         service.pins = [NearbyPost(post: makeAPIPost(id: "p1"), distanceMeters: 10)]

@@ -208,7 +208,44 @@ describe('ROUTE_TABLE (#4278)', () => {
     // /api/v1/world` (l'entrée de World Wide que lit la landing de
     // meeshy.me), montage autonome. Aucun alias, aucune route retirée ni
     // renommée.
-    expect(ROUTE_TABLE.length).toBe(77);
+    // 78 : #10102 ajoute `world-participant-card` — l'adresse NEUVE `GET
+    // /api/v1/world/participants/:participantId` (la fiche de modération d'un
+    // participant de World Wide, réservée aux rôles au-delà de USER), montage
+    // autonome. Aucun alias, aucune route retirée ni renommée. Vérifié : le
+    // manifeste passe de 656 à 657 routes, soit exactement celle-là.
+    // 79 : #10148 (LP0) ajoute `packs-glory-frame` — le montage AUTONOME des
+    // packs de cadres de gloire sous `/api/v1/packs/glory-frame`, servi par le
+    // MÊME moteur que `sticker-packs` (un montage par domaine, jamais un
+    // `:domain`). Aucun alias, aucune route retirée ni renommée : les routes de
+    // `/api/v1/sticker-packs` gardent chemins, méthodes et réponses à l'octet.
+    // Vérifié : le manifeste passe de 657 à 662 routes, soit exactement les
+    // cinq neuves (GET /, GET /installed, GET /:slug, PUT et DELETE
+    // /:slug/install).
+    // 80 : #10157 (L5) ajoute `pack-assets` — le magasin PUBLIC adressé par
+    // contenu des packs officiels sous `/api/v1/pack-assets/:file`. Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste gagne
+    // exactement cette route.
+    // 81 : #10233 ajoute `admin-game-seasons` — l'administration du calendrier
+    // des saisons du Jeu sous `/api/v1/admin/game` (canManageGame). Aucun
+    // alias, aucune route retirée ni renommée. Vérifié : le manifeste passe de
+    // 667 à 676 routes, soit exactement les huit routes d'admin et
+    // `GET /me/game/seasons/calendar` (montée par `me-game`, déjà dans la table).
+    // 84 : #10384 ajoute `admin-ops` (l'hôte en direct, la sauvegarde et la purge
+    // sous `/api/v1/admin/ops`), #10392 `admin-post-gestures` (les gestes de
+    // publication sous `/api/v1/admin/posts/…/gestures`) et #10394
+    // `admin-moderation-acts` (`/api/v1/admin/reports/:reportId/act`,
+    // `/api/v1/admin/comments/:commentId/remove`). Aucun alias, aucune route
+    // retirée ni renommée ; le manifeste gagne exactement ces sept routes.
+    // 88 : #10632 ajoute `packs-wallpaper`, `packs-avatar-ring`, `packs-banner`
+    // (les trois domaines d'apparence de la boutique unifiée, sous
+    // `/api/v1/packs/<domaine>`) et `packs-shop` (`GET /api/v1/packs/shop`,
+    // la vitrine qui les agrège). Aucun alias, aucune route retirée ni
+    // renommée.
+    // 89 : #10936 ajoute `packs-banner-frame` (le domaine des cadres posés sur
+    // la bannière, vendu en boutique sous `/api/v1/packs/banner-frame`, monté
+    // par le même `appearancePacksPlugin`). Aucun alias, aucune route retirée
+    // ni renommée.
+    expect(ROUTE_TABLE.length).toBe(89);
   });
 });
 
@@ -220,13 +257,15 @@ describe('ROUTE_TABLE (#4278)', () => {
  * tsconfig.json retire tout le dossier `__tests__` — voir la note de
  * `services/gateway/CLAUDE.md` § « Un cliquet doit être ATTEIGNABLE par le
  * compilateur »). `tsconfig.test.json`, lui, INCLUT `__tests__` sans
- * exclusion — c'est donc ts-jest, au moment où
- * CE fichier de test est chargé, qui type-vérifie les trois blocs
+ * exclusion — et depuis #10203 (ts-jest transpile en modules isolés, sans
+ * types), c'est `tsc -p tsconfig.test.json`, mesuré par
+ * `tsc-never-loaded-tests-ratchet.test.ts`, qui type-vérifie les trois blocs
  * `@ts-expect-error` ci-dessous. Le code TS2578 (directive `@ts-expect-error`
- * inutilisée) n'est PAS dans `diagnostics.ignoreCodes` de `jest.config.json`
- * — si un champ redevenait optionnel, la ligne se mettrait à COMPILER, la
- * directive deviendrait inutile, et ts-jest ferait ROUGIR ce fichier entier
- * au chargement. C'est la preuve, PROUVÉE rouge sous chacune des trois
+ * inutilisée) n'est PAS l'un des quatre codes muets de ce cliquet — si un
+ * champ redevenait optionnel, la ligne se mettrait à COMPILER, la directive
+ * deviendrait inutile, et le compte du cliquet dépasserait son plafond SERRÉ.
+ * Avant #10203, c'était ts-jest qui faisait ROUGIR ce fichier au chargement,
+ * PROUVÉ rouge sous chacune des trois
  * mutations qu'elle nomme (voir le rapport de la session : mutation
  * `prefix?: string`, `module?: RoutePlugin`, `name?: string` — chacune fait
  * tomber CE fichier avec `TS2578: Unused '@ts-expect-error' directive`).

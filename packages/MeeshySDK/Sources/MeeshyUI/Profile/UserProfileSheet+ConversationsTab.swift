@@ -27,7 +27,7 @@ extension UserProfileSheet {
                 }
 
                 Text(isInteractionDisabled
-                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions desactivees", bundle: .module)
+                     ? String(localized: "profile.conversations.interactionsDisabled", defaultValue: "Interactions désactivées", bundle: .module)
                      : String(localized: "profile.conversations.noShared", defaultValue: "Aucune conversation en commun", bundle: .module))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(theme.textSecondary)
@@ -46,43 +46,36 @@ extension UserProfileSheet {
                 }
 
                 ForEach(Array(effectiveConversations.enumerated()), id: \.element.id) { index, conv in
-                    HStack(spacing: MeeshySpacing.md) {
-                        MeeshyAvatar(
-                            name: conv.name,
-                            context: .conversationList,
-                            accentColor: conv.accentColor,
-                            avatarURL: conv.avatar ?? conv.participantAvatarURL
-                        )
-
-                        Text(conv.name)
-                            .font(.system(size: MeeshyFont.labelSize, weight: .medium))
-                            .foregroundColor(theme.textPrimary)
-                            .lineLimit(1)
-
-                        Spacer()
-
-                        Image(systemName: "chevron.forward")
-                            .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
-                    }
-                    .padding(.horizontal, MeeshySpacing.xl)
-                    .padding(.vertical, MeeshySpacing.smPlus)
-                    .contentShape(Rectangle())
-                    .onTapGesture {
+                    Button {
                         guard !isInteractionDisabled else { return }
                         HapticFeedback.light()
-                        if let onNavigateToConversation {
-                            onNavigateToConversation(conv)
-                        } else {
-                            dismiss()
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                NotificationCenter.default.post(
-                                    name: Notification.Name("navigateToConversation"),
-                                    object: conv
-                                )
-                            }
+                        guard let onNavigateToConversation else { return openSharedConversation(conv) }
+                        onNavigateToConversation(conv)
+                    } label: {
+                        HStack(spacing: MeeshySpacing.md) {
+                            MeeshyAvatar(
+                                name: conv.name,
+                                context: .conversationList,
+                                accentColor: conv.accentColor,
+                                avatarURL: conv.avatar ?? conv.participantAvatarURL
+                            )
+
+                            Text(conv.name)
+                                .font(.system(size: MeeshyFont.labelSize, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                                .lineLimit(1)
+
+                            Spacer()
+
+                            Image(systemName: "chevron.forward")
+                                .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
+                                .foregroundColor(theme.textMuted)
                         }
+                        .padding(.horizontal, MeeshySpacing.xl)
+                        .padding(.vertical, MeeshySpacing.smPlus)
+                        .contentShape(Rectangle())
                     }
+                    .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .rectangle))
                     .staggeredAppear(index: index)
                     .opacity(isInteractionDisabled ? 0.35 : 1)
 
@@ -93,6 +86,13 @@ extension UserProfileSheet {
                     }
                 }
             }
+        }
+    }
+
+    private func openSharedConversation(_ conv: MeeshyConversation) {
+        dismiss()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            NotificationCenter.default.post(name: Notification.Name("navigateToConversation"), object: conv)
         }
     }
 }

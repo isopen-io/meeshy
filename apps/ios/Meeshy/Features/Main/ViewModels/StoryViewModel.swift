@@ -35,7 +35,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// s'arrêterait jamais.
     static let maxTrayPagesPerPass = 6
 
-    @Published var storyGroups: [StoryGroup] = []
+    @Published var storyGroups: [StoryGroup] = [] {
+        didSet { trayProjection = StoryTrayProjection(groups: storyGroups, ownerId: AuthManager.shared.currentUser?.id, at: Date()) }
+    }
+    private(set) var trayProjection = StoryTrayProjection.empty
     @Published var isLoading = false
 
     /// Motif du dernier échec de chargement du tray, `nil` quand la dernière
@@ -55,20 +58,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// « Publier ». Une seule monte à la fois (`currentUploadId`), mais rien
     /// n'empêche d'en empiler d'autres : plus aucune exclusion mutuelle à la
     /// CRÉATION. L'échec de l'une ne bloque pas les suivantes.
-    /// **Aucune restriction d'écriture depuis le découpage du 2026-08-30**, et
-    /// ce n'est pas un relâchement : `private(set)` limite l'écriture au FICHIER
-    /// de déclaration, et les trois sites qui mutent cette file vivent désormais
-    /// dans `StoryViewModel+Publication` et `+PublicationUpload`. Le
-    /// `internal(set)` qui l'avait remplacé est tombé à son tour : sur une
-    /// classe interne il ne restreint RIEN — il redit le défaut, et le
-    /// compilateur le signale.
-    ///
-    /// C'est le pendant de la leçon 348 pour un `private(set)` : la visibilité
-    /// au niveau fichier est une visibilité de VOISINAGE, et un découpage par
-    /// extension déplace le voisinage sans déplacer la déclaration. La
-    /// protection qui compte — « personne HORS du module ne l'écrit » — est
-    /// intacte.
-    @Published var activeUploads: [StoryUploadState] = []
+    @Published var activeUploads: [StoryUploadState] = [] {
+        didSet { uploadProgress.retainOnly(Set(activeUploads.map(\.id))) }
+    }
+    let uploadProgress: StoryUploadProgressStore
     /// L'id d'un upload qui a ABOUTI côté serveur, annoncé juste AVANT son
     /// retrait de `activeUploads`. Un retrait seul ne dit rien : annulation,
     /// abandon par la file et succès vident la ligne pareil. Qui doit créditer
@@ -85,12 +78,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Id de l'upload qui MONTE en ce moment. `nil` = la file peut démarrer le
     /// suivant.
     var currentUploadId: String?
-    /// Incrémenté quand une cover de tray vient d'être rendue côté récepteur —
-    /// invalide le tray pour que `latestStoryThumbnailURL` relise le cache local.
-    /// Écriture non restreinte pour la même raison : le compteur est incrémenté
-    /// depuis `StoryViewModel+MediaPreload`, sorti au découpage — et
-    /// `internal(set)` y redirait le défaut d'une classe interne.
-    @Published var receiverCoverRenderTick = 0
+    let coverRenders: StoryCoverRenderSignal
     var uploadTask: Task<Void, Never>?
     /// Garde local-first du drain d'archive « Mes stories » : un seul drain
     /// réseau ABOUTI par session (cf. `loadMyStoriesArchive`).
@@ -123,6 +111,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         self.api = api
         self.visibilityStore = visibilityStore
         self.draftStore = draftStore
+        self.uploadProgress = StoryUploadProgressStore()
+        self.coverRenders = StoryCoverRenderSignal()
         observeReconnectionForRetry()
         observeQueueDispositions()
     }
@@ -216,77 +206,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         isLoading = false
     }
 
-    /// Résultat d'une passe de tray, pages recollées.
-    struct DrainedStoryPages {
-        let posts: [APIPost]
-        let deletedStoryIds: Set<String>
-        /// Le serveur a plafonné ses tombstones : des disparitions manquent, et
-        /// elles n'ont AUCUN curseur de reprise.
-        let tombstonesTruncated: Bool
-    }
-
-    enum StoryTrayPageError: Error {
-        /// Une page a répondu `success: false` — indiscernable d'une panne, donc
-        /// traitée comme telle plutôt que recollée en silence.
-        case unsuccessfulPage
-    }
-
-    /// Suit `pagination.nextCursor` tant que le serveur annonce `hasMore`.
-    ///
-    /// La page est FILTRÉE par `updatedAt` mais ORDONNÉE par `(createdAt, id)`,
-    /// et son curseur porte sur ce même couple : paginer parcourt donc la
-    /// fenêtre EXACTEMENT, sans saut ni doublon. C'est ce qui distingue ce cas
-    /// de celui des conversations (cycle 79), où escalader vers un fetch complet
-    /// était le seul recours — ici le fetch complet emprunte la MÊME route
-    /// plafonnée à 50 : il ne rattraperait rien.
-    ///
-    /// Avant ce drain, `hasMore`/`nextCursor` n'avaient AUCUN lecteur dans tout
-    /// le dépôt : le tray était silencieusement coupé à 50 stories pour tout le
-    /// monde, delta comme fetch complet.
-    private func drainStoryPages(updatedSince: Date?) async throws -> DrainedStoryPages {
-        var posts: [APIPost] = []
-        var deletedStoryIds = Set<String>()
-        var tombstonesTruncated = false
-        var cursor: String?
-
-        for _ in 0..<Self.maxTrayPagesPerPass {
-            let response = try await storyService.list(
-                cursor: cursor,
-                limit: Self.trayPageLimit,
-                updatedSince: updatedSince
-            )
-            guard response.success else { throw StoryTrayPageError.unsuccessfulPage }
-
-            posts.append(contentsOf: response.data)
-            deletedStoryIds.formUnion(response.meta?.deletedStoryIds ?? [])
-            // Les tombstones voyagent page par page : la troncature vue sur
-            // N'IMPORTE laquelle vaut pour la passe entière.
-            tombstonesTruncated = tombstonesTruncated || (response.meta?.deletedStoryIdsTruncated ?? false)
-
-            // Un `nextCursor` vide avec `hasMore: true` serait une page suivante
-            // qu'on ne sait pas demander : on s'arrête plutôt que de rejouer la
-            // même page indéfiniment.
-            guard response.pagination?.hasMore == true,
-                  let next = response.pagination?.nextCursor,
-                  !next.isEmpty else {
-                return DrainedStoryPages(
-                    posts: posts,
-                    deletedStoryIds: deletedStoryIds,
-                    tombstonesTruncated: tombstonesTruncated
-                )
-            }
-            cursor = next
-        }
-
-        Logger.messages.error(
-            "[StoryVM] Tray drain stopped at the \(Self.maxTrayPagesPerPass, privacy: .public)-page cap while the server still announced more"
-        )
-        return DrainedStoryPages(
-            posts: posts,
-            deletedStoryIds: deletedStoryIds,
-            tombstonesTruncated: tombstonesTruncated
-        )
-    }
+    private var trayPager: StoryTrayPager { StoryTrayPager(storyService: storyService) }
 
     func fetchStoriesFromNetwork(deltaSince: Date? = nil) async {
         // R8 inc.1 — refetch silencieux DELTA : quand le cache fournit un
@@ -297,7 +217,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // historique ci-dessous (résilience > économie).
         if let deltaSince {
             do {
-                let drained = try await drainStoryPages(updatedSince: deltaSince)
+                let drained = try await trayPager.drain(updatedSince: deltaSince)
                 // Tombstones plafonnés : la purge qu'on tient est INCOMPLÈTE, et
                 // aucun curseur ne permet de réclamer la suite. Le seul geste qui
                 // fasse sortir les fantômes restants est le remplacement du tray
@@ -341,7 +261,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // une page tronquée n'y laisse pas seulement un trou — elle EFFACE
             // les stories coupées de l'état affiché, et le cache qu'on sauve
             // juste après grave la troncature.
-            let drained = try await drainStoryPages(updatedSince: nil)
+            let drained = try await trayPager.drain(updatedSince: nil)
 
             var groups = drained.posts.toStoryGroups()
 
@@ -396,7 +316,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // par les events socket (2026-06-01). On sauve la version triée pour
             // que les chemins .fresh/.stale servent déjà le bon ordre.
             sortStoryGroupsInPlace()
-            try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+            await bestEffort("storyViewModel.stories.save", category: .cache) { try await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey) }
             prefetchAllStoryMedia(storyGroups)
             renderMissingReceiverCovers()
             if loadFailure != nil { loadFailure = nil }
@@ -447,17 +367,28 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// durable (`.markStoryViewed`, anchor = storyId pour le coalescing) au
     /// lieu du POST fire-and-forget historique — le « vu » survit à un
     /// kill/offline et se rejoue FIFO au reconnect via OutboxDispatcher.
-    var markViewedOutboxEnqueuer: @MainActor (String) async throws -> Void = { storyId in
-        try await StoryViewModel.enqueueMarkStoryViewed(storyId)
+    var markViewedOutboxEnqueuer: @MainActor (String, ContentEntry) async throws -> Void = { storyId, entry in
+        try await StoryViewModel.enqueueMarkStoryViewed(storyId, entry: entry)
     }
 
     /// #9804 — registre durable des vues, distinct de l'instantané du tray.
     var viewedLedger: StoryViewedLedgerProviding = StoryViewedLedger.shared
 
+    /// #10483 — les marques d'entrée posées par les portes du lecteur (tap du
+    /// rail, notification, lien) ; la vue de la story les porte.
+    var storyViewEntries: DetailOpenSourceProviding = DetailOpenSources.shared
+
+    /// #10399 — l'impression d'une story est DURABLE comme sa vue : persistée,
+    /// rejouée à la relance, vidée en sortie de lecteur et en arrière-plan.
+    /// UNE file partagée par toutes les instances (une clé de persistance par
+    /// file) ; les tests en injectent une isolée.
+    static let sharedStoryImpressions = ImpressionBatcher(source: "story", surface: .story)
+    lazy var storyImpressions: ImpressionBatcher = StoryViewModel.sharedStoryImpressions
+
     // MARK: - Lookup Methods
 
     func storyGroupForUser(userId: String) -> StoryGroup? {
-        storyGroups.first { $0.id == userId }
+        trayProjection.group(forUserId: userId)
     }
 
     // MARK: - Optimistic offline stories (visibilité auteur hors-ligne)
@@ -479,9 +410,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     // MARK: - Delete Story
 
-    func deleteStory(storyId: String) async -> Bool {
+    func deleteStory(storyId: String, reason: String? = nil) async -> Bool {
         do {
-            try await storyService.delete(storyId: storyId)
+            try await Self.deleteRemotely(storyId: storyId, reason: reason, with: storyService)
             // Même chemin que les tombstones et l'event socket. Une suppression
             // explicite l'emporte sur l'exception accordée à l'auteur pour ses
             // propres stories expirées : c'est une volonté, pas un délai.
@@ -491,6 +422,34 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             return false
         }
     }
+
+    /// **La suppression part par une frontière `@concurrent`, et ce n'est pas
+    /// décoratif** (plantage TestFlight build 1890, « j'ai supprimé une story
+    /// ça a planté »).
+    ///
+    /// Le rapport montre `deleteStory` REPRIS sur un fil coopératif (thread 7,
+    /// le main étant dans sa runloop), puis `purgeDeadStories` trapper à la
+    /// vérification d'exécuteur de la fermeture `.filter { deadIds.contains }`
+    /// (`_dispatch_assert_queue_fail`). `storyService.delete` est
+    /// `nonisolated(nonsending)` (SE-0461, actif dans le SDK) : l'appelant
+    /// FAIT CONFIANCE à la chaîne appelée pour lui rendre la main sur son
+    /// exécuteur, et n'émet AUCUN saut de retour. Quand un maillon de cette
+    /// chaîne (décodage hors main par continuation, client API) reprend
+    /// ailleurs, la suite du view model s'exécute hors du main — mutation de
+    /// `@Published` comprise.
+    ///
+    /// Un appel `@concurrent`, lui, se termine toujours par un saut EXPLICITE
+    /// vers le MainActor (`swift_task_switch`, décidé à l'exécution sur
+    /// l'exécuteur réellement courant) : la purge retombe sur le main quoi que
+    /// fasse la chaîne réseau.
+    @concurrent
+    nonisolated static func deleteRemotely(
+        storyId: String, reason: String? = nil,
+        with service: any StoryServiceProviding
+    ) async throws {
+        try await service.delete(storyId: storyId, reason: reason)
+    }
+
     // MARK: - Socket.IO Real-Time Updates
 
     /// Mimics the sort applied by `Array<APIPost>.toStoryGroups(currentUserId:)`
@@ -501,15 +460,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// the "most recent author bubbles up to the front" behaviour they
     /// expect from Stories.
     func sortStoryGroupsInPlace() {
-        let currentUserId = AuthManager.shared.currentUser?.id
-        storyGroups.sort { a, b in
-            if let uid = currentUserId {
-                if a.id == uid { return true }
-                if b.id == uid { return false }
-            }
-            if a.hasUnviewed != b.hasUnviewed { return a.hasUnviewed }
-            return (a.latestStory?.createdAt ?? .distantPast) > (b.latestStory?.createdAt ?? .distantPast)
-        }
+        StoryTrayRules.sort(&storyGroups, currentUserId: AuthManager.shared.currentUser?.id)
     }
 
     /// Insertion/merge d'un lot de groupes fraîchement convertis dans le tray
@@ -527,34 +478,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     func insertOrMergeStoryGroups(_ groups: [StoryGroup], replacingExisting: Bool = false) {
         let selfId = AuthManager.shared.currentUser?.id
         for newGroup in applyViewedLedger(to: groups) {
-            if let idx = storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
-                let isOwnGroup = newGroup.id == selfId
-                var stories = storyGroups[idx].stories
-                for story in newGroup.stories {
-                    if let j = stories.firstIndex(where: { $0.id == story.id }) {
-                        guard replacingExisting else { continue }
-                        var replacement = story
-                        // Monotone raffinée : cède quand le CONTENU a été édité
-                        // après la vue locale (reset d'engagement) — jamais pour
-                        // ses propres stories (état « vu » client-only).
-                        if stories[j].isViewed && !replacement.isViewed,
-                           isOwnGroup || Self.shouldKeepLocalViewed(
-                               localViewedAt: stories[j].viewedAt,
-                               contentEditedAt: replacement.contentEditedAt
-                           ) {
-                            replacement.isViewed = true
-                            replacement.viewedAt = stories[j].viewedAt
-                        }
-                        stories[j] = replacement
-                    } else {
-                        stories.append(story)
-                    }
-                }
-                stories.sort { $0.createdAt < $1.createdAt }
-                storyGroups[idx] = storyGroups[idx].with(stories: stories)
-            } else {
-                storyGroups.append(newGroup)
-            }
+            StoryTrayRules.merge(newGroup, into: &storyGroups, selfId: selfId, replacingExisting: replacingExisting)
         }
         sortStoryGroupsInPlace()
         persistStoryCache()
@@ -702,23 +626,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] viewedData in
                 guard let self else { return }
-                for i in self.storyGroups.indices {
-                    if let j = self.storyGroups[i].stories.firstIndex(where: { $0.id == viewedData.storyId }) {
-                        var updatedStories = self.storyGroups[i].stories
-                        // viewCount = total autoritatif porté par l'event ; toujours appliqué.
-                        // (Avant : ignoré → le compteur de vues restait stale chez l'auteur
-                        // qui regarde sa propre story pendant que des viewers arrivent.)
-                        updatedStories[j].viewCount = viewedData.viewCount
-                        updatedStories[j].isViewed = true
-                        self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
-                        // Re-sort: `hasUnviewed` may flip when the last
-                        // unviewed story is consumed, dropping the group
-                        // below the "fresh" bubbles.
-                        self.sortStoryGroupsInPlace()
-                        self.persistStoryCache()
-                        return
-                    }
-                }
+                guard StoryTrayRules.applyViewed(viewedData, to: &self.storyGroups) else { return }
+                // Re-sort: `hasUnviewed` may flip when the last
+                // unviewed story is consumed, dropping the group
+                // below the "fresh" bubbles.
+                self.sortStoryGroupsInPlace()
+                self.persistStoryCache()
             }
             .store(in: &socketCancellables)
 
@@ -734,31 +647,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 let engagementReset = event.engagementReset ?? false
                 let updated = [event.story].toStoryGroups(currentUserId: selfId)
                 for updatedGroup in updated {
-                    guard let groupIdx = self.storyGroups.firstIndex(where: { $0.id == updatedGroup.id }) else { continue }
-                    let isOwnGroup = updatedGroup.id == selfId
-                    var stories = self.storyGroups[groupIdx].stories
-                    for newStory in updatedGroup.stories {
-                        if let storyIdx = stories.firstIndex(where: { $0.id == newStory.id }) {
-                            var replacement = newStory
-                            // Local-first : `isViewed` est posé en optimiste par markViewed
-                            // (fire-and-forget) ; le serveur peut lagger → un `isViewedByMe`
-                            // stale dans story:updated reverterait l'anneau en « non-vu ».
-                            // Viewed est MONOTONE (une fois vu, reste vu) — SAUF quand
-                            // l'édition a remis l'engagement à zéro (flag de l'event, ou
-                            // `contentEditedAt` postérieur à la vue locale pour le chemin
-                            // REST). Même garde que fetchStoriesFromNetwork.
-                            if stories[storyIdx].isViewed && !replacement.isViewed,
-                               isOwnGroup || (!engagementReset && Self.shouldKeepLocalViewed(
-                                   localViewedAt: stories[storyIdx].viewedAt,
-                                   contentEditedAt: replacement.contentEditedAt
-                               )) {
-                                replacement.isViewed = true
-                                replacement.viewedAt = stories[storyIdx].viewedAt
-                            }
-                            stories[storyIdx] = replacement
-                        }
-                    }
-                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    guard StoryTrayRules.applyUpdate(
+                        updatedGroup,
+                        engagementReset: engagementReset,
+                        selfId: selfId,
+                        to: &self.storyGroups
+                    ) else { continue }
                     // L'anneau du groupe peut redevenir « non-vu » — même
                     // re-tri que storyViewed pour remonter la bulle fraîche.
                     self.sortStoryGroupsInPlace()
@@ -777,17 +671,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self else { return }
-                for groupIdx in self.storyGroups.indices {
-                    var stories = self.storyGroups[groupIdx].stories
-                    guard let storyIdx = stories.firstIndex(where: { $0.id == payload.postId }) else { continue }
-                    stories[storyIdx] = stories[storyIdx].mergingTextObjectTranslations(
+                let merged = StoryTrayRules.mutateStory(postId: payload.postId, in: &self.storyGroups) { item in
+                    item = item.mergingTextObjectTranslations(
                         at: payload.textObjectIndex,
                         translations: payload.translations
                     )
-                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
-                    self.persistStoryCache()
-                    return
                 }
+                if merged { self.persistStoryCache() }
             }
             .store(in: &socketCancellables)
 
@@ -806,17 +696,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self else { return }
-                for groupIdx in self.storyGroups.indices {
-                    var stories = self.storyGroups[groupIdx].stories
-                    guard let storyIdx = stories.firstIndex(where: { $0.id == payload.postId }) else { continue }
-                    stories[storyIdx] = stories[storyIdx].mergingContentTranslation(
+                let merged = StoryTrayRules.mutateStory(postId: payload.postId, in: &self.storyGroups) { item in
+                    item = item.mergingContentTranslation(
                         language: payload.language,
                         content: payload.translation.text
                     )
-                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
-                    self.persistStoryCache()
-                    return
                 }
+                if merged { self.persistStoryCache() }
             }
             .store(in: &socketCancellables)
 
@@ -922,16 +808,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private func applyPostReactionDelta(event: SocketPostReactionUpdateEvent, delta: Int) {
         let myId = AuthManager.shared.currentUser?.id
         mutateStoryItem(byPostId: event.postId) { item in
-            item.reactionCount = max(0, item.reactionCount + delta)
-            if let myId, event.userId == myId {
-                var mine = item.currentUserReactions ?? []
-                if delta > 0 {
-                    if !mine.contains(event.emoji) { mine.append(event.emoji) }
-                } else {
-                    mine.removeAll { $0 == event.emoji }
-                }
-                item.currentUserReactions = mine
-            }
+            StoryTrayRules.applyReactionDelta(to: &item, emoji: event.emoji, userId: event.userId, myId: myId, delta: delta)
         }
     }
 
@@ -945,16 +822,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     func applyStoryReactionDelta(storyId: String, userId: String, emoji: String, delta: Int) {
         let myId = AuthManager.shared.currentUser?.id
         mutateStoryItem(byPostId: storyId) { item in
-            item.reactionCount = max(0, item.reactionCount + delta)
-            if let myId, userId == myId {
-                var mine = item.currentUserReactions ?? []
-                if delta > 0 {
-                    if !mine.contains(emoji) { mine.append(emoji) }
-                } else {
-                    mine.removeAll { $0 == emoji }
-                }
-                item.currentUserReactions = mine
-            }
+            StoryTrayRules.applyReactionDelta(to: &item, emoji: emoji, userId: userId, myId: myId, delta: delta)
         }
     }
 
@@ -963,14 +831,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// reflects the live counter. No-op when the story isn't in the tray
     /// (e.g. the user's own post that never feeds back into `getStories`).
     private func mutateStoryItem(byPostId postId: String, _ mutation: (inout StoryItem) -> Void) {
-        for i in storyGroups.indices {
-            guard let j = storyGroups[i].stories.firstIndex(where: { $0.id == postId }) else { continue }
-            var stories = storyGroups[i].stories
-            mutation(&stories[j])
-            storyGroups[i] = storyGroups[i].with(stories: stories)
-            persistStoryCache()
-            return
-        }
+        if StoryTrayRules.mutateStory(postId: postId, in: &storyGroups, mutation) { persistStoryCache() }
     }
 
 
@@ -1005,27 +866,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// par la surcharge `APIAuthor`. Le corps est identique (insertion dédupliquée
     /// par id, création du groupe si absent).
     func insertOrAppendStoryItem(_ item: StoryItem, authorId: String, authorName: String, authorAvatar: String?) {
-        if let idx = storyGroups.firstIndex(where: { $0.id == authorId }) {
-            var updated = storyGroups[idx].stories
-            // Déduplication par id : un insert optimiste suivi de l'écho serveur /
-            // socket (ou d'un 2e chemin de publish) ne doit JAMAIS produire deux
-            // entrées identiques dans le groupe — sinon le viewer affiche la même
-            // story deux fois (2 segments de progression identiques).
-            if let existing = updated.firstIndex(where: { $0.id == item.id }) {
-                updated[existing] = item
-            } else {
-                updated.append(item)
-            }
-            storyGroups[idx] = storyGroups[idx].with(stories: updated)
-        } else {
-            storyGroups.insert(StoryGroup(
-                id: authorId,
-                username: authorName,
-                avatarColor: DynamicColorGenerator.colorForName(authorName),
-                avatarURL: authorAvatar,
-                stories: [item]
-            ), at: 0)
-        }
+        StoryTrayRules.insert(item, authorId: authorId, authorName: authorName,
+                              authorAvatar: authorAvatar, into: &storyGroups)
         persistStoryCache()
     }
 

@@ -286,7 +286,7 @@ async function main() {
     // dans cette construction) — abandonné ici pour ne JAMAIS laisser partir
     // un octet réel vers un serveur de production depuis ce gate (#5793).
     await page.route('**/socket.io/**', (route) => route.abort());
-    await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/chats`, { waitUntil: 'networkidle' });
     const path = await page.evaluate(() => window.location.pathname);
     check(path === '/login', `sans session, "/" redirige vers /login (obtenu : ${path})`);
     check(requests.length === 0, `sans session, aucune requête /api/v1/conversations (obtenu : ${requests.length})`);
@@ -347,7 +347,7 @@ async function main() {
     const socketRequestPromise = page.waitForRequest((req) => req.url().includes('/socket.io/'), { timeout: 10000 });
     await page.route('**/socket.io/**', (route) => route.abort());
 
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
 
     // Le squelette doit être peint AVANT la résolution (800 ms) — on le
     // mesure tôt, avant d'attendre les rangées réelles.
@@ -422,7 +422,7 @@ async function main() {
     // --- 3. /login avec une session ⇒ /  ---------------------------------
     await page.goto(`${base}/login`, { waitUntil: 'networkidle' });
     const pathAfterLogin = await page.evaluate(() => window.location.pathname);
-    check(pathAfterLogin === '/', `/login avec une session active redirige vers / (obtenu : ${pathAfterLogin})`);
+    check(pathAfterLogin === '/chats', `/login avec une session active redirige vers /chats (obtenu : ${pathAfterLogin})`);
 
     await context.close();
   }
@@ -448,7 +448,7 @@ async function main() {
     });
     await page.route('**/socket.io/**', (route) => route.abort());
 
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-row]', { timeout: 5000 });
     check((await page.locator('[data-row]').count()) === 30, 'page 2b : la page 1 rend bien 30 rangées avant le défilement');
 
@@ -488,8 +488,11 @@ async function main() {
   // --- 2c. TIRER-POUR-RAFRAÎCHIR : conversations + stories/humeurs EN -------
   //         PARALLÈLE, sans squelette (#6195) --------------------------------
   {
-    // `serviceWorkers: 'block'` — voir le doc-comment du bloc 2.
-    const context = await browser.newContext({ serviceWorkers: 'block' });
+    // `serviceWorkers: 'block'` — voir le doc-comment du bloc 2. `locale:
+    // 'fr-FR'` (#10593) : les puces parlent la langue d'interface, que le
+    // script d'amorçage lit dans `navigator.languages`. Le bloc touche les
+    // puces par `data-list-filter` (#10598), que la langue ne change pas.
+    const context = await browser.newContext({ serviceWorkers: 'block', locale: 'fr-FR' });
     await context.addInitScript((session) => {
       window.localStorage.setItem('meeshy.session', JSON.stringify(session));
     }, SESSION);
@@ -514,7 +517,7 @@ async function main() {
     });
     await page.route('**/socket.io/**', (route) => route.abort());
 
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('[data-row]', { timeout: 5000 });
     check((await page.locator('[data-row]').count()) === 30, 'page 2c : 30 rangées avant le tirer');
     check(block2cCounts.get('') === 1, 'page 2c : une seule requête de conversations avant le tirer');
@@ -530,7 +533,7 @@ async function main() {
      * conversations synthétiques sont toutes `direct` et aucune n'est
      * épinglée : « Épinglés » rend donc exactement zéro rangée.
      */
-    await page.getByRole('button', { name: 'Épinglés' }).click();
+    await page.click('nav[data-list-filters] button[data-list-filter="pinned"]');
     await page.waitForFunction(() => document.querySelectorAll('[data-row]').length === 0, undefined, { timeout: 3000 });
     await page.waitForTimeout(1200);
     check(
@@ -550,7 +553,7 @@ async function main() {
       (await page.locator('[data-pagination-footer]').count()) === 0,
       'page 2c : sous un filtre à ZÉRO rangée, le pied de pagination est ABSENT',
     );
-    await page.getByRole('button', { name: 'Tous' }).click();
+    await page.click('nav[data-list-filters] button[data-list-filter="all"]');
     // `>= 30`, jamais `=== 30` : sur une régression de la garde ci-dessus, le
     // retour sur « Tous » rend les 45 rangées que la cascade a chargées — ce
     // qui doit RAPPORTER un échec, pas faire expirer une attente et abattre le
@@ -650,7 +653,7 @@ async function main() {
         body: JSON.stringify({ success: true, data: [] }),
       });
     });
-    await page.goto(`${base}/`, { waitUntil: 'networkidle' });
+    await page.goto(`${base}/chats`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#contenu:not([aria-busy])', { timeout: 5000 });
 
     /**
@@ -743,7 +746,9 @@ async function main() {
       /* Le chrome qui PRÉCÈDE la liste : le rail et la bande de filtres. On
          prend le plus bas des deux — c'est lui qui borne le début légitime de
          l'état vide. */
-      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[aria-label="Filtres"]')];
+      /* `[data-list-filters]`, jamais le nom accessible (#10593) : il suit la
+         langue d'interface, et « Filters » sortait la bande de la mesure. */
+      const chrome = [...contenu.querySelectorAll('[data-rail="grande"], nav[data-list-filters]')];
       const bas = chrome.reduce((max, el) => Math.max(max, el.getBoundingClientRect().bottom), contenu.getBoundingClientRect().top);
       return Math.round(empty.getBoundingClientRect().top - bas);
     });
@@ -786,7 +791,7 @@ async function main() {
         body: JSON.stringify({ success: false, error: 'Internal server error' }),
       });
     });
-    await page.goto(`${base}/`, { waitUntil: 'domcontentloaded' });
+    await page.goto(`${base}/chats`, { waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#contenu [role="alert"]', { timeout: 20000 });
 
     const busy = await page.locator('#contenu[aria-busy="true"]').count();

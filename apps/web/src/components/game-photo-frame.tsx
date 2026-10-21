@@ -1,8 +1,10 @@
-import { Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
+import { AuthorPlate, Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { flameForm } from '@meeshy/shared/utils/game/flame';
 
 import { useMemo } from 'react';
 
+import { authorPlateOf, plateStyleOf, type PhotoAuthor } from '@/lib/game-photo/author-plate';
+import { GAME_BADGE_MATERIALS, type GameMaterial } from '@/lib/game/materials';
 import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat, type Rect, type TextLine } from '@/lib/game-photo/layout';
 import type { PhotoEmblem, PhotoMoment } from '@/lib/game-photo/moments';
 import { fitBannerLine, type PhotoReferral } from '@/lib/game-photo/referral';
@@ -39,9 +41,15 @@ import '@/styles/game-photo.css';
  * sauf les deux du carré : un QR se lit sombre sur clair dans les deux thèmes.
  */
 
+/** Le trophée d'un succès ou d'une mission prend le métal de sa plaque (#10816) ; l'indigo neutre garde l'or d'avant. */
+const trophyMaterialOf = (emblem: PhotoEmblem): GameMaterial => {
+  const metal = plateStyleOf(emblem)?.metal;
+  return GAME_BADGE_MATERIALS.find((material) => material === metal) ?? 'gold';
+};
+
 const percent = (value: number, of: number): string => `${((value / of) * 100).toFixed(2)}%`;
 
-function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
+export function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
   switch (emblem.kind) {
     case 'start':
       return <Signature size={512} color="var(--ios-on-brand)" mode="struck" />;
@@ -52,13 +60,14 @@ function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem }) {
     case 'level-hundred':
       return <LevelRing level={100} tier="galaxie" progress={1} size={512} showTier />;
     case 'meesh':
-      return <MeeshCoin side="reverse" size={512} edition={emblem.edition} number={emblem.number} numberLabel={gameText('game.mint.number_label', { number: formatCount(emblem.number) })} />;
+      return <MeeshCoin side="reverse" size={512} edition={emblem.edition} number={emblem.number} />;
     case 'treasury':
       return <MeeshCoin side="obverse" size={512} edition="silver" />;
     case 'flame':
       return <Flame form={emblem.form} size={512} />;
     case 'achievement':
-      return <Trophy kind="league" material="gold" size={512} />;
+    case 'mission':
+      return <Trophy kind="league" material={trophyMaterialOf(emblem)} size={512} />;
     case 'trophy': {
       const view = trophyView(emblem.trophyKey);
       return <Trophy kind={view?.kind ?? 'league'} size={512} {...(view?.material === undefined ? {} : { material: view.material })} {...(view === null ? {} : { label: view.plate })} />;
@@ -196,13 +205,17 @@ export function GamePhotoFrame({
   dateLabel,
   format,
   referral = null,
+  author = null,
 }: {
   readonly moment: PhotoMoment;
   readonly dateLabel: string;
   readonly format: PhotoFormat;
   /** Le lien de parrainage et la Flamme (#7742) ; `null` : le cadre n'a pas de bandeau. */
   readonly referral?: PhotoReferral | null;
+  /** L'auteur (#10816) : son pseudo se grave sur la plaque d'un succès, d'un rang ou d'une fin de mission ; `null` : pas de plaque. */
+  readonly author?: PhotoAuthor | null;
 }) {
+  const plate = authorPlateOf(moment.emblem, author);
   const layout = photoLayout(format, { banner: referral !== null, rtl: interfaceDirection(currentInterfaceLanguage()) === 'rtl' });
   const { width, height } = PHOTO_FORMATS[format];
   return (
@@ -240,6 +253,13 @@ export function GamePhotoFrame({
           {dateLabel}
         </Line>
 
+        {plate === null ? null : (
+          <Placed rect={layout.author} width={width} height={height}>
+            <span data-photo-art="author" className="game-photo-art">
+              <AuthorPlate plate={plate} width={720} />
+            </span>
+          </Placed>
+        )}
         <Placed rect={layout.mee} width={width} height={height}>
           <span data-game-actor="mee" style={{ display: 'block', width: '100%', height: '100%' }}>
             <span data-photo-art="mee" className="game-photo-art">

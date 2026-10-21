@@ -9,6 +9,7 @@ import { forgetAccountCaches } from './account-caches';
 import { createAccountSwitcher, createAccountVault, forgettingLocalData, purgeAccountLocalData } from './accounts';
 import { logout } from './auth';
 import { httpTransport } from './client';
+import { createProvenSessionGestures } from './proven-session';
 import { sessionStore } from './session';
 
 /**
@@ -31,8 +32,8 @@ function storedKeys(): readonly string[] {
 
 /**
  * CE QU'UN COMPTE LAISSE SUR L'APPAREIL, EFFACÉ (#8286, #8674) — brouillons,
- * modes de lecture, dernières ouvertures, cache de requêtes rangé et seaux du
- * service worker. Appelé par la déconnexion et par « retirer ce compte » ;
+ * modes de lecture, dernières ouvertures, cache de requêtes rangé, seaux du
+ * service worker et envois en attente de la file de partage (#10948). Appelé par la déconnexion et par « retirer ce compte » ;
  * jamais par un changement de compte.
  */
 function forgetAccountLocally(userId: string): void {
@@ -41,9 +42,24 @@ function forgetAccountLocally(userId: string): void {
   unsentComments.getState().forgetScope(`u_${userId}`);
   purgeAccountLocalData({ storage: safeLocalStorage(), userId, keys: storedKeys() });
   forgetAccountCaches({ userId });
+  /* Ses envois en attente (contenu et fichiers dans IndexedDB) partent avec lui ; chargé au geste. */
+  void import('../send/send-queue-instance').then(({ sendQueue }) => sendQueue.forget(userId)).catch(() => undefined);
 }
 
-export const accountVault = forgettingLocalData(createAccountVault({ storage: safeLocalStorage(), now }), forgetAccountLocally);
+/**
+ * « RETIRER CE COMPTE » efface en plus son carnet de progression (#10161, D-154) :
+ * ses photos n'ont pas d'autre exemplaire, la DÉCONNEXION les garde donc, et
+ * seul le retrait du compte de l'appareil les emporte.
+ */
+function retireAccountLocally(userId: string): void {
+  forgetAccountLocally(userId);
+  /* Chargé au geste : l'écran de connexion et les réglages n'embarquent pas le carnet. */
+  void import('../game-photo/notebook-legacy')
+    .then(({ forgetAccountNotebook }) => forgetAccountNotebook(typeof indexedDB === 'undefined' ? undefined : indexedDB, userId))
+    .catch(() => undefined);
+}
+
+export const accountVault = forgettingLocalData(createAccountVault({ storage: safeLocalStorage(), now }), retireAccountLocally);
 
 export const accountSwitcher = createAccountSwitcher({
   vault: accountVault,
@@ -58,6 +74,18 @@ export const accountSwitcher = createAccountSwitcher({
       })
       .catch(() => undefined);
   },
+});
+
+/**
+ * LE LIEN D'UN AUTRE COMPTE (#10451) — accepter passe par la bascule (le
+ * compte quitté reste au sélecteur), refuser referme la session prouvée côté
+ * passerelle. Chargé au geste par `AccountReplacementPrompt`.
+ */
+export const provenSessions = createProvenSessionGestures({
+  store: sessionStore,
+  transport: httpTransport,
+  suspend: () => accountSwitcher.suspend(),
+  noteActive: (user) => accountVault.noteActive(user),
 });
 
 /**

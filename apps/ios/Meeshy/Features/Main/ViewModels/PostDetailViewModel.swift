@@ -50,6 +50,10 @@ class PostDetailViewModel: ObservableObject {
     private let socialSocket: any SocialSocketProviding
     private let languageProvider: LanguageProviding
     let offlineQueue: OfflineQueueing
+    private let openSources: DetailOpenSourceProviding
+    /// Les posts dont l'ouverture est déjà comptée par CETTE instance (#10483) :
+    /// le `.task` du détail se relance au retour d'un écran poussé.
+    private var countedOpenPostIds: Set<String> = []
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Persistence Layer
@@ -60,8 +64,10 @@ class PostDetailViewModel: ObservableObject {
         postService: PostServiceProviding = PostService.shared,
         languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
-        socialSocket: any SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: any SocialSocketProviding = SocialSocketManager.shared,
+        openSources: DetailOpenSourceProviding = DetailOpenSources.shared
     ) {
+        self.openSources = openSources
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
@@ -87,6 +93,12 @@ class PostDetailViewModel: ObservableObject {
                 let langs = self.preferredLanguages
                 if let current = self.post {
                     self.post = current.resolved(preferredLanguages: langs)
+                }
+                // Les commentaires et leurs réponses suivent : ils restaient
+                // dans l'ancienne langue.
+                self.comments = self.comments.map { $0.resolved(preferredLanguages: langs) }
+                self.repliesMap = self.repliesMap.mapValues { replies in
+                    replies.map { $0.resolved(preferredLanguages: langs) }
                 }
             }
             .store(in: &cancellables)
@@ -133,17 +145,34 @@ class PostDetailViewModel: ObservableObject {
     /// Ouvrir la page Détail d'un post est, par règle produit, une vue TOTALE
     /// (chaque ouverture compte, jamais dédupliquée) ET une impression, comptées
     /// IMMÉDIATEMENT — avant et indépendamment du tracking d'engagement (durée de
-    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` via
-    /// `POST /posts/:id/impression?source=detail`. On bump les compteurs affichés
+    /// lecture). Le gateway incrémente `postOpenCount` + `impressionCount` par
+    /// l'impression `source=detail` de `POST /social/events`. On bump les compteurs affichés
     /// de façon optimiste pour un feedback instantané, puis on enregistre (fire-
-    /// and-forget). La vue UNIQUE (`viewCount`, dédupliquée, non affichée) reste
-    /// portée par `viewPost` appelé séparément à l'ouverture.
+    /// and-forget), impression puis vue.
+    ///
+    /// Une ouverture se compte à la PREMIÈRE apparition de l'instance, pas à
+    /// chaque relance du `.task` (#10483). Son ENTRÉE (la marque posée par la
+    /// porte qui l'a amenée : tap d'un listing, notification, lien) donne la
+    /// source de l'impression et la provenance de la vue ; sans marque, `direct`.
     func registerDetailOpen(_ postId: String) async {
+        guard countedOpenPostIds.insert(postId).inserted else { return }
         if post != nil {
             post?.impressionCount += 1
             post?.postOpenCount += 1
         }
-        try? await postService.recordImpression(postId: postId, source: "detail")
+        let entry = openSources.consumeEntry(for: postId)
+        // Une seule requête : l'impression et la vue sont deux types qu'un
+        // serveur antérieur à #10483 connaît déjà ; la provenance et l'origine
+        // de la vue, inconnues de lui, sont retirées sans refus. `viewCount` est
+        // le TOTAL des vues : chaque ouverture en compte une, sous la même garde
+        // que l'impression, et porte par où elle est venue.
+        _ = try? await postService.recordSocialEvents(
+            [
+                .impression(postId: postId, source: entry.detailImpressionSource, surface: .detail),
+                .view(postId: postId, durationMs: nil, surface: .detail, entry: entry),
+            ],
+            credential: .account
+        )
     }
 
     private func refreshPost(_ postId: String) async {
@@ -152,7 +181,7 @@ class PostDetailViewModel: ObservableObject {
             let apiPost = try await postService.getPost(postId: postId)
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             post = feedPost
-            try? await CacheCoordinator.shared.feed.save([feedPost], for: postId)
+            await bestEffort("postDetailViewModel.feed.savePost", category: .cache) { try await CacheCoordinator.shared.feed.save([feedPost], for: postId) }
 
             // Persist to GRDB
             if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
@@ -243,7 +272,7 @@ class PostDetailViewModel: ObservableObject {
             seedCommentLikes(from: unique)
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
-            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            await bestEffort("postDetailViewModel.comments.saveThread", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
 
             // Persist fetched comments to GRDB
             if let persistence = feedPersistence {
@@ -294,7 +323,7 @@ class PostDetailViewModel: ObservableObject {
             // Persiste les réponses sous "replies-{commentId}" pour hydrater
             // l'aperçu (2 premières) instantanément à la ré-ouverture du post
             // (cache-first, miroir de `FeedCommentsSheet`).
-            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
+            await bestEffort("postDetailViewModel.comments.saveRepliesPreview", category: .cache) { try await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)") }
         } catch {
             expandedThreads.remove(commentId)
         }
@@ -327,9 +356,9 @@ class PostDetailViewModel: ObservableObject {
             repliesMap[commentId] = existing + unique
             recordRepliesPagination(response.pagination, for: commentId)
             seedCommentLikes(from: unique)
-            try? await CacheCoordinator.shared.comments.save(
+            await bestEffort("postDetailViewModel.comments.saveRepliesPage", category: .cache) { try await CacheCoordinator.shared.comments.save(
                 repliesMap[commentId] ?? [], for: "replies-\(commentId)"
-            )
+            ) }
         } catch {
             // Échec réseau : stopper proprement la pagination (et toute chasse
             // en cours) — le fil reste utilisable avec les pages déjà chargées.
@@ -409,98 +438,6 @@ class PostDetailViewModel: ObservableObject {
             .map(\.id)
         guard !liked.isEmpty else { return }
         commentLikedIds.formUnion(liked)
-    }
-
-    /// Réconciliation par l'agrégat ABSOLU d'un événement cœur de commentaire :
-    /// pose `likes = count` sur la ligne (top-level ou réponse), purge le delta
-    /// optimiste, et dérive « mon cœur » de `reactorUserIds` (la liste des
-    /// User.id ayant réagi — PAS `hasCurrentUser`, qui est calculé côté gateway
-    /// relativement à l'ACTEUR de l'événement, donc faux pour les destinataires
-    /// d'un broadcast). L'affichage `likes + delta` converge vers la vérité
-    /// serveur sans jamais compter double.
-    func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
-        var resolvedCount = count
-        if let myId = AuthManager.shared.currentUser?.id {
-            if reactorUserIds.contains(myId) {
-                commentLikedIds.insert(commentId)
-            } else if actorUserId == myId {
-                // L'événement décrit MA propre action : agrégat autoritatif.
-                commentLikedIds.remove(commentId)
-            } else if commentLikedIds.contains(commentId) {
-                // Agrégat d'un TIERS pendant que MON like est encore en vol :
-                // il ne me connaît pas — préserver le cœur, compter le mien
-                // par-dessus (l'écho de mon propre like reconfirmera).
-                resolvedCount = count + 1
-            }
-        }
-        commentLikeDelta[commentId] = nil
-        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
-            comments[idx].likes = resolvedCount
-            return
-        }
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx].likes = resolvedCount
-                repliesMap[key] = replies
-                return
-            }
-        }
-    }
-
-    /// Like/unlike d'un commentaire — optimistic + réaction socket cœur + rollback.
-    /// Miroir exact de `CommentsSheetView.toggleCommentLike` pour que le like de
-    /// commentaire dans le détail de post se comporte comme dans la sheet.
-    func toggleCommentLike(_ commentId: String, postId: String) async {
-        guard !commentHeartInFlightIds.contains(commentId) else { return }
-        commentHeartInFlightIds.insert(commentId)
-        defer { commentHeartInFlightIds.remove(commentId) }
-
-        let wasLiked = commentLikedIds.contains(commentId)
-        if wasLiked {
-            commentLikedIds.remove(commentId)
-            commentLikeDelta[commentId, default: 0] -= 1
-        } else {
-            commentLikedIds.insert(commentId)
-            commentLikeDelta[commentId, default: 0] += 1
-        }
-
-        do {
-            try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
-                if wasLiked {
-                    _ = try await SocialSocketManager.shared.removeCommentReaction(
-                        commentId: commentId, postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                } else {
-                    _ = try await SocialSocketManager.shared.addCommentReaction(
-                        commentId: commentId, postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                }
-            }
-        } catch {
-            // Fallback REST quand le socket échoue (le endpoint écrit la même table
-            // CommentReaction, idempotent + likeCount synchronisé). Mutuellement exclusif
-            // avec le socket → pas de double-écriture. Rollback uniquement si REST échoue aussi.
-            let restOK: Bool
-            do {
-                if wasLiked {
-                    try await postService.unlikeComment(postId: postId, commentId: commentId)
-                } else {
-                    try await postService.likeComment(postId: postId, commentId: commentId)
-                }
-                restOK = true
-            } catch {
-                restOK = false
-            }
-            if !restOK {
-                if wasLiked {
-                    commentLikedIds.insert(commentId)
-                    commentLikeDelta[commentId, default: 0] += 1
-                } else {
-                    commentLikedIds.remove(commentId)
-                    commentLikeDelta[commentId, default: 0] -= 1
-                }
-            }
-        }
     }
 
     // MARK: - Actions
@@ -651,49 +588,13 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    /// Reports the loaded post as inappropriate. Mirrors `FeedViewModel.reportPost`
-    /// — uses ReportService directly so PostDetailView doesn't have to dual-wire.
-    func reportPost(_ postId: String) async {
-        do {
-            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            FeedbackToastManager.shared.showSuccess(String(localized: "profile.posts.report.success", defaultValue: "Signalement envoyé", bundle: .main))
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "post.detail.report.error", defaultValue: "Erreur lors du signalement"))
-        }
-    }
-
-    /// Deletes the loaded post. Mirrors `FeedViewModel.deletePost` — no local
-    /// list to remove from (this IS the single loaded post), so success just
-    /// reports true and the caller (`PostDetailView`) pops the screen.
-    @discardableResult
-    func deletePost(_ postId: String) async -> Bool {
-        do {
-            try await postService.delete(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.deleted", defaultValue: "Publication supprimée", bundle: .main))
-            return true
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.deleteError", defaultValue: "Erreur lors de la suppression", bundle: .main))
-            return false
-        }
-    }
-
-    func pinPost(_ postId: String) async {
-        do {
-            try await postService.pinPost(postId: postId)
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.post.pinned", defaultValue: "Publication épinglée", bundle: .main))
-        } catch {
-            FeedbackToastManager.shared.showError(String(localized: "feed.post.pinError", defaultValue: "Erreur lors de l'épinglage", bundle: .main))
-        }
-    }
-
-
     // MARK: - Comment Deletion
 
     /// Supprime un commentaire (auteur uniquement — le gating se fait côté vue
     /// via `CommentRowView`). Retrait optimiste immédiat (racine + réponses, ou
     /// réponse avec décrément du parent), puis appel API, rollback du snapshot
     /// si l'API échoue. Miroir du flux optimiste de `submitCommentWithMedia`.
-    func deleteComment(_ comment: FeedComment) async {
+    func deleteComment(_ comment: FeedComment, reason: String? = nil) async {
         guard let post else { return }
         let snapshotComments = comments
         let snapshotReplies = repliesMap
@@ -706,7 +607,7 @@ class PostDetailViewModel: ObservableObject {
                 repliesMap[parentId] = existing
                 // Met à jour l'aperçu en cache pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)")
+                await bestEffort("postDetailViewModel.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(existing, for: "replies-\(parentId)") }
             }
             if let idx = comments.firstIndex(where: { $0.id == parentId }), comments[idx].replies > 0 {
                 comments[idx].replies -= 1
@@ -721,9 +622,9 @@ class PostDetailViewModel: ObservableObject {
         }
 
         do {
-            try await postService.deleteComment(postId: post.id, commentId: comment.id)
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+            try await postService.deleteComment(postId: post.id, commentId: comment.id, reason: reason)
+            await bestEffort("postDetailViewModel.comments.pruneDeletedComment", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {
             comments = snapshotComments
             repliesMap = snapshotReplies
@@ -851,9 +752,9 @@ class PostDetailViewModel: ObservableObject {
                 let reconciledComments = self.comments
                 let reconciledReplies = parentId.flatMap { self.repliesMap[$0] }
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledComments, for: "post-\(postId)")
+                    await bestEffort("postDetailViewModel.comments.reconcileCreatedThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledComments, for: "post-\(postId)") }
                     if let parentId, let reconciledReplies {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)")
+                        await bestEffort("postDetailViewModel.comments.reconcileCreatedReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(reconciledReplies, for: "replies-\(parentId)") }
                     }
                 }
             }
@@ -872,7 +773,7 @@ class PostDetailViewModel: ObservableObject {
                 // les autres vues resservent la version éditée depuis le cache.
                 let snapshot = self.comments
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                    await bestEffort("postDetailViewModel.comments.applyRemoteEdit", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                 }
             }
             .store(in: &socketCancellables)
@@ -913,13 +814,13 @@ class PostDetailViewModel: ObservableObject {
                     self.repliesMap[parentId] = existing
                     let snapshot = existing
                     Task {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "replies-\(parentId)")
+                        await bestEffort("postDetailViewModel.comments.applyMediaUpdateReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "replies-\(parentId)") }
                     }
                 } else if let idx = self.comments.firstIndex(where: { $0.id == commentId }) {
                     self.comments[idx].media = media
                     let snapshot = self.comments
                     Task {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                        await bestEffort("postDetailViewModel.comments.applyMediaUpdateThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                     }
                 }
             }
@@ -970,9 +871,9 @@ class PostDetailViewModel: ObservableObject {
                 let touchedThreads = touchedThreadIds
                 Task {
                     for key in touchedThreads {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(threadSnapshots[key] ?? [], for: "replies-\(key)")
+                        await bestEffort("postDetailViewModel.comments.applyRemoteDeleteReplies", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(threadSnapshots[key] ?? [], for: "replies-\(key)") }
                     }
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)")
+                    await bestEffort("postDetailViewModel.comments.applyRemoteDeleteThread", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(snapshot, for: "post-\(postId)") }
                 }
             }
             .store(in: &socketCancellables)

@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import { useListingScrollTelemetry } from '@/lib/telemetry/listing-scroll';
+import { useListingSessionId } from '@/lib/telemetry/listing-session';
+import { listingAt } from '@/lib/telemetry/served-listing';
+import { useMemo, useRef } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 
 import { FeedPostCard } from '@/components/feed-post-card';
@@ -14,6 +17,8 @@ import { useReaderLanguages } from '@/lib/view/use-reader';
 import { Link } from '@/routes/route-table';
 
 import { FeedSkeleton } from './feed';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * **LES PUBLICATIONS D'UN HASHTAG** (#7032) — `/hashtag/$tag`, l'adresse que
@@ -54,6 +59,9 @@ export default function HashtagScreen() {
   const { announcement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
 
   const page = useInfiniteQuery(hashtagInfiniteOptions({ ...apiDeps, tag: canonical }));
+  const listingSessionId = useListingSessionId();
+  const frame = useRef<HTMLElement | null>(null);
+  useListingScrollTelemetry({ frame, surface: 'hashtag', listingSessionId, loaded: page.data?.pages.length ?? 0 });
 
   const models = useMemo(
     () =>
@@ -70,7 +78,7 @@ export default function HashtagScreen() {
       <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
         <Link
           to="feed"
-          aria-label="Retour au fil"
+          aria-label={translate(currentInterfaceLanguage(), 'feed.backToFeed')}
           className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
           style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
         >
@@ -83,9 +91,9 @@ export default function HashtagScreen() {
       <p role="status" aria-live="polite" className="sr-only">
         {announcement}
       </p>
-      <main id="contenu" className="scrollbar-none flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe">
+      <main ref={frame} id="contenu" className="scrollbar-none flex flex-1 flex-col gap-3 overflow-y-auto px-3 pb-safe">
         {page.isPending ? (
-          <div aria-busy="true" aria-label="Chargement des publications">
+          <div aria-busy="true" aria-label={translate(currentInterfaceLanguage(), 'hashtag.loading')}>
             <FeedSkeleton count={2} />
           </div>
         ) : page.isError ? (
@@ -94,7 +102,7 @@ export default function HashtagScreen() {
               <Glyph name="warningCircle" size={28} />
             </span>
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              {online ? 'Impossible de charger ce mot-clé' : 'Hors ligne'}
+              {translate(currentInterfaceLanguage(), online ? 'hashtag.error' : 'common.offline')}
             </p>
             <button
               type="button"
@@ -102,24 +110,27 @@ export default function HashtagScreen() {
               className="grid place-items-center rounded-chip px-5 text-body font-semibold text-ios-on-brand"
               style={{ backgroundColor: 'var(--color-ios-brand)', minHeight: 44 }}
             >
-              Réessayer
+              {translate(currentInterfaceLanguage(), 'common.retry')}
             </button>
           </div>
         ) : models.length === 0 ? (
           <div className="grid flex-1 content-center justify-items-center gap-2 px-8 text-center">
             <p className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-              Rien sous #{canonical}
+              {translate(currentInterfaceLanguage(), 'hashtag.empty.title', { tag: canonical })}
             </p>
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Aucune publication visible ne porte ce mot-clé.
+              {translate(currentInterfaceLanguage(), 'hashtag.empty.body')}
             </p>
           </div>
         ) : (
           <>
-            {models.map((model) => (
+            {models.map((model, index) => (
               <FeedPostCard
                 key={model.id}
                 model={model}
+                listing={listingAt({ position: index, fallbackSource: 'hashtag', listingSessionId })}
+                impressionSource="search"
+                impressionSurface="hashtag"
                 onGesture={onGesture}
                 onShare={onShare}
                 onComment={onComment}
@@ -136,7 +147,7 @@ export default function HashtagScreen() {
                 className="mx-auto grid place-items-center rounded-chip px-5 text-body font-semibold"
                 style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
               >
-                {page.isFetchingNextPage ? 'Chargement…' : 'Charger plus'}
+                {translate(currentInterfaceLanguage(), page.isFetchingNextPage ? 'hashtag.loadingMore' : 'hashtag.loadMore')}
               </button>
             ) : null}
           </>

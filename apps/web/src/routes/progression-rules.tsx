@@ -9,7 +9,7 @@ import { GAME_BRAND, GAME_CARD, GAME_INK, GAME_INK_2 } from '@/components/game-s
 import { guideBirds } from '@/lib/game-guide/card';
 import { formatCount, gameText } from '@/lib/view/game-copy';
 import { stepCopy } from '@/lib/view/game-guide-copy';
-import { gameRules } from '@/lib/view/game-rules-copy';
+import { gameRules, rulesGlossary } from '@/lib/view/game-rules-copy';
 import { useOptionalRoute } from '@/lib/router';
 import { ProgressionShell } from '@/routes/progression-shell';
 import { RulesAtlas } from '@/routes/progression-rules-atlas';
@@ -21,6 +21,8 @@ import { BADGES_SECTION_ID, isBadgesSection } from '@/lib/game/medal';
  * disent à l'intégration (conception, partie I : « les règles en une page ») et
  * que le joueur retrouve ici quand il veut, avec les sept cartes de
  * l'intégration en entier : chacune peut se passer, le carnet les garde toutes.
+ * Sous les huit règles, « Chaque concept, en clair » (#10540) : aucun concept que
+ * Progression affiche n'est absent du carnet.
  *
  * Une page qui EXPLIQUE, sans geste : aucun bouton n'y agit, rien n'y est
  * promis qui ne soit dit ailleurs. Pas de lecture réseau : elle s'ouvre
@@ -124,6 +126,27 @@ export function RulesBody({ target, badges = false }: { readonly target?: number
             </li>
           ))}
         </ol>
+      </section>
+
+      <section aria-labelledby="concepts-titre" className="flex flex-col gap-2">
+        <h2 id="concepts-titre" className="text-title font-bold" style={{ color: GAME_INK }}>
+          {gameText('game.rules.section_concepts')}
+        </h2>
+        <p className="text-body" style={{ color: GAME_INK_2 }}>
+          {gameText('game.rules.concepts_intro')}
+        </p>
+        <dl className="flex flex-col gap-2">
+          {rulesGlossary().map((entry) => (
+            <div key={entry.key} data-rules-concept={entry.key} className="flex flex-col gap-0.5 rounded-card px-3 py-3" style={{ backgroundColor: GAME_CARD }}>
+              <dt className="text-body font-bold" style={{ color: GAME_INK }}>
+                {entry.name}
+              </dt>
+              <dd className="text-body" style={{ color: GAME_INK_2 }}>
+                {entry.body}
+              </dd>
+            </div>
+          ))}
+        </dl>
       </section>
 
       <RulesBadges />

@@ -2,11 +2,25 @@
  * LA RARETÉ CROISSANTE DES MEESHES (#9373) — le prix monte avec le nombre de
  * Meeshes déjà frappées. `docs/product/jeu-meeshy-conception.html` § II.3.
  *
- *     prix(n) = round(1221 × 1,06 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 4 884
+ *     prix(n) = round(1221 × 1,3 ^ ⌊(n − 1) ÷ 10⌋), plafonné à 16 556
+ *
+ * +30 % toutes les dix frappes (porteur, 2026-10-10, #10011) : 1 221 pour les dix premières, 1 587 de la 11e à
+ * la 20e, 12 948 pour la 100e (or), et le plafond de 16 556 dès la 101e. L'ancienne loi (+6 %, plafond 4 884)
+ * aurait mis 451 frappes à l'atteindre.
+ *
+ * ⚠️ LA LOI D'HIER. Avec les étincelles (#10846, #10847), le prix effectif d'une frappe est celui de
+ * `sparks.ts` (`effectiveMeeshPrice` : `meeshPrice(n)` × un facteur de niveau ACTUEL) et la frappe ne fait
+ * plus baisser le niveau (`previewSparksMint`). `previewMint` ci-dessous reste la loi que rejouent les
+ * clients publiés (vecteurs `mint-preview`) ; `meeshPrice` reste, lui, le prix de RANG de la pièce.
+ *
+ * Une Meesh ne se frappe QU'EN DÉBITANT des points, au prix de son rang : aucun autre chemin n'existe — ni
+ * fragment, ni frappe gratuite (porteur, 2026-10-10, #10011 ; `no-money-invariants.test.ts`).
  *
  * `MEESH_MINT_COST` (`utils/meesh.ts`) reste la BASE — le prix des dix
- * premières — et le défaut de `computeMeeshMintPlan`. Un ancien client qui croit
- * encore au prix de 1 221 est refusé SANS débit par le serveur, qui recalcule.
+ * premières — et le défaut de `computeMeeshMintPlan`. Le prix d'une frappe est
+ * RECALCULÉ par le serveur (`MeeshService.mint`) : aucun client ne l'envoie, un
+ * ancien client qui croit encore à l'ancien prix est refusé SANS débit quand ses
+ * points ne couvrent pas le nouveau.
  */
 
 import { MEESH_MINT_COST } from '../meesh.js';
@@ -15,9 +29,9 @@ import { levelStepGate, type LevelStepFacts } from './level-steps.js';
 import { levelFromScore, tighterLevelCap, type LevelCap } from './levels.js';
 
 export const MEESH_PRICE_STEP_EVERY = 10;
-export const MEESH_PRICE_GROWTH = 1.06;
-/** Quatre fois la base. */
-export const MEESH_PRICE_CAP = MEESH_MINT_COST * 4;
+export const MEESH_PRICE_GROWTH = 1.3;
+/** Le plafond du prix (porteur, 2026-10-10) : atteint à la 101e frappe. */
+export const MEESH_PRICE_CAP = 16_556;
 
 export type MeeshEdition = 'silver' | 'gold' | 'prism';
 
@@ -35,6 +49,19 @@ export const meeshEdition = (n: number): MeeshEdition => {
   const rank = sanitizeCount(n);
   if (rank > 0 && rank % 1000 === 0) return 'prism';
   if (rank > 0 && rank % 100 === 0) return 'gold';
+  return 'silver';
+};
+
+/**
+ * L'édition DESSINÉE de la n-ième Meesh (#11483) : la plus haute édition atteinte — l'argent avant le n° 100, l'or à
+ * partir du n° 100, le prisme à partir du n° 1000. Porteur, 2026-10-21 : « Le n° 247 dessiné en or ». La matière de la
+ * pièce, l'oiseau du revers et les poussières de la cérémonie suivent ce dessin ; la chorégraphie de la frappe suit la
+ * loi (`meeshEdition`). Une valeur illisible se dessine comme sa loi. Vecteurs : `meesh-display-edition.vectors.json`.
+ */
+export const meeshDisplayEdition = (n: number): MeeshEdition => {
+  const rank = sanitizeCount(n);
+  if (rank >= 1000) return 'prism';
+  if (rank >= 100) return 'gold';
   return 'silver';
 };
 

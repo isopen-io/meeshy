@@ -52,13 +52,13 @@ describe('le modèle de la pastille', () => {
       kind: 'streak',
       streakDays: 4,
       totalText: '120',
-      label: 'Série de 4 jours, 120 points dont 12 aujourd’hui',
+      label: '4 jours, 120 étincelles dont 12 aujourd’hui',
     });
   });
 
   test('le singulier se dit au singulier', () => {
     expect(engagementPillModel(snapshot({ totalPoints: 1, todayPoints: 1, streakDays: 1 }), '2026-09-30', 'fr')?.label).toBe(
-      'Série de 1 jour, 1 point dont 1 aujourd’hui',
+      '1 jour, 1 étincelle dont 1 aujourd’hui',
     );
   });
 
@@ -66,16 +66,16 @@ describe('le modèle de la pastille', () => {
     expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'fr')).toEqual({
       kind: 'total',
       totalText: '120',
-      label: '120 points gagnés dans cette conversation',
+      label: '120 étincelles gagnées dans cette conversation',
     });
     expect(engagementPillModel(snapshot({ totalPoints: 1, todayPoints: 0, streakDays: 0 }), '2026-09-30', 'fr')?.label).toBe(
-      '1 point gagné dans cette conversation',
+      '1 étincelle gagnée dans cette conversation',
     );
   });
 
   test('le cumul seul se dit dans la langue d’interface (#9570)', () => {
-    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'en')?.label).toBe('120 points earned in this conversation');
-    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'ar')?.label).toBe('120 نقاط مكتسبة في هذه المحادثة');
+    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'en')?.label).toBe('120 sparks earned in this conversation');
+    expect(engagementPillModel(snapshot({ streakDays: 0 }), '2026-09-30', 'ar')?.label).toBe('120 شرارات مكتسبة في هذه المحادثة');
   });
 
   test('le total s’abrège dans la langue du lecteur : 1,2 k, 12 k, 2,5 M (#9044)', () => {
@@ -87,8 +87,8 @@ describe('le modèle de la pastille', () => {
   });
 
   test('la phrase suit la langue d’interface', () => {
-    expect(engagementPillModel(snapshot(), '2026-09-30', 'en')?.label).toBe('4-day streak, 120 points, 12 today');
-    expect(engagementPillModel(snapshot(), '2026-09-30', 'ar')?.label).toBe('سلسلة 4 أيام، 120 نقاط، منها 12 اليوم');
+    expect(engagementPillModel(snapshot(), '2026-09-30', 'en')?.label).toBe('4 days, 120 sparks, 12 today');
+    expect(engagementPillModel(snapshot(), '2026-09-30', 'ar')?.label).toBe('4 أيام، 120 شرارات، منها 12 اليوم');
   });
 
   test('aucun instantané, ou zéro point depuis toujours ⇒ rien', () => {
@@ -113,7 +113,7 @@ describe('le rendu de la pastille', () => {
     expect(html).toContain('>120<');
     expect(html).not.toContain('(12)');
     expect(html).toContain('aria-hidden="true"');
-    expect(html).toContain('<span class="sr-only">Série de 4 jours, 120 points dont 12 aujourd’hui</span>');
+    expect(html).toContain('<span class="sr-only">4 jours, 120 étincelles dont 12 aujourd’hui</span>');
   });
 
   test('sans série : le cumul seul, sans flamme, à l’encre tertiaire — le rouge reste la couleur de la série (#9570)', () => {
@@ -124,7 +124,7 @@ describe('le rendu de la pastille', () => {
     expect(html).not.toContain(`d="M173.79`);
     expect(html).not.toContain('header-flame-count-digits');
     expect(html).toContain('var(--color-ios-ink-3)');
-    expect(html).toContain('<span class="sr-only">120 points gagnés dans cette conversation</span>');
+    expect(html).toContain('<span class="sr-only">120 étincelles gagnées dans cette conversation</span>');
   });
 
   test('avec série : la flamme et les chiffres rouges (#9570)', () => {

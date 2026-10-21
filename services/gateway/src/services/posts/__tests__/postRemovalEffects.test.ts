@@ -86,6 +86,7 @@ describe('applyPostRemovalEffects — retrait des notifications du post', () => 
     expect(runCommandRaw).toHaveBeenCalledWith(
       expect.objectContaining({
         filter: {
+          type: { $ne: 'content_removed' },
           $or: [
             { 'context.postId': { $in: [POST_ID] } },
             { 'metadata.repostId': { $in: [POST_ID] } },

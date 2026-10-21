@@ -64,8 +64,10 @@ final class CompactCountConsolidationSourceGuardTests: XCTestCase {
         // `ReelsPlayerView.swift` pour son fichier : l'appel direct l'a suivi.
         "ReelsPlayerView+ActionRail.swift",
         "ConversationDashboardView.swift",
-        "ConversationListHelpers.swift",
-        "CommunityListView.swift",
+        // ConversationListHelpers.swift en est sorti (#10841) : la carte de communauté, réduite de moitié, n'affiche
+        // plus aucun compteur abrégé — il ne vit plus que dans le libellé VoiceOver, en toutes lettres. La garde
+        // « aucun abrégé fait main » continue de couvrir le fichier.
+        "CommunityListScreen.swift",
     ]
 
     private func repoRoot() -> URL {

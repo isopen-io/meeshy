@@ -77,7 +77,7 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// chargeur se retire ; un montage resté sur `imageOnlyRect` rognerait la
     /// carte au rectangle de l'image, ce que la décision du 2026-09-17 retire.
     func test_leLecteur_monteLaFormeEtLeFondSurChaqueCouche() throws {
-        let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
+        let source = AppSourceGuard.stripComments(try Self.canvasUnit())
 
         XCTAssertEqual(source.components(separatedBy: ".readerCard(layout: readerSceneLayout").count - 1,
                        3, "canvas sortant, canvas courant, chargeur")
@@ -94,8 +94,9 @@ final class StoryReaderSceneCardTests: XCTestCase {
     /// F6 — le hachage étiré derrière ET dans la carte. Une couleur PLATE ne
     /// peut pas ressembler à un flou.
     func test_leFondDeLaCarte_estUneCouleurPlate() throws {
-        let source = AppSourceGuard.stripComments(try String(contentsOf: canvasSource, encoding: .utf8))
-        XCTAssertTrue(source.contains("SceneShape.layout(in: geometry.size, immersive: canvasIsExpanded)"),
+        let source = AppSourceGuard.stripComments(try Self.canvasUnit())
+        XCTAssertTrue(source.contains("canvasLayout.sceneLayout(expanded: canvasIsExpanded)")
+                      && source.contains("SceneShape.layout(in: viewport, immersive: expanded)"),
                       "la forme remise à la carte porte le fond, et la carte le peint — et le " +
                       "lecteur DÉCLARE l'état de son viewport (directive B du 2026-09-18)")
         XCTAssertEqual(StoryCardView.readerSceneBackdrop, .thumbHashDominantColor)
@@ -166,12 +167,9 @@ final class StoryReaderSceneCardTests: XCTestCase {
                                          canvasRatio: SceneShape.aspect))
     }
 
-    private var canvasSource: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()   // Views
-            .deletingLastPathComponent()   // Unit
-            .deletingLastPathComponent()   // MeeshyTests
-            .deletingLastPathComponent()   // ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift")
+    /// L'UNITÉ du canvas : la carte du lecteur, ses couches et son cadrage (`StoryReaderCanvasLayout`).
+    private static func canvasUnit() throws -> String {
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift",
+                                alsoIncluding: ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"])
     }
 }

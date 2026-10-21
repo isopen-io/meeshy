@@ -50,7 +50,7 @@ extension CallManager {
                 default: isInActiveCall = false
                 }
                 if interfaceChanged && isInActiveCall {
-                    self.analyticsNetworkTransitions += 1
+                    self.analytics.networkTransitions += 1
                 }
                 guard isInActiveCall else { return }
 
@@ -75,5 +75,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

@@ -20,6 +20,9 @@
  * | appartenance | oui | oui | oui |
  * | **lien de partage ÉCHU → 403** | **oui** | **NON** | **NON** |
  *
+ * (Depuis #7388, les deux routes dédiées portent aussi la porte du lien échu :
+ * voir le bloc `#7388` plus bas.)
+ *
  * La quatrième ligne est l'absence que ce lot ne veut pas propager : unifier
  * sans la voir aurait rendu `view=pinned` lisible par un invité dont le lien
  * est mort, ou aurait retiré la garde du chemin nominal. Le chemin unifié la
@@ -151,6 +154,7 @@ function ligne(
     viewOnceCount: 0,
     isBlurred: false,
     effectFlags: 0,
+    ephemeralDuration: null,
     expiresAt: null,
     pinnedAt: hors.ordinaire ? null : new Date('2026-08-20T12:00:00.000Z'),
     pinnedBy: SENDER_PARTICIPANT_ID,
@@ -260,6 +264,15 @@ function champCorrespond(valeur: unknown, contrainte: unknown): boolean {
 
   const bornes = ['gte', 'gt', 'lt', 'lte'] as const;
   if (bornes.some((b) => b in c)) {
+    // `prefixRange()` (utils/prefix-range.ts, #11492) borne un préfixe calculé
+    // par un intervalle de CHAÎNES — mimeType, filePath — pas seulement de dates.
+    if (typeof valeur === 'string') {
+      if (typeof c.gte === 'string' && valeur < c.gte) return false;
+      if (typeof c.gt === 'string' && valeur <= c.gt) return false;
+      if (typeof c.lt === 'string' && valeur >= c.lt) return false;
+      if (typeof c.lte === 'string' && valeur > c.lte) return false;
+      return true;
+    }
     const d = asDate(valeur);
     if (!d) return false;
     const gte = asDate(c.gte); if (gte && d.getTime() < gte.getTime()) return false;
@@ -726,6 +739,37 @@ describe('#4340 critère 2 — la TABLE des gardes × des cinq vues', () => {
   });
 });
 
+/**
+ * #7388 — la porte d'un lien de partage ÉCHU vaut aussi sur les deux routes
+ * DÉDIÉES. Elles lisaient le lien pour son seul `allowViewHistory` : un invité
+ * dont le lien est mort ne lisait plus le fil, et pouvait encore en chercher un
+ * mot ou en lire les épingles.
+ */
+describe('#7388 — les routes dédiées ferment la porte d’un lien ÉCHU comme le fil', () => {
+  const DEDIEES: ReadonlyArray<readonly [string, string]> = [
+    ['GET .../messages/search', `/conversations/${CONV_ID}/messages/search?q=cible`],
+    ['GET .../pinned-messages', `/conversations/${CONV_ID}/pinned-messages`],
+  ];
+
+  it.each(DEDIEES)('%s refuse 403 SHARE_LINK_EXPIRED, sans rien servir', async (_nom, url) => {
+    const { statut, corps } = await lire(url, {
+      shareLink: { allowViewHistory: true, expiresAt: new Date('2020-01-01T00:00:00.000Z') },
+    });
+    expect(statut).toBe(403);
+    expect(corps.success).toBe(false);
+    expect(corps.code).toBe('SHARE_LINK_EXPIRED');
+    expect(corps.data).toBeUndefined();
+  });
+
+  it.each(DEDIEES)('%s sert toujours le lecteur dont le lien est VIVANT', async (_nom, url) => {
+    const { statut, corps } = await lire(url, {
+      shareLink: { allowViewHistory: true, expiresAt: new Date('2999-01-01T00:00:00.000Z') },
+    });
+    expect(statut).toBe(200);
+    expect(ids(corps)).toContain(M_OK);
+  });
+});
+
 describe('#4340 critère 1 — la vue rend ce que la route dédiée rendait', () => {
   it('view=pinned porte tous les champs de `GET .../pinned-messages`, aux mêmes valeurs', async () => {
     const vue = await lire(`/conversations/${CONV_ID}/messages?view=pinned`);
@@ -797,19 +841,30 @@ describe('#4340 critère 1 — la vue rend ce que la route dédiée rendait', ()
     expect(champsVue.length).toBeGreaterThan(champsDediee.length);
   });
 
-  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message à vue unique reste `isViewOnce: true` (#4885)', async () => {
+  it('sert la VALEUR réelle des drapeaux, pas seulement leur présence — un message flouté reste `isBlurred: true` (#4885)', async () => {
     // Le témoin ci-dessus ne prouve que la présence de la clé — un `undefined`
     // aurait aussi bien traversé `toContain`. Le témoin décisif porte sur la
-    // CONSÉQUENCE : le garde de transfert (`BubbleMessageNormalView.tsx`,
-    // `!message.isViewOnce`) doit lire `true`, pas une clé vidée.
+    // CONSÉQUENCE : le client doit lire `true`, pas une clé vidée. Depuis
+    // #10429, un message à vue unique n'est plus TROUVÉ du tout (témoin
+    // suivant) : le flou, qui n'est pas une disparition, porte la preuve.
     const protege = JEU.map((r) =>
-      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+      r.id === M_OK ? { ...r, isBlurred: true, effectFlags: 2 } : r
     );
     const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: protege });
     const servi = dediee.corps.data.find((m: any) => m.id === M_OK);
-    expect(servi.isViewOnce).toBe(true);
+    expect(servi.isViewOnce).toBe(false);
     expect(servi.isBlurred).toBe(true);
-    expect(servi.effectFlags).toBe(5);
+    expect(servi.effectFlags).toBe(2);
+  });
+
+  it('un message à vue unique ne sort plus par aucune des deux surfaces de recherche (#10429)', async () => {
+    const vueUnique = JEU.map((r) =>
+      r.id === M_OK ? { ...r, isViewOnce: true, isBlurred: true, effectFlags: 5 } : r
+    );
+    const dediee = await lire(`/conversations/${CONV_ID}/messages/search?q=cible`, { jeu: vueUnique });
+    const vue = await lire(`/conversations/${CONV_ID}/messages?view=search&q=cible`, { jeu: vueUnique });
+    expect(ids(dediee.corps)).not.toContain(M_OK);
+    expect(ids(vue.corps)).not.toContain(M_OK);
   });
 });
 

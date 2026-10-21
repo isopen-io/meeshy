@@ -1,8 +1,10 @@
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
 import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
 import { attachmentSrc } from '@/lib/api/media-url';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import type { FeedMedia, FeedPost } from '@/lib/api/feed-pages';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
@@ -97,6 +99,8 @@ export type FeedCardAuthor = {
   readonly initials: string;
   readonly accentColor: string;
   readonly avatarSrc?: string;
+  /** LE CONTOUR ÉQUIPÉ (#10946) — la référence servie avec l'auteur (#10945), que `PeerAvatar` résout ; absent sans contour. */
+  readonly ring?: ServedProfileDecorItem;
   /**
    * LE PSEUDO, PARCE QUE L'AVATAR OUVRE LE PROFIL (#6396) — l'adresse d'un
    * profil est `/u/$username`, jamais l'identifiant (`route-table.tsx:191`).
@@ -243,6 +247,11 @@ const textOrUndefined = (value: string | null | undefined): string | undefined =
 
 const numberOrUndefined = (value: number | null | undefined): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+
+function authorRingOf(author: unknown): { readonly ring?: ServedProfileDecorItem } {
+  const ring = servedRingOf(author);
+  return ring === null ? {} : { ring };
+}
 
 function resolveAuthorSrc(avatar: string | null | undefined): string | undefined {
   const url = textOrUndefined(avatar);
@@ -428,6 +437,7 @@ function resolveFeedRepostEmbed(
       initials: initialsOf(authorName),
       accentColor: authorAccentColor(repostOf.author?.id, authorName),
       ...(avatarSrc !== undefined ? { avatarSrc } : {}),
+      ...authorRingOf(repostOf.author),
       ...(textOrUndefined(repostOf.author?.username) !== undefined ? { username: textOrUndefined(repostOf.author?.username) as string } : {}),
       ...(textOrUndefined(repostOf.author?.id) !== undefined ? { id: textOrUndefined(repostOf.author?.id) as string } : {}),
     },
@@ -527,6 +537,7 @@ export function resolveFeedCardModel(
       initials: initialsOf(authorName),
       accentColor: authorAccentColor(post.author?.id, authorName),
       ...(avatarSrc !== undefined ? { avatarSrc } : {}),
+      ...authorRingOf(post.author),
       ...(textOrUndefined(post.author?.username) !== undefined
         ? { username: textOrUndefined(post.author?.username) as string }
         : {}),

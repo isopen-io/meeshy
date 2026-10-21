@@ -80,10 +80,6 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique scellée (#7618) ou déjà ouverte (#7579) : la bulle ne porte
     /// QUE la puce, `text` est vide par la projection, jamais masqué par la vue.
     let viewOnceChip: ViewOnceChip.State?
-    /// Le texte peut-il être COPIÉ ? Verdict de la loi de sortie
-    /// (`Message.exitOffer`, #9573), projeté par `RiverConversationMapping` :
-    /// un contenu qui disparaît, ou flouté, ne se copie pas.
-    let offersCopy: Bool
     /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
@@ -99,12 +95,18 @@ struct RiverBubbleContent: Equatable {
     /// `BubbleLinkEmbed` que les autres modes (#8139). `nil` : aucun lien, ou
     /// un texte voilé dont le lien ne doit pas fuir à côté.
     let linkEmbed: BubbleContent.Text?
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    let linksAreInert: Bool
     /// Les cartes de visite du message, rendues par `BubbleAttachmentView`
     /// comme partout ailleurs (#8139).
     let contactCards: RiverContactCards
     /// La capture d'écran de ce message est bloquée (#9574) — projection de
     /// `Message.exitOffer.capture` : la bulle se rend dans la couche sécurisée.
     let capturesBlocked: Bool
+    /// #10637 — la taille d'un emoji envoyé SEUL (×4 / ×3 / ×2), telle que
+    /// `BubbleContent.emojiOnlyResult` l'a résolue pour les autres modes ;
+    /// `nil` : un texte ordinaire (ou rien à lire : vue unique scellée).
+    let emojiFontSize: CGFloat?
 
     init(
         bubble: RiverLaneResolver.RiverBubble,
@@ -129,13 +131,14 @@ struct RiverBubbleContent: Equatable {
         protection: MessageProtectionDescriptor = .unprotected,
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
-        offersCopy: Bool = true,
         isViewOnceRevealed: Bool = false,
         protectedTap: ProtectedContentTap = .none,
         tapAfterReveal: ProtectedContentTap = .none,
         linkEmbed: BubbleContent.Text? = nil,
+        linksAreInert: Bool = false,
         contactCards: RiverContactCards = RiverContactCards(items: []),
         capturesBlocked: Bool = false,
+        emojiFontSize: CGFloat? = nil,
         identity: RiverBubbleIdentity? = nil
     ) {
         self.bubble = bubble
@@ -153,13 +156,14 @@ struct RiverBubbleContent: Equatable {
         self.protection = protection
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
-        self.offersCopy = offersCopy
         self.isViewOnceRevealed = isViewOnceRevealed
         self.protectedTap = protectedTap
         self.tapAfterReveal = tapAfterReveal
         self.linkEmbed = linkEmbed
+        self.linksAreInert = linksAreInert
         self.contactCards = contactCards
         self.capturesBlocked = capturesBlocked
+        self.emojiFontSize = emojiFontSize
     }
 }
 
@@ -184,6 +188,10 @@ struct RiverBubbleIdentity: Equatable {
     let profileUser: ProfileSheetUser
     /// Compte de l'auteur — la story s'ouvre par lui ; `nil` pour un visiteur.
     let userId: String?
+    /// L'auteur a l'écran de cette conversation ouvert (#8892, #10956).
+    var isHere: ConversationHere = .absent
+    /// Son contour équipé, la référence servie avec le message (#10946).
+    var ring: ServedProfileDecorItem? = nil
 }
 
 // MARK: - Contour de groupe — une forme PURE, éprouvée sans monter la vue
@@ -197,7 +205,7 @@ struct RiverBubbleIdentity: Equatable {
 ///
 /// Directive produit 2026-08-22 : « bordure jointe en pointillé et partagée,
 /// non pas des bordures fermées puis des pointillés en plus ».
-struct RiverBubbleOutline: Shape {
+nonisolated struct RiverBubbleOutline: Shape {
     let position: RiverGroupPosition
     let cornerRadius: CGFloat
     let lineWidth: CGFloat
@@ -380,11 +388,13 @@ struct RiverBubbleView: View, Equatable {
     /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
-    /// Lot 3 — l'appui long : « Ouvrir dans le fil » (retour Script +
-    /// atterrissage, comme Résumé), « Répondre » (Script + composeur),
-    /// « Copier ». Les deux premiers sont des actes de l'hôte.
+    /// « Ouvrir dans le fil » (retour Script + atterrissage, comme Résumé) —
+    /// une action d'accessibilité nommée de la bulle.
     var onOpenInThread: ((String) -> Void)? = nil
-    var onReply: ((String) -> Void)? = nil
+    /// #11224 — l'appui long rend la main à l'hôte, qui ouvre LE menu du
+    /// message (`presentLongPressMenu`) : mêmes actions, mêmes droits, même
+    /// aperçu que dans les autres modes. La Rivière n'a plus de menu à elle.
+    var onLongPress: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de l'hôte. `nil` ⇒ le
     /// voile ne se lève pas : `BubbleBlurRevealController.requestReveal` est
     /// fail-closed sur un message qui exige l'accusé serveur. C'est le bon
@@ -492,8 +502,43 @@ struct RiverBubbleView: View, Equatable {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityActions { quotedMediaAccessibilityAction }
-        .contextMenu { bubbleMenu }
+        .accessibilityActions {
+            quotedMediaAccessibilityAction
+            openInThreadAccessibilityAction
+            menuAccessibilityAction
+        }
+        .simultaneousGesture(
+            // Le geste de la rangée du Fil (`ConditionalBubbleLongPress`) : même
+            // durée, même tolérance, même retrait devant une pièce qui a réclamé
+            // l'appui, même clavier baissé avant la surcouche.
+            LongPressGesture(minimumDuration: MessagePressClaim.rowMinimumDuration, maximumDistance: 6).onEnded { _ in
+                guard let onLongPress, !MessagePressClaim.isClaimed() else { return }
+                HapticFeedback.medium()
+                MessageMenuKeyboard.dismiss()
+                onLongPress(content.bubble.messageId)
+            },
+            including: onLongPress == nil ? .subviews : .all
+        )
+    }
+
+    /// L'appui long d'un élément COMBINÉ n'est pas garanti sous VoiceOver : le
+    /// menu s'ouvre aussi par une action nommée, comme la rangée du Fil.
+    @ViewBuilder
+    private var menuAccessibilityAction: some View {
+        if let onLongPress {
+            Button(String(localized: "a11y.message.actions.long_press", bundle: .main)) {
+                onLongPress(content.bubble.messageId)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var openInThreadAccessibilityAction: some View {
+        if let onOpenInThread {
+            Button(String(localized: "riviere.bubble.openInThread", defaultValue: "Ouvrir dans le fil", bundle: .main)) {
+                onOpenInThread(content.bubble.messageId)
+            }
+        }
     }
 
     /// #8283 — la bulle se lit d'un seul élément : la zone média y devient une
@@ -514,7 +559,18 @@ struct RiverBubbleView: View, Equatable {
     /// #8147 — la Rivière tronque désormais comme les autres modes : l'extrait
     /// d'un message long, « … Lire la suite », dépliage en place. L'état vient
     /// de l'hôte par l'environnement (`longMessageFocus`).
+    @ViewBuilder
     private var riverText: some View {
+        if let emojiSize = content.emojiFontSize {
+            Text(content.text)
+                .font(MeeshyFont.emoji(emojiSize))
+                .fixedSize(horizontal: false, vertical: true)
+        } else {
+            riverExpandableText
+        }
+    }
+
+    private var riverExpandableText: some View {
         BubbleExpandableText(
             content: content.text,
             isMe: false,
@@ -524,41 +580,10 @@ struct RiverBubbleView: View, Equatable {
             hashtagTint: MeeshyColors.hashtagColor(isDark: isDark),
             linkTint: laneColor,
             isDark: isDark,
+            linksAreInert: content.linksAreInert,
             fontSize: FocalMetrics.Text.size
         )
         .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
-    }
-
-    // MARK: - Appui long — les actes que le Fil offre déjà, avec ses mots
-
-    /// Les libellés sont CEUX du Fil (`action.reply`, `action.copy`,
-    /// `MessageMoreSheet`) — un seul vocabulaire pour un même acte.
-    @ViewBuilder
-    private var bubbleMenu: some View {
-        if let onOpenInThread {
-            Button {
-                onOpenInThread(content.bubble.messageId)
-            } label: {
-                Label(
-                    String(localized: "riviere.bubble.openInThread", defaultValue: "Ouvrir dans le fil", bundle: .main),
-                    systemImage: "text.bubble"
-                )
-            }
-        }
-        if let onReply {
-            Button {
-                onReply(content.bubble.messageId)
-            } label: {
-                Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
-            }
-        }
-        if content.viewOnceChip == nil, content.offersCopy {
-            Button {
-                if content.offersCopy { UIPasteboard.general.string = content.text }
-            } label: {
-                Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
-            }
-        }
     }
 
     // MARK: - Corps du message — la bulle proprement dite
@@ -834,6 +859,8 @@ struct RiverBubbleView: View, Equatable {
                 avatarURL: identity.avatarURL,
                 storyState: identity.storyRing,
                 presenceState: identity.presence,
+                isHere: identity.isHere,
+                ring: identity.ring,
                 enablePulse: false,
                 isDark: isDark,
                 onViewStory: identity.userId.flatMap { userId in

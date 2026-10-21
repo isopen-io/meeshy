@@ -31,6 +31,7 @@ import { Prisma } from '@meeshy/shared/prisma/client';
  * remain excluded.
  */
 import { NOT_DELETED } from './softDelete';
+import { AVATAR_RING_COLUMN } from '../appearance/profileDecor';
 
 // Ré-exporté ici : la plupart des appelants tiennent déjà `postIncludes` pour
 // leurs formes de `select`/`include` et lisent le prédicat au même endroit.
@@ -41,6 +42,19 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
   username: true,
   displayName: true,
   avatar: true,
+});
+
+/**
+ * L'auteur d'un post, d'une story, d'un statut ou d'un commentaire TEL QUE LE
+ * FIL LE SERT (#10945) — `authorSelect` + la colonne du contour équipé, lue
+ * dans la même jointure. Elle ne part jamais brute : `withMentions` (posts) et
+ * `hoistCommentCarriers` (commentaires) la résolvent en `profileDecor`. Les
+ * charges servies SANS ces frontières (admin, sons, listes de vues) gardent
+ * `authorSelect`.
+ */
+export const postAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
+  ...authorSelect,
+  ...AVATAR_RING_COLUMN,
 });
 
 /**
@@ -74,7 +88,7 @@ export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
  * Derived by spread so any future `authorSelect` field flows through.
  */
 export const storyAuthorSelect = Prisma.validator<Prisma.UserSelect>()({
-  ...authorSelect,
+  ...postAuthorSelect,
   isOnline: true,
   lastActiveAt: true,
   // `banner` complète l'interstitiel : c'était le dernier élément encore
@@ -106,6 +120,9 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   height: true,
   thumbnailUrl: true,
   thumbHash: true,
+  // Variantes WebP responsives (#11260) — OPTIONNEL : absent d'une ligne héritée,
+  // un ancien client ignore la clé.
+  imageVariants: true,
   duration: true,
   order: true,
   caption: true,
@@ -180,7 +197,7 @@ export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>
     // mais pas dans cet aperçu embarqué sur le post — la position semble
     // disparaître selon la surface consultée par le client.
     metadata: true,
-    author: { select: authorSelect },
+    author: { select: postAuthorSelect },
     // A comment's single media (image/video/audio + Prisme transcription/TTS).
     // Without this the feed/reels comments sheet — which reads top-level
     // comments ONLY from this post-embedded preview, never re-fetching them —
@@ -244,7 +261,11 @@ export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
     audioUrl: true,
     moodEmoji: true,
     originalRepostOfId: true,
-    author: { select: authorSelect },
+    // #10315 — lus pour décider si l'original se SERT encore (`postReferences.ts`),
+    // jamais servis : la projection les retire.
+    visibility: true,
+    moderationHiddenAt: true,
+    author: { select: postAuthorSelect },
     media: mediaInclude,
     createdAt: true,
     likeCount: true,
@@ -305,7 +326,9 @@ export const trayStorySelect = Prisma.validator<Prisma.PostSelect>()({
       id: true,
       type: true,
       createdAt: true,
-      author: { select: authorSelect },
+      visibility: true,
+      moderationHiddenAt: true,
+      author: { select: postAuthorSelect },
       media: mediaInclude,
     },
   },
@@ -368,6 +391,13 @@ export const postScalarSelect = Prisma.validator<Prisma.PostSelect>()({
   bookmarkCount: true,
   shareCount: true,
   postOpenCount: true,
+  anonymousViewCount: true,
+  anonymousImpressionCount: true,
+  uniqueViewCount: true,
+  anonymousUniqueViewCount: true,
+  openCountByOrigin: true,
+  viewCountByProvenance: true,
+  listingViewCountByOrigin: true,
   qualifiedViewCount: true,
   playCount: true,
   downloadCount: true,
@@ -392,7 +422,7 @@ export const postScalarSelect = Prisma.validator<Prisma.PostSelect>()({
  */
 export const postInclude = Prisma.validator<Prisma.PostSelect>()({
   ...postScalarSelect,
-  author: { select: authorSelect },
+  author: { select: postAuthorSelect },
   media: mediaInclude,
   comments: commentsPreviewInclude,
   repostOf: repostOfInclude,
@@ -407,7 +437,7 @@ export const postInclude = Prisma.validator<Prisma.PostSelect>()({
  */
 export const statusPostSelect = Prisma.validator<Prisma.PostSelect>()({
   ...postScalarSelect,
-  author: { select: authorSelect },
+  author: { select: postAuthorSelect },
   postMentions: postMentionInclude,
 });
 

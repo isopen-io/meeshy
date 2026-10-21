@@ -126,7 +126,7 @@ struct ReelsPlayerView: View {
             // reel and scroll to the targeted comment. Brief delay so the reel is
             // on screen first (the reveal disc settles), then present.
             guard let cid = commentTargetId, !cid.isEmpty else { return }
-            try? await Task.sleep(nanoseconds: 450_000_000)
+            _ = await cancellableSleep(for: .milliseconds(450))
             let reel = seedPosts.first(where: { $0.id == startId }) ?? seedPosts.first ?? viewModel.reels.first
             if let reel {
                 pendingCommentTargetId = cid
@@ -230,6 +230,7 @@ struct ReelsPlayerView: View {
             finalizeReelSession(for: viewModel.currentId)
             NotificationToastManager.shared.onPostClosed(viewModel.currentId)
             Task { await EngagementTracker.shared.end(surface: .reels) }
+            Task { await viewModel.flushImpressions() }
         }
         .statusBarHidden(true)
     }
@@ -302,17 +303,24 @@ struct ReelsPlayerView: View {
     private var pager: some View {
         let activeIndex = viewModel.reels.firstIndex { $0.id == viewModel.currentId }
         let playingId = election.activeId ?? viewModel.currentId
+        let restingId = election.restingId ?? viewModel.currentId
         return AdaptiveVerticalPager(
             items: viewModel.reels,
             currentPageID: $viewModel.currentId,
-            onMajorityPage: { id in elect(trigger: "majority") { $0.majority(id) } }
+            onMajorityPage: { id in elect(trigger: "majority") { $0.majority(id) } },
+            onScrollingChange: { scrolling in elect(trigger: "rest") { $0.scrolling(scrolling) } }
         ) { index, reel in
+            // Chaque page reçoit des PRIMITIVES (élue, posée, chrome masqué,
+            // fenêtre) et se compare par `rendersSameReelPage` (#10354) : une
+            // élection ne réévalue que les deux pages qu'elle touche.
             ReelPageView(
                 reel: reel,
                 isActive: playingId == reel.id,
+                isSettled: restingId == reel.id,
                 revealCompleted: revealCompleted,
                 viewModel: viewModel,
-                chromeHidden: $chromeHidden,
+                chromeHidden: chromeHidden,
+                setChromeHidden: { chromeHidden = $0 },
                 onComment: {
                     // Manual open: drop any notification target so we don't
                     // re-scroll to a stale comment.
@@ -324,6 +332,7 @@ struct ReelsPlayerView: View {
                 onTapAvatar: { openAvatarDestination(for: reel) },
                 isWithinPreloadWindow: isWithinPreloadWindow(index, activeIndex: activeIndex)
             )
+            .equatable()
             .onAppear {
                 Task { await viewModel.loadMoreIfNeeded(currentReel: reel) }
             }
@@ -498,14 +507,20 @@ enum ReelAudioLanguageResolver {
 /// overlay + a right-hand action rail (like / comment / bookmark / share).
 struct ReelPageView: View {
     let reel: FeedPost
+    /// Élue : la page passe la moitié de l'écran (#9837), peut-être encore
+    /// sous le doigt.
     let isActive: Bool
+    /// Posée : le défilement s'est arrêté sur elle (#10354).
+    var isSettled: Bool = true
     let revealCompleted: Bool
     /// The reels view-model — passed so the action rail can read the live
     /// like/bookmark/comment counters reactively (the rail observes it).
     let viewModel: ReelsViewModel
     /// Shared immersive flag (owned by `ReelsPlayerView`). Long-press hides all
-    /// chrome; the next tap restores it (mirrors the Story viewer).
-    @Binding var chromeHidden: Bool
+    /// chrome; the next tap restores it (mirrors the Story viewer). Une valeur
+    /// et son écrivain plutôt qu'un `Binding` : la page se compare (#10354).
+    let chromeHidden: Bool
+    var setChromeHidden: (Bool) -> Void
     var onComment: () -> Void
     /// Author name tap → profile.
     var onTapAuthorName: () -> Void
@@ -553,14 +568,18 @@ struct ReelPageView: View {
 
     var accentColor: String { reel.authorColor }
 
+    /// Élue ET posée (`ReelSwitchWork`, #10354) : la scène, le son, le chrome
+    /// actif et le moteur vidéo complet ne s'engagent qu'une fois le
+    /// défilement arrêté ; perdre l'élection désengage tout de suite.
+    var isEngaged: Bool { ReelSwitchWork.engages(isElected: isActive, isSettled: isSettled) }
+
     /// Description text for the currently-explored language (Prisme): preferred
     /// by default, the original when the translate toggle is on, or a specific
     /// available translation when a flag is tapped.
     var displayedDescription: String {
         guard let sel = selectedLanguage?.lowercased() else { return servedDescription }
         if sel == reel.originalLanguage?.lowercased() {
-            return ReelPublishedContent.content(type: .reel, text: reel.content,
-                                                captions: reel.media.map(\.caption)) ?? ""
+            return ReelCaptionMemo.shared.caption(text: reel.content, captions: reel.media.map(\.caption))
         }
         if let t = reel.translations?.first(where: { $0.key.lowercased() == sel })?.value {
             return t.text
@@ -568,10 +587,10 @@ struct ReelPageView: View {
         return servedDescription
     }
 
-    /// Un réel publié sans texte montre sa légende de scène (#9179).
+    /// Un réel publié sans texte montre sa légende de scène (#9179), calculée
+    /// une fois par texte servi (#10354).
     private var servedDescription: String {
-        ReelPublishedContent.content(type: .reel, text: reel.displayContent,
-                                     captions: reel.media.map(\.caption)) ?? ""
+        ReelCaptionMemo.shared.caption(text: reel.displayContent, captions: reel.media.map(\.caption))
     }
 
     /// True when this active reel is a video so the scrub bar shows only where
@@ -670,7 +689,7 @@ struct ReelPageView: View {
                 // of the transcript hero) just above the author/flags row, so it
                 // is tappable and fades in immersive mode. Driven by
                 // `selectedLanguage` so a flag tap plays that language's TTS.
-                if let audioMedia, isActive {
+                if let audioMedia, isEngaged {
                     ReelAudioControl(
                         media: audioMedia,
                         selectedLanguage: $selectedLanguage,
@@ -698,11 +717,11 @@ struct ReelPageView: View {
 
                 // Draggable scrub bar — only for the active video reel. Sits
                 // just below the description / action rail. Drag to seek.
-                if isVideoReel && isActive {
+                if isVideoReel && isEngaged {
                     ReelScrubBar(manager: playerManager, accentColor: accentColor)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.top, MeeshySpacing.mdPlus)
-                } else if isSceneReel && isActive {
+                } else if isSceneReel && isEngaged {
                     ReelSceneProgressBar(clock: sceneClock, accentColor: accentColor)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .padding(.top, MeeshySpacing.mdPlus)
@@ -736,12 +755,15 @@ struct ReelPageView: View {
         // la scène qui ARRIVE (un lecteur externe), quand elle avait repris la
         // première — le réel suivant restait muet. La vidéo et la scène quittées
         // se mettent en pause par leur propre `isActive`.
-        .adaptiveOnChange(of: isActive) { _, active in
-            if active { startActiveAudioIfNeeded() }
+        //
+        // Le son ne démarre qu'une fois la page POSÉE (#10354) — au milieu du
+        // geste, rien ne se charge ; perdre l'élection l'arrête aussitôt.
+        .adaptiveOnChange(of: isEngaged) { _, engaged in
+            if engaged { startActiveAudioIfNeeded() }
             else { audioPlayer.stop() }
         }
         .onReceive(audioBox.player.$isPlaying.removeDuplicates()) { playing in
-            guard playing, isActive else { return }
+            guard playing, isEngaged else { return }
             ReelSwitchSignpost.mediaStarted(reel.id, kind: "audio")
         }
         // The first reel holds on its poster (audio paused) until the liquid
@@ -822,7 +844,7 @@ struct ReelPageView: View {
     /// lockstep. Backed by the pure `ReelMediaAutostart.shouldStart` truth table.
     private var shouldStartActiveMedia: Bool {
         ReelMediaAutostart.shouldStart(
-            isActive: isActive,
+            isActive: isEngaged,
             revealCompleted: revealCompleted,
             isCallActive: MediaSessionCoordinator.shared.isCallActive
         )
@@ -902,7 +924,7 @@ struct ReelPageView: View {
     private func enterImmersive() {
         guard !chromeHidden else { return }
         HapticFeedback.medium()
-        withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = true }
+        withAnimation(.easeInOut(duration: 0.25)) { setChromeHidden(true) }
     }
 
     /// A tap on the content zone. The FIRST tap while immersed only restores the
@@ -910,7 +932,7 @@ struct ReelPageView: View {
     /// semantics). Otherwise it's the normal play/pause toggle (video only).
     private func handleContentTap() {
         if chromeHidden {
-            withAnimation(.easeInOut(duration: 0.25)) { chromeHidden = false }
+            withAnimation(.easeInOut(duration: 0.25)) { setChromeHidden(false) }
             return
         }
         if isSceneReel { scenePaused.toggle() }
@@ -922,13 +944,14 @@ struct ReelPageView: View {
     @ViewBuilder
     private var mediaLayer: some View {
         if let document = sceneDocument {
-            ReelSceneView(reel: reel, document: document, isActive: isActive,
+            ReelSceneView(reel: reel, document: document, isActive: isEngaged,
                           revealCompleted: revealCompleted, isMuted: sceneSoundMuted,
                           isPaused: $scenePaused, clock: sceneClock)
         } else if let media = reel.primaryReelDisplayMedia {
             switch media.type {
             case .video:
-                ReelVideoView(media: media, isActive: isActive, revealCompleted: revealCompleted,
+                ReelVideoView(media: media, isActive: isActive, isSettled: isSettled,
+                              revealCompleted: revealCompleted,
                               mayDownload: isActive || isWithinPreloadWindow, reelId: reel.id)
             case .image:
                 ReelImageView(reel: reel) { visibleCarouselMediaId = $0 }

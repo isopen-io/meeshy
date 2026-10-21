@@ -88,12 +88,15 @@ const onDemand = allAssets.filter((a) => !criticalNames.has(a.file));
  * demande » qui finirait INLINÉ dans le socle (une dépendance statique mal
  * placée, un import qui remonte au mauvais niveau) grossirait `first_paint`
  * en silence tant que la somme reste sous le plafond : le gate de POIDS ne
- * dit RIEN sur l'EMPLACEMENT. Ce témoin cherche le VOCABULAIRE du lecteur
- * (`aria-label="Lire l'audio"`, `attachment-blocks.tsx`) dans les fichiers
- * CRITIQUES eux-mêmes — sa présence prouverait qu'il n'a pas atteint le
- * chunk de route (`route-table.tsx`), quelle que soit la marge restante.
+ * dit RIEN sur l'EMPLACEMENT. Ce témoin cherche la MARQUE du lecteur
+ * (`data-voice-card`, posée par `attachment-blocks.tsx` et par lui seul) dans
+ * les fichiers CRITIQUES eux-mêmes — sa présence prouverait qu'il n'a pas
+ * atteint le chunk de route (`route-table.tsx`), quelle que soit la marge
+ * restante. C'était son libellé « Lire l'audio » jusqu'à ce qu'il passe au
+ * catalogue d'interface : le chercher ici aurait mesuré le CATALOGUE, plus le
+ * lecteur.
  */
-const AUDIO_PLAYER_LITERAL = "Lire l'audio";
+const AUDIO_PLAYER_LITERAL = 'data-voice-card';
 const audioPlayerLeaks = critical
   .filter((c) => c.file.endsWith('.js'))
   .filter((c) => readFileSync(join(dist, c.file), 'utf8').includes(AUDIO_PLAYER_LITERAL))
@@ -142,6 +145,28 @@ if (typeof declaredBytes === 'number' && storyFontsBytes !== declaredBytes) {
   fontFailures.push(
     `  CLIQUET : ${storyFontsBytes} octets de polices, ${declaredBytes} declares (budgets.json › story_fonts.bytes)` +
       ` — un binaire ne DERIVE pas, donc cet ecart est une SUBSTITUTION : la rouvrir est le geste attendu, pas la contourner`,
+  );
+}
+
+/**
+ * LES POLICES DES CADRES DE GLOIRE (#10158) — meme regle, inventaire a part :
+ * leurs fichiers portent le prefixe `glory-`, que le motif de `story_fonts`
+ * exclut. Tant que le peintre des cadres (L7) ne les importe pas, Vite n'en
+ * emet AUCUN — c'est la preuve qu'aucun chemin ne les atteint ; des qu'il les
+ * importe, l'inventaire et les octets sont EXACTS, comme pour les stories.
+ */
+const gloryFontsSpec = budgets.glory_fonts ?? {};
+const gloryFontPattern = new RegExp(gloryFontsSpec.pattern ?? '^$');
+const gloryFonts = fontFiles.filter((f) => gloryFontPattern.test(f.file));
+const gloryFontsBytes = gloryFonts.reduce((s, f) => s + f.bytes, 0);
+if (gloryFonts.length > 0 && typeof gloryFontsSpec.files?.value === 'number' && gloryFonts.length !== gloryFontsSpec.files.value) {
+  fontFailures.push(
+    `  INVENTAIRE : ${gloryFonts.length} police(s) de cadre produite(s), ${gloryFontsSpec.files.value} declaree(s) (budgets.json › glory_fonts.files)`,
+  );
+}
+if (gloryFonts.length > 0 && typeof gloryFontsSpec.bytes?.value === 'number' && gloryFontsBytes !== gloryFontsSpec.bytes.value) {
+  fontFailures.push(
+    `  CLIQUET : ${gloryFontsBytes} octets de polices de cadre, ${gloryFontsSpec.bytes.value} declares (budgets.json › glory_fonts.bytes) — une SUBSTITUTION, a rouvrir`,
   );
 }
 
@@ -246,6 +271,8 @@ const measure = {
   story_fonts_files: storyFonts.length,
   story_fonts_precached: precachedFonts.length,
   story_fonts_detail: Object.fromEntries(storyFonts.map((f) => [f.file, f.bytes])),
+  glory_fonts_bytes: gloryFontsBytes,
+  glory_fonts_files: gloryFonts.length,
 };
 
 if (asJson) {

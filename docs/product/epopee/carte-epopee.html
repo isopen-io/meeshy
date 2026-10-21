@@ -1,0 +1,276 @@
+<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>L'épopée Meeshy · carte du récit</title><style>
+:root{--text-primary:#14121f;--text-secondary:#5d5a72;--text-tertiary:#8a87a0;--bg-primary:#ffffff;--bg-secondary:#f6f5fb;--bg-tertiary:#ecebf4;--border:#dedbea;--accent:#7c5cff;--warning:#ff9f0a}
+@media (prefers-color-scheme: dark){:root{--text-primary:#f3f1ff;--text-secondary:#b4afd0;--text-tertiary:#8e88ad;--bg-primary:#0f0d1c;--bg-secondary:#1a1730;--bg-tertiary:#24203f;--border:#34305a}}
+body{margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif;background:var(--bg-primary);color:var(--text-primary);line-height:1.45}
+h2{margin:0 0 .4rem} .subtitle{color:var(--text-secondary);margin:.2rem 0 1rem} .label{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-secondary)}
+.cards{display:grid;gap:1rem} .card{border:1px solid var(--border);border-radius:14px;background:var(--bg-secondary)} .card.selected{outline:2px solid var(--accent)}
+</style><script>function toggleSelect(el){el.classList.toggle('selected')}</script></head><body><!-- Maquette de la séance « épopée du jeu » du 2026-10-20 (design, pas un état). Conception : docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md --><style>
+  .ep { max-width: 1080px; }
+  .ep h2 { font-size: 1.6rem; }
+  .ep-lead { color: var(--text-secondary); max-width: 860px; margin-bottom: 1.6rem; }
+  .ep-sec { margin: 2.2rem 0 1rem; }
+  .ep-sec > .label { margin-bottom: .35rem; }
+  .ep-sec > h3 { font-size: 1.2rem; margin-bottom: .8rem; }
+
+  .ep-tale { background: radial-gradient(130% 120% at 0% 0%, #3a2a7a 0%, #1b1640 60%, #0f0c24 100%);
+    color: #efeaff; border-radius: 18px; padding: 1.4rem 1.6rem; line-height: 1.6; font-size: 1rem; }
+  .ep-tale p + p { margin-top: .6rem; }
+  .ep-tale b { color: #ffd98a; }
+
+  .ep-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); gap: 1rem; }
+  .ep-card { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 14px; padding: 1rem 1.1rem;
+    display: flex; flex-direction: column; gap: .55rem; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .ep-card:hover { border-color: var(--accent); }
+  .ep-card.revoir { border-color: var(--warning); box-shadow: 0 0 0 2px rgba(255,159,10,.35); }
+  .ep-card.revoir .ep-flag { display: inline-block; }
+  .ep-flag { display: none; font-size: .68rem; font-weight: 700; color: var(--warning); text-transform: uppercase; letter-spacing: .05em; }
+  .ep-was { font-size: .7rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .05em; }
+  .ep-name { font-size: 1.15rem; font-weight: 700; }
+  .ep-story { font-size: .9rem; line-height: 1.5; }
+  .ep-note { font-size: .78rem; color: var(--text-secondary); line-height: 1.45; }
+  .ep-voice { display: grid; grid-template-columns: auto 1fr; gap: .25rem .6rem; font-size: .78rem; margin-top: .2rem;
+    padding-top: .55rem; border-top: 1px dashed var(--border); }
+  .ep-voice span:nth-child(odd) { color: var(--text-secondary); font-weight: 600; }
+
+  .ep-ladder { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+  .ep-ladder i { font-style: normal; color: var(--text-tertiary); font-size: .75rem; }
+  .ep-chip { font-size: .76rem; font-weight: 600; padding: .2rem .55rem; border-radius: 999px; color: #1b1640; white-space: nowrap; }
+  .ep-chip.new { outline: 2px dashed rgba(255,159,10,.9); outline-offset: 1px; }
+  .ep-chip.dim { opacity: .75; }
+
+  .lt1{background:#ffe08a}.lt2{background:#ffd36b}.lt3{background:#fff1c2}.lt4{background:#ffc94d}.lt5{background:#ffae2e}
+  .lt6{background:linear-gradient(90deg,#ff9a8b,#ffcf8b)}.lt7{background:#9fdcff}.lt8{background:#f4f1ff}.lt9{background:#b9c8ff}.lt10{background:#c7adff}
+  .ltc{background:linear-gradient(90deg,#3b2f7a,#7c5cff);color:#f1ecff}
+  .rk{background:#e9e4ff}.rk.g1{background:#d9d6e8}.rk.g2{background:#cfe2ff}.rk.g3{background:#bcd4ff}.rk.g4{background:#b8f0e0}.rk.g5{background:#c9f2b8}
+  .rk.g6{background:#f0f2a6}.rk.g7{background:#ffe08a}.rk.g8{background:#ffc768}.rk.g9{background:#d9b8ff}.rk.g10{background:linear-gradient(90deg,#ffd96b,#ffb347)}
+  .prism{background:linear-gradient(90deg,#ff8fb1,#ffd36b,#8ff0c4,#8fc8ff,#c39bff);color:#1b1640}
+  .mt{background:#e3d2b8}.mt.b{background:#e8c39a}.mt.c{background:#d8d8e0}.mt.d{background:#ffe08a}.mt.e{background:#ffd06b}.mt.f{background:linear-gradient(90deg,#ffd96b,#ffa94d)}
+  .fl1{background:#ffb27a}.fl2{background:#ff9150}.fl3{background:#ff6b3d;color:#fff}.fl4{background:#ffd36b}.fl5{background:linear-gradient(90deg,#ffe27a,#ffb020)}
+  .gq{background:#ececf4}.ga{background:#ffbf66}.gj{background:#5fd3a6}.gs{background:#6f9bff;color:#fff}.gr{background:#ff6b85;color:#fff}.gm{background:#b07cff;color:#fff}.gd{background:#d9f6ff}
+  .lg{background:#e7e2ff}
+
+  .ep-time { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: .8rem; padding-top: 1.1rem; }
+  .ep-time::before { content: ""; position: absolute; left: 0; right: 0; top: .42rem; height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, #ffe08a, #ffc94d, #ff9a8b, #9fdcff, #c7adff, #3b2f7a); }
+  .ep-beat { position: relative; padding-top: .5rem; }
+  .ep-beat::before { content: ""; position: absolute; top: -1.02rem; left: 0; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--bg-secondary); border: 3px solid #7c5cff; }
+  .ep-when { font-size: .72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .ep-what { font-size: .88rem; font-weight: 650; margin: .1rem 0 .15rem; }
+  .ep-why { font-size: .76rem; color: var(--text-secondary); line-height: 1.4; }
+
+  table.ep-t { width: 100%; border-collapse: collapse; font-size: .84rem; background: var(--bg-secondary); border-radius: 12px; overflow: hidden; }
+  .ep-t th, .ep-t td { text-align: left; padding: .55rem .7rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .ep-t th { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-secondary); background: var(--bg-tertiary); }
+  .ep-t tr:last-child td { border-bottom: none; }
+  .ep-t tr[data-choice] { cursor: pointer; }
+  .ep-t tr.revoir td { background: rgba(255,159,10,.12); }
+  .ep-t td:first-child { font-weight: 700; white-space: nowrap; }
+
+  .ep-ask { background: var(--bg-secondary); border: 1px solid var(--border); border-left: 4px solid var(--warning); border-radius: 12px; padding: .9rem 1.1rem; }
+  .ep-ask ol { margin: .4rem 0 0 1.2rem; font-size: .88rem; line-height: 1.55; }
+  .ep-help { font-size: .82rem; color: var(--text-secondary); margin-top: .5rem; }
+</style>
+
+<div class="ep">
+  <h2>L'épopée Meeshy · la carte du récit</h2>
+  <p class="ep-lead">Brouillon. Chaque concept du jeu prend sa place dans une seule histoire, avec ses noms d'évolution. Les règles du jeu ne changent pas : seul ce qu'elles racontent change. Les nouveaux noms sont entourés de pointillés. <b>Touchez une carte ou une ligne qui ne vous convient pas</b> : elle se marque « à revoir ».</p>
+
+  <div class="ep-tale">
+    <p>Chaque joueur est le héros de sa propre légende. Il arrive sur Meeshy comme une <b>Étincelle</b>, un <b>Murmure</b> que personne n'entend encore.</p>
+    <p>Chaque vrai échange avec quelqu'un, dans sa langue ou dans une autre, fait jaillir des <b>étincelles</b>. Elles nourrissent sa <b>lumière</b>.</p>
+    <p>Ses <b>aïeux</b> veillent sur lui. Chaque nuit, ils lui envoient un <b>rêve</b> à réaliser. À chaque évolution, ils se <b>manifestent</b>. À chaque rang, ils lui offrent les <b>parures</b> qui disent qui il est devenu. <b>Mee et Meo</b>, deux colibris, portent leurs messages entre les deux mondes.</p>
+    <p>Sa quête : devenir une <b>Légende</b>. Au-delà, le <b>Mythe</b> n'attend que quelques élus, ceux que le dieu de leurs aïeux précède.</p>
+  </div>
+
+  <div class="ep-sec">
+    <div class="label">Les trois fils de la légende</div>
+    <h3>Ce que le héros porte, ce qu'on l'appelle, ce qu'il lègue</h3>
+    <div class="ep-grid">
+
+      <div class="ep-card" data-choice="revoir:lumiere" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : le niveau <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">La Lumière</div>
+        <div class="ep-story">Les étincelles nourrissent ta lumière, qui traverse vingt états. Quand tu frappes une Meesh, une part de ta lumière se fige dans la pièce : elle quitte ta lumière sans se perdre.</div>
+        <div class="ep-ladder">
+          <span class="ep-chip lt1">Étincelle</span><span class="ep-chip lt2">Lueur</span><span class="ep-chip lt3 new">Clarté</span><span class="ep-chip lt4">Éclat</span><span class="ep-chip lt5">Rayon</span><span class="ep-chip lt6">Aurore</span><span class="ep-chip lt7">Comète</span><span class="ep-chip lt8">Étoile</span><span class="ep-chip lt9">Constellation</span><span class="ep-chip lt10">Galaxie</span>
+          <i>puis, après le niveau 100 :</i>
+          <span class="ep-chip ltc dim">Nébuleuse</span><i>…</i><span class="ep-chip ltc dim">Supernova</span><i>…</i><span class="ep-chip ltc">Singularité</span>
+        </div>
+        <div class="ep-note">Entre deux états, une <b>épreuve</b> : un geste demandé par les aïeux (une Meesh, un rêve, un rang, une Flamme). Le rang ouvre la lumière : la Supernova est la limite sous Ambassadeur, Ambassadeur ouvre jusqu'à la Singularité, et Oracle lève toute limite.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>anneau « 34 » · Éclat</span><span>Récit</span><span>Ta lumière brille en Éclat · <em>niveau 34, 3 200 étincelles jusqu'au 35</em></span></div>
+      </div>
+
+      <div class="ep-card" data-choice="revoir:rang" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : Gloire et rang <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Le Rang</div>
+        <div class="ep-story">Chaque exploit fait grandir ta gloire, et ta gloire te donne ton nom aux yeux du monde. Ce nom ne recule jamais.</div>
+        <div class="ep-ladder">
+          <span class="ep-chip rk g1">Murmure</span><span class="ep-chip rk g2">Écho</span><span class="ep-chip rk g3">Voix</span><span class="ep-chip rk g4">Conteur</span><span class="ep-chip rk g5">Passeur</span><span class="ep-chip rk g6">Polyglotte</span><span class="ep-chip rk g7">Ambassadeur</span><span class="ep-chip rk g8">Orateur</span><span class="ep-chip rk g9">Oracle</span><span class="ep-chip rk g10">Légende</span><i>puis, pour cent élus :</i><span class="ep-chip prism">Mythe</span>
+        </div>
+        <div class="ep-note">Cinq marches par rang, en chevrons sous le blason. <b>À Ambassadeur, les aïeux se révèlent</b> : le héros reconnaît leur terre parmi sept (Afrique éternelle, Égypte solaire, Olympe, Empire céleste, Aurores du Nord, Abysses, Néon), et leurs parures le suivent jusqu'au Mythe.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>Passeur IV</span><span>Récit</span><span>On t'appelle Passeur ›› · <em>gloire 44 600</em></span></div>
+      </div>
+
+      <div class="ep-card" data-choice="revoir:heritage" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : le trésor <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">L'Héritage</div>
+        <div class="ep-story">Frapper une Meesh, c'est figer ta lumière dans une pièce numérotée. Les pièces que tu gardes forment l'héritage que tu laisses à ta lignée. Celles que tu dépenses protègent ta Flamme ou t'offrent des parures.</div>
+        <div class="ep-ladder">
+          <span class="ep-chip mt">Bourse</span><span class="ep-chip mt b">Escarcelle</span><span class="ep-chip mt c">Coffret</span><span class="ep-chip mt d">Coffre</span><span class="ep-chip mt e">Trésor</span><span class="ep-chip mt f">Réserve</span>
+        </div>
+        <div class="ep-note">Le Coffre, le Trésor et la Réserve s'ouvrent avec le rang. Chaque centième pièce est d'or, chaque millième de prisme. <b>L'Ombre</b> (aujourd'hui : la dette) voile la lumière quand un contenu qui avait donné des étincelles disparaît après la frappe. Les étincelles suivantes la dissipent, et tant qu'elle est là, on ne frappe pas.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>12 Meeshes · Escarcelle</span><span>Récit</span><span>Ton Escarcelle tient 12 Meeshes · <em>le Coffret à 50</em></span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="ep-sec">
+    <div class="label">Les rythmes de la quête</div>
+    <h3>Chaque nuit, chaque jour, chaque semaine, chaque voyage, chaque âge</h3>
+    <div class="ep-grid">
+
+      <div class="ep-card" data-choice="revoir:reve" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">chaque nuit · aujourd'hui : missions du jour et coffre <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Le Rêve et l'Offrande</div>
+        <div class="ep-story">Chaque nuit, les aïeux envoient un rêve en trois actes, de plus en plus riches en gloire. Les trois actes réalisés font apparaître l'<b>Offrande</b>, un présent voilé dont on ne découvre le contenu qu'en l'ouvrant.</div>
+        <div class="ep-ladder"><span class="ep-chip lg new">Acte I</span><i>→</i><span class="ep-chip lg new">Acte II</span><i>→</i><span class="ep-chip lg new">Acte III</span><i>· parfois</i><span class="ep-chip mt f new">Acte d'or</span><i>→</i><span class="ep-chip lg new">Offrande</span></div>
+        <div class="ep-note">L'Heure du Prisme : une heure où chaque acte compte double. Changer un acte coûte une Meesh.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>Rêve 2 / 3</span><span>Récit</span><span>Le rêve de cette nuit · 2 actes sur 3 · <em>l'Acte III vaut 250 de gloire</em></span></div>
+      </div>
+
+      <div class="ep-card" data-choice="revoir:flamme" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">chaque jour · aujourd'hui : la Flamme et ses gels <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">La Flamme</div>
+        <div class="ep-story">Le feu que les aïeux confient au héros. Un geste par jour l'entretient. Une <b>Veilleuse</b> la garde allumée un jour d'absence. Éteinte, elle se rallume dans les 48 heures.</div>
+        <div class="ep-ladder"><span class="ep-chip fl1">Braise</span><span class="ep-chip fl2">Flamme</span><span class="ep-chip fl3">Brasier</span><span class="ep-chip fl4">Astre</span><span class="ep-chip fl5">Soleil</span><i>·</i><span class="ep-chip lg new">Veilleuse</span></div>
+        <div class="ep-note">Elle nourrit les rêves : chaque jour de Flamme ajoute des étincelles à chaque acte, jusqu'à moitié plus.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>▲ 23 j</span><span>Récit</span><span>Ta Flamme brûle depuis 23 jours · <em>+46 % sur tes rêves</em></span></div>
+      </div>
+
+      <div class="ep-card" data-choice="revoir:joute" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">chaque semaine · aujourd'hui : ligue et mission en duo <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">La Joute et l'Alliance</div>
+        <div class="ep-story">Chaque semaine, trente héros de lumière semblable se mesurent sous leur <b>nom de joute</b>. Les sept premiers gravissent le cercle de pierre suivant, et les trois premiers reçoivent une coupe. Une fois par semaine, on peut faire <b>alliance</b> avec un ami : si chacun réalise sa part, la récompense double.</div>
+        <div class="ep-ladder"><span class="ep-chip gq">Quartz</span><span class="ep-chip ga">Ambre</span><span class="ep-chip gj">Jade</span><span class="ep-chip gs">Saphir</span><span class="ep-chip gr">Rubis</span><span class="ep-chip gm">Améthyste</span><span class="ep-chip gd">Diamant</span><span class="ep-chip prism">Prisme</span></div>
+        <div class="ep-note">On parle de <b>place</b> en joute (« 4ᵉ place ») : le mot « rang » reste au nom du héros. La Joute des amis reste toujours ouverte.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>Jade · 4ᵉ</span><span>Récit</span><span>Joute de Jade · 4ᵉ place · <em>les 7 premiers montent au Saphir</em></span></div>
+      </div>
+
+      <div class="ep-card" data-choice="revoir:voyage" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">toutes les 8 semaines · aujourd'hui : la saison <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Le Voyage</div>
+        <div class="ep-story">Les aïeux envoient le héros en voyage dans une terre de langue. Chaque acte réalisé le fait avancer de quelques <b>pas</b>. Quatre pas mènent à la <b>halte</b> suivante, quarante haltes font le voyage, et au bout l'attend la coupe du voyage.</div>
+        <div class="ep-ladder"><span class="ep-chip lg">français</span><span class="ep-chip lg">espagnol</span><span class="ep-chip lg">arabe</span><span class="ep-chip lg">swahili</span><span class="ep-chip lg">japonais</span><span class="ep-chip lg">portugais</span><span class="ep-chip lg">hindi</span><span class="ep-chip lg">chinois</span></div>
+        <div class="ep-note">Un pas par acte (deux pour l'Acte III, trois pour l'Acte d'or, cinq pour une alliance). Le Sceau du voyage (10 Meeshes) ajoute des objets à collectionner, sans avantage. Le premier voyage part le 21 décembre : renommer avant, c'est gratuit.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>Voyage 1 · halte 9 / 40</span><span>Récit</span><span>En terre française · 9ᵉ halte · <em>encore 2 pas</em></span></div>
+      </div>
+
+      <div class="ep-card" data-choice="revoir:renaissance" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">à chaque âge · aujourd'hui : le Prestige <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">La Renaissance</div>
+        <div class="ep-story">Au niveau 100, quand sa lumière est devenue Galaxie, le héros peut renaître. Sa lumière redevient Étincelle et sa légende entre dans un nouvel <b>Âge</b>. Les aïeux lui offrent un trophée et une grande gloire. Rien d'autre ne se perd.</div>
+        <div class="ep-ladder"><span class="ep-chip lg new">Premier Âge</span><i>→</i><span class="ep-chip lg new">Deuxième</span><i>→</i><span class="ep-chip lg new">…</span><i>→</i><span class="ep-chip prism new">Sixième Âge</span></div>
+        <div class="ep-note">Cinq renaissances au plus. Le mot « étoile » est réservé au ciel (Constellation, fragments, état Étoile). La renaissance compte donc des âges, et le voyage des pas.</div>
+        <div class="ep-voice"><span>Synthèse</span><span>Âge II</span><span>Récit</span><span>Ta légende vit son Deuxième Âge</span></div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="ep-sec">
+    <div class="label">Ce que le héros garde</div>
+    <h3>Les traces de la légende</h3>
+    <div class="ep-grid">
+      <div class="ep-card" data-choice="revoir:manifestations" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : célébrations et moments photo <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Les manifestations des aïeux</div>
+        <div class="ep-story">Quand la lumière change d'état, quand le rang gravit une marche, quand l'héritage change de contenant, quand la Flamme change de forme… les aïeux se manifestent : une animation, un cadre, une photo à immortaliser.</div>
+        <div class="ep-note">Le nom affiché pourrait être « Signe des aïeux » : seul, le mot « manifestation » se lit aussi comme un défilé dans la rue.</div>
+      </div>
+      <div class="ep-card" data-choice="revoir:parures" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">nouveau, sur le système de décors existant <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Les Parures</div>
+        <div class="ep-story">À chaque rang, les aïeux offrent un contour d'avatar et une bannière à porter, pour se présenter selon son rang. À partir d'Ambassadeur, ils viennent de la terre des aïeux.</div>
+      </div>
+      <div class="ep-card" data-choice="revoir:chronique" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : carnet de progression <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">La Chronique</div>
+        <div class="ep-story">Le livre de la légende : chaque manifestation des aïeux s'y immortalise en photo, avec Mee et Meo.</div>
+      </div>
+      <div class="ep-card" data-choice="revoir:hauts-faits" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : succès <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Les Hauts faits</div>
+        <div class="ep-story">Les moments rares de la légende, du commun au mythique. Leur rareté se mesure parmi tous les héros.</div>
+      </div>
+      <div class="ep-card" data-choice="revoir:trophees" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : vitrine de trophées <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Les Trophées</div>
+        <div class="ep-story">Les coupes de joute et de voyage, les trophées de renaissance et de Flamme. Ils se rangent et se montrent.</div>
+      </div>
+      <div class="ep-card" data-choice="revoir:medailles" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : badges <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Les Médailles</div>
+        <div class="ep-story">Ce que le héros pratique le plus : écrire, parler, publier, commenter, relier. Chacune change de matière.</div>
+        <div class="ep-ladder"><span class="ep-chip mt b">Cuivre</span><span class="ep-chip mt">Bronze</span><span class="ep-chip mt c">Argent</span><span class="ep-chip mt d">Or</span><span class="ep-chip gd">Platine</span><span class="ep-chip ltc">Obsidienne</span><span class="ep-chip prism">Prisme</span></div>
+      </div>
+      <div class="ep-card" data-choice="revoir:atlas" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : Atlas des langues <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">L'Atlas</div>
+        <div class="ep-story">Les terres de langues que la voix du héros a traversées : un tampon par langue vraiment échangée.</div>
+      </div>
+      <div class="ep-card" data-choice="revoir:constellation" onclick="this.classList.toggle('revoir')">
+        <div class="ep-was">aujourd'hui : Constellation et fragments d'étoile <span class="ep-flag">· à revoir</span></div>
+        <div class="ep-name">Le ciel des aïeux</div>
+        <div class="ep-story">Les aïeux sèment des fragments d'étoile. Dix fragments allument une étoile dans la constellation du héros, et chaque étoile lui offre une parure.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ep-sec">
+    <div class="label">Le temps de l'épopée</div>
+    <h3>Des années, pour un joueur qui revient chaque jour</h3>
+    <div class="ep-time">
+      <div class="ep-beat"><div class="ep-when">Jour 1</div><div class="ep-what">Étincelle · Murmure</div><div class="ep-why">Mee et Meo se présentent. Premier rêve.</div></div>
+      <div class="ep-beat"><div class="ep-when">≈ 1 semaine</div><div class="ep-what">Voix</div><div class="ep-why">La Flamme passe de Braise à Flamme.</div></div>
+      <div class="ep-beat"><div class="ep-when">≈ 1 mois</div><div class="ep-what">Passeur</div><div class="ep-why">Premières Meeshes, Flamme en Brasier.</div></div>
+      <div class="ep-beat"><div class="ep-when">≈ 4 mois</div><div class="ep-what">Ambassadeur</div><div class="ep-why">Les aïeux se révèlent : le héros reconnaît leur terre.</div></div>
+      <div class="ep-beat"><div class="ep-when">≈ 1 an</div><div class="ep-what">Oracle</div><div class="ep-why">La lumière n'a plus de limite. Flamme d'un an : Soleil.</div></div>
+      <div class="ep-beat"><div class="ep-when">≈ 1 an ½</div><div class="ep-what">Légende</div><div class="ep-why">La quête est accomplie.</div></div>
+      <div class="ep-beat"><div class="ep-when">≈ 2 ans ½</div><div class="ep-what">Mythe</div><div class="ep-why">Cent élus seulement, que le dieu de leurs aïeux précède.</div></div>
+      <div class="ep-beat"><div class="ep-when">Au-delà</div><div class="ep-what">Les Âges</div><div class="ep-why">Chaque renaissance demande d'amasser une lumière de Galaxie : des années encore.</div></div>
+    </div>
+    <p class="ep-help">Ordres de grandeur, calculés sur les seuils de gloire du code pour un joueur qui réalise ses rêves chaque jour et frappe régulièrement. À mesurer : le rythme des moments est encore une décision ouverte (#9964).</p>
+  </div>
+
+  <div class="ep-sec">
+    <div class="label">Ce que la cohérence corrige</div>
+    <h3>Un mot, un seul sens</h3>
+    <table class="ep-t">
+      <tr><th>Mot</th><th>Ce qu'il désigne aujourd'hui</th><th>Proposition</th></tr>
+      <tr data-choice="revoir:mot-braise" onclick="this.classList.toggle('revoir')"><td>Braise</td><td>le premier palier de niveau et la première forme de Flamme</td><td>le palier redevient Étincelle (votre décision), la Flamme garde Braise</td></tr>
+      <tr data-choice="revoir:mot-lumiere" onclick="this.classList.toggle('revoir')"><td>Lumière</td><td>un palier de niveau, et le fil entier dans le récit</td><td>le palier devient <b>Clarté</b></td></tr>
+      <tr data-choice="revoir:mot-coffre" onclick="this.classList.toggle('revoir')"><td>Coffre</td><td>le coffre du jour et la quatrième réserve du trésor</td><td>le coffre du jour devient l'<b>Offrande</b></td></tr>
+      <tr data-choice="revoir:mot-tresor" onclick="this.classList.toggle('revoir')"><td>Trésor</td><td>le concept entier et la cinquième réserve</td><td>le concept devient l'<b>Héritage</b></td></tr>
+      <tr data-choice="revoir:mot-etoile" onclick="this.classList.toggle('revoir')"><td>Étoile</td><td>le Prestige, la saison, la Constellation, un palier, les fragments</td><td>réservée au ciel ; la saison compte des <b>pas</b>, la renaissance des <b>âges</b></td></tr>
+      <tr data-choice="revoir:mot-etape" onclick="this.classList.toggle('revoir')"><td>Étape</td><td>le seuil des dix niveaux, la saison, l'intégration</td><td><b>épreuve</b> (seuil), <b>halte</b> (voyage), étape (intégration seulement)</td></tr>
+      <tr data-choice="revoir:mot-rang" onclick="this.classList.toggle('revoir')"><td>Rang</td><td>le nom du héros et sa place en ligue</td><td><b>place</b> pour la joute</td></tr>
+      <tr data-choice="revoir:mot-record" onclick="this.classList.toggle('revoir')"><td>Record</td><td>le total à vie, le niveau maximum, la plus longue Flamme</td><td>« depuis toujours » : la lumière reçue, la plus haute lumière, la plus longue Flamme</td></tr>
+      <tr data-choice="revoir:mot-compteurs" onclick="this.classList.toggle('revoir')"><td>Convertibles, dette, points</td><td>des mots de comptable</td><td>ta lumière, une ombre, des étincelles</td></tr>
+    </table>
+  </div>
+
+  <div class="ep-sec">
+    <div class="label">Ce que vous seul pouvez trancher</div>
+    <div class="ep-ask">
+      <ol>
+        <li><b>Le dieu des aïeux</b> : je propose qu'il ne soit ni nommé ni dessiné, et qu'il ne parle qu'une fois, au seuil du Mythe. Le jeu se lit en sept langues, par des croyants de toutes confessions et par des non-croyants.</li>
+        <li><b>Néon et Abysses</b> deviennent-ils des terres d'aïeux (les aïeux de la cité, ceux des profondeurs), ou restent-ils des styles, hors de la révélation ?</li>
+        <li><b>Les parures de rang</b> : un Oracle peut-il encore porter la parure de Passeur ?</li>
+        <li><b>La gloire des rêves</b> : on garde 40 · 100 · 250 · 500 par acte, ou les rêves deviennent plus riches ?</li>
+      </ol>
+    </div>
+  </div>
+</div>
+</body></html>

@@ -8,7 +8,8 @@ import type { LocalDelivery } from '@/lib/view/message';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { badgesOf, editedOf, systemRowOf } from '@/lib/view/message-badges';
 import { bodyKindOf, moodCitationOf, placeOf, storyCitationOf } from '@/lib/view/message-body';
-import { initialsOf, participantAvatarOf, presenceOf } from '@/lib/view/conversation';
+import { initialsOf, participantAvatarOf } from '@/lib/view/conversation';
+import { usePresence } from '@/lib/view/use-presence';
 import { prismFor, served } from '@/lib/api/prism';
 import { mediaCarrierOf } from '@/lib/view/media';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -24,14 +25,17 @@ import {
   META_TEXT_OPACITY,
   ROW_PADDING_HORIZONTAL,
   ROW_PADDING_VERTICAL,
-  STICKER_RENDER_SCALE,
   STICKER_SIDE,
   TEXT_INDENT,
 } from '@/lib/reading-mode/metrics';
 import { useFocusFrame } from '@/lib/view/use-focus-frame';
+import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 import { hereKeyOf } from '@/lib/view/use-conversation-viewing';
+import { authorInkStyle } from '@/lib/view/author-ink';
+import { authorLanguageChip } from '@/lib/view/author-language-chip';
+import '@/styles/conversation-look.css';
 import { AuthorAvatar } from './author-avatar';
 import { PersonName } from './person-name';
 import { Attachments } from './attachment-blocks';
@@ -45,6 +49,7 @@ import { ProtectionChrome } from './protection-chrome';
 import { LongMessageText } from './long-message-text';
 import { ConversationLinkCards } from './conversation-link-cards';
 import { SystemNotice } from './system-notice';
+import { linkRenderingOf } from '@/lib/view/sender-links';
 import { callNoticeTarget } from '@/lib/calls/call-notice';
 import {
   Badges,
@@ -143,8 +148,11 @@ export const FocalRow = memo(function FocalRow({
   onOpenDetail,
   selected,
   onToggleSelect,
+  group = false,
 }: {
   mode: FlatRowMode;
+  /** Une conversation de GROUPE (#10004) : le nom d'un autre auteur y prend SA teinte. */
+  group?: boolean;
   place: PlacedMessage;
   languages: readonly string[];
   viewerId: string;
@@ -166,9 +174,8 @@ export const FocalRow = memo(function FocalRow({
   /** Les emojis que CE lecteur a posés sur CE message (`reaction-store.ts`)
    * — marque `ReactionChip mine` (#5814, T12). */
   myReactions?: readonly string[];
-  /** Retire une réaction MIENNE en tapant sa capsule (#5865) — jamais câblé
-   * sur une capsule d'autrui (`ReactionChip`, `onToggle`). `undefined` ⇒ la
-   * capsule reste un `<span>` inerte (loi 4). */
+  /** Bascule MA réaction en tapant une capsule — la mienne se retire (#5865),
+   * celle d'autrui pose la même (#10583). `undefined` ⇒ `<span>` inerte (loi 4). */
   onReact?: (emoji: string) => void;
   /**
    * OUVRE LA FICHE DU MESSAGE (#8536) — le MÊME panneau que « Plus… » au menu
@@ -249,6 +256,8 @@ export const FocalRow = memo(function FocalRow({
 }) {
   const { message, head, tail } = place;
   const nowMs = now();
+  /* LA PRÉSENCE VIVANTE DE L'EXPÉDITEUR (#10571) — avant tout retour anticipé. */
+  const senderPresence = usePresence(message.sender, { now });
   const kind = expired ? 'expired' : protectionOf(message, nowMs);
   const isMine = isMineOf(message, viewerId);
 
@@ -387,6 +396,10 @@ export const FocalRow = memo(function FocalRow({
     fallbackLanguage: message.originalLanguage,
   });
 
+  /* LA PASTILLE DE LANGUE SUR L'AVATAR DE 22 PX (#10004) — la langue SERVIE
+     est celle que la rangée vient de résoudre, jamais une seconde descente. */
+  const languageChip = authorLanguageChip({ originalLanguage: message.originalLanguage, servedLanguage: activeLanguage, isMine });
+
   const footerLanguages = languageBand({
     originalLanguage: message.originalLanguage,
     preferredLanguages: languages,
@@ -405,7 +418,7 @@ export const FocalRow = memo(function FocalRow({
    * comble l'identité, jamais un nom vide en tête de groupe. */
   const senderAvatarName = message.sender?.displayName ?? (isMine ? 'Vous' : '');
   /* LA PHOTO DE L'EXPÉDITEUR (#6975) — `message.sender` est un `Participant`
-     complet (c'est déjà lui que `presenceOf` reçoit deux lignes plus bas),
+     complet (c'est déjà lui que `usePresence` reçoit plus haut),
      donc les DEUX rangs de la loi partagée sont là : avatar local, puis
      avatar du compte. La rangée de message est le mode de lecture PAR DÉFAUT
      (D-7) : elle est vue à chaque message de chaque conversation. */
@@ -438,6 +451,12 @@ export const FocalRow = memo(function FocalRow({
    * CIBLE (famille #5681-#5683), pas une dérivation qui invente une
    * couleur : issue compagnon ouverte côté iOS, pas ici. */
   const senderNameColor = isMine ? 'var(--color-self-name-ink)' : 'var(--color-ios-ink)';
+  /* LE NOM TEINTÉ PAR PERSONNE, EN GROUPE (#10004) — l'identifiant d'abord,
+     le nom en repli (`authorAccentColor`) ; la feuille choisit le schéma. */
+  const tintsName = group && !isMine;
+  const senderNameStyle = tintsName
+    ? authorInkStyle({ authorId: message.sender?.userId ?? message.senderId, name: senderAvatarName })
+    : { color: senderNameColor };
   /* SANS COMPTE (#5774, travail 2/3 ; glyphe #5935) — miroir
    * `FocalIdentityHeader.swift:99-161` : un visiteur entré par lien porte un
    * marqueur AVANT son nom. Le fantôme `theatermasks.fill` d'iOS est
@@ -445,6 +464,8 @@ export const FocalRow = memo(function FocalRow({
    * badge textuel — l'écart avec le tracé exact d'iOS (Phosphor ne publie
    * pas `theatermasks`) est assumé, D-32. */
   const isAnonymousSender = message.sender?.type === 'anonymous';
+  /* Les adresses d'un anonyme restent du texte (#10286) — la décision de la bulle. */
+  const links = linkRenderingOf(message);
   const reactions = reactionEntries(message.reactionSummary);
 
   // `kind === 'veiled' | 'burned'` toutes deux passent par `ProtectedContent`
@@ -554,7 +575,7 @@ export const FocalRow = memo(function FocalRow({
       {sharedPlace !== null ? <LocationCard place={sharedPlace} accent="var(--accent)" language={currentInterfaceLanguage()} /> : null}
 
       {body.kind === 'sticker' ? (
-        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
+        <StickerArtwork sticker={body.sticker} picture={body.picture} side={STICKER_SIDE} senderName={message.sender?.displayName} />
       ) : body.kind === 'emoji-only' ? (
         <EmojiOnly text={body.text} fontSize={body.fontSize} />
       ) : rendered.text ? (
@@ -591,10 +612,11 @@ export const FocalRow = memo(function FocalRow({
           style={{ color: 'var(--color-ios-ink)' }}
           mentions={message.validatedMentions}
           trackingLinks={message.trackingLinks}
+          links={links}
           plainTextHidden
         />
       ) : null}
-      <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />
+      {links === 'plain' ? null : <ConversationLinkCards text={message.content} trackingLinks={message.trackingLinks} />}
     </>
   );
 
@@ -685,11 +707,12 @@ export const FocalRow = memo(function FocalRow({
             >
               {selected ? '✓' : null}
             </span>
-            <span className="offscreen">Sélectionner ce message</span>
+            <span className="offscreen">{translate(currentInterfaceLanguage(), 'thread.select.message')}</span>
           </button>
         ) : head ? (
+          <span className="relative inline-flex">
           <AuthorAvatar
-            {...(isMine ? {} : { authorId: hereKeyOf(message.sender) })}
+            {...(isMine ? {} : { authorId: hereKeyOf(message.sender), sender: message.sender, participant: { id: message.senderId, name: senderAvatarName } })}
             initials={initialsOf(senderAvatarName)}
             color="var(--accent)"
             size={AVATAR_SIZE}
@@ -706,8 +729,14 @@ export const FocalRow = memo(function FocalRow({
                   ...(senderRing === undefined ? {} : { storyRing: senderRing }),
                 }
               : {})}
-            presence={presenceOf(message.sender, nowMs)}
+            presence={senderPresence}
           />
+          {languageChip === null ? null : (
+            <span aria-hidden data-author-language={languageChip} className={`author-language-chip${tintsName ? ' author-ink' : ''}`} style={tintsName ? senderNameStyle : { color: 'var(--color-ios-ink-2)' }}>
+              {languageChip}
+            </span>
+          )}
+          </span>
         ) : null}
       </div>
 
@@ -733,6 +762,8 @@ export const FocalRow = memo(function FocalRow({
             {...(senderPhoto === undefined ? {} : { src: senderPhoto })}
             username={senderHandle}
             {...(senderRing === undefined ? {} : { storyRing: senderRing })}
+            {...(isMine ? {} : { participantId: message.senderId, authorId: hereKeyOf(message.sender) })}
+            presence={senderPresence}
           />
         ) : null}
 
@@ -786,10 +817,11 @@ export const FocalRow = memo(function FocalRow({
             <PersonName
               name={senderName}
               username={senderHandle}
+              {...(isMine ? {} : { participantId: message.senderId })}
               {...(senderRing === undefined ? {} : { storyRing: senderRing })}
               redundant
-              className="text-title font-extrabold"
-              style={{ color: senderNameColor }}
+              className={`text-title font-extrabold${tintsName ? ' author-ink' : ''}`}
+              style={senderNameStyle}
             >
               {senderName}
             </PersonName>
@@ -801,7 +833,7 @@ export const FocalRow = memo(function FocalRow({
             DERNIÈRE ligne du bloc — `items-end` fait ce que
             `HStack(alignment:.bottom)` fait côté iOS. */}
         <div data-row-content className="flex items-end gap-2">
-          <div className="min-w-0 flex-1">
+          <div data-row-body className="min-w-0 flex-1">
             {/* La bande de reprise reste DANS la rangée du message concerné,
                 et HORS voile : un échec d'envoi se voit même sur un message
                 protégé (`FocalRow.swift:224-238`, même parti que la bulle). */}
@@ -855,7 +887,7 @@ export const FocalRow = memo(function FocalRow({
               reactions={reactions}
               {...(myReactions === undefined ? {} : { myReactions })}
               {...(onPickLanguage === undefined ? {} : { onPickLanguage })}
-              {...(onReact === undefined ? {} : { onReact })}
+              {...(onReact === undefined ? {} : { onReact, reactorsFor: message.id })}
             />
           </div>
 
@@ -946,14 +978,14 @@ export const FocalRow = memo(function FocalRow({
                       })}
                   reactions={reactions}
                   {...(myReactions === undefined ? {} : { myReactions })}
-                  {...(onReact === undefined ? {} : { onToggleReaction: onReact })}
+                  {...(onReact === undefined ? {} : { onToggleReaction: onReact, reactorsFor: message.id })}
                 />
               ) : null}
               <FocusStamp
                 sentAt={new Date(message.createdAt)}
                 now={nowMoment}
                 timeString={time(message.createdAt)}
-                locale={languages[0] ?? 'fr'}
+                locale={currentInterfaceLanguage()}
                 delivery={delivery}
                 isMine={isMine}
                 {...(sendStartedAt === undefined ? {} : { sendStartedAt })}

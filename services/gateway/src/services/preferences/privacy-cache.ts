@@ -56,6 +56,7 @@
  * |---|---|---|
  * | si un CHAMP part dans une charge qui part de toute façon | **ouvert** — se fermer priverait tout le monde d'un contenu sur la foi d'un incident | `PrivacyPreferencesService` (×2), `MessageReadStatusService._loadReadReceiptOptOuts`, `forward-source-visibility` (×2) |
  * | à QUI la charge est adressée | **restrictif** — la room de l'acteur : il reste synchronisé, l'audience ne s'élargit pas | `routes/messages-writes.ts` (`attachment-status:updated`) |
+ * | si la charge part DU TOUT — elle est elle-même un accusé de lecture | **restrictif** — rien n'est rangé ni diffusé, la requête échoue et se refera | `routes/conversations/shared-translations.ts` (partage d'une traduction faite sur l'appareil) |
  *
  * Et un appelant SANS repli à lui n'hérite pas d'un défaut raisonnable : il
  * hérite du `catch` qui l'entoure. Celui de la diffusion ne se replie sur rien

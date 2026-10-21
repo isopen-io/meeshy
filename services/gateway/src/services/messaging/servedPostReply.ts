@@ -45,6 +45,7 @@ export type CitedPostLiveness = {
   readonly createdAt?: Date | null;
   readonly deletedAt?: Date | null;
   readonly expiresAt?: Date | null;
+  readonly moderationHiddenAt?: Date | null;
 };
 
 export type ServedPostReplyTo = PostReplyTo & { readonly deletedAt?: string };
@@ -60,9 +61,11 @@ export const CITED_POST_LIVENESS_SELECT = Object.freeze({
   createdAt: true,
   deletedAt: true,
   expiresAt: true,
+  moderationHiddenAt: true,
 });
 
 export function citedPostWithdrawnAt(post: CitedPostLiveness | null | undefined): Date | null {
+  if (post?.moderationHiddenAt) return post.moderationHiddenAt;
   const deletedAt = post?.deletedAt ?? null;
   if (!deletedAt) return null;
   const expiresAt = post?.expiresAt ?? null;

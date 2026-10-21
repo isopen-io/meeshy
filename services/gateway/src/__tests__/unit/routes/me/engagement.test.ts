@@ -106,7 +106,7 @@ describe('GET /me/engagement', () => {
       { milestoneType: 'streak', milestoneKey: 'streak:3', reachedAt: '2026-09-02T00:00:00.000Z' },
     ]);
     expect(body.data.streak).toEqual({ currentStreakDays: 5, longestStreakDays: 12 });
-    expect(body.data.level).toEqual({ engagementScore: 42 });
+    expect(body.data.level).toMatchObject({ engagementScore: 42 });
 
     // Chaque requête Prisma cible EXACTEMENT l'appelant — jamais un id
     // fourni par ailleurs (pas de paramètre d'URL ici, mais la garde vaut
@@ -131,7 +131,7 @@ describe('GET /me/engagement', () => {
     expect(body.data.counters).toEqual([]);
     expect(body.data.milestones).toEqual([]);
     expect(body.data.streak).toEqual({ currentStreakDays: 0, longestStreakDays: 0 });
-    expect(body.data.level).toEqual({ engagementScore: 0 });
+    expect(body.data.level).toMatchObject({ engagementScore: 0 });
 
     await app.close();
   });
@@ -145,7 +145,7 @@ describe('GET /me/engagement', () => {
     expect(res.statusCode).toBe(200);
     const body = res.json();
     expect(body.data.streak).toEqual({ currentStreakDays: 0, longestStreakDays: 0 });
-    expect(body.data.level).toEqual({ engagementScore: 0 });
+    expect(body.data.level).toMatchObject({ engagementScore: 0 });
 
     await app.close();
   });

@@ -237,7 +237,7 @@ extension StoryExporter {
             // throttles based on its internal buffer state; sleeping 1 ms keeps
             // CPU low while staying responsive.
             while !input.isReadyForMoreMediaData {
-                try await Task.sleep(nanoseconds: 1_000_000)
+                try await Task.sleep(for: .milliseconds(1))
             }
             guard let pool = adaptor.pixelBufferPool else {
                 throw StoryExporterError.syntheticAssetGenerationFailed(

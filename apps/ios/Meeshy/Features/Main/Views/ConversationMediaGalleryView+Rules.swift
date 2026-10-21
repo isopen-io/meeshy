@@ -63,6 +63,15 @@ enum GalleryRenderWindow {
         abs(distance) <= radius
     }
 
+    /// **Une page n'est construite que près de la page ouverte** (#11163). Le
+    /// pager par sélection appelle le constructeur de CHAQUE pièce à chaque
+    /// mise à jour ; au-delà de la fenêtre et de sa marge, la page est un fond
+    /// noir sans état. La marge d'une page fait qu'une page devient réelle
+    /// AVANT d'entrer dans la fenêtre — jamais sous les yeux de l'utilisateur.
+    static func buildsPage(distance: Int) -> Bool {
+        abs(distance) <= radius + 1
+    }
+
     /// Ce qu'on préchauffe : STRICTEMENT la fenêtre de rendu. Préchauffer
     /// au-delà décoderait des images que personne ne peut voir, donc de la
     /// pression mémoire pure — donc des évictions, donc un re-décodage au
@@ -76,29 +85,20 @@ enum GalleryRenderWindow {
 // MARK: - Fullscreen image source
 
 /// Sélection de la variante d'image servie en plein écran.
-///
-/// Vit ici — et non dans un fichier de pellicule séparé — parce que
-/// `UIScreen.main.bounds` y est un budget de DÉCODAGE (la largeur maximale
-/// qu'une image pourra jamais devoir couvrir), pas une mesure de mise en page :
-/// `WindowMetricsSSOTTests` n'autorise cette lecture que dans les deux fichiers
-/// qui la font pour cette raison.
 enum GalleryImageSource {
-    /// 5.2 — URL d'image à charger en plein écran : la plus petite variante
-    /// `>=` la largeur écran (évite l'original multi-Mo quand une 1920 suffit).
-    /// Sans variante (image chiffrée) → l'original. Utilisée pour l'affichage ET
-    /// le préchauffage (cohérence : on warm ce qu'on affiche). Pas de `targetSize`
-    /// downsample côté plein écran : le pinch-zoom a besoin des pixels de la
-    /// variante. La sauvegarde Photos garde l'original (qualité maximale).
     @MainActor
     static func fullscreenURL(for attachment: MessageAttachment) -> String {
+        fullscreenURL(for: attachment, on: WindowMetrics.physicalDisplay)
+    }
+
+    static func fullscreenURL(for attachment: MessageAttachment, on display: DisplayMetrics) -> String {
         let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
         guard !original.isEmpty else { return "" }
-        let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
         return ImageVariantSelector.bestImageURL(
             variants: attachment.imageVariants ?? [],
             originalURL: original,
             originalWidth: attachment.width,
-            targetWidthPx: targetPx
+            targetWidthPx: DecodeBudget.targetWidthPx(for: .fullscreen, on: display)
         )
     }
 }

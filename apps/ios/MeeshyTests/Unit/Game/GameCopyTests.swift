@@ -185,11 +185,6 @@ final class GameCopyTests: XCTestCase {
         XCTAssertNotEqual(GameCopy.clock(minuteOfDay: 21 * 60, locale: Locale(identifier: "en_US")), "21:00", "12 h en anglais américain")
     }
 
-    func test_chance_isOneOverTheOdds() {
-        XCTAssertTrue(GameCopy.chance(1.0 / 6.0).contains(GameCopy.formatCount(6)))
-        XCTAssertTrue(GameCopy.chance(1.0 / 20.0).contains(GameCopy.formatCount(20)))
-    }
-
     // MARK: - Mee et Meo
 
     func test_everyGuideAction_hasALabel() {
@@ -222,8 +217,7 @@ final class GameCopyTests: XCTestCase {
             .missionsUnlocked,
             .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100),
             .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100),
-            .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14),
-            .badgeExtinguished(missingActions: 37),
+            .firstMint,
             .priceRises(nextPrice: 1294),
             .newRank(rank: .voix, division: .ii, glory: 1700, gloryMissing: 466),
             .newRank(rank: .legende, division: .i, glory: 160_000, gloryMissing: nil),
@@ -245,11 +239,23 @@ final class GameCopyTests: XCTestCase {
         }
     }
 
-    func test_theFirstMintCard_citesTheLevelsBeforeAndAfter() {
-        let moment = GameGuide.moment(for: .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14), seen: [])
-        let means = GameGuideCopy.moment(moment).means
-        XCTAssertTrue(means.contains(GameCopy.formatCount(14)))
-        XCTAssertTrue(means.contains(GameCopy.formatCount(9)))
+    /// La poche fait le niveau (#10892) : une première frappe qui coûte des niveaux le DIT avant le geste ; sans perte,
+    /// la phrase d'hier reste vraie.
+    func test_theFirstMintPossibleCard_saysTheLevelDrop_onlyWhenThereIsOne() {
+        let dropping = GameGuideCopy.moment(GameGuide.moment(for: .firstMintPossible(price: 1221, levelsLost: 2, gloryGain: 100), seen: []))
+        let free = GameGuideCopy.moment(GameGuide.moment(for: .firstMintPossible(price: 1221, levelsLost: 0, gloryGain: 100), seen: []))
+        XCTAssertNotEqual(dropping.means, free.means)
+        XCTAssertEqual(dropping.means, GameGuideCopy.firstMintPossibleDrop(cost: GameCopy.points(1221), glory: GameCopy.formatCount(100)))
+    }
+
+    /// La première frappe (#10892) : la carte dit que le niveau baisse d'autant et le rang jamais — sans citer de
+    /// niveaux — et mène à la progression.
+    func test_theFirstMintCard_saysTheLevelDrops_andLeadsToProgress() {
+        let moment = GameGuide.moment(for: .firstMint, seen: [])
+        XCTAssertEqual(moment.action, .seeProgress)
+        let copy = GameGuideCopy.moment(moment)
+        XCTAssertFalse(copy.means.isEmpty)
+        XCTAssertFalse(copy.means.contains(where: \.isNumber), "plus aucun « de 14 à 9 »")
     }
 
     // MARK: - Le minuteur d'une mission (#9539)

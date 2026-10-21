@@ -266,7 +266,7 @@ extension MeeshyComposerHost {
             isPresented: $showsPhotoPicker,
             selection: $pickedPhotoLibraryItems,
             maxSelectionCount: 10,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .adaptiveOnChange(of: pickedPhotoLibraryItems) { _, items in
             guard !items.isEmpty else { return }
@@ -284,6 +284,23 @@ extension MeeshyComposerHost {
             allowsMultipleSelection: fileImportIntent.allowsMultipleSelection
         ) { result in
             Task { await ingestFileImporterResult(result) }
+        }
+        // **Le choix de l'appui long sur la photothèque** (#10357) : prendre
+        // une photo, ou un fichier. Monté au-dessus de l'aiguillage comme les
+        // autres portails, pour la même raison.
+        .confirmationDialog(
+            ComposerRailCopy.label(.media),
+            isPresented: Binding(get: { railLongPressSources != nil },
+                                 set: { if !$0 { railLongPressSources = nil } }),
+            titleVisibility: .hidden,
+            presenting: railLongPressSources
+        ) { sources in
+            ForEach(sources, id: \.self) { source in
+                Button(ComposerMediaSourcePolicy.longPressLabel(source)) {
+                    chooseRailLongPressSource(source)
+                }
+            }
+            Button(ComposerMediaSourcePolicy.cancel, role: .cancel) {}
         }
     }
 }

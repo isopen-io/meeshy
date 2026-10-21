@@ -137,6 +137,63 @@ final class AuthAccountSwitchingTests: XCTestCase {
         let back = await auth.switchAccount(to: Self.alice.id)
         XCTAssertFalse(back)
     }
+
+    // MARK: - Un compte supprimé pendant une bascule (#10482)
+
+    /// Bob, actif, est supprimé côté passerelle ; Alice est gardée. Pendant que
+    /// le retrait démonte la session de Bob, on touche Alice : la bascule
+    /// attend la fin du retrait, et ce n'est jamais elle que le retrait démonte.
+    func test_retireDeletedActiveAccount_switchingDuringItsExit_endsOnTheKeptAccount() async {
+        await signIn(Self.alice, token: "tA")
+        await auth.suspendActiveSession()
+        await signIn(Self.bob, token: "tB")
+        let manager = auth
+        let bobId = Self.bob.id
+        let retirement = Task { @MainActor in await manager.retireDeletedAccount(userId: bobId) }
+        var turns = 0
+        while !manager.isLeavingActiveSession, turns < 10_000 {
+            turns += 1
+            await Task.yield()
+        }
+        XCTAssertTrue(manager.isLeavingActiveSession, "la bascule part pendant la sortie de la session de Bob")
+
+        let switched = await manager.switchAccount(to: Self.alice.id)
+        let retired = await retirement.value
+
+        XCTAssertTrue(retired)
+        XCTAssertTrue(switched, "la bascule attend la fin du retrait au lieu d'être démontée par lui")
+        XCTAssertEqual(manager.activeAccountId, Self.alice.id)
+        XCTAssertEqual(manager.currentUser?.id, Self.alice.id)
+        XCTAssertEqual(manager.authToken, "tA")
+        XCTAssertTrue(manager.isAuthenticated)
+        XCTAssertFalse(manager.isSwitchingAccount)
+        XCTAssertFalse(manager.savedAccounts.contains { $0.id == bobId }, "Bob quitte le sélecteur")
+        XCTAssertNil(manager.keychain.load(forKey: manager.tokenKey(for: bobId), account: nil), "et le trousseau")
+        XCTAssertTrue(manager.hasPreservedSession(for: Self.alice.id))
+    }
+
+    /// Pendant le retrait du compte actif, aucune connexion ne se pose : elle
+    /// serait démontée par lui.
+    func test_retireDeletedActiveAccount_refusesALoginDuringItsExit() async {
+        await signIn(Self.alice, token: "tA")
+        let manager = auth
+        let aliceId = Self.alice.id
+        let retirement = Task { @MainActor in await manager.retireDeletedAccount(userId: aliceId) }
+        var turns = 0
+        while !manager.isLeavingActiveSession, turns < 10_000 {
+            turns += 1
+            await Task.yield()
+        }
+        let loginsBefore = stub.loginCallCount
+
+        await signIn(Self.bob, token: "tB")
+        _ = await retirement.value
+
+        XCTAssertEqual(stub.loginCallCount, loginsBefore, "la connexion est refusée avant d'atteindre la passerelle")
+        XCTAssertNil(manager.activeAccountId)
+        XCTAssertFalse(manager.isAuthenticated)
+        XCTAssertFalse(manager.isSwitchingAccount)
+    }
 }
 
 // MARK: - Doubles

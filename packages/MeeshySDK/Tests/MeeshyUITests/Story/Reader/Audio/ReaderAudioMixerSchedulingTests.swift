@@ -252,6 +252,10 @@ final class RecordingAudioScheduler: ReaderAudioSchedulerProviding {
     }
 
     private(set) var passes: [Pass] = []
+    /// Le handler de fin de chaque passe, rang pour rang avec `passes` : un
+    /// témoin de boucle le déclenche à la main pour simuler la fin d'une passe
+    /// sans moteur qui rende (#9867).
+    private(set) var completions: [(@Sendable () -> Void)?] = []
 
     func schedule(node: AVAudioPlayerNode,
                   file: AVAudioFile,
@@ -259,5 +263,12 @@ final class RecordingAudioScheduler: ReaderAudioSchedulerProviding {
                   at: AVAudioTime?,
                   completionHandler: (@Sendable () -> Void)?) {
         passes.append(Pass(window: window, isImmediate: at == nil))
+        completions.append(completionHandler)
+    }
+
+    /// Joue la fin de la passe `index`, comme le ferait le node.
+    func completePass(_ index: Int) {
+        guard completions.indices.contains(index) else { return }
+        completions[index]?()
     }
 }

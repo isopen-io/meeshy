@@ -113,7 +113,7 @@ const existe = (args: OuConversation): boolean => {
 
 /** Une conversation `EXISTANTE` dont l'appelant n'est PAS membre ; rien d'autre. */
 const prismaNonMembre = () => ({
-  userSession: { findFirst: jest.fn(async () => ({ isValid: true })) },
+  userSession: { findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })) },
   user: { findUnique: jest.fn(async () => utilisateur()) },
   participant: { findFirst: jest.fn(async () => null), findMany: jest.fn(async () => []) },
   conversation: {

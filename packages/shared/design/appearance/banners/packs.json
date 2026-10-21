@@ -1,0 +1,188 @@
+[
+  {
+    "slug": "bannieres-essentielles",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "9e9e0c7a62fbc3b2.webp",
+      "bytes": 734,
+      "sha256": "9e9e0c7a62fbc3b2027756683faf62292f47ac98407398a7c4004cc4ff5f7f4b"
+    },
+    "preview": null,
+    "contract": {
+      "src": "788afc373ebce04f.json",
+      "bytes": 11734,
+      "sha256": "788afc373ebce04f0d6d0e9eb91d19dcdb331e66b11105672a981a11bc1f5e98"
+    },
+    "strings": {
+      "fr": {
+        "src": "ae4c3bec6aad4940.json",
+        "bytes": 161,
+        "sha256": "ae4c3bec6aad4940e0af3b793f4198cecd86eef50cf5dd0d339d42d93c53a684"
+      },
+      "en": {
+        "src": "7188467f9733b3cf.json",
+        "bytes": 156,
+        "sha256": "7188467f9733b3cf84eae4a30fe1304143eb7d51fd2a50a88a0541935ed95569"
+      },
+      "es": {
+        "src": "bf2b9a3db6bf1bf3.json",
+        "bytes": 159,
+        "sha256": "bf2b9a3db6bf1bf399f3e6f788afceca2ce95f46e4e0462c35a72df11315f865"
+      },
+      "pt": {
+        "src": "a90107e5a4918b0f.json",
+        "bytes": 158,
+        "sha256": "a90107e5a4918b0f6bcaa1e93b67e9e283983aeb9b000dcdd90d30c94bcd39e9"
+      },
+      "de": {
+        "src": "62b445d3b374340e.json",
+        "bytes": 157,
+        "sha256": "62b445d3b374340e14cb220c4c57b43a1232f90627712b20db69535bb55d6504"
+      },
+      "it": {
+        "src": "a39fe059b61b67cf.json",
+        "bytes": 159,
+        "sha256": "a39fe059b61b67cf4383b9274b2ce110a4627b8ffe9db0caf1636737106e1bcd"
+      },
+      "ar": {
+        "src": "1b565d11227fff16.json",
+        "bytes": 192,
+        "sha256": "1b565d11227fff16eec24c99a543ff15e2f9e890b556c4fb1bf5577cf150c861"
+      }
+    },
+    "downloadBytes": {
+      "story": 11734,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières essentielles",
+        "description": "Six bannières pour votre profil."
+      },
+      "en": {
+        "name": "Essential banners",
+        "description": "Six banners for your profile."
+      },
+      "es": {
+        "name": "Banners esenciales",
+        "description": "Seis banners para tu perfil."
+      },
+      "pt": {
+        "name": "Banners essenciais",
+        "description": "Seis banners para o teu perfil."
+      },
+      "de": {
+        "name": "Basis-Banner",
+        "description": "Sechs Banner für dein Profil."
+      },
+      "it": {
+        "name": "Banner essenziali",
+        "description": "Sei banner per il tuo profilo."
+      },
+      "ar": {
+        "name": "لافتات أساسية",
+        "description": "ست لافتات لملفك الشخصي."
+      }
+    }
+  },
+  {
+    "slug": "bannieres-animees",
+    "domain": "banner",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "f70c6422173f262a.webp",
+      "bytes": 916,
+      "sha256": "f70c6422173f262a1515c8c9ed5ef9613a057603124c93f1de8198618d655c36"
+    },
+    "preview": null,
+    "contract": {
+      "src": "9803b7afd2cc715a.json",
+      "bytes": 1093,
+      "sha256": "9803b7afd2cc715a214cc257a0742413fe7ff460829b0216958b078a5dc86b4c"
+    },
+    "strings": {
+      "fr": {
+        "src": "c1c26b807f9decbc.json",
+        "bytes": 34,
+        "sha256": "c1c26b807f9decbce2d5fc31dcaadb5b41591610312674d91efc0fc8aa14952b"
+      },
+      "en": {
+        "src": "355338cc62581315.json",
+        "bytes": 35,
+        "sha256": "355338cc62581315cf2ffee2e18d55e025410c14dab388ce1b5970ff8bf077d4"
+      },
+      "es": {
+        "src": "5343d24134f22a3e.json",
+        "bytes": 34,
+        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+      },
+      "pt": {
+        "src": "5343d24134f22a3e.json",
+        "bytes": 34,
+        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+      },
+      "de": {
+        "src": "1911e82637411866.json",
+        "bytes": 38,
+        "sha256": "1911e82637411866a0cbb14e743578ee6ada9a2939c66a1d84e370249039ad71"
+      },
+      "it": {
+        "src": "5343d24134f22a3e.json",
+        "bytes": 34,
+        "sha256": "5343d24134f22a3e3a0d6abf07c2de7fa9420288a8992847bfd323f3c094f167"
+      },
+      "ar": {
+        "src": "45ae33fc04fc8cae.json",
+        "bytes": 38,
+        "sha256": "45ae33fc04fc8cae8c79ff4019a474b2c1c222bddbae2ce29225405d48dc0f95"
+      }
+    },
+    "downloadBytes": {
+      "story": 1093,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Bannières animées",
+        "description": "Un reflet discret traverse la bannière."
+      },
+      "en": {
+        "name": "Animated banners",
+        "description": "A subtle glint sweeps across the banner."
+      },
+      "es": {
+        "name": "Banners animados",
+        "description": "Un reflejo discreto cruza el banner."
+      },
+      "pt": {
+        "name": "Banners animados",
+        "description": "Um reflexo discreto atravessa o banner."
+      },
+      "de": {
+        "name": "Animierte Banner",
+        "description": "Ein dezenter Glanz zieht über das Banner."
+      },
+      "it": {
+        "name": "Banner animati",
+        "description": "Un riflesso discreto attraversa il banner."
+      },
+      "ar": {
+        "name": "لافتات متحركة",
+        "description": "وميض خفيف يعبر اللافتة."
+      }
+    }
+  }
+]

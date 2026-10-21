@@ -10,6 +10,9 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { mayAttach } from '@/lib/send/attachments';
 import type { ContactSource } from '@/lib/send/contact-card';
+import type { GuestAttachmentKind } from '@meeshy/shared/types/guest-attachment-kind-rules';
+import { guestAcceptAttribute, guestKindsAllowMime, guestKindsPhrase, type GuestAttachments } from '@/lib/send/guest-attachment-policy';
+import { Link } from '@/routes/route-table';
 
 /**
  * LE PANNEAU DES SOURCES (#7280) — extrait de `composer-tray.tsx`, qui
@@ -194,7 +197,26 @@ export type ComposerAttachmentPanelProps = {
    * `canRecord`. */
   readonly canLocate: boolean;
   readonly rights?: ParticipantPermissions;
+  /** L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003, planche « Attach ») :
+   * présent ⇒ seules les familles ouvertes ont une tuile (« Fichier texte
+   * (.txt) », « Audio »…), leurs sélecteurs ne proposent qu'elles, et une note
+   * dit ce qui passe — les droits instantanés de la jonction n'y décident plus
+   * (#10029). Absent ⇒ le panneau d'un compte, inchangé. */
+  readonly guest?: GuestAttachments;
 };
+
+/** Les tuiles de fichier d'un invité restreint, dans l'ordre de la planche. */
+const GUEST_FILE_TILES: ReadonlyArray<{ readonly kind: Exclude<GuestAttachmentKind, 'image'>; readonly color: string }> = [
+  { kind: 'text', color: 'var(--ios-tile-file)' },
+  { kind: 'audio', color: 'var(--ios-tile-voice)' },
+  { kind: 'pdf', color: 'var(--ios-tile-file)' },
+];
+
+const GUEST_TILE_LABEL = {
+  text: 'composer.guest.kind.text',
+  audio: 'composer.guest.kind.audio',
+  pdf: 'composer.guest.kind.pdf',
+} as const;
 
 export function ComposerAttachmentPanel({
   onPickPhotos,
@@ -209,6 +231,7 @@ export function ComposerAttachmentPanel({
   canRecord,
   canLocate,
   rights,
+  guest,
 }: ComposerAttachmentPanelProps) {
   /* `translate` SE LIT AVEC UNE CLÉ LITTÉRALE, jamais par un raccourci
      `say(key)` : c'est la clé LITTÉRALE qui TYPE les paramètres attendus
@@ -222,10 +245,12 @@ export function ComposerAttachmentPanel({
      seconde table écrite ici. La CAMÉRA produit une image : elle partage le
      droit de « Photos », sans quoi une tuile ouvrirait l'objectif pour un
      envoi que le serveur refuserait en 403 après téléversement. */
-  const canImages = mayAttach(rights, 'image/*');
-  const canFiles = mayAttach(rights, 'application/octet-stream');
-  const canAudios = canRecord && mayAttach(rights, 'audio/*');
-  const canContacts = mayAttach(rights, CONTACT_CARD_MIME_TYPE);
+  const allows = (mimeType: string): boolean => (guest === undefined ? mayAttach(rights, mimeType) : guestKindsAllowMime(guest.kinds, mimeType));
+  const canImages = allows('image/*');
+  const canFiles = guest === undefined && mayAttach(rights, 'application/octet-stream');
+  const canAudios = canRecord && allows('audio/*');
+  const canContacts = allows(CONTACT_CARD_MIME_TYPE);
+  const guestTiles = guest === undefined ? [] : GUEST_FILE_TILES.filter((tile) => guest.kinds.includes(tile.kind));
 
   return (
     /* `data-composer-panel` — L'ANCRE STRUCTURELLE DU PANNEAU (#7280), même
@@ -304,6 +329,21 @@ export function ComposerAttachmentPanel({
           </FileSource>
         ) : null}
 
+        {guestTiles.map((tile) => (
+          <FileSource
+            key={tile.kind}
+            id={`guest-${tile.kind}`}
+            label={translate(language, GUEST_TILE_LABEL[tile.kind])}
+            action={translate(language, GUEST_TILE_LABEL[tile.kind])}
+            color={tile.color}
+            accept={guestAcceptAttribute([tile.kind])}
+            multiple
+            onPick={onPickFile}
+          >
+            {tile.kind === 'text' ? <GlyphSvg glyph={COMPOSER_GLYPHS.clipboardText} size={26} /> : <Glyph name={tile.kind === 'audio' ? 'microphone' : 'file'} size={26} />}
+          </FileSource>
+        ))}
+
         {contact !== undefined && canContacts ? (
           contact.source === 'file' ? (
             <FileSource
@@ -329,7 +369,7 @@ export function ComposerAttachmentPanel({
           )
         ) : null}
 
-        {canLocate ? (
+        {canLocate && guest === undefined ? (
           <GestureSource
             id="location"
             label={translate(language, 'composer.attach.location')}
@@ -375,6 +415,14 @@ export function ComposerAttachmentPanel({
           </GestureSource>
         ) : null}
       </div>
+      {guest === undefined ? null : (
+        <p data-composer-guest-note className="mt-3 rounded-card px-3.5 py-3 text-caption leading-snug" style={{ backgroundColor: 'color-mix(in srgb, var(--accent) 8%, transparent)' }}>
+          {translate(language, 'composer.guest.note', { title: `\u2068${guest.title}\u2069`, kinds: guestKindsPhrase(language, guest.kinds) })}{' '}
+          <Link to="signup" data-composer-guest-signup className="font-semibold underline-offset-2 hover:underline" style={{ color: 'var(--accent)' }}>
+            {translate(language, 'composer.guest.createAccount')}
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

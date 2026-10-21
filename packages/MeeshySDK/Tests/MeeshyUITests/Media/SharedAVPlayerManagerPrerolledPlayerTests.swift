@@ -101,6 +101,16 @@ final class SharedAVPlayerManagerPrerolledPlayerTests: XCTestCase {
 
     // MARK: - (e) Le lecteur rendu au pool est préroulé
 
+    func test_isReadyForPreroll_requiresThePlayerItself_notOnlyItsItem() {
+        XCTAssertTrue(SharedAVPlayerManager.isReadyForPreroll(playerStatus: .readyToPlay, itemStatus: .readyToPlay))
+        XCTAssertFalse(
+            SharedAVPlayerManager.isReadyForPreroll(playerStatus: .failed, itemStatus: .readyToPlay),
+            "AVPlayer.preroll lève une exception sur le statut du LECTEUR : un élément prêt ne suffit pas")
+        XCTAssertFalse(SharedAVPlayerManager.isReadyForPreroll(playerStatus: .unknown, itemStatus: .readyToPlay))
+        XCTAssertFalse(SharedAVPlayerManager.isReadyForPreroll(playerStatus: .readyToPlay, itemStatus: .unknown))
+        XCTAssertFalse(SharedAVPlayerManager.isReadyForPreroll(playerStatus: .readyToPlay, itemStatus: nil))
+    }
+
     func test_mayPrerollRecycledPlayer_onlyAnIdleReadyPlayer() {
         XCTAssertTrue(SharedAVPlayerManager.mayPrerollRecycledPlayer(rate: 0, isReadyToPlay: true))
         XCTAssertFalse(

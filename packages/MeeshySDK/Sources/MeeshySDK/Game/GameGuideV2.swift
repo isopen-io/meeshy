@@ -213,4 +213,25 @@ public enum GamePhotoMomentsV2 {
         case .leagueFirst, .leagueRelegated, .seasonStart, .atlasStamp: nil
         }
     }
+
+    /// LA RÉALISATION DU JOUR (D6, #10173) — un moment par jour de jeu, réalisé par un geste (l'ouverture du
+    /// Coffre du jour). Son identité porte la journée : `day:<AAAA-MM-JJ>` ; une clé illisible n'a pas d'identité.
+    public static func dayMomentId(_ dayKey: String) -> String? {
+        isDayKey(dayKey) ? "day:\(dayKey)" : nil
+    }
+
+    /// La journée d'une identité `day:<AAAA-MM-JJ>`, `nil` pour toute autre identité.
+    public static func day(ofMomentId momentId: String) -> String? {
+        guard momentId.hasPrefix("day:") else { return nil }
+        let day = String(momentId.dropFirst(4))
+        return isDayKey(day) ? day : nil
+    }
+
+    private static func isDayKey(_ value: String) -> Bool {
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts[0].count == 4, parts[1].count == 2, parts[2].count == 2,
+              parts.allSatisfy({ $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }),
+              let month = Int(parts[1]), let day = Int(parts[2]) else { return false }
+        return (1...12).contains(month) && (1...31).contains(day)
+    }
 }

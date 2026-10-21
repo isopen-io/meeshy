@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web",
-  "version": "2.13.0",
+  "version": "2.19.0",
   "private": true,
   "type": "module",
   "description": "La v3.1 web — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
@@ -17,7 +17,7 @@
     "capacitor:sync:before": "node scripts/shell-start-path-hook.mjs before",
     "capacitor:sync:after": "node scripts/shell-start-path-hook.mjs after",
     "test": "bun test",
-    "gate": "bun run check:tokens && bun run check:design-harmony && bun run check:countries && bun run check:brand-assets && node scripts/check-curve.mjs && node scripts/check-river-metrics.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-sw-api-cache.mjs && node scripts/check-push-target-parity.mjs && node scripts/check-institutional.mjs && node scripts/check-scheme-bootstrap.mjs && node scripts/check-interface-language-bootstrap.mjs && node scripts/check-interface-language.mjs && node scripts/check-avatar-src.mjs && node scripts/check-lens.mjs && node scripts/check-avatar-pixels.mjs && node scripts/check-floating-clearance.mjs && node scripts/check-feed-disc.mjs && node scripts/check-notifications.mjs && node scripts/check-profile.mjs && node scripts/check-settings.mjs && node scripts/check-communities.mjs && node scripts/check-calls.mjs && node scripts/check-calls-join.mjs && node scripts/check-calls-during.mjs && node scripts/check-calls-screen.mjs && node scripts/check-calls-quality.mjs && node scripts/check-calls-effects.mjs && node scripts/check-calls-effects-perf.mjs && node scripts/check-calls-controls.mjs && node scripts/check-calls-captions.mjs && node scripts/check-discover.mjs && node scripts/check-links.mjs && node scripts/check-reels.mjs && node scripts/check-feed-media.mjs && node scripts/check-feed-column.mjs && node scripts/check-post-comments.mjs && node scripts/check-medias-absents.mjs && node scripts/check-feed-scenes.mjs && node scripts/check-story-scene.mjs && node scripts/check-story-sound.mjs && node scripts/check-story-studio.mjs && node scripts/check-story-plateau.mjs && node scripts/check-story-self-rail.mjs && node scripts/check-list-actions.mjs && node scripts/check-list-folded-unread.mjs && node scripts/check-thread-states.mjs && node scripts/check-thread-chrome.mjs && node scripts/check-day-pill-rest.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-thread-scroll-edges.mjs && node scripts/check-reading-mode.mjs && node scripts/check-long-message.mjs && node scripts/check-field-focus.mjs && node scripts/check-access-column.mjs && node scripts/check-signup.mjs && node scripts/check-phone-frame.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs && node scripts/check-shell-dist.mjs && node scripts/check-android-manifest.mjs && node scripts/check-gateway-build.mjs && node scripts/check-admin-rung.mjs && node scripts/check-admin-souverain.mjs && node scripts/check-capacitor-config.mjs && node scripts/check-api-source.mjs && node ../../scripts/check-web-api-literals.mjs && node scripts/check-join-first-screen.mjs && node scripts/check-app-update.mjs && node scripts/check-rich-text.mjs",
+    "gate": "bun run check:tokens && bun run check:design-harmony && bun run check:countries && bun run check:brand-assets && node scripts/check-curve.mjs && node scripts/check-river-metrics.mjs && bun run type-check && bun test && bun run build && node scripts/check-utilities.mjs && node scripts/measure-weight.mjs && node scripts/check-sw-api-cache.mjs && node scripts/check-push-target-parity.mjs && node scripts/check-institutional.mjs && node scripts/check-scheme-bootstrap.mjs && node scripts/check-interface-language-bootstrap.mjs && node scripts/check-interface-language.mjs && node scripts/check-avatar-src.mjs && node scripts/check-lens.mjs && node scripts/check-avatar-pixels.mjs && node scripts/check-floating-clearance.mjs && node scripts/check-feed-disc.mjs && node scripts/check-notifications.mjs && node scripts/check-profile.mjs && node scripts/check-settings.mjs && node scripts/check-communities.mjs && node scripts/check-calls.mjs && node scripts/check-calls-join.mjs && node scripts/check-calls-during.mjs && node scripts/check-calls-screen.mjs && node scripts/check-calls-quality.mjs && node scripts/check-calls-effects.mjs && node scripts/check-calls-effects-perf.mjs && node scripts/check-calls-controls.mjs && node scripts/check-calls-captions.mjs && node scripts/check-discover.mjs && node scripts/check-links.mjs && node scripts/check-reels.mjs && node scripts/check-feed-media.mjs && node scripts/check-feed-column.mjs && node scripts/check-post-comments.mjs && node scripts/check-medias-absents.mjs && node scripts/check-feed-scenes.mjs && node scripts/check-story-scene.mjs && node scripts/check-story-sound.mjs && node scripts/check-story-studio.mjs && node scripts/check-story-plateau.mjs && node scripts/check-story-self-rail.mjs && node scripts/check-list-actions.mjs && node scripts/check-list-folded-unread.mjs && node scripts/check-thread-states.mjs && node scripts/check-thread-chrome.mjs && node scripts/check-day-pill-rest.mjs && node scripts/check-thread-virtualization.mjs && node scripts/check-thread-scroll-edges.mjs && node scripts/check-reading-mode.mjs && node scripts/check-long-message.mjs && node scripts/check-field-focus.mjs && node scripts/check-access-column.mjs && node scripts/check-signup.mjs && node scripts/check-phone-frame.mjs && node scripts/check-docker-context.mjs && node scripts/check-git-tracking.mjs && node scripts/check-shell-dist.mjs && node scripts/check-android-manifest.mjs && node scripts/check-gateway-build.mjs && node scripts/check-admin-rung.mjs && node scripts/check-admin-souverain.mjs && node scripts/check-capacitor-config.mjs && node scripts/check-api-source.mjs && node ../../scripts/check-web-api-literals.mjs && node scripts/check-join-first-screen.mjs && node scripts/check-app-update.mjs && node scripts/check-rich-text.mjs && node scripts/check-animated-properties.mjs",
     "check:tokens": "node ../../packages/design-tokens/scripts/generate-from-ios.mjs --check && node ../../packages/design-tokens/scripts/check-jetons.mjs",
     "check:countries": "node scripts/generate-countries.mjs --check",
     "check:brand-assets": "python3 scripts/generate-icons.py --check",
@@ -35,6 +35,7 @@
     "check:links": "node scripts/check-links.mjs",
     "check:api-literals": "node ../../scripts/check-web-api-literals.mjs",
     "check:rich-text": "node scripts/check-rich-text.mjs",
+    "check:animated-properties": "node scripts/check-animated-properties.mjs",
     "check:reels": "node scripts/check-reels.mjs",
     "check:feed-media": "node scripts/check-feed-media.mjs",
     "check:feed-column": "node scripts/check-feed-column.mjs",
@@ -62,6 +63,7 @@
     "check:utilities": "node scripts/check-utilities.mjs",
     "check:virtualization": "node scripts/check-thread-virtualization.mjs",
     "check:scroll-edges": "node scripts/check-thread-scroll-edges.mjs",
+    "check:mobile-browsers": "node scripts/check-mobile-browsers.mjs",
     "check:states": "node scripts/check-thread-states.mjs",
     "check:reading-mode": "node scripts/check-reading-mode.mjs",
     "check:thread-chrome": "node scripts/check-thread-chrome.mjs",
@@ -82,11 +84,11 @@
   "dependencies": {
     "@capacitor-community/media": "9.1.0",
     "@capacitor/push-notifications": "8.1.2",
-    "@mediapipe/tasks-vision": "1.0.1",
+    "@mediapipe/tasks-vision": "1.1.0",
     "@meeshy/shared": "workspace:*",
     "@tanstack/react-query": "5.104.1",
-    "@tanstack/react-virtual": "3.14.13",
-    "preact": "10.29.8",
+    "@tanstack/react-virtual": "3.14.20",
+    "preact": "11.0.1",
     "socket.io-client": "4.8.4",
     "zod": "4.4.3",
     "zustand": "5.0.15"
@@ -97,18 +99,21 @@
     "@tailwindcss/vite": "4.3.3",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "preact-render-to-string": "6.8.0",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "fflate": "0.8.3",
+    "fontkit": "2.0.4",
+    "lottie-web": "5.13.0",
+    "preact-render-to-string": "6.8.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "tailwindcss": "4.3.3",
     "typescript": "^6.0.3",
-    "vite": "8.3.3",
-    "vite-plugin-pwa": "1.3.0"
+    "vite": "8.3.4",
+    "vite-plugin-pwa": "2.0.0"
   },
   "optionalDependencies": {
     "@capacitor/android": "8.5.3",
-    "@capacitor/cli": "8.5.1",
+    "@capacitor/cli": "8.5.3",
     "@capacitor/core": "8.5.1",
-    "@capacitor/ios": "8.5.2"
+    "@capacitor/ios": "8.5.3"
   }
 }

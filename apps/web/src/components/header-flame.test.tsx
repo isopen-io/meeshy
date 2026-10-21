@@ -168,7 +168,7 @@ describe('HeaderFlame — « 🔥 M » et son effet', () => {
     const html = renderToStaticMarkup(<HeaderFlame snapshot={snapshot()} replay={0} onDismiss={() => undefined} />);
     expect(html).toContain('data-header-flame="12"');
     expect(html).toContain('data-header-flame-streak="4"');
-    expect(html).toContain('aria-label="Série de 4 jours, 120 points dont 12 aujourd’hui"');
+    expect(html).toContain('aria-label="4 jours, 120 étincelles dont 12 aujourd’hui"');
   });
 
   test('un snapshot d’hier se relit au jour du lecteur : la série tient, 0 aujourd’hui', () => {

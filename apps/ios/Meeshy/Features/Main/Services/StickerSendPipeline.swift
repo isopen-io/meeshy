@@ -39,17 +39,39 @@ nonisolated enum StickerSendPipeline {
         let data: Data
     }
 
+    /// **Le fichier d'origine d'un sticker animé** (#9210) — un GIF ou un WebP
+    /// de pack cinématique, envoyé TEL QUEL avec son type : le réencoder en PNG
+    /// depuis sa première image le figerait chez le destinataire.
+    nonisolated struct OriginalFile: Equatable, Sendable {
+        let data: Data
+        let mimeType: String
+    }
+
+    /// Le type du PNG d'un sticker rasterisé — le chemin de tous les autres.
+    nonisolated static let pngMimeType = "image/png"
+
+    /// L'extension d'un type d'image de sticker ; un type inconnu garde `png`,
+    /// le format que tout lecteur relit.
+    nonisolated static func fileExtension(forMimeType mimeType: String) -> String {
+        switch mimeType.lowercased() {
+        case "image/gif": return "gif"
+        case "image/webp": return "webp"
+        default: return "png"
+        }
+    }
+
     /// Le nom de fichier d'un sticker, dérivé de l'id de la pièce jointe :
     /// stable, donc le même id nomme le même fichier avant et après
-    /// l'écriture.
-    nonisolated static func fileName(for attachmentId: String) -> String {
-        "sticker_\(attachmentId).png"
+    /// l'écriture. Son extension suit le type du fichier envoyé.
+    nonisolated static func fileName(for attachmentId: String, mimeType: String = pngMimeType) -> String {
+        "sticker_\(attachmentId).\(fileExtension(forMimeType: mimeType))"
     }
 
     /// L'URL qu'aura le fichier — connue avant qu'il existe, c'est ce qui
     /// permet de poser la bulle en premier.
-    nonisolated static func fileURL(id attachmentId: String, in directory: URL) -> URL {
-        directory.appendingPathComponent(fileName(for: attachmentId))
+    nonisolated static func fileURL(id attachmentId: String, in directory: URL,
+                                    mimeType: String = pngMimeType) -> URL {
+        directory.appendingPathComponent(fileName(for: attachmentId, mimeType: mimeType))
     }
 
     /// Les octets PNG d'une image déjà rasterisée. `nil` — jamais des octets
@@ -69,6 +91,19 @@ nonisolated enum StickerSendPipeline {
         let url = fileURL(id: attachmentId, in: directory)
         try data.write(to: url, options: .atomic)
         return url
+    }
+
+    /// Écrit le fichier d'ORIGINE, sans réencodage, HORS du fil principal :
+    /// les octets qui partent sont exactement ceux du pack.
+    @MainActor
+    static func prepare(_ original: OriginalFile,
+                        id attachmentId: String,
+                        directory: URL) async throws -> WrittenSticker {
+        try await Task.detached(priority: .userInitiated) {
+            let url = StickerSendPipeline.fileURL(id: attachmentId, in: directory, mimeType: original.mimeType)
+            try original.data.write(to: url, options: .atomic)
+            return WrittenSticker(url: url, data: original.data)
+        }.value
     }
 
     /// Encode puis écrit, HORS du fil principal.

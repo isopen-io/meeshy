@@ -10,6 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -85,8 +86,8 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       messages,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
     });
@@ -150,7 +151,7 @@ describe('« Copier » une sélection de messages', () => {
     clipboardThat({ write: 'rejects', legacy: false });
     const messages = [ordinary('m1'), ordinary('m2')];
     const { api, announced } = mount(messages);
-    act(() => api().onMenuAction('m1', 'forward'));
+    act(() => api().onMenuAction('m1', 'select'));
     act(() => api().onRowTap('m2'));
     act(() => api().onCopySelection(messages.map((m) => ({ message: { id: m.id } }))));
     await settle();
@@ -161,7 +162,7 @@ describe('« Copier » une sélection de messages', () => {
     const written = clipboardThat({ write: 'resolves', legacy: false });
     const messages = [ordinary('m1'), ordinary('m2')];
     const { api, announced } = mount(messages);
-    act(() => api().onMenuAction('m1', 'forward'));
+    act(() => api().onMenuAction('m1', 'select'));
     act(() => api().onRowTap('m2'));
     act(() => api().onCopySelection(messages.map((m) => ({ message: { id: m.id } }))));
     await settle();

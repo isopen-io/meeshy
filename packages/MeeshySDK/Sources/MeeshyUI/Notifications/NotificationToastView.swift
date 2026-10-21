@@ -21,6 +21,15 @@ public struct NotificationToastView: View {
     // `colorScheme` keeps theme-flip reactivity; `theme` is accessed
     // non-observingly for its derived text colors.
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.meeshyPresenceResolver) private var presenceResolver
+
+    /// La présence servie de l'ACTEUR (#10956) — seulement quand l'avatar le représente :
+    /// retombé sur la photo du groupe (`toastAvatarURL`), il ne porte aucun point de personne.
+    private var actorPresence: PresenceState? {
+        let showsGroup = (event.senderAvatar?.isEmpty ?? true) && !event.isDirect && event.conversationAvatar?.isEmpty == false
+        guard !showsGroup else { return nil }
+        return event.senderId.flatMap { presenceResolver?($0) }
+    }
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var notifType: MeeshyNotificationType { event.notificationType }
@@ -183,7 +192,8 @@ public struct NotificationToastView: View {
                 name: event.toastAvatarName,
                 context: .notification,
                 accentColor: avatarColorHex,
-                avatarURL: event.toastAvatarURL
+                avatarURL: event.toastAvatarURL,
+                presenceState: actorPresence
             )
             .shadow(color: .black.opacity(isDark ? 0.35 : 0.12), radius: 4, y: 2)
 

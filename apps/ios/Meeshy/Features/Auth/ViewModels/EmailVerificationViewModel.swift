@@ -106,7 +106,7 @@ final class EmailVerificationViewModel: ObservableObject {
             case .pending, nil:
                 break
             }
-            try? await Task.sleep(for: watchInterval)
+            _ = await cancellableSleep(for: watchInterval)
         }
     }
 
@@ -129,10 +129,16 @@ final class EmailVerificationViewModel: ObservableObject {
     /// refermée (#8059). Ouvrir la session bascule la racine de l'app et
     /// démonte l'écran de connexion : ce qu'il présente encore resterait
     /// orphelin, figé sur « Email vérifié ! ». Idempotent.
+    ///
+    /// #10450 — une session que l'appareil refuse de poser (un autre compte y
+    /// est ouvert) n'est ni ouverte ni célébrée : l'écran le dit.
     func openProvenSession() {
         guard let proven = provenSession else { return }
         provenSession = nil
-        confirmer.openSession(proven.originating(from: sessionOrigin))
+        guard confirmer.openSession(proven.originating(from: sessionOrigin)) else {
+            error = EmailProofErrorText.sessionNotOpened()
+            return
+        }
         sessionOpened = true
         if celebratesArrival {
             celebration.begin(userId: proven.user.id)
@@ -148,7 +154,7 @@ final class EmailVerificationViewModel: ObservableObject {
         do {
             try await authService.resendVerificationEmail(email: email)
             resendSuccess = true
-            try? await Task.sleep(for: .seconds(3))
+            _ = await cancellableSleep(for: .seconds(3))
             resendSuccess = false
         } catch {
             self.error = EmailProofErrorText.resendMessage(for: error)

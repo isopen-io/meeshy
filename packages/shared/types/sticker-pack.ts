@@ -26,12 +26,23 @@
  * @see schema.prisma — `StickerPack`, `StickerPackItem`, `UserStickerPack`
  */
 import * as z from 'zod/mini';
+import {
+  PACK_LIMITS,
+  PACK_SLUG_PATTERN,
+  PACK_STATUSES,
+  isPackInstalled,
+  isReservedPackSlug,
+  type PackRegistries,
+  type PackStatus,
+  type PackSummaryBase,
+} from './content-pack.js';
 
 export const STICKER_KINDS = ['static', 'cinematic', 'instant'] as const;
 export type StickerKind = (typeof STICKER_KINDS)[number];
 
-export const STICKER_PACK_STATUSES = ['pending', 'approved', 'rejected'] as const;
-export type StickerPackStatus = (typeof STICKER_PACK_STATUSES)[number];
+/** Les statuts d'une proposition — ceux du moteur des packs (`content-pack.ts`), sous leur nom historique. */
+export const STICKER_PACK_STATUSES = PACK_STATUSES;
+export type StickerPackStatus = PackStatus;
 
 export const STICKER_TEXT_WEIGHTS = ['regular', 'bold', 'black'] as const;
 export type StickerTextWeight = (typeof STICKER_TEXT_WEIGHTS)[number];
@@ -44,10 +55,10 @@ export const STICKER_PACK_LIMITS = {
   canvas: 512,
   minItems: 3,
   maxItems: 120,
-  maxSlugLength: 24,
-  maxNameLength: 40,
-  maxDescriptionLength: 280,
-  maxAuthorLength: 40,
+  maxSlugLength: PACK_LIMITS.maxSlugLength,
+  maxNameLength: PACK_LIMITS.maxNameLength,
+  maxDescriptionLength: PACK_LIMITS.maxDescriptionLength,
+  maxAuthorLength: PACK_LIMITS.maxAuthorLength,
   maxKeyLength: 32,
   maxTitleLength: 40,
   maxZones: 3,
@@ -59,12 +70,12 @@ export const STICKER_PACK_LIMITS = {
   /** Une zone trop étroite ne loge pas même un mot court. */
   minZoneEdge: 32,
   /** Les propositions en attente d'un même auteur. */
-  maxPendingPerAuthor: 3,
-  maxReviewNoteLength: 280,
+  maxPendingPerAuthor: PACK_LIMITS.maxPendingPerAuthor,
+  maxReviewNoteLength: PACK_LIMITS.maxReviewNoteLength,
 } as const;
 
 /** Le slug devient l'adresse du pack et le préfixe de ses gabarits : `pack.<slug>.<clé>`. */
-export const STICKER_PACK_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+export const STICKER_PACK_SLUG_PATTERN = PACK_SLUG_PATTERN;
 export const STICKER_ITEM_KEY_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 /** Les clés de zone deviennent les clés de `MessageSticker.slots` — même forme que la passerelle admet. */
 export const STICKER_SLOT_PATTERN = /^[a-z][a-zA-Z0-9]*$/;
@@ -333,20 +344,17 @@ export type StickerPackItem = {
   readonly zones: readonly StickerTextZone[];
 };
 
-export type StickerPackSummary = {
-  readonly slug: string;
-  readonly name: string;
-  readonly description: string;
-  readonly author: string;
-  /** Dessiné par le client (Mee, Meo, Mee & Meo) : aucun fichier côté serveur. */
-  readonly builtin: boolean;
-  readonly status: StickerPackStatus;
-  readonly itemCount: number;
+/**
+ * La projection `sticker` du résumé du moteur (`PackSummaryBase`), plus ses
+ * genres — identique à l'octet à ce que servent les clients publiés.
+ * `builtin` : dessiné par le client (Mee, Meo, Mee & Meo), `coverUrl` alors `null`.
+ */
+export type StickerPackSummary = PackSummaryBase & {
   readonly kinds: readonly StickerKind[];
-  /** L'image de vitrine — `null` pour un pack intégré, que le client dessine. */
-  readonly coverUrl: string | null;
-  readonly installed: boolean;
-  readonly installCount: number;
+  /** Le prix en Meeshes ; `null` ou absent = gratuit (additif, ignoré par les anciens clients). */
+  readonly price?: number | null;
+  /** Gratuit ⇒ `true` ; payant ⇒ une ligne de possession existe (additif). */
+  readonly owned?: boolean;
 };
 
 export type StickerPackDetail = StickerPackSummary & {
@@ -394,17 +402,14 @@ export const STICKER_PACK_AUTHOR_MEESHY = 'Meeshy';
 
 export const isBuiltinStickerPackSlug = (slug: string): boolean => BUILTIN_STICKER_PACKS.some((pack) => pack.slug === slug);
 
-/** Les segments d'adresse de l'API des packs et les onglets fixes de la feuille de stickers, qu'aucun slug ne peut prendre. */
-const ROUTE_SEGMENTS: ReadonlySet<string> = new Set(['submissions', 'pending', 'installed', 'mine', 'favorites', 'shop']);
+const STICKER_REGISTRIES: PackRegistries = { sticker: BUILTIN_STICKER_PACKS };
 
-/** Un slug qu'un tiers ne peut pas prendre : celui d'un pack intégré ou d'une adresse de l'API. */
-export const isReservedStickerPackSlug = (slug: string): boolean => isBuiltinStickerPackSlug(slug) || ROUTE_SEGMENTS.has(slug);
+/** Un slug qu'un tiers ne peut pas prendre : celui d'un pack intégré ou d'une adresse de l'API — la règle du moteur, domaine `sticker`. */
+export const isReservedStickerPackSlug = (slug: string): boolean => isReservedPackSlug('sticker', slug, STICKER_REGISTRIES);
 
-/** Un pack est installé si l'utilisateur l'a installé ; sans choix de sa part, selon le défaut du pack. */
-export function isStickerPackInstalled(slug: string, choice: { readonly installed: boolean } | undefined): boolean {
-  if (choice !== undefined) return choice.installed;
-  return BUILTIN_STICKER_PACKS.find((pack) => pack.slug === slug)?.installedByDefault ?? false;
-}
+/** Un pack est installé si l'utilisateur l'a installé ; sans choix de sa part, selon le défaut du pack — la règle du moteur, domaine `sticker`. */
+export const isStickerPackInstalled = (slug: string, choice: { readonly installed: boolean } | undefined): boolean =>
+  isPackInstalled('sticker', slug, choice, STICKER_REGISTRIES);
 
 // ── Le gabarit d'un sticker de pack dans un message ─────────────────────
 

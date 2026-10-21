@@ -12,10 +12,12 @@
 import Foundation
 
 public enum WorldEndpoint: MeeshyEndpoint, Sendable {
+    case participantsByParticipantId(participantId: String)
     case root
 
     public var path: String {
         switch self {
+        case .participantsByParticipantId(let participantId): return "/api/v1/world/participants/\(participantId)"
         case .root: return "/api/v1/world"
         }
     }

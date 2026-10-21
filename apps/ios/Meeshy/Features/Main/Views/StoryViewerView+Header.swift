@@ -28,14 +28,17 @@ import MeeshyUI
 ///
 /// Le même menu pour TOUT lecteur, sa story ou celle d'un autre : la lecture
 /// (plein écran, transcription), « Composer », UN sous-menu « Partager »
-/// (exporter en vidéo, partager à un ami), l'action sur la story (signaler, ou
-/// supprimer la sienne), puis « Fermer ». Envoyer et republier restent au rail.
+/// (exporter en vidéo, partager à un ami, republier en post ou en réel),
+/// l'action sur la story (signaler, ou supprimer la sienne), puis « Fermer ».
+/// Envoyer et « Republier » (en story, d'un tap) restent au rail.
 nonisolated enum StoryOptionsMenuEntry: Hashable {
     case fullscreen
     case transcript
     case compose
     case share
     case report
+    /// #11151 — la modération retire la story d'un autre, avec un motif.
+    case remove
     case delete
     case close
 }
@@ -45,9 +48,14 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
 ///   (`StoryExportShareSheet`), qu'offrait le bouton « Partager » du rail auteur.
 /// - `shareWithFriend` : la feuille du système — le lien traçable, et le
 ///   fichier pour « Enregistrer la vidéo », AirDrop, Fichiers.
+/// - `repostAsPost` / `repostAsReel` : la republication d'un tap
+///   (`StoryDirectRepost`), la même que « Republier » du rail, vers une autre
+///   cible.
 nonisolated enum StoryShareMenuEntry: Hashable {
     case exportVideo
     case shareWithFriend
+    case repostAsPost
+    case repostAsReel
 }
 
 nonisolated struct StoryOptionsMenuPlan: Equatable {
@@ -59,23 +67,27 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
     /// `isPublicStory` ne garde que « Partager à un ami » : son lien
     /// `meeshy.me/l/…` s'ouvre sans compte et élargirait l'audience d'une story
     /// FRIENDS ou PRIVATE. L'export vidéo, lui, est offert sur toute story —
-    /// comme l'était « Enregistrer » (#8823).
+    /// comme l'était « Enregistrer » (#8823). Republier en post ou en réel est
+    /// offert sur TOUTE story, la sienne comprise (porteur, 2026-10-10), et sur
+    /// toute audience — la loi d'audience du serveur borne le résultat.
     static func resolve(
         hasStory: Bool,
         isOwnStory: Bool,
         isPublicStory: Bool,
         hasAudioTranscript: Bool,
-        canCompose: Bool
+        canCompose: Bool,
+        canRemove: Bool = false
     ) -> StoryOptionsMenuPlan {
         let reading: [StoryOptionsMenuEntry] = hasAudioTranscript ? [.fullscreen, .transcript] : [.fullscreen]
         guard hasStory else {
             return StoryOptionsMenuPlan(sections: [reading, [.close]], shareEntries: [])
         }
         let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
-        let sharing: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
-        let acting: StoryOptionsMenuEntry = isOwnStory ? .delete : .report
+        let exporting: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
+        let sharing: [StoryShareMenuEntry] = exporting + [.repostAsPost, .repostAsReel]
+        let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .remove] : [.report])
         return StoryOptionsMenuPlan(
-            sections: [reading, composing, [.share], [acting], [.close]].filter { !$0.isEmpty },
+            sections: [reading, composing, [.share], acting, [.close]].filter { !$0.isEmpty },
             shareEntries: sharing
         )
     }
@@ -107,7 +119,6 @@ struct StoryHeaderView: View {
     @Binding var showAudioTranscript: Bool
 
     @Binding var selectedProfileUser: ProfileSheetUser?
-    @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     @Binding var showReportSheet: Bool
 
     /// Holds the freshly-minted `meeshy.me/l/<token>` URL for the current
@@ -131,7 +142,7 @@ struct StoryHeaderView: View {
                 generateLink: true
             )
             if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
-                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, authorUsername: currentGroup?.username))
+                shareableStoryLink = ShareableLink(url: url, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
                 HapticFeedback.light()
                 return
             }
@@ -139,7 +150,7 @@ struct StoryHeaderView: View {
             // intentional fall-through: try raw URL fallback
         }
         if let fallback {
-            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, authorUsername: currentGroup?.username))
+            shareableStoryLink = ShareableLink(url: fallback, fileSource: .story(story, author: currentGroup.map(StoryExportAuthor.init(group:))))
             HapticFeedback.light()
         } else {
             FeedbackToastManager.shared.showError(
@@ -147,9 +158,7 @@ struct StoryHeaderView: View {
         }
     }
 
-    /// Partage INTERNE, « Republier en post » et « Citer en post » ont quitté le
-    /// menu (#9953) : « Envoyer » et « Republier » restent au rail. Leurs liens
-    /// restent câblés jusqu'ici pour qu'un retour au menu ne coûte qu'une entrée.
+    /// Le partage INTERNE a quitté le menu (#9953) : « Envoyer » reste au rail.
     @Binding var sharedContentWrapper: SharedContentWrapper?
 
     /// « Partager ▸ Exporter en vidéo » (#9953) : la feuille d'export au choix
@@ -157,8 +166,8 @@ struct StoryHeaderView: View {
     @Binding var showExportShareSheet: Bool
 
     let makeStoryExternalShareURL: (String) -> URL?
-    let deleteCurrentStory: () -> Void
-    let repostAsPostDirect: () -> Void
+    /// `nil` : l'auteur supprime ; un motif : la modération retire (#11151).
+    let deleteCurrentStory: (_ reason: String?) -> Void
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
@@ -184,6 +193,10 @@ struct StoryHeaderView: View {
     /// aussi ce qui tient l'aperçu du composer hors du menu : il monte le
     /// lecteur SANS conteneur, donc sans hôte de présentation.
     @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+    /// L'humeur de la personne dont on ouvre le profil, et son toucher (#10529) —
+    /// les résolveurs de la racine, hérités par la visionneuse et sa feuille.
+    @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
+    @Environment(\.meeshyMoodTapResolver) private var moodTapResolver
     /// Le menu « … » ouvert fait BOUCLER la story (#9821) : l'en-tête le dit au
     /// lecteur, qui seul survit aux ticks de la barre.
     @Environment(\.storyOptionsMenuPresenceChange) private var optionsMenuPresenceChange: ((Bool) -> Void)?
@@ -261,11 +274,13 @@ struct StoryHeaderView: View {
                                 // l'anneau « story dispo » serait redondant (cf. user
                                 // request 2026-05-27). Le contexte `.storyViewer` suffit
                                 // déjà à masquer l'anneau via `showsStoryRing == false`.
-                                MeeshyAvatar(
+                                LivePresence { MeeshyAvatar(
                                     name: group.username,
                                     context: .storyViewer,
                                     accentColor: group.avatarColor,
                                     avatarURL: group.avatarURL,
+                                    presenceState: PresenceManager.shared.presenceState(for: group.id, served: group.authorPresence),
+                                    ring: group.authorRing,
                                     onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                     contextMenuItems: [
                                         AvatarContextMenuItem(
@@ -275,7 +290,7 @@ struct StoryHeaderView: View {
                                             selectedProfileUser = .from(storyGroup: group)
                                         }
                                     ]
-                                )
+                                ) }
                                 .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
                             }
                             .onLongPressGesture(minimumDuration: 0.4) {
@@ -366,7 +381,6 @@ struct StoryHeaderView: View {
                     }
                 }
             }
-            .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
         }
         .padding(.horizontal, FullscreenTopBarLayout.horizontalPadding)
         .adaptiveOnChange(of: currentStory?.id, initial: true) { _, _ in
@@ -375,6 +389,8 @@ struct StoryHeaderView: View {
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
+                moodEmoji: moodEmojiResolver?(user.userId ?? ""),
+                onMoodTap: moodTapResolver?(user.userId ?? ""),
                 presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
                 postsContent: { uid in AnyView(ProfileUserPostsList(
                     userId: uid,
@@ -419,7 +435,8 @@ struct StoryHeaderView: View {
             isOwnStory: isOwnStory,
             isPublicStory: currentStory?.isPublic ?? false,
             hasAudioTranscript: hasAudioTranscript,
-            canCompose: composableSlide != nil && demanderComposer != nil
+            canCompose: composableSlide != nil && demanderComposer != nil,
+            canRemove: ContentRemovalPolicy.mayRemovePublication(authoredByViewer: isOwnStory, platformRole: AuthManager.shared.currentUser?.role)
         )
     }
 
@@ -483,18 +500,8 @@ struct StoryHeaderView: View {
                 Label(String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main),
                       systemImage: "square.and.arrow.up")
             }
-        case .report:
-            Button(role: .destructive) {
-                showReportSheet = true
-            } label: {
-                Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
-            }
-        case .delete:
-            Button(role: .destructive) {
-                deleteCurrentStory()
-            } label: {
-                Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
-            }
+        case .report, .remove, .delete:
+            actingMenuItem(entry)
         case .close:
             Button {
                 dismissViewer()
@@ -502,6 +509,35 @@ struct StoryHeaderView: View {
                 Label(String(localized: "common.close", defaultValue: "Fermer", bundle: .main),
                       systemImage: FullscreenChromeSymbol.close)
             }
+        }
+    }
+
+    /// Ce que le lecteur FAIT de la story : la signaler, la retirer (modération,
+    /// #11151) ou la supprimer (l'auteur).
+    @ViewBuilder
+    private func actingMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
+        switch entry {
+        case .remove:
+            Button(role: .destructive) {
+                HapticFeedback.medium()
+                ContentRemovalPresenter.present(.story) { deleteCurrentStory($0) }
+            } label: {
+                Label(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), systemImage: ContentRemovalKind.symbol)
+            }
+        case .delete:
+            Button(role: .destructive) {
+                deleteCurrentStory(nil)
+            } label: {
+                Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
+            }
+        case .report:
+            Button(role: .destructive) {
+                showReportSheet = true
+            } label: {
+                Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
+            }
+        default:
+            EmptyView()
         }
     }
 
@@ -527,14 +563,31 @@ struct StoryHeaderView: View {
                     Label(String(localized: "story.viewer.share.friend", defaultValue: "Partager à un ami", bundle: .main), systemImage: "person.2")
                 }
             }
+        case .repostAsPost:
+            if let story = currentStory {
+                Button {
+                    StoryDirectRepost.publish(story, as: .post)
+                } label: {
+                    Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "infinity")
+                }
+            }
+        case .repostAsReel:
+            if let story = currentStory {
+                Button {
+                    StoryDirectRepost.publish(story, as: .reel)
+                } label: {
+                    Label(String(localized: "story.viewer.repostAsReel", defaultValue: "Republier en réel", bundle: .main), systemImage: "play.rectangle.on.rectangle")
+                }
+            }
         }
     }
 
-    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Une slide
-    /// à deux médias, une slide sans média ni texte : aucune cible, donc aucune
-    /// entrée. Le Prisme du lecteur descend sur le texte qui pré-remplira la
-    /// description — la graine d'un composer est du CONTENU, et le Prisme
-    /// s'applique à tout le contenu.
+    /// **La règle d'offre décide, pas le menu** (critère 2 de #6085). Depuis
+    /// #9994 elle reprend la SCÈNE entière — plusieurs médias, textes posés,
+    /// stickers, effets ; seule une slide qui ne porte rien, ou qu'on ne saurait
+    /// recréer à l'identique, n'a pas de cible, donc pas d'entrée. Le Prisme du
+    /// lecteur descend sur le texte qui pré-remplira la description — la graine
+    /// d'un composer est du CONTENU, et le Prisme s'applique à tout le contenu.
     private func resolveComposableSlide() -> ComposerSeedTarget? {
         guard demanderComposer != nil, let story = currentStory else { return nil }
         return ComposerSeedTarget(

@@ -26,6 +26,7 @@ import arSignup from './catalog-ar-signup';
 import arGallery from './catalog-ar-gallery';
 import arMessageCard from './catalog-ar-message-card';
 import arMentions from './catalog-ar-mentions';
+import arShellLabels from './catalog-ar-shell-labels';
 import arStudioChrome from './catalog-ar-studio-chrome';
 import arEphemeral from './catalog-ar-ephemeral';
 import arWriteRestriction from './catalog-ar-write-restriction';
@@ -38,6 +39,10 @@ import arContactDiscovery from './catalog-ar-contact-discovery';
 import arDownload from './catalog-ar-download';
 import arPhonePrompt from './catalog-ar-phone-prompt';
 import arUserProfile from './catalog-ar-user-profile';
+import arContentRefused from './catalog-ar-content-refused';
+import arContentRemoval from './catalog-ar-content-removal';
+import arPublicEntry from './catalog-ar-public-entry';
+import arThreadSearch from './catalog-ar-thread-search';
 
 const ar = {
   'announce.messageSent': 'تم إرسال الرسالة',
@@ -304,6 +309,7 @@ const ar = {
   'notFound.title': 'هذا العنوان غير موجود.',
 
   'pending.back': 'العودة إلى المحادثات',
+  'pending.screen': 'الشاشة في الطريق',
 
   'linkPage.home': 'العودة إلى Meeshy',
   'linkPage.retry': 'إعادة المحاولة',
@@ -320,8 +326,6 @@ const ar = {
   'trackingLink.opening': 'جارٍ فتح الرابط…',
   'trackingLink.dead.title': 'هذا الرابط لم يعد متاحًا',
   'trackingLink.dead.body': 'انتهت صلاحيته أو تم تعطيله أو لم يكن موجودًا قط.',
-  'accountDeletion.incomplete.title': 'رابط غير مكتمل',
-  'accountDeletion.incomplete.body': 'لا يحمل هذا الرابط المعلومات اللازمة. سجّل الدخول لطلب حذف حسابك.',
   'accountDeletion.confirm.title': 'تأكيد حذف حسابك',
   'accountDeletion.confirm.body': 'سيتم تعطيل حسابك بعد انتهاء فترة سماح مدتها 30 يومًا. وحتى ذلك الحين، يتيح لك رابط «إلغاء» في البريد الإلكتروني التراجع.',
   'accountDeletion.confirm.action': 'تأكيد الحذف',
@@ -399,6 +403,8 @@ const ar = {
   'profile.avatar.updated': 'تم تحديث صورة الملف الشخصي',
   'profile.avatar.error': 'تعذّر تحديث صورة الملف الشخصي',
   'profile.banner.edit': 'تعديل صورة الغلاف',
+  'profile.avatar.view': 'عرض صورة الملف الشخصي بملء الشاشة',
+  'profile.banner.view': 'عرض صورة الغلاف بملء الشاشة',
   'profile.banner.updated': 'تم تحديث صورة الغلاف',
   'profile.banner.error': 'تعذّر تحديث صورة الغلاف',
   'profile.image.uploading': 'جارٍ الإرسال',
@@ -699,55 +705,6 @@ const ar = {
   'links.announce.activated': 'تم تفعيل الرابط',
   'links.announce.toggleFailed': 'تعذّر تعديل هذا الرابط',
   'links.announce.offline': 'غير متصل: لم يُرسَل شيء.',
-  'links.create.title': 'رابط مشاركة جديد',
-  'links.create.section.conversation': 'المحادثة',
-  'links.create.choose': 'اختر مجموعة أو مجتمعًا',
-  'links.create.picker.title': 'اختر محادثة',
-  'links.create.picker.empty': 'لا توجد محادثة يمكنها استقبال رابط حاليًا.',
-  'links.create.section.identity': 'هوية الرابط',
-  'links.create.name': 'اسم الرابط',
-  'links.create.name.placeholder': 'مثال: مشاركة على تويتر',
-  'links.create.description': 'الوصف (اختياري)',
-  'links.create.description.placeholder': 'مثال: انضمّ إلى مجموعتنا…',
-  'links.create.section.access': 'وصول الضيوف',
-  'links.create.section.access.subtitle': 'ما يجب أن يقدّمه الزوار للانضمام',
-  'links.create.access.account': 'الحساب مطلوب',
-  'links.create.access.account.caption': 'لا ينضمّ إلا أعضاء Meeshy',
-  'links.create.access.nickname': 'الاسم المستعار مطلوب',
-  'links.create.access.nickname.caption': 'على الزائر اختيار اسم مستعار',
-  'links.create.access.email': 'البريد الإلكتروني مطلوب',
-  'links.create.access.email.caption': 'على الزائر تقديم بريده الإلكتروني',
-  'links.create.access.birthday': 'تاريخ الميلاد مطلوب',
-  'links.create.access.birthday.caption': 'يتيح التحقّق من العمر',
-  'links.create.section.permissions': 'الأذونات',
-  'links.create.section.permissions.subtitle': 'ما يمكن للضيوف المجهولين فعله',
-  'links.create.permission.messages': 'إرسال الرسائل',
-  'links.create.permission.messages.caption': 'يمكن للضيوف الكتابة في المحادثة',
-  'links.create.permission.images': 'إرسال الصور',
-  'links.create.permission.images.caption': 'يمكن للضيوف مشاركة الصور',
-  'links.create.permission.files': 'إرسال الملفات',
-  'links.create.permission.files.caption': 'يمكن للضيوف إرسال المستندات',
-  'links.create.permission.history': 'عرض السجل',
-  'links.create.permission.history.caption': 'يرى الضيوف الرسائل السابقة',
-  'links.create.section.limits': 'الحدود',
-  'links.create.section.limits.subtitle': 'تحكّم في جمهور الرابط ومدة صلاحيته',
-  'links.create.limit.uses': 'تحديد عدد الاستخدامات',
-  'links.create.limit.max.one': '{count} استخدام كحد أقصى',
-  'links.create.limit.max.other': '{count} استخدامات كحد أقصى',
-  'links.create.limit.count': 'عدد الاستخدامات',
-  'links.create.limit.invalid': 'اختر عددًا صحيحًا بين 1 و{max}.',
-  'links.create.expiration': 'انتهاء الصلاحية',
-  'links.create.expiration.never': 'أبدًا',
-  'links.create.expiration.h24': '24 ساعة',
-  'links.create.expiration.d7': '7 أيام',
-  'links.create.expiration.d30': '30 يومًا',
-  'links.create.expiration.m3': '3 أشهر',
-  'links.create.button': 'إنشاء رابط المشاركة',
-  'links.create.inprogress': 'جارٍ الإنشاء…',
-  'links.create.error.conversation': 'اختر محادثة أولًا.',
-  'links.create.error.offline': 'غير متصل: لم يُنشأ الرابط.',
-  'links.create.error.refused': 'لا يمكنك إنشاء رابط لهذه المحادثة.',
-  'links.create.error.default': 'تعذّر إنشاء الرابط. أعد المحاولة.',
 
   'feed.scene.carousel.previous': 'المشهد السابق',
   'feed.scene.carousel.next': 'المشهد التالي',
@@ -784,6 +741,8 @@ const ar = {
   'story.studio.kind.reel': 'ريل',
   'story.studio.refusal.reel': 'يحتاج الريل إلى فيديو أو صوت لا يقل عن 3 ثوانٍ، أو صورتين على الأقل.',
   'story.studio.offline': 'غير متصل — ستُنشر القصة عند عودة الشبكة.',
+  'story.studio.pending.sending': 'جارٍ إرسال المنشور.',
+  'story.studio.pending.cancel': 'إلغاء الإرسال',
   'story.studio.stage': 'معاينة القصة',
   'story.studio.background.add': 'إضافة صورة أو فيديو',
   'story.studio.background.label': 'الخلفية',
@@ -920,6 +879,8 @@ const ar = {
   'story.action.reply': 'رد',
   'story.action.forward': 'إرسال',
   'story.action.repost': 'إعادة نشر',
+  'story.viewer.repost': 'إعادة نشر',
+  'story.viewer.repostOf': 'أُعيد نشره من @{handle}',
   'story.action.views': 'المشاهدات',
   'story.action.share': 'مشاركة',
   'story.action.save': 'حفظ',
@@ -1092,6 +1053,7 @@ const ar = {
   'message.detail.language.original': '{language} (الأصل)',
 
   ...arMentions,
+  ...arShellLabels,
   ...arStudioChrome,
   ...arEphemeral,
   ...arWriteRestriction,
@@ -1100,11 +1062,17 @@ const ar = {
   ...arConversationCard,
   ...arStoriesMine,
   'settings.tools.sounds': 'أصواتي',
+  'settings.section.packs': 'الحزم والتنزيلات',
+  'settings.packs.shop': 'متجر الملصقات والإطارات',
   ...arContactCard,
   ...arQuote,
   ...arCommentRow,
   ...arContactDiscovery,
   ...arUserProfile,
+  ...arContentRefused,
+  ...arContentRemoval,
+  ...arPublicEntry,
+  ...arThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default ar;

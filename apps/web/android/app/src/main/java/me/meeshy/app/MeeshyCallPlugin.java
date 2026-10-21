@@ -49,7 +49,8 @@ import java.util.List;
  * en image dans l'image, ou l'app revient au plein ecran. La fenetre porte
  * micro et raccrocher : `pictureInPictureAction { action: mic | hangup }`,
  * l'etat du micro et le format de la video venant de
- * `setPictureInPictureControls({ micMuted, aspectWidth, aspectHeight })`.
+ * `setPictureInPictureControls({ micMuted, floats, aspectWidth, aspectHeight })`
+ * — `floats` : une video est a l'ecran, l'appel vocal flotte aussi (#11346).
  *
  * Evenement `callAnswer { callId }` : « Repondre » touche sur la notification.
  * RETENU jusqu'a l'abonnement de la page (`retainUntilConsumed`), comme les
@@ -63,6 +64,7 @@ public class MeeshyCallPlugin extends Plugin {
     private volatile boolean video;
     private String route;
     private volatile boolean micMuted;
+    private volatile boolean floats;
     private volatile int aspectWidth;
     private volatile int aspectHeight;
     private BroadcastReceiver pipButtons;
@@ -110,6 +112,7 @@ public class MeeshyCallPlugin extends Plugin {
         video = wantsVideo;
         CallForegroundService.start(getContext(), wantsVideo);
         keepScreenOn(true);
+        if (starting) volumeKeys(true);
         if (starting && audio != null) {
             audio.setMode(AudioManager.MODE_IN_COMMUNICATION);
             applyRoute(audio, CallAudioRoutes.defaultRoute(wantsVideo, CallAudioRoutes.available(deviceTypes(audio))));
@@ -182,12 +185,13 @@ public class MeeshyCallPlugin extends Plugin {
     /** #8144 — l'appel en cours flotte-t-il quand l'utilisateur quitte l'app ? Lu par `MainActivity`. */
     boolean floatsInPictureInPicture() {
         boolean supported = getContext().getPackageManager().hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
-        return CallShellRules.entersPictureInPicture(Build.VERSION.SDK_INT, callActive, video, supported);
+        return CallShellRules.entersPictureInPicture(Build.VERSION.SDK_INT, callActive, video, floats, supported);
     }
 
     @PluginMethod
     public void setPictureInPictureControls(PluginCall call) {
         micMuted = Boolean.TRUE.equals(call.getBoolean("micMuted", false));
+        floats = Boolean.TRUE.equals(call.getBoolean("floats", false));
         aspectWidth = call.getInt("aspectWidth", 0);
         aspectHeight = call.getInt("aspectHeight", 0);
         refreshPictureInPicture();
@@ -260,6 +264,7 @@ public class MeeshyCallPlugin extends Plugin {
         boolean wasActive = callActive;
         callActive = false;
         micMuted = false;
+        floats = false;
         aspectWidth = 0;
         aspectHeight = 0;
         CallForegroundService.stop(getContext());
@@ -268,7 +273,15 @@ public class MeeshyCallPlugin extends Plugin {
         updateProximity();
         AudioManager audio = audio();
         if (wasActive && audio != null) restoreAudio(audio);
+        if (wasActive) volumeKeys(false);
         route = null;
+    }
+
+    /** #10375 — pendant l'appel, les touches de volume reglent la voix ; ensuite, les medias. */
+    private void volumeKeys(boolean inCall) {
+        Activity activity = getActivity();
+        if (activity == null) return;
+        activity.runOnUiThread(() -> activity.setVolumeControlStream(VolumeStreamRules.stream(inCall)));
     }
 
     private AudioManager audio() {
@@ -286,7 +299,7 @@ public class MeeshyCallPlugin extends Plugin {
         AudioDeviceInfo[] outputs = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS);
         int[] types = new int[outputs.length];
         for (int i = 0; i < types.length; i++) types[i] = outputs[i].getType();
-        return types;
+        return CallAudioRoutes.routableTypes(types, Build.VERSION.SDK_INT);
     }
 
     @SuppressWarnings("deprecation")

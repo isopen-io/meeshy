@@ -131,7 +131,7 @@ final class FocalElectedLoupeTests: XCTestCase {
     // MARK: - 4. La date ouvre les détails du message
 
     func test_theElectedDate_opensTheMessageDetails_likeTheMenu() throws {
-        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+        let row = try normalized("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift")
         let chip = try XCTUnwrap(row.range(of: "private var focusStampChip: some View {"))
         let body = String(row[chip.lowerBound...].prefix(900))
         XCTAssertTrue(body.contains("actions.onShowMessageInfo?(content.messageId)"), "toucher la date ouvre les détails du message")
@@ -178,7 +178,7 @@ final class FocalElectedLoupeTests: XCTestCase {
         let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().deletingLastPathComponent()
-        let source = try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
+        let source = try AppSourceGuard.text(at: root.appendingPathComponent(relativePath))
         return AppSourceGuard.stripComments(source)
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }

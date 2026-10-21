@@ -11,7 +11,7 @@ final class AnalyticsManager {
     nonisolated deinit {}
     static let shared = AnalyticsManager()
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "analytics")
+    private let logger = MeeshyLog.logger(.analytics)
 
     private init() {
         syncCollectionState()
@@ -68,7 +68,7 @@ extension Route {
         case .progressionSection(let section): return "Progression.\(section.rawValue)"
         case .progressionRules: return "Progression.Rules"
         case .progressionNotebook: return "Progression.Notebook"
-        case .gamePage(let page): return page.analyticsName
+        case .gamePage(let page, _): return page.analyticsName
         case .progressionConcept(let concept, _): return "Progression.Concept.\(concept.rawValue)"
         case .progressionDashboard: return "Progression.Dashboard"
         case .links: return "Links"
@@ -83,6 +83,7 @@ extension Route {
         case .starredMessages: return "StarredMessages"
         case .friendRequests: return "FriendRequests"
         case .storyNotificationTarget: return "StoryNotificationTarget"
+        case .moodSpotlight: return "MoodSpotlight"
         }
     }
 }

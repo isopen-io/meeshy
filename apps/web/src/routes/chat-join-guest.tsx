@@ -5,6 +5,7 @@ import type { GuestDraft, GuestField, GuestTerms } from '@/lib/api/link-join';
 import { translateInvite } from '@/lib/i18n-invite-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { ANONYMOUS_MODE } from '@/lib/links/invitation-view';
 
 /**
  * **LE FORMULAIRE D'INVITÉ** (#5561) — ce qu'on demande à quelqu'un qui n'a pas
@@ -17,9 +18,11 @@ import type { InterfaceLanguage } from '@/lib/interface-language';
  * mais la séparation garde la question « que voit-on avant de choisir ? »
  * lisible d'un seul fichier.
  *
- * **PSEUDO ET LANGUE CÔTE À CÔTE**, l'un et l'autre sur une rangée qui se
- * REPLIE sous 360 px (`flex-wrap`) : c'est ce qui garde l'action primaire dans
- * le premier écran, la mesure que #5561 pose comme critère de fin. E-mail et
+ * **NOM ANONYME ET LANGUE SUR LA MÊME RANGÉE, TÉLÉPHONE COMPRIS** (directive
+ * porteur 2026-10-13) : la langue SUIT le champ du nom, elle ne passe plus
+ * dessous — la rangée ne se replie pas, les deux champs se partagent la
+ * largeur (3 pour 2). C'est aussi ce qui garde l'action primaire dans le
+ * premier écran, la mesure que #5561 pose comme critère de fin. E-mail et
  * date de naissance ne paraissent QUE si le lien les exige — les afficher
  * « au cas où » coûterait deux champs à tout le monde pour une minorité de
  * liens.
@@ -120,8 +123,8 @@ export function GuestForm({
         </p>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
-        <div className="min-w-[10rem] flex-1">
+      <div className="flex gap-3">
+        <div className="min-w-0 flex-[3]">
           <Field
             id="chat-join-nickname"
             label={translateInvite(language, terms.nicknameRequired ? 'invite.guest.nickname' : 'invite.guest.nickname.optional')}
@@ -154,7 +157,7 @@ export function GuestForm({
           </Field>
         </div>
 
-        <div className="min-w-[8rem] flex-1">
+        <div className="min-w-0 flex-[2]">
           <Field
             id="chat-join-language"
             label={translateInvite(language, 'invite.guest.language')}
@@ -298,4 +301,22 @@ export function GuestSubmit({
       )}
     </div>
   );
+}
+
+/**
+ * L'ENTRÉE QU'APPORTE LA LANDING (#10003, D-186) — le nom et la langue déjà
+ * choisis sur meeshy.me, que l'adresse transporte
+ * (`/chat/:link?mode=anonymous&name=…&language=…`). La jonction crée l'invité
+ * avec eux sans redemander : elle ne se dispense jamais d'un champ que le lien
+ * exige en plus (`validateGuestDraft` en décide). Hors mode invité ou sans nom,
+ * il n'y a pas d'entrée — l'invitation s'affiche comme d'ordinaire.
+ */
+export type GuestEntry = { readonly nickname: string; readonly language: string | null };
+
+export function guestEntryOf(search: URLSearchParams): GuestEntry | null {
+  if (search.get('mode') !== ANONYMOUS_MODE) return null;
+  const nickname = (search.get('name') ?? '').trim();
+  if (nickname === '') return null;
+  const language = (search.get('language') ?? '').trim();
+  return { nickname, language: language === '' ? null : language };
 }

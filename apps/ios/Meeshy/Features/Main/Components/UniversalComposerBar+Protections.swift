@@ -79,7 +79,7 @@ extension UniversalComposerBar {
         .accessibilityLabel(isImposed
                             ? String(localized: "composer.ephemeral.imposed", defaultValue: "Mode éphémère imposé par le message cité : \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
                             : isActive
-                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
+                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode éphémère actif: \(EphemeralChoiceCopy.displayLabel(ephemeralChoice.wrappedValue))", bundle: .main)
                             : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode éphémère", bundle: .main))
         .accessibilityRemoveTraits(isImposed ? .isButton : [])
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)

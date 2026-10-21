@@ -1,11 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- #8049 — jumeau API 31+ de backup_rules.xml : le credential du refus
-     d'appel (CallShellStore) n'est ni sauvegarde ni transfere. -->
+     d'appel (CallShellStore) n'est ni sauvegarde ni transfere.
+     #10143 — le stockage de la WebView (session, cache) non plus. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="meeshy_call_shell.xml" />
+        <exclude domain="root" path="app_webview/" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="meeshy_call_shell.xml" />
+        <exclude domain="root" path="app_webview/" />
     </device-transfer>
 </data-extraction-rules>

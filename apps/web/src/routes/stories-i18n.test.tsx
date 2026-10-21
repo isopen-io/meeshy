@@ -66,7 +66,7 @@ describe('routes/stories.tsx — le catalogue d’interface, pas le français en
 
   test('une ligne de story mène au lecteur par l’id d’ENTRÉE du groupe, jamais par `?author=`', () => {
     const html = renderToStaticMarkup(<StoryRow language="fr" group={group({ entryStoryId: 's42' })} />);
-    expect(html).toContain('href="/story/s42"');
+    expect(html).toContain('href="/story/s42?from=story_rail"');
     expect(html).not.toContain('?author=');
     expect(html).toContain('1 story<');
   });

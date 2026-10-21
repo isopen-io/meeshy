@@ -18,6 +18,7 @@ import {
   resolveParticipantFromMessage,
 } from '../../../socketio/utils/participant-resolver';
 import type { SocketUser } from '../../../socketio/utils/socket-helpers';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 // ─── Factories ────────────────────────────────────────────────────────────────
 
@@ -105,7 +106,7 @@ describe('resolveParticipant', () => {
     expect(result!.userId).toBe('anon-token-abc');
     expect(prisma.participant.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'part-anon-1', conversationId: 'conv-1', isActive: true },
+        where: { id: 'part-anon-1', conversationId: 'conv-1', ...PARTICIPATION_VIVANTE },
       })
     );
   });
@@ -248,7 +249,7 @@ describe('resolveParticipant', () => {
 
     expect(prisma.participant.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ userId: 'u-42', conversationId: 'conv-xyz', isActive: true }),
+        where: expect.objectContaining({ userId: 'u-42', conversationId: 'conv-xyz', ...PARTICIPATION_VIVANTE }),
       }),
     );
   });

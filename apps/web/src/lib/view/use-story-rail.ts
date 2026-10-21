@@ -49,6 +49,11 @@ export function useStoryRailProps(viewerId: string | undefined, viewerAvatar?: s
     [tray.data, viewerId, moods.data, seenNow],
   );
 
+  /* LES HUMEURS DU PLATEAU se comptent À L'ÉCRAN (#10483) : chaque tuile
+     observe l'humeur qu'elle porte (`StoryTile`, `moodPostId`), au seuil de
+     visibilité — plus à la réception du corpus, qui comptait aussi les
+     humeurs d'auteurs sans tuile. */
+
   const language = currentInterfaceLanguage();
 
   /**

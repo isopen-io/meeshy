@@ -7,11 +7,11 @@
  */
 
 import { describe, it, expect, jest, beforeAll, afterAll } from '@jest/globals';
+import { postCounterWritesOf } from '../../../helpers/posts-counter-writes';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-const mockRecordAnonymousOpen = jest.fn();
 const mockRecordEngagementBatch = jest.fn();
 const mockSharePost = jest.fn();
 const mockShareWithTrackingLink = jest.fn();
@@ -31,6 +31,14 @@ const mockBookmarkPost = jest.fn().mockResolvedValue({ bookmarkCount: 1 });
 const mockUnbookmarkPost = jest.fn().mockResolvedValue({ bookmarkCount: 0 });
 const mockRecordView = jest.fn().mockResolvedValue(true);
 
+// #10315 — la porte de republication et le verdict d'audience ont leurs propres témoins
+// (`services/posts/__tests__/moderationHold.test.ts`) ; cette suite parle d'autre chose.
+jest.mock('../../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../../services/posts/moderationHold') as object),
+  mayRepostSource: async () => true,
+  audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }),
+}));
+
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     likePost: (...a: any[]) => mockLikePost(...a),
@@ -39,7 +47,6 @@ jest.mock('../../../../services/PostService', () => ({
     unbookmarkPost: (...a: any[]) => mockUnbookmarkPost(...a),
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     sharePost: (...a: any[]) => mockSharePost(...a),
     shareWithTrackingLink: (...a: any[]) => mockShareWithTrackingLink(...a),
@@ -123,6 +130,9 @@ const OTHER_POST_ID = '507f1f77bcf86cd799439033';
  */
 const publicAcl = (id: string) => ({
   id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+  // Ce que la garde ANONYME lit en plus (#10483, `readServableToAnonymous`).
+  deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
+  author: { isActive: true, deletedAt: null, deactivatedAt: null },
 });
 
 /**
@@ -153,7 +163,12 @@ function makeAuth(authenticated: boolean) {
 async function buildApp(authenticated = true): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
-    postImpression: {
+    $runCommandRaw: jest.fn().mockResolvedValue({ ok: 1 }),
+    anonymousPostOpen: {
+      create: jest.fn().mockResolvedValue({}),
+      updateMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn().mockResolvedValue({}),
       createMany: jest.fn().mockResolvedValue({ count: 2 }),
     },
@@ -201,7 +216,6 @@ describe('POST /posts/:postId/anonymous-view', () => {
   });
 
   it('returns 200 with counted=true on valid session key', async () => {
-    mockRecordAnonymousOpen.mockResolvedValueOnce(true);
     const res = await app.inject({
       method: 'POST', url: `/posts/${POST_ID}/anonymous-view`,
       headers: { 'x-session-token': 'valid-session-key' },
@@ -346,7 +360,7 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
   it('increments impressionCount once per occurrence, not once per distinct post', async () => {
     const OTHER = '507f1f77bcf86cd799439033';
     const prisma = (app as any).prisma;
-    prisma.post.updateMany.mockClear();
+    prisma.$runCommandRaw.mockClear();
     prisma.postImpression.createMany.mockClear();
 
     const res = await app.inject({
@@ -362,13 +376,13 @@ describe('POST /posts/impressions/batch (authenticated)', () => {
     expect(created).toHaveLength(3);
 
     // Somme des incréments par post, quelle que soit la façon de grouper les
-    // updates. Le `in` est DÉDUPLIQUÉ avant de sommer : `updateMany` avec
-    // `id: { in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
+    // updates. Le `$in` est DÉDUPLIQUÉ avant de sommer : une mise à jour avec
+    // `_id: { $in: [A, A] }` n'incrémente A qu'une fois côté base — compter le
     // doublon ici ferait passer le test sur le code bogué.
     const increments: Record<string, number> = {};
-    for (const [args] of prisma.post.updateMany.mock.calls as any[]) {
-      const step = args.data.impressionCount.increment as number;
-      for (const id of new Set(args.where.id.in as string[])) {
+    for (const write of postCounterWritesOf(prisma.$runCommandRaw)) {
+      const step = write.data.impressionCount.increment;
+      for (const id of new Set(write.ids)) {
         increments[id] = (increments[id] ?? 0) + step;
       }
     }

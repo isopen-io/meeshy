@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import MeeshyUI
+import MeeshySDK
 
 struct CallWaitingBannerView: View {
     // Audit P2-iOS-11 — refactored from a `show()`-returning-a-new-View
@@ -89,7 +90,7 @@ struct CallWaitingBannerView: View {
                             .frame(minHeight: 44)
                             .background(MeeshyColors.success, in: Capsule())
                     }
-                    .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))
+                    .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et répondre à \(callerName)", bundle: .main))
                     .accessibilityHint(String(localized: "call.waiting.answer.hint", defaultValue: "Termine l'appel en cours et répond au nouvel appel entrant", bundle: .main))
                 }
                 .padding(.horizontal, MeeshySpacing.lg)
@@ -143,8 +144,7 @@ struct CallWaitingBannerView: View {
         autoDismissTask?.cancel()
         let seconds = autoDismissSeconds
         autoDismissTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(seconds))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(seconds)), !Task.isCancelled else { return }
             // Audit 2026-07-02 — ignoring the banner for `autoDismissSeconds`
             // used to just hide it (isVisible = false) without ever calling
             // `onReject()`, unlike the explicit "Refuser" button. The caller

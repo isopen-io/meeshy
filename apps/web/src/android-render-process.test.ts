@@ -11,7 +11,8 @@ import { describe, expect, test } from 'bun:test';
  * recharge l'onglet. Dans la coque, `BridgeWebViewClient` (Capacitor 8.5.1)
  * ne rend `true` à `onRenderProcessGone` que si un `WebViewListener` le fait ;
  * sans lui, Android tue tout le processus et Meeshy se ferme. La coque recrée
- * l'activité, sauf si la perte précédente est trop récente : la règle vit dans
+ * l'activité, sauf si le moteur a PLANTÉ peu après une perte précédente
+ * (un moteur tué par le système pour sa mémoire est toujours recréé, #10276) : la règle vit dans
  * `RendererRecovery` (JUnit), ce témoin garde son branchement.
  */
 
@@ -38,5 +39,11 @@ describe('la perte du moteur de rendu dans la coque Android (#8564)', () => {
     expect(corps).toMatch(/RendererRecovery\.shouldRecover\(/);
     expect(corps).toMatch(/recreate\(\)/);
     expect(corps).toMatch(/return true;/);
+  });
+
+  test('un moteur tué par le système pour sa mémoire est toujours recréé (#10276)', () => {
+    const perte = code.indexOf('public boolean onRenderProcessGone(');
+    const corps = code.slice(perte);
+    expect(corps).toMatch(/RendererRecovery\.shouldRecover\([^)]*detail\.didCrash\(\)\)/);
   });
 });

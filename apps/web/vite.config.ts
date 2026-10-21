@@ -8,16 +8,19 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
+import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from './src/landing/landing-languages.js';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
-import { declaredBuildFlag } from './src/lib/build-flag';
-import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
-import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
-import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
-import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
-import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
-import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
-import { SW_RUNTIME_CACHES } from './src/lib/sw-caches';
+import { declaredBuildFlag } from './src/lib/build-flag.js';
+import { loadedPreloadDeps } from './src/lib/build-preload-deps.js';
+import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity.js';
+import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache.js';
+import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations.js';
+import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness.js';
+import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations.js';
+import { shellApiOrigin, withApiPreconnect } from './src/lib/net/shell-preconnect.js';
+import { SHARE_TARGET } from './src/lib/share-incoming/share-target.js';
+import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches.js';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -64,6 +67,16 @@ const inlineInterfaceLanguageBootstrap = (): Plugin => ({
     }
     return html.replace(INTERFACE_LANGUAGE_BOOTSTRAP_MARKER, INLINE_INTERFACE_LANGUAGE_BOOTSTRAP);
   },
+});
+
+/**
+ * La coque préconnecte sa passerelle dès le HTML (#10534) — voir
+ * `src/lib/net/shell-preconnect.ts`. Le web n'en reçoit pas : son origine
+ * n'est connue qu'à l'exécution (`/config.js`).
+ */
+const shellApiPreconnect = (): Plugin => ({
+  name: 'meeshy-shell-api-preconnect',
+  transformIndexHtml: (html) => withApiPreconnect(html, shellApiOrigin(process.env.VITE_API_BASE)),
 });
 
 /**
@@ -249,6 +262,52 @@ const prerenderInstitutionalPages = (): Plugin => {
 };
 
 /**
+ * LA LANDING DE meeshy.me EST PRÉRENDUE, une page par langue (#10002).
+ *
+ * Même horloge que le préchauffage institutionnel ci-dessus — `closeBundle`
+ * d'un greffon ordinaire, donc AVANT que `vite-plugin-pwa` ne scelle son
+ * manifeste de précache — et même processus séparé (`react-dom/server` lit des
+ * `.tsx`). Variante web SEULEMENT : la coque n'a pas de landing, `/` y ouvre la
+ * liste des conversations (`routes/home-shell.tsx`).
+ */
+const prerenderLanding = (): Plugin => {
+  const root = fileURLToPath(new URL('.', import.meta.url));
+  let outDir = 'dist';
+  return {
+    name: 'meeshy-prerender-landing',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir;
+    },
+    closeBundle: {
+      sequential: true,
+      handler() {
+        const r = spawnSync('bun', ['run', 'scripts/prerender-landing.tsx', resolve(root, outDir)], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (r.status !== 0) {
+          throw new Error(
+            `Le prérendu de la landing a échoué (code ${r.status}). La construction s'arrête : ` +
+              'sans `landing.html`, nginx ne servirait rien sur / et les robots ne liraient aucune balise.',
+          );
+        }
+        /* LES APERÇUS DES ADRESSES DE L'APPLICATION (#10192) — même horloge,
+           même variante : nginx sert ces copies de la coquille aux adresses
+           de l'application, et la coque n'a pas de nginx. */
+        const previews = spawnSync('bun', ['run', 'scripts/prerender-share-previews.ts', resolve(root, outDir)], {
+          cwd: root,
+          stdio: 'inherit',
+        });
+        if (previews.status !== 0) {
+          throw new Error(`Le prérendu des aperçus d'adresse a échoué (code ${previews.status}). La construction s'arrête.`);
+        }
+      },
+    },
+  };
+};
+
+/**
  * LES SCRIPTS QUE LE SERVICE WORKER GÉNÉRÉ IMPORTE, déclarés UNE fois.
  *
  * Deux lecteurs : `importScripts` (variante A) et le retrait de la variante B
@@ -308,6 +367,10 @@ const dropWebOnlyAssets = (): Plugin => ({
   writeBundle(options) {
     if (options.dir === undefined) return;
     rmSync(join(options.dir, 'store-shots'), { recursive: true, force: true });
+    /* LES IMAGES D'APERÇU (#10002) — `og/` ne sert que les robots qui
+       déplient un lien `https://meeshy.me/…` (sept landings, ~75 Ko chacune,
+       et l'invitation de la passerelle) : la coque ne les affiche jamais. */
+    rmSync(join(options.dir, 'og'), { recursive: true, force: true });
   },
 });
 
@@ -379,6 +442,14 @@ const productionBuildGuard = (): Plugin => {
     },
   };
 };
+
+/** Voir `src/lib/build-preload-deps.ts` (#10974) : capturé AVANT que Vite écrive les listes de préchargement. */
+const preloadDeps = loadedPreloadDeps();
+const capturePreloadBundle = (): Plugin => ({
+  name: 'meeshy:capture-preload-bundle',
+  apply: 'build',
+  generateBundle: { order: 'pre', handler: (_options, bundle) => preloadDeps.capture(bundle) },
+});
 
 const proxyTarget = process.env.MEESHY_PROXY_TARGET ?? 'https://gate.staging.meeshy.me';
 
@@ -504,11 +575,13 @@ export default defineConfig({
   },
   plugins: [
     productionBuildGuard(),
+    capturePreloadBundle(),
     tailwind(),
     inlineSchemeBootstrap(),
     inlineInterfaceLanguageBootstrap(),
     prerenderInstitutionalPages(),
-    ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets()] : []),
+    ...(forCapacitor ? [] : [prerenderLanding()]),
+    ...(forCapacitor ? [dropServiceWorkerScripts(), dropWebOnlyAssets(), shellApiPreconnect()] : []),
     /**
      * VARIANTE A (PWA). Desactivee sous Capacitor : la coque native gere
      * elle-meme son cycle de vie, et un service worker par-dessus ferait deux
@@ -550,15 +623,18 @@ export default defineConfig({
               short_name: 'Meeshy',
               description: 'Messagerie multilingue en temps réel',
               lang: 'fr',
-              start_url: '/',
+              /* #10002 — `/` est la landing ; l'application installée
+                 démarre sur la liste des conversations, là où elle démarrait. */
+              start_url: '/chats',
               scope: '/',
               display: 'standalone',
               /* #7877 — la PWA installée tourne comme les coques Android
                  (aucun `screenOrientation`) et iOS (paysage déclaré, comme
                  l'app iOS) : `portrait` y verrouillait vidéos, reels et appels. */
               orientation: 'any',
-              background_color: '#0b0c14',
-              theme_color: '#0b0c14',
+              /* #10005 — la surface de l'écran (`--ios-surface` sombre). */
+              background_color: '#09090b',
+              theme_color: '#09090b',
               icons: [
                 { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
                 { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
@@ -652,6 +728,25 @@ export default defineConfig({
                */
               globIgnores: [
                 '*/index.html',
+                /* LES SEPT LANDINGS (#10002) — un visiteur n'en lit qu'une, et
+                   un membre de la PWA aucune : les précacher ferait payer
+                   ~7 documents à chaque installation. `/` reste servie par la
+                   coquille précachée (`routes/home.tsx`), `/en`… par le réseau. */
+                ...LANDING_LANGUAGES.flatMap(landingFiles).filter((file) => !file.includes('/')),
+                /* LES APERÇUS D'ADRESSE (#10192) — des copies de la coquille
+                   pour les robots de messagerie, que nginx sert au premier
+                   chargement ; le précache garde la coquille nue. */
+                'shell-og/**',
+                /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) — réécrite au
+                   démarrage du conteneur, donc JAMAIS précachée : son
+                   empreinte de build est celle du fichier par défaut, pas de
+                   celui que le conteneur sert. Elle a son seau (ci-dessous). */
+                'config.js',
+                /* L'AVATAR ET LA BANNIÈRE DE WORLD WIDE (#10204) — servis par
+                   adresse ABSOLUE dans la conversation et lus par le réseau
+                   comme n'importe quelle photo de conversation : ni leurs
+                   sources SVG ni leurs PNG n'ont à peser sur l'installation. */
+                'brand/world-wide/**',
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
@@ -661,6 +756,13 @@ export default defineConfig({
                    flou que la caméra ne fait pas — jamais à l'installation. */
                 'assets/video-effects-segmentation-*.js',
                 'assets/vision_wasm_*',
+                /* LES NOMS DE RECHERCHE DES EMOJIS (#10531) — sept langues,
+                   une trentaine de Ko chacune, dont un lecteur ne lit qu'une
+                   et seulement s'il CHERCHE un emoji : jamais à
+                   l'installation. La table des emojis, elle, reste précachée
+                   (la feuille s'ouvre hors ligne ; seule sa recherche demande
+                   le réseau la première fois). */
+                'assets/emoji-names-*.js',
               ],
               /**
                * Chargés EN TÊTE du service worker généré, donc leurs écouteurs
@@ -692,7 +794,15 @@ export default defineConfig({
                * — la coquille d'une version en attente ne sait pas toujours le
                * consommer (`src/lib/net/email-token-navigations.ts`).
                */
-              navigateFallbackDenylist: [INSTITUTIONAL_PATTERN, ...NETWORK_ONLY_NAVIGATIONS, ...EMAIL_TOKEN_NAVIGATIONS],
+              navigateFallbackDenylist: [
+                INSTITUTIONAL_PATTERN,
+                /* LES LANDINGS DE LANGUE (#10002) — `/en`, `/ar`… sont des
+                   documents prérendus : la coquille n'a pas de route pour eux.
+                   `/en` sort du précache (`en.html`), `/en/` du réseau. */
+                LANDING_SUBPATH_PATTERN,
+                ...NETWORK_ONLY_NAVIGATIONS,
+                ...EMAIL_TOKEN_NAVIGATIONS,
+              ],
               /**
                * La zone rurale est la raison d'etre de ce cache : le shell est
                * precache une fois, puis JAMAIS retelecharge tant que son hash
@@ -701,6 +811,28 @@ export default defineConfig({
                * « Offline Graceful Degradation »).
                */
               runtimeCaching: [
+                {
+                  /* LA CONFIGURATION DU DÉPLOIEMENT (#10208) en
+                     StaleWhileRevalidate : un démarrage sous service worker la
+                     lit dans son seau sans attendre le réseau (le script est
+                     bloquant), hors ligne compris, et la relit en fond — une
+                     origine changée au redémarrage du conteneur s'applique au
+                     lancement suivant. Fonction AUTONOME : Workbox la
+                     stringifie dans `dist/sw.js`.
+                     `index.html` la charge en script CLASSIQUE et bloquant
+                     (`<script src="/config.js">`, sans commentaire : chaque
+                     octet du document compte dans la première peinture) parce
+                     que `src/lib/api/config.ts` la lit à l'évaluation du
+                     module ; le défaut `public/config.js` est vide, et
+                     l'entrypoint du conteneur (`docker/runtime-config.sh`) le
+                     réécrit. */
+                  urlPattern: ({ url, sameOrigin }) => sameOrigin && url.pathname === '/config.js',
+                  handler: 'StaleWhileRevalidate',
+                  options: {
+                    cacheName: SW_DEPLOYMENT_CONFIG_CACHE,
+                    expiration: { maxEntries: 1 },
+                  },
+                },
                 {
                   /* LES MÉDIAS D'ABORD, ET L'ORDRE EST LA MOITIÉ DU CORRECTIF
                      (#6973) : le routeur de Workbox retient la PREMIÈRE route
@@ -824,6 +956,7 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     target: 'es2022',
+    modulePreload: { resolveDependencies: preloadDeps.resolveDependencies },
     cssCodeSplit: true,
     reportCompressedSize: true,
     rollupOptions: {
@@ -844,6 +977,18 @@ export default defineConfig({
         moduleSideEffects: [{ test: FIXTURE_MODULE, sideEffects: false }],
       },
       /**
+       * LA DIRECTIVE « use client » D'UNE DÉPENDANCE NE DIT RIEN ICI. Elle
+       * sépare les composants serveur et client d'un framework à rendu
+       * serveur ; cette application ne rend que dans le navigateur, et le
+       * bundler la retire en le signalant (`@tanstack/react-query`). Seul ce
+       * signal-là se tait, et seulement pour `node_modules` : toute autre
+       * alerte, et toute directive écrite dans nos sources, reste visible.
+       */
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.id?.includes('/node_modules/')) return;
+        warn(warning);
+      },
+      /**
        * DEUX entrées CSS : celle de l'application, et celle — beaucoup plus
        * maigre — des pages institutionnelles préchauffées, dont la détection
        * Tailwind est limitée à leurs propres fichiers (`source(none)` +
@@ -852,6 +997,8 @@ export default defineConfig({
       input: {
         index: fileURLToPath(new URL('./index.html', import.meta.url)),
         institutional: fileURLToPath(new URL('./src/styles/institutional.css', import.meta.url)),
+        /* LA LANDING (#10002) — sa feuille, inlinée par `scripts/prerender-landing.tsx`. */
+        landing: fileURLToPath(new URL('./src/styles/landing.css', import.meta.url)),
       },
       output: {
         /**
@@ -882,6 +1029,19 @@ export default defineConfig({
          */
         manualChunks: (id) => {
           if (id.includes('node_modules')) {
+            /**
+             * LES OBSERVATEURS ET LES HOOKS DE TANSTACK (#10485) — le socle
+             * ne lit que `QueryClient`, `QueryClientProvider`, `hydrate` et
+             * `dehydrate` (`main.tsx`, `lib/api/query-client.ts`) ; `useQuery`,
+             * `useMutation`, `useQueries`, `useInfiniteQuery` et les
+             * `*Observer` de query-core ne servent qu'aux écrans, tous chargés
+             * par `import()`. La règle « node_modules ⇒ core » les payait à la
+             * première peinture de tous : mesuré, 89,95 → 85,85 Ko.
+             */
+            if (/@tanstack\/query-core\/build\/modern\/\w*Observer\.js$/.test(id)) return 'query-screens';
+            if (/@tanstack\/react-query\/build\/modern\//.test(id) && !/\/(index|QueryClientProvider)\.js$/.test(id)) {
+              return 'query-screens';
+            }
             if (id.includes('@tanstack/react-query')) return 'data';
             // Le virtualiseur ne sert qu'au fil : son propre morceau, chargé
             // par la route qui l'importe et par personne d'autre.
@@ -928,6 +1088,13 @@ export default defineConfig({
              * `call_video_segmentation`), hors du précache (`globIgnores`).
              */
             if (id.includes('@mediapipe/tasks-vision')) return undefined;
+            /**
+             * LOTTIE ET SON DÉZIPPEUR (#10638) — atteints UNIQUEMENT par les
+             * `import()` de `lib/lottie/engine.ts` et `lib/lottie/decode.ts`.
+             * Rangés dans `core`, ils y entraient malgré l'import dynamique :
+             * mesuré, la première peinture passait de ~85 à 137 Ko.
+             */
+            if (id.includes('/lottie-web/') || id.includes('/fflate/')) return undefined;
             return 'core';
           }
           /**
@@ -953,6 +1120,19 @@ export default defineConfig({
            * 14 avant ce renommage). */
           if (id.includes('/socketio-events/event-names')) return 'socket-event-names';
           /**
+           * LES NOMS QUE LA PREMIÈRE PEINTURE LIT (#9966) — `viewing-`,
+           * `session-` et `call-recording-event-names` (`@meeshy/shared`) sont
+           * des PARTIES des deux cartes, qu'`event-names.ts` répand. Dans
+           * l'entrée, `lib/api/conversation-viewing.ts` et
+           * `lib/calls/call-recording.ts` ne lisent qu'elles. Sans nom à eux,
+           * Rolldown les range dans le groupe `socket-event-names` ci-dessus,
+           * dont ils sont des dépendances, et l'entrée importe alors la carte
+           * ENTIÈRE. Mesuré : rendre `undefined` n'y change rien (90,09 Ko, un
+           * groupe nommé entraîne ses dépendances) ; ce nom sort la carte de la
+           * première peinture, 87,85 Ko au lieu de 90,09, pour 0,29 Ko.
+           */
+          if (/\/socketio-events\/(viewing|session|call-recording)-event-names\.[jt]s$/.test(id)) return 'event-names-first-paint';
+          /**
            * LA LOI DU NIVEAU ET DE LA FRAPPE (#9706) — `levels`, `level-steps`,
            * `level-wire`, `mint` et `rarity` (`@meeshy/shared/utils/game`)
            * sont lus par les seuls écrans du jeu, et chacun pèse moins d'1 Ko.
@@ -964,6 +1144,29 @@ export default defineConfig({
            * pour la même raison : dev était à 90,00 Ko pile, et la seule entropie
            * des empreintes faisait basculer le gate (mesuré : 90,01 → 89,9 Ko).
            */
+          /**
+           * LES LOIS PURES DU TRANSPORT MÉDIA (`lib/view/media-transport.ts`) —
+           * temps, vitesses, recherche : lues par le fil, ses visionneuses, le
+           * mini-lecteur, les accusés et le composant de barre de lecture.
+           * Quand Rollup les sort en morceau partagé (2026-10-11, après que la
+           * fiche de profil a monté la visionneuse, #10092), il le nommait
+           * d'après le fichier, `media-transport-…` : le motif du budget
+           * `media_transport` (`^assets/media-transport-`), réservé au
+           * COMPOSANT chargé par `import()`, le comptait alors, et ses importeurs
+           * statiques — légitimes, ce sont des fonctions pures — faisaient
+           * rougir `dynamic_only`. Un nom qui ne commence pas par ce préfixe.
+           */
+          /**
+           * L'IDENTITÉ DE WORLD WIDE ET LES FAMILLES D'UN INVITÉ (#10038) —
+           * `world-identity` et `guest-attachment-kind-rules` (`@meeshy/shared`),
+           * des constantes et deux fonctions pures, sans Zod. Elles remplacent
+           * les jumelles que le web en tenait ; laissées à Rolldown, elles
+           * faisaient deux morceaux là où la jumelle n'en faisait qu'un, soit
+           * un nom de plus dans la table de préchargement de l'entrée. Un nom
+           * pour les deux : lues par les mêmes écrans (liste, fil, jonction).
+           */
+          if (/\/types\/(world-identity|guest-attachment-kind-rules)\.[jt]s$/.test(id)) return 'guest-world-law';
+          if (id.endsWith('/src/lib/view/media-transport.ts')) return 'media-time';
           if (/\/utils\/game\/(levels|level-steps|level-wire|mint|rarity|boosts|personal-mission|photo-moments)\.[jt]s$/.test(id)) return 'game-law';
           return undefined;
         },

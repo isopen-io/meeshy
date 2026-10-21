@@ -16,10 +16,28 @@
  */
 export type AdminSpace = 'adm' | 'admin';
 
-export type AdminGroupId = 'overview' | 'people' | 'exchanges' | 'content' | 'moderation' | 'growth' | 'platform';
+/**
+ * Les huit DOMAINES du menu (#10391) — l'ordre dit ce qu'on vient faire : voir
+ * la machine, publier, modérer, puis les personnes, les échanges, la croissance,
+ * les barèmes de points et le pilotage du serveur.
+ */
+export type AdminGroupId = 'overview' | 'content' | 'moderation' | 'people' | 'exchanges' | 'growth' | 'scales' | 'operations';
 
 export const ADMIN_SECTION_TABLE = [
   { id: 'dashboard', group: 'overview', list: { admin: 'admin', adm: 'adm' } },
+  {
+    id: 'posts',
+    group: 'content',
+    list: { admin: 'adminPosts', adm: 'admPosts' },
+    fiche: { entity: 'post', admin: 'adminPost', adm: 'admPost', param: 'post' },
+  },
+  {
+    id: 'reports',
+    group: 'moderation',
+    list: { admin: 'adminReports', adm: 'admReports' },
+    fiche: { entity: 'report', admin: 'adminReport', adm: 'admReport', param: 'report' },
+  },
+  { id: 'audit', group: 'moderation', list: { admin: 'adminAudit', adm: 'admAudit' } },
   {
     id: 'users',
     group: 'people',
@@ -56,19 +74,6 @@ export const ADMIN_SECTION_TABLE = [
     list: { admin: 'adminShareLinks', adm: 'admShareLinks' },
     fiche: { entity: 'shareLink', admin: 'adminShareLink', adm: 'admShareLink', param: 'link' },
   },
-  {
-    id: 'posts',
-    group: 'content',
-    list: { admin: 'adminPosts', adm: 'admPosts' },
-    fiche: { entity: 'post', admin: 'adminPost', adm: 'admPost', param: 'post' },
-  },
-  {
-    id: 'reports',
-    group: 'moderation',
-    list: { admin: 'adminReports', adm: 'admReports' },
-    fiche: { entity: 'report', admin: 'adminReport', adm: 'admReport', param: 'report' },
-  },
-  { id: 'audit', group: 'moderation', list: { admin: 'adminAudit', adm: 'admAudit' } },
   { id: 'analytics', group: 'growth', list: { admin: 'adminAnalytics', adm: 'admAnalytics' } },
   { id: 'ranking', group: 'growth', list: { admin: 'adminRanking', adm: 'admRanking' } },
   {
@@ -83,11 +88,12 @@ export const ADMIN_SECTION_TABLE = [
     list: { admin: 'adminBroadcasts', adm: 'admBroadcasts' },
     fiche: { entity: 'broadcast', admin: 'adminBroadcast', adm: 'admBroadcast', param: 'broadcast' },
   },
-  { id: 'monitoring', group: 'platform', list: { admin: 'adminMonitoring', adm: 'admMonitoring' } },
-  { id: 'languages', group: 'platform', list: { admin: 'adminLanguages', adm: 'admLanguages' } },
-  { id: 'agent', group: 'platform', list: { admin: 'adminAgent', adm: 'admAgent' } },
-  { id: 'engagementScale', group: 'platform', list: { admin: 'adminEngagementScale', adm: 'admEngagementScale' } },
-  { id: 'settings', group: 'platform', list: { admin: 'adminSettings', adm: 'admSettings' } },
+  { id: 'engagementScale', group: 'scales', list: { admin: 'adminEngagementScale', adm: 'admEngagementScale' } },
+  { id: 'operations', group: 'operations', list: { admin: 'adminOperations', adm: 'admOperations' } },
+  { id: 'monitoring', group: 'operations', list: { admin: 'adminMonitoring', adm: 'admMonitoring' } },
+  { id: 'languages', group: 'operations', list: { admin: 'adminLanguages', adm: 'admLanguages' } },
+  { id: 'agent', group: 'operations', list: { admin: 'adminAgent', adm: 'admAgent' } },
+  { id: 'settings', group: 'operations', list: { admin: 'adminSettings', adm: 'admSettings' } },
 ] as const;
 
 type Row = (typeof ADMIN_SECTION_TABLE)[number];

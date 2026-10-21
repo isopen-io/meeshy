@@ -5,7 +5,7 @@ import MeeshySDK
 
 /// `ReaderAudioMixer.segment(forBounds:sampleRate:fileLength:)` — la conversion
 /// PURE secondes → frames que `scheduleAudio` (site unique de `scheduleEntry`,
-/// `rescheduleLoopedEntry` ET `scheduleBackgroundFile`) consulte pour décider
+/// `startBackground` ET la boucle partagée `scheduleLoop`) consulte pour décider
 /// entre `AVAudioPlayerNode.scheduleSegment` (clip rogné) et `scheduleFile`
 /// (repli, comportement d'aujourd'hui). Éprouvable sans `AVAudioEngine` ni
 /// fichier réel : seuls des `Double` / `AVAudioFramePosition` traversent la

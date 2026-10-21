@@ -72,6 +72,8 @@ export type WorkerHarness = {
   readonly clients: ClientStub[];
   /** Les accusés de remise partis — vide tant qu'aucun push éligible n'a de crédential. */
   readonly deliveries: CapturedFetch[];
+  /** L'IndexedDB du worker — la page la relit (#10507, file de télémétrie des notifications). */
+  readonly idb: FakeIndexedDB;
   readonly exports: {
     readonly PUSH_ROUTE_PATTERNS: Readonly<Record<string, string>>;
     readonly pushTargetUrl: (data: Record<string, unknown>) => string;
@@ -194,6 +196,7 @@ export function mount({
     badges,
     clients,
     deliveries,
+    idb,
     exports: self['meeshyPushTarget'] as WorkerHarness['exports'],
     async dispatch(type, event) {
       const listener = listeners.get(type);

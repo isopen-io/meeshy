@@ -138,11 +138,22 @@ public enum CaptureNoticeText {
         identifier.flatMap(TimeZone.init(identifier:)) ?? TimeZone(identifier: "UTC")!
     }
 
+    private static let formatterCache = Locked(uncheckedState: [String: DateFormatter]())
+
     private static func format(_ date: Date, template: String, language: String, zone: TimeZone) -> String {
+        let key = "\(language)_\(zone.identifier)_\(template)"
+        return formatterCache.mutateUnchecked { cache in
+            let formatter = cache[key] ?? makeFormatter(template: template, language: language, zone: zone)
+            cache[key] = formatter
+            return formatter.string(from: date)
+        }
+    }
+
+    private static func makeFormatter(template: String, language: String, zone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: language)
         formatter.timeZone = zone
         formatter.setLocalizedDateFormatFromTemplate(template)
-        return formatter.string(from: date)
+        return formatter
     }
 }

@@ -22,7 +22,7 @@ afterAll(async () => {
 });
 afterEach(unmountAll);
 
-const firstMint: GuideEvent = { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 };
+const firstMint: GuideEvent = { kind: 'first-mint' };
 const rank: GuideEvent = { kind: 'new-rank', rank: 'voix', division: 2, glory: 1700, gloryMissing: 300 };
 const atRisk: GuideEvent = { kind: 'flame-at-risk', days: 6 };
 
@@ -46,13 +46,13 @@ describe('la première fois : la version complète', () => {
   const page = text(renderToStaticMarkup(<GameGuideCard card={full(firstMint)} {...handlers} />));
 
   test('les trois parties, dans l’ordre', () => {
-    const order = ['Ta première Meesh est frappée', 'de 14 à 9', 'niveau 14'].map((part) => page.indexOf(part));
+    const order = ['Ta première Meesh est frappée', 'ton niveau a baissé d’autant', 'Ce que tu as reçu reste reçu'].map((part) => page.indexOf(part));
     expect(order.every((i) => i >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
 
   test('un bouton qui y mène, avec son libellé', () => {
-    expect(page).toContain('Reprendre mes niveaux');
+    expect(page).toContain('Voir ma progression');
   });
 
   test('qui parle : Mee et Meo ensemble pour un grand moment', () => {
@@ -91,7 +91,7 @@ describe('les fois suivantes : une ligne, et « ? » rouvre', () => {
   test('la version courte ne dit que la ligne courte', () => {
     const page = text(renderToStaticMarkup(<GameGuideCard card={short(atRisk)} {...handlers} />));
     expect(page).toContain('Ta Flamme s’éteint à minuit : un geste suffit.');
-    expect(page).not.toContain('Fais une mission facile, ou achète un gel.');
+    expect(page).not.toContain('Réalise le premier acte, ou prends une Veilleuse.');
   });
 
   test('le « ? » est toujours là et annonce son état', () => {
@@ -101,14 +101,14 @@ describe('les fois suivantes : une ligne, et « ? » rouvre', () => {
 
   test('le toucher déplie la version complète', async () => {
     const host = await mount(<GameGuideCard card={short(atRisk)} {...handlers} />);
-    expect(host.textContent).not.toContain('Fais une mission facile');
+    expect(host.textContent).not.toContain('Réalise le premier acte');
     await click(host.querySelector('[data-game-guide-help]'));
-    expect(host.textContent).toContain('Fais une mission facile, ou achète un gel.');
+    expect(host.textContent).toContain('Réalise le premier acte, ou prends une Veilleuse.');
     expect(host.querySelector('[data-game-guide-help]')?.getAttribute('aria-expanded')).toBe('true');
   });
 
   test('la version complète n’a pas besoin du « ? » pour se montrer', () => {
-    expect(text(renderToStaticMarkup(<GameGuideCard card={full(atRisk)} {...handlers} />))).toContain('Fais une mission facile');
+    expect(text(renderToStaticMarkup(<GameGuideCard card={full(atRisk)} {...handlers} />))).toContain('Réalise le premier acte');
   });
 });
 

@@ -31,6 +31,7 @@
 // validateur au producteur.
 import type { MeeshySocket, MeeshyIOServer } from '../typed-socket';
 import { clientDeclaredProtection } from './messageProtectionInput';
+import { forwardReferencesOf } from '../../validation/forwarded-attachments';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { getCacheStore } from '../../services/CacheStore';
 import { isBlockedBetween } from '../../utils/blocking';
@@ -101,6 +102,7 @@ import {
   describeEditRefusalForSocket,
 } from '../../services/messaging/messageEditAdmission';
 import { admitMessageDelete } from '../../services/messaging/messageDeleteAdmission';
+import { completeModeratedMessageRemoval, moderationReasonOf, MODERATION_REASON_MESSAGE, MODERATION_REASON_REQUIRED } from '../../services/moderation/contentRemoval';
 import { applyMessageRemovalEffects } from '../../services/messaging/messageRemovalEffects';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
 import {
@@ -368,8 +370,7 @@ export class MessageHandler {
         replyToId: validated.replyToId,
         attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        ...forwardReferencesOf(validated),
         // Diffusion : les pièces jointes du message source sont copiées côté
         // serveur (`MessageProcessor.saveMessage` → `copyAttachments`). Franchir
         // la garde sans transmettre le champ laisserait la copie muette.
@@ -599,8 +600,7 @@ export class MessageHandler {
         replyToId: validated.replyToId,
         attachmentReplyTo: validated.attachmentReplyTo,
         storyReplyToId: validated.storyReplyToId,
-        forwardedFromId: validated.forwardedFromId,
-        forwardedFromConversationId: validated.forwardedFromConversationId,
+        ...forwardReferencesOf(validated),
         // Effets de protection déclarés par le client — parité avec
         // POST /messages, déclarés UNE fois (`messageProtectionInput.ts`) pour
         // les deux chemins socket. Sans cette propagation, une photo view-once
@@ -831,7 +831,7 @@ export class MessageHandler {
       // ajoutée par édition restait intraçable pour toujours.
       const editedLinks = await reconcileEditedLinks({
         linkService: this.trackingLinkService,
-        message: { id: validated.messageId, conversationId: message.conversationId },
+        message: { id: validated.messageId, conversationId: message.conversationId, sender: message.sender },
         content: contentAdmission.content,
         editorUserId: userId,
         onError: (err) => handlerLogger.warn('tracking link processing failed on socket edit', { messageId: validated.messageId, error: err }),
@@ -869,11 +869,10 @@ export class MessageHandler {
         return;
       }
 
-      // Les effets DURABLES de l'édition — l'écart de mots et de caractères sur
-      // les compteurs de la conversation. Ce transport, pourtant PRIMAIRE, ne
-      // les ajustait pas : ils restaient sur les longueurs du texte d'origine,
-      // définitivement. La liste vit dans `applyMessageEditEffects`, une fois
-      // pour les quatre transports.
+      // Les effets DURABLES de l'édition (compteurs, notifications, traductions
+      // partagées d'avant) vivent dans `applyMessageEditEffects`, une fois pour
+      // les quatre transports. `editedAt` est l'instant ÉCRIT ci-dessus, remis
+      // tel quel : la version de source d'une traduction partagée en est l'ISO.
       await applyMessageEditEffects(this.prisma, {
         id: message.id,
         conversationId: message.conversationId,
@@ -881,6 +880,7 @@ export class MessageHandler {
         senderUserId: message.sender?.userId ?? null,
         previousContent: message.content,
         content: editedContent,
+        editedAt,
       });
 
       // Ce que ce message doit à ceux qu'il NOMME, après édition. Ce chemin
@@ -1024,11 +1024,8 @@ export class MessageHandler {
    * Handles real-time message deletion (soft delete) via WebSocket.
    * Mirrors the REST DELETE /messages/:messageId logic.
    *
-   * Permissions: `admitMessageDelete` — l'auteur sans limite de temps, sinon un
-   * rôle privilégié de CONVERSATION (`admin`/`moderator`) ou GLOBAL
-   * (`MODERATOR`/`ADMIN`/`BIGBOSS`). La règle vit dans l'unité partagée, pas
-   * ici : les trois transports de suppression y répondent désormais la même
-   * chose. Les utilisateurs anonymes ne peuvent pas supprimer.
+   * Permissions : `admitMessageDelete`, partagée par les trois transports. Un
+   * tiers (#11149) doit un motif ; les utilisateurs anonymes ne suppriment pas.
    */
   async handleMessageDelete(
     socket: MeeshySocket,
@@ -1091,12 +1088,7 @@ export class MessageHandler {
         return;
       }
 
-      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle,
-      // jumeau d'`admitMessageEdit`. Cette copie-ci était la plus juste des
-      // trois, et c'est précisément pour ça qu'elle n'était pas suffisante :
-      // rien ne la reliait aux deux autres, qui avaient dérivé chacune de son
-      // côté. Sa forme est conservée à l'identique — auteur, rôle de
-      // conversation, puis rôle global en lecture paresseuse.
+      // Qui peut supprimer : `admitMessageDelete`, l'unique énoncé de la règle.
       const admission = await admitMessageDelete({
         prisma: this.prisma,
         deleterUserId: userId,
@@ -1109,6 +1101,11 @@ export class MessageHandler {
 
       if (!admission.admitted) {
         this._sendGenericError(callback, 'You are not authorized to delete this message', socket);
+        return;
+      }
+      const moderationReason = admission.byModeration ? moderationReasonOf(validated) : null;
+      if (admission.byModeration && moderationReason === null) {
+        this._sendGenericError(callback, MODERATION_REASON_MESSAGE, socket, MODERATION_REASON_REQUIRED);
         return;
       }
 
@@ -1138,6 +1135,7 @@ export class MessageHandler {
         content: message.content,
         metadata: message.metadata, removedByParticipantId: admission.actorParticipantId ?? null,
       });
+      if (moderationReason !== null) await completeModeratedMessageRemoval({ prisma: this.prisma }, { actorUserId: userId, authorUserId: message.sender?.userId, messageId: message.id, conversationId: message.conversationId, reason: moderationReason });
 
       const room = ROOMS.conversation(message.conversationId);
       const deletedPayload = {
@@ -1371,7 +1369,7 @@ export class MessageHandler {
       // `visible ⇔ auteur ET lecteur`, fail-CLOSED si la liste des lecteurs est
       // inconnue — composée avec le scellement de la citation d'un éphémère
       // déjà échu pour un lecteur (#8562) dans `resolvePeerBroadcastSplit`.
-      const { peerPayload, hiddenKeys, payloadForKey } =
+      const { peerPayload, hiddenKeys, payloadForKey, quotedDeathOf } =
         await resolvePeerBroadcastSplit(this.prisma, {
           senderUserId,
           sharedParticipants,
@@ -1539,7 +1537,7 @@ export class MessageHandler {
         for (const { room, participant } of targets) {
           this.io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {
             ...updatePayload,
-            ...resolveLastMessagePreviewGroup(participant, message)
+            ...resolveLastMessagePreviewGroup(participant, message, new Date(), { quotedDeathAt: quotedDeathOf(participant) })
           });
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: targets.length });

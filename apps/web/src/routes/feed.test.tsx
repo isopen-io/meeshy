@@ -76,7 +76,7 @@ describe('les quatre états du fil sont DESSINÉS, jamais un écran blanc', () =
     expect(html).toContain('Meeshy Feed');
     expect(html).toContain('aria-label="Revenir aux conversations"');
     expect(html).toContain('size-11');
-    expect(html).toContain('href="/"');
+    expect(html).toContain('href="/chats"');
   });
 
   /** `FeedView.swift` : la première action de l'en-tête, `play.rectangle.on.

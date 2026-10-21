@@ -33,6 +33,10 @@ const dryRun = process.env.DRY_RUN === '1';
 const specs = [
   { collection: 'AdminAuditLog', name: 'AdminAuditLog_entity_entityId_idx', key: { entity: 1, entityId: 1 } },
   { collection: 'CallRecording', name: 'CallRecording_callSessionId_idx', key: { callSessionId: 1 } },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_domain_slug_key', key: { domain: 1, slug: 1 }, unique: true },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_domain_status_createdAt_idx', key: { domain: 1, status: 1, createdAt: 1 } },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_submitterId_idx', key: { submitterId: 1 } },
+  { collection: 'CommunityAppearancePack', name: 'CommunityAppearancePack_contractSrc_idx', key: { contractSrc: 1 } },
   { collection: 'Conversation', name: 'Conversation_isActive_lastActivityAt_idx', key: { isActive: 1, lastActivityAt: 1 } },
   { collection: 'ConversationEngagement', name: 'ConversationEngagement_userId_conversationId_key', key: { userId: 1, conversationId: 1 }, unique: true },
   { collection: 'ConversationEngagement', name: 'ConversationEngagement_userId_updatedAt_idx', key: { userId: 1, updatedAt: 1 } },
@@ -54,6 +58,7 @@ const specs = [
   { collection: 'StoryBackgroundAudio', name: 'Sound_uploaderId_contentHash_key', key: { uploaderId: 1, contentHash: 1 }, unique: true },
   { collection: 'User', name: 'User_referralCode_key', key: { referralCode: 1 }, unique: true, partialFilterExpression: { referralCode: { $type: 'string' } } },
   { collection: 'UserConversationPreferences', name: 'UserConversationPreferences_userId_conversationId_key', key: { userId: 1, conversationId: 1 }, unique: true },
+  { collection: 'UserPackOwnership', name: 'UserPackOwnership_userId_packKey_key', key: { userId: 1, packKey: 1 }, unique: true },
   { collection: 'UserSticker', name: 'UserSticker_userId_contentHash_key', key: { userId: 1, contentHash: 1 }, unique: true },
   { collection: 'UserSticker', name: 'UserSticker_userId_lastUsedAt_idx', key: { userId: 1, lastUsedAt: 1 } },
   { collection: 'UserStickerPack', name: 'UserStickerPack_userId_packSlug_key', key: { userId: 1, packSlug: 1 }, unique: true },

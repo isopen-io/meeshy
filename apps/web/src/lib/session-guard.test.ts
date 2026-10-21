@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { ROUTES } from '@/routes/route-table';
 import { landingAfterSession, resolveRouteAccess, safeNextPath, type RouteKey } from './session-guard';
+import { SECRET_RETURN_PATHS } from '../test-support/email-link-secret-paths';
 
 /**
  * LA PORTE (#5555, T7) — pure. Fixtures ⇒ toujours `allow` (les captures et le
@@ -20,7 +21,9 @@ const PRIVATE_ROUTES: readonly RouteKey[] = [
   'conversationsNew',
   'progression',
   'progressionLigue',
+  'progressionLigueSemaine',
   'progressionSaison',
+  'progressionSaisonNumero',
   'progressionVitrine',
   'progressionAtlas',
   'progressionPrestige',
@@ -407,9 +410,9 @@ describe("toute route d'administration déclarée dans ROUTES est PRIVÉE (#8876
     expect(publiques).toEqual([]);
   });
 
-  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906)', () => {
+  test('et la déclaration les connaît toutes : quarante adresses neuves + les seize d’avant + les deux du barème de points (#8906) + les deux des opérations (#10391)', () => {
     const adresses = Object.values(ROUTES).filter((route) => route.pattern.startsWith('/adm')).length;
-    expect(adresses).toBe(58);
+    expect(adresses).toBe(60);
   });
 });
 
@@ -490,6 +493,24 @@ describe('safeNextPath — un chemin INTERNE, ou rien', () => {
   });
 });
 
+describe('safeNextPath — jamais une page à jeton d’e-mail (#10877)', () => {
+  test('toute forme d’un chemin à secret ⇒ rien', () => {
+    for (const hostile of SECRET_RETURN_PATHS) {
+      expect({ hostile: JSON.stringify(hostile), next: safeNextPath(hostile) }).toEqual({ hostile: JSON.stringify(hostile), next: null });
+    }
+  });
+
+  test('la forme normalisée est servie, jamais l’entrée brute', () => {
+    expect(safeNextPath('/c/./abc')).toBe('/c/abc');
+    expect(safeNextPath('/x/../chats')).toBe('/chats');
+  });
+
+  test('ni la page à jeton ni la landing ne survivent à `landingAfterSession`', () => {
+    expect(landingAfterSession('/auth/magic-link?token=t', '/chats')).toBe('/chats');
+    expect(landingAfterSession('/x/%2e%2e/reset-password', '/chats')).toBe('/chats');
+  });
+});
+
 describe('landingAfterSession — `next` s’il est sûr, l’accueil sinon', () => {
   test('un `next` interne gagne', () => {
     expect(landingAfterSession('/chat/mshy_abc', '/')).toBe('/chat/mshy_abc');
@@ -500,4 +521,12 @@ describe('landingAfterSession — `next` s’il est sûr, l’accueil sinon', ()
     expect(landingAfterSession('//evil.com', '/')).toBe('/');
     expect(landingAfterSession('https://evil.com', '/accueil')).toBe('/accueil');
   });
+});
+
+describe('/world est ouvert à tous : l’entrée ET le fil de l’invité y vivent (#10100)', () => {
+  for (const sessionStatus of ['anonymous', 'guest', 'authenticated'] as const) {
+    test(`${sessionStatus} ⇒ allow`, () => {
+      expect(resolveRouteAccess({ sessionStatus, source: 'gateway', routeKey: 'world' })).toBe('allow');
+    });
+  }
 });

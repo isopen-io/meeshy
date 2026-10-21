@@ -11,6 +11,8 @@ import type { VerifyEmailData, VerifyEmailRequest } from '@/lib/api/verify-email
 import { MagicLinkFlow, type MagicLinkFlowDeps } from '@/components/magic-link-flow';
 import { MagicLinkValidation } from '@/components/magic-link-validation';
 import { authColumnIn, strayFromAuthColumn } from '@/test-support/auth-column';
+import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
+import type { auth } from '@/lib/api/auth';
 import { controlledBy, perceivableText } from '@/test-support/perceivable-text';
 
 /**
@@ -501,5 +503,44 @@ describe('MagicLinkFlow — (h) le code reçu se saisit sur place (#8034)', () =
     });
     expect(el.querySelector('#verify-email-code-error')?.textContent).toBe('Code invalide ou expiré');
     expect(el.textContent).toContain('E-mail envoyé');
+  });
+});
+
+describe('MagicLinkValidation — le jeton quitte l’historique une fois servi (#10864)', () => {
+  afterEach(leaveEmailLink);
+
+  const answering = (reply: Awaited<ReturnType<typeof auth.validateMagicLink>>): typeof auth.validateMagicLink => async () => reply;
+
+  async function validateFrom(token: string, reply: Awaited<ReturnType<typeof auth.validateMagicLink>>) {
+    arriveByEmailLink('/auth/magic-link', token);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root.render(<MagicLinkValidation token={token} returnUrl={null} validate={answering(reply)} go={() => undefined} />);
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+  }
+
+  test('connexion ouverte : l’entrée ne porte plus le jeton', async () => {
+    await validateFrom('m-ok', { ok: true, status: 200, data: { user: { id: 'u-1', username: 'ada', displayName: 'Ada' }, token: 'jwt', sessionToken: 'sess', expiresIn: 3_600 } });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('lien refusé : l’entrée ne porte plus le jeton', async () => {
+    await validateFrom('m-dead', { ok: false, status: 400, error: 'Invalid or expired token' });
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  for (const status of [429, 500]) {
+    test(`refus en ${status} (débit, panne) : le lien n’est pas prouvé mort, l’entrée le garde`, async () => {
+      await validateFrom(`m-${status}`, { ok: false, status, error: 'Too many requests' });
+      expect(tokenInHistory()).toBe(`m-${status}`);
+    });
+  }
+
+  test('hors ligne : l’entrée le garde, « Réessayer » en a besoin', async () => {
+    await validateFrom('m-offline', { ok: false, status: 0, error: 'Failed to fetch' });
+    expect(tokenInHistory()).toBe('m-offline');
   });
 });

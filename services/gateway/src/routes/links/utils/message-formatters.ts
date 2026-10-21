@@ -2,6 +2,7 @@ import { transformTranslationsToArray } from '../../../utils/translation-transfo
 import { resolveAnonymousSenderIdentity } from '@meeshy/shared/utils/participant-helpers';
 import { mapMessageProtectionFields } from '../../conversations/messages-list-query';
 import { servedQuotedMessage } from '../../../services/messaging/servedQuotedMessage';
+import { servedLinkMetadata } from '../../../services/messaging/linkTrackingAuthor';
 import { attachmentReplyToFromMetadata } from '../../../services/messaging/attachmentReplySnapshot';
 import type { EphemeralReaderResolution } from '../../conversations/ephemeralReaderDeadlines';
 
@@ -105,6 +106,8 @@ export type LinkQuotedReaders = {
 };
 
 export function formatLinkMessageWithDetails(message: any, readers?: LinkQuotedReaders) {
+  // #10286 — la carte de liens suivis d'un invité anonyme n'en sort pas.
+  const servedMetadata = servedLinkMetadata(message.metadata, message.sender);
   return {
     id: message.id,
     content: message.content,
@@ -120,7 +123,7 @@ export function formatLinkMessageWithDetails(message: any, readers?: LinkQuotedR
     // client), jamais dans le texte. Clés ABSENTES sur un message ordinaire.
     ...(message.messageSource ? { messageSource: message.messageSource } : {}),
     ...(message.senderId ? { senderId: message.senderId } : {}),
-    ...(message.metadata ? { metadata: message.metadata } : {}),
+    ...(servedMetadata ? { metadata: servedMetadata } : {}),
     sender: extractSenderInfo(message.sender),
     attachments: message.attachments || [],
     replyTo: message.replyTo ? formatReplyToMessage(message.replyTo, message.metadata, readers) : null,

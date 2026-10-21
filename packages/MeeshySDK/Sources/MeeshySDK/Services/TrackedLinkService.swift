@@ -86,7 +86,7 @@ public protocol TrackedLinkResolving: Sendable {
     func recordClick(token: String) async
 }
 
-public final class TrackedLinkService: TrackedLinkResolving, @unchecked Sendable {
+public final class TrackedLinkService: TrackedLinkResolving, Sendable {
     public static let shared = TrackedLinkService()
     private let api: APIClientProviding
 

@@ -1,0 +1,96 @@
+[
+  {
+    "slug": "exemple-prestige",
+    "domain": "wallpaper",
+    "origin": "official",
+    "version": 1,
+    "order": 1000,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "af592d13c5d38096.webp",
+      "bytes": 996,
+      "sha256": "af592d13c5d3809674584c3f40063a3c8bbbb7677464d7cf4d35e39b9f188aa3"
+    },
+    "preview": null,
+    "contract": {
+      "src": "1f91514f54abfbde.json",
+      "bytes": 1737,
+      "sha256": "1f91514f54abfbde5e4a54828f5f0809d7e629ff08300aee6f7d523f51758a3e"
+    },
+    "strings": {
+      "fr": {
+        "src": "ea01ae72a423448b.json",
+        "bytes": 46,
+        "sha256": "ea01ae72a423448ba1bfcce530333d3eb4b7a3647e2cb6c4b5a4666787dfc2e9"
+      },
+      "en": {
+        "src": "dfce7f9910448d59.json",
+        "bytes": 43,
+        "sha256": "dfce7f9910448d59cc6d0baf9aecdad4e2a80ea12f9bb932c8216b278b47ea03"
+      },
+      "es": {
+        "src": "b33cf3632ea8e61e.json",
+        "bytes": 44,
+        "sha256": "b33cf3632ea8e61e190dd1a3b6c3fc6fabfb7347c5e7109e105204ba3637d3aa"
+      },
+      "pt": {
+        "src": "621c7659a1e39cd9.json",
+        "bytes": 44,
+        "sha256": "621c7659a1e39cd91a906c146ef6436f3b860e1d2d23593e36f67f58c515f2da"
+      },
+      "de": {
+        "src": "1bd946903d43957b.json",
+        "bytes": 47,
+        "sha256": "1bd946903d43957be743409fa58675a1a4b5dd0e706af26a170fe89e58d395d6"
+      },
+      "it": {
+        "src": "575595fd85ad1716.json",
+        "bytes": 45,
+        "sha256": "575595fd85ad1716a9dda3b2c0880f67c0f43fc8c485409a2ded91f9c4dd543b"
+      },
+      "ar": {
+        "src": "c1dec73d3cd8ac88.json",
+        "bytes": 60,
+        "sha256": "c1dec73d3cd8ac880c6b3d95768c182b016b9fdffae3c8a35eca5432b7c8244b"
+      }
+    },
+    "downloadBytes": {
+      "story": 1737,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Exemple · Prestige",
+        "description": "Pack d'exemple PAYANT du staging : deux fonds à acheter en Meeshes."
+      },
+      "en": {
+        "name": "Sample · Prestige",
+        "description": "Paid staging sample pack: two wallpapers to buy with Meeshes."
+      },
+      "es": {
+        "name": "Ejemplo · Prestigio",
+        "description": "Paquete de ejemplo de pago del entorno de pruebas: dos fondos para comprar con Meeshes."
+      },
+      "pt": {
+        "name": "Exemplo · Prestígio",
+        "description": "Pacote de exemplo pago do ambiente de testes: dois fundos para comprar com Meeshes."
+      },
+      "de": {
+        "name": "Beispiel · Prestige",
+        "description": "Kostenpflichtiges Beispielpaket der Testumgebung: zwei Hintergründe, mit Meeshes zu kaufen."
+      },
+      "it": {
+        "name": "Esempio · Prestigio",
+        "description": "Pacchetto di esempio a pagamento dell'ambiente di prova: due sfondi da acquistare con i Meeshes."
+      },
+      "ar": {
+        "name": "مثال · الفخامة",
+        "description": "حزمة تجريبية مدفوعة لبيئة الاختبار: خلفيتان للشراء بالميشات."
+      }
+    },
+    "price": 20
+  }
+]

@@ -20,7 +20,7 @@ public protocol NotificationServiceProviding: Sendable {
     func markAsRead(notificationId: String) async throws
 }
 
-public final class NotificationService: NotificationServiceProviding, @unchecked Sendable {
+public final class NotificationService: NotificationServiceProviding, Sendable {
     public static let shared = NotificationService()
     private let api: APIClientProviding
 

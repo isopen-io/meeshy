@@ -353,7 +353,7 @@ describe('le pseudo tapé tient la borne du schéma partagé', () => {
     expect(usernameFieldRefusal(baseForm({ username: null }))).toBeNull());
 
   test('le message nomme la borne, jamais « réessayez »', () => {
-    const message = usernameRefusalMessage('too-long');
+    const message = usernameRefusalMessage('fr', 'too-long');
     expect(message).toContain(String(USERNAME_MAX));
     expect(message).not.toMatch(/réessayez/i);
   });

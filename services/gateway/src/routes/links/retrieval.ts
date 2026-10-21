@@ -23,6 +23,8 @@ import {
   countOnlineAnonymousParticipants
 } from './utils/prisma-queries';
 import { formatMessageWithUnifiedSender } from './utils/message-formatters';
+import { allowedAttachmentKindsJsonSchema } from '@meeshy/shared/types/guest-attachment-kinds';
+import { guestAttachmentKindsOf } from '../../services/attachments/ContentSignature';
 import {
   conversationSummarySchema,
   messageSchema,
@@ -30,6 +32,7 @@ import {
   linkMemberSchema,
   linkAnonymousParticipantSchema
 } from './types';
+import { isGuestViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 
 export async function registerRetrievalRoutes(fastify: FastifyInstance) {
   const authOptional = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -93,6 +96,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
                     allowAnonymousMessages: { type: 'boolean' },
                     allowAnonymousFiles: { type: 'boolean' },
                     allowAnonymousImages: { type: 'boolean' },
+                    allowedAttachmentKinds: allowedAttachmentKindsJsonSchema,
                     requireAccount: { type: 'boolean' },
                     requireEmail: { type: 'boolean' },
                     requireNickname: { type: 'boolean' },
@@ -338,7 +342,10 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           { onMissingEntry: anonymousPresence }
         ));
 
-      const stats = {
+      // #10205 — un lecteur sans compte Meeshy ne lit ni les membres, ni les
+      // autres invités, ni aucun effectif : seuls les messages et leurs auteurs.
+      const viewerIsGuest = isGuestViewer(request.authContext);
+      const stats = viewerIsGuest ? { totalMessages, hasMore: totalMessages > offset + messages.length } : {
         totalMessages,
         totalMembers: participantCounts.totalMembers,
         totalAnonymousParticipants: participantCounts.totalAnonymousParticipants,
@@ -369,6 +376,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
             allowAnonymousMessages: shareLink.allowAnonymousMessages,
             allowAnonymousFiles: shareLink.allowAnonymousFiles,
             allowAnonymousImages: shareLink.allowAnonymousImages,
+            allowedAttachmentKinds: guestAttachmentKindsOf(shareLink),
             requireAccount: shareLink.requireAccount,
             requireEmail: shareLink.requireEmail,
             requireNickname: shareLink.requireNickname,
@@ -382,7 +390,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           }),
           messages: formattedMessages.reverse(),
           stats,
-          members: members.map(member => ({
+          members: (viewerIsGuest ? [] : members).map(member => ({
             id: member.id,
             role: member.role,
             joinedAt: member.joinedAt,
@@ -411,7 +419,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
           // `isOnline` ET `lastActiveAt` sont gatés ci-dessus
           // (`gatedAnonymousParticipants`) — `false` / `null` sauf pour un
           // viewer ADMIN/BIGBOSS.
-          anonymousParticipants: gatedAnonymousParticipants,
+          anonymousParticipants: membersServedToViewer(gatedAnonymousParticipants, request.authContext),
           currentUser
         });
 

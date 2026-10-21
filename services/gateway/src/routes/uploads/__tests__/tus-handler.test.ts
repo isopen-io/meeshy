@@ -30,6 +30,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import { hashSessionToken } from '../../../utils/session-token';
 
 type CapturedTusOptions = {
@@ -155,11 +156,9 @@ function buildFakePrisma(overrides: {
     messageAttachment: {
       create: overrides.createAttachment ?? jest.fn<any>().mockResolvedValue({ id: 'created-attachment' }),
     },
-    postMedia: {
-      create: jest.fn<any>().mockResolvedValue({ id: 'created-post-media' }),
-    },
+    postMedia: { create: jest.fn<any>().mockResolvedValue({ id: 'created-post-media' }) },
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(overrides.trustedSession ?? null),
+      findFirst: jest.fn<any>().mockResolvedValue(overrides.trustedSession ?? liveSession()),
       update: jest.fn<any>().mockReturnValue({ catch: jest.fn() }),
     },
   };
@@ -539,7 +538,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
           type: 'anonymous',
           isActive: true,
         },
-        select: { id: true, anonymousSession: true },
+        select: { id: true, shareLinkId: true, anonymousSession: true, joinedAt: true, bannedAt: true },
       });
       const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
       expect(createCall.data.uploadedBy).toBe('participant-1');
@@ -560,21 +559,20 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       ).rejects.toMatchObject({ status_code: 401 });
     });
 
+    // #10492 — un invité qui survit à son lien : 410 dès la création, jamais un 401 qui se rejoue.
     it('refuse quand le participant existe mais son lien de partage a disparu', async () => {
       const prisma = buildFakePrisma({
         participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'deleted-link' } },
         shareLink: null,
       });
 
-      const result = await runFullUpload({
+      await expect(runFullUpload({
         prisma,
         headers: ANONYMOUS_HEADERS,
         filename: 'document.pdf',
         filetype: 'application/pdf',
         bytes: PDF_BYTES,
-      });
-
-      expect(result.status_code).toBe(403);
+      })).rejects.toMatchObject({ status_code: 410, body: expect.stringContaining('GUEST_ACCESS_REVOKED') });
       expect(prisma.messageAttachment.create).not.toHaveBeenCalled();
     });
   });
@@ -582,7 +580,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
   describe('authentifié (JWT) — pas de garde de lien de partage (non concerné par ce round)', () => {
     it('autorise un utilisateur enregistré sans jamais consulter le lien de partage', async () => {
       const prisma = buildFakePrisma();
-      const token = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+      const token = jwt.sign({ userId: '5f00000000000000000000a1', sid: LIVE_SID }, JWT_SECRET);
 
       const result = await runFullUpload({
         prisma,
@@ -595,7 +593,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       expect(result.status_code).toBe(200);
       expect(prisma.conversationShareLink.findUnique).not.toHaveBeenCalled();
       const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
-      expect(createCall.data.uploadedBy).toBe('user-registered-1');
+      expect(createCall.data.uploadedBy).toBe('5f00000000000000000000a1');
       expect(createCall.data.isAnonymous).toBe(false);
     });
   });
@@ -616,7 +614,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
 
       // Signé avec un secret QUELCONQUE, différent de `JWT_SECRET` du serveur
       // — exactement le jeton qu'un attaquant peut fabriquer lui-même.
-      const forgedToken = jwt.sign({ userId: 'victim-user-1' }, 'attacker-controlled-secret');
+      const forgedToken = jwt.sign({ userId: '5f00000000000000000000b1', sid: LIVE_SID }, 'attacker-controlled-secret');
 
       await expect(
         captured.onUploadCreate(
@@ -634,7 +632,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onUploadCreate not captured');
 
-      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+      const expiredToken = jwt.sign({ userId: '5f00000000000000000000a1', sid: LIVE_SID }, JWT_SECRET, { expiresIn: -10 });
 
       await expect(
         captured.onUploadCreate(
@@ -648,7 +646,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
 
     it('accepte toujours un jeton légitimement signé par le serveur (non-régression)', async () => {
       const prisma = buildFakePrisma();
-      const legitToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET);
+      const legitToken = jwt.sign({ userId: '5f00000000000000000000a1', sid: LIVE_SID }, JWT_SECRET);
 
       const result = await runFullUpload({
         prisma,
@@ -660,7 +658,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
 
       expect(result.status_code).toBe(200);
       const createCall = (prisma.messageAttachment.create as jest.Mock<any>).mock.calls[0][0] as any;
-      expect(createCall.data.uploadedBy).toBe('user-registered-1');
+      expect(createCall.data.uploadedBy).toBe('5f00000000000000000000a1');
     });
   });
 
@@ -685,7 +683,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onUploadCreate not captured');
 
-      const expiredToken = jwt.sign({ userId: 'user-registered-1' }, JWT_SECRET, { expiresIn: -10 });
+      const expiredToken = jwt.sign({ userId: '5f00000000000000000000a1', sid: LIVE_SID }, JWT_SECRET, { expiresIn: -10 });
 
       await expect(
         captured.onUploadCreate(
@@ -712,7 +710,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onUploadCreate not captured');
 
-      const forgedToken = jwt.sign({ userId: 'victim-user-1' }, 'attacker-controlled-secret');
+      const forgedToken = jwt.sign({ userId: '5f00000000000000000000b1', sid: LIVE_SID }, 'attacker-controlled-secret');
 
       await expect(
         captured.onUploadCreate(
@@ -750,8 +748,8 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
   // JWT expire en cours de route échoue désormais).
   describe("JWT authentique-mais-expiré + session de confiance PROPRE — refusé quel que soit le userId (task-1-fix-round-6)", () => {
     const ATTACKER_RAW_SESSION_TOKEN = 'attacker-own-trusted-session-token';
-    const ATTACKER_USER_ID = 'attacker-user-1';
-    const VICTIM_USER_ID = 'victim-user-1';
+    const ATTACKER_USER_ID = '5f00000000000000000000c1';
+    const VICTIM_USER_ID = '5f00000000000000000000b1';
 
     function buildFaithfulUniqueSessionPrisma() {
       const storedRow = {
@@ -780,7 +778,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onUploadCreate not captured');
 
-      const victimAuthenticExpiredToken = jwt.sign({ userId: VICTIM_USER_ID }, JWT_SECRET, { expiresIn: -10 });
+      const victimAuthenticExpiredToken = jwt.sign({ userId: VICTIM_USER_ID, sid: LIVE_SID }, JWT_SECRET, { expiresIn: -10 });
 
       await expect(
         captured.onUploadCreate(
@@ -804,7 +802,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onUploadCreate not captured');
 
-      const ownExpiredToken = jwt.sign({ userId: ATTACKER_USER_ID }, JWT_SECRET, { expiresIn: -10 });
+      const ownExpiredToken = jwt.sign({ userId: ATTACKER_USER_ID, sid: LIVE_SID }, JWT_SECRET, { expiresIn: -10 });
 
       await expect(
         captured.onUploadCreate(
@@ -882,7 +880,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
       await registerTusRoutes(buildFakeFastify(buildFakePrisma()));
       if (!captured) throw new Error('onIncomingRequest not captured');
-      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+      seedExistingUpload('owned-upload', { userId: '5f00000000000000000000d1', isAnonymous: 'false' });
 
       await expect(
         captured.onIncomingRequest({ headers: headersFrom({}) }, 'owned-upload')
@@ -894,9 +892,9 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       const prisma = buildFakePrisma();
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
-      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+      seedExistingUpload('owned-upload', { userId: '5f00000000000000000000d1', isAnonymous: 'false' });
 
-      const attackerToken = jwt.sign({ userId: 'attacker-2' }, JWT_SECRET);
+      const attackerToken = jwt.sign({ userId: '5f00000000000000000000c2', sid: LIVE_SID }, JWT_SECRET);
 
       await expect(
         captured.onIncomingRequest(
@@ -911,9 +909,9 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       const prisma = buildFakePrisma();
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
-      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+      seedExistingUpload('owned-upload', { userId: '5f00000000000000000000d1', isAnonymous: 'false' });
 
-      const ownerToken = jwt.sign({ userId: 'owner-1' }, JWT_SECRET);
+      const ownerToken = jwt.sign({ userId: '5f00000000000000000000d1', sid: LIVE_SID }, JWT_SECRET);
 
       await expect(
         captured.onIncomingRequest(
@@ -926,7 +924,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     it('autorise le PROPRIÉTAIRE anonyme (participantId) via son X-Session-Token', async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
       const prisma = buildFakePrisma({
-        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sl-1' } },
+        participant: { id: 'participant-1', anonymousSession: { shareLinkId: 'sl-1' } }, shareLink: { isActive: true },
       });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
@@ -943,7 +941,7 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
     it("refuse un AUTRE participant anonyme que le propriétaire", async () => {
       const { registerTusRoutes } = await importFreshTusHandler(uploadDir);
       const prisma = buildFakePrisma({
-        participant: { id: 'participant-intruder', anonymousSession: { shareLinkId: 'sl-1' } },
+        participant: { id: 'participant-intruder', anonymousSession: { shareLinkId: 'sl-1' } }, shareLink: { isActive: true },
       });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
@@ -970,9 +968,9 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
-      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+      seedExistingUpload('owned-upload', { userId: '5f00000000000000000000d1', isAnonymous: 'false' });
 
-      const expiredOwnerToken = jwt.sign({ userId: 'owner-1' }, JWT_SECRET, { expiresIn: -10 });
+      const expiredOwnerToken = jwt.sign({ userId: '5f00000000000000000000d1', sid: LIVE_SID }, JWT_SECRET, { expiresIn: -10 });
 
       await expect(
         captured.onIncomingRequest(
@@ -995,9 +993,9 @@ describe('registerTusRoutes — onUploadCreate / onUploadFinish', () => {
       const prisma = buildFakePrisma({ trustedSession: { id: 'session-1' } });
       await registerTusRoutes(buildFakeFastify(prisma));
       if (!captured) throw new Error('onIncomingRequest not captured');
-      seedExistingUpload('owned-upload', { userId: 'owner-1', isAnonymous: 'false' });
+      seedExistingUpload('owned-upload', { userId: '5f00000000000000000000d1', isAnonymous: 'false' });
 
-      const forgedToken = jwt.sign({ userId: 'owner-1' }, 'attacker-controlled-secret');
+      const forgedToken = jwt.sign({ userId: '5f00000000000000000000d1', sid: LIVE_SID }, 'attacker-controlled-secret');
 
       await expect(
         captured.onIncomingRequest(

@@ -120,8 +120,9 @@ export function ForegroundMark({ size = 20 }: MarkProps) {
 
 /** Le glyphe d'une action d'objet ou du fond — le MÊME au menu d'appui long
  * et à la colonne droite. */
-export function ObjectActionMark({ action, size = 20 }: { readonly action: StudioObjectActionId | StudioBackgroundMenuAction; readonly size?: number }) {
+export function ObjectActionMark({ action, size = 20 }: { readonly action: StudioObjectActionId | StudioBackgroundMenuAction | 'rotate'; readonly size?: number }) {
   if (action === 'edit') return <EditMark size={size} />;
+  if (action === 'rotate') return <RotateMark size={size} />;
   if (action === 'raise' || action === 'lower') return <LayerStepMark size={size} up={action === 'raise'} />;
   if (action === 'duplicate') return <DuplicateMark size={size} />;
   if (action === 'set-background' || action === 'replace-background') return <BackgroundMark size={size} />;
@@ -133,6 +134,17 @@ export function ObjectActionMark({ action, size = 20 }: { readonly action: Studi
 /** La famille d'effets de la scène, par son glyphe. */
 export function EffectMark({ effect, size = 20 }: { readonly effect: StudioSceneEffect; readonly size?: number }) {
   return effect === 'opening' ? <OpeningEffectMark size={size} /> : <VisualEffectMark size={size} />;
+}
+
+/** « Pivoter » (#9160) — la flèche ⟲ d'iOS (`rotate.left`), un quart de tour antihoraire. */
+export function RotateMark({ size = 20 }: MarkProps) {
+  return (
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" {...STROKE}>
+      <path d="M4 8.5V3.5M4 8.5h5" />
+      <path d="M4.6 8.2A8 8 0 1 1 4 13" />
+      <rect x="9" y="10" width="7" height="7" rx="1.5" />
+    </svg>
+  );
 }
 
 /** « Couper » (#9136) — des ciseaux : la vidéo garde sa fenêtre. */

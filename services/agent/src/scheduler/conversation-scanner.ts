@@ -10,6 +10,7 @@ import { findEligibleConversations, type EligibleConversation } from './eligible
 import { detectActivity } from './activity-detector';
 import { toneProfileToGlobalFields } from '../memory/profile-merger';
 import { ScanTracer } from '../tracing/scan-tracer';
+import { resolveDailyBudgetUsd } from '../llm/budgeted-llm';
 import type { TracerRef } from '../graph/graph';
 
 type CompiledGraph = {
@@ -319,6 +320,15 @@ export class ConversationScanner {
 
   private async processConversation(conv: EligibleConversation, trigger: 'auto' | 'manual' = 'auto'): Promise<boolean> {
     const { conversationId } = conv;
+
+    // #10287 — budget LLM du jour atteint : l'agent s'ARRÊTE (aucun graphe, aucun statut).
+    // L'enveloppe BudgetedLlmProvider refuse de toute façon l'appel ; ce contrôle évite
+    // de lancer un cycle qui ne peut qu'échouer.
+    const llmBudget = await this.budgetManager.canSpendLlm(resolveDailyBudgetUsd(await this.configCache.getGlobalConfig()));
+    if (!llmBudget.allowed) {
+      console.warn(`[Scanner] conv=${conversationId} skipped: daily LLM budget reached ($${llmBudget.spentUsd.toFixed(4)} / $${llmBudget.budgetUsd.toFixed(2)})`);
+      return false;
+    }
 
     // Lock PAR-CONVERSATION : scanConversation (manuel, déclenché par le bouton
     // admin) ne prend aucun lock global, donc sans ce verrou il pourrait traiter

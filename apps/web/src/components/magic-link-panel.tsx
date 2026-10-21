@@ -12,10 +12,9 @@ import {
   type MagicLinkDeadline,
   type MagicLinkRequestOutcome,
 } from '@/lib/view/magic-link';
-import { HOW_IT_WORKS_LABEL, HOW_IT_WORKS_TEXT } from '@/lib/view/auth-copy';
 import { useCountdown } from '@/lib/view/use-countdown';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 import { AuthSubmitButton } from './auth-chrome';
 import { EmailCodeForm, withStrongEmail } from './email-code-form';
@@ -59,9 +58,12 @@ export const defaultMagicLinkDeps: MagicLinkPanelDeps = {
   now: () => Date.now(),
 };
 
-const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
+/** Les espaces PLIENT avec la hauteur (#8418, #10007) : 24 px dès 700 px de
+ * haut, 12 px à 676 px et en dessous — sans règle de média dans la feuille de
+ * la première peinture. */
+const SECTION_GAP = 'clamp(12px, calc(100dvh - 676px), 24px)';
 
-const OUTCOME_FIELD_ERROR = 'Adresse e-mail invalide';
+const MAGIC_LINK_SUBMIT_GRADIENT = 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))';
 
 /**
  * UNE LIGNE VISIBLE PAR ÉTAPE, LE « COMMENT » DERRIÈRE UN (i) (#6626).
@@ -72,12 +74,16 @@ const OUTCOME_FIELD_ERROR = 'Adresse e-mail invalide';
  * part à l'écran — la BAGUETTE reste l'icône de la connexion par e-mail — et le
  * vocabulaire est celui que les trois clients partagent.
  */
-const HOW_IT_WORKS: InfoHint = { label: HOW_IT_WORKS_LABEL, text: HOW_IT_WORKS_TEXT, glyph: AUTH_GLYPHS.info };
+const howItWorks = (language: InterfaceLanguage): InfoHint => ({
+  label: translate(language, 'magicLink.howItWorks'),
+  text: translate(language, 'magicLink.howItWorks.text'),
+  glyph: AUTH_GLYPHS.info,
+});
 
-function bannerFor(outcome: MagicLinkRequestOutcome | null): string | null {
+function bannerFor(outcome: MagicLinkRequestOutcome | null, language: InterfaceLanguage): string | null {
   if (outcome === null) return null;
-  if (outcome.kind === 'rate-limited') return 'Trop de demandes — réessayez dans une heure.';
-  if (outcome.kind === 'offline') return 'Pas de connexion. Vérifiez votre réseau et réessayez.';
+  if (outcome.kind === 'rate-limited') return translate(language, 'magicLink.rateLimited');
+  if (outcome.kind === 'offline') return translate(language, 'magicLink.offline');
   if (outcome.kind === 'failed') return outcome.message;
   return null;
 }
@@ -130,7 +136,8 @@ export function MagicLinkPanel({
   const [focused, setFocused] = useState(false);
   const [codeVerified, setCodeVerified] = useState(false);
   const [pendingSessionToken, setPendingSessionToken] = useState<string | null>(null);
-  const howItWorks = useInfoHint();
+  const howItWorksState = useInfoHint();
+  const language = currentInterfaceLanguage();
 
   const remaining = useCountdown(deadline, deps.clock, deps.now);
   const locale = typeof document === 'object' ? document.documentElement.lang || 'fr' : 'fr';
@@ -167,8 +174,9 @@ export function MagicLinkPanel({
     onCancel?.();
   }
 
-  const fieldError = outcome?.kind === 'invalid-email' ? OUTCOME_FIELD_ERROR : undefined;
-  const banner = bannerFor(outcome);
+  const fieldError = outcome?.kind === 'invalid-email' ? translate(language, 'magicLink.email.invalid') : undefined;
+  const banner = bannerFor(outcome, language);
+  const hint = howItWorks(language);
 
   if (step === 'waiting') {
     const expired = deadline !== null && remaining <= 0;
@@ -182,7 +190,6 @@ export function MagicLinkPanel({
        ET un lien. Le code se saisit ICI, sans changer d'écran
        (`EmailCodeForm`, la machine de `/auth/verify-email`) ; il ouvre la
        session et mène là où une connexion mène. */
-    const language = currentInterfaceLanguage();
     return (
       <EmailSentNotice
         email={email}
@@ -191,7 +198,7 @@ export function MagicLinkPanel({
           <>
             {expired ? (
               <p role="alert" style={{ color: 'var(--ios-error)' }}>
-                Lien expiré, renvoyez-en un nouveau
+                {translate(language, 'magicLink.linkExpired')}
               </p>
             ) : (
               <p
@@ -224,13 +231,13 @@ export function MagicLinkPanel({
         <button
           type="button"
           disabled={(!expired && remaining > 0) || submitting || !online}
-          aria-label="Renvoyer le lien"
+          aria-label={translate(language, 'magicLink.resend.label')}
           onClick={send}
           className="inline-flex items-center gap-2 font-semibold text-title"
           style={{ minHeight: 44, color: expired ? 'var(--ios-indigo-400)' : 'var(--color-ios-ink-2)' }}
         >
           <GlyphSvg glyph={AUTH_GLYPHS.arrowClockwise} size={18} />
-          Renvoyer
+          {translate(language, 'magicLink.resend')}
         </button>
 
         <button
@@ -239,7 +246,7 @@ export function MagicLinkPanel({
           className="text-title font-medium"
           style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
         >
-          Annuler
+          {translate(language, 'magicLink.cancel')}
         </button>
       </EmailSentNotice>
     );
@@ -251,7 +258,8 @@ export function MagicLinkPanel({
         e.preventDefault();
         void send();
       }}
-      className="flex flex-1 flex-col content-center justify-center gap-6 px-8"
+      className="flex flex-1 flex-col content-center justify-center px-8"
+      style={{ gap: SECTION_GAP }}
       noValidate
     >
       <span aria-hidden="true" className="mx-auto" style={{ color: 'var(--ios-indigo-500)' }}>
@@ -268,11 +276,11 @@ export function MagicLinkPanel({
       <div className="grid gap-1 text-center">
         <div>
           <h2 className="inline text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Votre adresse <span className="whitespace-nowrap">e-mail</span>
+            <UnbrokenLastWord text={translate(language, 'magicLink.title')} />
           </h2>
-          <InfoHintButton hint={HOW_IT_WORKS} state={howItWorks} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
+          <InfoHintButton hint={hint} state={howItWorksState} style={{ display: 'inline-grid', verticalAlign: 'middle' }} />
         </div>
-        <InfoHintText hint={HOW_IT_WORKS} state={howItWorks} />
+        <InfoHintText hint={hint} state={howItWorksState} />
       </div>
 
       <Field id="magic-link-email" glyph={AUTH_GLYPHS.envelope} tint="var(--ios-indigo-400)" focused={focused} error={fieldError}>
@@ -290,8 +298,8 @@ export function MagicLinkPanel({
             onInput={(e) => setEmail(e.currentTarget.value)}
             onFocus={() => setFocused(true)}
             onBlur={() => setFocused(false)}
-            placeholder="nom@exemple.com"
-            aria-label="Adresse email"
+            placeholder={translate(language, 'magicLink.email.placeholder')}
+            aria-label={translate(language, 'magicLink.email.label')}
             className="w-full bg-transparent py-3 text-input outline-none"
             style={{ color: 'var(--color-ios-ink)' }}
           />
@@ -307,12 +315,30 @@ export function MagicLinkPanel({
       <AuthSubmitButton
         disabled={!isEmailValid(email) || !online}
         isSubmitting={submitting}
-        label="Recevoir le lien"
-        busyLabel="Envoi…"
+        label={translate(language, 'magicLink.submit')}
+        busyLabel={translate(language, 'magicLink.submit.busy')}
         background={MAGIC_LINK_SUBMIT_GRADIENT}
       />
 
       {footer}
     </form>
+  );
+}
+
+/**
+ * LE DERNIER MOT DU TITRE NE SE COUPE PAS — « e-mail » cassait au trait
+ * d'union (« e- » / « mail », mesuré en capture), et le (i) qui le suit doit
+ * rester collé au texte qu'il explique. Le titre vient du catalogue, dans
+ * l'ordre de SA langue : c'est donc son dernier mot, quel qu'il soit, qui
+ * reste entier.
+ */
+function UnbrokenLastWord({ text }: { readonly text: string }) {
+  const cut = text.lastIndexOf(' ');
+  if (cut < 0) return <span className="whitespace-nowrap">{text}</span>;
+  return (
+    <>
+      {text.slice(0, cut + 1)}
+      <span className="whitespace-nowrap">{text.slice(cut + 1)}</span>
+    </>
   );
 }

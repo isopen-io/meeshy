@@ -12,6 +12,7 @@
 import frGallery from './catalog-fr-gallery';
 import frMessageCard from './catalog-fr-message-card';
 import frMentions from './catalog-fr-mentions';
+import frShellLabels from './catalog-fr-shell-labels';
 import frStudioChrome from './catalog-fr-studio-chrome';
 import frEphemeral from './catalog-fr-ephemeral';
 import frWriteRestriction from './catalog-fr-write-restriction';
@@ -49,6 +50,10 @@ import frContactDiscovery from './catalog-fr-contact-discovery';
 import frDownload from './catalog-fr-download';
 import frPhonePrompt from './catalog-fr-phone-prompt';
 import frUserProfile from './catalog-fr-user-profile';
+import frContentRefused from './catalog-fr-content-refused';
+import frContentRemoval from './catalog-fr-content-removal';
+import frPublicEntry from './catalog-fr-public-entry';
+import frThreadSearch from './catalog-fr-thread-search';
 
 const fr = {
   'announce.messageSent': 'Message envoyé',
@@ -293,6 +298,7 @@ const fr = {
   'notFound.title': "Cette adresse n'existe pas.",
 
   'pending.back': 'Revenir aux conversations',
+  'pending.screen': 'L’écran arrive',
 
   /* LES LIENS REÇUS (#6714, #6715) — les pages que visent les liens suivis
      `/l/:token` et les e-mails de compte (suppression, changement d'adresse,
@@ -312,8 +318,6 @@ const fr = {
   'trackingLink.opening': 'Ouverture du lien…',
   'trackingLink.dead.title': 'Ce lien n’est plus disponible',
   'trackingLink.dead.body': 'Il a expiré, a été désactivé ou n’a jamais existé.',
-  'accountDeletion.incomplete.title': 'Lien incomplet',
-  'accountDeletion.incomplete.body': 'Ce lien ne porte pas les informations nécessaires. Connectez-vous pour demander la suppression de votre compte.',
   'accountDeletion.confirm.title': 'Confirmer la suppression de votre compte',
   'accountDeletion.confirm.body':
     'Votre compte sera désactivé au terme d’une période de grâce de 30 jours. D’ici là, le lien « Annuler » de l’e-mail vous permet de revenir en arrière.',
@@ -392,6 +396,8 @@ const fr = {
   'profile.avatar.updated': 'Photo de profil mise à jour',
   'profile.avatar.error': 'Impossible de mettre à jour la photo de profil',
   'profile.banner.edit': 'Modifier la bannière',
+  'profile.avatar.view': 'Voir la photo de profil en plein écran',
+  'profile.banner.view': 'Voir la bannière en plein écran',
   'profile.banner.updated': 'Bannière mise à jour',
   'profile.banner.error': 'Impossible de mettre à jour la bannière',
   'profile.image.uploading': 'Envoi en cours',
@@ -706,55 +712,6 @@ const fr = {
   'links.announce.activated': 'Lien activé',
   'links.announce.toggleFailed': 'Impossible de modifier ce lien',
   'links.announce.offline': 'Hors ligne : rien n’a été envoyé.',
-  'links.create.title': 'Nouveau lien de partage',
-  'links.create.section.conversation': 'Conversation',
-  'links.create.choose': 'Choisir un groupe ou une communauté',
-  'links.create.picker.title': 'Choisir une conversation',
-  'links.create.picker.empty': 'Aucune conversation ne peut recevoir un lien pour l’instant.',
-  'links.create.section.identity': 'Identité du lien',
-  'links.create.name': 'Nom du lien',
-  'links.create.name.placeholder': 'ex. : Partage Twitter',
-  'links.create.description': 'Description (facultative)',
-  'links.create.description.placeholder': 'ex. : Rejoins notre groupe…',
-  'links.create.section.access': 'Accès invités',
-  'links.create.section.access.subtitle': 'Ce que les visiteurs doivent fournir pour rejoindre',
-  'links.create.access.account': 'Compte requis',
-  'links.create.access.account.caption': 'Seuls les membres Meeshy peuvent rejoindre',
-  'links.create.access.nickname': 'Pseudonyme requis',
-  'links.create.access.nickname.caption': 'Le visiteur doit choisir un pseudo',
-  'links.create.access.email': 'E-mail requis',
-  'links.create.access.email.caption': 'Le visiteur doit fournir son e-mail',
-  'links.create.access.birthday': 'Date de naissance requise',
-  'links.create.access.birthday.caption': 'Permet le contrôle d’âge',
-  'links.create.section.permissions': 'Permissions',
-  'links.create.section.permissions.subtitle': 'Ce que les invités anonymes peuvent faire',
-  'links.create.permission.messages': 'Envoyer des messages',
-  'links.create.permission.messages.caption': 'Les invités peuvent écrire dans la conversation',
-  'links.create.permission.images': 'Envoyer des images',
-  'links.create.permission.images.caption': 'Les invités peuvent partager des photos',
-  'links.create.permission.files': 'Envoyer des fichiers',
-  'links.create.permission.files.caption': 'Les invités peuvent envoyer des documents',
-  'links.create.permission.history': 'Voir l’historique',
-  'links.create.permission.history.caption': 'Les invités voient les messages précédents',
-  'links.create.section.limits': 'Limites',
-  'links.create.section.limits.subtitle': 'Contrôlez l’audience et la durée de vie du lien',
-  'links.create.limit.uses': 'Limiter les utilisations',
-  'links.create.limit.max.one': '{count} utilisation au maximum',
-  'links.create.limit.max.other': '{count} utilisations au maximum',
-  'links.create.limit.count': 'Nombre d’utilisations',
-  'links.create.limit.invalid': 'Choisissez un nombre entier entre 1 et {max}.',
-  'links.create.expiration': 'Expiration',
-  'links.create.expiration.never': 'Jamais',
-  'links.create.expiration.h24': '24 heures',
-  'links.create.expiration.d7': '7 jours',
-  'links.create.expiration.d30': '30 jours',
-  'links.create.expiration.m3': '3 mois',
-  'links.create.button': 'Créer le lien de partage',
-  'links.create.inprogress': 'Création en cours…',
-  'links.create.error.conversation': 'Choisissez d’abord une conversation.',
-  'links.create.error.offline': 'Hors ligne : le lien n’a pas été créé.',
-  'links.create.error.refused': 'Vous ne pouvez pas créer de lien pour cette conversation.',
-  'links.create.error.default': 'Le lien n’a pas pu être créé. Réessayez.',
 
   /* LES SCÈNES DU FIL (#6898) — carrousel, mosaïque et lecture d'une
      publication v:3. */
@@ -798,6 +755,8 @@ const fr = {
   'story.studio.kind.reel': 'Réel',
   'story.studio.refusal.reel': 'Un réel demande une vidéo ou un son d’au moins 3 secondes, ou au moins deux images.',
   'story.studio.offline': 'Hors ligne — la publication partira au retour du réseau.',
+  'story.studio.pending.sending': 'Publication en cours d’envoi.',
+  'story.studio.pending.cancel': 'Annuler l’envoi',
   'story.studio.stage': 'Aperçu de la story',
   'story.studio.background.add': 'Ajouter une photo ou une vidéo',
   'story.studio.background.label': 'Fond',
@@ -954,6 +913,8 @@ const fr = {
   'story.action.reply': 'Répondre',
   'story.action.forward': 'Envoyer',
   'story.action.repost': 'Republier',
+  'story.viewer.repost': 'Republication',
+  'story.viewer.repostOf': 'Republication de @{handle}',
   'story.action.views': 'Vues',
   'story.action.share': 'Partager',
   'story.action.save': 'Enregistrer',
@@ -1084,6 +1045,7 @@ const fr = {
 
   ...frThreadStates,
   ...frMentions,
+  ...frShellLabels,
   ...frStudioChrome,
   ...frEphemeral,
   ...frWriteRestriction,
@@ -1122,12 +1084,18 @@ const fr = {
 
   ...frStoriesMine,
   'settings.tools.sounds': 'Mes sons',
+  'settings.section.packs': 'Packs et téléchargements',
+  'settings.packs.shop': 'Boutique des stickers et des cadres',
   ...frFeedPost,
   ...frContactCard,
   ...frQuote,
   ...frCommentRow,
   ...frContactDiscovery,
   ...frUserProfile,
+  ...frContentRefused,
+  ...frContentRemoval,
+  ...frPublicEntry,
+  ...frThreadSearch,
 } as const;
 
 export default fr;

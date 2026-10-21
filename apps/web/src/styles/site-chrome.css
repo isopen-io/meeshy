@@ -1,0 +1,262 @@
+/* L'EN-TÊTE ET LE PIED DE meeshy.me (#10071) — la feuille de
+ * `src/landing/site-chrome.tsx`, extraite de `landing.css` sans en changer une
+ * valeur.
+ *
+ * TROIS CONSOMMATEURS, et aucun n'est la première peinture de l'application :
+ * `landing.css` et `institutional.css` l'importent (chacune est INLINÉE dans
+ * son document prérendu), et l'écran `/download` l'importe dans son propre
+ * morceau. Jamais `app.css`.
+ *
+ * Les sélecteurs ne dépendent PAS de la racine `.ld` de la landing : la même
+ * barre se pose sur une page institutionnelle (Tailwind, préflight en couche
+ * `base` — ces règles hors couche le précèdent) et sur `/download` (feuille de
+ * l'application). Les boutons portent deux classes (`.ld-btn.ld-btn--primary`)
+ * pour l'emporter sur `.ld a` / `.ld-header a` sans dépendre de l'ordre.
+ *
+ * Aucune couleur écrite : les jetons générés depuis iOS (`--ios-*`), que les
+ * trois feuilles hôtes chargent déjà. Les propriétés sont LOGIQUES
+ * (`margin-inline-start`, `inset-inline-end`) : l'arabe retourne la barre.
+ */
+.ld-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.ld-wrap {
+  position: relative;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right));
+}
+
+.ld-spacer {
+  flex: 1;
+}
+
+.ld-header a,
+.ld-footer a {
+  color: var(--ios-ink-2);
+  text-decoration: none;
+}
+.ld-header a:hover,
+.ld-footer a:hover {
+  color: var(--ios-ink);
+}
+.ld-header a:focus-visible,
+.ld-header select:focus-visible,
+.ld-header summary:focus-visible,
+.ld-footer a:focus-visible {
+  outline: 2px solid var(--ios-indigo-400);
+  outline-offset: 2px;
+}
+
+/* L'EN-TÊTE — le verre de l'application (`.glass`, 80 %, flou 24 px). */
+.ld-header {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  padding-top: env(safe-area-inset-top);
+  background: color-mix(in srgb, var(--ios-surface) 80%, transparent);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border-bottom: 0.5px solid var(--ios-edge);
+}
+.ld-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px 14px;
+  flex-wrap: wrap;
+  padding-block: 10px;
+}
+.ld-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.ld-brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.ld-wordmark {
+  font-size: 22px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--ios-indigo-400), var(--ios-indigo-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ld-nav {
+  display: flex;
+  gap: 4px 20px;
+  margin-inline-start: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  flex-wrap: wrap;
+}
+.ld-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.ld-language {
+  position: relative;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  background: var(--ios-surface-card);
+  border: 0.5px solid var(--ios-edge);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ios-ink-2);
+}
+.ld-language select {
+  background: transparent;
+  color: var(--ios-ink);
+  border: 0;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  min-height: 44px;
+}
+.ld-language option {
+  background: var(--ios-surface-card);
+  color: var(--ios-ink);
+}
+
+/* LE SÉLECTEUR SANS SCRIPT des pages non traduites — une divulgation de liens. */
+.ld-language-menu {
+  position: relative;
+}
+.ld-language-menu > summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ios-ink);
+}
+.ld-language-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.ld-language-menu ul {
+  position: absolute;
+  inset-inline-end: 0;
+  top: calc(100% + 6px);
+  z-index: 6;
+  min-width: 11rem;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border-radius: 14px;
+  background: var(--ios-surface-card);
+  border: 0.5px solid var(--ios-edge);
+  box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--ios-indigo-950) 60%, transparent);
+}
+.ld-language-menu li a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: 10px;
+  font-size: 15px;
+}
+.ld-language-menu li a:hover {
+  background: color-mix(in srgb, var(--ios-indigo-500) 12%, transparent);
+}
+
+.ld-btn {
+  min-height: 44px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+.ld-btn.ld-btn--ghost {
+  border: 1px solid color-mix(in srgb, var(--ios-indigo-300) 42%, transparent);
+  color: var(--ios-ink);
+}
+.ld-btn.ld-btn--primary,
+.ld-btn.ld-btn--primary:hover {
+  background: linear-gradient(135deg, var(--ios-indigo-500), var(--ios-indigo-700));
+  color: var(--ios-on-brand);
+  font-weight: 700;
+}
+.ld-btn--large {
+  min-height: 52px;
+  font-size: 17px;
+  padding: 0 22px;
+}
+
+/* LE PIED */
+.ld-footer {
+  position: relative;
+  border-top: 0.5px solid var(--ios-edge);
+  margin-top: 32px;
+}
+.ld-footer-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  align-items: center;
+  padding-block: 20px calc(36px + env(safe-area-inset-bottom));
+  font-size: 14px;
+  color: var(--ios-ink-3);
+}
+.ld-footer-name {
+  font-weight: 700;
+  color: var(--ios-ink);
+}
+.ld-footer nav {
+  display: flex;
+  gap: 4px 18px;
+  flex-wrap: wrap;
+}
+.ld-footer nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.ld-footer-signature {
+  margin-top: -20px;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+}
+
+@media (max-width: 640px) {
+  .ld-nav {
+    display: none;
+  }
+}
+
+/* LE TÉLÉPHONE ÉTROIT (320–480 px) : la barre tient en DEUX rangées — la
+ * marque et la langue, puis les deux portes côte à côte —
+ * plutôt que trois, qui mangeaient un cinquième de l'écran sous un en-tête
+ * collant. Chaque porte tient sur UNE ligne (#10124) : elle prend la largeur
+ * de son libellé, l'espace qui reste se partage. À parts égales, « Join
+ * without an account » passait sur deux lignes à 390 px pendant que « Sign
+ * in » laissait la moitié de la sienne vide. */
+@media (max-width: 480px) {
+  .ld-bar {
+    gap: 8px;
+  }
+  .ld-bar > .ld-btn {
+    flex: 1 1 auto;
+    white-space: nowrap;
+    padding-inline: 8px;
+    font-size: 14px;
+    line-height: 1.2;
+    text-align: center;
+  }
+}

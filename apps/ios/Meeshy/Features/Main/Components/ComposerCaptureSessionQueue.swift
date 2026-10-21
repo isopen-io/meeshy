@@ -59,6 +59,20 @@ nonisolated final class ComposerCaptureSessionQueue: @unchecked Sendable {
         }
     }
 
+    /// **La session s'est arrêtée sans qu'on le demande** (#10308) — erreur
+    /// d'exécution, interruption levée : elle repart si le viseur la veut
+    /// encore, jamais après un désarmement. AVFoundation ne la relance pas, et
+    /// l'aperçu garderait sa dernière image, figée.
+    func resumeIfWanted(_ session: any ComposerCaptureRunning) {
+        let cible = Target(session: session)
+        queue.async {
+            self.lock.lock()
+            let voulu = self.wantsRunning
+            self.lock.unlock()
+            if voulu, !cible.session.isRunning { cible.session.startRunning() }
+        }
+    }
+
     /// Attend que la file ait tout exécuté — pour les témoins.
     func drain() {
         queue.sync {}

@@ -350,7 +350,7 @@ public actor StoryPublishQueue {
     private var failedItems: [StoryPublishQueueItem] = []
     private var isProcessing = false
     private var cancellables = Set<AnyCancellable>()
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+    private let logger = MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -608,8 +608,7 @@ public actor StoryPublishQueue {
             // Backoff between consecutive retries within the same processing
             // pass — small jitter to avoid thundering-herd on reconnect.
             if attemptedInSweep > 0 {
-                let jitter = UInt64(Double.random(in: 200...700) * 1_000_000)
-                try? await Task.sleep(nanoseconds: jitter)
+                guard await cancellableSleep(for: .milliseconds(Int.random(in: 200...700))) else { break }
             }
             attemptedInSweep += 1
 
@@ -648,6 +647,11 @@ public actor StoryPublishQueue {
                     draftId: item.draftId
                 ))
                 consecutiveRetryableFailures = 0
+            } catch is StoryPublishDeferredError {
+                // Pas un ESSAI : personne pour publier (exécuteur démonté). Aucun budget consommé, et la passe
+                // s'arrête — les items suivants n'ont pas plus d'exécuteur que celui-ci.
+                logger.info("Story publication deferred — no executor; kept without charging its retry budget")
+                break
             } catch {
                 // Échec retryable : on charge le budget de CET item puis on
                 // poursuit sur les suivants — ils sont indépendants et
@@ -769,7 +773,7 @@ public actor StoryPublishQueue {
                 guard let self else { return }
                 Task {
                     // Stabilization delay matches OfflineQueue's pattern.
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    guard await cancellableSleep(for: QueueTiming.reconnectSettle) else { return }
                     await self.processNext()
                 }
             }
@@ -785,7 +789,7 @@ public actor StoryPublishQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -799,7 +803,7 @@ public actor StoryPublishQueue {
             do {
                 try FileManager.default.createDirectory(at: cacheDir, withIntermediateDirectories: true)
             } catch {
-                Logger(subsystem: "com.meeshy.sdk", category: "story-publish-queue")
+                MeeshyLog.logger(.storyPublishQueue, subsystem: .legacySDK)
                     .error("Cache directory unavailable — the queue file cannot be persisted: \(error.localizedDescription, privacy: .public)")
             }
         }
@@ -854,6 +858,13 @@ public actor StoryPublishQueue {
 /// Throw this from the `onPublish` handler to mark a publish failure as
 /// permanent (4xx HTTP, validation rejected, story expired) so the queue
 /// stops retrying and surfaces the failure to the user via `publishFailed`.
+/// La publication n'a PAS été tentée : rien ne peut publier pour l'instant (l'exécuteur de l'app — le
+/// `StoryViewModel` racine — est démonté). La file garde l'item SANS consommer son budget de retry et arrête la
+/// passe ; la prochaine reprise (reconnexion, retour au premier plan, exécuteur remonté) la relance.
+public struct StoryPublishDeferredError: Error, Sendable {
+    public init() {}
+}
+
 public struct StoryPublishUnrecoverableError: Error, Sendable {
     public let message: String
 

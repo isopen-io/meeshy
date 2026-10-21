@@ -106,7 +106,7 @@ struct StatusBubbleOverlay: View {
             // Geste d'échappement VoiceOver (scrub à deux doigts) : la bulle est un overlay ZStack,
             // pas une sheet système — sans ceci, un utilisateur VoiceOver n'a aucun moyen standard
             // de la fermer (le tap-to-dismiss extérieur est un `Color.clear` non focalisable).
-            .accessibilityAction(.escape) { dismiss() }
+            .dismissOnEscape { dismiss() }
         }
         .onAppear {
             appearAnimation = true
@@ -220,9 +220,7 @@ struct StatusBubbleOverlay: View {
                     .frame(width: 18, height: 18)
                     .background(Circle().fill(Color(hex: status.avatarColor)))
             }
-            // VoiceOver : cette rangée est agrégée par le conteneur `bubbleContent`
-            // (`children: .ignore`) ; l'étiquette lecture/arrêt vit dans l'action nommée
-            // du conteneur (`bubbleAccessibilityActions`). Pas de label ici (inerte).
+            .accessibilityLabel(audioToggleLabel)
 
             ProgressView(value: audioPlayer.progress)
                 .progressViewStyle(.linear)
@@ -265,13 +263,16 @@ struct StatusBubbleOverlay: View {
         return audioPlayer.progress.formatted(.percent.precision(.fractionLength(0)))
     }
 
+    private var audioToggleLabel: String {
+        audioPlayer.isPlaying
+            ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
+            : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
+    }
+
     /// Actions secondaires exposées via le rotor VoiceOver (l'action par défaut = répondre).
     @ViewBuilder private var bubbleAccessibilityActions: some View {
         if hasAudio {
-            Button(audioPlayer.isPlaying
-                ? String(localized: "status.bubble.audio.stop", defaultValue: "Arrêter l'écoute", bundle: .main)
-                : String(localized: "status.bubble.audio.play", defaultValue: "Écouter l'humeur", bundle: .main)
-            ) {
+            Button(audioToggleLabel) {
                 audioPlayer.togglePlayPause()
             }
         }

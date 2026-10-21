@@ -34,6 +34,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'game_league_result':
     case 'game_season_step':
     case 'game_mission_window': return prefs.gameEnabled ?? true;
+    case 'game_photo_moment':   return (prefs.gameEnabled ?? true) && (prefs.gamePhotoEnabled ?? true);
     case 'member_joined':     return prefs.memberJoinedEnabled;
     case 'message_reply':
     case 'reply':             return prefs.replyEnabled;
@@ -67,6 +68,7 @@ export function isNotificationTypeEnabledByPreference(
     case 'two_factor_enabled':
     case 'two_factor_disabled':
     case 'login_new_device':      return true; // sécurité = toujours actif
+    case 'content_removed':       return true; // retrait par la modération : l'auteur sait pourquoi (#11149)
     default:                  return true;
   }
 }

@@ -259,7 +259,7 @@ struct ParticipantsView: View {
         } else {
             LazyVStack(spacing: 0) {
                 ForEach(participants) { participant in
-                    participantRow(participant)
+                    liveParticipantRow(participant)
                         .onAppear {
                             Task { await loadMoreIfNeeded(currentItem: participant) }
                         }
@@ -291,10 +291,14 @@ struct ParticipantsView: View {
 
     // MARK: - Participant Row
 
+    private func liveParticipantRow(_ participant: PaginatedParticipant) -> some View {
+        LivePresence { participantRow(participant) }
+    }
+
     private func participantRow(_ participant: PaginatedParticipant) -> some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
         let isCurrentUser = participant.id == currentUserId
-        let presence = presenceManager.presenceState(for: participant.id)
+        let presence = presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt)
 
         return HStack(spacing: MeeshySpacing.md) {
             MeeshyAvatar(
@@ -302,10 +306,16 @@ struct ParticipantsView: View {
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
-                moodEmoji: statusViewModel.statusForUser(userId: participant.id)?.moodEmoji,
+                moodEmoji: statusViewModel.statusForUser(userId: participant.viewingKey)?.moodEmoji,
                 presenceState: presence,
-                onMoodTap: statusViewModel.moodTapHandler(for: participant.id)
+                isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
+                // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
+                ring: participant.avatarRing,
+                onMoodTap: statusViewModel.moodTapHandler(for: participant.viewingKey)
             )
+            .countsImpression(of: statusViewModel.statusForUser(userId: participant.viewingKey)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {
@@ -364,12 +374,16 @@ struct ParticipantsView: View {
         // Ouvrir la fiche : c'est la SEULE surface de profil d'un visiteur sans
         // compte. Réservée à eux — un inscrit a déjà sa page `/u/{pseudo}`, et
         // dupliquer l'entrée ferait deux profils pour une même personne.
-        .onTapGesture {
-            guard participant.isAnonymous else { return }
-            profileParticipantId = participant.id
-        }
+        .onTapGesture { openAnonymousProfile(participant) }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(participantAccessibilityLabel(participant, isCurrentUser: isCurrentUser, presence: presence))
+        .accessibilityAddTraits(participant.isAnonymous ? .isButton : [])
+        .accessibilityAction { openAnonymousProfile(participant) }
+    }
+
+    private func openAnonymousProfile(_ participant: PaginatedParticipant) {
+        guard participant.isAnonymous else { return }
+        profileParticipantId = participant.id
     }
 
     // MARK: - Role Badge
@@ -726,5 +740,5 @@ extension View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let participants = Logger(subsystem: "me.meeshy.app", category: "participants")
+    nonisolated static let participants = MeeshyLog.logger(.participants)
 }

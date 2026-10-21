@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.AudioManager;
+import android.os.SystemClock;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -58,6 +59,29 @@ public class MeeshyPlaybackPlugin extends Plugin {
         return true;
     }
 
+    /**
+     * #10624 — la barre glissee ou les ±15 s de la carte : la position visee
+     * part a la page, qui la pose sur l'audio qui joue. `false` sans page a
+     * l'ecoute (plus ancienne que la carte decrite) : la carte n'avance rien.
+     */
+    static boolean seekRequested(long positionMs) {
+        MeeshyPlaybackPlugin plugin = live;
+        if (plugin == null || !plugin.hasListeners("seekRequested")) return false;
+        JSObject data = new JSObject();
+        data.put("positionMs", positionMs);
+        plugin.notifyListeners("seekRequested", data);
+        return true;
+    }
+
+    /** #10624 — suivant / precedent, offerts seulement quand la page declare une file (#10627). */
+    static boolean skipRequested(boolean next) {
+        MeeshyPlaybackPlugin plugin = live;
+        String event = next ? "nextRequested" : "previousRequested";
+        if (plugin == null || !plugin.hasListeners(event)) return false;
+        plugin.notifyListeners(event, new JSObject());
+        return true;
+    }
+
     @Override
     public void load() {
         live = this;
@@ -88,9 +112,40 @@ public class MeeshyPlaybackPlugin extends Plugin {
             });
     }
 
+    /** #10641 — la page reprend la lecture : le vocal lu depuis une notification se tait, jamais deux sons. */
     @PluginMethod
     public void holdPlayback(PluginCall call) {
+        NotificationVoiceService.yieldToPage();
         PlaybackForegroundService.start(getContext());
+        call.resolve();
+    }
+
+    /**
+     * #10624 — la page decrit le vocal qui joue (auteur, conversation, date,
+     * avatar, duree, position, vitesse), aux seules ruptures : la carte de
+     * lecture le montre et extrapole la position. Un champ absent garde le
+     * libelle generique.
+     */
+    @PluginMethod
+    public void nowPlaying(PluginCall call) {
+        JSObject data = call.getData();
+        Object sentAt = data.opt("sentAtMs");
+        PlaybackForegroundService.describe(new PlaybackRules.Track(
+            call.getString("key", ""),
+            call.getString("sender"),
+            call.getString("conversation"),
+            sentAt instanceof Number ? Long.valueOf(PlaybackRules.millis(sentAt, 0)) : null,
+            call.getString("artworkUrl"),
+            Boolean.TRUE.equals(call.getBoolean("protected", false)),
+            PlaybackRules.millis(data.opt("durationMs"), 0),
+            PlaybackRules.millis(data.opt("positionMs"), 0),
+            PlaybackRules.rate(data.opt("rate")),
+            Boolean.TRUE.equals(call.getBoolean("playing", true)),
+            Boolean.TRUE.equals(call.getBoolean("buffering", false)),
+            Boolean.TRUE.equals(call.getBoolean("canNext", false)),
+            Boolean.TRUE.equals(call.getBoolean("canPrevious", false)),
+            SystemClock.elapsedRealtime()
+        ));
         call.resolve();
     }
 

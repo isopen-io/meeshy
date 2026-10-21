@@ -123,7 +123,7 @@ export class PostReactionService {
 
     const post = await this.prisma.post.findUnique({
       where: { id: postId },
-      select: { id: true, deletedAt: true, authorId: true }
+      select: { id: true, deletedAt: true, authorId: true, type: true }
     });
 
     if (!post) {
@@ -191,7 +191,7 @@ export class PostReactionService {
         this.prisma,
         userId,
         'tool.post_reaction',
-        { posts: postsCreditedBy({ id: postId, authorId: post.authorId }, through), source: creditSource.postReaction(reaction.id) },
+        { posts: postsCreditedBy({ id: postId, authorId: post.authorId, type: post.type }, through), source: creditSource.postReaction(reaction.id) },
         this.engagement,
       );
 
@@ -242,7 +242,7 @@ export class PostReactionService {
       // Retirer la réaction reprend ce qu'elle a rapporté — sur l'original et
       // sur chaque republication par laquelle elle a été posée ou reconfirmée.
       removed.forEach(({ id }) =>
-        reclaimContentCredits(this.prisma, userId, creditSource.postReaction(id), {}, this.engagement),
+        reclaimContentCredits(this.prisma, userId, creditSource.postReaction(id), this.engagement),
       );
     }
 

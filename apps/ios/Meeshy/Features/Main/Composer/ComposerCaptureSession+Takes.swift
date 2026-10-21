@@ -3,12 +3,14 @@ import ImageIO
 import MeeshySDK
 import UIKit
 
-/// Où part une prise (#9351).
+/// Où part une prise (#9351, #10284 — `CaptureSaveLaw.destination(for:)`).
 nonisolated enum ComposerTakeIntent: Equatable, Sendable {
-    /// La scène : la prise mène à l'édition (puis à l'hôte).
+    /// HORS zone cadre (la scène, le rond sans cadre) : la retouche, la prise
+    /// gardée dans l'app par défaut — son original rejoint Photos si Réglages ›
+    /// Médias le demande (`CaptureSaveLaw.destination(for:savesOriginal:)`).
     case edit
-    /// La miniature choisie : le rendu part en galerie (l'original aussi si
-    /// `CaptureSavePolicy` le veut), on reste en capture.
+    /// La ZONE CADRE (la case choisie) : le rendu part en galerie (l'original
+    /// aussi si `CaptureSavePolicy` le veut), PUIS la retouche s'ouvre.
     case gallery
 }
 
@@ -45,6 +47,7 @@ extension ComposerCaptureSession {
     /// ne changeraient pas `capturedPhoto`. Un enregistrement qui ne rendra aucun
     /// fichier libère son intention.
     func subscribeToTakes() {
+        camera.savesOriginalSetting = { [weak self] in self?.savePolicy().savesOriginal ?? CaptureSavePolicy.stored().savesOriginal }
         camera.$capturedPhotoId.compactMap { $0 }
             .sink { [weak self] _ in self?.photoArrived() }
             .store(in: &takeSubscriptions)
@@ -66,6 +69,12 @@ extension ComposerCaptureSession {
         filmIntents = filmIntents.filter { $0.value == .gallery }
     }
 
+    /// La case choisie n'est la zone cadre que si un VRAI cadre y est posé : la
+    /// case « Aucun » prend comme le rond, hors cadre — retouche, prise gardée
+    /// dans l'app ; Réglages › Médias « enregistrer l'original » prime toujours
+    /// (décision porteur 2026-10-12, #10284).
+    var frameIntent: ComposerTakeIntent { look.frame == ComposerPhotoFrame.none ? .edit : .gallery }
+
     /// **Le geste décidé par la table, exécuté.** Mise au point, zoom, rangement et
     /// cadrage ont besoin d'une géométrie : la vue les fait elle-même.
     func perform(_ action: ComposerCaptureAction, item: ComposerLookStripItem?) {
@@ -73,10 +82,11 @@ extension ComposerCaptureSession {
         case .photoToEdit:
             shootPhoto(intent: .edit)
         case .photoToGallery:
-            shootPhoto(intent: .gallery)
+            shootPhoto(intent: frameIntent)
         case .filmSegment:
             beginHold()
         case .filmToGallery:
+            guard frameIntent == .gallery else { return beginHold() }
             holdToFilmForGallery()
         case .stopTake:
             closeTake()
@@ -84,6 +94,8 @@ extension ComposerCaptureSession {
             guard let item else { return }
             look = ComposerLookStripRule.look(of: item, combinedWith: look)
             HapticFeedback.light()
+        case .toggleEditChrome:
+            editChromeShown ? hideEditChrome() : revealEditChrome()
         case .none, .focus, .zoom, .steerTake, .close, .openFamily, .reframe:
             return
         }
@@ -160,13 +172,13 @@ extension ComposerCaptureSession {
                                      argument: ComposerSceneCameraCopy.previousTakeStillSaving)
                 return false
             }
-            try? await Task.sleep(nanoseconds: 20_000_000)
+            _ = await cancellableSleep(for: .milliseconds(20))
         }
         return !Task.isCancelled
     }
 
-    /// La photo de la scène s'ouvre en ÉDITION (#9352) : rien ne part vers l'hôte
-    /// avant « Terminé ». Celle de la miniature choisie part en galerie.
+    /// La photo s'ouvre en ÉDITION (#9352) : rien ne part vers l'hôte avant
+    /// « Terminé ». Celle de la case choisie part AUSSI en galerie (#10284).
     /// Une photo demandée en galerie y part même si le viseur s'est fermé entre-temps.
     func photoArrived() {
         guard let image = camera.capturedPhoto else { return }
@@ -174,10 +186,15 @@ extension ComposerCaptureSession {
         photoInFlightIntent = .edit
         guard stage != .off || intent == .gallery else { return }
         switch intent {
-        case .gallery:
+        case .gallery where stage == .off:
             saveRenderedPhoto(image, data: camera.capturedPhotoData)
+        case .gallery:
+            let brut = camera.librarySave
+            beginEditing(photo: image, data: camera.capturedPhotoData)
+            saveFrameTake(awaitingRaw: brut)
         case .edit:
             beginEditing(photo: image, data: camera.capturedPhotoData)
+            if phase.isEditing { editRawSave = camera.librarySave }
         }
     }
 
@@ -194,8 +211,22 @@ extension ComposerCaptureSession {
             return
         }
         switch intent {
-        case .gallery: saveRenderedVideo(url)
+        case .gallery where stage == .off: saveRenderedVideo(url)
+        case .gallery: openFrameTake(video: url)
         case .edit: collectSegment(url)
+        }
+    }
+
+    /// **La vidéo du cadre part en galerie PUIS en retouche** (#10284) : la
+    /// retouche s'ouvre sur elle, et son écriture vers Photos part de là — la
+    /// retouche abandonnée attend l'écriture avant de jeter le fichier. Une
+    /// vidéo qui ne se lit pas part telle quelle vers l'hôte (`beginEditing`).
+    func openFrameTake(video url: URL) {
+        let brut = camera.librarySave
+        Task { @MainActor in
+            await beginEditing(video: url)
+            guard phase == .editing(.video(url)) else { return }
+            saveFrameTake(awaitingRaw: brut)
         }
     }
 
@@ -258,7 +289,6 @@ extension ComposerCaptureSession {
     /// lui serait identique au pixel près — l'export rend alors le brut lui-même,
     /// qui s'écrit s'il n'est pas déjà en galerie (#9684).
     func saveRenderedVideo(_ url: URL) {
-        let politique = savePolicy()
         let regard = look
         let auteur = lookPerson
         let date = lookDate
@@ -279,7 +309,8 @@ extension ComposerCaptureSession {
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
             guard let rendue else { return }
-            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, originalInLibrary: brut != nil,
+                                                                      gallery: galerie)
             if rendue != url {
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)
@@ -291,11 +322,13 @@ extension ComposerCaptureSession {
 
     /// **Le chemin UNIQUE d'une vidéo vers Photos** (#9684) — miniature, flèche
     /// ⬇︎ et « Terminé ». Un rendu distinct s'écrit ; un rendu identique à
-    /// l'original ne s'écrit que si l'original n'y est pas déjà. `true` : la
-    /// prise est dans Photos.
-    static func writeVideo(_ rendue: URL, original: URL, policy: CaptureSavePolicy,
+    /// l'original ne s'écrit que si l'original n'y est pas déjà — un FAIT de la
+    /// prise (son brut écrit par la caméra, `editRawSave`), jamais une lecture du
+    /// réglage : un segment assemblé à d'autres n'est pas le brut écrit, et une
+    /// écriture refusée n'a rien mis dans Photos. `true` : la prise est dans Photos.
+    static func writeVideo(_ rendue: URL, original: URL, originalInLibrary: Bool,
                            gallery: any ComposerGalleryProviding) async -> Bool {
-        guard rendue != original || policy.writesUntouchedTake else { return true }
+        guard rendue != original || !originalInLibrary else { return true }
         return await gallery.saveVideo(at: rendue)
     }
 

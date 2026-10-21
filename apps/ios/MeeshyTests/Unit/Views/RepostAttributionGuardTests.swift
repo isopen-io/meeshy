@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Meeshy
 
 /// Garde de NON-RÉGRESSION de l'attribution de republication — Lot E, Task E5.
@@ -197,5 +198,33 @@ final class RepostAttributionGuardTests: XCTestCase {
             "L'étiquette VoiceOver doit garder son repli sans handle (feed.post.reposted) — un " +
             "repost dont l'auteur d'origine est inconnu reste annonçable."
         )
+    }
+}
+
+/// #8939 — le bouton repost d'un post DÉJÀ reposté peignait `arrow.2.squarepath.circle.fill` sous un contour
+/// `arrow.2.squarepath.circle` : aucun des deux n'existe au catalogue SF Symbols, l'état « reposté » se peignait donc
+/// sans glyphe. Chaque nom de la famille repost cité par la carte du fil et par le détail d'un post doit exister.
+final class RepostButtonGlyphTests: XCTestCase {
+
+    private static let iosRoot = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+
+    private func repostSymbols(in relativePath: String) throws -> Set<String> {
+        let source = try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8)
+        let pattern = try NSRegularExpression(pattern: "\"(arrow\\.2\\.squarepath[a-z.]*)\"")
+        let range = NSRange(source.startIndex..., in: source)
+        return Set(pattern.matches(in: source, range: range).compactMap { match in
+            Range(match.range(at: 1), in: source).map { String(source[$0]) }
+        })
+    }
+
+    func test_theRepostButton_paintsOnlySymbolsThatExist() throws {
+        for file in ["Meeshy/Features/Main/Views/FeedPostActionsBar.swift", "Meeshy/Features/Main/Views/PostDetailView.swift"] {
+            let symbols = try repostSymbols(in: file)
+            XCTAssertFalse(symbols.isEmpty, "\(file) : le bouton repost n'est plus trouvé")
+            for symbol in symbols {
+                XCTAssertNotNil(UIImage(systemName: symbol), "\(file) : « \(symbol) » n'existe pas — l'état reposté se peindrait vide")
+            }
+        }
     }
 }

@@ -56,6 +56,11 @@ export function registerStudioBench(): void {
   });
 
   afterAll(async () => {
+    // Une tâche du planificateur de React encore en file (un rendu suspendu
+    // résolu après le dernier démontage) s'exécuterait APRÈS le retrait de la
+    // fenêtre : `window.event` lève entre deux fichiers. On la laisse passer
+    // tant que la fenêtre existe.
+    await flush();
     delete globals.IS_REACT_ACT_ENVIRONMENT;
     document.documentElement.lang = 'fr';
     await releaseHappyDomIfRegistered();
@@ -215,6 +220,10 @@ export type Harness = {
   /** Rend la PLUS ANCIENNE réponse `POST /posts` retenue (`postsHold`) — les
    * témoins d'une séquence (#7707) avancent ainsi requête par requête. */
   readonly releasePost: () => void;
+  /** Les `POST /posts` retenus que le signal de l'appelant a COUPÉS en vol (#10316). */
+  readonly postAborts: () => number;
+  /** L'en-tête `X-Client-Mutation-Id` de chaque `POST /posts`, dans l'ordre (#10316). */
+  readonly postMutationIds: Array<string | null>;
 };
 
 /** Un seul banc : `POST /posts` répond `postsStatus`, la montée TUS rend
@@ -234,6 +243,8 @@ export function harness(options: {
   const posts: Array<Record<string, unknown>> = [];
   const puts: Array<{ readonly path: string; readonly body: Record<string, unknown> }> = [];
   const heldPosts: Array<() => void> = [];
+  const postMutationIds: Array<string | null> = [];
+  let postAborts = 0;
   let creations = 0;
   let aborts = 0;
   const postsFetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -248,7 +259,16 @@ export function harness(options: {
     }
     if (!url.endsWith(postsEndpoints.root) || init?.method !== 'POST') throw new Error(`appel inattendu : ${init?.method} ${url}`);
     posts.push(JSON.parse(String(init.body)) as Record<string, unknown>);
-    if (options.postsHold?.() === true) await new Promise<void>((resolve) => heldPosts.push(resolve));
+    postMutationIds.push(new Headers(init.headers).get('X-Client-Mutation-Id'));
+    if (options.postsHold?.() === true) {
+      await new Promise<void>((resolve, reject) => {
+        heldPosts.push(resolve);
+        init.signal?.addEventListener('abort', () => {
+          postAborts += 1;
+          reject(new DOMException('Aborted', 'AbortError'));
+        });
+      });
+    }
     const status = options.postsStatus?.() ?? 201;
     const body = status === 201 ? { success: true, data: { id: `post-${posts.length}` } } : { success: false, error: 'boom' };
     return new Response(JSON.stringify(body), { status });
@@ -278,6 +298,8 @@ export function harness(options: {
     uploadCreations: () => creations,
     uploadAborts: () => aborts,
     releasePost: () => heldPosts.shift()?.(),
+    postAborts: () => postAborts,
+    postMutationIds,
     deps: {
       api: { source: 'gateway', transport: createHttpTransport({ base: '', fetchImpl: postsFetch }) },
       upload: { source: 'gateway', base: 'https://gate.test', credential: () => ({ kind: 'registered', token: 't' }), fetchImpl: uploadsFetch },

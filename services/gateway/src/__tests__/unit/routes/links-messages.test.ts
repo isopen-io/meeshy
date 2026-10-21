@@ -356,56 +356,28 @@ describe('POST /links/:id/messages — anonymous: canal d’annonces', () => {
   });
 });
 
-describe('POST /links/:id/messages — anonymous: with tracking links', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => { app = await buildApp(); });
-  afterAll(async () => { await app.close(); });
-
-  it('stores the raw address untouched and its token in metadata.trackingLinks', async () => {
-    mockCollectContentTrackingLinks.mockResolvedValueOnce([
-      { url: 'https://example.com/a', token: 'tok-1' },
-    ]);
+// #10286 — un invité anonyme ne fait JAMAIS de ses adresses des liens suivis :
+// aucun `TrackingLink` minté, aucune carte `trackingLinks`, le texte tel qu'écrit.
+describe('POST /links/:id/messages — anonymous: addresses are never tracked', () => {
+  it('stores the content exactly as written, mints nothing and serves no trackingLinks', async () => {
+    mockProcessExplicitLinksInContent.mockResolvedValueOnce({ processedContent: 'Vois m+abc et https://evil.example/a', trackingLinks: [] });
+    mockCollectContentTrackingLinks.mockResolvedValueOnce([{ url: 'https://evil.example/a', token: 'tok-1' }]);
+    const content = 'Vois <https://evil.example/a> et https://evil.example/a';
     const prisma = makePrisma();
     const linkApp = await buildApp({ prisma });
     const res = await linkApp.inject({
       method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: { ...VALID_BODY, content: 'Vois https://example.com/a' },
+      headers: ANON_HEADERS, payload: { ...VALID_BODY, content },
     });
     await linkApp.close();
     expect(res.statusCode).toBe(201);
-    expect(prisma.message.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
-        content: 'Vois https://example.com/a',
-        metadata: { trackingLinks: [{ url: 'https://example.com/a', token: 'tok-1' }] },
-      }),
-    }));
-    expect(mockUpdateTrackingLinksMessageId).toHaveBeenCalledWith(['tok-1'], MSG_ID);
-    expect(res.json().data.message.trackingLinks).toEqual([{ url: 'https://example.com/a', token: 'tok-1' }]);
-  });
-
-  it('collects the map from the content as stored, after the explicit <url> rewrite', async () => {
-    mockProcessExplicitLinksInContent.mockResolvedValueOnce({ processedContent: 'Vois m+abc', trackingLinks: [] });
-    const res = await app.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: { ...VALID_BODY, content: 'Vois <https://example.com/a>' },
-    });
-    expect(res.statusCode).toBe(201);
-    expect(mockCollectContentTrackingLinks).toHaveBeenCalledWith(
-      expect.objectContaining({ content: 'Vois m+abc' })
-    );
-  });
-
-  it('writes no trackingLinks key when the content carries no address', async () => {
-    const prisma = makePrisma();
-    const linkApp = await buildApp({ prisma });
-    await linkApp.inject({
-      method: 'POST', url: `/links/${MSHY_ID}/messages`,
-      headers: ANON_HEADERS, payload: VALID_BODY,
-    });
-    await linkApp.close();
     const data = (prisma.message.create as jest.Mock<any>).mock.calls[0][0].data;
+    expect(data.content).toBe(content);
     expect(data.metadata?.trackingLinks).toBeUndefined();
-    expect(mockUpdateTrackingLinksMessageId).not.toHaveBeenCalledWith([], expect.anything());
+    expect(mockProcessExplicitLinksInContent).not.toHaveBeenCalled();
+    expect(mockCollectContentTrackingLinks).not.toHaveBeenCalled();
+    expect(mockUpdateTrackingLinksMessageId).not.toHaveBeenCalled();
+    expect(res.json().data.message).not.toHaveProperty('trackingLinks');
   });
 });
 

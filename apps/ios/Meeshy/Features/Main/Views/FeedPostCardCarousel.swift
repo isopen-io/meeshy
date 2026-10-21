@@ -38,8 +38,11 @@ struct FeedPostCardCarousel: View {
     let captions: [String: String]
     let accentColor: String
     let onOpen: (FeedMedia) -> Void
+    /// #10509 — le contenu dont on mesure le parcours (`scroll.content`).
+    var scrollTarget: SocialTarget? = nil
 
     @State private var index: Int = 0
+    @State private var scrollTracker: ContentScrollTracker?
 
     var body: some View {
         VStack(spacing: MeeshySpacing.sm) {
@@ -92,6 +95,22 @@ struct FeedPostCardCarousel: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .adaptiveOnChange(of: index) { _, newIndex in
+            scrollTracker?.noteIndex(newIndex)
+        }
+        // Le post perd un média sous la carte (édition, média retiré) : la page
+        // restait au-delà de la fin — compteur « 3 / 2 », page blanche.
+        .adaptiveOnChange(of: media.count) { _, count in
+            let page = FeedCarouselLayout.page(index, clampedTo: count)
+            if page != index { index = page }
+        }
+        .onAppear {
+            guard scrollTracker == nil, let scrollTarget else { return }
+            scrollTracker = ContentScrollTracker(target: scrollTarget, contentKind: .carousel, itemsTotal: media.count, surface: SocialSurface(.feed))
+        }
+        .onDisappear {
+            scrollTracker?.finish()
+        }
     }
 
     @ViewBuilder
@@ -237,6 +256,11 @@ struct FeedPostCardCarousel: View {
 /// la cible app compile sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, donc
 /// l'isolation est le DÉFAUT, pas un choix qu'on aurait fait.
 nonisolated enum FeedCarouselLayout {
+
+    /// La page tenue, ramenée dans `0..<count` (0 pour une liste vide).
+    static func page(_ index: Int, clampedTo count: Int) -> Int {
+        min(max(0, index), max(0, count - 1))
+    }
     /// Largeur pour laquelle on interroge la règle. Sa valeur n'a aucune
     /// importance — seul le RAPPORT qu'elle produit est utilisé.
     private static let probeWidth: CGFloat = 1_000

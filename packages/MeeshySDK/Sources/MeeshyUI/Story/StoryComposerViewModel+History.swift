@@ -13,10 +13,26 @@ extension StoryComposerViewModel {
     public func pushHistorySnapshot() {
         guard !drawingEditingMode.isActive else { return }
         guard let data = Self.encodeHistorySnapshot(slides) else { return }
-        // L'évincé (cap) sera consommé par la purge différée des bitmaps
-        // orphelins à l'Inc.3 — pour l'instant on le laisse tomber.
         _ = history.push(data)
+        purgeUnreachableRetiredResources()
         refreshHistoryFlags()
+    }
+
+    /// Les bitmaps et octets animés mis de côté par une suppression ne servent qu'à un undo. Quand plus aucune
+    /// étape de la trajectoire ne les référence — évincés par le cap, ou branche redo tronquée — ils restaient en
+    /// mémoire jusqu'à la sortie du composer : une longue séance qui pose et retire des photos gardait chacune.
+    /// Un identifiant présent dans les octets d'un snapshot est conservé (un faux positif garde, jamais ne perd).
+    /// Les URL de fichiers restent : leur cycle de vie est celui des fichiers, pas de la mémoire.
+    func purgeUnreachableRetiredResources() {
+        guard !retiredImages.isEmpty || !retiredSlideImages.isEmpty || !retiredStickerAnimations.isEmpty else { return }
+        let snapshots = history.states
+        func reachable(_ id: String) -> Bool {
+            let needle = Data(id.utf8)
+            return snapshots.contains { $0.range(of: needle) != nil }
+        }
+        retiredImages = retiredImages.filter { reachable($0.key) }
+        retiredSlideImages = retiredSlideImages.filter { reachable($0.key) }
+        retiredStickerAnimations = retiredStickerAnimations.filter { reachable($0.key) }
     }
 
     /// (Re)démarre la trajectoire : à l'entrée du composer ET après la
@@ -55,8 +71,15 @@ extension StoryComposerViewModel {
             refreshHistoryFlags()
             return false
         }
+        // La slide éditée garde la main par son ID : l'index seul glissait
+        // (supprimer A sous C, puis annuler, montrait B).
+        let editedSlideId = slides.indices.contains(currentSlideIndex) ? slides[currentSlideIndex].id : nil
         slides = decoded
-        if currentSlideIndex >= slides.count { currentSlideIndex = slides.count - 1 }
+        if let editedSlideId, let restored = slides.firstIndex(where: { $0.id == editedSlideId }) {
+            currentSlideIndex = restored
+        } else {
+            currentSlideIndex = min(max(0, currentSlideIndex), slides.count - 1)
+        }
         // Sélection/format panel réinitialisés — simple et sûr (plan §Risques) ;
         // le View reset le band via ses hooks existants au changement d'état.
         selectedElementId = nil

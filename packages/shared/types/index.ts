@@ -32,6 +32,7 @@ export * from './conversation.js';
 export * from './conversation-preview.js';
 export * from './conversation-card.js';
 export * from './world.js';
+export * from './guest-attachment-kinds.js';
 export * from './user.js';
 export * from './anonymous.js';
 export * from './api-responses.js';
@@ -54,6 +55,11 @@ export * from './tracking-link.js';
 // Lien d'invitation (#7794, #7797) — aperçu du groupe et statistiques du lien
 export * from './share-link-stats.js';
 
+// Écrans d'affichage d'un contenu, portés par les événements de portée (#10483)
+export * from './content-surfaces.js';
+export * from './content-reach.js';
+export * from './social-events-v2.js';
+
 // Sticker porté par un message (#4823) — descripteur dédié, hissé depuis `metadata.sticker`
 export * from './message-sticker.js';
 export * from './sticker-definition.js';
@@ -74,6 +80,16 @@ export * from './call-recording.js';
 export * from './call-controls.js';
 export * from './call-preview.js';
 export * from './call-live-frame.js';
+
+// Cadres de gloire (#10146, #10148) — la loi d'usage des cadres et le moteur de packs à domaines
+export * from './frame-usage.js';
+export * from './glory-atmospheres.js';
+export * from './content-pack.js';
+export * from './content-pack-index.js';
+export * from './glory-frame-pack.js';
+export * from './pack-ownership.js';
+export * from './pack-presence.js';
+export * from './lens-format.js';
 
 // Export des types unifiés Phase 7 - Audio Effects Timeline
 export * from './audio-effects-timeline.js';
@@ -110,6 +126,7 @@ export * from './engagement.js';
 // Barème réglable et état par conversation « N (M) 🔥 » (#8906)
 export * from './engagement-scale.js';
 export * from './engagement-operations.js';
+export * from './engagement-act-streaks.js';
 
 // Export des types références de post (Prisme des références — parité Swift)
 export type {
@@ -318,6 +335,7 @@ export type UserRoleEnum = GlobalUserRole;
 
 // Importation des types de messages consolidés
 import type { Message as ConsolidatedMessage, MessageWithTranslations as ConsolidatedMessageWithTranslations } from './conversation.js';
+import type { GuestAttachmentKind } from './guest-attachment-kinds.js';
 
 // Alias pour rétrocompatibilité
 export type Message = ConsolidatedMessage;
@@ -581,6 +599,8 @@ export interface ConversationLink {
   readonly allowAnonymousMessages: boolean;
   readonly allowAnonymousFiles: boolean;
   readonly allowAnonymousImages: boolean;
+  /** Familles ouvertes aux invités (#10001) — `null`/absent : aucune restriction par famille. @see guest-attachment-kinds.ts */
+  readonly allowedAttachmentKinds?: readonly GuestAttachmentKind[] | null;
   readonly allowViewHistory: boolean;
   readonly requireNickname: boolean;
   readonly requireEmail: boolean;
@@ -769,6 +789,9 @@ export * from './contact-card.js';
 
 // ===== LA CAPTURE D'UN CONTENU QUI DISPARAÎT (#9617) =====
 export * from './content-capture.js';
+
+// Traduction calculée par un membre et partagée scellée (#9899)
+export * from './shared-translation.js';
 
 // ===== CE QUE CHAQUE PERSONNE DE LA LISTE DES VUES A FAIT (#9727) =====
 export type { PostViewerEngagement, PostViewerRow } from './publication-viewers.js';

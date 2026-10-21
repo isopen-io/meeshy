@@ -11,8 +11,8 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
-import { tailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { NO_LEVEL_CAP, levelForUnlocks, levelFromScore } from '@meeshy/shared/utils/game/levels';
+import { sparksTailwindFactor } from '@meeshy/shared/utils/game/boosts';
 import { DUO_TEMPLATES } from '@meeshy/shared/utils/game/duo';
 import { LEVEL_STEPS } from '@meeshy/shared/utils/game/level-steps';
 import { MISSION_TEMPLATES } from '@meeshy/shared/utils/game/missions';
@@ -27,6 +27,8 @@ import { MessageGameSignals, type MessageSignalInput } from './MessageGameSignal
 import { MissionService, type SignalOptions } from './MissionService';
 import { GameWeekPointsRecorder } from './GameWeekPoints';
 import type { StreakPlan } from './FlameService';
+import { getPhotoMomentMarks, type PhotoMomentMarks } from './PhotoMomentMarks';
+import { isGamePhotoPushOn } from './photoPushFlag';
 
 const log = enhancedLogger.child({ module: 'EngagementGameHooks' });
 
@@ -41,14 +43,22 @@ const MISSION_AXIS_SIGNALS: ReadonlySet<string> = new Set(
 
 export { quarterPoints };
 
-/** Les records de Flamme que jugent les étapes des niveaux (#9706) : 7 et 30 jours. */
-const FLAME_STEP_DAYS: readonly number[] = LEVEL_STEPS.flatMap((rule) => (rule.kind === 'flame' ? [rule.target] : []));
-
-/** Le Vent arrière : ×1,25 tant que le niveau est sous le niveau record. Entier. */
-export function applyTailwind(points: number, account: { readonly engagementScore: number; readonly levelRecord: number | null }): number {
-  const factor = tailwindFactor({ level: levelForUnlocks({ score: account.engagementScore, levelRecord: account.levelRecord }), levelRecord: account.levelRecord ?? 0 });
+/**
+ * Le Vent arrière (#10896) : ×1,25 tant que le niveau — lu sur la POCHE, étapes faites comprises — est 7 niveaux ou plus
+ * sous le record du cycle. Entier. Le record du cycle repart à 1 au Prestige : un Prestige ne l'allume pas.
+ */
+export function applyTailwind(
+  points: number,
+  account: { readonly engagementScore: number; readonly levelRecord: number | null; readonly levelMaxLifetime: number | null },
+): number {
+  const proof = Math.max(account.levelRecord ?? 0, account.levelMaxLifetime ?? 0);
+  const level = levelForUnlocks({ score: account.engagementScore, levelRecord: proof === 0 ? null : proof });
+  const factor = sparksTailwindFactor({ level, levelRecord: account.levelRecord ?? 0 });
   return factor > 1 ? Math.round(points * factor) : points;
 }
+
+/** Les records de Flamme que jugent les étapes des niveaux (#9706) : 7 et 30 jours. */
+const FLAME_STEP_DAYS: readonly number[] = LEVEL_STEPS.flatMap((rule) => (rule.kind === 'flame' ? [rule.target] : []));
 
 export class EngagementGameHooks {
   readonly glory: GloryService;
@@ -67,10 +77,15 @@ export class EngagementGameHooks {
 
   private readonly signals: MessageGameSignals;
 
+  private readonly photo: { readonly marks: () => PhotoMomentMarks; readonly on: () => boolean };
+
   constructor(
     prisma: PrismaClient,
     creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>,
+    /** Les comptes « à évaluer » des étapes franchies app fermée (#10175) ; remplaçables en test. */
+    deps: { readonly photoMarks?: PhotoMomentMarks; readonly photoPushOn?: () => boolean } = {},
   ) {
+    this.photo = { marks: () => deps.photoMarks ?? getPhotoMomentMarks(), on: deps.photoPushOn ?? (() => isGamePhotoPushOn()) };
     this.glory = new GloryService(prisma);
     this.trophies = new TrophyService(prisma);
     this.missions = new MissionService(prisma, {
@@ -120,27 +135,43 @@ export class EngagementGameHooks {
 
   /**
    * Des points viennent d'être GAGNÉS (#9384, #9385) : la semaine du compte
-   * monte d'autant — le total que les ligues classent. Un débit ne passe jamais
-   * ici.
+   * monte d'autant — le total que les ligues classent. Un débit (la frappe) ne
+   * passe jamais ici ; une reprise passe par `onPointsTakenBack`.
    */
   async onPointsGained(userId: string, points: number): Promise<void> {
     await this.isolated('week points', () => this.weekPoints.record(userId, points));
+    await this.markPhotoMoment(userId);
+  }
+
+  /**
+   * Un gain vient d'être REPRIS (un contenu retiré, #9584) : la ligue rend ce qu'il y avait mis, sur la semaine de son
+   * crédit (#10895). Sans cela, publier puis supprimer gardait les points classés — la poche revenait, pas la ligue.
+   */
+  async onPointsTakenBack(userId: string, points: number, creditedAt?: Date): Promise<void> {
+    await this.isolated('week points take-back', () => this.weekPoints.takeBack(userId, points, creditedAt).then(() => undefined));
   }
 
   /** Un succès vient d'être obtenu : sa Gloire, figée à sa rareté du moment (#9390). */
   async onAchievement(userId: string, milestoneKey: string): Promise<void> {
     await this.isolated('achievement glory', () => this.glory.creditAchievement(userId, milestoneKey).then(() => undefined));
+    await this.markPhotoMoment(userId);
   }
 
   /**
-   * Le score vient de changer : la Gloire du premier passage de chaque niveau. Le tri se fait sans
+   * Le CYCLE d'étincelles vient de changer (#10846) : la Gloire du premier passage de chaque niveau. Le tri se fait sans
    * plafond de rang ni étapes (#9688, #9706) : la lecture brute majore la lecture servie, donc un score
    * qui ne la porte pas au-dessus du record n'a rien ouvert — `creditLevelProgress` applique ensuite le
    * plafond du rang et le palier des étapes.
    */
-  async onScore(userId: string, score: number, levelRecord: number | null): Promise<void> {
-    if (levelFromScore(score, NO_LEVEL_CAP) <= (levelRecord ?? 1)) return;
-    await this.isolated('level glory', () => this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord }).then(() => undefined));
+  async onScore(userId: string, score: number, levelRecord: number | null, levelMaxLifetime: number | null = null, prestige?: number | null): Promise<void> {
+    await this.markPhotoMoment(userId);
+    // `score` est la POCHE (#10892). Rien à graver tant que le niveau lu ne dépasse ni le record du cycle ni le niveau max
+    // à vie : remonter après une frappe ne rapporte pas une seconde fois la Gloire d'un niveau déjà passé.
+    const level = levelFromScore(score, NO_LEVEL_CAP);
+    if (level <= (levelRecord ?? 1) && level <= (levelMaxLifetime ?? 0)) return;
+    await this.isolated('level glory', () =>
+      this.glory.creditLevelProgress({ userId, score, previousRecord: levelRecord, previousMax: levelMaxLifetime, ...(prestige === undefined ? {} : { prestige }) }).then(() => undefined),
+    );
   }
 
   /**
@@ -148,6 +179,7 @@ export class EngagementGameHooks {
    * 7 ou 30 jours, l'étape des niveaux 40 ou 90 (#9706) : le niveau qui l'attendait monte d'un coup.
    */
   async onStreak(userId: string, plan: StreakPlan): Promise<void> {
+    await this.markPhotoMoment(userId);
     if (plan.longest <= plan.previousLongest) return;
     await this.isolated('flame record glory', () =>
       this.glory.creditFlameRecords({ userId, previousLongest: plan.previousLongest, longest: plan.longest }).then(() => undefined),
@@ -166,6 +198,15 @@ export class EngagementGameHooks {
   /** Une conversation créée vide vient d'être démarrée (#9635) : sous la garde d'un message. */
   recordConversationStarted(input: { readonly senderUserId: string; readonly conversationId: string }): Promise<void> {
     return this.signals.recordConversationStarted(input);
+  }
+
+  /**
+   * Une écriture du jeu a pu faire franchir une étape app fermée : le compte est « à évaluer » par le job des
+   * étapes (#10175). Seulement l'interrupteur allumé ; une marque qui tombe ne retient jamais le geste.
+   */
+  private async markPhotoMoment(userId: string): Promise<void> {
+    if (!this.photo.on()) return;
+    await this.isolated('photo moment mark', () => this.photo.marks().mark(userId));
   }
 
   private async isolated(label: string, work: () => Promise<void>): Promise<void> {

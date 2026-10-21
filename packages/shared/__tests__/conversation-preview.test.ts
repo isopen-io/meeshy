@@ -237,6 +237,27 @@ describe('cas limites du composeur', () => {
     expect(composeConversationPreview(baseInput({ lastMessage: message({ content: '  ' }) })).segments).toEqual([]);
   });
 
+  it('un dernier message SUPPRIMÉ se dit « Message supprimé », jamais « Nom : » suivi de rien (#11466)', () => {
+    const deleted = message({ content: '', deletedAt: '2026-09-23T09:59:30.000Z' });
+    expect(text(baseInput({ lastMessage: deleted }))).toBe('Alice : Message supprimé');
+    expect(text(baseInput({ language: 'en', lastMessage: deleted }))).toBe('Alice: Message deleted');
+    expect(text(baseInput({ lastMessage: { ...deleted, senderUserId: 'u-me' } }))).toBe('Vous : Message supprimé');
+  });
+
+  it('un message supprimé ne sert ni son texte, ni sa traduction, ni sa pièce jointe (#11466)', () => {
+    const preview = composeConversationPreview(baseInput({
+      lastMessage: message({
+        content: 'secret',
+        translations: { fr: 'secret traduit' },
+        deletedAt: '2026-09-23T09:59:30.000Z',
+        attachment: { mimeType: 'image/jpeg' },
+        attachmentSummary: { count: 1, kinds: { image: 1 }, totalSize: 10 },
+      }),
+    }));
+    expect(preview.segments).toEqual([{ kind: 'label', text: 'Message supprimé' }]);
+    expect(preview.icon).toBeNull();
+  });
+
   it('une pièce jointe sans type MIME prend la nature du message', () => {
     expect(text(baseInput({ lastMessage: message({ messageType: 'video', attachment: { duration: 3000 } }) }))).toBe('Alice : 🎬 Vidéo · 0:03');
     expect(text(baseInput({ lastMessage: message({ attachment: {} }) }))).toBe('Alice : 📄 Fichier');

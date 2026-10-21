@@ -3,7 +3,7 @@ import XCTest
 @testable import MeeshyUI
 
 /// #7599 — les états d'un message se lisent par leur COULEUR, avec un code
-/// unique pour iOS et web-v2 (`--ios-state-*` dans `design-tokens/ios.css`).
+/// unique pour iOS et le web (`--ios-state-*` dans `design-tokens/ios.css`).
 /// Les hex ci-dessous sont le CONTRAT entre plateformes : ils s'écrivent en
 /// littéral ici, jamais relus depuis `MeeshyColors`, sinon le témoin
 /// confirmerait n'importe quelle valeur.

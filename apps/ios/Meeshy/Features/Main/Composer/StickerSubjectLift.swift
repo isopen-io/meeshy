@@ -98,9 +98,10 @@ nonisolated enum StickerSubjectLift {
         return try bounded(pixelBuffer: masked, orientation: source.imageOrientation)
     }
 
-    /// Construit une fois : un `CIContext` est coûteux à monter et sûr à
-    /// partager entre threads (doc Apple).
-    private static let liftContext = CIContext()
+    /// Le contexte du domaine story (#9873) : un `CIContext` est coûteux à
+    /// monter et sûr à partager entre threads (doc Apple) — le détourage
+    /// emprunte celui du canvas qui le peindra.
+    private static var liftContext: CIContext { StoryRenderingContext.shared.ciContext }
 
     /// Ramène le buffer de Vision à une `UIImage` bornée par `maxSide`.
     ///

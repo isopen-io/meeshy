@@ -1,9 +1,13 @@
 import type { InfiniteData } from '@tanstack/react-query';
 import * as z from 'zod/mini';
 import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 
 import { unwrap } from './client';
 import type { DataSource } from './config';
+import { FRIENDS_STALE_TIME } from './friends-keys';
 import type { ApiResult, HttpTransport } from './http';
 
 /**
@@ -39,6 +43,8 @@ export type PersonSummary = {
   readonly username: string;
   readonly displayName: string | null;
   readonly avatar: string | null;
+  /** Le contour équipé servi avec la personne (#10945) ; absent sans contour (#10946). */
+  readonly ring?: ServedProfileDecorItem;
 };
 
 export type FriendRequestRecord = {
@@ -58,7 +64,7 @@ export type PendingRequests = { readonly count: number; readonly more: boolean }
 
 export type FriendRequestsDeps = { readonly source: DataSource; readonly transport: HttpTransport };
 
-export { FRIENDS_QUERY_PREFIX } from './friends-keys';
+export { FRIENDS_QUERY_PREFIX, FRIENDS_STALE_TIME } from './friends-keys';
 export const friendRequestsQueryKey = (bucket: FriendRequestBucket) => ['friends', 'requests', bucket] as const;
 
 const optionalText = z.optional(z.nullable(z.string()));
@@ -77,7 +83,8 @@ export function decodePerson(raw: unknown): PersonSummary | null {
   const parsed = WirePerson.safeParse(raw);
   if (!parsed.success) return null;
   const { id, username, displayName, avatar } = parsed.data;
-  return { id, username, displayName: textOrNull(displayName), avatar: textOrNull(avatar) };
+  const ring = servedRingOf(raw);
+  return { id, username, displayName: textOrNull(displayName), avatar: textOrNull(avatar), ...(ring === null ? {} : { ring }) };
 }
 
 const WireRequest = z.object({
@@ -188,7 +195,7 @@ type PageContext = { readonly pageParam: string | null; readonly signal?: AbortS
  * désormais l'EFFET sur le vrai hook : un montage à 31 s ne déclenche aucun
  * vol. Un témoin de source aurait laissé revenir la surcharge.
  */
-export const FRIENDS_STALE_TIME = 5 * 60_000;
+// La valeur vit dans `friends-keys.ts` (#10593), module sans dépendance.
 
 export function friendRequestsQueryOptions(deps: FriendRequestsDeps, bucket: FriendRequestBucket) {
   return {

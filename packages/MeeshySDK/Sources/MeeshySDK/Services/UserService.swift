@@ -5,6 +5,8 @@ import Foundation
 public protocol UserServiceProviding: Sendable {
     func search(query: String, limit: Int, offset: Int) async throws -> OffsetPaginatedAPIResponse<[UserSearchResult]>
     func searchUsers(query: String, limit: Int, offset: Int) async throws -> [UserSearchResult]
+    /// La même recherche, avec l'identifiant que la passerelle a scellé pour elle.
+    func searchPeople(query: String, limit: Int, offset: Int) async throws -> UserSearchPage
     func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser
     func updateAvatar(url: String) async throws -> MeeshyUser
     func updateBanner(url: String) async throws -> MeeshyUser
@@ -23,7 +25,19 @@ public protocol UserServiceProviding: Sendable {
     func getUserStats(userId: String) async throws -> UserStats
 }
 
-public final class UserService: UserServiceProviding, @unchecked Sendable {
+/// Une page de recherche de personnes et l'identifiant SERVI de la recherche
+/// (#10505) — `nil` quand le serveur n'en a pas servi.
+public struct UserSearchPage: Sendable, Equatable {
+    public let users: [UserSearchResult]
+    public let searchId: String?
+
+    public init(users: [UserSearchResult], searchId: String? = nil) {
+        self.users = users
+        self.searchId = searchId
+    }
+}
+
+public final class UserService: UserServiceProviding, Sendable {
     public static let shared = UserService()
     private let api: APIClientProviding
     private let urlSession: URLSession
@@ -48,6 +62,18 @@ public final class UserService: UserServiceProviding, @unchecked Sendable {
             ]
         )
         return response.data
+    }
+
+    public func searchPeople(query: String, limit: Int = 20, offset: Int = 0) async throws -> UserSearchPage {
+        let response: OffsetPaginatedAPIResponse<[UserSearchResult]> = try await api.request(
+            UsersEndpoint.search,
+            queryItems: [
+                URLQueryItem(name: "q", value: query),
+                URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "offset", value: "\(offset)"),
+            ]
+        )
+        return UserSearchPage(users: response.data, searchId: response.meta?.searchId)
     }
 
     public func updateProfile(_ request: UpdateProfileRequest) async throws -> MeeshyUser {

@@ -49,8 +49,12 @@ final class EngagementRevealWiringTests: XCTestCase {
     /// seulement — le genre d'écart qu'aucun essai manuel ne couvre.
     func test_everyTapSource_carriesTheMilestone() throws {
         let iphone = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
-        XCTAssertEqual(iphone.components(separatedBy: "reveal = ").count - 1, 3,
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift",
+                                    alsoIncluding: ["Meeshy/Features/Main/Views/RootNotificationNavigator.swift"]))
+        // Les constructeurs vivent à côté de la racine depuis #10483.
+        let iphoneContext = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView+NotificationNavContext.swift"))
+        XCTAssertEqual(iphoneContext.components(separatedBy: "reveal = ").count - 1, 3,
                        "Les trois constructeurs de `NotificationNavContext` renseignent le "
                            + "palier — API, socket, push (ce dernier à `nil`, faute de "
                            + "métadonnée typée : on n'en invente pas).")
@@ -58,9 +62,9 @@ final class EngagementRevealWiringTests: XCTestCase {
 
         let ipad = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertEqual(ipad.components(separatedBy: "router.pendingEngagementReveal =").count - 1, 2,
-                       "Les gestionnaires API et socket dérivent le palier ; celui du push "
-                           + "n'en pose aucun, faute de métadonnée typée.")
+        XCTAssertTrue(ipad.contains("router.pendingEngagementReveal = ctx.reveal"),
+                      "L'iPad pose le palier par le MÊME contexte que l'iPhone (API, socket, push — ce dernier à "
+                          + "`nil`, faute de métadonnée typée), depuis l'aiguillage unique du 2026-10-14.")
     }
 
     // MARK: - La SECONDE porte : le geste, sans tap (#5847)
@@ -92,13 +96,16 @@ final class EngagementRevealWiringTests: XCTestCase {
     /// là d'où il vient.
     func test_theGameIsStillOpened_theRevealOnlyCoversIt() throws {
         let iphone = AppSourceGuard.stripComments(
-            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift"))
+            try AppSourceGuard.unit("Meeshy/Features/Main/Views/RootView.swift",
+                                    alsoIncluding: ["Meeshy/Features/Main/Views/RootNotificationNavigator.swift"]))
         let reveal = try XCTUnwrap(iphone.range(of: "router.pendingEngagementReveal = ctx.reveal"))
         XCTAssertTrue(iphone[reveal.upperBound...].prefix(200).contains("router.openGame(at: GameNavigationMap.entry(for: ctx.type)"))
 
         let ipad = AppSourceGuard.stripComments(
             try AppSourceGuard.unit("Meeshy/Features/Main/Views/iPadRootView.swift"))
-        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 6,
-                       "jeu et paliers, sur les trois gestionnaires iPad")
+        XCTAssertEqual(ipad.components(separatedBy: "router.openGame(at: GameNavigationMap.entry(for:").count - 1, 3,
+                       "jeu, paliers et lien du Jeu (#9947) : l'aiguillage unique de l'iPad, comme l'iPhone")
+        let ipadReveal = try XCTUnwrap(ipad.range(of: "router.pendingEngagementReveal = ctx.reveal"))
+        XCTAssertTrue(ipad[ipadReveal.upperBound...].prefix(200).contains("router.openGame(at: GameNavigationMap.entry(for: ctx.type)"))
     }
 }

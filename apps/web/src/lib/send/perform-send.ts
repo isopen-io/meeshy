@@ -2,11 +2,12 @@ import type { QueryClient } from '@tanstack/react-query';
 import type { StoreApi } from 'zustand/vanilla';
 
 import { uploadAttachments } from '@/lib/api/attachments';
+import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import type { ConversationsDeps } from '@/lib/api/conversations';
 import { offerLastMessage } from '@/lib/api/list-preview';
 import type { ApiFailure } from '@/lib/api/http';
-import { messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
+import { findCachedThreadMessage, messagesQueryKey, sendMessage, upsertThreadMessage, type SendMessageBody } from '@/lib/api/messages';
 import { attachmentReplyOf } from './attachment-reply';
 import type { Message, Participant } from '@/lib/api/types';
 
@@ -29,6 +30,8 @@ export type SendDeps = ConversationsDeps & {
   readonly online: boolean;
   /** Horloge injectable — jamais `Date.now()` lu directement (témoins). */
   readonly now?: () => number;
+  /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
+  readonly prepare?: ImagePreparer;
 };
 
 export type Draft = {
@@ -39,6 +42,12 @@ export type Draft = {
    * défaut majeur 6, revue-correction #5813) : porté à côté de `replyToId`
    * pour que la bulle optimiste affiche sa citation avant tout accusé. */
   readonly replyTo?: Message;
+  /**
+   * L'HUMEUR (ou la story) À LAQUELLE ON RÉPOND (#10813) — sa citation se gèle
+   * côté passerelle (`metadata.postReplyTo`) ; elle n'est admise que dans la
+   * conversation DIRECTE avec son auteur (`storyReplyAdmission.ts`).
+   */
+  readonly storyReplyToId?: string;
   /**
    * LA SÉLECTION DU COMPOSEUR (#5668) — `undefined`/liste vide pour un envoi
    * texte pur (comportement INCHANGÉ, tous les témoins historiques de ce
@@ -116,6 +125,7 @@ function bodyOf(message: LocalMessage, attachmentIds: readonly string[]): SendMe
     ...(declared === undefined ? {} : { messageType: declared }),
     ...(attachmentIds.length > 0 ? { attachmentIds } : {}),
     ...(message.replyToId === undefined ? {} : { replyToId: message.replyToId }),
+    ...(message.storyReplyToId === undefined ? {} : { storyReplyToId: message.storyReplyToId }),
     /* LA PIÈCE NOMMÉE (#6303) — relue sur le message CITÉ, comme la bande et la
        bulle optimiste : la passerelle la range dans `metadata.attachmentReplyTo`
        et la ressert sur `replyTo.attachmentReplyTo`. */
@@ -234,7 +244,7 @@ async function uploadPhase(params: {
   const result = await uploadAttachments({
     source: deps.source,
     transport: deps.transport,
-    pending: upload.files,
+    pending: await (deps.prepare ?? browserImagePreparer).prepareUploads(upload.files),
   });
 
   if (!result.ok) {
@@ -289,7 +299,17 @@ async function attempt(params: {
      ni traductions, et ses compteurs retombent à 0 — ce chemin-ci est celui
      qui faisait redescendre la coche de ✓✓ à ✓ quand l'accusé arrivait après
      un `read-status:updated`. La loi de fusion est chez elle, pas ici. */
-  upsertThreadMessage(deps.queryClient, conversationId, confirmed);
+  /* L'ÉCHO A PU PRÉCÉDER L'ACCUSÉ (#10690) : `message:new` a déjà posé la
+     rangée avec les pièces SERVIES. L'accusé, qui repart du local, ne les
+     remplace pas par les aperçus `blob:` — la loi de fusion garde une clé
+     absente telle quelle. */
+  const served = findCachedThreadMessage(deps.queryClient, conversationId, confirmed.id);
+  const { attachments: _localPreviews, ...withoutLocalPieces } = confirmed;
+  upsertThreadMessage(
+    deps.queryClient,
+    conversationId,
+    served?.attachments === undefined ? confirmed : withoutLocalPieces,
+  );
   /* L'ACCUSÉ PASSE PAR LA GARDE D'ORDRE (#7547) : s'il revient après une
      réponse plus récente, il ne ramène pas mon ancien message dans la ligne.
      Même message que l'optimiste (même `clientMessageId`) ⇒ il le promeut.
@@ -333,6 +353,7 @@ export async function performSend(params: {
     messageType,
     ...(draft.replyToId === undefined ? {} : { replyToId: draft.replyToId }),
     ...(draft.replyTo === undefined ? {} : { replyTo: draft.replyTo }),
+    ...(draft.storyReplyToId === undefined ? {} : { storyReplyToId: draft.storyReplyToId }),
     ...(draft.attachments === undefined || draft.attachments.length === 0 ? {} : { attachments: draft.attachments }),
     ...(draft.protection === undefined ? {} : { protection: draft.protection }),
     ...(draft.place === undefined ? {} : { place: draft.place }),

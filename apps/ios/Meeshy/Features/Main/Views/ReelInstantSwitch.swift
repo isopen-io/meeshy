@@ -23,11 +23,21 @@ import MeeshyUI
 /// confirme. La dernière des deux l'emporte : revenir sous la moitié sans
 /// relâcher rend la main au réel d'avant, et une page posée par le code (seed,
 /// lien profond) s'impose sans attendre de géométrie.
+///
+/// **Élu n'est pas posé** (#10354). `restingId` est le réel sur lequel le
+/// défilement s'est ARRÊTÉ : c'est lui seul qui engage son moteur, sa scène,
+/// son son et son PiP (`ReelSwitchWork`). Il suit l'élu quand le pager se
+/// pose — `currentId` hors défilement, ou la fin du défilement (iOS 18+). Un
+/// réel élu sous le doigt sans être posé ne fait que `play()` le lecteur déjà
+/// attaché à sa surface.
 nonisolated struct ReelPlaybackElection: Equatable {
     private(set) var activeId: String?
+    private(set) var restingId: String?
+    private(set) var isScrolling = false
 
     init(activeId: String? = nil) {
         self.activeId = activeId
+        self.restingId = activeId
     }
 
     mutating func majority(_ id: String) {
@@ -37,6 +47,13 @@ nonisolated struct ReelPlaybackElection: Equatable {
     mutating func settled(_ id: String?) {
         guard let id else { return }
         activeId = id
+        if !isScrolling { restingId = id }
+    }
+
+    /// Le pager défile, ou vient de s'arrêter : à l'arrêt, l'élu se pose.
+    mutating func scrolling(_ scrolling: Bool) {
+        isScrolling = scrolling
+        if !scrolling { restingId = activeId }
     }
 }
 
@@ -155,7 +172,7 @@ nonisolated struct ReelSwitchMeter: Equatable {
 @MainActor
 enum ReelSwitchSignpost {
     private static let signposter = OSSignposter(subsystem: "me.meeshy.app", category: "ReelSwitch")
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "reels-perf")
+    private static let log = MeeshyLog.logger(.reelsPerf)
     private static var meter = ReelSwitchMeter()
     private static var interval: OSSignpostIntervalState?
     private static let metricLog = MXMetricManager.makeLogHandle(category: "ReelSwitch")

@@ -1,5 +1,6 @@
 import type { ConversationsPage } from './conversations-pages';
 import { amina, bruno, conversationDefaults, dayAt, fatou, kwame, message, viewer } from './fixtures-base';
+import { FIXTURE_PROCHES_CATEGORY_ID, FIXTURE_TRAVAIL_CATEGORY_ID } from './fixtures-categories';
 import type { Conversation } from './types';
 
 /**
@@ -24,6 +25,24 @@ const PAGINATION_TITLES: readonly string[] = [
 ];
 
 const PAGINATION_POOL = [amina, kwame, fatou, bruno] as const;
+
+/** Les trois premières sont RANGÉES (#10103) — « Travail » puis « Proches »
+ * (`fixtures-categories.ts`) : une catégorie peut porter des conversations
+ * anciennes, qui quittent alors « Plus ancien ». */
+const CATEGORY_OF: Readonly<Record<number, string>> = {
+  0: FIXTURE_TRAVAIL_CATEGORY_ID,
+  1: FIXTURE_PROCHES_CATEGORY_ID,
+  2: FIXTURE_PROCHES_CATEGORY_ID,
+};
+
+/**
+ * LE SEUL GROUPE DE LA DÉMONSTRATION QUE LE LECTEUR A CRÉÉ (#11211) — ailleurs
+ * il est membre (`participantDefaults.role`), et un membre ne renomme ni
+ * n'invite (`conversationActionsFor`). `c-page-04` porte donc le rang que la
+ * passerelle sert dans `currentUserRole`, pour que Renommer, Inviter et Gérer
+ * les membres aient une ligne où se montrer (`check-row-menu-more.mjs`).
+ */
+export const READER_CREATED_GROUP_ID = 'c-page-04';
 
 export const PAGINATION_CONVERSATIONS: readonly Conversation[] = Array.from({ length: 34 }, (_, i) => {
   const n = String(i + 1).padStart(2, '0');
@@ -50,6 +69,10 @@ export const PAGINATION_CONVERSATIONS: readonly Conversation[] = Array.from({ le
     lastMessage,
     lastMessageAt: lastMessage.createdAt,
     lastMessageOriginalLanguage: 'fr',
+    ...(`c-page-${n}` === READER_CREATED_GROUP_ID ? { currentUserRole: 'creator' } : {}),
+    ...(CATEGORY_OF[i] === undefined
+      ? {}
+      : { userPreferences: [{ isPinned: false, isMuted: false, isArchived: false, categoryId: CATEGORY_OF[i] }] }),
   };
 });
 

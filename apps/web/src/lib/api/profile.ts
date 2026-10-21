@@ -5,9 +5,13 @@ import { isProfileImageReference } from '@meeshy/shared/utils/profile-image-refe
 import * as meEndpoints from '@meeshy/shared/api/endpoints/me';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
+import type { ServedProfileDecor } from '@meeshy/shared/types/profile-decor';
+
 import { unwrap } from './client';
+import { CONTACT_MASK, maskEmail } from './email-mask';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { readProfileDecor } from './profile-decor';
 
 /**
  * **LE PORT DU PROFIL** (#6289) — miroir `UserService` (iOS,
@@ -62,6 +66,8 @@ export type MyProfile = {
   readonly email: MaskedContact | null;
   readonly phone: MaskedContact | null;
   readonly createdAt: string | null;
+  /** Le contour et la bannière de design équipés (#10632) ; absent = ancien serveur, les sélecteurs ne s'ouvrent pas. */
+  readonly profileDecor?: ServedProfileDecor;
 };
 
 export type MyStats = {
@@ -74,15 +80,9 @@ export type MyStats = {
 };
 
 
-const MASK = '•';
+const MASK = CONTACT_MASK;
 
-export function maskEmail(email: string): string {
-  const at = email.lastIndexOf('@');
-  if (at < 1 || at === email.length - 1) return MASK.repeat(3);
-  const local = email.slice(0, at);
-  const domain = email.slice(at + 1);
-  return local.length === 1 ? `${MASK}@${domain}` : `${local.slice(0, 1)}${MASK.repeat(3)}@${domain}`;
-}
+export { maskEmail };
 
 /** L'indicatif et les deux derniers chiffres — un nombre FIXE de puces, pour
  * que le masque ne dise pas la longueur du numéro. */
@@ -111,7 +111,13 @@ const WireUser = z.object({
   emailVerifiedAt: z.optional(z.unknown()),
   phoneVerifiedAt: z.optional(z.unknown()),
   createdAt: z.optional(z.unknown()),
+  profileDecor: z.optional(z.unknown()),
 });
+
+const decorOf = (raw: unknown): { readonly profileDecor?: ServedProfileDecor } => {
+  const profileDecor = readProfileDecor(raw);
+  return profileDecor === undefined ? {} : { profileDecor };
+};
 
 const textOrNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value.trim() === '' ? null : value;
@@ -139,6 +145,7 @@ export function decodeMyProfile(raw: unknown): MyProfile | null {
     email: email === null ? null : { masked: maskEmail(email), verified: isStamped(user.emailVerifiedAt) },
     phone: phone === null ? null : { masked: maskPhone(phone), verified: isStamped(user.phoneVerifiedAt) },
     createdAt: typeof user.createdAt === 'string' ? user.createdAt : null,
+    ...decorOf(raw),
   };
 }
 

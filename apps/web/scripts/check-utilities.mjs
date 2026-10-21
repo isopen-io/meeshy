@@ -81,6 +81,39 @@ export const ALLOWED = new Map([
       '(`syncPillTop()`), jamais dans la feuille, depuis que cette cote dépend ' +
       'de la route',
   ],
+  [
+    'send-sheet-row',
+    "crochet de sélection de l'écran de partage unique (`document.querySelectorAll" +
+      "('.send-sheet-row')`, `send-sheet-zones.tsx`) — la ligne est entièrement " +
+      "présentée par ses utilitaires Tailwind (`flex min-h-14 w-full …`) et son " +
+      'style inline ; la classe bare ne porte aucune règle propre (#10948)',
+  ],
+  [
+    'send-sheet-pieces',
+    "marqueur de groupe de l'écran de partage unique (`send-sheet-zones.tsx`, " +
+      '`PieceStrip`) — la liste est entièrement présentée par ses utilitaires ' +
+      '(`flex gap-2 overflow-x-auto …`) ; le compte vit dans `data-send-pieces` ' +
+      ', jamais dans une règle de cette classe (#10948)',
+  ],
+  [
+    'send-sheet-piece-moves',
+    "marqueur de groupe de l'écran de partage unique (`send-sheet-zones.tsx`, " +
+      "`PieceStrip`) — n'enveloppe que deux boutons `sr-only focus:not-sr-only`, " +
+      'invisibles par construction : aucune règle propre attendue (#10948)',
+  ],
+  [
+    'send-sheet-selected',
+    "marqueur de groupe de l'écran de partage unique (`send-sheet-zones.tsx`, " +
+      '`SelectedRow`) — la liste est entièrement présentée par ses utilitaires ' +
+      '(`flex gap-2 overflow-x-auto`) ; aucune règle propre attendue (#10948)',
+  ],
+  [
+    'send-toast',
+    "marqueur de l'écran de partage unique (`send-toast-host.tsx`) — le toast " +
+      'est entièrement présenté par ses utilitaires Tailwind et son style ' +
+      'inline (couleurs) ; le crochet de sélection est `data-send-toast`, ' +
+      'jamais cette classe (#10948)',
+  ],
 ]);
 
 export const sourceFiles = (dir) =>
@@ -148,8 +181,16 @@ export const usedClasses = (files) => {
  * `@xl:grid-cols-4` sortent en `.\@container`, `.\@xl\:grid-cols-4`) : sans
  * lui, l'administration, première à les employer, voyait seize classes
  * vivantes passer pour mortes.
+ *
+ * L'astérisque d'une multiplication `calc()` s'y protège de même
+ * (`w-[min(100%,calc(62dvh*9/16))]` sort en
+ * `.w-\[min\(100\%\,calc\(62dvh\*9\/16\)\)\]`, #10293) : sans lui, la
+ * première classe du dépôt à porter un `*` dans sa valeur arbitraire — une
+ * multiplication en `calc()` — passait pour morte alors que Tailwind l'avait
+ * bel et bien émise, exactement comme les apostrophes et l'arobase avant
+ * elle.
  */
-export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"@]/g, (c) => `\\${c}`);
+export const escapeForCss = (name) => name.replace(/[.[\]/%#(),!:'"@*]/g, (c) => `\\${c}`);
 
 /** Le corps `{ ... }` de la règle `.name{...}` dans `css`, ou `null` si absente. */
 export const findRuleBody = (css, name) => {

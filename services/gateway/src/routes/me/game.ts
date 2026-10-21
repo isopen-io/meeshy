@@ -25,11 +25,17 @@ import { GameBlockService } from '../../services/game/GameBlockService';
 import { MissionService } from '../../services/game/MissionService';
 import { PersonalMissionService } from '../../services/game/PersonalMissionService';
 import { gameRateLimitConfig, okResponse, refusalResponse, requestIdSchema, runGameWrite, writeBody } from './game-shared';
+import { meGameArchiveRoutes } from './game-archive';
+import { meGameSeasonCalendarRoutes } from './game-season-calendar';
 import { meGameWave2Routes } from './game-wave2';
+import { meGamePhotoRoutes } from './game-photo';
+import type { PackIndex } from '../../services/packs/PackIndex';
 
 export type GameRoutesOptions = {
   /** Le crédit des points de jeu — l'`EngagementService` partagé, remplaçable en test. */
   readonly engagement?: { creditGamePoints(userId: string, points: number, axisKey: EngagementAxisKey): Promise<void> };
+  /** Le registre des packs de cadres que l'atmosphère installe (#10162) ; absent : celui lu au démarrage. */
+  readonly packIndex?: PackIndex;
 };
 
 const guideBody = {
@@ -146,4 +152,10 @@ export async function meGameRoutes(fastify: FastifyInstance, options: GameRoutes
     creditPoints,
     grantFreeze: (userId) => missions.grantFreeze(userId),
   });
+  // Ce qu'un lien du jeu ouvre (#9947) : une saison n, une semaine de ligue — en lecture.
+  await fastify.register(meGameArchiveRoutes);
+  // Les moments photo et l'atmosphère des cadres (#10162) : une table de routes à part, `GAME_PHOTO_ROUTES`.
+  await fastify.register(meGamePhotoRoutes, options.packIndex ? { packIndex: options.packIndex } : {});
+  // Le calendrier des saisons servi (#10016) : la base, ou la constante.
+  await fastify.register(meGameSeasonCalendarRoutes);
 }

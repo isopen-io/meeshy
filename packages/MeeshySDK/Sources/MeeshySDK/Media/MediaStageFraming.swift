@@ -157,6 +157,31 @@ public nonisolated enum MediaStageFraming {
         }
 
         static let zero = Result(frame: .zero, media: .zero, cornerRadius: 0)
+
+        /// **Le cadre se plie au conteneur que la page reçoit RÉELLEMENT** (#10352).
+        ///
+        /// `resolve` calcule contre la fenêtre. Une page peut recevoir moins :
+        /// une page protégée hébergée dans la couche sécurisée, une fenêtre
+        /// redimensionnée, un paysage. Un cadre fixe plus grand que son
+        /// conteneur en DÉBORDAIT — le média sortait du viewport.
+        ///
+        /// Le cadre se borne axe par axe ; le média, lui, ne se réduit que s'il
+        /// ne tient plus dans ce cadre, et d'un seul facteur — jamais étiré,
+        /// jamais rogné. Un conteneur assez grand rend le résultat intact ; un
+        /// conteneur sans dimension finie ne décide rien.
+        public func fitted(in container: CGSize) -> Result {
+            guard container.width > 0, container.height > 0,
+                  container.width.isFinite, container.height.isFinite else { return self }
+            let bounded = CGSize(width: min(frame.width, container.width),
+                                 height: min(frame.height, container.height))
+            guard bounded != frame else { return self }
+            let shrink = Swift.min(1,
+                                   media.width > 0 ? bounded.width / media.width : 1,
+                                   media.height > 0 ? bounded.height / media.height : 1)
+            return Result(frame: bounded,
+                          media: CGSize(width: media.width * shrink, height: media.height * shrink),
+                          cornerRadius: cornerRadius)
+        }
     }
 
     public static func resolve(_ input: Input) -> Result {

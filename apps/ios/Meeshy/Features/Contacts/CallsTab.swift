@@ -17,7 +17,7 @@ struct CallsTab: View {
     @State private var selectedCall: APICallRecord?
     @State private var confirmsClearAll = false
 
-    private static let searchDebounceNanoseconds: UInt64 = 250_000_000
+    private static let searchDebounceDuration: Duration = .milliseconds(250)
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,8 +36,7 @@ struct CallsTab: View {
         .task { await viewModel.loadCalls() }
         .task(id: viewModel.searchQuery) {
             if viewModel.isSearching {
-                try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: Self.searchDebounceDuration), !Task.isCancelled else { return }
             }
             await viewModel.applySearch()
         }
@@ -240,13 +239,13 @@ private struct CallJournalRow: View, Equatable {
             HStack(spacing: MeeshySpacing.mdPlus) {
                 Button(action: onTap) {
                     HStack(spacing: MeeshySpacing.mdPlus) {
-                        MeeshyAvatar(
+                        LivePresence { MeeshyAvatar(
                             name: name,
                             context: .userListItem,
                             accentColor: color,
                             avatarURL: record.avatarURL,
-                            presenceState: PresenceManager.shared.resolvedState(userId: record.peer?.userId, isOnline: record.peer?.isOnline)
-                        )
+                            presenceState: record.peer.flatMap { PresenceManager.shared.knownPresenceState(for: $0.userId) }
+                        ) }
 
                         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                             Text(name)
@@ -325,7 +324,7 @@ private struct CallJournalRow: View, Equatable {
     private var directionIcon: String {
         switch record.directionKind {
         case .outgoing: return "arrow.up.right"
-        case .incoming, .missed: return "arrow.down.left"
+        case .incoming, .missed, .unknown: return "arrow.down.left"
         }
     }
 
@@ -335,7 +334,7 @@ private struct CallJournalRow: View, Equatable {
     // durée si présente (mêmes segments que la pastille visuelle).
     private func rowAccessibilityLabel(name: String) -> String {
         let type = record.isVideo
-            ? String(localized: "calls.type.video", defaultValue: "Appel video", bundle: .main)
+            ? String(localized: "calls.type.video", defaultValue: "Appel vidéo", bundle: .main)
             : String(localized: "calls.type.audio", defaultValue: "Appel vocal", bundle: .main)
         let participants = record.participants.map(\.displayName)
         let withParticipants = participants.isEmpty
@@ -380,7 +379,7 @@ struct CallRowDialButton: View {
             Button {
                 dial(isVideo: true)
             } label: {
-                Label(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main), systemImage: "video.fill")
+                Label(String(localized: "call.start.video", defaultValue: "Appel vidéo", bundle: .main), systemImage: "video.fill")
             }
         } label: {
             Image(systemName: defaultIsVideo ? "video.fill" : "phone.fill")

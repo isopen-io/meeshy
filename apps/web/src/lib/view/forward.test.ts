@@ -4,7 +4,7 @@ import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags'
 
 import { attachmentDefaults, message } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
-import type { SendPayload } from '@/lib/send/send-sheet-plan';
+import { publishOffered, type SendPayload } from '@/lib/send/send-sheet-plan';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardCandidate } from './forward';
@@ -72,20 +72,24 @@ describe('forwardRefusalOf — la règle serveur, rejouée avant l’aller-retou
   });
 });
 
-describe('admitForward — la SÉLECTION entière, jamais un transfert à moitié', () => {
+describe('admitForward — le protégé est retiré avec son motif, le reste part (D6)', () => {
   test('trois messages ordinaires ⇒ trois ids, dans l’ordre reçu', () => {
     const admission = admitForward([candidate({ id: 'a' }), candidate({ id: 'b' }), candidate({ id: 'c' })], NOW);
-    expect(admission).toEqual({ admitted: true, ids: ['a', 'b', 'c'] });
+    expect(admission).toEqual({ admitted: true, ids: ['a', 'b', 'c'], withdrawn: [] });
   });
 
-  test('UNE vue unique dans la sélection refuse TOUT le lot — jamais un envoi partiel silencieux', () => {
+  test('UNE vue unique dans la sélection est RETIRÉE, avec son motif — le reste part', () => {
     const admission = admitForward([candidate({ id: 'a' }), candidate({ id: 'b', isViewOnce: true })], NOW);
-    expect(admission).toEqual({ admitted: false, reason: 'view-once' });
+    expect(admission).toEqual({ admitted: true, ids: ['a'], withdrawn: [{ id: 'b', reason: 'view-once' }] });
   });
 
-  test('UNE flamme après lecture dans la sélection refuse TOUT le lot', () => {
+  test('UNE flamme après lecture est retirée de même', () => {
     const flame = candidate({ id: 'b', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ });
-    expect(admitForward([candidate({ id: 'a' }), flame], NOW)).toEqual({ admitted: false, reason: 'after-read' });
+    expect(admitForward([candidate({ id: 'a' }), flame], NOW)).toEqual({ admitted: true, ids: ['a'], withdrawn: [{ id: 'b', reason: 'after-read' }] });
+  });
+
+  test('RIEN ne sort : refusé, par le premier motif', () => {
+    expect(admitForward([candidate({ id: 'b', isViewOnce: true })], NOW)).toEqual({ admitted: false, reason: 'view-once' });
   });
 
   test('une sélection vide est un refus, jamais un envoi de zéro message', () => {
@@ -145,6 +149,27 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     ]);
   });
 
+  test('un STICKER part avec son sticker : la copie reste un sticker, jamais une image nue (#10630)', () => {
+    const sticker = sourceOf({ id: 'm3', content: '', metadata: { sticker: { stickerId: 's-1' } } });
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [sticker], now: NOW });
+    expect(messagesPayload(request).messages).toEqual([{ id: 'm3', content: '', originalLanguage: 'fr', sticker: { stickerId: 's-1' } }]);
+  });
+
+  test('l’aperçu d’un STICKER est un sticker (« Sticker »), avec une vignette résolue par la passerelle, jamais une photo à chemin relatif (#10747)', () => {
+    const piece = fileOf({ id: 'att-s', mimeType: 'image/webp', fileUrl: '/c/2026/10/s/sticker_1.webp', thumbnailUrl: '/c/2026/10/s/sticker_1_thumb.webp' });
+    const sticker = sourceOf({ id: 'm3', content: '', metadata: { sticker: { stickerId: 's-1' } }, attachments: [piece] });
+    const preview = messagesPayload(forwardRequestOf({ conversationId: 'c-src', messages: [sticker], now: NOW })).preview;
+    expect(preview.kind).toBe('sticker');
+    expect(preview.thumbUrl).toMatch(/^https?:\/\/.+\/c\/2026\/10\/s\/sticker_1_thumb\.webp$/);
+    expect(preview.thumbUrl).not.toContain('staging.meeshy.me/c/');
+  });
+
+  test('une photo ordinaire garde sa vignette et son genre', () => {
+    const photo = sourceOf({ content: '', attachments: [fileOf()] });
+    const preview = messagesPayload(forwardRequestOf({ conversationId: 'c-src', messages: [photo], now: NOW })).preview;
+    expect(preview).toEqual({ kind: 'image', thumbUrl: 'https://cdn.test/photo-thumb.jpg' });
+  });
+
   test('une flamme à durée part avec SA borne ; un message ordinaire n’en porte aucune', () => {
     const flame = sourceOf({ id: 'm2', effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 300 });
     const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf(), flame], now: NOW });
@@ -158,7 +183,7 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     const flame = sourceOf({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 300, attachments: [fileOf()] });
     const request = forwardRequestOf({ conversationId: 'c-src', messages: [flame], now: NOW });
     expect(messagesPayload(request).preview).toEqual({ kind: 'messages', count: 1 });
-    expect(messagesPayload(request).soleMedia?.protected).toBe(true);
+    expect(publishOffered(request.payload)).toEqual([]);
   });
 
   test('un seul message texte s’aperçoit par son texte', () => {
@@ -183,7 +208,7 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
 
   test('UN message portant UNE photo ouverte offre le média à la publication', () => {
     const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf({ attachments: [fileOf()] })], now: NOW });
-    expect(messagesPayload(request).soleMedia).toEqual({ attachmentId: 'att-1', mime: 'image/jpeg', protected: false });
+    expect(publishOffered(request.payload)).toEqual(['STORY', 'POST']);
   });
 
   test('une photo sans légende s’aperçoit par sa vignette', () => {
@@ -197,7 +222,7 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
       messages: [sourceOf({ attachments: [fileOf(), fileOf({ id: 'att-2' })] })],
       now: NOW,
     });
-    expect(messagesPayload(request).soleMedia).toBeUndefined();
+    expect(publishOffered(request.payload)).toEqual([]);
   });
 
   test('deux messages : rien n’est publiable, même avec un média chacun', () => {
@@ -206,7 +231,7 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
       messages: [sourceOf({ attachments: [fileOf()] }), sourceOf({ id: 'm2', attachments: [fileOf({ id: 'att-2' })] })],
       now: NOW,
     });
-    expect(messagesPayload(request).soleMedia).toBeUndefined();
+    expect(publishOffered(request.payload)).toEqual([]);
   });
 
   const protectedCases: readonly (readonly [string, Message])[] = [
@@ -220,9 +245,9 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
     ['un message flouté par son SEUL bit d’effet', sourceOf({ effectFlags: MESSAGE_EFFECT_FLAGS.BLURRED, attachments: [fileOf()] })],
   ];
   protectedCases.forEach(([label, source]) => {
-    test(`${label} : le média est déclaré PROTÉGÉ`, () => {
+    test(`${label} : le média ne se publie pas`, () => {
       const request = forwardRequestOf({ conversationId: 'c-src', messages: [source], now: NOW });
-      expect(messagesPayload(request).soleMedia?.protected).toBe(true);
+      expect(publishOffered(request.payload)).toEqual([]);
     });
   });
 
@@ -235,5 +260,32 @@ describe('forwardRequestOf — la sélection admise devient une demande d’envo
       const request = forwardRequestOf({ conversationId: 'c-src', messages: [source], now: NOW });
       expect(messagesPayload(request).preview).toEqual({ kind: 'messages', count: 1 });
     });
+  });
+});
+
+describe('forwardRequestOf — ce que le web ne peut pas faire partir (D7)', () => {
+  test('un message chiffré, ou une pièce d’une source chiffrée, est déclaré non envoyable', () => {
+    const request = forwardRequestOf({
+      conversationId: 'c-src',
+      messages: [sourceOf({ id: 'a' }), sourceOf({ id: 'b', isEncrypted: true }), sourceOf({ id: 'c', attachments: [fileOf({ isEncrypted: true })] })],
+      now: NOW,
+    });
+    expect(messagesPayload(request).unsendable).toEqual(['b', 'c']);
+  });
+
+  test('le texte d’une conversation chiffrée que le web lit en clair part ; ses pièces, non', () => {
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf({ id: 'a' }), sourceOf({ id: 'b', attachments: [fileOf()] })], now: NOW, sourceEncrypted: true });
+    expect(messagesPayload(request).unsendable).toEqual(['b']);
+    expect(messagesPayload(request).exit[0]?.encrypted).toBe(true);
+  });
+
+  test('un message supprimé n’a plus de source : non envoyable', () => {
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf({ deletedAt: new Date(NOW - 1000) })], now: NOW });
+    expect(messagesPayload(request).unsendable).toEqual(['m1']);
+  });
+
+  test('la loi lit les pièces : identifiant, type, poids, durée, drapeaux', () => {
+    const request = forwardRequestOf({ conversationId: 'c-src', messages: [sourceOf({ attachments: [fileOf({ duration: 1200 })] })], now: NOW });
+    expect(messagesPayload(request).exit[0]?.pieces).toEqual([{ id: 'att-1', mimeType: 'image/jpeg', bytes: 10, durationMs: 1200, isViewOnce: false, isBlurred: false }]);
   });
 });

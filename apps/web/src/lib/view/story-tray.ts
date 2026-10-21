@@ -42,6 +42,9 @@ export type StoryTrayGroup = {
    * ici comme le fait `LentilleRailEntry.moodEmoji` côté iOS
    * (`StoriesVivantsRail.swift`) — une pastille porte les deux signaux. */
   readonly moodEmoji?: string | null;
+  /** Le post de cette humeur — ce que la tuile compte quand elle la montre
+   * (#10483). Posé avec `moodEmoji` par `withMoods`. */
+  readonly moodPostId?: string;
 };
 
 function instantOf(value: string | Date | undefined): number {
@@ -125,14 +128,21 @@ export function groupStoriesByAuthor(
  * (`use-author-moods.ts`), qui n'exigent pas que l'auteur ait une story.
  */
 export function moodsByAuthor(moods: readonly StatusMoodPost[]): ReadonlyMap<string, string> {
-  const moodByAuthor = new Map<string, string>();
+  return new Map([...currentMoodPosts(moods)].map(([authorId, post]) => [authorId, post.moodEmoji ?? '']));
+}
+
+/** Le POST de l'humeur courante de chaque auteur — la même élection que
+ * {@link moodsByAuthor}, dont il est la source : c'est lui que l'écran affiche,
+ * donc lui qui reçoit l'impression `status` (#10401). */
+export function currentMoodPosts(moods: readonly StatusMoodPost[]): ReadonlyMap<string, StatusMoodPost> {
+  const byAuthor = new Map<string, StatusMoodPost>();
   for (const post of moods) {
     const authorId = post.author?.id ?? post.authorId;
-    if (authorId === undefined || moodByAuthor.has(authorId)) continue;
+    if (authorId === undefined || byAuthor.has(authorId)) continue;
     if (post.moodEmoji === null || post.moodEmoji === undefined || post.moodEmoji === '') continue;
-    moodByAuthor.set(authorId, post.moodEmoji);
+    byAuthor.set(authorId, post);
   }
-  return moodByAuthor;
+  return byAuthor;
 }
 
 /**
@@ -156,9 +166,12 @@ export function withMoods(
 ): readonly StoryTrayGroup[] {
   const moodByAuthor = moodsByAuthor(moods);
   if (moodByAuthor.size === 0) return groups;
+  const postByAuthor = currentMoodPosts(moods);
   return groups.map((g) => {
     const mood = moodByAuthor.get(g.authorId);
-    return mood === undefined ? g : { ...g, moodEmoji: mood };
+    if (mood === undefined) return g;
+    const postId = postByAuthor.get(g.authorId)?.id;
+    return postId === undefined ? { ...g, moodEmoji: mood } : { ...g, moodEmoji: mood, moodPostId: postId };
   });
 }
 
@@ -236,4 +249,14 @@ export function entryStoryIdOf(stories: readonly StoryTrayPost[]): string {
   const oldestFirst = [...stories].sort((a, b) => instantOf(a.createdAt) - instantOf(b.createdAt));
   const unseen = oldestFirst.find((s) => s.isViewedByMe !== true);
   return (unseen ?? oldestFirst[0])?.id ?? '';
+}
+
+/**
+ * À QUI APPARTIENT LA PRÉSENCE DE CETTE TUILE (#10944) — l'auteur, lu dans la
+ * carte vivante (le plateau est persisté : sa présence n'y entre pas, D-60) ;
+ * jamais la mienne, que ma propre tuile ne montre pas. Miroir de
+ * `StoryTrayView.swift` (`PresenceManager.presenceState(for: group.id)`).
+ */
+export function storyAuthorPresenceKey(group: Pick<StoryTrayGroup, 'authorId' | 'isMine'>): string | undefined {
+  return group.isMine ? undefined : group.authorId;
 }

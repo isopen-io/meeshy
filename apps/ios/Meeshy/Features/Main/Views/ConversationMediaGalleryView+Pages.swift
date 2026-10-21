@@ -133,75 +133,77 @@ struct GalleryImagePage: View, Equatable {
         // fond est celui du CADRE, pas de l'écran — au-delà de lui c'est le
         // plateau qui se voit. Il porte le ThumbHash flouté du média quand
         // celui-ci en a un, le noir sinon.
-        ZStack {
-            MediaStageBackdrop(
-                source: MediaGalleryStage.backdrop(stage: stage,
-                                                   thumbHash: attachment.thumbHash)
-            )
+        // #10352 — le cadre se plie au conteneur que la page reçoit RÉELLEMENT.
+        FittedMediaStage(stage: stage) { stage in
+            ZStack {
+                MediaStageBackdrop(
+                    source: MediaGalleryStage.backdrop(stage: stage,
+                                                       thumbHash: attachment.thumbHash)
+                )
 
-            if hasRenderableSource, rendersFullPixels, loadPhase.isFailed {
-                GalleryMediaUnavailableView(onRetry: { loadPhase.retry() })
-            } else if hasRenderableSource {
-                imageLayer
-                    /*
-                     **LA TAILLE VIENT DU SOLVEUR, PAS D'UN `.aspectRatio`**
-                     (retour porteur 2026-09-13 : « ça zoom trop au point où on
-                     ne voit plus tout le contenu »).
+                if hasRenderableSource, rendersFullPixels, loadPhase.isFailed {
+                    GalleryMediaUnavailableView(onRetry: { loadPhase.retry() })
+                } else if hasRenderableSource {
+                    imageLayer
+                        /*
+                         **LA TAILLE VIENT DU SOLVEUR, PAS D'UN `.aspectRatio`**
+                         (retour porteur 2026-09-13 : « ça zoom trop au point où on
+                         ne voit plus tout le contenu »).
 
-                     `MediaStageFraming.Result` rend DEUX tailles : `frame`, le
-                     cadre, et `media`, le média ajusté par un `aspectFit` dont
-                     le doc-comment promet « jamais de rognage, jamais
-                     d'étirement ». **`media` n'était lu par AUCUNE vue** —
-                     mesuré : zéro occurrence dans tout le dépôt. La loi
-                     calculait juste, et personne ne l'écoutait.
+                         `MediaStageFraming.Result` rend DEUX tailles : `frame`, le
+                         cadre, et `media`, le média ajusté par un `aspectFit` dont
+                         le doc-comment promet « jamais de rognage, jamais
+                         d'étirement ». **`media` n'était lu par AUCUNE vue** —
+                         mesuré : zéro occurrence dans tout le dépôt. La loi
+                         calculait juste, et personne ne l'écoutait.
 
-                     Ce qui tenait lieu de contrainte était le
-                     `.aspectRatio(contentMode: .fit)` posé ici. Il ne portait
-                     pas sur l'image : `imageLayer` rend un
-                     `ProgressiveCachedImage`, dont le corps est un `ZStack` de
-                     quatre branches (plein format / vignette / thumbHash /
-                     `Color.clear`). Un `.aspectRatio` sans ratio explicite
-                     déduit celui de la vue qu'il enveloppe — et un `ZStack`
-                     dont une branche est un `Color.clear` n'a pas le ratio de
-                     l'image qu'il montre. Le média se posait donc au cadre, et
-                     en plein cadre — où le cadre EST l'écran — une image très
-                     haute débordait par le haut et par le bas.
+                         Ce qui tenait lieu de contrainte était le
+                         `.aspectRatio(contentMode: .fit)` posé ici. Il ne portait
+                         pas sur l'image : `imageLayer` rend un
+                         `ProgressiveCachedImage`, dont le corps est un `ZStack` de
+                         quatre branches (plein format / vignette / thumbHash /
+                         `Color.clear`). Un `.aspectRatio` sans ratio explicite
+                         déduit celui de la vue qu'il enveloppe — et un `ZStack`
+                         dont une branche est un `Color.clear` n'a pas le ratio de
+                         l'image qu'il montre. Le média se posait donc au cadre, et
+                         en plein cadre — où le cadre EST l'écran — une image très
+                         haute débordait par le haut et par le bas.
 
-                     Reproduit au simulateur avec un témoin 600×2400 portant
-                     trois repères : en mode CADRÉ les trois se voyaient ; en
-                     PLEIN CADRE, « HAUT » et « BAS » disparaissaient et seul
-                     « MILIEU » subsistait.
+                         Reproduit au simulateur avec un témoin 600×2400 portant
+                         trois repères : en mode CADRÉ les trois se voyaient ; en
+                         PLEIN CADRE, « HAUT » et « BAS » disparaissaient et seul
+                         « MILIEU » subsistait.
 
-                     > Une loi qui calcule une valeur que personne ne lit ne
-                     > protège de rien — et elle est PIRE qu'absente, parce que
-                     > son existence et ses tests donnent l'illusion que la
-                     > question est réglée. `MediaGalleryStageGeometryTests`
-                     > éprouvait `aspectFit` et passait ; le pixel, lui, était
-                     > rogné.
+                         > Une loi qui calcule une valeur que personne ne lit ne
+                         > protège de rien — et elle est PIRE qu'absente, parce que
+                         > son existence et ses tests donnent l'illusion que la
+                         > question est réglée. `MediaGalleryStageGeometryTests`
+                         > éprouvait `aspectFit` et passait ; le pixel, lui, était
+                         > rogné.
 
-                     La taille est désormais posée en dur depuis `stage.media`.
-                     Le non-rognage devient une propriété de CONSTRUCTION : le
-                     cadre proposé a exactement le ratio de l'image, donc
-                     `.resizable()` le remplit sans déborder ni déformer. Le
-                     `.aspectRatio` est retiré — le garder ferait deux sources
-                     pour une même décision, dont une inopérante.
-                    */
-                    .frame(width: stage.media.width, height: stage.media.height)
-                    .scaleEffect(scale)
-                    .offset(offset)
-                    .gesture(zoomGesture, including: isActive ? .all : .none)
-                    .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
-                    // Sans label, l'image plein écran est un élément VoiceOver muet quand
-                    // on balaie la galerie. Caption si fournie, sinon libellé générique.
-                    .accessibilityLabel(accessibilityLabel)
-                    .accessibilityAddTraits(.isImage)
-            } else {
-                emptyStateGlyph
+                         La taille est désormais posée en dur depuis `stage.media`.
+                         Le non-rognage devient une propriété de CONSTRUCTION : le
+                         cadre proposé a exactement le ratio de l'image, donc
+                         `.resizable()` le remplit sans déborder ni déformer. Le
+                         `.aspectRatio` est retiré — le garder ferait deux sources
+                         pour une même décision, dont une inopérante.
+                        */
+                        .frame(width: stage.media.width, height: stage.media.height)
+                        .scaleEffect(scale)
+                        .offset(offset)
+                        .gesture(zoomGesture, including: isActive ? .all : .none)
+                        .highPriorityGesture(panGesture, including: isActive && isZoomed ? .all : .none)
+                        // Sans label, l'image plein écran est un élément VoiceOver muet quand
+                        // on balaie la galerie. Caption si fournie, sinon libellé générique.
+                        .accessibilityLabel(accessibilityLabel)
+                        .accessibilityAddTraits(.isImage)
+                } else {
+                    emptyStateGlyph
+                }
             }
+            .frame(width: stage.frame.width, height: stage.frame.height)
+            .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
         }
-        .frame(width: stage.frame.width, height: stage.frame.height)
-        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         // **Le glissement appartient au CADRE, pas au média ajusté.** Il était
         // monté sur `imageLayer`, c'est-à-dire sur la vue déjà `.fit` : il ne
@@ -470,7 +472,9 @@ struct GalleryVideoPage: View, Equatable {
     @State private var videoManagerActiveURL: String = SharedAVPlayerManager.shared.activeURL
     @State private var videoManagerPlayer: AVPlayer?
     @State private var videoManagerIsPlaying: Bool = SharedAVPlayerManager.shared.isPlaying
-    @State private var resolvedAvailability: VideoAvailability = .needsDownload
+    /// `nil` tant que la tâche n'a pas résolu : le premier rendu lit le disque
+    /// en synchrone, une vidéo déjà téléchargée ne montre jamais « ↓ » (#10370).
+    @State private var resolvedAvailability: VideoAvailability?
     @StateObject private var downloader = AttachmentDownloader()
     /// Décalage de fermeture, LOCAL à la page (cf. `GalleryImagePage`).
     @State private var offset: CGSize = .zero
@@ -495,7 +499,7 @@ struct GalleryVideoPage: View, Equatable {
         if downloader.isCached {
             return .ready
         }
-        return resolvedAvailability
+        return resolvedAvailability ?? VideoAvailability.atFirstRender(for: attachment)
     }
 
     private var isPlayerActive: Bool {
@@ -533,64 +537,66 @@ struct GalleryVideoPage: View, Equatable {
         // borne. Une vidéo est d'ailleurs la nature qui en profite le plus : un
         // 16:9 pose son cadre au plancher et laisse deux bandes dans les DEUX
         // états.
-        ZStack {
-            MediaStageBackdrop(
-                source: MediaGalleryStage.backdrop(stage: stage,
-                                                   thumbHash: attachment.thumbHash)
-            )
+        // #10352 — le cadre se plie au conteneur que la page reçoit RÉELLEMENT.
+        FittedMediaStage(stage: stage) { stage in
+            ZStack {
+                MediaStageBackdrop(
+                    source: MediaGalleryStage.backdrop(stage: stage,
+                                                       thumbHash: attachment.thumbHash)
+                )
 
-            if !isPlayerActive || !surfaceReady {
-                thumbnailLayer
-            }
+                if !isPlayerActive || !surfaceReady {
+                    thumbnailLayer
+                }
 
-            if isPlayerActive || isPlayerAttached {
-                if let player = videoManagerPlayer {
-                    FullscreenAVPlayerLayerView(
-                        player: player,
-                        gravity: .resizeAspect,
-                        onReadyForDisplay: { surfaceReady = true }
+                if isPlayerActive || isPlayerAttached {
+                    if let player = videoManagerPlayer {
+                        FullscreenAVPlayerLayerView(
+                            player: player,
+                            gravity: .resizeAspect,
+                            onReadyForDisplay: { surfaceReady = true }
+                        )
+                    }
+                }
+
+                // Un seul contrôleur : une fois le player attaché à cette URL
+                // (lecture OU pause), play/pause appartient au transport partagé
+                // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
+                // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
+                // play/pause 64pt du transport (double contrôleur, bug user).
+                if !isPlayerAttached {
+                    playOrDownloadButton
+                }
+
+                // **La quatrième porte** (#6163) : double tap à gauche ⇒ −10 s, à
+                // droite ⇒ +10 s. Armée seulement quand une piste est ATTACHÉE à
+                // cette page — sans piste il n'y a rien à parcourir, et la loi 4
+                // refuse un contrôle sans effet. Cette condition est aussi ce qui
+                // évite de retarder le tap d'un point de vue où le bouton central
+                // de lecture est encore là : les deux ne sont jamais montés
+                // ensemble, `!isPlayerAttached` gouvernant l'un et l'autre.
+                //
+                // **La zone reçoit AUSSI la porte du tap** (`onSingleTap`), et c'est
+                // ce qui réunit les deux gestes sur la MÊME vue là où ils se
+                // disputent le doigt — la règle que le corps de `GalleryImagePage`
+                // écrit dix lignes plus haut. Le `.onTapGesture` posé sur cette page
+                // ne disparaît pas pour autant : il sert le tiers CENTRAL, qui ne
+                // porte aucun geste et garde donc son tap immédiat.
+                if isActive, isPlayerAttached {
+                    MediaStageSeekZones(
+                        size: stage.frame,
+                        onSingleTap: { onEnterStage(.tap) },
+                        onDoubleTap: { point in
+                            MediaStageSeekAction.apply(at: point,
+                                                       in: stage.frame,
+                                                       manager: videoManager)
+                        }
                     )
                 }
             }
-
-            // Un seul contrôleur : une fois le player attaché à cette URL
-            // (lecture OU pause), play/pause appartient au transport partagé
-            // (`VideoTransportControls`). Gater sur `!isPlayerActive` faisait
-            // réapparaître ce poster 64pt PENDANT la pause, empilé sur le
-            // play/pause 64pt du transport (double contrôleur, bug user).
-            if !isPlayerAttached {
-                playOrDownloadButton
-            }
-
-            // **La quatrième porte** (#6163) : double tap à gauche ⇒ −10 s, à
-            // droite ⇒ +10 s. Armée seulement quand une piste est ATTACHÉE à
-            // cette page — sans piste il n'y a rien à parcourir, et la loi 4
-            // refuse un contrôle sans effet. Cette condition est aussi ce qui
-            // évite de retarder le tap d'un point de vue où le bouton central
-            // de lecture est encore là : les deux ne sont jamais montés
-            // ensemble, `!isPlayerAttached` gouvernant l'un et l'autre.
-            //
-            // **La zone reçoit AUSSI la porte du tap** (`onSingleTap`), et c'est
-            // ce qui réunit les deux gestes sur la MÊME vue là où ils se
-            // disputent le doigt — la règle que le corps de `GalleryImagePage`
-            // écrit dix lignes plus haut. Le `.onTapGesture` posé sur cette page
-            // ne disparaît pas pour autant : il sert le tiers CENTRAL, qui ne
-            // porte aucun geste et garde donc son tap immédiat.
-            if isActive, isPlayerAttached {
-                MediaStageSeekZones(
-                    size: stage.frame,
-                    onSingleTap: { onEnterStage(.tap) },
-                    onDoubleTap: { point in
-                        MediaStageSeekAction.apply(at: point,
-                                                   in: stage.frame,
-                                                   manager: videoManager)
-                    }
-                )
-            }
+            .frame(width: stage.frame.width, height: stage.frame.height)
+            .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
         }
-        .frame(width: stage.frame.width, height: stage.frame.height)
-        .clipShape(RoundedRectangle(cornerRadius: stage.cornerRadius, style: .continuous))
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
         .onTapGesture { onEnterStage(.tap) }
         .offset(y: offset.height)
@@ -620,7 +626,7 @@ struct GalleryVideoPage: View, Equatable {
             // « prête » à la fermeture de la galerie.
             downloader.observe(attachment)
             await resolveAvailability()
-            if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
+            if case .needsDownload? = resolvedAvailability, !downloader.isDownloading {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
                 if MediaDownloadPolicyEngine.shouldAutoDownload(
@@ -668,8 +674,7 @@ struct GalleryVideoPage: View, Equatable {
         // sur une vidéo qui joue.
         .task(id: isPlayerActive) {
             guard isPlayerActive, !surfaceReady else { return }
-            try? await Task.sleep(for: .milliseconds(2500))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(2500)), !Task.isCancelled else { return }
             surfaceReady = true
         }
         .adaptiveOnChange(of: isPlayerAttached) { _, attached in

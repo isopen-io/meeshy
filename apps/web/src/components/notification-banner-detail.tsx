@@ -6,7 +6,7 @@ import { coqueCourante } from '@/lib/native-shell';
 import { focusComposerInDocument } from '@/lib/notifications/composer-focus-intent';
 import { bannerActions, bannerAudio, type BannerAction } from '@/lib/notifications/content-detail';
 import type { NotificationRecord } from '@/lib/notifications/record';
-import { navigate } from '@/lib/router';
+import { openNotificationTarget } from '@/lib/notifications/open-target';
 
 import { BannerAudioPlayer } from './notification-banner-audio';
 
@@ -57,7 +57,7 @@ function ActionPill({ action, accent, language, onDone }: { readonly action: Ban
     );
   }
   const run = () => {
-    navigate(action.path);
+    openNotificationTarget(action.path);
     if (action.kind === 'reply') focusComposerInDocument();
     onDone();
   };

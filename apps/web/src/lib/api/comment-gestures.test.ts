@@ -561,6 +561,16 @@ describe('performCommentDelete — la rangée part AVANT la réponse, et REVIENT
     expect(requests[0]?.headers?.['X-Client-Mutation-Id']).toMatch(MUTATION_ID);
   });
 
+  test('RETIRER (#11150) : le motif voyage en corps `{ reason }` ; l’auteur supprime sans corps', async () => {
+    const queryClient = seeded([trois()]);
+    const { requests, transport } = scripted(async () => ({ ok: true, data: { deleted: true } }));
+
+    await performCommentDelete({ postId: 'p1', commentId: 'b', reason: 'Harcèlement', deps: gatewayDeps(queryClient, transport) });
+    await performCommentDelete({ postId: 'p1', commentId: 'c', deps: gatewayDeps(queryClient, transport) });
+
+    expect(requests.map((r) => r.body)).toEqual([{ reason: 'Harcèlement' }, undefined]);
+  });
+
   /** LE CŒUR DE CE LOT : réinsérer « quelque part » passerait pour un rollback. */
   test('403 ⇒ la rangée est RÉINSÉRÉE À SA PLACE, et le compteur remonte', async () => {
     const queryClient = seeded([trois()]);

@@ -6,6 +6,11 @@
  * administrateur désigné (`MEESHY_EMAIL`, `ADMIN_EMAIL`, `WORLD_ADMIN_EMAILS`)
  * est présent et légitime. Sort en code 1 tant qu'un bloquant subsiste.
  *
+ * Les risques résiduels de la garde des pièces jointes d'invité (une charge
+ * arbitraire logée dans un conteneur audio, #10045) bloquent chacun tant que le
+ * porteur ne l'a pas accepté par son nom (#10057) :
+ * `WORLD_GUEST_RESIDUAL_RISKS_ACCEPTED=<étiquette>,<étiquette>`.
+ *
  * FAÇADE MINCE : la logique vit dans `src/services/world/worldSeedOperations.ts`.
  *
  * ⚠ En production : exécuter DANS le conteneur du gateway (la base n'expose
@@ -24,7 +29,11 @@ import { worldReservedIdentitiesFromEnv } from '../src/services/world/worldReser
 async function main(): Promise<void> {
   const prisma = new PrismaClient();
   try {
-    const preflight = await inspectWorldSeed(prisma, worldReservedIdentitiesFromEnv());
+    const acceptedResidualRisks = (process.env.WORLD_GUEST_RESIDUAL_RISKS_ACCEPTED ?? '')
+      .split(',')
+      .map((risk) => risk.trim())
+      .filter((risk) => risk.length > 0);
+    const preflight = await inspectWorldSeed(prisma, worldReservedIdentitiesFromEnv(), { acceptedResidualRisks });
 
     console.log('Pré-vol du seed World Wide (#10000) — lecture seule');
     console.log(`  conversation "world"   : ${preflight.conversation}`);
@@ -35,6 +44,11 @@ async function main(): Promise<void> {
       const why = member.status === 'ineligible' ? ` — ${member.reason}` : '';
       console.log(`    ${member.designation.padEnd(16)} ${member.status.padEnd(10)} ${who}${why}`);
     }
+    console.log('  risques résiduels des pièces jointes d\'invité (#10057) :');
+    for (const risk of preflight.residualRisks) {
+      console.log(`    ${risk.padEnd(26)} ${acceptedResidualRisks.includes(risk) ? 'accepté par le porteur' : 'NON accepté'}`);
+    }
+    if (preflight.residualRisks.length === 0) console.log('    aucun : la garde les refuse tous');
     console.log('');
 
     if (preflight.ready) {

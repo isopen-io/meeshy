@@ -1,0 +1,177 @@
+{
+  "packs": {
+    "essentiels": {
+      "name": "Essenciais",
+      "description": "Os padrões e gradientes de base."
+    },
+    "heritages": {
+      "name": "Heranças",
+      "description": "Padrões do mundo inteiro."
+    },
+    "nature-et-ciel": {
+      "name": "Natureza e céu",
+      "description": "Mapas, folhas, treliças e estrelas."
+    },
+    "illustrations": {
+      "name": "Ilustrações",
+      "description": "Paisagens desenhadas a traço."
+    },
+    "bannieres-essentielles": {
+      "name": "Banners essenciais",
+      "description": "Seis banners para o teu perfil."
+    },
+    "contours-essentiels": {
+      "name": "Contornos essenciais",
+      "description": "Seis contornos para o teu avatar."
+    },
+    "animes": {
+      "name": "Animados",
+      "description": "Fundos que respiram suavemente."
+    },
+    "bannieres-animees": {
+      "name": "Banners animados",
+      "description": "Um reflexo discreto atravessa o banner."
+    },
+    "contours-animes": {
+      "name": "Contornos animados",
+      "description": "Um arco dourado contorna o avatar."
+    },
+    "contours-haussmannien": {
+      "name": "Contorno Haussmanniano",
+      "description": "A fachada parisiense: cantaria, ferro fundido e fecho de arco."
+    },
+    "cadres-haussmannien": {
+      "name": "Moldura Haussmanniano",
+      "description": "A fachada parisiense: cantaria, ferro fundido e fecho de arco."
+    },
+    "contours-arabe": {
+      "name": "Contorno Árabe",
+      "description": "Entrelaçado da Alhambra, estrelas de oito pontas e arco polilobado."
+    },
+    "cadres-arabe": {
+      "name": "Moldura Árabe",
+      "description": "Entrelaçado da Alhambra, estrelas de oito pontas e arco polilobado."
+    },
+    "contours-grec": {
+      "name": "Contorno Grego",
+      "description": "Meandro, palmetas e volutas jônicas."
+    },
+    "cadres-grec": {
+      "name": "Moldura Grego",
+      "description": "Meandro, palmetas e volutas jônicas."
+    },
+    "contours-ancestral": {
+      "name": "Contorno Africano ancestral",
+      "description": "Bogolan pintado com terra e símbolo adinkra."
+    },
+    "cadres-ancestral": {
+      "name": "Moldura Africano ancestral",
+      "description": "Bogolan pintado com terra e símbolo adinkra."
+    },
+    "contours-technologique": {
+      "name": "Contorno Africano tecnológico",
+      "description": "Degraus ndebele em néon e trilhas de circuito."
+    },
+    "cadres-technologique": {
+      "name": "Moldura Africano tecnológico",
+      "description": "Degraus ndebele em néon e trilhas de circuito."
+    },
+    "contours-rituel": {
+      "name": "Contorno Africano ritual",
+      "description": "Ráfia franjada, búzios, contas e máscara de madeira."
+    },
+    "cadres-rituel": {
+      "name": "Moldura Africano ritual",
+      "description": "Ráfia franjada, búzios, contas e máscara de madeira."
+    },
+    "contours-celte": {
+      "name": "Contorno Celta",
+      "description": "Trança sem fim e triskles em espiral."
+    },
+    "cadres-celte": {
+      "name": "Moldura Celta",
+      "description": "Trança sem fim e triskles em espiral."
+    }
+  },
+  "designs": {
+    "monogramme": "Monograma",
+    "chevrons": "Chevrons",
+    "aurore": "Aurora",
+    "maille": "Malha",
+    "art-deco": "Art déco",
+    "seigaiha": "Seigaiha",
+    "zellige": "Zellige",
+    "bogolan": "Bogolan",
+    "topographie": "Topografia",
+    "feuillage": "Folhagem",
+    "treillis": "Treliça",
+    "constellation": "Constelação",
+    "horizon": "Horizonte",
+    "baobab": "Baobá",
+    "brume-vivante": "Névoa viva",
+    "aurore-vive": "Aurora viva"
+  },
+  "rings": {
+    "filet": "Filete",
+    "double-filet": "Filete duplo",
+    "perle": "Pérolas",
+    "aurore": "Aurora",
+    "deco": "Deco",
+    "laurier": "Louro",
+    "halo-or": "Halo dourado",
+    "haussmannien": "Haussmanniano",
+    "haussmannien-anime": "Haussmanniano animado",
+    "arabe": "Árabe",
+    "arabe-anime": "Árabe animado",
+    "grec": "Grego",
+    "grec-anime": "Grego animado",
+    "ancestral": "Africano ancestral",
+    "ancestral-anime": "Africano ancestral animado",
+    "technologique": "Africano tecnológico",
+    "technologique-anime": "Africano tecnológico animado",
+    "rituel": "Africano ritual",
+    "rituel-anime": "Africano ritual animado",
+    "celte": "Celta",
+    "celte-anime": "Celta animado"
+  },
+  "gamut": {
+    "indigo": "Índigo Meeshy",
+    "bleu-nuit": "Azul-noite",
+    "azur": "Azul",
+    "lagon": "Lagoa",
+    "emeraude": "Esmeralda",
+    "olive": "Oliva",
+    "moutarde": "Mostarda",
+    "sable": "Areia",
+    "terracotta": "Terracota",
+    "corail": "Coral",
+    "rose-poudre": "Rosa empoeirado",
+    "framboise": "Framboesa",
+    "prune": "Ameixa",
+    "lavande": "Lavanda",
+    "ardoise": "Ardósia",
+    "graphite": "Grafite"
+  },
+  "modes": {
+    "signature": "Assinatura",
+    "solid": "Cor lisa",
+    "photo": "Foto da conversa"
+  },
+  "avatarUsage": "Contorno de perfil",
+  "frames": {
+    "haussmannien": "Haussmanniano",
+    "haussmannien-anime": "Haussmanniano animado",
+    "arabe": "Árabe",
+    "arabe-anime": "Árabe animado",
+    "grec": "Grego",
+    "grec-anime": "Grego animado",
+    "ancestral": "Africano ancestral",
+    "ancestral-anime": "Africano ancestral animado",
+    "technologique": "Africano tecnológico",
+    "technologique-anime": "Africano tecnológico animado",
+    "rituel": "Africano ritual",
+    "rituel-anime": "Africano ritual animado",
+    "celte": "Celta",
+    "celte-anime": "Celta animado"
+  }
+}

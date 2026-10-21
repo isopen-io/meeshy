@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 
 import type { EditPostOutcome } from '@/lib/api/publication-actions';
+import type { FeedCardModel } from '@/lib/feed/card-model';
 import type { ReportReason } from '@/lib/api/reports';
 import type { DraftStore } from '@/lib/send/draft-store';
 import type { PostToggleKind } from '@/lib/feed/interactions';
@@ -39,6 +40,8 @@ export type PostMenuHost = {
   readonly viewerId: string | null;
   /** ADMIN/BIGBOSS (#9727) — absent ⇒ non : « Vues » ne s'offre pas. */
   readonly viewerIsAdministrator?: boolean;
+  /** MODERATOR/ADMIN/BIGBOSS (#11150) — absent ⇒ non : « Retirer » ne s'offre pas. */
+  readonly viewerModerates?: boolean;
   readonly onCopyText: (text: string) => void;
   readonly onPin: (postId: string) => void;
   /** MODIFIER LE TEXTE (#7534) — la SEULE entrée du menu qui rend son issue :
@@ -48,7 +51,11 @@ export type PostMenuHost = {
    * qui attend. */
   readonly onEdit: (postId: string, content: string) => Promise<EditPostOutcome>;
   readonly onDelete: (postId: string) => void;
+  /** RETIRER LA PUBLICATION D'UN AUTRE (#11150) — le motif nettoyé, saisi dans `ContentRemovalSheet`. Absent ⇒ aucune entrée. */
+  readonly onRemove?: (postId: string, reason: string) => void;
   readonly onReport: (postId: string, reason: ReportReason) => void;
+  /** LA FEUILLE DE SIGNALEMENT S'OUVRE (#10503) — un signal négatif, même sans motif choisi. */
+  readonly onReportOpen?: (postId: string) => void;
   /** LE BROUILLON DE L'ÉDITION EN COURS (#8849, jumelle de #8848) — absent,
    * la feuille ne sauvegarde rien. */
   readonly editDrafts?: DraftStore;
@@ -103,6 +110,7 @@ export function FeedPostMenu({
   const [reporting, setReporting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const entries = postMenuEntries({
     viewerId: menu.viewerId,
     authorId,
@@ -111,6 +119,7 @@ export function FeedPostMenu({
     canShare: onShare !== undefined,
     canSave: onGesture !== undefined,
     viewerIsAdministrator: menu.viewerIsAdministrator === true,
+    viewerModerates: menu.viewerModerates === true && menu.onRemove !== undefined,
   });
 
   const [box, setBox] = useState<{ top: number; right: number; width: number }>({ top: 0, right: 0, width: MENU_WIDTH });
@@ -174,7 +183,7 @@ export function FeedPostMenu({
         </span>
       </button>
 
-      {open || reporting || editing || viewing ? (
+      {open || reporting || editing || viewing || removing ? (
         <Suspense fallback={null}>
           <PostMenuPanel
             open={open}
@@ -202,9 +211,51 @@ export function FeedPostMenu({
             setEditing={setEditing}
             viewing={viewing}
             setViewing={setViewing}
+            removing={removing}
+            setRemoving={setRemoving}
           />
         </Suspense>
       ) : null}
     </>
+  );
+}
+
+/**
+ * **LE « ⋯ » D'UNE PUBLICATION, DEPUIS SON MODÈLE** — le SEUL passage du
+ * modèle de carte aux props du menu : la carte du fil (post et réel) et la
+ * barre haute du plein écran des Réels (#11156) le montent toutes deux, aucune
+ * ne recopie l'aiguillage (texte original, studio, signet).
+ */
+export function ModelPostMenu({
+  model,
+  isDetail,
+  tone,
+  menu,
+  onShare,
+  onGesture,
+}: {
+  readonly model: FeedCardModel;
+  readonly isDetail: boolean;
+  readonly tone: 'card' | 'overlay';
+  readonly menu: PostMenuHost;
+  readonly onShare?: ((postId: string) => void) | undefined;
+  readonly onGesture?: ((postId: string, kind: PostToggleKind) => void) | undefined;
+}) {
+  return (
+    <FeedPostMenu
+      postId={model.id}
+      authorId={model.author.id}
+      authorName={model.author.name}
+      text={model.text?.full}
+      originalText={model.text?.original}
+      originalLanguage={model.text?.originalLanguage}
+      bookmarked={model.viewer.bookmarked}
+      studioEditable={model.repostOf === undefined && (model.scene !== undefined || model.media.length > 0)}
+      isDetail={isDetail}
+      tone={tone}
+      menu={menu}
+      onShare={onShare}
+      onGesture={onGesture}
+    />
   );
 }

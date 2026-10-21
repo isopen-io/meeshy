@@ -1,8 +1,27 @@
+import { appearanceFromPreferences, resolveAppearanceAccent } from '@meeshy/shared/types/conversation-appearance';
 import { conversationAccentPalette, type ConversationAccentPalette } from '@meeshy/shared/utils/conversation-colors';
 
 import type { CSSProperties } from 'react';
 
 import type { Conversation } from '@/lib/api/types';
+import { currentScheme } from '@/lib/scheme';
+
+/**
+ * L'ACCENT PERSONNEL SUR UNE PALETTE CALCULÉE (#10631, D2) — le SITE UNIQUE qui
+ * applique le choix du lecteur : un accent de la gamme remplace la primaire
+ * (et ses deux voisines à ±30°), « Automatique » rend la palette calculée
+ * inchangée. Les sites qui calculent l'accent d'une conversation sans en tenir
+ * l'objet entier (ligne des favoris) y passent aussi.
+ */
+export function personalAccentPalette(computed: ConversationAccentPalette, userPreferences: unknown): ConversationAccentPalette {
+  const appearance = appearanceFromPreferences(userPreferences);
+  if (appearance.accent === null) return computed;
+  return resolveAppearanceAccent({
+    computedPrimary: computed.primary,
+    appearance,
+    scheme: typeof document === 'undefined' ? 'dark' : currentScheme(),
+  });
+}
 
 /**
  * L'ACCENT DE LA CONVERSATION — calculé par `@meeshy/shared`, posé en variable CSS.
@@ -23,11 +42,13 @@ import type { Conversation } from '@/lib/api/types';
  * le mécanisme qui rend tenable la règle « aucun composant de conversation ne
  * code une couleur en dur ».
  */
-export const accentPaletteOf = (conversation: Pick<Conversation, 'id' | 'title' | 'identifier' | 'type'>): ConversationAccentPalette =>
-  conversationAccentPalette({
-    name: conversation.title ?? conversation.identifier ?? conversation.id,
-    type: conversation.type,
-  });
+export const accentPaletteOf = (
+  conversation: Pick<Conversation, 'id' | 'title' | 'identifier' | 'type'> & Partial<Pick<Conversation, 'userPreferences'>>,
+): ConversationAccentPalette =>
+  personalAccentPalette(
+    conversationAccentPalette({ name: conversation.title ?? conversation.identifier ?? conversation.id, type: conversation.type }),
+    conversation.userPreferences,
+  );
 
 export const accentOf = (conversation: Conversation): string => accentPaletteOf(conversation).primary;
 
@@ -80,4 +101,21 @@ export const inkOnAccent = (accent: string): string =>
 
 export function withAccent(accent: string, rest?: CSSProperties): CSSProperties {
   return { ...rest, '--accent': accent, '--accent-ink': inkOnAccent(accent) } as CSSProperties;
+}
+
+/**
+ * LA BULLE ENVOYÉE À L'ACCENT PERSONNEL (#10734, D2) — seulement quand le
+ * lecteur a CHOISI un accent : « Automatique » garde le `brandPrimary` commun
+ * de toutes les conversations. L'encre est celle qui contraste le plus, et la
+ * méta (heure, coches) en dérive au même titre que le blanc à 70 % d'iOS.
+ */
+export function personalBubbleVars(conversation: Pick<Conversation, 'id' | 'title' | 'identifier' | 'type'> & Partial<Pick<Conversation, 'userPreferences'>>): CSSProperties {
+  if (appearanceFromPreferences(conversation.userPreferences).accent === null) return {};
+  const accent = accentPaletteOf(conversation).primary;
+  const ink = inkOnAccent(accent);
+  return {
+    '--bubble-mine-personal': accent,
+    '--bubble-mine-personal-ink': ink,
+    '--bubble-mine-personal-meta': `color-mix(in srgb, ${ink} 70%, transparent)`,
+  } as CSSProperties;
 }

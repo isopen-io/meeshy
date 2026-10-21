@@ -226,7 +226,7 @@ final class SceneAudioStageSurfacesTests: XCTestCase {
                      "Canvas/StoryAudioChipPainter.swift",
                      "SceneThumbnail.swift",
                      "SlideMiniPreview.swift",
-                     "StoryComposerView+Canvas.swift"] {
+                     "StoryCanvasMediaMuteOverlays.swift"] {
             XCTAssertTrue(try source(site).contains("SceneAudioStageRule."),
                           "\(site) pose un son sur une scène sans lire SceneAudioStageRule : " +
                           "un son de fond pourrait y être peint.")

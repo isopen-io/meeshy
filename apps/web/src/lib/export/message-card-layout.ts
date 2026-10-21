@@ -8,8 +8,10 @@ import {
   type CardMediaArrangement,
   type CardMediaLayout,
 } from './message-card-arrangement';
-import { DEFAULT_AUDIO_STYLE, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
+import { DEFAULT_AUDIO_STYLE, heroMediaOps, layoutCardMedia, type CardAudioStyle, type CardMedia, type CardMediaBlock } from './message-card-media';
 import type { CardOp } from './message-card-ops';
+import { HERO_GAP, heroHeight, heroSpan } from './message-card-hero';
+import { threadLevel, threadRoom, threadSeparatorHeight, threadSeparatorOps, threadShift } from './message-card-thread';
 import { GUILLEMET_FONT, canvasFont, templateOf, type CardLinkId, type CardPalette, type MessageCardTemplateId } from './message-card-templates';
 import { textDirection, truncateLines, wrapText, type Measure } from './message-card-text';
 
@@ -24,8 +26,12 @@ export type { CardBarOp, CardDotOp, CardMediaOp, CardOp, CardPanelOp, CardPlayOp
  * LA LECTURE DE HAUT EN BAS EST CELLE DU FIL :
  *  0. l'en-tête, si l'exportateur l'a voulu : titre de la conversation, date —
  *     en tête, ou couché dans la marge (onglet Frame, `message-card-frame.ts`) ;
+ *  0 bis. le HÉROS du support (post, story, réel) quand on image un commentaire :
+ *     son média, grand et en pleine largeur, AVANT la citation (#10915) ;
  *  1. le message CITÉ — en entier, en taille RÉDUITE ;
  *  2. la LIAISON du template, qui mène la question à la réponse ;
+ *  2 bis. les commentaires du FIL entre la citation et la réponse, chacun à son
+ *     niveau : un retrait et une barre verticale par niveau d'imbrication ;
  *  3. la RÉPONSE, en bas, dans la police du template et en grand — ses MÉDIAS
  *     (images, première image des vidéos, représentation de l'audio) au-dessus
  *     de son texte comme dans la bulle, au-dessous, dans une colonne à sa gauche
@@ -80,7 +86,19 @@ export type MessageCardInput = {
   readonly audioStyle?: CardAudioStyle;
   /** Les réponses peintes SOUS la réponse (#8734), dans leur ordre. */
   readonly followUps?: readonly MessageCardPart[];
+  /**
+   * Le rang, dans `media`, du visuel du SUPPORT (post, story, réel) : il OUVRE
+   * la carte en héros — grand, pleine largeur, avant la citation — et ne se
+   * compte plus parmi les médias de la réponse (#10915).
+   */
+  readonly heroMedia?: number | null;
+  /** Les commentaires du fil entre la citation et la réponse, chacun à son niveau : un retrait et une barre verticale par niveau. */
+  readonly context?: readonly MessageCardContext[];
+  /** Le niveau d'imbrication de la réponse — 0 : premier niveau. */
+  readonly replyDepth?: number;
 };
+
+export type MessageCardContext = { readonly part: MessageCardPart; readonly depth: number };
 
 /**
  * Les PARTIES d'une carte qu'un geste peut désigner sur l'aperçu : l'en-tête,
@@ -148,6 +166,8 @@ const BUBBLE_RADIUS = 36;
 const MEDIA_GAP = 28;
 const SIDE_REGION = 64;
 const FOLLOW_GAP = 40;
+/** La part de la hauteur utile qu'un visuel se prend au plus quand du texte l'accompagne — la même que sur iOS. */
+const MEDIA_SHARE = 0.42;
 const FOLLOW_MAX_LINES = 3;
 /** La part de la colonne de texte qu'une colonne de médias prend, et l'espace qui la sépare de la réponse. */
 const BESIDE_SHARE = 0.42;
@@ -177,6 +197,7 @@ type Sized = {
   readonly replyLines: string[];
   readonly quoteLines: string[];
   readonly followLines: readonly (readonly string[])[];
+  readonly contextLines: readonly (readonly string[])[];
 };
 
 const replyLineHeight = (size: number) => Math.round(size * REPLY_LEADING);
@@ -184,6 +205,8 @@ const quoteLineHeight = (size: number) => Math.round(size * QUOTE_LEADING);
 
 type Chrome = {
   readonly header: number;
+  /** Le héros du support, son écart compris. */
+  readonly hero: number;
   readonly quoteMeta: number;
   readonly replyMeta: number;
   readonly bubble: number;
@@ -198,7 +221,7 @@ function contentHeight(sized: Sized, hasQuote: boolean, chrome: Chrome): number 
   const mediaGap = chrome.media > 0 && sized.replyLines.length > 0 ? MEDIA_GAP : 0;
   const text = chrome.replyMeta + sized.replyLines.length * replyLineHeight(sized.replySize);
   const reply = chrome.beside > 0 ? Math.max(text, chrome.beside) : chrome.media + mediaGap + text;
-  return chrome.header + quote + reply + chrome.bubble;
+  return chrome.header + chrome.hero + quote + reply + chrome.bubble;
 }
 
 /** Le voile d'un visuel de fond : la première teinte du fond, assez opaque pour que le texte se lise et que la carte garde sa couleur. */
@@ -233,14 +256,18 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const textWidth = width - 2 * PAD_X;
   const bubbleWidth = textWidth - BUBBLE_OFFSET;
   const quoteWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth - QUOTE_INDENT;
-  const replyWidth = geometry.bubbles ? bubbleWidth - 2 * BUBBLE_PAD_X : textWidth;
-  const hasQuote = input.quoted !== null && input.quoted.text.trim() !== '';
+  const replyLevel = threadLevel(input.replyDepth ?? 0);
+  const replyIndent = threadShift(replyLevel);
+  const replyBubbleWidth = bubbleWidth - replyIndent;
+  const replyWidth = geometry.bubbles ? replyBubbleWidth - 2 * BUBBLE_PAD_X : textWidth - replyIndent;
+  const contexts = (input.context ?? []).filter((entry) => entry.part.text.trim() !== '');
+  const depthOf = (entry: MessageCardContext) => threadLevel(entry.depth);
+  const replySeparator = threadSeparatorHeight(template.link, replyLevel);
   const title = nonBlank(input.title);
   const date = nonBlank(input.date);
   const showAuthors = input.showAuthors !== false;
   const sideHeader = frame.header === 'horizontal' || (title === null && date === null) ? null : frame.header;
   const metaOf = (part: MessageCardPart) => metaLine(showAuthors ? part.author : null, nonBlank(part.time), frame.authors);
-  const quoteMeta = hasQuote && input.quoted !== null ? metaOf(input.quoted) : null;
   const replyMeta = metaOf(input.reply);
   const replyHasText = input.reply.text.trim() !== '';
   const followUps = (input.followUps ?? []).filter((part) => part.text.trim() !== '');
@@ -248,7 +275,22 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
   const followInset = geometry.quoteBar ? QUOTE_INDENT : 0;
   const media = input.media ?? [];
   const arrangement = input.mediaArrangement ?? DEFAULT_MEDIA_ARRANGEMENT;
-  const painted = paintedVisualIndexes(media, { layout: input.mediaLayout ?? DEFAULT_MEDIA_LAYOUT, arrangement, featured: input.featuredMedia ?? null });
+  const heroRank = input.heroMedia ?? null;
+  const heroIndex = heroRank !== null && media[heroRank] !== undefined && media[heroRank]?.kind !== 'audio' ? heroRank : null;
+  const painted = paintedVisualIndexes(media, { layout: input.mediaLayout ?? DEFAULT_MEDIA_LAYOUT, arrangement, featured: input.featuredMedia ?? null, hero: heroIndex });
+  /* Le héros a son cadre (`message-card-hero.ts`, miroir iOS) : pleine largeur à 48 de chaque bord, au rapport borné du média. */
+  const heroMediaItem = heroIndex === null ? undefined : media[heroIndex];
+  const hero = heroSpan({ canvasWidth: width, sideHeader: sideHeader !== null, textLeft: PAD_X, textWidth });
+  const heroFrameHeight = heroMediaItem === undefined || heroMediaItem.kind === 'audio' ? 0 : heroHeight(heroMediaItem, hero.width, budget);
+  const heroBlock: CardMediaBlock =
+    heroIndex === null || heroMediaItem === undefined || heroMediaItem.kind === 'audio' || heroFrameHeight <= 0
+      ? { height: 0, place: () => [] }
+      : { height: heroFrameHeight, place: (x, y) => heroMediaOps(heroMediaItem, heroIndex, { x, y, width: hero.width, height: heroFrameHeight }) };
+  const hasHero = heroBlock.height > 0;
+  /* Une citation sans texte reste une citation quand le héros l'ouvre : son nom lit le support. */
+  const quotedText = input.quoted?.text.trim() ?? '';
+  const hasQuote = input.quoted !== null && (quotedText !== '' || hasHero);
+  const quoteMeta = hasQuote && input.quoted !== null ? metaOf(input.quoted) : null;
   const placement = effectiveMediaLayout(input.mediaLayout ?? DEFAULT_MEDIA_LAYOUT, painted.length > 0);
   const beside = isBeside(placement);
   const besideWidth = beside ? Math.round(replyWidth * BESIDE_SHARE) : 0;
@@ -262,7 +304,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     arrangement,
     audioStyle: input.audioStyle ?? DEFAULT_AUDIO_STYLE,
     width: beside ? besideWidth : replyWidth,
-    maxHeight: Math.round(budget * (beside ? 0.62 : replyHasText || hasQuote ? 0.46 : 0.8)),
+    maxHeight: Math.round(budget * (beside ? 0.62 : replyHasText || hasQuote || contexts.length > 0 ? MEDIA_SHARE : 0.8)),
     column: beside,
     creditAt: placement === 'backdrop' ? null : frame.authors,
     measure,
@@ -271,7 +313,9 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     font: (size, weight) => canvasFont({ family: null, weight, style: 'normal' }, size),
   });
   const metaHeight = (line: string | null) => (line === null ? 0 : AUTHOR_LINE + AUTHOR_GAP);
+  const contextMetas = contexts.map((entry) => metaOf(entry.part));
   const chrome: Chrome = {
+    hero: hasHero ? heroBlock.height + HERO_GAP : 0,
     header: sideHeader !== null || (title === null && date === null) ? 0 : (title === null ? 0 : TITLE_LINE) + (date === null ? 0 : DATE_LINE) + HEADER_GAP,
     quoteMeta: metaHeight(quoteMeta),
     replyMeta: metaHeight(replyMeta),
@@ -292,7 +336,10 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       replyFont,
       quoteFont,
       replyLines: replyHasText ? wrapText(input.reply.text, replyTextWidth, replyFont, measure) : [],
-      quoteLines: hasQuote ? wrapText(input.quoted?.text ?? '', quoteWidth, quoteFont, measure) : [],
+      quoteLines: hasQuote && quotedText !== '' ? wrapText(input.quoted?.text ?? '', quoteWidth, quoteFont, measure) : [],
+      contextLines: contexts.map((entry) =>
+        truncateLines(wrapText(entry.part.text, threadRoom(quoteWidth, depthOf(entry)), quoteFont, measure), FOLLOW_MAX_LINES, threadRoom(quoteWidth, depthOf(entry)), quoteFont, measure),
+      ),
       followLines: followUps.map((part) => truncateLines(wrapText(part.text, quoteWidth, quoteFont, measure), FOLLOW_MAX_LINES, quoteWidth, quoteFont, measure)),
     };
   };
@@ -303,7 +350,10 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       (sum, lines, index) => sum + FOLLOW_GAP + metaHeight(followMetas[index] ?? null) + lines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble,
       0,
     );
-  const total = (sized: Sized): number => contentHeight(sized, hasQuote, chrome) + followHeight(sized);
+  /** Les commentaires du fil gardent leurs lignes (trois au plus) : leur hauteur s'ajoute, comme celle des suites. */
+  const contextHeight = (sized: Sized): number =>
+    sized.contextLines.reduce((sum, lines, index) => sum + threadSeparatorHeight(template.link, depthOf(contexts[index] ?? { part: input.reply, depth: 0 })) + metaHeight(contextMetas[index] ?? null) + lines.length * quoteLineHeight(sized.quoteSize) + chrome.bubble + FOLLOW_GAP, 0);
+  const total = (sized: Sized): number => contentHeight(sized, hasQuote, chrome) + followHeight(sized) + contextHeight(sized) + replySeparator;
 
   const atFloor = (sized: Sized) => sized.replySize <= REPLY_FLOOR * typeface.replyScale && sized.quoteSize <= QUOTE_FLOOR;
   let step = 0;
@@ -398,7 +448,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       readonly meta: string | null;
       /** Les médias du bloc et leur place — au-dessus, au-dessous, ou en colonne à côté des lignes. */
       readonly media: { readonly block: CardMediaBlock; readonly at: 'above' | 'below' | 'left' | 'right' } | null;
-      readonly bubble: { readonly offset: number; readonly color: string } | null;
+      readonly bubble: { readonly offset: number; readonly color: string; readonly width: number } | null;
     },
   ) => {
     const direction = textDirection(part.text);
@@ -442,11 +492,17 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     if (mediaTop !== null && (media?.at === 'left' || media?.at === 'right')) y = Math.max(y, rowTop + media.block.height);
     if (options.bubble !== null) {
       y += BUBBLE_PAD_Y;
-      const x = rtl ? width - PAD_X - options.bubble.offset - bubbleWidth : PAD_X + options.bubble.offset;
-      ops.splice(panelIndex, 0, { kind: 'panel', x, y: top, width: bubbleWidth, height: y - top, radius: BUBBLE_RADIUS, color: options.bubble.color });
+      const x = rtl ? width - PAD_X - options.bubble.offset - options.bubble.width : PAD_X + options.bubble.offset;
+      ops.splice(panelIndex, 0, { kind: 'panel', x, y: top, width: options.bubble.width, height: y - top, radius: BUBBLE_RADIUS, color: options.bubble.color });
     }
     return { top, rtl, mediaTop, mediaX: media?.at === 'left' || media?.at === 'right' ? columnX : null };
   };
+
+  if (hasHero) {
+    ops.push(...heroBlock.place(hero.x, y));
+    regions.push({ part: 'media', x: hero.x, y, width: hero.width, height: heroBlock.height });
+    y += heroBlock.height + HERO_GAP;
+  }
 
   if (hasQuote && input.quoted !== null) {
     const quote = block(input.quoted, sized.quoteLines, {
@@ -457,7 +513,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       inset: geometry.quoteBar ? QUOTE_INDENT : 0,
       meta: quoteMeta,
       media: null,
-      bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel } : null,
+      bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel, width: bubbleWidth } : null,
     });
     if (geometry.quoteBar) ops.push({ kind: 'bar', x: quote.rtl ? width - PAD_X - BAR_WIDTH : PAD_X, y: quote.top, width: BAR_WIDTH, height: y - quote.top, color: palette.accent });
     region('quote', quote.top, y);
@@ -466,15 +522,42 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
     y += geometry.block;
   }
 
+  /* L'imbrication est la SÉPARATION du template, par niveau : un retrait proportionnel, jamais une barre propre au fil. */
+  const separate = (level: number, rtl: boolean, inset: number) => {
+    const row = threadSeparatorHeight(template.link, level);
+    if (row === 0) return;
+    ops.push(...threadSeparatorOps(template.link, { x: start(rtl, inset), y, rtl, level, accent: palette.accent }));
+    y += row;
+  };
+  const contextTop = y;
+  contexts.forEach((entry, index) => {
+    const depth = depthOf(entry);
+    const rtl = textDirection(entry.part.text) === 'rtl';
+    separate(depth, rtl, followInset + threadShift(depth));
+    block(entry.part, sized.contextLines[index] ?? [], {
+      size: sized.quoteSize,
+      lineHeight: quoteLineHeight(sized.quoteSize),
+      font: sized.quoteFont,
+      ink: palette.quoteInk,
+      inset: followInset + threadShift(depth),
+      meta: contextMetas[index] ?? null,
+      media: null,
+      bubble: geometry.bubbles ? { offset: threadShift(depth), color: palette.quotePanel, width: bubbleWidth - threadShift(depth) } : null,
+    });
+    y += FOLLOW_GAP;
+  });
+  if (contexts.length > 0) region('replies', contextTop, y - FOLLOW_GAP);
+  separate(replyLevel, textDirection(input.reply.text) === 'rtl', replyIndent);
+
   const reply = block(input.reply, sized.replyLines, {
     size: sized.replySize,
     lineHeight: replyLineHeight(sized.replySize),
     font: sized.replyFont,
     ink: palette.replyInk,
-    inset: 0,
+    inset: replyIndent,
     meta: replyMeta,
     media: placement === 'backdrop' ? { block: mediaBlock, at: 'above' } : { block: mediaBlock, at: placement },
-    bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET, color: palette.replyPanel } : null,
+    bubble: geometry.bubbles ? { offset: BUBBLE_OFFSET + replyIndent, color: palette.replyPanel, width: replyBubbleWidth } : null,
   });
   region('reply', reply.top, y);
   /* Les médias vivent DANS la réponse : leur zone vient après pour se poser au-dessus d'elle. */
@@ -492,7 +575,7 @@ export function layoutMessageCard(input: MessageCardInput, measure: Measure): Ca
       inset: followInset,
       meta: followMetas[index] ?? null,
       media: null,
-      bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel } : null,
+      bubble: geometry.bubbles ? { offset: 0, color: palette.quotePanel, width: bubbleWidth } : null,
     });
     if (geometry.quoteBar) ops.push({ kind: 'bar', x: follow.rtl ? width - PAD_X - BAR_WIDTH : PAD_X, y: follow.top, width: BAR_WIDTH, height: y - follow.top, color: palette.accent });
   });

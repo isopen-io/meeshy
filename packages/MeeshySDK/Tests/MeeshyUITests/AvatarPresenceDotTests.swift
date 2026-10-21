@@ -82,6 +82,35 @@ final class AvatarPresenceDotTests: XCTestCase {
         XCTAssertNotEqual(AvatarPresenceDot.here.localizedLabel, PresenceState.online.localizedLabel)
     }
 
+    // MARK: - Le libellé lu par VoiceOver (#10528)
+
+    func test_spokenName_withoutMoodNorHere_isTheName() {
+        XCTAssertEqual(MeeshyAvatar.spokenName(name: "Nour", moodEmoji: nil, isHere: false), "Nour")
+        XCTAssertEqual(MeeshyAvatar.spokenName(name: "Nour", moodEmoji: "", isHere: false), "Nour")
+    }
+
+    /// La pastille masque le point et n'était lue par personne : l'humeur
+    /// n'existait que pour l'œil.
+    func test_spokenName_carriesTheMood() {
+        let spoken = MeeshyAvatar.spokenName(name: "Nour", moodEmoji: "🎉", isHere: false)
+        XCTAssertTrue(spoken.hasPrefix("Nour, "))
+        XCTAssertTrue(spoken.contains("🎉"))
+        XCTAssertNotEqual(spoken, "Nour, 🎉", "l'emoji seul ne dit pas que c'est une humeur")
+    }
+
+    func test_spokenName_carriesBothTheMoodAndHere() {
+        let spoken = MeeshyAvatar.spokenName(name: "Nour", moodEmoji: "🎉", isHere: true)
+        XCTAssertTrue(spoken.contains("🎉"))
+        XCTAssertTrue(spoken.hasSuffix(AvatarPresenceDot.here.localizedLabel))
+    }
+
+    func test_spokenName_hereAlone_isUnchanged() {
+        XCTAssertEqual(
+            MeeshyAvatar.spokenName(name: "Nour", moodEmoji: nil, isHere: true),
+            "Nour, \(AvatarPresenceDot.here.localizedLabel)"
+        )
+    }
+
     // MARK: - Les transitions du point (#9047)
 
     func test_transitionKey_changesWhenTheDotChangesNature() {
@@ -98,17 +127,17 @@ final class AvatarPresenceDotTests: XCTestCase {
 
     // MARK: - Taille et place du point (#9061)
 
-    func test_diameter_here_isTwiceThePresenceDot() {
-        XCTAssertEqual(AvatarPresenceDot.here.diameter(avatarSize: 44), 44 * 0.52, accuracy: 0.001)
-        XCTAssertEqual(AvatarPresenceDot.presence(.online).diameter(avatarSize: 44), 44 * 0.26, accuracy: 0.001)
-    }
-
-    func test_diameter_inTheConversationHeader_isSmaller() {
-        XCTAssertEqual(AvatarContext.conversationHeaderCollapsed.hereDotRatio, 0.40, accuracy: 0.001)
-        XCTAssertEqual(AvatarContext.conversationHeaderExpanded.hereDotRatio, 0.40, accuracy: 0.001)
-        XCTAssertEqual(AvatarContext.messageBubble.hereDotRatio, 0.52, accuracy: 0.001)
-        XCTAssertEqual(AvatarPresenceDot.here.diameter(avatarSize: 44, hereRatio: 0.40), 44 * 0.40, accuracy: 0.001)
-        XCTAssertEqual(AvatarPresenceDot.presence(.online).diameter(avatarSize: 44, hereRatio: 0.40), 44 * 0.26, accuracy: 0.001)
+    /// Le point « ici » a été divisé par deux (#10943, porteur 2026-10-18) —
+    /// 0,52 avant lui, 0,40 dans l'en-tête — et reste TOUJOURS un peu plus gros
+    /// que les pastilles vert / orange / gris. Jumeau de `HERE_DOT_RATIO` (web).
+    func test_diameter_here_isHalfTheFormerDot_andStaysBiggerThanThePresenceDot() {
+        let here = AvatarPresenceDot.here.diameter(avatarSize: 44) / 44
+        for state in [PresenceState.online, .away, .idle] {
+            XCTAssertGreaterThan(here, AvatarPresenceDot.presence(state).diameter(avatarSize: 44) / 44)
+        }
+        XCTAssertGreaterThan(here, 0.52 / 2)
+        XCTAssertLessThan(here, 0.52 / 2 * 1.25)
+        XCTAssertEqual(AvatarPresenceDot.presence(.online).diameter(avatarSize: 44) / 44, 0.26, accuracy: 0.001)
     }
 
     func test_centerOffset_withoutRing_putsTheDotCentreOnTheCircleAt45Degrees() {

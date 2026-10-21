@@ -6,10 +6,25 @@ import AppIntents
 // MARK: - App Group Constants
 
 private enum WidgetSharedKeys: Sendable {
-    nonisolated static let suiteName = "group.me.meeshy.apps"
-    nonisolated static let conversations = "recent_conversations"
-    nonisolated static let unreadCount = "unread_count"
-    nonisolated static let pendingMarkRead = "pending_mark_read"
+    static let suiteName = "group.me.meeshy.apps"
+    static let conversations = "recent_conversations"
+    static let unreadCount = "unread_count"
+    static let pendingMarkRead = "pending_mark_read"
+}
+
+// MARK: - Deep Link
+
+private struct WidgetLink<Content: View>: View {
+    let url: URL?
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        if let url {
+            Link(destination: url) { content }
+        } else {
+            content
+        }
+    }
 }
 
 // MARK: - Brand Colors (mirrors MeeshyColors from SDK — widget can't import MeeshyUI)
@@ -64,7 +79,7 @@ private struct InitialsAvatar: View {
                 .fill(Color(hex: accentColor))
             Text(initials)
                 .font(.system(size: size * 0.4, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
     }
@@ -72,22 +87,21 @@ private struct InitialsAvatar: View {
 
 // MARK: - Mark-as-Read App Intent (iOS 17+)
 
-@available(iOS 17.0, *)
 struct MarkConversationReadIntent: AppIntent {
     // `LocalizedStringResource` se résout dans le bundle de la cible qui la
     // déclare — c'est le catalogue `MeeshyWidgets/Localizable.xcstrings` qui
     // lui donne ses sept langues.
-    nonisolated static let title = LocalizedStringResource(
+    static let title = LocalizedStringResource(
         "widget.intent.markRead.title",
         defaultValue: "Mark conversation as read"
     )
-    nonisolated static let description = IntentDescription(
+    static let description = IntentDescription(
         LocalizedStringResource(
             "widget.intent.markRead.description",
             defaultValue: "Clears the unread badge for this conversation from the widget."
         )
     )
-    nonisolated static let openAppWhenRun: Bool = false
+    static let openAppWhenRun: Bool = false
 
     @Parameter(title: LocalizedStringResource(
         "widget.intent.markRead.parameter.conversationId",
@@ -152,15 +166,10 @@ struct MeeshyWidgetBundle: WidgetBundle {
         UnreadCountWidget()
         QuickReplyWidget()
         FavoriteContactsWidget()
-        #if canImport(ActivityKit)
-        if #available(iOS 16.2, *) {
-            MeeshyLiveActivity()
-            OutboxLiveActivity()
-            CallLiveActivity()
-            VoicePlaybackLiveActivity()
-            VoiceRecordingLiveActivity()
-        }
-        #endif
+        OutboxLiveActivity()
+        CallLiveActivity()
+        VoicePlaybackLiveActivity()
+        VoiceRecordingLiveActivity()
     }
 }
 
@@ -194,26 +203,17 @@ struct ConversationProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ConversationEntry>) -> ()) {
-        var entries: [ConversationEntry] = []
-
-        let currentDate = Date()
-        // The four entries (now, +15, +30, +45) all show the SAME snapshot — only
-        // their dates differ. Read the shared store + decode the JSON ONCE and
-        // reuse it, instead of paying the UserDefaults read + decode per entry.
-        let conversations = loadConversations()
-        let unreadCount = getUnreadCount()
-        for minuteOffset in 0 ..< 60 where minuteOffset % 15 == 0 {
-            let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
-            let entry = ConversationEntry(
-                date: entryDate,
-                conversations: conversations,
-                unreadCount: unreadCount
-            )
-            entries.append(entry)
-        }
-
-        let timeline = Timeline(entries: entries, policy: .atEnd)
-        completion(timeline)
+        let now = Date()
+        let entry = ConversationEntry(
+            date: now,
+            conversations: loadConversations(),
+            unreadCount: getUnreadCount()
+        )
+        completion(WidgetRefreshSchedule.timeline(
+            single: entry,
+            now: now,
+            interval: WidgetRefreshSchedule.conversationsInterval
+        ))
     }
 
     private func loadConversations() -> [Conversation] {
@@ -280,10 +280,10 @@ struct WidgetEmptyState: View {
         VStack(spacing: 6) {
             Image(systemName: "message")
                 .font(.title3)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
             Text(String(localized: "widget.empty.openApp", defaultValue: "Open Meeshy to get started"))
                 .font(.caption)
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -406,10 +406,10 @@ struct SmallConversationView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "message.fill")
-                    .foregroundColor(WidgetColors.brandPrimary)
+                    .foregroundStyle(WidgetColors.brandPrimary)
                 Text("\(entry.unreadCount)")
                     .font(.headline)
-                    .foregroundColor(WidgetColors.brandPrimary)
+                    .foregroundStyle(WidgetColors.brandPrimary)
                 Spacer()
             }
 
@@ -424,7 +424,7 @@ struct SmallConversationView: View {
                             .lineLimit(1)
                         Text(first.lastMessage)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(2)
                     }
                 }
@@ -449,7 +449,7 @@ struct MediumConversationView: View {
             HStack {
                 Label(String(localized: "widget.conversations", defaultValue: "Conversations"), systemImage: "message.fill")
                     .font(.headline)
-                    .foregroundColor(WidgetColors.brandPrimary)
+                    .foregroundStyle(WidgetColors.brandPrimary)
                 Spacer()
                 if entry.unreadCount > 0 {
                     Text(String(localized: "widget.unreadCount", defaultValue: "\(entry.unreadCount) unread"))
@@ -457,7 +457,7 @@ struct MediumConversationView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(WidgetColors.brandPrimary.opacity(0.2))
-                        .cornerRadius(8)
+                        .clipShape(.rect(cornerRadius: 8))
                 }
             }
 
@@ -478,7 +478,7 @@ struct MediumConversationView: View {
     @ViewBuilder
     private func conversationRow(_ conversation: Conversation) -> some View {
         HStack(spacing: 8) {
-            Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
+            WidgetLink(url: WidgetDeepLink.conversation(conversation.id)) {
                 HStack(spacing: 8) {
                     InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 30)
 
@@ -487,16 +487,16 @@ struct MediumConversationView: View {
                             Text(conversation.contactName)
                                 .font(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.primary)
+                                .foregroundStyle(.primary)
                             if conversation.isPinned {
                                 Image(systemName: "pin.fill")
                                     .font(.caption2)
-                                    .foregroundColor(.orange)
+                                    .foregroundStyle(.orange)
                             }
                         }
                         Text(conversation.lastMessage)
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
 
@@ -510,11 +510,11 @@ struct MediumConversationView: View {
                 }
             }
 
-            if conversation.isUnread, #available(iOS 17.0, *) {
+            if conversation.isUnread {
                 Button(intent: MarkConversationReadIntent(conversationId: conversation.id)) {
                     Image(systemName: "checkmark.circle")
                         .font(.caption)
-                        .foregroundColor(WidgetColors.brandPrimary)
+                        .foregroundStyle(WidgetColors.brandPrimary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "widget.markAsRead", defaultValue: "Mark as read"))
@@ -531,7 +531,7 @@ struct LargeConversationView: View {
             HStack {
                 Label(String(localized: "widget.recentConversations", defaultValue: "Recent Conversations"), systemImage: "message.fill")
                     .font(.headline)
-                    .foregroundColor(WidgetColors.brandPrimary)
+                    .foregroundStyle(WidgetColors.brandPrimary)
                 Spacer()
                 if entry.unreadCount > 0 {
                     Text(String(localized: "widget.unreadCount", defaultValue: "\(entry.unreadCount) unread"))
@@ -539,7 +539,7 @@ struct LargeConversationView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(WidgetColors.brandPrimary.opacity(0.2))
-                        .cornerRadius(8)
+                        .clipShape(.rect(cornerRadius: 8))
                 }
             }
 
@@ -547,7 +547,7 @@ struct LargeConversationView: View {
                 WidgetEmptyState()
             }
             ForEach(entry.conversations.prefix(5)) { conversation in
-                Link(destination: URL(string: "meeshy://conversation/\(conversation.id)")!) {
+                WidgetLink(url: WidgetDeepLink.conversation(conversation.id)) {
                     HStack(spacing: 12) {
                         InitialsAvatar(name: conversation.contactName, accentColor: conversation.accentColor, size: 40)
 
@@ -556,20 +556,20 @@ struct LargeConversationView: View {
                                 Text(conversation.contactName)
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(.primary)
+                                    .foregroundStyle(.primary)
                                 if conversation.isPinned {
                                     Image(systemName: "pin.fill")
                                         .font(.caption)
-                                        .foregroundColor(.orange)
+                                        .foregroundStyle(.orange)
                                 }
                                 Spacer()
                                 Text(conversation.timestamp, style: .relative)
                                     .font(.caption2)
-                                    .foregroundColor(.secondary)
+                                    .foregroundStyle(.secondary)
                             }
                             Text(conversation.lastMessage)
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(.secondary)
                                 .lineLimit(2)
                         }
 
@@ -640,19 +640,19 @@ struct SmallUnreadView: View {
         VStack(spacing: 8) {
             Image(systemName: count > 0 ? "message.badge.filled.fill" : "message.fill")
                 .font(.largeTitle)
-                .foregroundColor(.white)
+                .foregroundStyle(.white)
 
             if count > 0 {
                 Text("\(count)")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                 Text(String(localized: "widget.unread", defaultValue: "Unread"))
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundStyle(.white.opacity(0.9))
             } else {
                 Text(String(localized: "widget.allRead", defaultValue: "All Read"))
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
             }
         }
         .containerBackground(for: .widget) {
@@ -740,7 +740,7 @@ struct QuickReplyWidgetView: View {
             HStack {
                 Label(String(localized: "widget.quickReply", defaultValue: "Quick Reply"), systemImage: "text.bubble.fill")
                     .font(.headline)
-                    .foregroundColor(WidgetColors.brandPrimary)
+                    .foregroundStyle(WidgetColors.brandPrimary)
                 Spacer()
             }
 
@@ -755,7 +755,7 @@ struct QuickReplyWidgetView: View {
 
                     Text(conversation.lastMessage)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(2)
                         .padding(.vertical, 4)
 
@@ -812,13 +812,13 @@ struct QuickReplyButton: View {
     }
 
     var body: some View {
-        Link(destination: URL(string: "meeshy://quickreply/\(conversationId)?text=\(draft.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")")!) {
+        WidgetLink(url: WidgetDeepLink.quickReply(conversationId: conversationId, draft: draft)) {
             Text(label)
                 .font(.caption)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(WidgetColors.brandPrimary.opacity(0.15))
-                .cornerRadius(12)
+                .clipShape(.rect(cornerRadius: 12))
         }
     }
 }
@@ -856,9 +856,13 @@ struct FavoriteContactsProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<FavoriteContactsEntry>) -> ()) {
-        let entry = FavoriteContactsEntry(date: Date(), contacts: loadFavorites())
-        let timeline = Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(3600)))
-        completion(timeline)
+        let now = Date()
+        let entry = FavoriteContactsEntry(date: now, contacts: loadFavorites())
+        completion(WidgetRefreshSchedule.timeline(
+            single: entry,
+            now: now,
+            interval: WidgetRefreshSchedule.favoritesInterval
+        ))
     }
 
     private func loadFavorites() -> [FavoriteContact] {
@@ -902,7 +906,7 @@ struct FavoriteContactsWidgetView: View {
             HStack {
                 Label(String(localized: "widget.favorites", defaultValue: "Favorites"), systemImage: "star.fill")
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundStyle(.orange)
                 Spacer()
             }
 
@@ -911,7 +915,7 @@ struct FavoriteContactsWidgetView: View {
             }
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 65))], spacing: 12) {
                 ForEach(entry.contacts.prefix(contactsToShow)) { contact in
-                    Link(destination: URL(string: "meeshy://contact/\(contact.id)")!) {
+                    WidgetLink(url: WidgetDeepLink.contact(contact.id)) {
                         VStack(spacing: 4) {
                             ZStack(alignment: .bottomTrailing) {
                                 InitialsAvatar(name: contact.name, accentColor: contact.accentColor, size: 50)
@@ -930,7 +934,7 @@ struct FavoriteContactsWidgetView: View {
                             Text(contact.name)
                                 .font(.caption)
                                 .lineLimit(1)
-                                .foregroundColor(.primary)
+                                .foregroundStyle(.primary)
                         }
                         // La pastille est une forme sans texte : sans cette
                         // fusion, VoiceOver ne lit que le nom et l'état de

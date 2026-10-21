@@ -1,0 +1,695 @@
+[
+  {
+    "slug": "cadres-haussmannien",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "dd71e0c3af92b656.webp",
+      "bytes": 4620,
+      "sha256": "dd71e0c3af92b6565a518a4dceae9fe6e2e5dd9c41b45600bb6de2d045ab3bcb"
+    },
+    "preview": null,
+    "contract": {
+      "src": "50dad6ac8184eb63.json",
+      "bytes": 11331,
+      "sha256": "50dad6ac8184eb634e3ded6592d36aa3652fa3ef077e7b2524d01f1ee668e5a1"
+    },
+    "strings": {
+      "fr": {
+        "src": "5d5a875fc095c018.json",
+        "bytes": 82,
+        "sha256": "5d5a875fc095c01859262afac6843f0df7f001301bdfe2eaadef72ea28a553fb"
+      },
+      "en": {
+        "src": "8e7c8d81be61c113.json",
+        "bytes": 79,
+        "sha256": "8e7c8d81be61c113d2eb668918ce64b89452c4382bab4c49332bcafe35d08c0e"
+      },
+      "es": {
+        "src": "0a738050b17a8eaf.json",
+        "bytes": 85,
+        "sha256": "0a738050b17a8eaf9d76ce809213f424a34cf3a584925f9313b7089a38ca4336"
+      },
+      "pt": {
+        "src": "0a738050b17a8eaf.json",
+        "bytes": 85,
+        "sha256": "0a738050b17a8eaf9d76ce809213f424a34cf3a584925f9313b7089a38ca4336"
+      },
+      "de": {
+        "src": "aebcd4d97ee354e7.json",
+        "bytes": 79,
+        "sha256": "aebcd4d97ee354e7f74e476e4046c0d28cf2f5e15de8263bbdb35435dfb4a5b4"
+      },
+      "it": {
+        "src": "045606f0d37ec221.json",
+        "bytes": 85,
+        "sha256": "045606f0d37ec2213d306425fb92afbdee52091370b8d1c8da52a4e54734e0de"
+      },
+      "ar": {
+        "src": "898e28b336008bc3.json",
+        "bytes": 90,
+        "sha256": "898e28b336008bc3efcb9e8036a9530a6d2cd4020b77f700b7accb39b57f2c0f"
+      }
+    },
+    "downloadBytes": {
+      "story": 11331,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre haussmannien",
+        "description": "La façade parisienne : pierre de taille, fonte et clé d’arc."
+      },
+      "en": {
+        "name": "Haussmann banner frame",
+        "description": "The Parisian façade: dressed stone, cast iron and keystone."
+      },
+      "es": {
+        "name": "Marco Haussmanniano",
+        "description": "La fachada parisina: sillería, hierro fundido y clave de arco."
+      },
+      "pt": {
+        "name": "Moldura Haussmanniano",
+        "description": "A fachada parisiense: cantaria, ferro fundido e fecho de arco."
+      },
+      "de": {
+        "name": "Bannerrahmen Haussmann",
+        "description": "Die Pariser Fassade: Quaderstein, Gusseisen und Schlussstein."
+      },
+      "it": {
+        "name": "Cornice Haussmanniano",
+        "description": "La facciata parigina: pietra da taglio, ghisa e chiave di volta."
+      },
+      "ar": {
+        "name": "إطار لافتة هوسماني",
+        "description": "الواجهة الباريسية: حجر منحوت وحديد مصبوب وحجر عقد."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-arabe",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4b2482eb0c9b9d4b.webp",
+      "bytes": 10154,
+      "sha256": "4b2482eb0c9b9d4b3475d44b14ca4cf8f52e7c2f678d6c4859de6ce1f5cfddcd"
+    },
+    "preview": null,
+    "contract": {
+      "src": "2ae91a33025d28bb.json",
+      "bytes": 13709,
+      "sha256": "2ae91a33025d28bb78a9cac678be9a84b5bf0217166b9f7dfbf38976960cdd51"
+    },
+    "strings": {
+      "fr": {
+        "src": "e2a6515a8bf53863.json",
+        "bytes": 54,
+        "sha256": "e2a6515a8bf53863514e024cd44bab10a37b83631e36a8e1767883e17b57d06e"
+      },
+      "en": {
+        "src": "35166397ec6bc5a6.json",
+        "bytes": 65,
+        "sha256": "35166397ec6bc5a6d6f492be6ce1c24c99f619f5f5a5e43405daa74c0d3cbd62"
+      },
+      "es": {
+        "src": "70c9b511c7836f18.json",
+        "bytes": 57,
+        "sha256": "70c9b511c7836f18872954e7a2794f38d3edf35ee408d4ff3837ce1a4e4a337f"
+      },
+      "pt": {
+        "src": "70c9b511c7836f18.json",
+        "bytes": 57,
+        "sha256": "70c9b511c7836f18872954e7a2794f38d3edf35ee408d4ff3837ce1a4e4a337f"
+      },
+      "de": {
+        "src": "ca0119aadf9309f5.json",
+        "bytes": 63,
+        "sha256": "ca0119aadf9309f534620a017aa4af1fd2ec8251a645428ca0b574fe1dcb8354"
+      },
+      "it": {
+        "src": "48182516cc117324.json",
+        "bytes": 55,
+        "sha256": "48182516cc11732495b5f6a123e4a3002d8abbc2acbb2208b3effa48bbe10046"
+      },
+      "ar": {
+        "src": "b66aa767d7747c1b.json",
+        "bytes": 64,
+        "sha256": "b66aa767d7747c1be9514988582ad88c5ceafeada5f2848adf6a4a20fbd7b840"
+      }
+    },
+    "downloadBytes": {
+      "story": 13709,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre arabe",
+        "description": "Entrelacs de l’Alhambra, étoiles à huit branches et arc polylobé."
+      },
+      "en": {
+        "name": "Arabesque banner frame",
+        "description": "Alhambra interlace, eight-pointed stars and a lobed arch."
+      },
+      "es": {
+        "name": "Marco Árabe",
+        "description": "Lacería de la Alhambra, estrellas de ocho puntas y arco lobulado."
+      },
+      "pt": {
+        "name": "Moldura Árabe",
+        "description": "Entrelaçado da Alhambra, estrelas de oito pontas e arco polilobado."
+      },
+      "de": {
+        "name": "Bannerrahmen Arabisch",
+        "description": "Flechtwerk der Alhambra, achtzackige Sterne und Vielpassbogen."
+      },
+      "it": {
+        "name": "Cornice Arabo",
+        "description": "Intrecci dell’Alhambra, stelle a otto punte e arco polilobato."
+      },
+      "ar": {
+        "name": "إطار لافتة عربي",
+        "description": "تشابيك الحمراء ونجوم ثمانية وقوس مفصّص."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-grec",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 2,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "29416ef1cccea939.webp",
+      "bytes": 7034,
+      "sha256": "29416ef1cccea939c41c0b32a2f91b9f818d2b3315416d560e01f4598f5c6ec5"
+    },
+    "preview": null,
+    "contract": {
+      "src": "8ad5f10aba57187b.json",
+      "bytes": 11191,
+      "sha256": "8ad5f10aba57187ba7bca81f3f1977beea94127b9eb2fd86e5e8f81b6b183339"
+    },
+    "strings": {
+      "fr": {
+        "src": "4c31bb9dd35cc0ae.json",
+        "bytes": 50,
+        "sha256": "4c31bb9dd35cc0ae08315441e282f6ee1dfdd1afefa98a621f5c551fef29ebd1"
+      },
+      "en": {
+        "src": "ca6764e2b950ebd7.json",
+        "bytes": 55,
+        "sha256": "ca6764e2b950ebd76360c52accd1ad505d28935285375b1fea1942cb6dc18088"
+      },
+      "es": {
+        "src": "14cadccbf6356b20.json",
+        "bytes": 55,
+        "sha256": "14cadccbf6356b20cb485d51e60182a9671a90e1db12874d0782926cdce5e9f4"
+      },
+      "pt": {
+        "src": "15acf5a97e55002c.json",
+        "bytes": 53,
+        "sha256": "15acf5a97e55002c63abf38aaea71669f31c176ffaa3774e8a14fb63cd955eb5"
+      },
+      "de": {
+        "src": "9045460f5d2ca29a.json",
+        "bytes": 65,
+        "sha256": "9045460f5d2ca29ae005324c862bd773ba537e7c7ddd4f6b78f6161634229c99"
+      },
+      "it": {
+        "src": "96db04d70801bae7.json",
+        "bytes": 53,
+        "sha256": "96db04d70801bae7d4a8622f7675882728dd46cbbf9ce660ad0f461d5d241e8e"
+      },
+      "ar": {
+        "src": "873ac154d89003eb.json",
+        "bytes": 70,
+        "sha256": "873ac154d89003ebc7e60d2c20a8c7fd58e9bef8fa9950c73038e7da5fadebcf"
+      }
+    },
+    "downloadBytes": {
+      "story": 11191,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre grec",
+        "description": "Méandre, palmettes et volutes ioniques."
+      },
+      "en": {
+        "name": "Greek banner frame",
+        "description": "Meander, palmettes and Ionic volutes."
+      },
+      "es": {
+        "name": "Marco Griego",
+        "description": "Meandro, palmetas y volutas jónicas."
+      },
+      "pt": {
+        "name": "Moldura Grego",
+        "description": "Meandro, palmetas e volutas jônicas."
+      },
+      "de": {
+        "name": "Bannerrahmen Griechisch",
+        "description": "Mäander, Palmetten und ionische Voluten."
+      },
+      "it": {
+        "name": "Cornice Greco",
+        "description": "Meandro, palmette e volute ioniche."
+      },
+      "ar": {
+        "name": "إطار لافتة إغريقي",
+        "description": "المتعرّج والسعيفات والحلزونات الأيونية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-ancestral",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 3,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4eff11b2e05c2488.webp",
+      "bytes": 7878,
+      "sha256": "4eff11b2e05c2488c5e6b9c4ba7e50cdc945609635e0e48fd62c4aa1dcfebbce"
+    },
+    "preview": null,
+    "contract": {
+      "src": "e8b9e4d3d1da31e8.json",
+      "bytes": 10390,
+      "sha256": "e8b9e4d3d1da31e8f2b2a6b5b4db15e57f0a18cfa9b00cf61de2e14e7eba3c0b"
+    },
+    "strings": {
+      "fr": {
+        "src": "0ba9175ce589cdc4.json",
+        "bytes": 88,
+        "sha256": "0ba9175ce589cdc494b8e4aadc81d9636c6332ab51c9cb1bf2d6dc4352ca14c8"
+      },
+      "en": {
+        "src": "1eaa13b204a2e56c.json",
+        "bytes": 89,
+        "sha256": "1eaa13b204a2e56ca0fdce318a0886cbff32ad481880ec8c137a0eb345ae1023"
+      },
+      "es": {
+        "src": "eab1e28c32c74975.json",
+        "bytes": 89,
+        "sha256": "eab1e28c32c749751b0bb6664c9200e54596062901aab52b169ed688ce54ed9c"
+      },
+      "pt": {
+        "src": "eab1e28c32c74975.json",
+        "bytes": 89,
+        "sha256": "eab1e28c32c749751b0bb6664c9200e54596062901aab52b169ed688ce54ed9c"
+      },
+      "de": {
+        "src": "f0030e13ed320358.json",
+        "bytes": 91,
+        "sha256": "f0030e13ed320358a7acdf0a18120a6be47ac3f5372ab885e8a4a086036fcee8"
+      },
+      "it": {
+        "src": "926d294246e8c0ca.json",
+        "bytes": 91,
+        "sha256": "926d294246e8c0ca9780c1cb6929ffd83f095bbe737471e78a32bc3762336628"
+      },
+      "ar": {
+        "src": "597daaf54ee8558d.json",
+        "bytes": 98,
+        "sha256": "597daaf54ee8558deb7a7b4122acc92f0e951f676c4955ba20b8029573d9d11f"
+      }
+    },
+    "downloadBytes": {
+      "story": 10390,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre africain ancestral",
+        "description": "Bogolan peint à la terre et signe adinkra."
+      },
+      "en": {
+        "name": "Ancestral African banner frame",
+        "description": "Earth-painted bogolan and an adinkra sign."
+      },
+      "es": {
+        "name": "Marco Africano ancestral",
+        "description": "Bogolán pintado con tierra y signo adinkra."
+      },
+      "pt": {
+        "name": "Moldura Africano ancestral",
+        "description": "Bogolan pintado com terra e símbolo adinkra."
+      },
+      "de": {
+        "name": "Bannerrahmen Afrikanisch, Ahnen",
+        "description": "Mit Erde bemalter Bogolan und ein Adinkra-Zeichen."
+      },
+      "it": {
+        "name": "Cornice Africano ancestrale",
+        "description": "Bogolan dipinto con la terra e simbolo adinkra."
+      },
+      "ar": {
+        "name": "إطار لافتة أفريقي عريق",
+        "description": "بوغولان مرسوم بالطين ورمز أدينكرا."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-technologique",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 4,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "9944acccfdf5f618.webp",
+      "bytes": 4968,
+      "sha256": "9944acccfdf5f6184877d01708013f9a4e99afaac1d46496c24eff26f10d1745"
+    },
+    "preview": null,
+    "contract": {
+      "src": "b2a3a2863b78feae.json",
+      "bytes": 16276,
+      "sha256": "b2a3a2863b78feaea58ab315971e917a677bb2d68a507a900bfcf0057ad75fe8"
+    },
+    "strings": {
+      "fr": {
+        "src": "162f1021edf98011.json",
+        "bytes": 104,
+        "sha256": "162f1021edf980117732d3adb65a2978c30a447d6b2b65e2c3cccb6a10ed0aaa"
+      },
+      "en": {
+        "src": "13b2d4938d525e2c.json",
+        "bytes": 87,
+        "sha256": "13b2d4938d525e2c0a2ed1936e12948c1f3ea71cf3264f038c96702c373d861c"
+      },
+      "es": {
+        "src": "3c27ccd7b83681d3.json",
+        "bytes": 103,
+        "sha256": "3c27ccd7b83681d386c619c5985465f7d68e5a34faf58dd69fc86d980d02cd16"
+      },
+      "pt": {
+        "src": "3c27ccd7b83681d3.json",
+        "bytes": 103,
+        "sha256": "3c27ccd7b83681d386c619c5985465f7d68e5a34faf58dd69fc86d980d02cd16"
+      },
+      "de": {
+        "src": "0fec4466418efcd4.json",
+        "bytes": 103,
+        "sha256": "0fec4466418efcd4380316a2033f0921dfa4359f808e049e28a4ce67a7deef3a"
+      },
+      "it": {
+        "src": "abdafd736219cd0f.json",
+        "bytes": 101,
+        "sha256": "abdafd736219cd0fbf5270d5283bdb79b51429b977d5e910a7de3c8f7442996d"
+      },
+      "ar": {
+        "src": "3ba230602f623da0.json",
+        "bytes": 106,
+        "sha256": "3ba230602f623da0becaa5eff1d8e9aac69bd5abaf357bf5469124fd33b7e684"
+      }
+    },
+    "downloadBytes": {
+      "story": 16276,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre africain technologique",
+        "description": "Marches ndebele en néon et pistes de circuit."
+      },
+      "en": {
+        "name": "African tech banner frame",
+        "description": "Neon Ndebele steps and circuit traces."
+      },
+      "es": {
+        "name": "Marco Africano tecnológico",
+        "description": "Escalones ndebele de neón y pistas de circuito."
+      },
+      "pt": {
+        "name": "Moldura Africano tecnológico",
+        "description": "Degraus ndebele em néon e trilhas de circuito."
+      },
+      "de": {
+        "name": "Bannerrahmen Afrikanisch, Technik",
+        "description": "Ndebele-Stufen in Neon und Leiterbahnen."
+      },
+      "it": {
+        "name": "Cornice Africano tecnologico",
+        "description": "Gradini ndebele al neon e piste di circuito."
+      },
+      "ar": {
+        "name": "إطار لافتة أفريقي تقني",
+        "description": "درجات نديبيلي بالنيون ومسارات دارة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-rituel",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 5,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "dae036169596bf7e.webp",
+      "bytes": 6166,
+      "sha256": "dae036169596bf7ed9f2afbbd5918d6e87a9e78fb150d052c804b4ab88e3f0e3"
+    },
+    "preview": null,
+    "contract": {
+      "src": "6f274f4a2e3a51b7.json",
+      "bytes": 23249,
+      "sha256": "6f274f4a2e3a51b75be8747be553e462c5a60af42eda429a30224be7e8ce011c"
+    },
+    "strings": {
+      "fr": {
+        "src": "9caba1963f0613da.json",
+        "bytes": 76,
+        "sha256": "9caba1963f0613daab14705ec2be90d188a291426a7db1cc709d9cedf916507d"
+      },
+      "en": {
+        "src": "8b03ab7bbd6605b8.json",
+        "bytes": 77,
+        "sha256": "8b03ab7bbd6605b825783d084b25782240a9ccdd6273e3c4f8ec3e6d6fbdb8da"
+      },
+      "es": {
+        "src": "cda156cb83769c40.json",
+        "bytes": 77,
+        "sha256": "cda156cb83769c40e5f2d765ff206c58e73649ffdbbff4d73547e12e5053698f"
+      },
+      "pt": {
+        "src": "cda156cb83769c40.json",
+        "bytes": 77,
+        "sha256": "cda156cb83769c40e5f2d765ff206c58e73649ffdbbff4d73547e12e5053698f"
+      },
+      "de": {
+        "src": "13d9b498e79d62c0.json",
+        "bytes": 87,
+        "sha256": "13d9b498e79d62c0f9e0dbe6201cef960bbf179fd261d2f650e3f4446b8cf894"
+      },
+      "it": {
+        "src": "303e9ff406190246.json",
+        "bytes": 79,
+        "sha256": "303e9ff406190246fe7e23c201a6b6c23bcb448e3d1db0fc8b4d058a09af8252"
+      },
+      "ar": {
+        "src": "8a7bb558170e488b.json",
+        "bytes": 92,
+        "sha256": "8a7bb558170e488b5d78e08d50b372d5991fce9c77290becac022d802d7bb241"
+      }
+    },
+    "downloadBytes": {
+      "story": 23249,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre africain rituel",
+        "description": "Raffia frangé, cauris, perles et masque de bois."
+      },
+      "en": {
+        "name": "African ritual banner frame",
+        "description": "Fringed raffia, cowries, beads and a wooden mask."
+      },
+      "es": {
+        "name": "Marco Africano ritual",
+        "description": "Rafia con flecos, cauris, cuentas y máscara de madera."
+      },
+      "pt": {
+        "name": "Moldura Africano ritual",
+        "description": "Ráfia franjada, búzios, contas e máscara de madeira."
+      },
+      "de": {
+        "name": "Bannerrahmen Afrikanisch, Ritual",
+        "description": "Gefranster Bast, Kaurimuscheln, Perlen und Holzmaske."
+      },
+      "it": {
+        "name": "Cornice Africano rituale",
+        "description": "Rafia sfrangiata, cauri, perline e maschera di legno."
+      },
+      "ar": {
+        "name": "إطار لافتة أفريقي طقسي",
+        "description": "رافيا مهدّبة وودع وخرز وقناع خشبي."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  },
+  {
+    "slug": "cadres-celte",
+    "domain": "banner-frame",
+    "origin": "builtin",
+    "version": 1,
+    "order": 6,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "4d11b20cd831193c.webp",
+      "bytes": 8838,
+      "sha256": "4d11b20cd831193c31d42b2f54de7e14e8bebb95fa407a7dc4e7bc3dcb3f8006"
+    },
+    "preview": null,
+    "contract": {
+      "src": "3c32347b7937f6af.json",
+      "bytes": 36488,
+      "sha256": "3c32347b7937f6af4f409f932fbb4908f601988eaed4b884dc0b250d0673a473"
+    },
+    "strings": {
+      "fr": {
+        "src": "9bee23025161f3bb.json",
+        "bytes": 54,
+        "sha256": "9bee23025161f3bb252f553cbe5904b879da67d1c32a8cd0c5a7838bef8ee867"
+      },
+      "en": {
+        "src": "2e50d99178ac9fda.json",
+        "bytes": 59,
+        "sha256": "2e50d99178ac9fda56033d16f12acda4182d6c535584a3a23684387113dff7e8"
+      },
+      "es": {
+        "src": "85f9aa1e659871b1.json",
+        "bytes": 55,
+        "sha256": "85f9aa1e659871b112355c1e588b6411f6a75d8e82754e84ba653e409029472b"
+      },
+      "pt": {
+        "src": "85f9aa1e659871b1.json",
+        "bytes": 55,
+        "sha256": "85f9aa1e659871b112355c1e588b6411f6a75d8e82754e84ba653e409029472b"
+      },
+      "de": {
+        "src": "d5fd2642eeb2807d.json",
+        "bytes": 63,
+        "sha256": "d5fd2642eeb2807dac9f66c19c5363359f8161de0534b4e881bec9b6be8f8f0c"
+      },
+      "it": {
+        "src": "256cbe3ffa5640bd.json",
+        "bytes": 59,
+        "sha256": "256cbe3ffa5640bdac098e06f3e815e03c3a464992d45770126356106954fe7f"
+      },
+      "ar": {
+        "src": "8a985b7dc7cd9223.json",
+        "bytes": 64,
+        "sha256": "8a985b7dc7cd9223af1dbb465cf0757bc6df8e9627e5a8f1e80e399a6323a4ca"
+      }
+    },
+    "downloadBytes": {
+      "story": 36488,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Cadre celte",
+        "description": "Tresse sans fin et triskèles en spirale."
+      },
+      "en": {
+        "name": "Celtic banner frame",
+        "description": "Endless braid and spiral triskeles."
+      },
+      "es": {
+        "name": "Marco Celta",
+        "description": "Trenza sin fin y trisqueles en espiral."
+      },
+      "pt": {
+        "name": "Moldura Celta",
+        "description": "Trança sem fim e triskles em espiral."
+      },
+      "de": {
+        "name": "Bannerrahmen Keltisch",
+        "description": "Endloses Flechtband und Triskelen."
+      },
+      "it": {
+        "name": "Cornice Celtico",
+        "description": "Treccia infinita e trischeli a spirale."
+      },
+      "ar": {
+        "name": "إطار لافتة سلتي",
+        "description": "ضفيرة لا تنتهي وتريسكيل حلزونية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "banner"
+      ]
+    }
+  }
+]

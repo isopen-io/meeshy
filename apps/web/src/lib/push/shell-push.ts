@@ -1,9 +1,9 @@
-import * as conversationsEndpoints from '@meeshy/shared/api/endpoints/conversations';
 import * as usersEndpoints from '@meeshy/shared/api/endpoints/users';
 
 import type { Credential, HttpTransport } from '@/lib/api/http';
 import { heldAccountOf, type SessionState } from '@/lib/api/session';
-import { DELIVERY_RECEIPT_TYPES } from '@/lib/notifications/delivery-receipt-types';
+import type { SocialEventV2Input } from '@/lib/api/social-events-v2-types';
+import { notificationEventOf } from '@/lib/notifications/notification-telemetry';
 import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from '@/lib/notifications/target';
 
 /**
@@ -20,7 +20,9 @@ import { pushTapTarget, type NotificationTargetInput, type PushTapTarget } from 
  * `notification` de FCM est affiché par le SYSTÈME, dans le canal que la
  * passerelle nomme. Il ne re-résout pas non plus le Prisme — le corps est
  * composé serveur (`servedBannerBody`) ; de la carte `data`, seuls les champs
- * qui servent à NAVIGUER et à ACCUSER la remise sont lus.
+ * qui servent à NAVIGUER sont lus. La REMISE s'accuse en natif, une seule fois
+ * (`MeeshyMessagingService`, #8124, #11122), comme `accuserRemise` dans
+ * `sw-push.js`.
  *
  * Tout est injecté : le plugin, la session, le transport, la navigation.
  * `startShellPushInShell()` (`shell-push-runtime.ts`) branche les réels.
@@ -71,7 +73,31 @@ export type ShellPushEnvironment = {
   readonly navigate: (url: string) => void;
   readonly urlOf: (target: PushTapTarget) => string;
   readonly appVersion: string;
+  /** L'appareil, par le pont natif (`MeeshyNotificationSettings.deviceIdentity`) — #10858. */
+  readonly deviceIdentity: () => Promise<unknown>;
+  /** L'entonnoir des notifications (#10507, #10910) : la file v2 de la télémétrie. */
+  readonly record: (event: SocialEventV2Input) => void;
 };
+
+export type ShellDeviceIdentity = { readonly deviceId?: string; readonly deviceName?: string };
+
+const boundedText = (value: unknown, max: number): string | undefined =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, max) : undefined;
+
+/**
+ * **UN APPAREIL, UN JETON ACTIF PAR TYPE** (#10858). La passerelle désactive les
+ * jetons précédents du même `(userId, deviceId, type)` ; sans `deviceId`, chaque
+ * réinstallation laissait une ligne FCM active de plus. Seules des chaînes non
+ * vides et bornées par le schéma de la route partent ; un pont absent (coque
+ * plus ancienne) ou une réponse inattendue n'empêche pas l'enregistrement.
+ */
+export function shellDeviceIdentityOf(raw: unknown): ShellDeviceIdentity {
+  if (raw === null || typeof raw !== 'object') return {};
+  const { deviceId, deviceName } = raw as Record<string, unknown>;
+  const id = boundedText(deviceId, 255);
+  const name = boundedText(deviceName, 100);
+  return { ...(id === undefined ? {} : { deviceId: id }), ...(name === undefined ? {} : { deviceName: name }) };
+}
 
 /** La carte `data` d'un push FCM : des chaînes plates, `''` valant absence. */
 function dataOf(raw: unknown): Readonly<Record<string, string>> {
@@ -94,16 +120,6 @@ export function shellPushTargetInput(raw: unknown): NotificationTargetInput {
     senderUsername: data.senderUsername,
     route: data.route,
   };
-}
-
-/** La conversation et le message dont un push annonce la REMISE, ou `null`. */
-export function deliveredMessageOf(raw: unknown): { readonly conversationId: string; readonly messageId: string } | null {
-  const data = dataOf(raw);
-  const conversationId = (data.conversationId ?? '').trim();
-  const messageId = (data.messageId ?? '').trim();
-  if (!DELIVERY_RECEIPT_TYPES.has((data.type ?? '').trim())) return null;
-  if (conversationId === '' || messageId === '') return null;
-  return { conversationId, messageId };
 }
 
 /**
@@ -135,18 +151,28 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   let token: string | null = null;
   let activeUser: string | null = null;
   const account = (): Credential | null => accountCredentialOf(sessionStore.getState().session);
+  let device: ShellDeviceIdentity | null = null;
+  const deviceResolved = env
+    .deviceIdentity()
+    .then(shellDeviceIdentityOf)
+    .catch((): ShellDeviceIdentity => ({}))
+    .then((identity) => {
+      device = identity;
+      return identity;
+    });
 
   const registerToken = (): void => {
     const credential = account();
     if (token === null || activeUser === null || credential === null) return;
-    void transport
-      .request({
+    const body = { token, platform: 'android', type: 'fcm', appVersion: env.appVersion };
+    const send = (identity: ShellDeviceIdentity) =>
+      transport.request({
         method: 'POST',
         path: usersEndpoints.registerDeviceToken,
-        body: { token, platform: 'android', type: 'fcm', appVersion: env.appVersion },
+        body: { ...body, ...identity },
         credential,
-      })
-      .catch(() => undefined);
+      });
+    void (device === null ? deviceResolved.then(send) : send(device)).catch(() => undefined);
   };
 
   await plugin.addListener('registration', ({ value }) => {
@@ -155,23 +181,17 @@ export async function startShellPush(env: ShellPushEnvironment): Promise<void> {
   });
   await plugin.addListener('registrationError', () => undefined);
 
+  const note = (data: unknown, action: 'received' | 'opened'): void => {
+    const event = notificationEventOf(data, action, 'fcm');
+    if (event !== null) env.record(event);
+  };
+
   await plugin.addListener('pushNotificationActionPerformed', ({ notification }) => {
+    note(notification.data, 'opened');
     env.navigate(env.urlOf(pushTapTarget(shellPushTargetInput(notification.data))));
   });
 
-  await plugin.addListener('pushNotificationReceived', ({ data }) => {
-    const delivered = deliveredMessageOf(data);
-    const credential = account();
-    if (delivered === null || activeUser === null || credential === null) return;
-    void transport
-      .request({
-        method: 'POST',
-        path: conversationsEndpoints.byConversationIdReceipts(delivered.conversationId),
-        body: { type: 'delivered', messageIds: [delivered.messageId] },
-        credential,
-      })
-      .catch(() => undefined);
-  });
+  await plugin.addListener('pushNotificationReceived', ({ data }) => note(data, 'received'));
 
   await plugin.createChannel({ id: SHELL_PUSH_CHANNEL_ID, name: 'Meeshy', importance: 4, visibility: 0 }).catch(() => undefined);
 

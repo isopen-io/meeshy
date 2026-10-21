@@ -1,14 +1,18 @@
-import { memo, type ReactNode } from 'react';
+import { memo, useMemo, type ReactNode } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { Avatar, MoodPeekTarget } from '@/components/avatar';
+import { AvatarRing, ringBoxSize } from '@/components/avatar-ring';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import {   SECTION_CARD_STYLE } from '@/components/grouped-section';
 import { DISCOVER_GLYPHS } from '@/components/glyphs-discover';
 import { PROFILE_GLYPHS } from '@/components/glyphs-profile';
+import { bannerPaint, ProfileBannerDesign, ProfileBannerFrame, useScheme } from '@/components/profile-banner-design';
+import { ProfileImageButton, useProfileImageViewer } from '@/components/profile-image-viewer';
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { PublicProfile } from '@/lib/api/public-profile';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import type { ProfilePresenceLine } from '@/lib/profile/presence-line';
 import type { ProfileActionKind, ProfileRelation } from '@/lib/profile/relation';
 import { initialsOf } from '@/lib/view/conversation';
@@ -39,44 +43,82 @@ import { BRAND, BRAND_FILL, BRAND_INK, FOCUS, INK, INK_2 } from './user-profile-
  * assumé avec iOS qui la teinte : le vert et l'orange de la pastille tombent
  * sous AA en texte sur fond de carte, et la pastille porte déjà la couleur.
  *
- * **LA BANNIÈRE EST À LIRE, PAS À TOUCHER** dans ce lot : iOS l'ouvre en plein
- * écran, mais brancher le visualiseur ici tirerait un chunk de plus sur un
- * écran dont le poids se mesure pour la première fois. Issue compagnon — et
- * c'est déjà ce que `/me` fait.
+ * **LA BANNIÈRE ET LA PHOTO S'OUVRENT EN PLEIN ÉCRAN** (#10092, miroir iOS) —
+ * la visionneuse existante, chargée au toucher seulement. Sans image (dégradé,
+ * initiales), il n'y a rien à ouvrir : aucun bouton.
+ *
+ * **LE JEU SE POSE SUR LA BANNIÈRE** (#10092, #10231) — `game` est l'emplacement
+ * du niveau et du rang (`GameBannerVisitorSlot` / `GameBannerOwnSlot`) : le
+ * niveau et ses points au début, le rang à la fin.
  */
 export const ProfileHero = memo(function ProfileHero({
   profile,
   name,
   accent,
   presence,
+  mood,
+  game,
 }: {
   readonly profile: PublicProfile;
   readonly name: string;
   readonly accent: string;
   readonly presence: ProfilePresenceLine | null;
+  /** L'humeur du moment, telle que le corpus servi la porte (#10528) —
+   * `useProfileController`. Absente : aucune pastille. */
+  readonly mood?: string | undefined;
+  readonly game?: ReactNode;
 }) {
+  const images = useMemo(() => ({ avatar: profile.avatar, banner: profile.banner }), [profile.avatar, profile.banner]);
+  const { open, viewer } = useProfileImageViewer({ ownerId: profile.id, images });
+  /* LE DÉCOR D'UN AUTRE (#10632) — servi avec son profil ; absent (ancien serveur) = le rendu d'avant, à l'octet. */
+  const designs = useDecorDesigns(profile.decor);
+  const scheme = useScheme();
+  const ringExtra = designs.ring === null ? 0 : (ringBoxSize(90) - 90) / 2;
+  const avatar = (
+    <Avatar
+      initials={initialsOf(name)}
+      color={accent}
+      size={90}
+      name={name}
+      {...(profile.avatar === null ? {} : { src: profile.avatar })}
+      {...(presence === null ? {} : { presence: presence.status })}
+      {...(mood === undefined ? {} : { mood })}
+    />
+  );
+  const paint = bannerPaint({ image: profile.banner, design: designs.banner });
   return (
     <section data-user-hero aria-label={name} className="grid justify-items-center">
       <div data-user-banner className="relative w-full overflow-hidden rounded-card" style={{ height: 120 }}>
-        {profile.banner === null ? (
+        {paint.kind === 'design' ? (
+          <ProfileBannerDesign design={paint.design} accent={accent} scheme={scheme} />
+        ) : paint.kind === 'plain' ? (
           <span
             aria-hidden="true"
             className="block size-full"
             style={{ background: `linear-gradient(135deg, color-mix(in srgb, ${accent} 42%, transparent), color-mix(in srgb, ${accent} 12%, transparent))` }}
           />
         ) : (
-          <img src={attachmentSrc(profile.banner)} alt="" className="block size-full object-cover" />
+          <ProfileImageButton kind="banner" onOpen={open} className="size-full">
+            <img src={attachmentSrc(paint.image)} alt="" className="block size-full object-cover" />
+          </ProfileImageButton>
         )}
+        <ProfileBannerFrame frame={designs.bannerFrame} />
+        {game}
       </div>
-      <span className="block rounded-chip" style={{ marginTop: -45, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
-        <Avatar
-          initials={initialsOf(name)}
-          color={accent}
-          size={90}
-          name={name}
-          {...(profile.avatar === null ? {} : { src: profile.avatar })}
-          {...(presence === null ? {} : { presence: presence.status })}
-        />
+      <span className="relative block rounded-chip" style={{ marginTop: -45 - ringExtra, padding: 4, backgroundColor: 'var(--color-ios-surface)' }}>
+        <AvatarRing ring={designs.ring} size={90}>
+          {profile.avatar === null ? (
+            avatar
+          ) : (
+            <ProfileImageButton kind="avatar" onOpen={open} className="rounded-chip">
+              {avatar}
+            </ProfileImageButton>
+          )}
+        </AvatarRing>
+        {/* L'HUMEUR SE TOUCHE (#10528) — sa cible est posée ICI, à côté du
+            bouton de la photo : un bouton dans un bouton n'est pas du HTML
+            valide. `inset` = le liseré de 4 px qui entoure l'avatar. */}
+        {mood === undefined || mood === '' ? null : <MoodPeekTarget authorId={profile.id} emoji={mood} name={name} size={90} inset={4 + ringExtra} />}
       </span>
       <div className="grid max-w-full justify-items-center gap-0.5 pt-2 text-center">
         <p className="max-w-full break-words text-screen font-bold" style={{ color: INK }}>
@@ -104,6 +146,7 @@ export const ProfileHero = memo(function ProfileHero({
           </p>
         )}
       </div>
+      {viewer}
     </section>
   );
 });

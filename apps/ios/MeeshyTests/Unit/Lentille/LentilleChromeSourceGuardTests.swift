@@ -47,9 +47,22 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         iosRoot.appendingPathComponent("Meeshy/Features/Main/Lentille/Chrome")
     }
 
+    /// `+Overlays` et les types qui en sont sortis (en-tête, barre du bas, glisser de chip, items de menu).
+    private static let overlayFamily: Set<String> = [
+        "ConversationListView+Overlays.swift", "ConversationListView+ChipDrag.swift",
+        "ConversationListView+HeaderOverlay.swift", "ConversationListView+BottomBar.swift",
+        "ConversationListView+MoveToSectionMenuItems.swift",
+    ]
+
+    /// Le code qui vient de `ConversationListView.swift` : le fichier-tête ET les types qui en ont été extraits
+    /// (`+StoryRail`, `+SectionHeader`, `+ScrollChrome`…). `+Overlays` et ses types extraits en sont exclus — le menu
+    /// contextuel et ses constantes de geste (`0.45`, auto-scroll) ont leurs propres gardes et n'ont jamais été sous celle-ci.
     private func listViewSource() throws -> (name: String, code: String) {
-        let url = Self.iosRoot.appendingPathComponent("Meeshy/Features/Main/Views/ConversationListView.swift")
-        return ("ConversationListView.swift", try String(contentsOf: url, encoding: .utf8))
+        let code = try AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/ConversationListView.swift")
+            .filter { !Self.overlayFamily.contains($0.lastPathComponent) }
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
+        return ("ConversationListView.swift", code)
     }
 
     /// Tout `.swift` de `Lentille/Chrome/`, découvert au moment du test —
@@ -313,8 +326,7 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         XCTAssertEqual(
             definitions, ["Features/Main/Views/StoryTrayView.swift"],
             "Le résolveur de couverture doit exister UNE fois, dans StoryTrayView.swift. " +
-            "Trouvé : \(definitions). Le rail Lentille l'APPELLE (portée interne depuis le " +
-            "lot 3) — il ne le recopie pas."
+            "Trouvé : \(definitions)."
         )
 
         // #4002 — RELOCALISATION, pas un second appelant. La consommation de la
@@ -332,15 +344,15 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         )
     }
 
-    func test_theRailMapping_resolvesItsCoversThroughThatSameResolver() throws {
+    /// #11033 — la liste monte le tray du fil : elle ne résout plus AUCUNE
+    /// couverture elle-même, le tray le fait pour les deux emplacements.
+    func test_theListResolvesNoCoverItself_theSharedTrayDoes() throws {
         let (name, raw) = try listViewSource()
         let code = AppSourceGuard.stripComments(raw)
         XCTAssertEqual(
-            occurrences(of: "latestStoryThumbnailURL(", in: code), 2,
-            "\(name) doit appeler le résolveur PARTAGÉ deux fois — une pour la pastille " +
-            "« moi », une pour les autres. Sans cet appel le rail retombe sur les avatars et " +
-            "l'exigence « afficher la preview de la story » redevient une régression " +
-            "silencieuse."
+            occurrences(of: "latestStoryThumbnailURL(", in: code), 0,
+            "\(name) ne mappe plus de pastilles : il monte `StoryTrayView`, qui résout la " +
+            "couverture pour la liste ET pour le fil."
         )
     }
 
@@ -356,58 +368,13 @@ final class LentilleChromeSourceGuardTests: XCTestCase {
         )
     }
 
-    // MARK: - Le rail rend la preview, le mood et l'état vu (lot 3)
-
-    private func railSource() throws -> (name: String, code: String) {
-        let url = Self.chromeDirectory.appendingPathComponent("StoriesVivantsRail.swift")
-        return ("StoriesVivantsRail.swift", AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8)))
-    }
-
-    func test_theRail_drawsItsPastillesWithTheSharedCachedAvatar_notAHandRolledLoader() throws {
-        let (name, code) = try railSource()
-        XCTAssertEqual(
-            occurrences(of: "AsyncImage(", in: code), 0,
-            "\(name) : `AsyncImage` sans repli d'initiales est ce qui peignait un cercle VIDE " +
-            "pour tout auteur sans avatar. L'atome partagé `CachedAvatarImage` sert le cache " +
-            "chaud ET les initiales."
-        )
-        XCTAssertEqual(
-            occurrences(of: "CachedAvatarImage(", in: code), 2,
-            "\(name) : les DEUX pastilles (« moi » et les autres) passent par le même atome."
-        )
-    }
-
-    func test_theRail_animatesItsMoods_throughTheSharedBadgeAtom() throws {
-        let (name, code) = try railSource()
-        XCTAssertEqual(
-            occurrences(of: "MeeshyMoodBadge(", in: code), 2,
-            "\(name) : le mood de « moi » ET celui de chaque auteur passent par l'atome " +
-            "partagé — le seul endroit où le ressort `repeatForever` est écrit, et le seul " +
-            "qui consulte Reduce Motion."
-        )
-        XCTAssertEqual(
-            occurrences(of: "repeatForever", in: code), 0,
-            "\(name) : aucun ressort écrit à la main dans une peau. Il échapperait au " +
-            "portillon d'accessibilité de l'atome."
-        )
-    }
-
-    func test_theRail_paintsItsRingThroughThePolicy_neverFromIsLiveAlone() throws {
-        let (name, code) = try railSource()
-        XCTAssertTrue(
-            code.contains("LentilleRailPolicy.ringIsAccented(entry)"),
-            "\(name) : l'anneau des autres pastilles doit demander la règle. Avant le lot 3 " +
-            "il lisait `entry.isLive` seul — toujours faux faute de modèle d'appel — donc " +
-            "tout le rail était gris, y compris les stories NON VUES."
-        )
-    }
-
-    func test_hardLawLiteral520_matchesTheOneKnownUnrelatedOccurrence_inConversationListView() throws {
+    /// Le seul « 520 » connu de la vue — `min(windowWidth * 0.42, 520)`, sans rapport avec la loi — est parti dans
+    /// `ConversationRowWidthLaw` (repli d'avant la première mesure de la colonne) : la vue n'en porte plus aucun.
+    func test_hardLawLiteral520_neverAppearsInConversationListView() throws {
         let (name, code) = try listViewSource()
         XCTAssertEqual(
-            occurrences(of: "520", in: code), 1,
-            "\(name) : le compte de « 520 » a changé par rapport au repère connu (1 — " +
-            "`min(windowWidth * 0.42, 520)`, sans rapport avec la loi). Si ce changement AJOUTE " +
+            occurrences(of: "520", in: code), 0,
+            "\(name) : un « 520 » est réapparu dans la vue (le repère connu est désormais 0). Si ce changement AJOUTE " +
             "une seconde occurrence, vérifier qu'elle n'est pas `FOCUS_CURVE_CONSTANTS.list." +
             "maxDistance` recopiée en dur avant de faire quoi que ce soit d'autre."
         )

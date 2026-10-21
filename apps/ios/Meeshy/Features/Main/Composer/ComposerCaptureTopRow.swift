@@ -78,6 +78,14 @@ nonisolated enum ComposerCaptureTopRow {
         max(0, pending) + (recording ? 1 : 0)
     }
 
+    /// **L'indicateur se LIT d'un coup d'œil : « 3 – »** (#10310, porteur
+    /// 2026-10-12). Le chiffre et un trait, sans le mot : la puce tient à côté
+    /// du chrono sur un iPhone étroit. Le mot reste à VoiceOver, au pluriel de
+    /// la langue (`ComposerSceneCameraCopy.segmentCount`).
+    static func segmentBadge(_ count: Int, locale: Locale = .current) -> String {
+        "\(LocalizedNumber.exact(max(0, count), locale: locale)) \u{2013}"
+    }
+
     /// **Le curseur d'intensité se pose SOUS le flash** : son retrait depuis le
     /// bord droit compte les contrôles posés à droite du flash.
     static func flashSliderTrailingInset(_ trailing: [ComposerCaptureTopItem], tapTarget: CGFloat) -> CGFloat {
@@ -97,8 +105,68 @@ nonisolated enum ComposerCaptureTopRow {
 nonisolated enum ComposerCaptureDiscardRule {
     static func asksBeforeClosing(stage: ComposerSceneCameraStage, editing: Bool,
                                   segments: [ComposerCaptureSegment], takeSave: ComposerTakeSaveState) -> Bool {
-        guard !editing else { return takeSave != .saved }
+        // Photo comme vidéo, enregistrée ou non (porteur 2026-10-12, #10342) :
+        // la retouche en cours — effet, cadre, recadrage — se perdrait.
+        guard !editing else { return true }
         return stage == .recording || ComposerCaptureSegments.asksBeforeClosing(segments)
+    }
+}
+
+/// **La question « Abandonner ? », portée par la SESSION** (recette iPhone
+/// 2026-10-20 : « Abandonner » touché, la photo restait en retouche). Tenue
+/// par des états de la vue, la question se perdait avec elle ; ici elle
+/// survit à une vue recréée pendant l'alerte, et ce qu'elle abandonne est
+/// fixé quand on la pose. SwiftUI peut refermer l'alerte AVANT d'appeler son
+/// action : `dismiss()` ferme sans oublier la demande, que seule une
+/// réponse consomme.
+nonisolated struct ComposerCaptureDiscardPrompt: Equatable, Sendable {
+    struct Request: Equatable, Sendable {
+        /// La prise en retouche, sinon le viseur (#9781).
+        let take: Bool
+        let photo: Bool
+    }
+
+    private(set) var request: Request?
+    private(set) var isPresented = false
+    private(set) var closedAt: Date?
+
+    mutating func ask(take: Bool, photo: Bool) {
+        request = Request(take: take, photo: photo)
+        isPresented = true
+    }
+
+    mutating func dismiss(now: Date = Date()) {
+        guard isPresented else { return }
+        isPresented = false
+        closedAt = now
+    }
+
+    /// La réponse : la demande, consommée.
+    mutating func answer(now: Date = Date()) -> Request? {
+        dismiss(now: now)
+        defer { request = nil }
+        return request
+    }
+
+    /// Le toucher qui ferme l'alerte n'est pas un toucher sur la prise.
+    func swallowsTap(now: Date) -> Bool {
+        ComposerCaptureTapRule.belongsToAnAlert(presented: isPresented, closedAt: closedAt, now: now)
+    }
+}
+
+/// **Les deux réponses à « Abandonner ? »** : la retouche revient viser ; une
+/// question posée au viseur le range — `true`, l'hôte le ferme.
+@MainActor
+enum ComposerCaptureDiscardFlow {
+    static func confirm(_ session: ComposerCaptureSession) -> Bool {
+        guard let demande = session.discardPrompt.answer() else { return false }
+        guard demande.take else { return true }
+        if session.phase.isEditing { session.cancelEditing() }
+        return false
+    }
+
+    static func keep(_ session: ComposerCaptureSession) {
+        _ = session.discardPrompt.answer()
     }
 }
 

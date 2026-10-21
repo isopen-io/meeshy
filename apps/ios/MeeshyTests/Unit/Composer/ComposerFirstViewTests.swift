@@ -69,18 +69,44 @@ final class ComposerFirstViewTests: XCTestCase {
         XCTAssertFalse(ComposerFirstView.railShowsTextTools(textEditing: false))
     }
 
-    /// **La zone basse déplie les réglages de l'outil ouvert** — dessin ou
-    /// texte — et rien quand aucun outil ne l'est.
-    ///
-    /// N'éprouver que le refus laisserait passer une règle qui rend `false`
-    /// partout : le pinceau et le texte perdraient leurs réglages, et leurs
-    /// colonnes deviendraient inertes.
-    func test_laZoneBasse_porteLesOptionsDeLOutilOuvert() {
-        XCTAssertTrue(ComposerFirstView.lowZoneShowsToolOptions(drawing: true, textEditing: false),
-                      "les réglages du pinceau sont ceux du geste qui AJOUTE")
-        XCTAssertTrue(ComposerFirstView.lowZoneShowsToolOptions(drawing: false, textEditing: true),
+    /// **La zone basse ne déplie plus que les réglages du texte saisi** — le
+    /// dessin ouvre les siens à droite depuis le haut (#9145), et rien ne
+    /// s'ouvre en bas quand aucun outil ne l'est.
+    func test_laZoneBasse_porteLesOptionsDuTexte_jamaisCellesDuDessin() {
+        XCTAssertTrue(ComposerFirstView.lowZoneShowsToolOptions(textEditing: true),
                       "un réglage de texte choisi dans la colonne se déplie en bas")
-        XCTAssertFalse(ComposerFirstView.lowZoneShowsToolOptions(drawing: false, textEditing: false))
+        XCTAssertFalse(ComposerFirstView.lowZoneShowsToolOptions(textEditing: false))
+    }
+
+    /// **Les options du pinceau s'ouvrent à droite, depuis le haut** (#9145) —
+    /// la grammaire des sous-outils d'un objet (#9138). N'éprouver que le refus
+    /// laisserait passer une règle qui rend `false` partout : le pinceau
+    /// perdrait ses réglages, et sa colonne deviendrait inerte.
+    func test_lesOptionsDuDessin_sOuvrentADroite_seulementPourUnControleDeplie() {
+        XCTAssertTrue(ComposerFirstView.trailingPanelShowsDrawingOptions(drawing: true, expandedTool: true,
+                                                                         strokeSelected: false),
+                      "les réglages du pinceau sont ceux du geste qui AJOUTE")
+        XCTAssertFalse(ComposerFirstView.trailingPanelShowsDrawingOptions(drawing: true, expandedTool: false,
+                                                                          strokeSelected: false),
+                       "aucun contrôleur déplié : la colonne seule, pas de plaque")
+        XCTAssertFalse(ComposerFirstView.trailingPanelShowsDrawingOptions(drawing: true, expandedTool: true,
+                                                                          strokeSelected: true),
+                       "le panneau du pinceau ne rend rien sur un trait sélectionné : jamais de plaque vide")
+        XCTAssertFalse(ComposerFirstView.trailingPanelShowsDrawingOptions(drawing: false, expandedTool: true,
+                                                                          strokeSelected: false))
+    }
+
+    /// **Le meuble monte les options du dessin dans la plaque de droite**, et
+    /// plus dans la zone basse qui faisait remonter la scène (#9145).
+    func test_leMeuble_poseLesOptionsDuDessinDansLaPlaqueDeDroite() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.composerHostSource())
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(source.contains("ifviewModel.isDrawingActive{returnsceneDrawingOptionsPanel}"),
+                      "le dessin passe par la plaque de droite, avant l'édition en place")
+        XCTAssertTrue(source.contains("ComposerTrailingOptionsPlate(plateauTint:tint.color){MeeshyToolOptionsPanel(viewModel:viewModel)"),
+                      "la plaque déplie le panneau d'options du SDK, pas une bande maison")
+        XCTAssertFalse(source.contains("lowZoneShowsToolOptions(drawing:"),
+                       "le dessin n'ouvre plus ses options en bas")
     }
 
     // MARK: - Ce que la règle garde en vie, ailleurs

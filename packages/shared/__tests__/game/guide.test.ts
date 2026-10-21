@@ -42,8 +42,7 @@ describe('les moments récurrents', () => {
     { kind: 'new-tier', tier: 'lueur', nextTierLevel: 20 },
     { kind: 'missions-unlocked' },
     { kind: 'first-mint-possible', price: 1221, levelsLost: 5, gloryGain: 100 },
-    { kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 },
-    { kind: 'badge-extinguished', missingActions: 37 },
+    { kind: 'first-mint' },
     { kind: 'price-rises', nextPrice: 1294 },
     { kind: 'new-rank', rank: 'voix', division: 2, glory: 2200, gloryMissing: 634 },
     { kind: 'treasury-tier', tier: 'escarcelle', nextTierMissing: 40 },
@@ -77,7 +76,6 @@ describe('les moments récurrents', () => {
       'missions-unlocked': 'mee',
       'first-mint-possible': 'meo',
       'first-mint': 'duo',
-      'badge-extinguished': 'meo',
       'price-rises': 'meo',
       'new-rank': 'duo',
       'treasury-tier': 'mee',
@@ -103,13 +101,13 @@ describe('les moments récurrents', () => {
   });
 
   it('ne choisit qu\'une carte par ouverture d\'écran, la plus importante', () => {
-    const chosen = chooseGuideMoment([events[0]!, events[7]!, events[9]!], []);
+    const chosen = chooseGuideMoment([events[0]!, events[6]!, events[8]!], []);
     expect(chosen?.key).toBe('new-rank');
     expect(chooseGuideMoment([], [])).toBeNull();
   });
 
   it('préfère le moment inédit au moment déjà vu à importance voisine', () => {
-    const chosen = chooseGuideMoment([events[9]!, events[8]!], ['flame-at-risk']);
+    const chosen = chooseGuideMoment([events[8]!, events[7]!], ['flame-at-risk']);
     expect(chosen?.key).toBe('treasury-tier');
   });
 });

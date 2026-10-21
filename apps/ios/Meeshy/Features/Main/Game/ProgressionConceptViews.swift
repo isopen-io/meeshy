@@ -29,15 +29,20 @@ struct ProgressionConceptEmblem: View {
     private var drawing: some View {
         switch concept {
         case .level:
-            if let tier = game?.level.shown.tier {
-                TierEmblemView(tier: tier, knockout: theme.backgroundPrimary)
+            // L'anneau PORTE le niveau (#11180) : la carte nomme l'état de la lumière, l'anneau dit son niveau.
+            if let level = game?.level.shown {
+                LevelRingView(
+                    level: level.level, progress: level.progress, tier: level.tier,
+                    trackColor: theme.textMuted.opacity(MeeshyOpacity.light), inkColor: theme.textPrimary,
+                    discColor: theme.backgroundPrimary, accessibilityLabel: nil
+                )
             } else {
                 signature(.flat, MeeshyColors.brandPrimary)
             }
         case .points:
             ConceptMarkView(kind: .points)
         case .meesh:
-            MeeshCoinView(face: .obverse, edition: game?.mint.edition ?? .silver, figures: nil)
+            MeeshCoinView(face: .obverse, edition: game.map { GameMint.displayEdition(forNumber: $0.mint.number) } ?? .silver, figures: nil)
         case .glory:
             if let glory = game?.glory {
                 RankBlasonView(rank: glory.rank, division5: glory.shownDivision, level: game?.level.shown.level, mythic: glory.mythicSeat)
@@ -89,80 +94,6 @@ extension ProgressionConcept {
     }
 }
 
-// MARK: - Les pastilles
-
-/// Des pastilles qui ne se coupent JAMAIS : chacune tient sur une ligne (`GameChip`), et la rangée passe à la ligne
-/// ENTRE les pastilles (`FlowLayout`), y compris en Dynamic Type agrandi.
-struct ProgressionConceptChips: View {
-    let items: [String]
-    var tint: Color = MeeshyColors.brandPrimary
-    /// La première pastille demande une ACTION : elle prend la teinte de l'attention (carte de navigation, § 4).
-    var urgent = false
-
-    var body: some View {
-        FlowLayout(spacing: MeeshySpacing.xs) {
-            ForEach(Array(items.enumerated()), id: \.element) { index, item in
-                GameChip(text: item, tint: urgent && index == 0 ? MeeshyColors.warning : tint)
-            }
-        }
-    }
-}
-
-// MARK: - La tête d'un concept
-
-/// La tête : l'emblème, le nom, la valeur sur UNE ligne, et le chevron quand la tête ouvre quelque chose. Aux très
-/// grandes tailles de texte, la valeur passe sous le nom plutôt que de se tronquer.
-struct ProgressionConceptHead: View {
-    let concept: ProgressionConcept
-    let name: String
-    let value: String
-    let game: GameBlock?
-    var showsChevron = true
-
-    @Environment(\.dynamicTypeSize) private var typeSize
-    private var theme: ThemeManager { ThemeManager.shared }
-
-    var body: some View {
-        HStack(alignment: .center, spacing: MeeshySpacing.md) {
-            ProgressionConceptEmblem(concept: concept, game: game)
-            if typeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    nameText
-                    valueText
-                }
-                Spacer(minLength: 0)
-            } else {
-                nameText
-                Spacer(minLength: MeeshySpacing.sm)
-                valueText
-            }
-            if showsChevron {
-                Image(systemName: "chevron.forward")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .accessibilityHidden(true)
-            }
-        }
-    }
-
-    private var nameText: some View {
-        Text(name)
-            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-            .foregroundColor(theme.textPrimary)
-            .lineLimit(1)
-            .layoutPriority(1)
-    }
-
-    private var valueText: some View {
-        Text(value)
-            .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-            .foregroundColor(theme.textPrimary)
-            .lineLimit(1)
-            .minimumScaleFactor(0.6)
-            .modifier(GameValueRoll(value: value))
-    }
-}
-
 /// Une valeur qui CHANGE roule chiffre par chiffre (un geste fait dans une fiche se relit ici au retour) ; rien ne
 /// joue au premier rendu, et rien sous « réduire les animations ».
 struct GameValueRoll: ViewModifier {
@@ -179,47 +110,54 @@ struct GameValueRoll: ViewModifier {
 
 // MARK: - La carte de la première page
 
-/// UNE CARTE PAR CONCEPT, à trois étages : la tête (emblème, nom, valeur, chevron), les données importantes en
-/// pastilles (et la jauge fine vers l'étape suivante), puis le pourquoi et le comment. La carte ENTIÈRE ouvre la
-/// fiche ; elle ne porte aucun geste du jeu. Un seul élément pour VoiceOver : concept, valeur, pourquoi, bouton.
+/// LA CARTE D'UN CONCEPT sur la première page (#11180, épopée § 5) — trois étages, et la carte entière ouvre la fiche :
+/// le NOM en petit, la VALEUR en grand, UNE ligne en petit. Ni pastilles, ni jauge, ni paragraphe : la fiche dit le
+/// reste. Ce qui demande un geste (Offrande prête, Flamme en danger, frappe possible…) PREND la ligne, marquée d'un
+/// point d'attention. L'emblème qui montre un fait (l'anneau porte le niveau) le dit au lecteur d'écran.
+///
+/// Rien ne glisse de côté : le nom passe à la ligne, la valeur se réduit dans la carte, la ligne passe à la ligne.
+/// Chaque chiffre déclare son identité (`GameFactsTag`). Un seul élément pour VoiceOver.
 struct ProgressionConceptCardView: View {
     let card: ProgressionConceptCard
     let game: GameBlock?
-    /// La carte est entrée en scène : sa jauge monte alors, une fois — jamais au retour d'une fiche.
+    /// Conservé pour l'hôte : la carte n'a plus de jauge, l'entrée en scène est portée par `GameStaggeredEntrance`.
     var entered = true
     let onOpen: () -> Void
 
-    @Environment(\.dynamicTypeSize) private var typeSize
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var theme: ThemeManager { ThemeManager.shared }
 
-    /// Deux lignes au plus par phrase ; aux tailles d'accessibilité, la phrase se lit en entier plutôt que coupée.
-    private var sentenceLines: Int? { typeSize.isAccessibilitySize ? nil : 2 }
-
     var body: some View {
-        // La carte ENTIÈRE rebondit et ouvre la fiche : ses pastilles ne s'ouvrent pas séparément.
+        // La carte ENTIÈRE rebondit et ouvre la fiche.
         GameBounceButton(action: onOpen) {
-            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                ProgressionConceptHead(concept: card.concept, name: card.name, value: card.value, game: game)
-                ProgressionConceptChips(items: card.chips, tint: card.concept.tint, urgent: card.urgent)
-                if let gauge = card.gauge {
-                    ProgressionBar(progress: entered ? gauge : 0, tint: card.concept.tint, label: card.name)
-                        .animation(reduceMotion ? nil : .easeOut(duration: GameTimeline.levelGainDuration), value: entered)
+            HStack(alignment: .center, spacing: MeeshySpacing.md) {
+                ProgressionConceptEmblem(concept: card.concept, game: game)
+                    .modifier(GameFactsTag(card.emblem?.fact))
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(card.name)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
+                        .textCase(.uppercase)
+                        .foregroundStyle(theme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(card.value)
+                        .font(MeeshyFont.relative(MeeshyFont.title3Size, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.textPrimary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .modifier(GameValueRoll(value: card.value))
+                        .modifier(GameFactsTag(card.valueFact))
+                    if let line = card.line {
+                        lineView(line)
+                    }
                 }
-                Text(card.why)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(sentenceLines)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(card.how)
-                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(sentenceLines)
-                    .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "chevron.forward")
+                    .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandPrimary)
+                    .accessibilityHidden(true)
             }
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(MeeshySpacing.lg)
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md)
             .frame(minHeight: MeeshyControlSize.tapTarget)
             .background(RoundedRectangle(cornerRadius: MeeshyRadius.md, style: .continuous).fill(theme.backgroundSecondary))
             .contentShape(Rectangle())
@@ -229,6 +167,22 @@ struct ProgressionConceptCardView: View {
         .accessibilityHint(ConceptText.cardHint)
         .accessibilityAddTraits(.isButton)
         .accessibilityIdentifier("progression.concept.\(card.concept.rawValue)")
+    }
+
+    private func lineView(_ line: ProgressionFactText) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.xs) {
+            if card.urgent {
+                Circle()
+                    .fill(MeeshyColors.warning)
+                    .frame(width: 8, height: 8)
+                    .accessibilityHidden(true)
+            }
+            Text(line.text)
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                .foregroundStyle(card.urgent ? theme.textPrimary : theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .modifier(GameFactsTag(line.facts))
     }
 }
 
@@ -271,18 +225,18 @@ struct ProgressionConceptRow: View {
             HStack(spacing: MeeshySpacing.md) {
                 Image(systemName: symbol)
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                     .frame(width: 40)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     if let subtitle {
                         Text(subtitle)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -290,7 +244,7 @@ struct ProgressionConceptRow: View {
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.lg)
@@ -325,10 +279,12 @@ struct ProgressionConceptFacts: View {
                         .frame(minHeight: MeeshyControlSize.tapTarget)
                         .accessibilityElement(children: .combine)
                         .gameElement(GameElementDetails.fact(fact, of: concept))
+                        .modifier(GameFactsTag(fact.identity))
                 } else {
                     row(fact)
                         .padding(.vertical, MeeshySpacing.xs)
                         .accessibilityElement(children: .combine)
+                        .modifier(GameFactsTag(fact.identity))
                 }
             }
         }
@@ -338,13 +294,13 @@ struct ProgressionConceptFacts: View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.md) {
             Text(fact.label)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: MeeshySpacing.sm)
             Text(fact.value)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.trailing)
                 .fixedSize(horizontal: false, vertical: true)
                 .modifier(GameValueRoll(value: fact.value))
@@ -387,13 +343,13 @@ struct ProgressionGuideLine: View {
                     .accessibilityHidden(true)
                 Text(card.copy.short)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(MeeshyColors.brandPrimary)
+                    .foregroundStyle(MeeshyColors.brandPrimary)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.lg)

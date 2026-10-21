@@ -17,6 +17,7 @@ import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 import { starMessageAction } from '@/lib/view/use-message-star';
 import { useLoadMoreSentinel } from '@/lib/view/use-load-more-sentinel';
 import { useReaderLanguages } from '@/lib/view/use-reader';
+import { useConversationPreferences } from '@/lib/view/use-conversation-preferences';
 import { useScrollportMemory } from '@/lib/view/use-scrollport-memory';
 import { Link } from '@/routes/route-table';
 
@@ -257,8 +258,9 @@ export default function StarredMessagesScreen() {
   useScrollportMemory(frame);
   const language = currentInterfaceLanguage();
   const online = useOnline();
-  const { languages: readerLanguages, locale } = useReaderLanguages();
+  const { languages: readerLanguages } = useReaderLanguages();
   const { text: announcement, announce } = useLiveAnnouncer();
+  const preferencesOf = useConversationPreferences();
 
   const corpus = useInfiniteQuery(starredListInfiniteOptions(apiDeps));
   const items = itemsOf(corpus.data);
@@ -267,8 +269,8 @@ export default function StarredMessagesScreen() {
   const paginationState = paginationStateOf(corpus);
 
   const models = useMemo(
-    () => items.map((item) => starredRowModel(item, { preferredLanguages: readerLanguages, locale })),
-    [items, readerLanguages, locale],
+    () => items.map((item) => starredRowModel(item, { preferredLanguages: readerLanguages, locale: language, preferencesOf })),
+    [items, readerLanguages, language, preferencesOf],
   );
 
   const onRemove = useCallback(

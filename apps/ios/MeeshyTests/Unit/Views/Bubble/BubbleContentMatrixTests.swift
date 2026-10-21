@@ -499,8 +499,8 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertFalse(content.visualHostsReply)
     }
 
-    /// Emoji-only + reply : l'emoji est rendu agrandi dans la bulle texte ;
-    /// ni audio ni visual ne hostent — comportement préservé.
+    /// Emoji-only + reply : ni audio ni visual n'hébergent la citation —
+    /// l'emoji se pose en grand SOUS sa carte citée, sans bulle (#10628).
     func test_neitherHostsReply_emojiOnlyWithReply_isFalse() {
         let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
         let msg = makeMessage(content: "🔥", replyTo: reply)
@@ -831,10 +831,10 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     // MARK: - Loi de présentation de l'avis d'arrivée
 
-    /// Le nom DONNÉ prime, le pseudo `ano_…` descend en @handle — chacun à sa
-    /// place. Sans nom donné, le pseudo reste le nom principal et le handle
-    /// disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
-    func test_joinNoticePresentation_putsGivenNameFirstAndPseudoAsHandle() {
+    /// Le nom DONNÉ prime ; le pseudo `ano_…` d'un invité ne s'affiche jamais
+    /// (#9717) : la pastille « sans compte » dit déjà qui il est. Sans nom
+    /// donné, le pseudo reste le nom principal, toujours sans @handle.
+    func test_joinNoticePresentation_putsGivenNameFirstAndHidesGuestPseudo() {
         let notice = BubbleContent.JoinNotice(
             participantId: "participant-1",
             displayName: "ano_Jc_n045",
@@ -849,7 +849,7 @@ final class BubbleContentMatrixTests: XCTestCase {
         let presentation = JoinNoticePresentation(notice: notice)
 
         XCTAssertEqual(presentation.primaryName, "Jc Nm")
-        XCTAssertEqual(presentation.handle, "@ano_Jc_n045")
+        XCTAssertNil(presentation.handle)
         XCTAssertTrue(presentation.showsNoAccountBadge)
     }
 

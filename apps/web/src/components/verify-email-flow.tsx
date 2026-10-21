@@ -2,11 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand/react';
 
 import { auth } from '@/lib/api/auth';
+import { confirmsSilently, linkConfirmationOf, type LinkQuestion } from '@/lib/api/link-confirmation';
+import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
 import type { ArrivalDeps } from '@/lib/arrival/arrival';
-import { sessionStore } from '@/lib/api/session';
+import { heldAccountOf, sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
+import { translateSignInLink } from '@/lib/i18n-sign-in-link-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { APP_HANDOFF_WAIT_MS, browserAppHandoff, type AppHandoff } from '@/lib/links/app-handoff';
+import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
+import { linkDeviceSecrets } from '@/lib/links/link-device-secret';
 import { useOnline } from '@/lib/net/online';
 import { waiveNextOnboardingOffer } from '@/lib/onboarding/landing-waiver';
 import { forgetPendingVerification, pendingVerificationFor } from '@/lib/pending-verification';
@@ -18,11 +23,13 @@ import { useCountdown } from '@/lib/view/use-countdown';
 import { resolveVerifyEmailOutcome } from '@/lib/view/auth-feedback';
 import { href, Link, navigate } from '@/routes/route-table';
 
+import { AccountReplacementPrompt } from './account-replacement-prompt';
 import { ArrivalCelebration } from './arrival-celebration';
 import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
-import { EmailCodeForm, verifyEmailErrorText, withStrongEmail } from './email-code-form';
+import { awaitsSecondFactor, EmailCodeForm, goToSecondFactor, verifyEmailErrorText, withStrongEmail } from './email-code-form';
 import { Glyph } from './glyph';
+import { LinkSignInConfirmation } from './link-sign-in-confirmation';
 
 /**
  * LE FLUX DE VÉRIFICATION D'E-MAIL (T-verify, #5672) — anatomie de
@@ -76,6 +83,8 @@ export type VerifyEmailFlowDeps = {
   readonly appHandoff?: AppHandoff;
   /** L'arrivée célébrée (#8088) — `browserArrival` si absente. */
   readonly arrival?: ArrivalDeps;
+  /** La question « un AUTRE compte » (#10451) — les gestes de l'appareil si absents. */
+  readonly accountGestures?: ProvenSessionGestures;
 };
 
 const browserArrival: ArrivalDeps = {
@@ -99,7 +108,14 @@ const defaultDeps: VerifyEmailFlowDeps = {
   now: () => Date.now(),
 };
 
-type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'celebrating' | 'refused';
+type LinkPhase = 'idle' | 'handoff' | 'in-app' | 'checking' | 'ask' | 'confirm' | 'celebrating' | 'refused';
+
+const LINK_SPENT_OUTCOMES: ReadonlySet<ReturnType<typeof resolveVerifyEmailOutcome>['kind']> = new Set([
+  'signed-in',
+  'second-factor',
+  'verified',
+  'invalid-code',
+]);
 
 export function VerifyEmailFlow({
   email,
@@ -120,11 +136,14 @@ export function VerifyEmailFlow({
 
   const [verified, setVerified] = useState(false);
   const appHandoff = deps.appHandoff ?? browserAppHandoff;
-  const [handoffUrl] = useState<string | null>(() => (email !== null && token !== null && token !== '' ? appHandoff.target() : null));
+  const [handoffUrl] = useState<string | null>(() => (email !== null && token !== null && token !== '' ? appHandoff.target({ token, email }) : null));
   const [linkPhase, setLinkPhase] = useState<LinkPhase>(
     email === null || token === null || token === '' ? 'idle' : handoffUrl !== null ? 'handoff' : 'checking',
   );
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
+  const [asked, setAsked] = useState<LinkQuestion | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const linkConsumed = useRef(false);
   const handedOff = useRef(false);
 
@@ -148,9 +167,35 @@ export function VerifyEmailFlow({
   useEffect(() => {
     if (linkPhase !== 'checking' || email === null || token === null || linkConsumed.current) return;
     linkConsumed.current = true;
-    void deps.verifyEmail({ email, token }).then((result) => {
+    consumeLink(email, token, false);
+  }, [linkPhase, email, token, next, deps, language]);
+
+  function consumeLink(address: string, linkToken: string, confirm: boolean): void {
+    void deps.verifyEmail({ email: address, token: linkToken, ...(confirm ? { confirm } : {}) }).then((result) => {
+      const question = result.ok ? linkConfirmationOf(result.data) : null;
+      if (question !== null) {
+        if (!confirm && confirmsSilently(sessionStore.getState().session, question.account)) {
+          setConfirmed(true);
+          consumeLink(address, linkToken, true);
+          return;
+        }
+        setAsked(question);
+        setLinkPhase('ask');
+        return;
+      }
+      const pending = result.ok ? accountReplacementOf(sessionStore.getState().session, provenSessionOf(result.data)) : null;
       const outcome = resolveVerifyEmailOutcome(result);
-      if (outcome.kind === 'signed-in') {
+      if (pending !== null || LINK_SPENT_OUTCOMES.has(outcome.kind)) forgetEmailLinkSecret();
+      if (pending !== null) {
+        setReplacement(pending);
+        setLinkPhase('confirm');
+        return;
+      }
+      if (outcome.kind === 'second-factor' && awaitsSecondFactor()) {
+        goToSecondFactor();
+        return;
+      }
+      if (outcome.kind === 'signed-in' || outcome.kind === 'second-factor') {
         setLinkPhase('celebrating');
         return;
       }
@@ -159,10 +204,17 @@ export function VerifyEmailFlow({
         setLinkPhase('idle');
         return;
       }
-      setLinkError(outcome.kind === 'invalid-code' ? translate(language, 'verifyEmail.link.invalid') : verifyEmailErrorText(outcome));
+      setLinkError(outcome.kind === 'invalid-code' ? translateSignInLink(language, 'verifyEmail.link.invalid') : verifyEmailErrorText(outcome));
       setLinkPhase('refused');
     });
-  }, [linkPhase, email, token, next, deps, language]);
+  }
+
+  function declineLink(): void {
+    forgetEmailLinkSecret();
+    linkDeviceSecrets.forget();
+    forgetPendingVerification();
+    navigate(href(sessionStore.getState().session.status === 'authenticated' ? 'list' : 'login'), true);
+  }
 
   async function handleResend() {
     if (email === null || resendSending || resendLocked || !online) return;
@@ -177,10 +229,10 @@ export function VerifyEmailFlow({
   if (email === null) {
     return (
       <AuthColumn>
-        <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
+        <AuthColumnBar to={closeTarget} title={translateSignInLink(language, 'verifyEmail.bar.title')} />
         <div className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
           <Glyph name="warningCircle" size={48} style={{ color: 'var(--ios-error)' }} />
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(language, 'verifyEmail.noAddress')}</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translateSignInLink(language, 'verifyEmail.noAddress')}</p>
           <Link
             to="login"
             replace
@@ -199,14 +251,42 @@ export function VerifyEmailFlow({
   const awaitsActivation = pending !== null && !pending.accountCreated;
   const lead =
     pending === null
-      ? translate(language, 'verifyEmail.subtitle', { email })
-      : translate(language, awaitsActivation ? 'verifyEmail.subtitle.pending' : 'verifyEmail.subtitle.created', { email });
+      ? translateSignInLink(language, 'verifyEmail.subtitle', { email })
+      : translateSignInLink(language, awaitsActivation ? 'verifyEmail.subtitle.pending' : 'verifyEmail.subtitle.created', { email });
 
   return (
     <AuthColumn>
-      <AuthColumnBar to={closeTarget} title={translate(language, 'verifyEmail.bar.title')} />
+      <AuthColumnBar to={closeTarget} title={translateSignInLink(language, 'verifyEmail.bar.title')} />
 
-      {linkPhase === 'celebrating' ? (
+      {linkPhase === 'ask' && asked !== null && token !== null ? (
+        <div className="flex flex-1 flex-col justify-center px-8">
+          <LinkSignInConfirmation
+            language={language}
+            question={asked}
+            current={heldAccountOf(session)?.user ?? null}
+            onConfirm={() => {
+              setConfirmed(true);
+              setLinkPhase('checking');
+              consumeLink(email, token, true);
+            }}
+            onCancel={declineLink}
+          />
+        </div>
+      ) : linkPhase === 'confirm' && replacement !== null ? (
+        <div className="flex flex-1 flex-col justify-center px-8">
+          <AccountReplacementPrompt
+            language={language}
+            replacement={replacement}
+            alreadyConfirmed={confirmed}
+            {...(deps.accountGestures === undefined ? {} : { gestures: deps.accountGestures })}
+            onAdopted={() => (replacement.proven.kind === 'second-factor' ? goToSecondFactor() : setLinkPhase('celebrating'))}
+            onDiscarded={() => {
+              forgetPendingVerification();
+              navigate(href('list'), true);
+            }}
+          />
+        </div>
+      ) : linkPhase === 'celebrating' ? (
         <ArrivalCelebration deps={deps.arrival ?? browserArrival} language={language} onLand={() => arriveAfterLink(next)} />
       ) : verified ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-5 px-8 text-center" role="status">
@@ -222,7 +302,7 @@ export function VerifyEmailFlow({
             className="grid w-full place-items-center rounded-field px-8 font-bold text-ios-on-brand"
             style={{ minHeight: 52, background: VERIFY_TINT }}
           >
-            {translate(language, 'verifyEmail.continue')}
+            {translateSignInLink(language, 'verifyEmail.continue')}
           </Link>
         </div>
       ) : linkPhase === 'in-app' ? (
@@ -231,7 +311,7 @@ export function VerifyEmailFlow({
             <Glyph name="envelopeOpen" size={48} />
           </span>
           <p className="text-title font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translate(language, 'verifyEmail.handoff.opened')}
+            {translateSignInLink(language, 'verifyEmail.handoff.opened')}
           </p>
           <button
             type="button"
@@ -239,7 +319,7 @@ export function VerifyEmailFlow({
             className="grid w-full place-items-center rounded-field px-8 font-semibold"
             style={{ minHeight: 44, border: '1px solid color-mix(in srgb, var(--color-ios-ink-3) 60%, transparent)', color: 'var(--color-ios-ink)' }}
           >
-            {translate(language, 'verifyEmail.handoff.stay')}
+            {translateSignInLink(language, 'verifyEmail.handoff.stay')}
           </button>
         </div>
       ) : linkPhase === 'checking' || linkPhase === 'handoff' ? (
@@ -257,12 +337,12 @@ export function VerifyEmailFlow({
             <Glyph name="envelopeOpen" size={48} />
           </span>
           <h2 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            {translate(language, 'verifyEmail.title')}
+            {translateSignInLink(language, 'verifyEmail.title')}
           </h2>
           <p style={{ color: 'var(--color-ios-ink-2)' }}>{withStrongEmail(lead, email)}</p>
           {awaitsActivation ? (
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(language, 'verifyEmail.subtitle.pending.inbox')}
+              {translateSignInLink(language, 'verifyEmail.subtitle.pending.inbox')}
             </p>
           ) : null}
 
@@ -272,6 +352,7 @@ export function VerifyEmailFlow({
             verifyEmail={deps.verifyEmail}
             {...(deps.verificationStatus === undefined ? {} : { verificationStatus: deps.verificationStatus })}
             pendingSessionToken={pending?.pendingSessionToken ?? null}
+            {...(deps.accountGestures === undefined ? {} : { accountGestures: deps.accountGestures })}
             onVerified={() => setVerified(true)}
             autoFocus
             initialError={linkError}
@@ -279,23 +360,23 @@ export function VerifyEmailFlow({
 
           <div className="grid gap-2">
             <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              {translate(language, 'verifyEmail.resend.prompt')}
+              {translateSignInLink(language, 'verifyEmail.resend.prompt')}
             </p>
             <button
               type="button"
               onClick={handleResend}
               disabled={resendSending || resendLocked || !online}
-              aria-label={translate(language, 'verifyEmail.resend')}
+              aria-label={translateSignInLink(language, 'verifyEmail.resend')}
               className="text-caption font-medium"
               style={{ color: VERIFY_TINT, opacity: resendSending || resendLocked ? 0.6 : 1, minHeight: 44 }}
             >
               {resendSending
-                ? translate(language, 'verifyEmail.resend.busy')
+                ? translateSignInLink(language, 'verifyEmail.resend.busy')
                 : resendLocked
-                  ? translate(language, 'verifyEmail.resend.locked', { seconds: String(resendRemaining) })
+                  ? translateSignInLink(language, 'verifyEmail.resend.locked', { seconds: String(resendRemaining) })
                   : resendSent
-                    ? translate(language, 'verifyEmail.resend.done')
-                    : translate(language, 'verifyEmail.resend')}
+                    ? translateSignInLink(language, 'verifyEmail.resend.done')
+                    : translateSignInLink(language, 'verifyEmail.resend')}
             </button>
           </div>
         </div>

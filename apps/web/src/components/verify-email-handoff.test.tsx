@@ -124,7 +124,7 @@ describe('VerifyEmailFlow — remise du lien à l’app (#8083)', () => {
       for (let i = 0; i < 10; i += 1) await Promise.resolve();
     });
     expect(stub.calls).toEqual([{ email: 'neuf@meeshy.example', token: 'tok-1' }]);
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
     expect(el.querySelector('[role="alert"]')).toBeNull();
   });
 

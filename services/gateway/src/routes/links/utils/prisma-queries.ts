@@ -74,6 +74,7 @@ export const shareLinkSelectStructure = {
   allowAnonymousMessages: true,
   allowAnonymousFiles: true,
   allowAnonymousImages: true,
+  allowedAttachmentKinds: true,
   requireAccount: true,
   requireEmail: true,
   requireNickname: true,

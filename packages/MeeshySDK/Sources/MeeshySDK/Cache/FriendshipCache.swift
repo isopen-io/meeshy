@@ -12,7 +12,7 @@ public enum FriendshipStatus: Sendable, Equatable {
 public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     public static let shared = FriendshipCache()
 
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "friendship-cache")
+    private let logger = MeeshyLog.logger(.friendshipCache, subsystem: .legacySDK)
     private let lock = NSLock()
 
     /// Monotonic version bumped on every mutation. Use `@ObservedObject` on
@@ -204,13 +204,13 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         // OSLog's lazy-evaluation closure was generating a `@unowned Int`
         // thunk that hit a Swift→ObjC bridging edge case when reaching back
         // through `self` to access the property under lock contention.
-        // Plain `Int` locals avoid the closure capture entirely. Reading the
-        // counts without the lock is safe: applyHydration has already
-        // committed under the lock above, and we just want a snapshot for
-        // logging — a slightly-stale count is acceptable for a log line.
-        let friendsCount = _friendIds.count
-        let sentCount = _sentPending.count
-        let receivedCount = _receivedPending.count
+        // Plain `Int` locals avoid the closure capture entirely. Lus SOUS le
+        // verrou : cette tâche tourne hors du fil principal, et une demande
+        // d'ami reçue ou une déconnexion mute ces collections au même instant
+        // — `count` lu pendant qu'un `Set` se réalloue lit une mémoire libérée.
+        let (friendsCount, sentCount, receivedCount) = lock.withLock {
+            (_friendIds.count, _sentPending.count, _receivedPending.count)
+        }
         logger.info("Friendship cache hydrated: \(friendsCount) friends, \(sentCount) sent pending, \(receivedCount) received pending")
     }
 

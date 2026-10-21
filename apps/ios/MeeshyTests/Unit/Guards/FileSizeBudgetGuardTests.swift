@@ -45,28 +45,10 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     /// toujours. Chaque découpe est un lot à elle seule — `CallManager.swift`
     /// (6462 lignes) n'était pas un lot d'UI/UX ; il a eu le sien (2026-10-02).
     private static let legacyOverBudget: Set<String> = [
-        "BubbleStandardLayout.swift",
-        "ConversationDashboardView.swift",
-        "ConversationListView+Overlays.swift",
-        "ConversationListView.swift",
-        "ConversationListViewModel.swift",
-        "ConversationView.swift",
-        "FeedCommentsSheet.swift",
         // #6040 — `FeedView+Attachments.swift` a QUITTÉ la dette : 207 lignes,
         // contre 1 391 avant le découpage. La feuille qui en est sortie
         // (`FeedComposerSheet.swift`, 1 166) n'y ENTRE pas : elle est sous le
         // plafond. Le nom sort ENTIER, plafond compris — voir ci-dessous.
-        "FeedView.swift",
-        "FeedViewModel.swift",
-        "MessageListViewController.swift",
-        "P2PWebRTCClient.swift",
-        "PostDetailView.swift",
-        "ProfileUserPostsList.swift",
-        "RootView.swift",
-        "StoryViewerView+Canvas.swift",
-        "StoryViewerView+Content.swift",
-        "StoryViewerView.swift",
-        "WebRTCTypes.swift",
     ]
 
     /// Cumul des lignes de la dette héritée. **Ne doit que DESCENDRE.**
@@ -593,7 +575,83 @@ final class FileSizeBudgetGuardTests: XCTestCase {
     // composeur, et `StoryViewerView+Content.swift` (−53) et `StoryViewerView.swift`
     // (−1) perdent ce qu'elle remplace ; `StoryViewerView+Canvas.swift` (−1) gagne
     // l'état de la prise vocale en resserrant un doc-comment. Les hôtes RESTENT en dette.
-    private static let legacyLineCeiling = 35_721
+    //
+    // #10483 — 35 721 → 35 550 (−171). Le contexte d'une notification touchée
+    // (`NotificationNavContext`, ses trois constructeurs) quitte `RootView.swift`
+    // pour `RootView+NotificationNavContext.swift` (−172) avant que la racine ne
+    // gagne le marquage de la source d'ouverture (+1). L'hôte RESTE en dette.
+    //
+    // #10483 — 35 550 → 34 373 (−1 177). `ProfileUserPostsList.swift` repasse SOUS
+    // le budget (1 177 lignes comptées) : le tap du profil ne compte plus sa propre
+    // vue derrière `PostViewThrottle` (retiré), la destination ouverte la compte. Il
+    // sort de `legacyOverBudget` ENTIER, et le plafond baisse d'exactement ce qu'il
+    // pesait à la sortie.
+    //
+    // #10506 — 34 373 → 34 302 (−71). La navigation du lecteur de story
+    // (`goToNext`, `goToPrevious`, `dismissViewer`) sort de
+    // `StoryViewerView+Content.swift` vers `StoryViewerView+Navigation.swift`
+    // AVANT d'y recevoir la télémétrie de lecture : extraire d'abord, ajouter
+    // ensuite. Le plafond reprend exactement le mou que l'extraction ouvre.
+    //
+    // #10678 — 34 302 → 32 905 (−1 397). `BubbleStandardLayout.swift` (1 396
+    // lignes) se découpe par responsabilité en quatre extensions
+    // (`+TextBubble`, `+Footer`, `+Attachments`, `+Reveal`), sans changer une
+    // ligne de comportement : le type retombe à 814 lignes, chaque extension
+    // est sous le budget. Il sort de `legacyOverBudget` ENTIER, et le plafond
+    // baisse d'exactement ce qu'il pesait à la sortie.
+    //
+    // #10758 — 32 905 → 29 824 (−3 081). `MessageListViewController.swift`
+    // (3 080 lignes) se découpe par responsabilité en six extensions
+    // (`+Rows`, `+ApplySnapshot`, `+Observation`, `+ScrollNavigation`,
+    // `+ScrollDelegate`, `+DayOverlays`), sans changer de comportement : le type
+    // retombe à 1 029 lignes, chaque extension est sous le budget. Il sort de
+    // `legacyOverBudget` ENTIER, et le plafond baisse de ce qu'il pesait.
+    //
+    // Cycle 6 iPad — 29 824 → 29 803 (−21). `ConversationListVMOwner` quitte
+    // `RootView.swift` pour son propre fichier AVANT d'y recevoir le partage
+    // du VM de liste entre fenêtres : extraire d'abord, ajouter ensuite.
+    //
+    // Cycle 10 — 29 803 → 29 799 (−4). Le passage à l'auteur suivant quitte
+    // `StoryViewerView+Content.swift` pour `landOnNextGroup()` (+Navigation, borné) : le plafond reprend le mou.
+    //
+    // #10956 — 29 799 → 28 050 (−1 749). `PostDetailView.swift` (1 748 lignes)
+    // se découpe par responsabilité en sept extensions (`+Header`, `+ShareLink`,
+    // `+Heart`, `+Opening`, `+Prism`, `+CommentTarget`, `+Presentations`) et
+    // confie le bandeau de réponse à `+CommentComposer`, sans changer de
+    // comportement : le type retombe à 1 095 lignes, chaque extension est sous
+    // le budget. Il sort de `legacyOverBudget` ENTIER, et le plafond baisse de
+    // ce qu'il pesait.
+    //
+    // #10988 — 28 050 → 23 905 (−4 145). `ConversationListViewModel.swift` (2 249
+    // lignes comptées) et `FeedViewModel.swift` (1 896) se découpent par
+    // responsabilité en extensions (`+Loading`, `+Actions`, `+SocketEvents`… ;
+    // `+Pagination`, `+Posting`, `+Socket`…), sans changer de comportement : chaque
+    // fichier issu est sous 800 lignes. Ils sortent de `legacyOverBudget` ENTIERS,
+    // et le plafond baisse d'exactement ce qu'ils pesaient.
+    //
+    // #10988 — 23 905 → 10 431 (−13 474). Sept fichiers sortent de la dette par
+    // EXTRACTION DE VRAIS TYPES, pas par tranches d'extensions : sous-vues SwiftUI
+    // qui reçoivent valeurs, Binding et closures, collaborateurs possédés par
+    // l'hôte, règles pures. `ConversationView.swift` (2 317), `ConversationListView.swift`
+    // (2 136) et `+Overlays` (1 293), `StoryViewerView.swift` (2 255), `+Canvas`
+    // (2 074) et `+Content` (2 034) retombent sous 1 000 lignes ; `WebRTCTypes.swift`
+    // (1 365) se range un type par fichier. Ils sortent de `legacyOverBudget`
+    // ENTIERS, et le plafond baisse d'exactement ce qu'ils pesaient.
+    //
+    // #10988 — 10 431 → 5 582 (−4 849). Même méthode, deuxième lot :
+    // `P2PWebRTCClient.swift` (1 700 lignes comptées) confie ses observateurs
+    // d'interruption et ses préférences de codec à des collaborateurs,
+    // `RootView.swift` (1 578) son chrome flottant, ses bannières et l'ouverture
+    // des conversations à des sous-vues et un ouvreur, `FeedCommentsSheet.swift`
+    // (1 571) ses bannières et son chargement. Ils sortent de `legacyOverBudget`
+    // ENTIERS, et le plafond baisse d'exactement ce qu'ils pesaient.
+    //
+    // #10988 — 5 582 → 3 052 (−2 530). Troisième lot : `FeedView.swift` (1 317
+    // lignes comptées) confie l'engagement optimiste à `FeedPostEngagementState`
+    // et la ligne du fil à `FeedPostRow` ; `ConversationDashboardView.swift`
+    // (1 213) ses sections à des sous-vues et ses calculs à des règles. La dette
+    // héritée est VIDE : plus aucun fichier de l'app ne dépasse le budget.
+    private static let legacyLineCeiling = 3_052
 
     // MARK: - Règle 1 — pas de 43ᵉ
 

@@ -998,7 +998,8 @@ describe('AuthService', () => {
         canViewAuditLogs: true,
         canManageNotifications: true,
         canManageTranslations: true,
-        canManageAgent: true
+        canManageAgent: true,
+        canManageGame: true
       });
     });
 
@@ -1022,7 +1023,8 @@ describe('AuthService', () => {
         // La garde RÉELLE des routes `/admin/agent/*` (#6733). ADMIN l'a ;
         // MODERATOR et AUDIT, qui ont pourtant `canAccessAdmin: true`, ne
         // l'ont pas — c'est là que ce droit se distingue du seuil d'accès.
-        canManageAgent: true
+        canManageAgent: true,
+        canManageGame: true
       });
     });
 
@@ -1043,7 +1045,8 @@ describe('AuthService', () => {
         canViewAuditLogs: false, // ADMIN doesn't have audit logs
         canManageNotifications: true,
         canManageTranslations: true,
-        canManageAgent: true
+        canManageAgent: true,
+        canManageGame: true
       });
     });
 
@@ -1067,7 +1070,8 @@ describe('AuthService', () => {
         // Le rang qui DISCRIMINE : MODERATOR a `canAccessAdmin: true` et
         // `canManageAgent: false`. Un client qui se rabat sur le seuil
         // d'accès lui peint une tuile qui ne peut que prendre 403 (#6733).
-        canManageAgent: false
+        canManageAgent: false,
+        canManageGame: false
       });
     });
 
@@ -1086,7 +1090,8 @@ describe('AuthService', () => {
         canViewAuditLogs: true,
         canManageNotifications: false,
         canManageTranslations: false,
-        canManageAgent: false
+        canManageAgent: false,
+        canManageGame: false
       });
     });
 
@@ -1113,7 +1118,8 @@ describe('AuthService', () => {
         canViewAuditLogs: false,
         canManageNotifications: false,
         canManageTranslations: false,
-        canManageAgent: false
+        canManageAgent: false,
+        canManageGame: false
       });
     });
 
@@ -1132,7 +1138,8 @@ describe('AuthService', () => {
         canViewAuditLogs: false,
         canManageNotifications: false,
         canManageTranslations: false,
-        canManageAgent: false
+        canManageAgent: false,
+        canManageGame: false
       });
     });
 
@@ -1151,7 +1158,8 @@ describe('AuthService', () => {
         canViewAuditLogs: false,
         canManageNotifications: false,
         canManageTranslations: false,
-        canManageAgent: false
+        canManageAgent: false,
+        canManageGame: false
       });
     });
 
@@ -1873,7 +1881,8 @@ describe('AuthService - resendVerificationEmail', () => {
       data: {
         emailVerificationToken: expect.any(String),
         emailVerificationCode: expect.any(String),
-        emailVerificationExpiry: expect.any(Date)
+        emailVerificationExpiry: expect.any(Date),
+        emailVerificationDeviceHash: null
       }
     });
   });

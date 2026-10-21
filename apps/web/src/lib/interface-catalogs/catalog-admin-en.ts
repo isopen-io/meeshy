@@ -11,6 +11,10 @@ import auditReglagesEn from './admin/audit-reglages-en';
 import personnesEn from './admin/personnes-en';
 import conversationsAgentEn from './admin/conversations-agent-en';
 import engagementScaleEn from './admin/engagement-scale-en';
+import gestesEn from './admin/gestes-en';
+import operationsEn from './admin/operations-en';
+import gameSeasonsEn from './admin/game-seasons-en';
+import ergonomieEn from './admin/ergonomie-en';
 
 const en = {
   'admin.role': 'Your role: {role}',
@@ -51,7 +55,9 @@ const en = {
   'admin.nav.agent.hint': 'Drive the conversation agent',
   'admin.nav.settings.hint': 'Your access and the space preferences',
   'admin.nav.engagementScale': 'Points scale',
-  'admin.nav.engagementScale.hint': 'What each gesture earns in points',
+  'admin.nav.engagementScale.hint': 'What each gesture earns, streaks, loyalty and Game seasons',
+  'admin.nav.operations': 'Operations',
+  'admin.nav.operations.hint': 'The host live, the backup and the image purge',
   'admin.users.search': 'Search an account',
   'admin.users.count': '{count} account(s)',
   'admin.users.unavailable': 'List unavailable right now.',
@@ -377,6 +383,10 @@ const en = {
   ...personnesEn,
   ...conversationsAgentEn,
   ...engagementScaleEn,
+  ...gestesEn,
+  ...operationsEn,
+  ...gameSeasonsEn,
+  ...ergonomieEn,
 } satisfies AdminInterfaceCatalog;
 
 export default en;

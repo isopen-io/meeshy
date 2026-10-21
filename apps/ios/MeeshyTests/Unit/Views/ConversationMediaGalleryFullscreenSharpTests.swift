@@ -1,6 +1,7 @@
 import XCTest
 import UIKit
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Plein écran NET (feature 3) — « l'image de base doit être nette ; pour une
@@ -15,6 +16,44 @@ import MeeshySDK
 /// `ConversationMediaGalleryScrollTests`). Le code est lu commentaires retirés.
 @MainActor
 final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
+
+    // MARK: - Image : variante élue selon l'écran
+
+    private func attachment(fileUrl: String, width: Int?, variantWidths: [Int]) -> MessageAttachment {
+        var made = MessageAttachment(fileUrl: fileUrl, width: width)
+        made.imageVariants = variantWidths.map {
+            MeeshyImageVariant(width: $0, height: $0, url: "https://cdn.meeshy.me/v-\($0).webp", size: $0 * 10)
+        }
+        return made
+    }
+
+    func test_fullscreenURL_onAPhone_picksTheSmallestVariantCoveringTheScreen() {
+        let phone = DisplayMetrics(points: CGSize(width: 390, height: 844), scale: 3)
+        let source = attachment(fileUrl: "https://cdn.meeshy.me/o.jpg", width: 4000, variantWidths: [640, 1280, 1920])
+
+        XCTAssertEqual(GalleryImageSource.fullscreenURL(for: source, on: phone), "https://cdn.meeshy.me/v-1280.webp")
+    }
+
+    func test_fullscreenURL_onAWideDisplay_fallsBackToTheLargest() {
+        let wide = DisplayMetrics(points: CGSize(width: 1024, height: 1366), scale: 2)
+        let source = attachment(fileUrl: "https://cdn.meeshy.me/o.jpg", width: nil, variantWidths: [640, 1280, 1920])
+
+        XCTAssertEqual(GalleryImageSource.fullscreenURL(for: source, on: wide), "https://cdn.meeshy.me/v-1920.webp")
+    }
+
+    func test_fullscreenURL_withoutVariants_isTheOriginal() {
+        let phone = DisplayMetrics(points: CGSize(width: 390, height: 844), scale: 3)
+        let source = attachment(fileUrl: "https://cdn.meeshy.me/o.jpg", width: 4000, variantWidths: [])
+
+        XCTAssertEqual(GalleryImageSource.fullscreenURL(for: source, on: phone), "https://cdn.meeshy.me/o.jpg")
+    }
+
+    func test_fullscreenURL_withoutAnyURL_isEmpty() {
+        let phone = DisplayMetrics(points: CGSize(width: 390, height: 844), scale: 3)
+        let source = attachment(fileUrl: "", width: nil, variantWidths: [640])
+
+        XCTAssertEqual(GalleryImageSource.fullscreenURL(for: source, on: phone), "")
+    }
 
     // MARK: - Image : source d'affichage du plein écran
 
@@ -228,7 +267,7 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     private func block(from startMarker: String, upTo endMarker: String, in code: String) throws -> String {
@@ -390,7 +429,9 @@ final class ConversationMediaGalleryFullscreenSharpTests: XCTestCase {
         // #8310 — l'ouvreur a quitté la fermeture littérale de l'hôte pour
         // `openMediaFullscreen`, partagé par le fil et la Rivière.
         let host = AppSourceGuard.stripComments(try source(Self.conversation))
-        XCTAssertTrue(host.contains("onMediaTap: openMediaFullscreen"), "le fil ouvre par l'ouvreur unique")
+        let list = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift"))
+        XCTAssertTrue(host.contains("openMedia: openMediaFullscreen") && list.contains("onMediaTap: actions.openMedia"),
+                      "le fil ouvre par l'ouvreur unique (remis par l'hôte à la couche de la liste)")
         let code = AppSourceGuard.stripComments(try source(Self.mediaOpener))
         let tap = try block(from: "func openMediaFullscreen(_ attachment: MessageAttachment) {",
                             upTo: "scrollState.galleryStartAttachment = attachment", in: code)

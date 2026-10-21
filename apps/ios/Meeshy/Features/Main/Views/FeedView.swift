@@ -69,25 +69,15 @@ struct FeedView: View {
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
     // Feed list does NOT join individual post rooms (too many rooms for a scrolling list).
     // Room join only happens in PostDetailView for the single focused post.
-    @State private var postLikedIds: Set<String> = []
-    @State private var postLikeDelta: [String: Int] = [:]
-    @State private var postHeartInFlightIds: Set<String> = []
-    // Optimistic bookmark / repost / share states. FeedPost has no
-    // server-issued `isBookmarked`/`isReposted` so the parent View tracks
-    // them locally — toggled on tap, cleared on API failure.
-    @State private var postBookmarkedIds: Set<String> = []
-    @State private var postBookmarkInFlightIds: Set<String> = []
-    @State private var postBookmarkDelta: [String: Int] = [:]
-    @State private var postRepostedIds: Set<String> = []
-    @State private var postRepostInFlightIds: Set<String> = []
-    @State private var postRepostDelta: [String: Int] = [:]
-    @State private var postShareInFlightIds: Set<String> = []
-    @State private var postShareDelta: [String: Int] = [:]
+    // Optimistic bookmark / repost / share states: FeedPost has no server-issued
+    // flag for every path so the parent View tracks them locally — toggled on tap,
+    // cleared on API failure. Les règles d'amorçage/réconciliation : `FeedPostEngagementState`.
+    @State private var engagement = FeedPostEngagementState()
 
     // Impression tracking — une impression par APPARITION à l'écran. Le
     // groupement, la persistance et le flush (sortie d'écran / arrière-plan /
     // relance) sont portés par `ImpressionBatcher`.
-    @StateObject private var impressions = ImpressionBatcher(source: "feed")
+    @StateObject private var impressions = ImpressionBatcher(source: "feed", surface: .feed)
 
     // Attachment states
     @State var pendingAttachments: [MessageAttachment] = []
@@ -104,47 +94,34 @@ struct FeedView: View {
 
     // MARK: - Post Heart Seeding (Prisme Linguistique — reaction state)
 
-    /// Seeds `postLikedIds` from a batch of posts using `post.isLiked` (which the SDK
+    /// Seeds the liked ids from a batch of posts using `post.isLiked` (which the SDK
     /// derives from `APIPost.currentUserReactions`/`isLikedByMe`). Called on initial
     /// load and when new pages arrive. Existing optimistic state is preserved: a post
-    /// already in `postLikedIds` due to an in-flight toggle is not overwritten.
+    /// already liked due to an in-flight toggle is not overwritten.
     static func computePostLikedIds(from posts: [FeedPost]) -> Set<String> {
-        Set(posts.compactMap { $0.isLiked ? $0.id : nil })
+        FeedPostEngagementState.likedPostIds(in: posts)
     }
 
     // MARK: - Post Bookmark Seeding
 
-    /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the
+    /// Hydrates the bookmarked ids from the shared "bookmarks" cache so the
     /// filled icon shows up correctly on first render for posts the user has
     /// already bookmarked. Cache-first, never hits the network — the actual
     /// bookmarks list is refreshed by `BookmarksViewModel` when the user
     /// opens the Favoris tab. Preserves any optimistic state already in
     /// flight by only inserting new IDs.
     private func hydrateBookmarkSeeding() async {
-        let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-        let bookmarks: [FeedPost]
-        switch cached {
-        case .fresh(let v, _), .stale(let v, _):
-            bookmarks = v
-        case .expired, .empty:
+        guard let bookmarks = await FeedPostEngagementRequests.cachedBookmarks() else {
             // Fire-and-forget a background refresh so the next render is
             // hydrated correctly without blocking the current mount.
             Task(priority: .utility) {
-                do {
-                    let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
-                    let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-                    let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
-                    try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
-                    for p in posts where !postBookmarkInFlightIds.contains(p.id) {
-                        postBookmarkedIds.insert(p.id)
-                    }
-                } catch { /* offline / 5xx — bookmarks stay unseeded, no UX harm */ }
+                if let posts = await FeedPostEngagementRequests.refreshBookmarksCache() {
+                    engagement.seedBookmarks(posts)
+                }
             }
             return
         }
-        for p in bookmarks where !postBookmarkInFlightIds.contains(p.id) {
-            postBookmarkedIds.insert(p.id)
-        }
+        engagement.seedBookmarks(bookmarks)
     }
 
     // MARK: - Post Heart Toggle (socket-driven)
@@ -153,21 +130,21 @@ struct FeedView: View {
     private func togglePostHeart(post: FeedPost) {
         let postId = post.id
         Task {
-            guard !postHeartInFlightIds.contains(postId) else { return }
-            postHeartInFlightIds.insert(postId)
+            guard !engagement.heartInFlightIds.contains(postId) else { return }
+            engagement.heartInFlightIds.insert(postId)
             defer {
                 Task { @MainActor in
-                    postHeartInFlightIds.remove(postId)
+                    engagement.heartInFlightIds.remove(postId)
                 }
             }
-            let wasLiked = postLikedIds.contains(postId)
+            let wasLiked = engagement.likedIds.contains(postId)
             // Optimistic update
             if wasLiked {
-                postLikedIds.remove(postId)
-                postLikeDelta[postId, default: 0] -= 1
+                engagement.likedIds.remove(postId)
+                engagement.likeDelta[postId, default: 0] -= 1
             } else {
-                postLikedIds.insert(postId)
-                postLikeDelta[postId, default: 0] += 1
+                engagement.likedIds.insert(postId)
+                engagement.likeDelta[postId, default: 0] += 1
             }
             do {
                 // A6 — hard timeout so the heart-in-flight set never leaks
@@ -185,13 +162,13 @@ struct FeedView: View {
                     }
                 }
             } catch where DailyGestureLimit.from(error) != nil { // #9571 : terminale, ni REST ni file
-                rollbackPostHeart(postId: postId, wasLiked: wasLiked)
+                engagement.rollbackHeart(postId: postId, wasLiked: wasLiked)
                 DailyGestureLimitNotice.surface(error)
             } catch {
                 // REST fallback when the socket fails (noSocket, timeout,
                 // gateway hiccup). Mirrors the SocialSocketManager call but
                 // hits the persisted `POST/DELETE /posts/:id/like` route.
-                let restOK = await postReactionViaREST(postId: postId, like: !wasLiked)
+                let restOK = await FeedPostEngagementRequests.postReactionViaREST(postId: postId, like: !wasLiked)
                 if !restOK {
                     // Both the live socket call and the REST fallback failed —
                     // most commonly because the device is offline. Durably
@@ -200,8 +177,7 @@ struct FeedView: View {
                     // instead of silently rolling back and losing the like —
                     // the OutboxDispatcher replays it on reconnect and the
                     // canonical `post:liked`/`post:unliked` broadcast handled
-                    // above reconciles `postLikedIds`/`postLikeDelta` once it
-                    // lands.
+                    // above reconciles the liked ids/delta once it lands.
                     let cmid = ClientMutationId.generate()
                     do {
                         let payload = ToggleLikePostPayload(
@@ -218,26 +194,16 @@ struct FeedView: View {
                         // the UI forever: no `post:liked`/`post:unliked` broadcast
                         // will ever arrive for a mutation the outbox gave up on,
                         // and the feed re-seed explicitly skips posts with a live
-                        // `postLikeDelta`.
+                        // like delta.
                         observePostLikeOutcome(cmid: cmid, postId: postId, wasLiked: wasLiked)
                     } catch {
                         // The outbox itself refused the row (pool not
                         // configured, encoding failure) — only now is rolling
                         // back the optimistic UI honest.
-                        rollbackPostHeart(postId: postId, wasLiked: wasLiked)
+                        engagement.rollbackHeart(postId: postId, wasLiked: wasLiked)
                     }
                 }
             }
-        }
-    }
-
-    private func rollbackPostHeart(postId: String, wasLiked: Bool) {
-        if wasLiked {
-            postLikedIds.insert(postId)
-            postLikeDelta[postId, default: 0] += 1
-        } else {
-            postLikedIds.remove(postId)
-            postLikeDelta[postId, default: 0] -= 1
         }
     }
 
@@ -252,7 +218,7 @@ struct FeedView: View {
             let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
             for await event in stream {
                 if case .exhausted = event {
-                    rollbackPostHeart(postId: postId, wasLiked: wasLiked)
+                    engagement.rollbackHeart(postId: postId, wasLiked: wasLiked)
                     FeedbackToastManager.shared.showError(DailyGestureLimitNotice.exhaustedText(clientMutationId: cmid)
                         ?? String(localized: "feed.like.error", defaultValue: "Impossible d'aimer la publication", bundle: .main)
                     )
@@ -261,42 +227,25 @@ struct FeedView: View {
         }
     }
 
-    /// Minimal decoder for the `liked` flag returned by both the like and
-    /// unlike REST routes. Ignores `reactionSummary` (heterogeneous) and any
-    /// other fields the gateway may add.
-    private struct LikeRESTPayload: Decodable { let liked: Bool? }
-
-    /// REST fallback for the heart toggle. Returns true on success so the
-    /// caller can skip rolling back its optimistic update.
-    private func postReactionViaREST(postId: String, like: Bool) async -> Bool {
-        do {
-            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdLike(postId: postId),
-                method: like ? "POST" : "DELETE"
-            )
-            return true
-        } catch { return false }
-    }
-
     // MARK: - Bookmark / Repost / Share toggles (optimistic, ViewModel-backed)
 
     @MainActor
     private func togglePostBookmark(postId: String) {
-        guard !postBookmarkInFlightIds.contains(postId) else { return }
-        let wasBookmarked = postBookmarkedIds.contains(postId)
+        guard !engagement.bookmarkInFlightIds.contains(postId) else { return }
+        let wasBookmarked = engagement.bookmarkedIds.contains(postId)
         // Optimistic flip — UI changes instantly, network confirms after.
         if wasBookmarked {
-            postBookmarkedIds.remove(postId)
-            postBookmarkDelta[postId, default: 0] -= 1
+            engagement.bookmarkedIds.remove(postId)
+            engagement.bookmarkDelta[postId, default: 0] -= 1
         } else {
-            postBookmarkedIds.insert(postId)
-            postBookmarkDelta[postId, default: 0] += 1
+            engagement.bookmarkedIds.insert(postId)
+            engagement.bookmarkDelta[postId, default: 0] += 1
         }
-        postBookmarkInFlightIds.insert(postId)
+        engagement.bookmarkInFlightIds.insert(postId)
         Task {
             defer {
                 Task { @MainActor in
-                    postBookmarkInFlightIds.remove(postId)
+                    engagement.bookmarkInFlightIds.remove(postId)
                 }
             }
             // Capture the post snapshot INSIDE the Task on the MainActor —
@@ -307,28 +256,14 @@ struct FeedView: View {
             // Pre-populate the bookmarks cache optimistically so the Favoris
             // tab shows the post the moment the user opens it. Mirror the
             // pre-fix behaviour from FeedViewModel.bookmarkPost.
-            let snapshotCache: [FeedPost]? = await {
-                if wasBookmarked { return nil } // remove path handles cache below
-                guard let p = postSnapshot else { return [] }
-                let key = "bookmarks"
-                let r = await CacheCoordinator.shared.feed.load(for: key)
-                let current: [FeedPost]
-                switch r {
-                case .fresh(let v, _), .stale(let v, _): current = v
-                case .expired, .empty: current = []
-                }
-                if !current.contains(where: { $0.id == postId }) {
-                    var updated = current
-                    updated.insert(p, at: 0)
-                    try? await CacheCoordinator.shared.feed.save(updated, for: key)
-                }
-                return current
-            }()
+            let snapshotCache = await FeedPostEngagementRequests.prepopulateBookmarkCache(
+                postId: postId, postSnapshot: postSnapshot, wasBookmarked: wasBookmarked
+            )
 
-            let success = await callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
+            let success = await FeedPostEngagementRequests.callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
             if success {
                 if wasBookmarked {
-                    await pruneBookmarkFromCache(postId: postId)
+                    await FeedPostEngagementRequests.pruneBookmarkFromCache(postId: postId)
                     FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.removed", defaultValue: "Retiré des favoris", bundle: .main))
                 } else {
                     FeedbackToastManager.shared.showSuccess(String(localized: "post.bookmark.added", defaultValue: "Ajouté aux favoris", bundle: .main))
@@ -336,13 +271,13 @@ struct FeedView: View {
             } else {
                 // Rollback both the UI flip and the cache pre-population.
                 if wasBookmarked {
-                    postBookmarkedIds.insert(postId)
-                    postBookmarkDelta[postId, default: 0] += 1
+                    engagement.bookmarkedIds.insert(postId)
+                    engagement.bookmarkDelta[postId, default: 0] += 1
                 } else {
-                    postBookmarkedIds.remove(postId)
-                    postBookmarkDelta[postId, default: 0] -= 1
+                    engagement.bookmarkedIds.remove(postId)
+                    engagement.bookmarkDelta[postId, default: 0] -= 1
                     if let snap = snapshotCache {
-                        try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
+                        await FeedPostEngagementRequests.restoreBookmarkCache(snap)
                     }
                 }
                 FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
@@ -350,40 +285,16 @@ struct FeedView: View {
         }
     }
 
-    private func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
-        do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdBookmark(postId: postId),
-                method: bookmark ? "POST" : "DELETE"
-            )
-            return true
-        } catch {
-            return false
-        }
-    }
-
-    private func pruneBookmarkFromCache(postId: String) async {
-        let key = "bookmarks"
-        let result = await CacheCoordinator.shared.feed.load(for: key)
-        let current: [FeedPost]
-        switch result {
-        case .fresh(let v, _), .stale(let v, _): current = v
-        case .expired, .empty: return
-        }
-        let updated = current.filter { $0.id != postId }
-        try? await CacheCoordinator.shared.feed.save(updated, for: key)
-    }
-
     @MainActor
     private func togglePostRepost(postId: String) {
-        guard !postRepostInFlightIds.contains(postId) else { return }
+        guard !engagement.repostInFlightIds.contains(postId) else { return }
         // Reposts are append-only on the backend — the optimistic state
         // only persists if the server confirmed the create. Bypass the
         // ViewModel call because it swallows errors via Toast and leaves
         // no signal we can rollback against.
-        postRepostedIds.insert(postId)
-        postRepostDelta[postId, default: 0] += 1
-        postRepostInFlightIds.insert(postId)
+        engagement.repostedIds.insert(postId)
+        engagement.repostDelta[postId, default: 0] += 1
+        engagement.repostInFlightIds.insert(postId)
         // L'instantané se prend AVANT d'ouvrir le `Task`, donc dans le tour de
         // boucle du tap : cette fonction est déjà `@MainActor`, mais un `Task`
         // ne s'exécute pas au tap — il s'ENFILE. Lire la carte à l'intérieur
@@ -401,7 +312,7 @@ struct FeedView: View {
         Task {
             defer {
                 Task { @MainActor in
-                    postRepostInFlightIds.remove(postId)
+                    engagement.repostInFlightIds.remove(postId)
                 }
             }
             do {
@@ -410,8 +321,8 @@ struct FeedView: View {
                 )
                 FeedbackToastManager.shared.showSuccess(String(localized: "post.repost.label", defaultValue: "Repartage"))
             } catch {
-                postRepostedIds.remove(postId)
-                postRepostDelta[postId, default: 0] -= 1
+                engagement.repostedIds.remove(postId)
+                engagement.repostDelta[postId, default: 0] -= 1
                 FeedbackToastManager.shared.showError(String(localized: "feed.repost.error", defaultValue: "Erreur lors du repost"))
             }
         }
@@ -419,12 +330,12 @@ struct FeedView: View {
 
     @MainActor
     private func sharePostWithLink(postId: String) {
-        guard !postShareInFlightIds.contains(postId) else { return }
-        postShareInFlightIds.insert(postId)
+        guard !engagement.shareInFlightIds.contains(postId) else { return }
+        engagement.shareInFlightIds.insert(postId)
         Task {
             defer {
                 Task { @MainActor in
-                    postShareInFlightIds.remove(postId)
+                    engagement.shareInFlightIds.remove(postId)
                 }
             }
             if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
@@ -435,7 +346,7 @@ struct FeedView: View {
                 // left the counter permanently inflated whenever the REST
                 // call failed, because the raw-URL fallback below almost
                 // always succeeds and the old "undo" branch never ran.
-                postShareDelta[postId, default: 0] += 1
+                engagement.shareDelta[postId, default: 0] += 1
                 shareableLink = ShareableLink(url: url, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post))
             } else if let raw = ShareableLink.fallback(forPostId: postId, fileSource: viewModel.posts.first(where: { $0.id == postId }).map(ShareFileSource.post)) {
                 // `sharePost` already surfaced an error toast; the gateway
@@ -446,18 +357,39 @@ struct FeedView: View {
         }
     }
 
+    /// Ce que les cartes du fil déclenchent chez l'hôte (l'état optimiste et les
+    /// présentations restent ici).
+    private var postRowActions: FeedPostRowActions {
+        FeedPostRowActions(
+            onHeart: { post in togglePostHeart(post: post) },
+            onRepost: { postId in togglePostRepost(postId: postId) },
+            onBookmark: { postId in togglePostBookmark(postId: postId) },
+            onShare: { postId in sharePostWithLink(postId: postId) },
+            onQuote: { postId in
+                quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
+            },
+            onEdit: { post in editingPost = post },
+            onOpenReelComments: { post in reelCommentsPost = post },
+            onAuthorMoodTap: { userId, point in statusViewModel.moodTapHandler(for: userId)?(point) },
+            moodLookup: { userId in
+                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
+                 tapHandler: statusViewModel.moodTapHandler(for: userId))
+            },
+            onViewAuthorStory: { authorId in
+                storyViewerCoordinator.present(
+                    StoryViewerRequest(id: authorId, startAtFirstUnviewed: true, singleGroup: true)
+                )
+            }
+        )
+    }
+
     private var posts: [FeedPost] { viewModel.posts }
 
-    /// Fingerprint of the like/bookmark/repost "by me" flags across the
-    /// loaded feed, used ONLY to drive the re-seeding `adaptiveOnChange`
-    /// below. `FeedPost: Equatable` is intentionally id-only (it powers
-    /// `.equatable()` list-row diffing) — observing `viewModel.posts`
-    /// directly there silently skipped re-seeding whenever a refresh
-    /// returned the SAME post ids with DIFFERENT flags (e.g. a repost
-    /// confirmed on another device, or a stale-then-fresh cache pass): the
-    /// repost/bookmark icon stayed unfilled forever because `[FeedPost]`
-    /// compared "unchanged". This fingerprint changes whenever any flag
-    /// does, independent of the id-only `Equatable`.
+    /// Fingerprint of the like/bookmark/repost "by me" flags across the loaded
+    /// feed, used ONLY to drive the re-seeding `adaptiveOnChange` below.
+    /// `FeedPost: Equatable` is intentionally id-only, so observing
+    /// `viewModel.posts` there skipped re-seeding whenever a refresh returned the
+    /// SAME ids with DIFFERENT flags; this fingerprint changes whenever any flag does.
     private var feedFlagsFingerprint: [String] {
         viewModel.posts.map { "\($0.id)|\($0.isLiked)|\($0.isBookmarkedByMe)|\($0.isRepostedByMe)" }
     }
@@ -528,25 +460,12 @@ struct FeedView: View {
             }
 
         }
-        // **Le fil iPad monte le MEUBLE** (directive porteur 2026-09-06 :
-        // « dans tous les cas iPad et iOS doivent utiliser le nouveau composer
-        // à présent »).
-        //
-        // Il montait un composer écrit à la main (`composerOverlay`, RETIRÉ le
-        // 2026-09-06 — 346 lignes, plus aucun appelant depuis la migration
-        // ci-dessus) — ses propres boutons photo/caméra/emoji, qui publiaient
-        // avec
-        // `storyEffects: nil`. Sur une app où TOUTE photo devient une scène
-        // (`syncPostMediaIntoSlides`), l'iPad fabriquait donc des publications
-        // d'une autre nature que l'iPhone : sans scène, sans légende par
-        // média, sans texte alternatif, et hors de la mosaïque (#5322).
-        //
-        // > Deux composers, ce n'est pas deux fois le même écran : c'est deux
-        // > formats de publication, et rien ne le disait à l'auteur.
-        //
-        // L'origine est la MÊME que celle du fil iPhone (`.feedComposer`) —
-        // même intention, même profil, même socle. Une origine « iPad » aurait
-        // fabriqué une seconde vérité à tenir d'accord avec la première.
+        // **Le fil iPad monte le MEUBLE** (directive porteur 2026-09-06 : iPad et
+        // iOS utilisent le même composer). L'ancien composer écrit à la main
+        // (`composerOverlay`, RETIRÉ le 2026-09-06) publiait `storyEffects: nil` :
+        // des publications d'une autre nature que l'iPhone (#5322). L'origine est
+        // la MÊME que celle du fil iPhone (`.feedComposer`) — une origine « iPad »
+        // aurait fabriqué une seconde vérité à tenir d'accord avec la première.
         .feedPostComposer(
             isPresented: $showComposer, router: router, viewModel: viewModel,
             storyViewModel: storyViewModel, statusViewModel: statusViewModel,
@@ -586,6 +505,19 @@ struct FeedView: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        // Les réels dans leur propre fenêtre (iPad) : le fil des publications reste dans la fenêtre principale.
+        .contextMenu {
+            if DetachedWindowOpener.shared.isAvailable {
+                Button {
+                    DetachedWindowOpener.shared.open(.reels(startId: nil))
+                } label: {
+                    Label(
+                        String(localized: "window.detach.reels", defaultValue: "Ouvrir les réels dans une nouvelle fenêtre", bundle: .main),
+                        systemImage: "macwindow.badge.plus"
+                    )
+                }
+            }
+        }
         .accessibilityLabel(String(localized: "feed.header.reels", defaultValue: "Lancer les Réels", bundle: .main))
         .accessibilityIdentifier("feed.header.reels")
     }
@@ -614,12 +546,7 @@ struct FeedView: View {
     // MARK: - Composer Placeholder
     private var composerPlaceholder: some View {
         HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
-                name: getUserDisplayName(AuthManager.shared.currentUser, fallback: "M"),
-                context: .custom(40),
-                avatarURL: AuthManager.shared.currentUser?.avatar
-            )
-            .accessibilityHidden(true)
+            composerPlaceholderAvatar
 
             // Text input placeholder
             Button(action: {
@@ -742,190 +669,6 @@ struct FeedView: View {
         .padding(.horizontal, MeeshySpacing.lg)
     }
 
-    // MARK: - Feed Post Card
-    @ViewBuilder
-    private func feedPostCardView(for post: FeedPost) -> some View {
-        // On iPad/Mac (regular width) the feed lives in a narrow column where a
-        // full-bleed reel card looks crude, so reels render as the standard
-        // compact card there (author header + bounded media + action bar) for
-        // parity with the iPhone feed. iPhone keeps the immersive full-frame card.
-        if post.isReel && sizeClass != .regular {
-            reelFeedCardView(for: post)
-        } else {
-            standardFeedPostCardView(for: post)
-        }
-    }
-
-    /// Carte Réel plein-cadre. Réutilise EXACTEMENT les handlers optimistes de
-    /// `standardFeedPostCardView` (toggle cœur/repartage/signet/partage) + le
-    /// même bloc d'ouverture viewer (`ReelsPresenter.present`). Le tap média
-    /// fait d'abord le handoff (clear + pause du moteur feed) avant de présenter.
-    private func reelFeedCardView(for post: FeedPost) -> some View {
-        // `ReelFeedCardContainer` observe le coordinator et calcule `isActive` en
-        // interne : le body de FeedView ne dépend donc pas d'`activeReelId` (I1).
-        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
-        return ReelFeedCardContainer(
-            coordinator: reelAutoplay,
-            post: post,
-            isDark: isDark,
-            isLiked: postLikedIds.contains(post.id),
-            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
-            isBookmarked: postBookmarkedIds.contains(post.id),
-            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
-            isReposted: postRepostedIds.contains(post.id),
-            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
-            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
-            onTapMedia: {
-                // Handoff : le viewer prend la session via son propre usage de
-                // SharedAVPlayerManager ; on stoppe d'abord la lecture muette du
-                // feed pour éviter un conflit de moteur.
-                reelAutoplay.clear()
-                SharedAVPlayerManager.shared.pause()
-                HapticFeedback.medium()
-                withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                    ReelsPresenter.shared.present(posts: viewModel.posts, startId: post.id)
-                }
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-            },
-            onTapGlyph: {
-                // Le logo Réel ouvre la page détail du poste (thread complet),
-                // distinct du tap média qui présente le viewer immersif.
-                router.push(.postDetail(post.id, post))
-                Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-            },
-            onLike: { _ in togglePostHeart(post: post) },
-            onComment: { _ in
-                // Le bouton commentaire d'un réel ouvre la feuille de commentaires
-                // DIRECTEMENT (parité avec les cartes post du feed) — l'utilisateur
-                // commente sans basculer dans le viewer plein écran. La lecture
-                // muette du feed continue derrière la feuille (translucide).
-                HapticFeedback.medium()
-                reelCommentsPost = post
-            },
-            onRepost: { postId in togglePostRepost(postId: postId) },
-            onBookmark: { postId in togglePostBookmark(postId: postId) },
-            onShare: { postId in sharePostWithLink(postId: postId) },
-            onTapAuthor: { authorId in
-                NotificationCenter.default.post(
-                    name: Notification.Name("openProfileSheet"),
-                    object: ["userId": authorId, "username": post.authorUsername ?? post.author]
-                )
-            },
-            onEdit: isOwnPost ? { post in
-                editingPost = post
-            } : nil,
-            onDelete: isOwnPost ? { postId in
-                Task { await viewModel.deletePost(postId) }
-            } : nil,
-            onReport: !isOwnPost ? { postId in
-                Task { await viewModel.reportPost(postId) }
-            } : nil,
-            onPin: isOwnPost ? { postId in
-                Task { await viewModel.pinPost(postId) }
-            } : nil
-        )
-        // Marge latérale volontairement plus serrée que les posts standards
-        // (`FeedPostCard` = 16) → la carte Réel est un peu plus large, tout en
-        // gardant une séparation nette des bords et des boutons flottants.
-        .padding(.horizontal, MeeshySpacing.md)
-        // Pas de `.equatable()` ici : le conteneur observe le coordinator (non
-        // Equatable). Le court-circuit Equatable vit à l'intérieur, sur `ReelFeedCard`.
-    }
-
-    private func standardFeedPostCardView(for post: FeedPost) -> some View {
-        let isOwnPost = post.authorId == AuthManager.shared.currentUser?.id
-        return FeedPostCard(
-            post: post,
-            onSeeNearby: { place in
-                HapticFeedback.light()
-                router.push(.nearbyDiscovery(initialCoordinate: RouteCoordinate(
-                    latitude: place.latitude, longitude: place.longitude
-                )))
-            },
-            isLiked: postLikedIds.contains(post.id),
-            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
-            isHeartInFlight: postHeartInFlightIds.contains(post.id),
-            isBookmarked: postBookmarkedIds.contains(post.id),
-            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
-            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
-            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
-            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
-            isReposted: postRepostedIds.contains(post.id),
-            isRepostInFlight: postRepostInFlightIds.contains(post.id),
-            isShareInFlight: postShareInFlightIds.contains(post.id),
-            onLike: { _ in
-                togglePostHeart(post: post)
-            },
-            onRepost: { postId in
-                togglePostRepost(postId: postId)
-            },
-            onQuote: { postId in
-                quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
-            },
-            onShare: { postId in
-                sharePostWithLink(postId: postId)
-            },
-            onBookmark: { postId in
-                togglePostBookmark(postId: postId)
-            },
-            onSelectLanguage: { postId, language in
-                viewModel.setTranslationOverride(postId: postId, language: language)
-            },
-            onTapPost: { post in
-                if post.isReel {
-                    // Reels open straight into the immersive full-screen pager,
-                    // seeded with the feed's reels, never the detail page.
-                    HapticFeedback.medium()
-                    withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) {
-                        ReelsPresenter.shared.present(
-                            posts: viewModel.posts,
-                            startId: post.id
-                        )
-                    }
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-                } else {
-                    router.push(.postDetail(post.id, post))
-                    Task { try? await PostService.shared.viewPost(postId: post.id, duration: nil) }
-                }
-            },
-            onTapRepost: { repostId in
-                router.push(.postDetail(repostId))
-            },
-            onDelete: isOwnPost ? { postId in
-                Task { await viewModel.deletePost(postId) }
-            } : nil,
-            onReport: !isOwnPost ? { postId in
-                Task { await viewModel.reportPost(postId) }
-            } : nil,
-            onPin: isOwnPost ? { postId in
-                Task { await viewModel.pinPost(postId) }
-            } : nil,
-            onEdit: isOwnPost ? { post in
-                editingPost = post
-            } : nil,
-            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
-            onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
-            moodLookup: { userId in
-                (emoji: statusViewModel.statusForUser(userId: userId)?.moodEmoji,
-                 tapHandler: statusViewModel.moodTapHandler(for: userId))
-            },
-            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
-            onViewAuthorStory: {
-                // Parité iPhone (`ThemedFeedOverlay`) : toucher l'avatar d'un auteur
-                // qui a une story ouvre SA story via le coordinator unique. Sans ce
-                // câblage, l'anneau de story et le tap étaient inertes sur iPad.
-                storyViewerCoordinator.present(
-                    StoryViewerRequest(id: post.authorId, startAtFirstUnviewed: true, singleGroup: true)
-                )
-            },
-            // RF2: a POST that reposts a REEL renders inside FeedPostCard (not the
-            // immersive reel card) — hand it the shared autoplay coordinator so the
-            // embedded reel plays muted/inline, elected against the native reels.
-            reelAutoplay: reelAutoplay
-        )
-        .equatable()
-    }
-
     // MARK: - Feed Scroll View
     private var feedScrollView: some View {
         // GeometryReader extérieur : fournit les bornes globales du viewport au
@@ -947,9 +690,6 @@ struct FeedView: View {
 
     private var scrollContent: some View {
         ScrollViewReader { scrollProxy in
-            // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
-            // anime (logo dashes + degrade indigo). Meme experience que la
-            // liste de conversations — UX coherente cross-screen.
             MeeshyRefreshableScroll(
                 onRefresh: {
                     async let feedRefresh: Void = viewModel.refresh()
@@ -963,9 +703,6 @@ struct FeedView: View {
                 topPadding: CollapsibleHeaderMetrics.expandedHeight
             ) {
                 LazyVStack(spacing: MeeshySpacing.lg) {
-                    // Anchor pour le banner "nouveaux posts" → scroll vers
-                    // le haut. L'id est attache a un Color.clear de hauteur 0
-                    // au sommet du contenu.
                     Color.clear.frame(height: 0).id("feed-top")
 
                     // Story tray — same component used by the conversation list
@@ -1034,13 +771,22 @@ struct FeedView: View {
 
                     // Posts with infinite scroll
                     ForEach(posts) { post in
-                        feedPostCardView(for: post)
+                        FeedPostRow(
+                            post: post,
+                            viewModel: viewModel,
+                            reelAutoplay: reelAutoplay,
+                            engagement: engagement.snapshot(for: post),
+                            authorStoryRing: storyViewModel.storyRingState(forUserId: post.authorId),
+                            authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
+                            actions: postRowActions
+                        )
+                            .equatable()
                             .onAppear {
                                 Task { await viewModel.loadMoreIfNeeded(currentPost: post) }
                                 viewModel.prefetchMediaForPost(post.id)
                                 viewModel.prefetchComments(post.id)
-                                trackImpression(postId: post.id)
                             }
+                            .countsListedImpression(of: post.id, isVideo: post.isReel, in: impressions) { posts.firstIndex { $0.id == post.id } }
                     }
 
                     // La page suivante arrive : des cartes fantômes, jamais un indicateur sur du fond nu (#6987)
@@ -1110,25 +856,10 @@ struct FeedView: View {
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
-            // Seed liked state from loaded posts (uses post.isLiked which is derived
-            // from APIPost.currentUserReactions / isLikedByMe by the SDK).
+            // Seed liked / bookmark / repost state from the loaded posts (SDK-derived
+            // `isLiked`, server-enriched `isBookmarkedByMe` / `isRepostedByMe`).
             // Preserves existing optimistic state: only seeds posts not yet tracked.
-            let newLiked = FeedView.computePostLikedIds(from: viewModel.posts)
-            for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
-                postLikedIds.insert(id)
-            }
-            // Seed bookmark/repost flags from the server-enriched fields
-            // on each loaded post (PostFeedService now provides
-            // isBookmarkedByMe + isRepostedByMe alongside isLikedByMe).
-            // Preserves in-flight optimistic state.
-            for post in viewModel.posts {
-                if post.isBookmarkedByMe && !postBookmarkInFlightIds.contains(post.id) {
-                    postBookmarkedIds.insert(post.id)
-                }
-                if post.isRepostedByMe && !postRepostInFlightIds.contains(post.id) {
-                    postRepostedIds.insert(post.id)
-                }
-            }
+            engagement.seedFromLoadedPosts(viewModel.posts)
             // Defensive fallback for backends that haven't been upgraded yet
             // — pull bookmark IDs from the local cache so the filled icon
             // still appears for older sessions or when the server payload
@@ -1140,81 +871,41 @@ struct FeedView: View {
             await storyViewModel.loadStories()
         }
         .adaptiveOnChange(of: feedFlagsFingerprint) { _, _ in
-            let newPosts = viewModel.posts
-            // Merge liked / bookmarked / reposted state when new pages
-            // arrive. Only seed posts not yet tracked to avoid overwriting
-            // optimistic state from in-flight toggles.
-            for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
-                if post.isLiked {
-                    postLikedIds.insert(post.id)
-                } else {
-                    postLikedIds.remove(post.id)
-                }
-            }
-            for post in newPosts where postBookmarkDelta[post.id] == nil && !postBookmarkInFlightIds.contains(post.id) {
-                if post.isBookmarkedByMe {
-                    postBookmarkedIds.insert(post.id)
-                }
-            }
-            for post in newPosts where postRepostDelta[post.id] == nil && !postRepostInFlightIds.contains(post.id) {
-                if post.isRepostedByMe {
-                    postRepostedIds.insert(post.id)
-                }
-            }
+            engagement.reconcile(with: viewModel.posts)
         }
         .onReceive(SocialSocketManager.shared.postReactionAdded.receive(on: DispatchQueue.main)) { event in
-            let heart = StoryViewerView.heartEmoji
-            guard event.emoji == heart else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                postLikedIds.insert(event.postId)
-            } else {
-                postLikeDelta[event.postId, default: 0] += 1
-            }
+            engagement.applyReactionAdded(
+                emoji: event.emoji, userId: event.userId, postId: event.postId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
         .onReceive(SocialSocketManager.shared.postReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            let heart = StoryViewerView.heartEmoji
-            guard event.emoji == heart else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                postLikedIds.remove(event.postId)
-            } else {
-                postLikeDelta[event.postId, default: 0] -= 1
-            }
+            engagement.applyReactionRemoved(
+                emoji: event.emoji, userId: event.userId, postId: event.postId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
-        // Unification du like : le ❤️ arrive désormais comme `post:liked`/`post:unliked`
-        // (événement CANONIQUE absolu — le ViewModel pose `posts[i].likes = likeCount`).
-        // On réconcilie ici l'état OPTIMISTE local de la vue : le compteur absolu fait
-        // autorité → on purge le delta, et on confirme `isLiked` pour l'acteur. Source
-        // unique pour les 3 vues (feed, détail, reel). Le chemin `post:reaction-*` ci-
-        // dessus reste pour les emojis NON-❤️ (réactions riches).
+        // Unification du like : `post:liked`/`post:unliked` (événement CANONIQUE
+        // absolu) purge le delta optimiste et confirme `isLiked` pour l'acteur.
+        // Le chemin `post:reaction-*` ci-dessus reste pour les emojis NON-❤️.
         .onReceive(SocialSocketManager.shared.postLiked.receive(on: DispatchQueue.main)) { event in
-            postLikeDelta[event.postId] = nil
-            if event.userId == AuthManager.shared.currentUser?.id {
-                postLikedIds.insert(event.postId)
-            }
+            engagement.applyPostLiked(
+                postId: event.postId, userId: event.userId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
         .onReceive(SocialSocketManager.shared.postUnliked.receive(on: DispatchQueue.main)) { event in
-            postLikeDelta[event.postId] = nil
-            if event.userId == AuthManager.shared.currentUser?.id {
-                postLikedIds.remove(event.postId)
-            }
+            engagement.applyPostUnliked(
+                postId: event.postId, userId: event.userId,
+                currentUserId: AuthManager.shared.currentUser?.id
+            )
         }
-        // Bookmark : même réconciliation canonique que le like. L'événement est
-        // PERSONNEL (emitToUser) → toujours pour l'utilisateur courant. Le
-        // ViewModel a posé le `bookmarkCount` absolu sur le post ; on purge ici
-        // le delta optimiste local pour que `bookmarkCount + delta` retombe sur
-        // le compteur autoritaire (sans reload). Si le compteur est absent
-        // (vieux gateway), on garde le delta (dégradation gracieuse).
+        // Bookmark : même réconciliation canonique que le like (événement PERSONNEL).
         .onReceive(SocialSocketManager.shared.postBookmarked.receive(on: DispatchQueue.main)) { payload in
-            if payload.bookmarkCount != nil {
-                postBookmarkDelta[payload.postId] = nil
-            }
-            if payload.bookmarked {
-                postBookmarkedIds.insert(payload.postId)
-            } else {
-                postBookmarkedIds.remove(payload.postId)
-            }
+            engagement.applyPostBookmarked(
+                postId: payload.postId, bookmarked: payload.bookmarked,
+                hasAbsoluteCount: payload.bookmarkCount != nil
+            )
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
@@ -1305,11 +996,6 @@ struct FeedView: View {
                     }
                 )
             }
-    }
-    // MARK: - Impression Tracking
-
-    private func trackImpression(postId: String) {
-        impressions.record(postId)
     }
 }
 

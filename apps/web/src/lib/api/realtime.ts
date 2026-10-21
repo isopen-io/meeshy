@@ -1,27 +1,41 @@
 import { bridgeCallEvents } from '@/lib/calls/call-socket-bridge';
 import { setCallEngineWake } from '@/lib/calls/call-transport';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { conversationStore } from '@/lib/conversation-store';
 import { createSocketIOClient } from '@/lib/net/socket-io-factory';
 import { bridgeBannerRevocations } from '@/lib/notifications/banner-revocation';
+import { navigate } from '@/lib/router';
 import { outboxStore } from '@/lib/send/outbox-store';
 
 import { endRevokedSession } from './account-caches';
+import { retireDeletedAccountLater } from './account-deleted';
 import { bindAppStatePresence, documentVisibility } from './app-state-presence';
 import { apiConfig } from './config';
 import { bindConversationViewing, viewingStore } from './conversation-viewing';
 import { bindConversationEngagement, engagementStore } from './conversation-engagement';
 import { bindPostEngagement } from './publication-engagement';
+import { bindProfileDecorSync } from '../profile-decor/equip';
+import { bindGameStateSync } from './game-state-live';
+import { bindAppearanceLiveLazily } from './appearance-live';
+import { bindPresenceLive } from './presence-live';
+import { presenceStore } from './presence-store';
 import { apiDeps } from './deps';
+import { endGuestAccess } from './guest-access-end';
 import { appQueryClient } from './query-client';
 import { setAttachmentReactionEmitter } from './attachment-reaction-emit';
 import { watchIdentityScopedStores } from './identity-scoped-stores';
+import { createLiveSocketWatchers } from './live-socket-watchers';
 import { sendAttachmentReaction } from './attachment-reaction-socket';
 import { setTypingEmitter } from './typing-emit';
 import { keepRealtimeConnection } from './realtime-identity';
+import { relaunchConversationList } from './realtime-thread-catch-up';
 import { sessionStore } from './session';
 import { createRealtimeConnection, type RealtimeConnection } from './socket';
 import { typingStore } from './typing-store';
 import { resolveViewer } from './viewer';
+
+/** Le puits de `message:translation`, offert aux traductions faites sur l'appareil (#9898) : elles le rejoignent par ce chunk déjà chargé, jamais par un second. */
+export { applyMessageTranslation } from './realtime-apply';
 
 /**
  * L'AMORÇAGE DU TEMPS RÉEL (#5793) — chargé EN `import()` (`main.tsx`), APRÈS
@@ -59,6 +73,16 @@ let fixturesConnecting = false;
 let unbridgeCalls: (() => void) | null = null;
 
 /**
+ * Les écrans qui écoutent la socket vivante le temps où ils sont ouverts (#9899) :
+ * le fil, pour `message:translation-shared`. La connexion se reconstruit à chaque
+ * changement d'identité ; chaque observateur est détaché de l'ancienne et accroché
+ * à la nouvelle par `bridgeCalls`, sans que `socket.ts` (chemin du démarrage) ne
+ * connaisse l'événement.
+ */
+const liveWatchers = createLiveSocketWatchers();
+export const watchLiveSocket = liveWatchers.watch;
+
+/**
  * UNE SESSION RÉVOQUÉE DIT POURQUOI (#9613) — le motif est NOTÉ avant que la
  * session ne finisse, pour que l'écran de connexion l'explique
  * (`lib/session-end.ts`). Sans motif (jeton expiré), la session finit aussitôt ;
@@ -77,19 +101,32 @@ function endWithReason(reason?: string): void {
 
 function bridgeCalls(next: RealtimeConnection | null): void {
   unbridgeCalls?.();
+  liveWatchers.connect(next === null ? null : next.socket);
   if (next === null) {
     unbridgeCalls = null;
     return;
   }
-  const unbridge = bridgeCallEvents(next.socket);
-  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible. */
-  const unwatch = typeof document === 'undefined' ? () => undefined : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document) });
+  const unbridge = callsAvailable() ? bridgeCallEvents(next.socket) : () => undefined;
+  /* `presence:app-state` (B8) : la passerelle choisit la sonnerie socket ou la poussée selon que l'onglet est visible.
+     Un onglet réveillé d'un long sommeil rouvre sa connexion et relit la liste (#10573). */
+  const unwatch =
+    typeof document === 'undefined'
+      ? () => undefined
+      : bindAppStatePresence({ socket: next.socket, visibility: documentVisibility(document), onWake: () => relaunchConversationList(appQueryClient) });
   /* « est dans la conversation » (#8892) : l'écran de fil s'annonce, les pairs annoncés portent le point primaire. */
   const unview = typeof document === 'undefined' ? () => undefined : bindConversationViewing({ socket: next.socket, visibility: documentVisibility(document), store: viewingStore, viewerId: currentViewerId });
   /* « N (M) 🔥 » (#8906) : la passerelle pousse l'état d'engagement au seul lecteur crédité. */
   const unengage = bindConversationEngagement({ socket: next.socket, store: engagementStore });
   /* « · +99 » (#9570) : ce qu'un post a rapporté au lecteur crédité, posé sur chaque caisse qui montre sa carte. */
   const unengagePosts = bindPostEngagement({ socket: next.socket, queryClient: appQueryClient });
+  /* `profile:decor-updated` (#10632) : le contour et la bannière équipés sur un autre de mes appareils. */
+  const undecor = bindProfileDecorSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `game:updated` (#10900) : une frappe ou un gain faits ailleurs mettent le Jeu à jour, jamais avec un état plus ancien. */
+  const ungame = bindGameStateSync({ socket: next.socket, queryClient: appQueryClient });
+  /* `user:preferences-updated` (#10663) : le fond et l'accent changés ailleurs repeignent la liste sans fil ouvert. */
+  const unappearance = bindAppearanceLiveLazily({ socket: next.socket, queryClient: appQueryClient });
+  /* La présence vivante (#10571) : `user:status`, `presence:snapshot` et la frappe tiennent chaque pastille à jour. */
+  const unpresence = bindPresenceLive({ socket: next.socket, store: presenceStore, viewerId: currentViewerId });
   /* `notification:deleted` ferme aussi la bannière du service worker (#8752), comme la coque et iOS. */
   const unrevoke = bridgeBannerRevocations(next.socket);
   unbridgeCalls = () => {
@@ -98,6 +135,10 @@ function bridgeCalls(next: RealtimeConnection | null): void {
     unview();
     unengage();
     unengagePosts();
+    undecor();
+    ungame();
+    unappearance();
+    unpresence();
     unrevoke();
   };
 }
@@ -108,7 +149,7 @@ function currentViewerId(): string {
 
 /** La connexion de la passerelle réelle, une par identité (`keepRealtimeConnection`). */
 const liveConnection = keepRealtimeConnection<RealtimeConnection>({
-  open: (auth) =>
+  open: (auth, account) =>
     createRealtimeConnection(auth, {
       base: apiConfig.base,
       socketFactory: createSocketIOClient,
@@ -118,6 +159,9 @@ const liveConnection = keepRealtimeConnection<RealtimeConnection>({
       outbox: outboxStore,
       viewerId: currentViewerId,
       onClearSession: endWithReason,
+      onAccountDeleted: retireDeletedAccountLater,
+      account,
+      onGuestAccessEnded: (reason) => endGuestAccess({ reason, store: sessionStore, end: endRevokedSession, navigate }),
     }),
   onChange: (next) => {
     connection = next;

@@ -24,7 +24,8 @@ struct RootEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
+            .modifier(PublishesSceneNavigation(router: router, role: .main))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
             .meeshyConversationList(conversationViewModel)
@@ -49,13 +50,14 @@ struct RootEnvironmentLayer: ViewModifier {
                         onOpenFullConversation(conv)
                     }
                 })
-                    .environmentObject(router)
+                    .modifier(MeeshyRouterInjection(router: router))
                     .environmentObject(storyViewModel)
                     .environmentObject(statusViewModel)
                     .meeshyConversationList(conversationViewModel)
                     .environmentObject(storyViewerCoordinator)
                     .presentationDetents([.large, .medium])
                     .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet)
             }
             // Propagate story viewer presentation state down to chrome (sync
             // pill, etc.) so they can skip rendering while a `fullScreenCover`
@@ -82,6 +84,7 @@ struct RootStoryDoorsLayer: ViewModifier {
     /// chargements parallèles. Il reste ÉCRIT dans `RootView`, qui possède
     /// tout ce qu'il touche.
     let onStart: @MainActor () async -> Void
+    @Environment(\.rootNavigationHandoff) private var navigationHandoff
 
     func body(content: Content) -> some View {
         content
@@ -127,47 +130,31 @@ struct RootStoryDoorsLayer: ViewModifier {
             }
             .onAppear {
                 DeviceLayout.activeWindowScene?.title = String(localized: "root.scene_title_default", defaultValue: "Meeshy — Conversations", bundle: .main)
+                // La fenêtre d'iPad vient de passer en largeur compacte : la pile reprend là où la racine iPad
+                // s'est arrêtée (`RootNavigationHandoff`).
+                if router.path.isEmpty, let routes = navigationHandoff?.routes, !routes.isEmpty {
+                    router.path = routes
+                }
             }
-            .task { await onStart() }
-            .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: request.id,
-                    isPresented: Binding(
-                        get: { storyViewerCoordinator.pendingRequest != nil },
-                        set: { if !$0 { storyViewerCoordinator.dismiss() } }
-                    ),
-                    onReplyToStory: { replyContext in
-                        storyViewerCoordinator.dismiss()
-                        router.navigateToStoryReply(replyContext, conversationList: conversationViewModel)
-                    },
-                    singleGroup: request.singleGroup,
-                    postId: request.postId,
-                    startAtFirstUnviewed: request.startAtFirstUnviewed,
-                    presentationSource: "RootView.fromConv",
-                    initialAction: request.initialAction,
-                    targetCommentId: request.targetCommentId,
-                    targetParentCommentId: request.targetParentCommentId
-                )
-                // Re-inject the trio that StoryViewerView declares as
-                // @EnvironmentObject (so it can re-inject them onto its inner
-                // SharePickerView sheet). fullScreenCover does not inherit
-                // EnvironmentObjects automatically.
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .meeshyConversationList(conversationViewModel)
-                // Re-inject le flag isStoryViewerPresenting — fullScreenCover
-                // n'hérite pas non plus des `Environment` values du parent,
-                // donc le `StoryViewerContainer.ConnectionBanner` interne au
-                // cover ne pouvait pas se cacher sans ça. Bug sync pill
-                // chevauche header 2026-05-27.
-                .environment(\.isStoryViewerPresenting, true)
-                // U1 — transition zoom depuis la bulle du tray (iOS 18+, no-op
-                // sinon). sourceID = userId du groupe : si la story s'ouvre
-                // depuis un point d'entrée sans bulle enregistrée (notification,
-                // deep link), iOS retombe sur la transition cover standard.
-                .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
+            .adaptiveOnChange(of: router.path) { _, path in
+                navigationHandoff?.record(path)
             }
+            .task {
+                await onStart()
+                ConversationListVMOwner.endLaunch()
+            }
+            .modifier(StoryReaderCover(
+                request: $storyViewerCoordinator.pendingRequest,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationViewModel,
+                presentationSource: "RootView.fromConv",
+                zoomNamespace: storyZoomNamespace,
+                onReply: { replyContext in
+                    router.navigateToStoryReply(replyContext, conversationList: conversationViewModel)
+                }
+            ))
             // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
             // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
             .engagementReveal(router: router)
@@ -224,7 +211,7 @@ struct RootChromeLayer: ViewModifier {
             // Masqué pendant le lecteur de réels immersif (frère de ZStack, pas
             // un fullScreenCover — contrairement au story viewer déjà gated via
             // isStoryViewerPresenting, il n'avait aucune garde équivalente).
-            .overlay(alignment: .top) {
+            .overlay(alignment: .bottom) {
                 if reelsPresenter.launch == nil {
                     ConnectionBanner(
                         conversationListViewModel: conversationViewModel,
@@ -232,10 +219,11 @@ struct RootChromeLayer: ViewModifier {
                         onItemTap: onSyncPillTap,
                         activeConversationId: activeConversationId
                     )
-                    // Dans la bande de la barre d'état, sous l'îlot, hors du
-                    // contenu — sur tous les écrans, conversation comprise
-                    // (#9680). La position vit dans `SyncPillPlacement`, plus
-                    // chez chaque hôte (#5941, #5944, #5835).
+                    // Au-dessus du chrome bas, et sur le clavier avec lui —
+                    // la barre de composition d'une conversation la porte
+                    // (#10840, qui supplante #10371). La position vit dans
+                    // `SyncPillPlacement`, plus chez chaque hôte (#5941,
+                    // #5944, #5835).
                     .inSyncPillBand()
                 }
             }
@@ -257,7 +245,7 @@ struct RootChromeLayer: ViewModifier {
                 // calculée ICI, où le routeur et le lecteur de réels sont observés.
                 playerBannerHosted: PlayerBannerPlacement.hosts(
                     routeIsDeep: router.isDeepRoute, reelsAreOpen: reelsPresenter.launch != nil),
-                onPlayerBannerTap: { router.openGame(at: .progressionConcept(.level)) }
+                onPlayerBannerTap: { router.openGame(at: .progressionConcept($0.concept)) }
             ))
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
             .animation(.spring(), value: showMenu)
@@ -335,22 +323,21 @@ struct RootSheetsLayer: ViewModifier {
             }
             .sheet(isPresented: $showSharePicker) {
                 if let shared = router.pendingShareContent {
-                    // SwiftUI sheets create a separate presentation hierarchy and do
-                    // NOT inherit EnvironmentObjects from the parent view automatically.
-                    // Re-inject the trio that SharePickerView declares as
-                    // @EnvironmentObject (conversationListViewModel, router,
-                    // statusViewModel), otherwise tapping share crashes with
-                    // "EnvironmentObject error → SharePickerView.<missing>".
-                    SharePickerView(
-                        sharedContent: shared,
+                    // L'écran de partage unique (#10947) ne lit aucun objet
+                    // d'environnement : tout lui est injecté.
+                    ShareSheetView(
+                        subject: shared,
+                        actions: ShareSheetHostActions(onOpenConversation: { router.navigateToConversation($0) }),
                         onDismiss: {
                             router.pendingShareContent = nil
                         }
                     )
-                    .meeshyConversationList(conversationViewModel)
-                    .environmentObject(router)
-                    .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .closesForConversationOpening(.sheet, close: {
+                        router.pendingShareContent = nil
+                        showSharePicker = false
+                    })
                 }
             }
             .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
@@ -358,12 +345,10 @@ struct RootSheetsLayer: ViewModifier {
                     showSharePicker = true
                 }
             }
-            .sheet(isPresented: $showNewConversation) {
-                NewConversationView()
-                    .environmentObject(statusViewModel)
-                    .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
-            }
+            // #10947 — un partage relayé par l'extension (sans session, ou vers
+            // une conversation chiffrée) rouvre ICI l'écran de partage unique.
+            .shareRelayPresenter(consumer: ShareRelayConsumer.shared, router: router)
+            .modifier(NewConversationSheetHost(isPresented: $showNewConversation, statusViewModel: statusViewModel))
             .adaptiveOnChange(of: router.path) { _, newPath in
                 if !newPath.isEmpty && showFeed {
                     feedWasVisibleBeforeNav = true
@@ -410,5 +395,11 @@ struct RootSheetsLayer: ViewModifier {
                     UpgradeGateView(requirement: requirement)
                 }
             }
+            // La fenêtre de ce routeur, posée par la couche la plus EXTERNE :
+            // feuilles et pleins écrans s'y déclarent, et une ouverture ne
+            // referme que ceux de cette fenêtre (#10543).
+            // La demande d'un lien d'appel : confirmée ici, dans la fenêtre principale.
+            .callLinkConfirmationSheet()
+            .environment(\.presentedSurfaceScope, router.surfaceScope)
     }
 }

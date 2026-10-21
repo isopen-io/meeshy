@@ -29,6 +29,9 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let content: String
     public let originalLanguage: String?
     public let replyToId: String?
+    /// La story ou l'humeur que ce message cite (#10820) : une réponse mise
+    /// en file la garde au rejeu. Absente des lignes écrites avant elle.
+    public let storyReplyToId: String?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
@@ -115,6 +118,10 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// champ — même convention `decodeIfPresent` que `location` et `sticker`,
     /// pour que les payloads déjà sur disque décodent sans migration.
     public let attachmentReplyTo: String?
+    /// **Les pièces CHOISIES d'un transfert** (#9914, #10947), rejouées sous la
+    /// clé `forwardedAttachmentIds`. `nil` = tout le lot, et pour les lignes
+    /// écrites avant ce champ (`decodeIfPresent`).
+    public let forwardedAttachmentIds: [String]?
     /// **La protection armée à l'envoi** (#8303) — les bits de cycle de vie
     /// (`MessageProtectionIntent.lifecycleFlags`) et la durée d'un éphémère.
     ///
@@ -149,6 +156,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         clientMessageId: String? = nil,
         originalLanguage: String? = nil,
         replyToId: String? = nil,
+        storyReplyToId: String? = nil,
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
         attachmentIds: [String]? = nil,
@@ -161,6 +169,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
         attachmentReplyTo: String? = nil,
+        forwardedAttachmentIds: [String]? = nil,
         protection: MessageProtectionIntent = .none
     ) {
         self.id = UUID().uuidString
@@ -171,6 +180,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.content = content
         self.originalLanguage = originalLanguage
         self.replyToId = replyToId
+        self.storyReplyToId = storyReplyToId
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
@@ -183,6 +193,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.attachmentReplyTo = attachmentReplyTo
+        self.forwardedAttachmentIds = forwardedAttachmentIds
         self.createdAt = Date()
     }
 
@@ -195,6 +206,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         content: String,
         originalLanguage: String?,
         replyToId: String?,
+        storyReplyToId: String? = nil,
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         attachmentIds: [String]?,
@@ -207,6 +219,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         copyAttachmentsFromClientMessageId: String? = nil,
         copyAttachmentsFromServerMessageId: String? = nil,
         attachmentReplyTo: String? = nil,
+        forwardedAttachmentIds: [String]? = nil,
         protectionFlags: UInt32? = nil,
         ephemeralDuration: Int? = nil,
         createdAt: Date
@@ -219,6 +232,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.content = content
         self.originalLanguage = originalLanguage
         self.replyToId = replyToId
+        self.storyReplyToId = storyReplyToId
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
@@ -231,6 +245,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
         self.copyAttachmentsFromServerMessageId = copyAttachmentsFromServerMessageId
         self.attachmentReplyTo = attachmentReplyTo
+        self.forwardedAttachmentIds = forwardedAttachmentIds
         self.createdAt = createdAt
     }
 
@@ -241,6 +256,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case content
         case originalLanguage
         case replyToId
+        case storyReplyToId
         case forwardedFromId
         case forwardedFromConversationId
         case attachmentIds
@@ -253,6 +269,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case copyAttachmentsFromClientMessageId
         case copyAttachmentsFromServerMessageId
         case attachmentReplyTo
+        case forwardedAttachmentIds
         case protectionFlags
         case ephemeralDuration
         case createdAt
@@ -266,6 +283,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.content = try c.decode(String.self, forKey: .content)
         self.originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage) ?? nil
         self.replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId) ?? nil
+        self.storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
         self.forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId) ?? nil
         self.forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId) ?? nil
         self.attachmentIds = try c.decodeIfPresent([String].self, forKey: .attachmentIds) ?? nil
@@ -281,6 +299,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.copyAttachmentsFromClientMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromClientMessageId)
         self.copyAttachmentsFromServerMessageId = try c.decodeIfPresent(String.self, forKey: .copyAttachmentsFromServerMessageId)
         self.attachmentReplyTo = try c.decodeIfPresent(String.self, forKey: .attachmentReplyTo)
+        self.forwardedAttachmentIds = try c.decodeIfPresent([String].self, forKey: .forwardedAttachmentIds)
         self.protectionFlags = try c.decodeIfPresent(UInt32.self, forKey: .protectionFlags)
         self.ephemeralDuration = try c.decodeIfPresent(Int.self, forKey: .ephemeralDuration)
         self.createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -294,6 +313,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encode(content, forKey: .content)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(storyReplyToId, forKey: .storyReplyToId)
         try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
         try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
         try c.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
@@ -306,6 +326,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)
         try c.encodeIfPresent(copyAttachmentsFromServerMessageId, forKey: .copyAttachmentsFromServerMessageId)
         try c.encodeIfPresent(attachmentReplyTo, forKey: .attachmentReplyTo)
+        try c.encodeIfPresent(forwardedAttachmentIds, forKey: .forwardedAttachmentIds)
         try c.encodeIfPresent(protectionFlags, forKey: .protectionFlags)
         try c.encodeIfPresent(ephemeralDuration, forKey: .ephemeralDuration)
         try c.encode(createdAt, forKey: .createdAt)

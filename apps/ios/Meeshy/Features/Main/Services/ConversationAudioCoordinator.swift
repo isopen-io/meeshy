@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import UIKit
 import Combine
@@ -135,7 +136,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// n'écrase `isPlaying`. Décide si la fin d'appel relance la lecture.
     private var _wasPlayingBeforeSystemCall = false
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
+    private static let log = MeeshyLog.logger(.audioCoordinator)
 
     /// Beyond this elapsed time, `playPrevious()` restarts the CURRENT track
     /// (standard media-player convention) instead of jumping to the prior one.
@@ -155,6 +156,10 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // without the SDK ever depending on CallManager.
         if let manager = engine as? AudioPlaybackManager {
             manager.sessionProfile = .content
+            // Les interruptions se traitent ICI (suspension d'appel Meeshy comprise).
+            manager.respondsToSessionInterruptions = false
+            // La fin d'une piste n'avance que la file du coordinateur (#10730).
+            manager.relaysEndToAutoplayRegistry = false
             manager.playbackPermissionGuard = { !CallManagerHost.shared.isCallActiveForAudioGuard }
         }
         wireEngineForwarding()
@@ -263,11 +268,27 @@ public final class ConversationAudioCoordinator: ObservableObject {
         startCurrentHead()
     }
 
+    /// **Remplace ce qui suivra la tête, sans toucher à la tête** (#10383).
+    ///
+    /// Le plein écran audio enchaîne dans l'ordre de RÉCEPTION, écoutés
+    /// compris ; la file de la conversation, elle, ne garde que les vocaux non
+    /// écoutés. Tant que le plein écran est ouvert, il pose ici sa propre
+    /// suite ; il rend celle de la conversation en se refermant. La tête joue
+    /// sans interruption : ni relance, ni changement de carte système.
+    public func replaceUpcoming(_ tail: [QueuedAudio]) {
+        guard activeContext != nil, let head = queue.first else { return }
+        queue = [head] + tail.filter { $0.attachmentId != head.attachmentId }
+        queueCount = queue.count
+    }
+
     public func togglePlayPause() {
         guard !CallManagerHost.shared.isCallActiveForAudioGuard else {
             Self.log.info("togglePlayPause() ignored: a CallKit call is active")
             return
         }
+        // L'utilisateur décide : sa pause l'emporte sur une reprise après
+        // interruption, et sa relance ne laisse plus rien à reprendre.
+        _ = interruptionLedger.handle(isPlaying ? .userPaused : .userStartedPlayback)
         // Un lecteur transitoire (préversion composer, statut, réel) a pu
         // stopper le moteur via PlaybackCoordinator.willStartPlaying pendant
         // que la file restait affichée (activeContext non-nil) : le moteur n'a
@@ -322,7 +343,7 @@ public final class ConversationAudioCoordinator: ObservableObject {
         // doit pas survivre à la frontière : sans ce reset, un
         // `.interruptionEndedShouldResume` tardif renverserait la décision de
         // `resumeAfterSystemCall()`.
-        wasPlayingBeforeInterruption = false
+        interruptionLedger = InterruptionResumeLedger()
         clearNowPlayingForSystemCall()
         setRemoteCommandsEnabled(false)
     }
@@ -364,8 +385,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     /// Armé par `.interruptionBegan` UNIQUEMENT si la lecture était en cours ;
     /// consommé par la fin d'interruption. Une pause déclenchée par un retrait
     /// d'AirPods (`routeChangedOldDeviceUnavailable`) ne l'arme PAS —
-    /// convention iOS : débrancher = pause, sans reprise automatique.
-    private var wasPlayingBeforeInterruption = false
+    /// convention iOS : débrancher = pause, sans reprise automatique. La
+    /// machine d'état est celle de tous les lecteurs (`InterruptionResumeLedger`,
+    /// #11040).
+    private var interruptionLedger = InterruptionResumeLedger()
+
+    /// `AVAudioSession.isOtherAudioPlaying` — injectable pour les témoins.
+    var otherAudioIsPlaying: () -> Bool = { AVAudioSession.sharedInstance().isOtherAudioPlaying }
 
     private func wireSessionInterruptionHooks(
         _ events: AnyPublisher<MediaSessionCoordinator.Event, Never>
@@ -374,6 +400,20 @@ public final class ConversationAudioCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleSessionEvent(event) }
             .store(in: &cancellables)
+        // Reprise sans signal de fin (vidéo d'une autre app) : au retour dans
+        // Meeshy, plus aucun autre son ⇒ le vocal interrompu reprend.
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.handleReturnToForeground() }
+            .store(in: &cancellables)
+    }
+
+    /// `internal` : appelé en synchrone par les tests, par le sink en prod.
+    func handleReturnToForeground() {
+        guard !_isSuspendedBySystemCall, interruptionLedger.holdsInterruptedPlayback else { return }
+        applyInterruptionAction(interruptionLedger.handle(.returnedToForeground(
+            otherAudioPlaying: otherAudioIsPlaying(), contentStillOnScreen: activeContext != nil
+        )))
     }
 
     /// `internal` : appelé en synchrone par les tests, par le sink en prod.
@@ -384,29 +424,25 @@ public final class ConversationAudioCoordinator: ObservableObject {
     func handleSessionEvent(_ event: MediaSessionCoordinator.Event) {
         guard !_isSuspendedBySystemCall else { return }
         guard activeContext != nil else { return }
-        switch event {
-        case .interruptionBegan:
+        // La fin d'un appel Meeshy a son propre chemin (`resumeAfterSystemCall`,
+        // piloté par CallManager) : le signal du SDK n'est pas lu ici.
+        guard event != .callEndedShouldResume,
+              let signal = InterruptionResumeLedger.signal(for: event, isPlaying: isPlaying) else { return }
+        // Un retrait d'AirPods désarme INCONDITIONNELLEMENT une interruption
+        // déjà armée (ex. Siri en cours) : sinon `.interruptionEndedShouldResume`
+        // relancerait la lecture alors que la sortie vient d'être débranchée.
+        applyInterruptionAction(interruptionLedger.handle(signal))
+    }
+
+    private func applyInterruptionAction(_ action: InterruptionResumeLedger.Action) {
+        switch action {
+        case .pause:
             guard isPlaying else { return }
-            wasPlayingBeforeInterruption = true
             engine.pause()
-        case .interruptionEndedShouldResume:
-            guard wasPlayingBeforeInterruption else { return }
-            wasPlayingBeforeInterruption = false
+        case .resume:
             guard !CallManagerHost.shared.isCallActiveForAudioGuard else { return }
             engine.resumeFromInterruption()
-        case .interruptionEndedShouldNotResume:
-            wasPlayingBeforeInterruption = false
-        case .routeChangedOldDeviceUnavailable:
-            // Désarme INCONDITIONNELLEMENT, avant le guard `isPlaying` : une
-            // interruption déjà armée (ex. Siri en cours) ne doit pas survivre
-            // à un retrait d'AirPods pendant cette même interruption — sinon
-            // `.interruptionEndedShouldResume` relance la lecture alors que le
-            // périphérique de sortie vient d'être débranché. Convention iOS :
-            // débrancher = pause, sans reprise automatique.
-            wasPlayingBeforeInterruption = false
-            guard isPlaying else { return }
-            engine.pause()
-        case .routeChangedOther, .callEndedShouldResume:
+        case .none:
             break
         }
     }
@@ -623,6 +659,12 @@ public final class ConversationAudioCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Un message porte une entrée de file PAR pièce audio (`AudioQueueBuilder`) : le supprimer les retire TOUTES.
+    /// N'en retirer que la première laissait la lecture enchaînée jouer le reste d'un message effacé.
+    nonisolated static func queue(_ queue: [QueuedAudio], afterDeleting messageId: String) -> [QueuedAudio] {
+        queue.filter { $0.messageId != messageId }
+    }
+
     private func wireSocketLifecycleHooks() {
         SocialSocketManager.shared.conversationDeleted
             .receive(on: DispatchQueue.main)
@@ -639,9 +681,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
                 let messageId = event.messageId
                 if self.activeContext?.messageId == messageId {
                     self.close()
-                } else if let idx = self.queue.firstIndex(where: { $0.messageId == messageId }) {
-                    self.queue.remove(at: idx)
-                    self.queueCount = self.queue.count
+                } else {
+                    let remaining = Self.queue(self.queue, afterDeleting: messageId)
+                    guard remaining.count != self.queue.count else { return }
+                    self.queue = remaining
+                    self.queueCount = remaining.count
                 }
             }
             .store(in: &cancellables)

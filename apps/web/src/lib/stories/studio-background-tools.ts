@@ -1,5 +1,5 @@
 import type { StudioMediaKind } from './story-document';
-import { studioBackgroundMenuActions } from './studio-scene-menu';
+import { studioBackgroundMenuActions, type StudioBackgroundMenuAction } from './studio-scene-menu';
 
 /**
  * **ÉDITER LE FOND SANS QUITTER LA SCÈNE** (#8849, jumelle web de
@@ -23,12 +23,13 @@ export type StudioBackgroundEdit = { readonly open: StudioBackgroundSection | nu
 
 /** Les gestes du fond servis à côté de ses outils — ceux de son menu d'appui
  * long, « Modifier » en moins : on y est déjà. */
-export type StudioBackgroundToolAction = 'retake' | 'forward' | 'remove';
+export type StudioBackgroundToolAction = 'retake' | 'forward' | 'rotate' | 'remove';
 
 /** Le filtre ne se cuit que dans une IMAGE (#8798) ; une retouche ne décrit
  * ni ne filtre l'image qu'elle rend — le fil la publie ailleurs. Elle sert les
  * ÉDITIONS DE BASE d'une pièce (#9136) : une image se recadre, une vidéo se
- * coupe et se tait. */
+ * coupe et se tait ; l'une et l'autre PIVOTENT (#9160), d'un toucher — une
+ * action, comme « Pivoter » dans `ComposerMediaActionRow`, pas un panneau. */
 export function studioBackgroundSections({ mediaType, retouching }: { readonly mediaType: StudioMediaKind; readonly retouching: boolean }): readonly StudioBackgroundSection[] {
   if (retouching) return mediaType === 'image' ? ['frame', 'crop'] : ['frame', 'trim', 'sound'];
   return mediaType === 'image' ? ['frame', 'filter', 'describe'] : ['frame', 'describe'];
@@ -43,8 +44,8 @@ export function studioBackgroundToolActions({
   readonly overlayFree: boolean;
   readonly retouching: boolean;
 }): readonly StudioBackgroundToolAction[] {
-  if (retouching) return ['remove'];
-  return studioBackgroundMenuActions({ offersPhoto, overlayFree }).filter((action): action is StudioBackgroundToolAction => action !== 'edit');
+  if (retouching) return ['rotate', 'remove'];
+  return studioBackgroundMenuActions({ offersPhoto, overlayFree }).filter((action): action is Exclude<StudioBackgroundMenuAction, 'edit'> => action !== 'edit');
 }
 
 /** **Toute porte d'édition du fond ouvre ses outils en ligne** — la section

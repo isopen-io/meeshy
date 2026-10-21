@@ -105,6 +105,114 @@ final class ComposerPanelHeightLawTests: XCTestCase {
         XCTAssertFalse(observer.isVisible)
     }
 
+    // MARK: - La hauteur qui soulève (#10544)
+
+    /// Une trame nulle n'annonce rien : clavier levé, la hauteur est GARDÉE —
+    /// retomber à zéro reposait le composeur sous un clavier encore là.
+    func test_liftHeight_zeroFrame_keepsTheCurrentHeight() {
+        XCTAssertEqual(ComposerPanelHeightLaw.liftHeight(endFrame: .zero, windowHeight: window, current: 336), 336)
+        XCTAssertEqual(ComposerPanelHeightLaw.liftHeight(endFrame: .zero, windowHeight: window, current: 0), 0)
+    }
+
+    func test_liftHeight_dockedKeyboard_isItsVisiblePortion() {
+        let frame = CGRect(x: 0, y: window - 336, width: 402, height: 336)
+        XCTAssertEqual(ComposerPanelHeightLaw.liftHeight(endFrame: frame, windowHeight: window, current: 0), 336)
+    }
+
+    /// Un clavier flottant ne soulève rien, même si un clavier ancré le
+    /// précédait ; un clavier sous la fenêtre non plus.
+    func test_liftHeight_floatingOrHiddenKeyboard_liftsNothing() {
+        let floating = CGRect(x: 40, y: 300, width: 320, height: 250)
+        XCTAssertEqual(ComposerPanelHeightLaw.liftHeight(endFrame: floating, windowHeight: window, current: 336), 0)
+        let hidden = CGRect(x: 0, y: window, width: 402, height: 336)
+        XCTAssertEqual(ComposerPanelHeightLaw.liftHeight(endFrame: hidden, windowHeight: window, current: 336), 0)
+    }
+
+    private func postKeyboardFrame(_ frame: CGRect) {
+        NotificationCenter.default.post(
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil,
+            userInfo: [
+                UIResponder.keyboardFrameEndUserInfoKey: frame,
+                UIResponder.keyboardAnimationDurationUserInfoKey: 0.25
+            ]
+        )
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+    }
+
+    /// Le chemin réel : clavier levé, une trame nulle ne le fait pas
+    /// « disparaître » ; la fin du masquage, elle, remet tout à zéro.
+    @MainActor
+    func test_keyboardObserver_zeroFrameWhileRaised_keepsTheHeight_untilTheKeyboardHides() {
+        let size = CGSize(width: 402, height: 874)
+        let observer = KeyboardObserver(windowHeight: { size.height })
+        postKeyboardFrame(CGRect(x: 0, y: size.height - 336, width: size.width, height: 336))
+        XCTAssertEqual(observer.height, 336)
+
+        postKeyboardFrame(.zero)
+        XCTAssertEqual(observer.height, 336)
+        XCTAssertTrue(observer.isVisible)
+
+        NotificationCenter.default.post(name: UIResponder.keyboardDidHideNotification, object: nil)
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        XCTAssertEqual(observer.height, 0)
+        XCTAssertFalse(observer.isVisible)
+    }
+
+    /// Dépendance à l'ordre (cycle 8, une fois sur un grand lot) : le témoin ci-dessus lisait `DeviceLayout.windowSize`
+    /// pour poser son clavier, l'observateur la RELISAIT à la réception — et entre les deux, la fenêtre clé d'un test
+    /// précédent (402 × 800, cachée dans son `tearDown`) cédait la place à celle de l'app (874). Le clavier se lisait
+    /// alors « flottant » (0) ou plafonné. L'observateur mesure désormais contre UNE hauteur, injectée ici.
+    @MainActor
+    func test_keyboardObserver_measuresAgainstItsWindowHeight_whicheverWindowIsKey() {
+        let observer = KeyboardObserver(windowHeight: { 874 })
+        let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .first { $0.activationState == .foregroundActive }
+        let other = scene.map { UIWindow(windowScene: $0) } ?? UIWindow(frame: .zero)
+        other.frame = CGRect(x: 0, y: 0, width: 402, height: 600)
+        other.rootViewController = UIViewController()
+        other.makeKeyAndVisible()
+        defer { other.isHidden = true }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+
+        postKeyboardFrame(CGRect(x: 0, y: 874 - 336, width: 402, height: 336))
+
+        XCTAssertEqual(observer.height, 336, "une autre fenêtre clé ne change pas la mesure du clavier")
+    }
+
+    // MARK: - Un écran, un observateur (#10544)
+
+    /// La barre montée par un hôte qui observe déjà le clavier (le lecteur de
+    /// stories) n'en crée pas un second.
+    @MainActor
+    func test_keyboardSource_withAHostObserver_createsNone() {
+        let source = ComposerKeyboardSource()
+        source.adopt(host: KeyboardObserver())
+        XCTAssertFalse(source.ownsObserver)
+    }
+
+    @MainActor
+    func test_keyboardSource_withoutAHost_ownsItsObserver() {
+        let source = ComposerKeyboardSource()
+        source.adopt(host: nil)
+        XCTAssertTrue(source.ownsObserver)
+    }
+
+    func test_theBar_noLongerCreatesItsOwnObserverUnconditionally() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let src = try String(
+            contentsOf: root.appendingPathComponent("Meeshy/Features/Main/Components/UniversalComposerBar.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(src.contains("= KeyboardObserver()"),
+                       "chaque barre créait son observateur : deux par écran de story")
+        XCTAssertTrue(src.contains("ownKeyboard.lastKnownHeight(host: hostKeyboard)"))
+    }
+
     // MARK: - Câblage
 
     func test_attachmentPanelHeight_derivesTheRestingHeightFromTheLaw() throws {

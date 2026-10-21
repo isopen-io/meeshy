@@ -96,6 +96,7 @@ export const AUDIT_ACTIONS = {
   ADMIN_CONVERSATION_UPDATED: entry('conversations', 'pencilSimple', 'neutral'),
   ADMIN_CONVERSATION_MEMBER_ROLE_CHANGED: entry('conversations', 'shieldCheck', 'brand'),
   ADMIN_CONVERSATION_MEMBER_REMOVED: entry('conversations', 'userMinus', 'danger'),
+  WORLD_PARTICIPANT_CARD_VIEWED: entry('conversations', 'eye', 'info', true),
   ADMIN_SHARE_LINK_REVEALED: entry('links', 'eye', 'info', true),
   ADMIN_SHARE_LINK_CLOSED: entry('links', 'linkBreak', 'warning'),
   ADMIN_SHARE_LINK_REOPENED: entry('links', 'linkSimple', 'success'),
@@ -104,6 +105,8 @@ export const AUDIT_ACTIONS = {
   ADMIN_COMMUNITY_UPDATED: entry('communities', 'usersThree', 'neutral'),
   // ── Contenus, diffusions, agent, signalements ──────────────────────────────
   DELETE_POST: entry('posts', 'trash', 'danger'),
+  MODERATE_POST: entry('posts', 'eyeSlash', 'warning'),
+  REMOVE_CONTENT: entry('reports', 'trash', 'danger'),
   ADMIN_POST_VIEWERS_VIEWED: entry('posts', 'eye', 'info', true),
   CREATE_BROADCAST: entry('broadcasts', 'plus', 'neutral'),
   SEND_BROADCAST: entry('broadcasts', 'paperPlaneTilt', 'info'),
@@ -132,6 +135,16 @@ export const AUDIT_ACTIONS = {
   ADMIN_REPORT_ASSIGNED: entry('reports', 'user', 'info'),
   // ── Réglages de la plateforme ──────────────────────────────────────────────
   UPDATE_ENGAGEMENT_SCALE: entry('settings', 'flame', 'warning'),
+  // ── Les opérations du serveur (#10396) : sauvegarde, purge des images ─────
+  TRIGGER_SERVER_OPERATION: entry('settings', 'database', 'warning'),
+  SERVER_OPERATION_REFUSED: entry('settings', 'prohibit', 'danger'),
+  // ── Le calendrier des saisons du Jeu (#10232, #10233) ──────────────────────
+  GAME_SEASON_UPDATE: entry('settings', 'calendarBlank', 'warning'),
+  GAME_SEASON_PROPOSAL_REQUEST: entry('settings', 'robot', 'info'),
+  GAME_SEASON_PROPOSAL_CREATE: entry('settings', 'robot', 'neutral'),
+  GAME_SEASON_PROPOSAL_DISCARDED: entry('settings', 'prohibit', 'warning'),
+  GAME_SEASON_PROPOSAL_APPROVE: entry('settings', 'checkCircle', 'success'),
+  GAME_SEASON_PROPOSAL_REJECT: entry('settings', 'prohibit', 'neutral'),
 } as const satisfies Readonly<Record<string, ActionEntry>>;
 
 export type AuditActionCode = keyof typeof AUDIT_ACTIONS;

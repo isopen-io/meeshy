@@ -20,6 +20,7 @@ import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendIntern
 import { accountIsBelowMinimumAge } from '../../services/auth/minimum-age-gate';
 import { scheduleContactJoinedAnnouncement } from '../../services/notifications/contact-joined';
 import { AUTH_ERROR_CODES } from '../../utils/auth-error-codes';
+import { accountIsDeleted, sendAccountDeleted } from '../../services/auth/account-deleted';
 import { disconnectSession } from '../../socketio/disconnectSession';
 import {
   legacyTokenRefusal,
@@ -30,13 +31,15 @@ import { handleGetMe, meRouteSharedOptions } from '../me/get-me';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { verifyEmailResponseSchema } from '@meeshy/shared/types';
 import { getRequestContext } from '../../services/GeoIPService';
-import { mintPendingTwoFactorChallenge } from '../../services/auth/pending-two-factor';
+import { mintPendingTwoFactorChallenge, provenChallengeAdoption } from '../../services/auth/pending-two-factor';
 import { validatePasswordStrength } from '../../utils/password-strength';
 import { createVerifyEmailIpRateLimiter, createVerifyEmailAddressRateLimiter } from '../../utils/rate-limiter.js';
 import { openSession } from './open-session';
 import { GEOLOCATION_ATTRIBUTION, readClientSessionHeaders } from '@meeshy/shared/utils/client-session';
 import { recordSessionClientInfo } from '../../services/auth/session-client-info';
 import { currentSessionOf } from '../../services/auth/current-session';
+import { countLegacyLinkLogin, getLegacyLinkLoginCounter, linkLoginConsent } from '../../services/auth/legacy-link-client';
+import { adoptProvenSession, provenSessionAdoption } from '../../services/auth/session-adoption';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -169,6 +172,15 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         return sendUnauthorized(reply, 'Token invalide ou expiré', { code: AUTH_ERROR_CODES.MAGIC_LINK_INVALID });
       }
 
+      // #10264 — « supprimé » ne se dit qu'ici, APRÈS la vérification de la
+      // signature : seul le porteur d'un jeton de CE compte l'apprend. C'est le
+      // chemin nominal d'un appareil resté hors ligne (jeton expiré).
+      const refuseDeletedAccount = () => sendAccountDeleted(reply, decoded.userId);
+      const refuseSession = async (userId: string) =>
+        (await accountIsDeleted(context.prisma, userId))
+          ? refuseDeletedAccount()
+          : sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+
       // À partir d'ici, la signature est AUTHENTIQUE — éventuellement
       // expirée, ce qui est la raison d'être de cette route
       // (`ignoreExpiration` ci-dessus). C'est la SEULE forme acceptée :
@@ -209,19 +221,20 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // Le claim `sid` (voir `services/auth/session-jwt.ts`) permet enfin de
       // NOMMER au lieu de compter. Deux régimes, et un seul est permanent :
       const sid = decoded.sid;
+      let attenteAdoption: Date | null = null;
 
       if (sid) {
         // Régime NOMINAL — le jeton dit sa session ; c'est celle-là, et aucune
         // autre, qui décide. `userId` est dans le `where` : sans lui, un `sid`
         // valide appartenant à un AUTRE compte suffirait à passer la garde.
         //
-        // Le filtre s'arrête à `isValid`, comme la règle de compte qu'il
-        // remplace : y ajouter `expiresAt` resserrerait au-delà de l'issue et
-        // déconnecterait des porteurs que #4213 laissait passer. Ce
-        // durcissement se mesure à part.
+        // #10328 — `expiresAt` aussi : le REST refuse une session échue, et
+        // la renouveler ici ferait boucler le client (401 → refresh → 401).
+        // Le balayage (`cleanupExpiredSessions`) l'invalidait déjà à son
+        // passage ; seul l'intervalle entre l'échéance et le balayage change.
         const sessionNommee = await context.prisma.userSession.findFirst({
-          where: { id: sid, userId: decoded.userId, isValid: true },
-          select: { id: true },
+          where: { id: sid, userId: decoded.userId, isValid: true, expiresAt: { gt: new Date() } },
+          select: { id: true, adoptedExpiresAt: true },
         });
 
         if (!sessionNommee) {
@@ -229,8 +242,9 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             userId: decoded.userId,
             sid,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+          return refuseSession(decoded.userId);
         }
+        attenteAdoption = sessionNommee.adoptedExpiresAt ?? null;
       } else {
         // Régime de TRANSITION — un jeton émis avant #4264 ne nomme rien.
         //
@@ -251,7 +265,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
             userId: decoded.userId,
             motif: refus,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+          return refuseSession(decoded.userId);
         }
 
         // Dans la fenêtre, la règle de #4213 s'applique telle quelle.
@@ -263,13 +277,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           logger.warn('Refus de refresh : aucune session valide — toutes révoquées', {
             userId: decoded.userId,
           });
-          return sendUnauthorized(reply, 'Session révoquée — veuillez vous reconnecter', { code: AUTH_ERROR_CODES.SESSION_REVOKED });
+          return refuseSession(decoded.userId);
         }
       }
 
       const user = await authService.getUserById(decoded.userId);
 
       if (!user) {
+        if (await accountIsDeleted(context.prisma, decoded.userId)) return refuseDeletedAccount();
         return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
@@ -296,6 +311,13 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       // `sessionToken`. S'il n'en envoie aucun, le jeton reste anonyme et le
       // butoir daté reste sa seule échéance — il ne se ré-arme pas, la
       // fermeture de fenêtre ne dépendant pas du jeton.
+      // #10477 — renouveler, c'est se servir de la session : une session
+      // prouvée par un lien et encore en attente est adoptée ici, après toutes
+      // les preuves, avant l'émission du jeton neuf.
+      if (sid && attenteAdoption) {
+        await adoptProvenSession(context.prisma, { sessionId: sid, adoptedExpiresAt: attenteAdoption, now: new Date() });
+      }
+
       const newToken = authService.generateToken(user, sid ?? activeSession?.id);
 
       // #9610 — la version, le build et la plateforme se relèvent à chaque
@@ -322,6 +344,9 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           where: { id: activeSession.id },
           data: {
             expiresAt: nextExpiresAt,
+            // #10477 — l'échéance glissée vaut adoption : aucune attente ne
+            // doit survivre pour la raccourcir ensuite.
+            adoptedExpiresAt: null,
             // P7-3 : le champ du modèle UserSession est `lastActivityAt` —
             // `lastActiveAt` (champ du modèle User) levait
             // PrismaClientValidationError sur CHAQUE refresh, avalée par le
@@ -383,7 +408,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     preHandler: [verifyEmailIpLimiter.middleware(), verifyEmailAddressLimiter.middleware()]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const { token, code, email, password } = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
+      const { token, code, email, password, linkDeviceSecret, confirm } = validateSchema(AuthSchemas.verifyEmail, request.body, 'verify-email');
 
       if (password !== undefined) {
         const strength = validatePasswordStrength(password);
@@ -394,13 +419,27 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       logger.info(`[AUTH] Vérification email (method=${code ? 'code' : 'token'})`);
 
-      const result = await authService.verifyEmail({ email, code, token, password });
+      // #10878 — un ancien binaire iOS (avant #10872) garde la connexion directe, comptée.
+      const consent = code === undefined && token !== undefined
+        ? linkLoginConsent({ headers: request.headers, confirm, linkDeviceSecret })
+        : { confirmed: confirm === true, legacyClient: null };
+
+      const result = await authService.verifyEmail({ email, code, token, password, linkDeviceSecret, confirmed: consent.confirmed });
+
+      // #10872 — lien ouvert ailleurs que sur l'appareil demandeur, sans le oui :
+      // rien n'est consommé, aucune session ; le client montre le compte cible.
+      if (result.success === false && result.reason === 'confirmation-required') {
+        logger.info('[AUTH] Lien présenté hors de l’appareil demandeur — confirmation requise');
+        return sendSuccess(reply, { requiresConfirmation: true, account: result.account, intent: result.intent, maskedEmail: result.maskedEmail });
+      }
 
       if (result.success === false) {
         logger.warn(`[AUTH] ❌ Échec de vérification email: ${result.reason}`);
         if (result.reason === 'error') return sendInternalError(reply, result.error);
         return sendBadRequest(reply, result.error, { code: result.reason === 'expired' ? 'VERIFICATION_EXPIRED' : 'INVALID_VERIFICATION' });
       }
+
+      countLegacyLinkLogin({ route: 'verify-email', consent, counter: getLegacyLinkLoginCounter() });
 
       // Une adresse NEUVEMENT prouvée peut annoncer une arrivée aux carnets
       // qui la contiennent (#8105) — après la réponse, jamais en ligne.
@@ -429,6 +468,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
           ...verification,
           requires2FA: true,
           twoFactorToken,
+          ...provenChallengeAdoption(),
           user: {
             id: user.id,
             username: user.username,
@@ -454,7 +494,8 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         token: opened.token,
         sessionToken: opened.sessionToken,
         session: formatSessionResponse(opened.session, false),
-        expiresIn: 24 * 60 * 60
+        expiresIn: 24 * 60 * 60,
+        ...provenSessionAdoption(opened.session, new Date())
       });
 
     } catch (error) {

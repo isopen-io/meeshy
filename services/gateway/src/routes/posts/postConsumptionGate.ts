@@ -90,6 +90,19 @@ export async function filterConsumablePostIds(
   postIds: readonly string[],
   userId: string,
 ): Promise<ReadonlySet<string>> {
+  return new Set((await consumablePostAuthors(prisma, postIds, userId)).keys());
+}
+
+/**
+ * La même porte, qui rend en plus l'AUTEUR de chaque id admis — lu dans la
+ * même passe : savoir qui a écrit un post ne coûte aucune requête de plus
+ * (#11037, l'auteur ne compte qu'une impression de son propre contenu).
+ */
+export async function consumablePostAuthors(
+  prisma: PostConsumptionPrisma,
+  postIds: readonly string[],
+  userId: string,
+): Promise<ReadonlyMap<string, string>> {
   // #4044 — le filtrage est ici, AVANT la requête, et c'est le cas le plus
   // grave des deux : le `findMany` ci-dessous est borné par `{ id: { in: [...] } }`,
   // donc UN identifiant malformé faisait lever la requête ENTIÈRE — cinquante
@@ -98,7 +111,7 @@ export async function filterConsumablePostIds(
   // qu'un id inconnu, supprimé ou refusé : c'est exactement la propriété que
   // l'en-tête de cette fonction demande de garantir.
   const distinctIds = [...new Set(postIds)].filter(isValidObjectId);
-  if (distinctIds.length === 0) return new Set<string>();
+  if (distinctIds.length === 0) return new Map<string, string>();
 
   const posts = await prisma.post.findMany({
     where: { id: { in: distinctIds }, deletedAt: NOT_DELETED },
@@ -106,9 +119,9 @@ export async function filterConsumablePostIds(
   });
 
   const verdicts = await Promise.all(
-    posts.map(async (post: PostVisibilityRecord): Promise<readonly [string, boolean]> =>
-      [post.id, await canUserConsumePost(prisma, post, userId)] as const),
+    posts.map(async (post: PostVisibilityRecord): Promise<readonly [PostVisibilityRecord, boolean]> =>
+      [post, await canUserConsumePost(prisma, post, userId)] as const),
   );
 
-  return new Set(verdicts.filter(([, allowed]) => allowed).map(([id]) => id));
+  return new Map(verdicts.filter(([, allowed]) => allowed).map(([post]) => [post.id, post.authorId] as const));
 }

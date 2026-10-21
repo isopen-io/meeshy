@@ -14,9 +14,12 @@ struct ConversationOverlayState {
     /// elle. `nil` ⇒ l'aperçu du message entier. Le défilement de l'aperçu la
     /// réécrit : la pièce affichée est toujours la cible des actions.
     var overlayPieceId: String? = nil
-    /// Aperçu d'appui long en Focal : pixels de la cellule vivante + frame
-    /// écran, capturés par le contrôleur au moment du geste. `nil` en mode
-    /// bulles — l'overlay garde alors son `ThemedMessageBubble` historique.
+    /// **Le cadre de la cellule pressée, en coordonnées de fenêtre** (#11208).
+    /// Résolu côté UIKit au geste (`MessageListViewController.cellFrameInWindow`)
+    /// et gardé ici : l'aperçu s'ouvre À LA PLACE de la cellule, quel que soit
+    /// le mode de lecture. `frameTracker` ne suit que la Rivière, son repli.
+    /// `nil` hors appui long, ou quand la cellule n'est pas matérialisée.
+    var overlaySourceFrame: CGRect? = nil
     var showOverlayMenu = false
     var longPressEnabled = false
     /// **L'état à restituer à la fermeture du menu longpress (#4004).**
@@ -61,6 +64,10 @@ struct ConversationOverlayState {
     var storyViewerUserId: String? = nil
     var storyViewerGroupIndex: Int = 0
     var storyViewerSlideIndex: Int = 0
+    /// La story EXACTE visée (réponse à une story) : le lecteur la retrouve par
+    /// son id. La position seule retombait sur la première story vivante quand
+    /// la story citée avait expiré, ou glissait si le plateau avait bougé.
+    var storyViewerPostId: String? = nil
     /// `true` quand le viewer est ouvert depuis l'avatar d'un expéditeur
     /// (première non-vue) ; `false` quand une story-reply cible une slide
     /// précise via `storyViewerSlideIndex`.

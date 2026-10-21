@@ -1,7 +1,7 @@
 import { colorForName } from '@meeshy/shared/utils/conversation-colors';
 import { memo } from 'react';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { Glyph, GlyphSvg } from '@/components/glyph';
 import { CALLS_GLYPHS } from '@/components/glyphs-calls';
@@ -194,7 +194,7 @@ export const KeypadResult = memo(function KeypadResult({
         className="flex min-h-14 min-w-0 flex-1 items-center gap-3 py-2 ps-4 pe-2 focus-visible:outline-2 focus-visible:-outline-offset-2"
         style={{ outlineColor: BRAND }}
       >
-        <Avatar initials={initialsOf(name)} color={colorForName(name)} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
+        <PeerAvatar presenceKey={person.id} ringRef={person.ring} initials={initialsOf(name)} color={colorForName(name)} size={40} {...(person.avatar === null ? {} : { src: person.avatar })} />
         <span className="grid min-w-0 flex-1">
           <span className="truncate text-body font-semibold" style={{ color: INK }}>
             {name}

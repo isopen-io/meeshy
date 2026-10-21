@@ -1,0 +1,334 @@
+{
+  "$doc": "LE LEXIQUE DE L’ÉPOPÉE, ALLEMAND — traduit de fr.json (#11174 ; conception docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md § 3.1 et § 4 ; glossaire docs/product/epopee/glossaire/de.md). Format : docs/product/epopee/glossaire/README.md. Lu par la garde web (apps/web/src/lib/game/epic-vocabulary.test.ts) et, demain, par la garde iOS (#11179). `banned` : les mots comptables de l’allemand qu’AUCUNE valeur des catalogues du jeu ne porte, paramètres {…} mis de côté ; `names` : la valeur exacte de chaque clé de nom.",
+  "language": "de",
+  "banned": [
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:erhöh|steiger)\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "wachsen, nähren, erwachen, heller leuchten"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:\\p{L}+-)?(?:Punkte|Funken|Ruhm|Flammen)?zähler(?:s|n)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "der Name des Konzepts: „dein Ruhm“, „deine Flamme“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:\\p{Lu}\\p{Ll}*w|W)ert(?:e|es|en)?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "„dein Licht“ (das Adjektiv „wert“ bleibt erlaubt: „ist 250 Ruhm wert“)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])umwandel\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„dein Licht“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])Taschen?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„dein Licht“ (statt „in der Tasche“)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])potenzi\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nichts: man sagt, was man besitzt"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*schulden?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„ein Schatten verhüllt N Funken deines Lichts“ (der Schatten)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*rekord\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„seit jeher empfangen“, „dein hellstes Licht“, „deine längste Flamme“, „seit jeher geprägt“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])noch(?![\\p{L}\\p{N}])[^.!?:;]*(?<![\\p{L}\\p{N}])bis(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "klein, „N bis X“ (ohne „noch“)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:kost(?:e|est|et|eten|en)|Kosten)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "ein Satz: „sie bannt N Funken deines Lichts“; die Rechnung steht in den Regeln"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:übrig|verbleib)\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nichts: keine Subtraktion auf einem Blatt"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*(?:tabelle|schema)\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„jede Geste lässt ihre eigenen Funken sprühen“ (statt einer Punktetabelle)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])grundpreis\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nichts auf einem Blatt: die Rechnung steht in den Regeln",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])prozents[aä]tz\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nichts auf einem Blatt: die Rechnung steht in den Regeln",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])faktor(?:en)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nichts auf einem Blatt: die Rechnung steht in den Regeln",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:\\p{L}*liga\\p{L}*|Ligen)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Turnier“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*r[aä]ng\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Platz“ (das Turnier spricht vom Platz; der Rang ist der Name des Helden)",
+      "keys": [
+        "game.league.",
+        "game.state.league.",
+        "game.guide.moment.league",
+        "game.trophy.league",
+        "game.photo.title.league",
+        "game.archive.week."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*pseudonym\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Turniername“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*duos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Bündnis“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*saison\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Reise“; ihre Sterne sind „Schritte“, ihre Etappen „Rasten“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*stern(?:e|en)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Schritte“ (die Reise); „Zeitalter“ (die Wiedergeburt); „Stufen“ (eine Medaille)",
+      "keys": [
+        "game.season.",
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths",
+        "game.badge.stars_label"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*prestige\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Wiedergeburt“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:\\p{L}+-)?(?:Eis|Frost|Freeze)(?![\\p{L}\\p{N}])|(?<![\\p{L}\\p{N}])\\p{L}*(?:einfrier|eingefror)\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Hüterin“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*(?:serie|streak|strähne)\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Flamme“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*mission\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„der Traum“; eine Mission ist ein „Akt“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:Tagestruhe\\p{L}*|Truhe\\s+des\\s+Tages)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„die Gabe“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])Erfolg(?:e|es|en|s)?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "„Heldentaten“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*abzeichen\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Medaillen“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*[Hh]eft(?:e|es)?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "„die Chronik“"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*sternbild\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„der Himmel der Ahnen“ (Sternbild nennt nur noch die neunte Gestalt des Lichts)",
+      "except": [
+        "game.tier.constellation"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])Feier(?:n|lichkeit\\p{L}*)?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "„Zeichen der Ahnen“ (das Verb „feiern“ bleibt erlaubt)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])\\p{L}*etappe\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„Prüfung“ (die zehn Level), „Rast“ (die Reise); „Etappe“ nennt nur noch die Einführung",
+      "keys": [
+        "game."
+      ],
+      "except": [
+        "game.guide.step_of",
+        "game.rules.section_steps"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:dein(?:en|em|es)?\\s+Schatz\\p{L}*|des\\s+Schatzes|Schatzes|Schätze\\p{L}*|Schatz\\p{L}+)(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "„das Erbe“ (der Schatz nennt nur noch die fünfte Reserve)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:Ihnen|Ihre|Ihren|Ihrem|Ihrer|Ihres)(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "„dein“, „deine“: das Spiel duzt"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])flammen?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "„N Tage“ unter 🔥: die Flamme gehört dem Helden, nie einem Gespräch",
+      "keys": [
+        "engagement.pill.streak."
+      ]
+    }
+  ],
+  "names": {
+    "game.tier.etincelle": "Funke",
+    "game.tier.lueur": "Schimmer",
+    "game.tier.lumiere": "Klarheit",
+    "game.tier.eclat": "Glanz",
+    "game.tier.rayon": "Strahl",
+    "game.tier.aurore": "Morgenrot",
+    "game.tier.comete": "Komet",
+    "game.tier.etoile": "Stern",
+    "game.tier.constellation": "Sternbild",
+    "game.tier.galaxie": "Galaxie",
+    "game.tier.nebuleuse": "Nebel",
+    "game.tier.pulsar": "Pulsar",
+    "game.tier.quasar": "Quasar",
+    "game.tier.supernova": "Supernova",
+    "game.tier.magnetar": "Magnetar",
+    "game.tier.amas": "Sternhaufen",
+    "game.tier.superamas": "Superhaufen",
+    "game.tier.cosmos": "Kosmos",
+    "game.tier.infini": "Unendlichkeit",
+    "game.tier.singularite": "Singularität",
+    "game.rank.murmure": "Flüstern",
+    "game.rank.echo": "Echo",
+    "game.rank.voix": "Stimme",
+    "game.rank.conteur": "Erzähler",
+    "game.rank.passeur": "Brückenbauer",
+    "game.rank.polyglotte": "Polyglott",
+    "game.rank.ambassadeur": "Botschafter",
+    "game.rank.orateur": "Redner",
+    "game.rank.oracle": "Orakel",
+    "game.rank.legende": "Legende",
+    "game.rank.mythe": "Mythos",
+    "game.treasury.bourse": "Börse",
+    "game.treasury.escarcelle": "Beutel",
+    "game.treasury.coffret": "Schatulle",
+    "game.treasury.coffre": "Truhe",
+    "game.treasury.tresor": "Schatz",
+    "game.treasury.reserve": "Reserve",
+    "game.flame.form.braise": "Glut",
+    "game.flame.form.flamme": "Flamme",
+    "game.flame.form.brasier": "Feuersbrunst",
+    "game.flame.form.astre": "Gestirn",
+    "game.flame.form.soleil": "Sonne",
+    "game.league.name.quartz": "Quarz",
+    "game.league.name.ambre": "Bernstein",
+    "game.league.name.jade": "Jade",
+    "game.league.name.saphir": "Saphir",
+    "game.league.name.rubis": "Rubin",
+    "game.league.name.amethyste": "Amethyst",
+    "game.league.name.diamant": "Diamant",
+    "game.league.name.prisme": "Prisma",
+    "game.edition.silver": "Silber",
+    "game.edition.gold": "Gold",
+    "game.edition.prism": "Prisma",
+    "game.difficulty.easy": "Akt I",
+    "game.difficulty.medium": "Akt II",
+    "game.difficulty.hard": "Akt III",
+    "game.difficulty.gold": "Goldener Akt",
+    "game.material.copper": "Kupfer",
+    "game.material.bronze": "Bronze",
+    "game.material.silver": "Silber",
+    "game.material.gold": "Gold",
+    "game.material.platinum": "Platin",
+    "game.material.obsidian": "Obsidian",
+    "game.material.prism": "Prisma",
+    "game.concept.level.name": "Das Licht",
+    "game.concept.points.name": "Funken",
+    "game.concept.meesh.name": "Das Erbe",
+    "game.concept.glory.name": "Der Rang",
+    "game.concept.flame.name": "Die Flamme",
+    "game.concept.missions.name": "Der Traum",
+    "game.concept.league.name": "Das Turnier",
+    "game.concept.season.name": "Die Reise",
+    "game.concept.prestige.name": "Die Wiedergeburt",
+    "game.concept.elans.name": "Schwung",
+    "game.concept.badges.name": "Medaillen",
+    "game.concept.defis.name": "Herausforderungen",
+    "game.concept.succes.name": "Heldentaten",
+    "game.concept.showcase.name": "Trophäen",
+    "game.concept.atlas.name": "Der Atlas",
+    "game.rules.concept.level.name": "Das Licht",
+    "game.rules.concept.points.name": "Funken",
+    "game.rules.concept.meesh.name": "Die Meesh",
+    "game.rules.concept.glory.name": "Der Rang",
+    "game.rules.concept.flame.name": "Die Flamme",
+    "game.rules.concept.missions.name": "Der Traum",
+    "game.rules.concept.league.name": "Das Turnier",
+    "game.rules.concept.season.name": "Die Reise",
+    "game.rules.concept.prestige.name": "Die Wiedergeburt",
+    "game.rules.concept.elans.name": "Schwung",
+    "game.rules.concept.badges.name": "Medaillen",
+    "game.rules.concept.defis.name": "Herausforderungen",
+    "game.rules.concept.succes.name": "Heldentaten",
+    "game.rules.concept.showcase.name": "Trophäen",
+    "game.rules.concept.atlas.name": "Der Atlas",
+    "game.rules.concept.chest.name": "Die Gabe",
+    "game.rules.concept.treasury.name": "Das Erbe",
+    "game.rules.concept.steps.name": "Die Prüfungen",
+    "game.rules.concept.duo.name": "Das Bündnis",
+    "game.chest.title": "Die Gabe",
+    "game.notebook.page_title": "Die Chronik",
+    "game.door.notebook": "Die Chronik",
+    "game.constellation.title": "Der Himmel der Ahnen",
+    "game.league.title": "Turnier",
+    "game.duo.title": "Bündnis",
+    "game.season.title": "Reise",
+    "game.prestige.title": "Wiedergeburt",
+    "game.gauge.level": "Licht",
+    "game.gauge.rank": "Rang",
+    "game.gauge.treasury": "Erbe",
+    "game.gauge.flame": "Flamme",
+    "game.fact.strides": "Schritte",
+    "game.fact.rebirths": "Wiedergeburten",
+    "game.badge.stars_label": "Stufen",
+    "game.badge.ladder_title": "Die sieben Stufen"
+  }
+}

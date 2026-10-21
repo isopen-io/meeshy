@@ -17,7 +17,7 @@ nonisolated enum ShareTusError: Error, Equatable {
 /// part sur disque avant lui, l'app rejouera.
 ///
 /// Il n'est appelé que sous le seuil de
-/// `ShareLimits.isOpportunisticUploadEligible` : chaque fichier tient dans une
+/// `ShareUploadBudget.isOpportunisticUploadEligible` : chaque fichier tient dans une
 /// seule tranche.
 ///
 /// Deux moments d'échec, distincts et TOUS DEUX à traiter — le contrat serveur

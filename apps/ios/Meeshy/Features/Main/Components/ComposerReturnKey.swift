@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// **La touche RETOUR du clavier ENVOIE le message** (directive porteur
 /// 2026-09-05).
@@ -70,10 +71,14 @@ nonisolated enum ComposerReturnKey {
     /// Pure et sans état : elle s'éprouve sans monter de champ, ce qu'un test
     /// de saisie réelle ne permet pas — le simulateur ne distingue pas une
     /// frappe d'un collage.
-    static func submits(previous: String, current: String) -> Bool {
-        guard current.hasSuffix("\n") else { return false }
+    static func submits(previous: String, current: String, literalNewline: Bool = false) -> Bool {
+        // Clavier MATÉRIEL (iPad) : Maj+Retour / Option+Retour est un saut de ligne voulu, jamais un envoi.
+        guard !literalNewline, current.hasSuffix("\n") else { return false }
         return current.count == previous.count + 1
     }
+
+    /// Les modificateurs qui, sur un clavier matériel, font de Retour un saut de ligne.
+    static func isLiteralNewline(shift: Bool, option: Bool) -> Bool { shift || option }
 
     /// Le texte DÉBARRASSÉ du saut de ligne que la touche vient d'insérer.
     ///
@@ -82,5 +87,37 @@ nonisolated enum ComposerReturnKey {
     /// un texte qui ne finit pas par un retour.
     static func stripped(_ text: String) -> String {
         text.hasSuffix("\n") ? String(text.dropLast()) : text
+    }
+}
+
+/// Note qu'un Retour MATÉRIEL porte Maj ou Option — le saut de ligne qu'il insère est voulu. iOS 17+ (`onKeyPress`) ;
+/// avant, aucun événement de touche ne remonte et le modificateur n'ajoute rien.
+struct HardwareReturnModifiers: ViewModifier {
+    let onLiteralNewline: () -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 17.0, *) {
+            content.onKeyPress(.return, phases: .down) { press in
+                if ComposerReturnKey.isLiteralNewline(shift: press.modifiers.contains(.shift),
+                                                      option: press.modifiers.contains(.option)) {
+                    onLiteralNewline()
+                }
+                return .ignored
+            }
+        } else {
+            content
+        }
+    }
+}
+
+/// Un relais par composer (`SceneActionRelay`) : l'action publiée reste la
+/// même d'un rendu à l'autre, et envoie toujours avec la dernière fermeture.
+struct PublishesComposerSend: ViewModifier {
+    let send: () -> Void
+    @State private var relay = SceneActionRelay()
+
+    func body(content: Content) -> some View {
+        relay.perform = send
+        return content.focusedValue(\.meeshySendMessage, relay.action)
     }
 }

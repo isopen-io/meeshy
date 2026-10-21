@@ -17,43 +17,14 @@ extension CallManager {
     // MARK: - Post-call diagnostics persistence
 
     /// UserDefaults key for the last persisted call quality summary.
-    static let lastCallSummaryDefaultsKey = "me.meeshy.lastCallQualitySummary"
+    static let lastCallSummaryDefaultsKey = CallQualitySummaryStore.defaultsKey
 
-    /// Lightweight call quality summary persisted to UserDefaults at call teardown.
-    /// Survives app termination so quality issues are debuggable after the fact.
-    struct CallQualitySummary: Codable, Sendable {
-        let callId: String?
-        let remoteUser: String?
-        let durationSeconds: TimeInterval
-        let endReason: String
-        let stats: CallStats?
-    }
+    typealias CallQualitySummary = CallPersistedQualitySummary
 
     /// Returns the last persisted call summary from a previous call (or the
     /// current session, if already torn down). Nil when no call has been made yet.
     static var lastCallSummary: CallQualitySummary? {
-        guard let data = UserDefaults.standard.data(forKey: lastCallSummaryDefaultsKey) else { return nil }
-        return JSONDecoder().decodeOrLog(CallQualitySummary.self, from: data,
-                                         field: "last call summary", logger: Logger.calls)
-    }
-
-    private static func persistCallSummary(
-        stats: CallStats?,
-        callId: String?,
-        duration: TimeInterval,
-        remote: String?,
-        reason: CallEndReason
-    ) {
-        let summary = CallQualitySummary(
-            callId: callId,
-            remoteUser: remote,
-            durationSeconds: duration,
-            endReason: String(describing: reason),
-            stats: stats
-        )
-        guard let data = JSONEncoder().encodeOrLog(summary, field: "call summary",
-                                                   id: callId ?? "-", logger: Logger.calls) else { return }
-        UserDefaults.standard.set(data, forKey: lastCallSummaryDefaultsKey)
+        CallQualitySummaryStore().read()
     }
 
     private func emitCallAnalyticsIfNeeded(reason: CallEndReason) {
@@ -65,19 +36,7 @@ extension CallManager {
         emitCallAnalyticsSnapshot(callId: callId, endReasonLabel: String(describing: reason))
 
         // Reset accumulators so a subsequent call starts clean.
-        analyticsCallInitiatedDate = nil
-        analyticsNegotiationStartDate = nil
-        analyticsConnectedDate = nil
-        analyticsNetworkTransitions = 0
-        analyticsQualitySeconds = [:]
-        analyticsLastQualityDate = nil
-        analyticsCurrentLevel = nil
-        analyticsRttSum = 0
-        analyticsSampleCount = 0
-        analyticsMaxPacketLoss = 0
-        analyticsPacketLossSum = 0
-        analyticsEffectsUsed = []
-        analyticsVideoFiltersUsed = false
+        analytics.resetAccumulators()
     }
 
     /// Snapshot analytics NON destructif — payload complet construit depuis
@@ -89,44 +48,18 @@ extension CallManager {
     /// background (vécu 2026-07-03 : row analytics perdue après 29 min
     /// d'appel) ne perd plus que la dernière fenêtre.
     private func emitCallAnalyticsSnapshot(callId: String, endReasonLabel: String) {
-        let setupMetrics = CallReliabilityPolicy.callSetupMetrics(
-            initiatedAt: analyticsCallInitiatedDate,
-            negotiationStartAt: analyticsNegotiationStartDate,
-            connectedAt: analyticsConnectedDate
+        let payload = analytics.payload(
+            now: Date(),
+            context: CallAnalyticsContext(
+                callDuration: callDuration,
+                codec: lastKnownStats?.codec ?? "unknown",
+                filtersEnabledNow: webRTCService.videoFilters.config.isEnabled,
+                transcriptionUsed: transcriptionService.isTranscribing,
+                deviceModel: UIDevice.current.model,
+                isVideo: isVideoEnabled,
+                endReason: endReasonLabel
+            )
         )
-        let qualityDistribution = CallReliabilityPolicy.qualityDistribution(
-            accumulatedSeconds: analyticsQualitySeconds,
-            openWindowLevel: analyticsCurrentLevel,
-            openWindowSince: analyticsLastQualityDate,
-            now: Date()
-        )
-
-        let averageRtt = analyticsSampleCount > 0
-            ? analyticsRttSum / Double(analyticsSampleCount) : 0
-        let averagePacketLoss = analyticsSampleCount > 0
-            ? analyticsPacketLossSum / Double(analyticsSampleCount) : 0
-        let codec = lastKnownStats?.codec ?? "unknown"
-        let filtersUsed = analyticsVideoFiltersUsed || webRTCService.videoFilters.config.isEnabled
-
-        let payload: [String: Any] = [
-            "setupTimeMs":         setupMetrics.setupTimeMs,
-            "negotiationTimeMs":   setupMetrics.negotiationTimeMs,
-            "durationSeconds":     callDuration,
-            "reconnectionCount":   analyticsTotalReconnects,
-            "networkTransitions":  analyticsNetworkTransitions,
-            "averageRtt":          averageRtt,
-            "averagePacketLoss":   averagePacketLoss,
-            "maxPacketLoss":       analyticsMaxPacketLoss,
-            "codec":               codec,
-            "effectsUsed":         Array(analyticsEffectsUsed),
-            "filtersUsed":         filtersUsed,
-            "transcriptionUsed":   transcriptionService.isTranscribing,
-            "qualityDistribution": qualityDistribution,
-            "platform":            "ios",
-            "deviceModel":         UIDevice.current.model,
-            "isVideo":             isVideoEnabled,
-            "endReason":           endReasonLabel
-        ]
         MessageSocketManager.shared.emitCallAnalytics(callId: callId, payload: payload)
     }
 
@@ -137,8 +70,7 @@ extension CallManager {
         guard analyticsSnapshotTask == nil else { return }
         analyticsSnapshotTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(QualityThresholds.analyticsSnapshotIntervalSeconds))
-                guard !Task.isCancelled, let self else { return }
+                guard await cancellableSleep(for: .seconds(QualityThresholds.analyticsSnapshotIntervalSeconds)), !Task.isCancelled, let self else { return }
                 // Un autre appel a remplacé celui-ci sans passer par le cancel
                 // (défensif) : cette task ne parle plus pour personne.
                 guard self.currentCallId == callId else { return }
@@ -213,6 +145,8 @@ extension CallManager {
         settlePendingAnswerAction(fulfilled: false, reason: "teardown before connect")
         outgoingRingTimeoutTask?.cancel()
         outgoingRingTimeoutTask = nil
+        incomingRingTimeoutTask?.cancel()
+        incomingRingTimeoutTask = nil
         // Cancel le Task de setup outgoing (force-leave + ACK + media +
         // listenForParticipantJoined). Sans ça, après endCallInternal, ce
         // Task continuait à tourner et pouvait re-armer la connexion, faire
@@ -265,7 +199,7 @@ extension CallManager {
         voipFreshnessTask = nil
         analyticsSnapshotTask?.cancel()
         analyticsSnapshotTask = nil
-        isRemoteQualityDegraded = false
+        remoteMedia = remoteMedia.applying(.qualityDegraded(false))
         isSignalingDegraded = false
         pendingRemoteOffer = nil
         pendingIceCandidates = []
@@ -281,16 +215,14 @@ extension CallManager {
         publishedListeningIntent = false
         callStartDate = nil
         reconnectAttempt = 0
-        analyticsTotalReconnects = 0
+        analytics.totalReconnects = 0
         // Reset inconditionnel de l'état vidéo per-call. Avant, seul
         // `resetEndedStateForNewCall` (fenêtre settle 1,5 s) le faisait : un
         // appel démarré plus tard héritait d'`isRemoteVideoEnabled == false`
         // (placeholder "Caméra désactivée" fantôme) et d'un FSM de survie
         // vidéo potentiellement suspendu — violation du contrat documenté de
         // `VideoSurvivalControlling.reset()`.
-        isRemoteVideoEnabled = true
-        isRemoteAudioEnabled = true
-        isRemoteScreenCapturing = false
+        remoteMedia = .initial
         screenShare.callEnded()
         recording.callEnded()
         videoSurvivalController.reset()
@@ -321,8 +253,8 @@ extension CallManager {
             displayMode = .fullScreen
         }
         detachSystemPiP()
-        Self.persistCallSummary(stats: lastKnownStats, callId: currentCallId,
-                                duration: callDuration, remote: remoteUsername, reason: reason)
+        CallQualitySummaryStore().persist(stats: lastKnownStats, callId: currentCallId,
+                                          duration: callDuration, remote: remoteUsername, reason: reason)
         lastKnownStats = nil
         CallQualityStatsFeed.shared.reset()
         webRTCService.close()
@@ -363,7 +295,7 @@ extension CallManager {
             ? QualityThresholds.callEndRetryableSettleSeconds
             : QualityThresholds.callEndSettleSeconds
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(settleDelay))
+            _ = await cancellableSleep(for: .seconds(settleDelay))
             guard let self else { return }
             guard self.settleToken == token else { return }
             if case .ended = self.callState {
@@ -384,5 +316,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

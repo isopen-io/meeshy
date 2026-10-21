@@ -4,6 +4,8 @@
  */
 
 import type { PostReference, ReferenceAccess } from './post-reference.js';
+import type { PersonProfileDecor } from './profile-decor.js';
+import type { ReachBreakdown } from './content-reach.js';
 
 // =====================================================
 // ENUMS
@@ -95,6 +97,8 @@ export interface PostAuthor {
    */
   readonly isOnline?: boolean;
   readonly lastActiveAt?: Date | string | null;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  readonly profileDecor?: PersonProfileDecor;
 }
 
 export interface PostMedia {
@@ -229,6 +233,30 @@ export interface Post {
   readonly commentCount: number;
   readonly repostCount: number;
   readonly viewCount: number;
+  /**
+   * Part ANONYME de `viewCount` / `impressionCount` (#10483) — lecteurs sans
+   * compte. Les totaux l'incluent déjà. Absent d'un ancien serveur, `null` sur
+   * un post antérieur à la colonne : à lire comme 0.
+   */
+  readonly anonymousViewCount?: number | null;
+  readonly anonymousImpressionCount?: number | null;
+  /**
+   * Vues UNIQUES par jeton (#10483) : `viewCount` compte CHAQUE ouverture, ce
+   * champ une fois par lecteur (compte ou anonyme), `anonymousUniqueViewCount`
+   * en est la part anonyme. Servis, pas encore affichés. Absents d'un ancien
+   * serveur, `null` sur un post antérieur : à lire comme 0.
+   */
+  readonly uniqueViewCount?: number | null;
+  readonly anonymousUniqueViewCount?: number | null;
+  /**
+   * Ventilations de la portée (#10483, `@meeshy/shared/types/content-reach`) :
+   * engagements d'ouverture (tap d'un listing) par origine, vues comptées par
+   * provenance, vues de listing par origine. Absents d'un ancien serveur ou
+   * d'un post qui n'en a jamais reçu : à lire comme vides.
+   */
+  readonly openCountByOrigin?: ReachBreakdown | null;
+  readonly viewCountByProvenance?: ReachBreakdown | null;
+  readonly listingViewCountByOrigin?: ReachBreakdown | null;
   readonly bookmarkCount: number;
   readonly shareCount: number;
   readonly isPinned: boolean;

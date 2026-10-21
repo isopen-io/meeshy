@@ -12,6 +12,9 @@
  * Les paramètres sont encodés ICI (encodeURIComponent) : passer la valeur brute.
  */
 
+/** GET /api/v1/affiliate/:token/og */
+export const byTokenOg = (token: string): string => `/api/v1/affiliate/${encodeURIComponent(token)}/og`;
+
 /** POST /api/v1/affiliate/click/:token */
 export const clickByToken = (token: string): string => `/api/v1/affiliate/click/${encodeURIComponent(token)}`;
 

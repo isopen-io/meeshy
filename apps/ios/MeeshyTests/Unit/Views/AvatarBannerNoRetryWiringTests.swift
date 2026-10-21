@@ -43,6 +43,30 @@ final class AvatarBannerNoRetryWiringTests: XCTestCase {
                       "The 140pt hero banner must suppress the retry button — it already renders heroBannerPlaceholder on failure.")
     }
 
+    /// #9200 — une bannière CHANGÉE (image plus haute que 140 pt, rendue en
+    /// `.fill`) débordait de son cadre : `clipShape` rogne le DESSIN, pas la
+    /// zone de toucher, et l'image ({{20,-116},{400,600}}) recouvrait l'en-tête
+    /// de la feuille — la roue dentée et « Fermer » ne répondaient plus.
+    func test_conversationInfoSheetHeroBanner_neverCapturesTouchesOutsideItsFrame() throws {
+        let source = try appSource("Meeshy/Features/Main/Components/ConversationInfoSheet.swift")
+        let hero = try block(
+            from: "private var heroConversationHeader: some View {",
+            upTo: "// Avatar overlapping banner",
+            in: source
+        )
+        XCTAssertTrue(hero.contains("Color.clear"),
+                      "The banner slot must be a fixed-size container (Color.clear) whose size never depends on the image.")
+        XCTAssertTrue(hero.contains(".allowsHitTesting(false)"),
+                      "The banner image is decorative: it must never take a touch, so its overflow cannot swallow the header buttons.")
+        XCTAssertTrue(hero.contains(".clipped()") || hero.contains(".clipShape("),
+                      "The banner must stay clipped to its 140 pt frame.")
+        XCTAssertTrue(hero.contains(".contentShape("),
+                      "The banner's hit area must be bounded to its own frame.")
+
+        XCTAssertTrue(source.contains("headerBar\n                    .zIndex(1)"),
+                      "The header bar must sit above the content that follows it, so no overflow can cover its buttons.")
+    }
+
     func test_callParticipantVisualAvatar_migratesToCachedAvatarImage() throws {
         let source = try appSource("Meeshy/Features/Main/Views/CallParticipantVisual.swift")
         let avatar = try block(

@@ -47,7 +47,7 @@ final class BadgeCountTests: XCTestCase {
             badgeWriter: writer,
             appGroupSuiteName: suite,
             badgeEnabledProvider: { true },
-            openConversationIdProvider: { nil },
+            openConversationIdsProvider: { [] },
             ledger: ConversationReadLedger()
         )
         return (coordinator, suite)

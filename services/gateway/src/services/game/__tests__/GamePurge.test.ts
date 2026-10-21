@@ -77,7 +77,7 @@ describe('exhaustivité de la purge', () => {
 describe('purgeGameData', () => {
   const seed = () => {
     const db = fakeGameDb();
-    seedUser(db, { levelRecord: 40, prestige: 2, flameFreezes: 1, guideSeen: ['a'], publicLeagueConsentAt: new Date(), publicLeagueConsentVersion: 'v1' });
+    seedUser(db, { levelRecord: 40, prestige: 2, prestigeLevelRecords: [120, 100], flameFreezes: 1, guideSeen: ['a'], publicLeagueConsentAt: new Date(), publicLeagueConsentVersion: 'v1' });
     seedUser(db, { levelRecord: 10 }, OTHER);
     for (const [model, rows] of Object.entries({
       dailyMission: [{ id: 'a', userId: USER }, { id: 'a2', userId: OTHER }],
@@ -94,6 +94,8 @@ describe('purgeGameData', () => {
       gameTrophy: [{ id: 'l', userId: USER }],
       atlasStamp: [{ id: 'm', userId: USER }],
       engagementPostPoints: [{ id: 'o', userId: USER, postId: 'p1', totalPoints: 4 }, { id: 'o2', userId: OTHER, postId: 'p1', totalPoints: 7 }],
+      gamePhotoMoment: [{ id: 'q', userId: USER, stepId: 'start' }, { id: 'q2', userId: OTHER, stepId: 'start' }],
+      engagementActStreak: [{ id: 'r', userId: USER, act: 'story' }, { id: 'r2', userId: OTHER, act: 'story' }],
       gameDuo: [{ id: 'n', inviterId: USER, inviteeId: OTHER }, { id: 'n2', inviterId: OTHER, inviteeId: USER }, { id: 'n3', inviterId: OTHER, inviteeId: '68a0000000000000000000ff' }],
     })) (db as unknown as Record<string, { rows: unknown[] }>)[model]!.rows.push(...rows);
     return db;
@@ -111,6 +113,8 @@ describe('purgeGameData', () => {
     expect(db.dailyMission.rows.map((r) => r.id)).toEqual(['a2']);
     expect(db.leagueMembership.rows.map((r) => r.id)).toEqual(['h2']);
     expect(db.gameDuo.rows.map((r) => r.id)).toEqual(['n3']);
+    expect(db.gamePhotoMoment.rows.map((r) => r.id)).toEqual(['q2']);
+    expect(db.engagementActStreak.rows.map((r) => r.id)).toEqual(['r2']);
   });
 
   it('retire ce que les posts ont rapporté au compte (#9569) — la trace de ses gestes post par post —, pas ce qu’ils ont rapporté aux autres', async () => {
@@ -131,7 +135,7 @@ describe('purgeGameData', () => {
   it('efface les colonnes de jeu et le consentement de ligue du compte, pas ceux des autres', async () => {
     const db = seed();
     await purgeGameData(db.prisma, USER);
-    expect(db.user.rows.find((u) => u.id === USER)).toMatchObject({ publicLeagueConsentAt: null, publicLeagueConsentVersion: null, levelRecord: null, prestige: null, flameFreezes: null, guideSeen: [] });
+    expect(db.user.rows.find((u) => u.id === USER)).toMatchObject({ publicLeagueConsentAt: null, publicLeagueConsentVersion: null, levelRecord: null, prestige: null, prestigeLevelRecords: [], flameFreezes: null, guideSeen: [] });
     expect(db.user.rows.find((u) => u.id === OTHER)!.levelRecord).toBe(10);
   });
 

@@ -1,28 +1,53 @@
-/** @jsxImportSource preact */
 import { describe, expect, test } from 'bun:test';
-import { render } from 'preact-render-to-string';
+import { renderToStaticMarkup as render } from 'react-dom/server';
 
 import { BrandSignature } from './brand-signature';
 
 /**
  * LA SIGNATURE WEB REPRODUIT `BrandSignature.swift` (#5606).
  *
- * Rendue par `preact-render-to-string` — le MÊME moteur que le préchauffage
- * (`scripts/prerender-institutional.tsx`), pas `react-dom/server` : ce fichier
- * porte le pragma preact (comme `src/institutional/page.tsx`), donc son JSX
- * compile déjà vers de vrais éléments Preact. `react-dom/server` y rendrait
- * une chaîne vide sans erreur (même précédent que #5554).
+ * Rendue par `react-dom/server` — le MÊME moteur que le préchauffage
+ * (`scripts/prerender-institutional.tsx`) depuis que les pages statiques
+ * partagent l'en-tête de la landing (#10071).
  */
 describe('BrandSignature — pied de marque des pages institutionnelles', () => {
-  const html = render(<BrandSignature version="3.1.0" />);
+  const html = render(<BrandSignature version="3.1.0" language="fr" />);
+  const creditLink = () => html.match(/<a [^>]*>.*?<\/a>/)?.[0] ?? '';
 
   test('porte la ligne de version', () => {
     expect(html).toContain('Meeshy 3.1.0');
   });
 
-  test('porte le crédit "Services CEO", en poids medium comme BrandSignature.swift:29-33', () => {
-    expect(html).toContain('Services CEO');
-    expect(html).toContain('class="font-medium"');
+  test('porte le crédit « by services.ceo », en poids medium comme BrandSignature.swift', () => {
+    expect(html).toContain('>by services.ceo<');
+    expect(html).not.toContain('Services CEO');
+    expect(creditLink()).toContain('font-medium');
+  });
+
+  /**
+   * LE CRÉDIT MÈNE À LA PLATEFORME (#10096) — un VRAI lien externe, nommé
+   * par son texte visible PUIS par ce qu'il fait, et touchable sur 44 px sans
+   * déplacer une ligne du pied : la zone grandit par son padding, et une marge
+   * négative de même valeur rend au flux exactement la hauteur d'une ligne.
+   */
+  test('le crédit est un lien externe vers https://services.ceo, nouvel onglet, sans opener', () => {
+    const a = creditLink();
+    expect(a).toContain('href="https://services.ceo"');
+    expect(a).toContain('target="_blank"');
+    expect(a).toContain('rel="noopener noreferrer"');
+  });
+
+  test('son nom accessible dit le crédit PUIS la destination', () => {
+    expect(creditLink()).toContain(
+      '>by services.ceo<span class="sr-only"> — ouvre la plateforme services.ceo dans un nouvel onglet</span></a>',
+    );
+  });
+
+  test('sa cible fait 44 px de haut sans changer la mise en page, et garde l’encre du crédit', () => {
+    const a = creditLink();
+    expect(a).toContain('min-h-[44px]');
+    expect(a).toContain('-my-[12px]');
+    expect(a).toContain('color:var(--color-ios-ink-3)');
   });
 
   test('le glyphe est un masque CSS 28×28 teinté var(--ios-error), caché au lecteur d’écran', () => {

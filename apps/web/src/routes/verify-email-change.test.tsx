@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 import type { EmailChangeResult } from '@/lib/api/email-change';
 import type { ApiFailure, ApiResult } from '@/lib/api/http';
 import { buttonNamed, createActMounter } from '@/test-support/act-mount';
+import { arriveByEmailLink, leaveEmailLink, tokenInHistory } from '@/test-support/email-link-arrival';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { VerifyEmailChangePage, type VerifyEmailChangeDeps } from './verify-email-change';
@@ -18,7 +19,7 @@ const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: b
 const { mount, unmountAll, click } = createActMounter();
 
 beforeAll(() => {
-  ensureHappyDomRegistered();
+  ensureHappyDomRegistered({ url: 'http://localhost/' });
   globals.IS_REACT_ACT_ENVIRONMENT = true;
 });
 
@@ -96,5 +97,33 @@ describe('/settings/verify-email-change — un refus motivé', () => {
 
     expect(script.verified).toEqual(['tok', 'tok']);
     expect(host.textContent).toContain('Votre nouvelle adresse e-mail est confirmée.');
+  });
+});
+
+describe('/settings/verify-email-change — le jeton quitte l’historique une fois servi (#10864)', () => {
+  afterEach(leaveEmailLink);
+
+  test('adresse modifiée : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/settings/verify-email-change', 'tok-done');
+    await mount(<VerifyEmailChangePage token="tok-done" signedIn language="fr" deps={scripted({ ok: true, data: { email: 'awa@nouveau.example' } }).deps} />);
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('lien expiré : l’entrée ne porte plus le jeton', async () => {
+    arriveByEmailLink('/settings/verify-email-change', 'tok-expired');
+    await mount(<VerifyEmailChangePage token="tok-expired" signedIn language="fr" deps={scripted(refused(400, 'Verification token has expired')).deps} />);
+    expect(tokenInHistory()).toBeNull();
+  });
+
+  test('passerelle injoignable : l’entrée le garde, réessayer en a besoin', async () => {
+    arriveByEmailLink('/settings/verify-email-change', 'tok-retry');
+    await mount(<VerifyEmailChangePage token="tok-retry" signedIn language="fr" deps={scripted(refused(503)).deps} />);
+    expect(tokenInHistory()).toBe('tok-retry');
+  });
+
+  test('sans session : l’entrée le garde, le jeton n’a pas servi', async () => {
+    arriveByEmailLink('/settings/verify-email-change', 'tok-later');
+    await mount(<VerifyEmailChangePage token="tok-later" signedIn={false} language="fr" deps={scripted().deps} />);
+    expect(tokenInHistory()).toBe('tok-later');
   });
 });

@@ -1,20 +1,19 @@
 /**
- * LE PRESTIGE ET LA FRAPPE NE DÉPENSENT JAMAIS DEUX FOIS LES MÊMES POINTS (#9675).
+ * LE PRESTIGE ET LA FRAPPE DEPUIS LES ÉTINCELLES (#10846, porteur 2026-10-16 ; #10892, porteur 2026-10-17).
  *
- * Le score dépensable a UNE source de vérité : la somme des points des
- * compteurs par axe (`engagementScore == Σ EngagementCounter.points`). Le
- * Prestige remettait le score à 0 sans toucher les compteurs, que la frappe
- * débitait ensuite : le score devenait négatif et bloquait les Prestiges
- * suivants. Témoins : Prestige puis frappe, frappe puis Prestige, et le score
- * ne descend jamais sous zéro.
+ * Le niveau 100 qui ouvre le Prestige se lit sur la POCHE (#10892), comme tout niveau.
+ *
+ * Le prestige VIDE la poche et le cycle (le niveau actuel retombe à 1) ; le TOTAL À VIE et le NIVEAU MAX À VIE ne bougent
+ * pas. Les compteurs par axe ne sont plus remis à zéro (la frappe ne les débite plus, ils disent ce que chaque axe a
+ * rapporté). La poche ne descend jamais sous zéro.
  *
  * @jest-environment node
  */
 
 import { describe, it, expect, jest } from '@jest/globals';
-import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { PrestigeService } from '../PrestigeService';
 import { MeeshService } from '../../meesh/MeeshService';
+import { effectiveMeeshPrice } from '@meeshy/shared/utils/game/sparks';
 import { fakeGameDb, seedUser, USER, type FakeGameDb } from './fakeGameDb';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -22,65 +21,108 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 }));
 
 const LEVEL_100 = 100 * 100 * 100;
-const FIRST_PRICE = meeshPrice(1);
+const AT_LEVEL_100 = LEVEL_100 + 3000;
 
-const account = (score: number) => {
+const account = (pocket: number, extra: Record<string, unknown> = {}) => {
   const db = fakeGameDb();
-  seedUser(db, { engagementScore: score, levelRecord: 100, meeshBalance: 0, meeshMintedLifetime: 0 });
+  seedUser(db, {
+    engagementScore: pocket,
+    sparksSincePrestige: LEVEL_100 + 5000,
+    sparksEarnedLifetime: LEVEL_100 + 9000,
+    levelRecord: 100,
+    levelMaxLifetime: 100,
+    meeshBalance: 0,
+    meeshMintedLifetime: 0,
+    ...extra,
+  });
   db.engagementCounter.rows.push(
-    { id: 'c1', userId: USER, axisKey: 'content.text_message', count: 40_000, points: score - 1000 },
+    { id: 'c1', userId: USER, axisKey: 'content.text_message', count: 40_000, points: 900_000 },
     { id: 'c2', userId: USER, axisKey: 'tool.reaction', count: 500, points: 1000 },
   );
   return db;
 };
 
-const score = (db: FakeGameDb) => db.user.rows[0]!.engagementScore as number;
-const debitable = (db: FakeGameDb) => db.engagementCounter.rows.reduce((sum, row) => sum + (row.points as number), 0);
-const badgesCount = (db: FakeGameDb) => db.engagementCounter.rows.map((row) => row.count);
+const user = (db: FakeGameDb) => db.user.rows[0]!;
 
-describe('le Prestige consomme les points dépensables, comme la frappe', () => {
-  it('Prestige puis frappe : plus rien à frapper, le score reste à 0, jamais négatif', async () => {
-    const db = account(LEVEL_100);
+describe('le Prestige vide la poche et le cycle, jamais le total à vie ni le niveau max', () => {
+  it('poche et cycle à 0, niveau à 1, étoile posée', async () => {
+    const db = account(AT_LEVEL_100);
+
+    const result = await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
+
+    expect(result).toMatchObject({ status: 'passed', prestige: 1, score: 0, level: 1 });
+    expect(user(db)).toMatchObject({ engagementScore: 0, sparksSincePrestige: 0, levelRecord: 1, prestige: 1 });
+  });
+
+  it('le total à vie et le niveau max à vie ne bougent pas', async () => {
+    const db = account(AT_LEVEL_100);
+
+    await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
+
+    expect(user(db)).toMatchObject({ sparksEarnedLifetime: LEVEL_100 + 9000, levelMaxLifetime: 100 });
+  });
+
+  it('un compte d\'AVANT le rattrapage : le total à vie et le max à vie sont posés avant que le cycle ne soit vidé', async () => {
+    const db = account(LEVEL_100 + 500, { sparksSincePrestige: undefined, sparksEarnedLifetime: undefined, levelMaxLifetime: undefined });
+
+    await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
+
+    expect(user(db)).toMatchObject({ engagementScore: 0, sparksSincePrestige: 0, sparksEarnedLifetime: LEVEL_100 + 500, levelMaxLifetime: 100 });
+  });
+
+  it('les compteurs par axe ne sont pas remis à zéro : ni points ni actions', async () => {
+    const db = account(AT_LEVEL_100);
+
+    await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
+
+    expect(db.engagementCounter.rows.map((r) => [r.count, r.points])).toEqual([[40_000, 900_000], [500, 1000]]);
+  });
+
+  it('la poche fait le niveau 100 : une poche presque vide ferme le Prestige, même avec un cycle au 100', async () => {
+    const db = account(10);
+
+    await expect(new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
+  });
+
+  it('une poche sous le niveau 100 refuse le Prestige, même avec le max à vie à 100', async () => {
+    const db = account(900_000, { sparksSincePrestige: 5000, levelRecord: 1 });
+
+    await expect(new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' })).rejects.toMatchObject({ code: 'PRESTIGE_LEVEL_TOO_LOW' });
+  });
+});
+
+describe('la frappe et le Prestige ne dépensent jamais deux fois les mêmes étincelles', () => {
+  it('Prestige puis frappe : la poche est vide, rien à frapper, jamais négatif', async () => {
+    const db = account(AT_LEVEL_100);
 
     await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
     const mint = await new MeeshService(db.prisma).mint(USER, 'mint-after-prestige');
 
     expect(mint.status).toBe('insufficient');
-    expect(score(db)).toBe(0);
-    expect(debitable(db)).toBe(0);
+    expect(user(db).engagementScore).toBe(0);
   });
 
-  it('le Prestige ne touche pas aux actions comptées : les badges restent', async () => {
-    const db = account(LEVEL_100);
-    const before = badgesCount(db);
-
-    await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
-
-    expect(badgesCount(db)).toEqual(before);
-  });
-
-  it('frappe puis Prestige : la frappe débite, le Prestige remet score ET points dépensables à 0', async () => {
-    const db = account(LEVEL_100 + FIRST_PRICE);
+  it('frappe puis Prestige : la frappe ne touche ni cycle ni total à vie, le Prestige vide la poche restante', async () => {
+    const db = account(LEVEL_100 + 5000);
 
     const mint = await new MeeshService(db.prisma).mint(USER, 'mint-before-prestige');
     expect(mint.status).toBe('minted');
-    expect(score(db)).toBe(LEVEL_100);
-    expect(debitable(db)).toBe(LEVEL_100);
+    expect(mint.status === 'minted' && user(db).engagementScore).toBe(LEVEL_100 + 5000 - (mint.status === 'minted' ? mint.receipt.price : 0));
+    expect(user(db).sparksSincePrestige).toBe(LEVEL_100 + 5000);
 
     await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
 
-    expect(score(db)).toBe(0);
-    expect(debitable(db)).toBe(0);
+    expect(user(db)).toMatchObject({ engagementScore: 0, sparksSincePrestige: 0, sparksEarnedLifetime: LEVEL_100 + 9000 });
   });
 
-  it('la frappe ne fait jamais descendre le score sous zéro, même si les compteurs mentent', async () => {
-    const db = account(LEVEL_100);
-    db.user.rows[0]!.engagementScore = 10;
+  it('après le Prestige, le niveau ACTUEL est 1 : la frappe se paie au tarif réduit, quel que soit le max à vie', async () => {
+    const db = account(AT_LEVEL_100);
+    await new PrestigeService(db.prisma).pass({ userId: USER, requestId: 'prestige-01' });
+    // Quelques étincelles gagnées dans le cycle neuf (niveau 2, 400 ≤ 700 < 900) : de quoi payer, au tarif du niveau 2.
+    Object.assign(user(db), { engagementScore: 700, sparksSincePrestige: 700 });
 
-    const mint = await new MeeshService(db.prisma).mint(USER, 'mint-lying-counters');
+    const mint = await new MeeshService(db.prisma).mint(USER, 'mint-after');
 
-    expect(mint.status).toBe('insufficient');
-    expect(score(db)).toBe(10);
-    expect(debitable(db)).toBe(LEVEL_100);
+    expect(mint).toMatchObject({ status: 'minted', receipt: { price: effectiveMeeshPrice(1, 2) } });
   });
 });

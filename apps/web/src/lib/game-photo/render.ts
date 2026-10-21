@@ -38,11 +38,44 @@ export const dateLabelOf = (date: Date, timeZone?: string, language: InterfaceLa
 
 const SUFFIX: Readonly<Record<PhotoFormat, string>> = { story: 'story', square: 'profil' };
 
-export const fileNameOf = (momentId: string, format: PhotoFormat): string =>
-  `meeshy-${momentId.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}-${SUFFIX[format]}.png`;
+export const fileNameOf = (momentId: string, format: PhotoFormat, mimeType = 'image/png'): string =>
+  `meeshy-${momentId.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')}-${SUFFIX[format]}.${mimeType === KEPT_STORY_MIME ? 'jpg' : 'png'}`;
 
-const toBlob = (canvas: HTMLCanvasElement): Promise<Blob | null> =>
-  new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+const toBlob = (canvas: HTMLCanvasElement, mimeType = 'image/png', quality?: number): Promise<Blob | null> =>
+  new Promise((resolve) => canvas.toBlob(resolve, mimeType, quality));
+
+/**
+ * LE 9:16 GARDÉ AU CARNET (#10238) : un JPEG de la qualité d'iOS (q0,9), pas le
+ * PNG du partage. Mesuré dans Chromium sur douze cartes composées 1080 × 1920 :
+ * le PNG pèse 1,38 à 1,65 Mo, le JPEG q0,9 210 à 274 Ko (q0,85 : 175 à 229 Ko),
+ * six à sept fois moins sur le quota du navigateur. Le partage garde le PNG.
+ */
+export const KEPT_STORY_MIME = 'image/jpeg';
+export const KEPT_STORY_QUALITY = 0.9;
+
+export type KeptStoryDeps = {
+  readonly createCanvas: (width: number, height: number) => HTMLCanvasElement;
+  readonly decode: (blob: Blob) => Promise<ImageBitmap>;
+};
+
+/** Le JPEG à garder ; l'image d'entrée telle quelle si elle l'est déjà, ou si le navigateur ne sait pas la ré-encoder. */
+export async function keptStoryOf(story: Blob, deps: KeptStoryDeps): Promise<Blob> {
+  if (story.type === KEPT_STORY_MIME) return story;
+  try {
+    const image = await deps.decode(story);
+    try {
+      const canvas = deps.createCanvas(image.width, image.height);
+      const ctx = canvas.getContext('2d');
+      if (ctx === null) return story;
+      ctx.drawImage(image, 0, 0);
+      return (await toBlob(canvas, KEPT_STORY_MIME, KEPT_STORY_QUALITY)) ?? story;
+    } finally {
+      image.close();
+    }
+  } catch {
+    return story;
+  }
+}
 
 /** Ce que le bandeau porte, dans la langue de l'interface : la phrase, les jours de Flamme, et le lien en carré QR (#9554). */
 const bannerOf = (referral: PhotoReferral, layout: BannerLayout | undefined): PhotoBanner => ({

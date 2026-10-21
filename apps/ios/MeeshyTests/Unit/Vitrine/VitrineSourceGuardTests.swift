@@ -26,7 +26,7 @@ final class VitrineSourceGuardTests: XCTestCase {
     /// Hors de son dossier, la vitrine ne vit que dans des blocs `#if DEBUG`.
     func test_everyVitrineReference_outsideItsFolder_isInsideADebugBlock() throws {
         let fichiers = [
-            "apps/ios/Meeshy/MeeshyApp.swift",
+            "apps/ios/Meeshy/MeeshyApp+LaunchSequence.swift",
             "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift",
             "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift",
             "apps/ios/Meeshy/Features/Main/Views/ProgressionView.swift",
@@ -50,7 +50,7 @@ final class VitrineSourceGuardTests: XCTestCase {
             "packages/MeeshySDK/Sources/MeeshySDK/Services/ShareLinkService.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine+Vitrine.swift",
             "packages/MeeshySDK/Sources/MeeshySDK/Configuration/MeeshyConfig.swift",
-            "packages/MeeshySDK/Sources/MeeshyUI/JoinFlow/JoinFlowViewModel.swift",
+            "apps/ios/Meeshy/Features/JoinFlow/JoinFlowViewModel.swift",
         ]
         for chemin in fichiers {
             var pile: [Bool] = []

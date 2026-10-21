@@ -25,3 +25,13 @@ export function newClientMessageId(): string {
   const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
   return `cid_${uuid}`;
 }
+
+/**
+ * LA CLÉ D'IDEMPOTENCE D'UNE ÉCRITURE (`X-Client-Mutation-Id`,
+ * `services/gateway/src/middleware/clientMutationId.ts`) — `cmid_<UUID v4>`,
+ * le même tirage que l'identifiant d'envoi sous le préfixe que la passerelle
+ * valide.
+ */
+export function newClientMutationId(): string {
+  return newClientMessageId().replace(/^cid_/, 'cmid_');
+}

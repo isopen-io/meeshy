@@ -72,6 +72,9 @@ export function localMessageOf(input: {
    * cycle 122, « qui AFFICHE ce qu'il élit ? »).
    */
   readonly replyTo?: Message;
+  /** L'HUMEUR OU LA STORY CITÉE (#10813) — sa référence, portée par la bulle
+   * optimiste comme par le corps du POST (`bodyOf`). */
+  readonly storyReplyToId?: string;
   /**
    * LES PIÈCES JOINTES DE LA BULLE OPTIMISTE (#5668) — des `PendingAttachment`
    * (`send/attachments.ts`), projetées en `Attachment` du domaine par
@@ -117,6 +120,7 @@ export function localMessageOf(input: {
     ...(input.sender === undefined ? {} : { sender: input.sender }),
     ...(input.replyToId === undefined ? {} : { replyToId: input.replyToId }),
     ...(input.replyTo === undefined ? {} : { replyTo: input.replyTo }),
+    ...(input.storyReplyToId === undefined ? {} : { storyReplyToId: input.storyReplyToId }),
     content: input.content,
     originalLanguage: input.originalLanguage,
     messageType: input.messageType ?? 'text',

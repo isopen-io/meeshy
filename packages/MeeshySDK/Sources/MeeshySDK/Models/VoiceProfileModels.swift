@@ -223,16 +223,6 @@ public enum VoiceProfileWizardStep: Int, CaseIterable {
     case complete
 }
 
-// MARK: - Voice Cloning Toggle
-
-public struct VoiceCloningToggleRequest: Encodable {
-    public let enabled: Bool
-
-    public init(enabled: Bool) {
-        self.enabled = enabled
-    }
-}
-
 // MARK: - GDPR Delete
 
 public struct VoiceProfileDeleteResponse: Decodable {

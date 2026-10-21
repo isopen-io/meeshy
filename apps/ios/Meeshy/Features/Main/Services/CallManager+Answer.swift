@@ -42,7 +42,7 @@ extension CallManager {
         ringbackPlayer.stop()
         ringbackPlayer.stopRingtone()
 
-        analyticsNegotiationStartDate = Date()
+        analytics.negotiationStartDate = Date()
         callState = .connecting
         // Audio session is configured at peer-connection setup (handleIncoming…),
         // not here — CallKit drives activation via provider:didActivate:.
@@ -98,7 +98,8 @@ extension CallManager {
                     return
                 }
                 await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
-                self.pendingRemoteOffer = nil
+                // L'accusé a pu laisser finir cet appel et en faire sonner un autre : son offre n'est pas la nôtre.
+                if self.currentCallId == callId { self.pendingRemoteOffer = nil }
                 Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
         } else {
@@ -114,11 +115,14 @@ extension CallManager {
     /// and `answerCallReady()` — both enter `.connecting` before the offer has
     /// arrived and must proactively fail (and notify the gateway) instead of
     /// hanging until the cron reaper eventually cleans up the zombie call.
+    /// Vrai entre le décroché et l'arrivée de l'offre de l'appelant : le minuteur
+    /// d'offre est armé, aucune description distante n'existe encore.
+    var isAwaitingRemoteOffer: Bool { sdpOfferTimeoutTask != nil }
+
     private func scheduleSdpOfferTimeout(callId: String) {
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds))
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.sdpOfferTimeoutSeconds)), let self, !Task.isCancelled else { return }
             guard case .connecting = self.callState, self.currentCallId == callId else { return }
             Logger.calls.error("SDP offer timeout for call: \(callId)")
             // The peer is still waiting on an answer that will never come —
@@ -161,7 +165,7 @@ extension CallManager {
             return
         }
 
-        analyticsNegotiationStartDate = Date()
+        analytics.negotiationStartDate = Date()
         callState = .connecting
 
         if let remoteOffer = pendingRemoteOffer {
@@ -224,5 +228,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

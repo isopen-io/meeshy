@@ -399,3 +399,25 @@ public extension MeeshyMessage {
     /// La loi de sortie de ce message — nature et verdicts.
     var contentExitLaw: ContentExitLaw { ContentExitLaw.of(contentExitSubject) }
 }
+
+public extension MeeshyConversation {
+
+    /// Ce que la loi de sortie lit du DERNIER message de la conversation — les
+    /// champs du groupe « dernier message » : vue unique, flou, échéance servie,
+    /// nature (#7545 : bits et durée) et pièces jointes. Rien de lu ⇒ ordinaire ;
+    /// une échéance sans durée ⇒ flamme après lecture (fermé par défaut).
+    var lastMessageContentExitSubject: ContentExitLaw.Subject {
+        ContentExitLaw.Subject(
+            isViewOnce: lastMessageIsViewOnce,
+            isBlurred: lastMessageIsBlurred,
+            effectFlags: lastMessageNature?.effectFlags.map { UInt32(truncatingIfNeeded: $0) },
+            ephemeralDuration: lastMessageNature?.ephemeralDuration.map(Double.init),
+            expiresAt: lastMessageExpiresAt,
+            attachments: lastMessageAttachments.map(\.contentExitPiece)
+        )
+    }
+
+    /// La loi de sortie du dernier message (#9622) — ce qu'un aperçu publié HORS
+    /// de la conversation (widget, résultat de recherche) a le droit d'en dire.
+    var lastMessageContentExitLaw: ContentExitLaw { ContentExitLaw.of(lastMessageContentExitSubject) }
+}

@@ -7,6 +7,7 @@ import os
 
 #if canImport(WebRTC)
 import WebRTC
+import MeeshySDK
 #endif
 
 // MARK: - Video Filter Configuration
@@ -478,7 +479,7 @@ nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unch
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }
 
 // MARK: - WebRTC Video Filter Capturer Delegate

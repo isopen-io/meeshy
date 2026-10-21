@@ -277,4 +277,35 @@ final class DiscoverViewModelTests: XCTestCase {
         XCTAssertEqual(sut.searchResults.map(\.id), ["search-result"])
         XCTAssertEqual(userService.searchUsersCallCount, 1)
     }
+
+    // MARK: - Réponses dans le désordre
+
+    /// « ab » part, puis « abc » ; la réponse de « ab » revient la DERNIÈRE.
+    /// Elle remplaçait les résultats de ce qui est tapé.
+    func test_performSearch_aSlowerOlderQuery_doesNotOverwriteTheCurrentResults() async {
+        let (sut, _, userService) = makeSUT()
+        let release = AsyncStream<Void>.makeStream()
+        let started = AsyncStream<Void>.makeStream()
+        userService.searchUsersGate = { query in
+            guard query == "ab" else { return }
+            started.continuation.yield()
+            for await _ in release.stream { break }
+        }
+        let old = UserSearchResult(id: "old", username: "abby", displayName: "Abby", avatar: nil, isOnline: false)
+        let current = UserSearchResult(id: "current", username: "abc", displayName: "Abc", avatar: nil, isOnline: false)
+
+        userService.searchUsersResult = .success([old])
+        sut.searchQuery = "ab"
+        let slow = Task { await sut.performSearch() }
+        for await _ in started.stream { break }
+
+        userService.searchUsersResult = .success([current])
+        sut.searchQuery = "abc"
+        await sut.performSearch()
+
+        release.continuation.yield()
+        await slow.value
+
+        XCTAssertEqual(sut.searchResults.map(\.id), ["current"])
+    }
 }

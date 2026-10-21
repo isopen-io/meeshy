@@ -31,7 +31,7 @@ protocol StoryPublishExecutor: AnyObject, Sendable {
 ///      from the serialized payload and runs the full TUS upload pipeline.
 ///      When no executor is mounted yet (boot race, post-logout window
 ///      before RootView mounts), the handler throws a retryable
-///      `StoryPublishExecutorMissingError` so the queue preserves the item
+///      `StoryPublishDeferredError` so the queue preserves the item WITHOUT charging its retry budget
 ///      until the next attempt.
 ///
 ///   2. Subscribes to the queue's success / failure publishers and surfaces
@@ -80,7 +80,7 @@ final class StoryPublishService: ObservableObject {
     /// queue) est consommé là-bas, et l'édition dans `runStoryUpdate`.
     var draftStore: StoryDraftStore = .shared
 
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "story-publish-service")
+    private let logger = MeeshyLog.logger(.storyPublishService)
     private var cancellables = Set<AnyCancellable>()
     private var configured = false
 
@@ -239,7 +239,7 @@ final class StoryPublishService: ObservableObject {
 
     private func registerPublishHandler() async {
         await StoryPublishQueue.shared.setPublishHandler { [weak self] item in
-            guard let self else { throw StoryPublishExecutorMissingError() }
+            guard let self else { throw StoryPublishDeferredError() }
             // The handler runs off the actor — hop to the main actor to
             // dereference the executor (which is @MainActor-isolated). If
             // no executor is registered (app boot race, post-logout window
@@ -250,7 +250,7 @@ final class StoryPublishService: ObservableObject {
             }
             guard let executor else {
                 self.logger.warning("StoryPublishQueue handler invoked with no executor — keeping item for next attempt")
-                throw StoryPublishExecutorMissingError()
+                throw StoryPublishDeferredError()
             }
             return try await executor.executeQueuedPublish(item: item)
         }
@@ -317,7 +317,6 @@ final class StoryPublishService: ObservableObject {
 /// Marker error thrown when no executor has been registered yet. Kept
 /// retryable (NOT StoryPublishUnrecoverableError) so the queue preserves
 /// the item until the executor mounts.
-private struct StoryPublishExecutorMissingError: Error {}
 
 // MARK: - UIKit import for foreground notification
 

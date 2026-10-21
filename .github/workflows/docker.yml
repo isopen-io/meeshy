@@ -255,21 +255,15 @@ jobs:
             HAS_CHANGES=true
             VERSION=$(node -p "require('./apps/web/package.json').version" 2>/dev/null || echo "0.0.0")
             [[ "$FIRST" == "false" ]] && SERVICES+=','
-            # **L'origine de l'API se fige au BUILD, pas au démarrage (#5872).**
-            # `import.meta.env` est remplacé par Vite à la construction : une
-            # variable posée sur le conteneur n'atteindrait jamais le bundle.
-            # `dev` alimente staging (cf. `deploy-staging` plus bas), donc son
-            # image pointe la passerelle de STAGING ; un tag `v*` construit pour
-            # la production, où le défaut de `resolveApiConfig` est déjà la
-            # bonne origine — d'où la chaîne vide. `build-args` rend alors
-            # `VITE_API_BASE=` : c'est `declaredOverride` (`config.ts`) qui
-            # traite cette chaîne vide comme une ABSENCE, sans quoi la base
-            # redeviendrait relative — le défaut même que ce lot corrige.
-            if [[ "${{ github.ref }}" == "refs/heads/dev" ]]; then
-              API_BASE='https://gate.staging.meeshy.me'
-            else
-              API_BASE=''
-            fi
+            # **L'origine de l'API ne se fige PLUS au build (#10208).** Une
+            # même image sert le staging, la production et tout déploiement
+            # sur site : le conteneur la déclare au démarrage
+            # (`MEESHY_API_URL`, `apps/web/docker/runtime-config.sh`), sinon
+            # elle se déduit de l'hôte de la page (`staging.meeshy.me` →
+            # `gate.staging.meeshy.me`). D'où la chaîne vide sur toutes les
+            # branches : `declaredOverride` (`config.ts`) la lit comme une
+            # ABSENCE. C'est ce qui rend l'image recettée promouvable (#9325).
+            API_BASE=''
             # **LA SOURCE DE DONNÉES, décidée ici comme l'origine (#5929).**
             # `gateway` INCONDITIONNELLEMENT : une image déployée qui sert des
             # fixtures montre Kwame Mensah à de vrais utilisateurs. Le défaut du
@@ -624,6 +618,13 @@ jobs:
             echo "::error::un service de staging ne tient pas debout après déploiement"
             exit 1
           fi
+          # (#9825, #10048) `healthy` ne dit pas QUELLE image tourne. Un
+          # `GATEWAY_IMAGE=…:sha-…` épinglé à la main dans le `.env` de l'hôte
+          # fait tirer et garder un tag figé : `pull` réussit, `up -d` répond
+          # `Running`, et l'image que la CI vient de pousser n'est jamais
+          # servie. On exige le tag flottant `:staging` sur chaque service
+          # recréé, en nommant la variable à retirer.
+          printf '%s\n' "$SORTIE" | node infrastructure/scripts/staging-deploy-verdict.mjs --services "$CIBLES"
 
           {
             echo "## Staging déployé"
@@ -704,7 +705,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload scan results
-        uses: github/codeql-action/upload-sarif@v4.38.2
+        uses: github/codeql-action/upload-sarif@v4.39.0
         continue-on-error: true
         with:
           sarif_file: 'trivy-${{ matrix.service }}.sarif'

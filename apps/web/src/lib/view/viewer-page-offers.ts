@@ -1,8 +1,11 @@
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+
 import { attachmentSrc } from '@/lib/api/media-url';
 import type { Attachment, Message } from '@/lib/api/types';
 import type { SendSheetRequest } from '@/lib/send/send-sheet-store';
 
 import { loosePieceLeaves, mediaLeaves, type ExitMessage } from './content-exit';
+import { forwardRefusalOf, sharePieceOf } from './forward';
 import { kindOf } from './message';
 import { quotedIsProtected } from './quoted-protection';
 
@@ -88,6 +91,8 @@ export type MediaViewerPage = {
   readonly messageId: string;
   readonly conversationId: string;
   readonly offers: MediaPageOffers;
+  /** « Transcrire » d'un vocal (#10700) — faux quand le serveur ne lit pas le message ou que l'envoi est local ; absent ⇒ offert. */
+  readonly transcribe?: boolean;
   readonly onReply?: () => void;
   /** Ce que « Partager » remet à la feuille d'envoi — posé par l'hôte qui sait de quoi la pièce est la pièce (message, publication, média nu). */
   readonly share?: SendSheetRequest;
@@ -102,26 +107,30 @@ const previewUrlOf = (attachment: Attachment): string =>
     : attachmentSrc(attachment.fileUrl);
 
 /**
- * LA PIÈCE D'UN MESSAGE, TELLE QUE LA FEUILLE D'ENVOI LA REÇOIT (#8884) — elle
- * voyage par ses IDENTIFIANTS, jamais par son fichier : la passerelle la copie
- * ou la transfère sans ré-upload. `mine` dit si la copie serveur lui est permise.
- * `mediaPageOffers` n'offre « Partager » qu'à une pièce qui a le droit de
- * sortir ; `protected` redit ce verdict dans la charge, pour que le plan
- * d'envoi refuse la publication même si une autre entrée l'ouvrait.
+ * LA PIÈCE D'UN MESSAGE, TELLE QUE L'ÉCRAN DE PARTAGE LA REÇOIT (#8884, #9914)
+ * — elle voyage par ses IDENTIFIANTS, jamais par son fichier : la passerelle
+ * ne recopie QUE cette pièce (`forwardedAttachmentIds`), mêmes blobs, aucun
+ * ré-upload. `exit` est ce que la loi du partage lit : le message, et cette
+ * pièce. Une citation dont la nature n'est pas déclarée est jugée fermée
+ * (`quotedExitOf`) : la charge le dit à la loi par le bit d'une flamme après
+ * lecture, le verdict le plus fermé.
  */
 export function attachmentSendRequest(params: {
   readonly attachment: Attachment;
   readonly message: Pick<Message, 'id' | 'conversationId'> & Partial<ExitMessage>;
-  /** Le lecteur est l'auteur du message (`isMineOf`) — l'hôte qui ne le sait pas dit `false`, la voie sûre (transfert, jamais copie serveur). */
-  readonly mine: boolean;
   readonly now: number;
   readonly quoted?: boolean;
+  /** La conversation source est chiffrée (D7). */
+  readonly sourceEncrypted?: boolean;
 }): SendSheetRequest {
-  const { attachment, message, mine, now } = params;
-  const carrier: ExitMessage = { isViewOnce: false, isBlurred: false, ...message };
-  const leaves = mediaLeaves({ message: carrier, piece: attachment, now, source: params.quoted === true ? 'quote' : 'message' });
+  const { attachment, message, now } = params;
+  /* Une source supprimée ou échue n'a plus rien à copier. */
+  const gone = forwardRefusalOf({ isViewOnce: false, isBlurred: false, ...message }, now) === 'unavailable';
+  const undeclared = params.quoted === true && typeof message.effectFlags !== 'number';
+  const sealed = MESSAGE_EFFECT_FLAGS.EPHEMERAL | MESSAGE_EFFECT_FLAGS.EPHEMERAL_AFTER_READ;
+  const effectFlags = undeclared ? sealed : message.effectFlags;
   return {
-    intent: 'share',
+    intent: 'forward',
     payload: {
       kind: 'attachment',
       conversationId: message.conversationId,
@@ -129,8 +138,17 @@ export function attachmentSendRequest(params: {
       attachmentId: attachment.id,
       mime: attachment.mimeType,
       previewUrl: previewUrlOf(attachment),
-      mine,
-      protected: !leaves,
+      exit: {
+        id: message.id,
+        isViewOnce: message.isViewOnce === true,
+        isBlurred: message.isBlurred === true,
+        ...(effectFlags === undefined ? {} : { effectFlags }),
+        ...(message.ephemeralDuration === undefined ? {} : { ephemeralDuration: message.ephemeralDuration }),
+        ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt }),
+        encrypted: params.sourceEncrypted === true || message.isEncrypted === true || attachment.isEncrypted,
+        pieces: [sharePieceOf(attachment)],
+      },
+      ...(gone ? { unsendable: true } : {}),
     },
   };
 }

@@ -47,7 +47,7 @@ nonisolated enum LocationSearchPlan {
 
 struct LocationPickerView: View {
     /// Couleur PRIMAIRE de la conversation — les appelants passent
-    /// `conversation.accentColor`, qui est `colorPalette.primary`.
+    /// `conversation.accentColor`, qui est `displayPalette.primary`.
     let accentColor: String
     /// Émet un lieu COMPLET (coordonnées + nom + adresse + catégorie POI),
     /// pas de simples coordonnées nues : c'est ce que jetait l'ancienne
@@ -75,7 +75,7 @@ struct LocationPickerView: View {
     /// officielle du SDK. `DynamicColorGenerator.colorFor(context:)` calcule
     /// `accent = shiftHue(primary, -30°)` et n'applique jamais
     /// `saturationBoost` aux hex — cette dérivation reproduit donc
-    /// `conversation.colorPalette.accent` à l'identique, sans imposer un
+    /// `conversation.displayPalette.accent` à l'identique, sans imposer un
     /// nouveau paramètre aux sept sites d'appel.
     ///
     /// STOCKÉE, pas calculée : `hueShiftedHex` construit deux `UIColor` et un
@@ -365,8 +365,7 @@ struct LocationPickerView: View {
                     // pas une nouvelle requête, la liste ne doit pas se rouvrir.
                     guard requête != viewModel.selectedName else { return }
                     searchTask = Task { @MainActor in
-                        try? await Task.sleep(nanoseconds: 300_000_000)
-                        guard !Task.isCancelled else { return }
+                        guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }
                         viewModel.search(query: requête)
                     }
                 }
@@ -571,7 +570,7 @@ struct LocationPickerView: View {
 
             Button {
                 guard let place = displayedPlace else { return }
-                Logger(subsystem: "me.meeshy.app", category: "location")
+                MeeshyLog.logger(.location)
                     .info("breadcrumb.selection hasName=\(place.name != nil, privacy: .public) precision=\(self.precision.rawValue, privacy: .public)")
                 onSelect(place)
                 HapticFeedback.success()
@@ -719,7 +718,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
     private var geocodeTask: Task<Void, Never>?
-    private let log = Logger(subsystem: "me.meeshy.app", category: "location")
+    private let log = MeeshyLog.logger(.location)
 
     /// Garde contre deux relevés concurrents. À l'ouverture d'un picker déjà
     /// autorisé, `requestPermission()` et le callback d'autorisation initial
@@ -802,8 +801,7 @@ nonisolated final class LocationPickerModel: NSObject, ObservableObject, CLLocat
         // `isGeocoding`/`addressString`, donc `objectWillChange` — SwiftUI exige
         // que ces émissions restent sur le main.
         geocodeTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(300)), !Task.isCancelled else { return }
             self?.reverseGeocode(coordinate)
         }
     }

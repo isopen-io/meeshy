@@ -62,6 +62,15 @@ final class PresenceManager: ObservableObject {
     /// mutation settles, coalescing a burst of `user:status` events (e.g.
     /// right after reconnect) into a single downstream re-render.
     let refreshSignal = PresenceRefreshSignal()
+    /// Le même battement, en flux, pour les avatars des vues du SDK
+    /// (`MeeshyLivePresence`, posé par `meeshySocialChrome`) : MeeshyUI ne lit
+    /// aucun singleton de l'app. `dropFirst` — s'abonner n'est pas un battement.
+    lazy var refreshPublisher: AnyPublisher<Int, Never> = refreshSignal.$presenceVersion
+        .dropFirst()
+        .eraseToAnyPublisher()
+    /// L'état de chaque pastille au dernier battement publié (#11412) : le
+    /// minuteur ne repeint que si un état a changé depuis.
+    private var publishedStates: [String: PresenceState] = [:]
     nonisolated(unsafe) private var versionBumpTask: Task<Void, Never>?
     nonisolated static let versionBumpDebounce: TimeInterval = 0.4
 
@@ -138,13 +147,22 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Keep the last-known presence snapshot across brief socket drops
-        // (e.g. iOS background → foreground transition). Wiping the map the
-        // moment `isConnected` flips to false caused all avatars to lose
-        // their online dots during every resume, which felt like the app
-        // "forgot" who was online. The computed decay (away at 1 min, idle at
-        // 3 min, offline at 5 min) still applies, so stale data degrades
-        // gracefully. Presence will be refreshed when `user:status` events resume.
+        // La carte SURVIT à une coupure (vidée, chaque reprise d'arrière-plan
+        // éteignait tous les points), mais elle n'y garde aucun `isOnline:true` :
+        // sans socket, ce drapeau n'est plus maintenu par personne, et une entrée
+        // sans `lastActiveAt` restait verte indéfiniment (#11412). Chaque entrée
+        // garde son `lastActiveAt` et décroît (1/3/5) ; l'instantané de la
+        // reconnexion la remplace. Seules les coupures APRÈS l'abonnement
+        // comptent (`dropFirst`) : l'état initial n'est pas une coupure.
+        MessageSocketManager.shared.$isConnected
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.noteSocketDisconnected()
+            }
+            .store(in: &cancellables)
 
         // Hydrate from disk off-main: fills entries not yet populated by a
         // real-time socket event (live updates take precedence via merging).
@@ -156,24 +174,23 @@ final class PresenceManager: ObservableObject {
             self.presenceMap = loaded.merging(self.presenceMap) { _, liveEntry in liveEntry }
         }
 
-        // Recalcule toutes les 30s — déclenche un re-render seulement si un
-        // utilisateur traverse une frontière d'état 1/3/5 dans cette fenêtre :
-        // online → away à 60s, away → idle à 180s, idle → offline à 300s.
-        recalcTimer = Timer.scheduledTimer(withTimeInterval: Self.recalcInterval, repeats: true) { [weak self] _ in
+        startRecalcTimer()
+    }
+
+    /// Re-résout chaque pastille à chaque tick et ne repeint que si un état a
+    /// changé depuis le dernier battement (`recalculateStates`) — plus de
+    /// fenêtre fixe qu'un tick manqué sautait. Mode `.common` : le minuteur
+    /// continue pendant le défilement, quand la décroissance se voit le plus.
+    private func startRecalcTimer() {
+        let timer = Timer(timeInterval: Self.recalcInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
-                let hasTransition = self.presenceMap.values.contains { Self.isNearStateFlip($0) }
-                if hasTransition {
-                    self.objectWillChange.send()
-                    // Reaches actual observers (`refreshSignal`) — previously
-                    // this recalc fired into the void: nothing subscribed to
-                    // `PresenceManager` directly, so a 1/3/5 boundary crossing
-                    // (e.g. online → away at 60s, no new `user:status` event)
-                    // never repainted a single avatar dot.
-                    self.refreshSignal.bump()
-                }
+                self.recalculateStates()
             }
         }
+        timer.tolerance = 1
+        RunLoop.main.add(timer, forMode: .common)
+        recalcTimer = timer
     }
 
     /// Re-sème la présence depuis une page de conversations (REST). Cette
@@ -199,15 +216,43 @@ final class PresenceManager: ObservableObject {
     }
 
     func presenceState(for userId: String) -> PresenceState {
-        presenceMap[userId]?.state ?? .offline
+        knownPresenceState(for: userId) ?? .offline
     }
 
-    /// Preuve d'activité immédiate observée côté client (typing:start reçu) :
-    /// force l'état online local pour cet utilisateur, sans attendre le
-    /// prochain user:status / snapshot du gateway.
+    /// La présence SERVIE de l'auteur d'un message (#10944) : `senderId` est
+    /// l'identifiant de PARTICIPATION, la carte est tenue par COMPTE — la clé
+    /// sous laquelle le serveur l'annonce (`viewingKey`). Un visiteur anonyme
+    /// n'a aucune présence servie : son avatar ne porte aucun point.
+    func presenceState(forSenderOf message: MeeshyMessage) -> PresenceState {
+        presenceState(for: message.viewingKey)
+    }
+
+    /// La carte vivante d'abord, la présence que la charge a SERVIE sinon — un
+    /// auteur de story dont aucun `user:status` n'est encore arrivé (#10944).
+    func presenceState(for userId: String, served: UserPresence?) -> PresenceState {
+        knownPresenceState(for: userId) ?? served?.state ?? .offline
+    }
+
+    /// Preuve d'activité observée côté client (frappe, arrivée dans une
+    /// conversation) : elle date l'activité, rien de plus (#11412). Le pair est
+    /// vert (≤ 60 s) puis décroît orange → gris → rien ; `isOnline` reste ce que
+    /// le serveur a dit — le poser à `true` donnait 5 min de vert puis plus rien.
+    /// Sa propre activité n'écrit jamais la carte.
     func noteActivity(userId: String) {
-        guard !userId.isEmpty else { return }
-        presenceMap[userId] = UserPresence(isOnline: true, lastActiveAt: Date())
+        guard !userId.isEmpty, userId != AuthManager.shared.currentUser?.id else { return }
+        presenceMap[userId] = UserPresence(
+            isOnline: presenceMap[userId]?.isOnline ?? false,
+            lastActiveAt: Date()
+        )
+    }
+
+    /// Coupure du socket (#11412) : plus personne n'est en ligne AU SENS DU
+    /// SERVEUR. Chaque entrée passe à `isOnline:false` en gardant son
+    /// `lastActiveAt`, donc décroît sans s'éteindre d'un coup ; l'instantané de
+    /// la reconnexion la remplace.
+    func noteSocketDisconnected() {
+        guard presenceMap.values.contains(where: \.isOnline) else { return }
+        presenceMap = presenceMap.mapValues { UserPresence(isOnline: false, lastActiveAt: $0.lastActiveAt) }
     }
 
     // MARK: - « Est dans la conversation » (#8892)
@@ -252,6 +297,17 @@ final class PresenceManager: ObservableObject {
         }
     }
 
+    /// Déconnexion : la présence observée appartient au compte sortant. Le
+    /// fichier n'a pas de compte dans son nom ; il est réécrit vide tout de
+    /// suite, pas après le délai de regroupement, pour qu'un arrêt de l'app
+    /// juste après ne rende pas au compte suivant la carte du précédent.
+    func resetForLogout() {
+        presenceMap = [:]
+        persistTask?.cancel()
+        persistToDisk()
+        clearConversationViewers()
+    }
+
     func clearConversationViewers() {
         cancelRestTasks()
         conversationViewers = ConversationViewers()
@@ -268,8 +324,7 @@ final class PresenceManager: ObservableObject {
         restTasks[key]?.cancel()
         let hold = activityHold
         restTasks[key] = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(hold)), !Task.isCancelled, let self else { return }
             self.restTasks[key] = nil
             self.conversationViewers = self.conversationViewers.resting(userId: change.userId, conversationId: change.conversationId)
         }
@@ -285,8 +340,21 @@ final class PresenceManager: ObservableObject {
     /// profil affiche la MÊME pastille que la liste de conversations quand la
     /// donnée live existe, et retombe sur son snapshot REST `isOnline` pour
     /// les profils hors du périmètre suivi (contacts jamais croisés).
+    ///
+    /// SA PROPRE pastille ne se peint jamais (décision porteur 2026-10-21,
+    /// #11412) : la passerelle sert sa présence à soi-même, et son propre post ou
+    /// son message en groupe la portaient. `.offline` — connue, sans point — et
+    /// non `nil`, pour qu'aucun appelant ne retombe sur la présence REST.
     func knownPresenceState(for userId: String) -> PresenceState? {
-        presenceMap[userId]?.state
+        if !userId.isEmpty, userId == AuthManager.shared.currentUser?.id { return .offline }
+        return presenceMap[userId]?.state
+    }
+
+    /// La présence d'un compte que la vue reçoit déjà servie (payload stories) :
+    /// la carte vivante d'abord, la charge sinon — jamais la sienne (#11412).
+    func servedPresence(for userId: String, fallback: UserPresence?) -> UserPresence? {
+        if !userId.isEmpty, userId == AuthManager.shared.currentUser?.id { return nil }
+        return presenceMap[userId] ?? fallback
     }
 
     /// Pastille tri-state pour les listes : présence temps réel du manager si
@@ -297,18 +365,24 @@ final class PresenceManager: ObservableObject {
         return UserPresence(isOnline: isOnline ?? false, lastActiveAt: lastActiveAt).state
     }
 
-    /// Cadence du timer de recalcul. Egale a la largeur des fenetres de
-    /// `isNearStateFlip` : chaque transition 1/3/5 est captee par le tick
-    /// qui suit la frontiere (retard maximal d'un tick).
-    nonisolated static let recalcInterval: TimeInterval = 30
+    /// Cadence du minuteur de recalcul : un seuil 1/3/5 se repeint au plus
+    /// `recalcInterval` après avoir été franchi.
+    nonisolated static let recalcInterval: TimeInterval = 15
 
-    nonisolated static func isNearStateFlip(_ presence: UserPresence, now: Date = Date()) -> Bool {
-        guard let last = presence.lastActiveAt else { return false }
-        let elapsed = now.timeIntervalSince(last)
-        // Fenetres de bascule 1/3/5 (60s online→away, 180s away→idle, 300s idle→offline).
-        return (elapsed > 60 && elapsed <= 90)
-            || (elapsed > 180 && elapsed <= 210)
-            || (elapsed > 300 && elapsed <= 330)
+    /// L'état de chaque pastille de `map` à l'instant `now`.
+    nonisolated static func resolvedStates(of map: [String: UserPresence], at now: Date) -> [String: PresenceState] {
+        map.mapValues { $0.state(now: now) }
+    }
+
+    /// Re-résout TOUTES les entrées à `now` et compare au dernier battement
+    /// publié (#11412) : un état changé — seuil 1/3/5 franchi, à n'importe quel
+    /// moment depuis — programme un battement ; rien de changé, rien ne se
+    /// repeint. Rend `true` quand un battement est programmé.
+    @discardableResult
+    func recalculateStates(now: Date = Date()) -> Bool {
+        guard Self.resolvedStates(of: presenceMap, at: now) != publishedStates else { return false }
+        scheduleVersionBump()
+        return true
     }
 
     /// Apply a bulk presence snapshot received via the `presence:snapshot` socket
@@ -320,15 +394,18 @@ final class PresenceManager: ObservableObject {
     /// (closes the "stale online forever" failure mode).
     func ingestSnapshot(_ users: [UserStatusEvent]) {
         guard !users.isEmpty else { return }
+        // Le DERNIER relevé d'un même utilisateur l'emporte ; un doublon dans l'instantané du serveur
+        // ne fait plus planter l'app (`uniqueKeysWithValues` piège sur une clé répétée).
         let updates = Dictionary(
-            uniqueKeysWithValues: users.map { entry in
+            users.map { entry in
                 (entry.userId, UserPresence(isOnline: entry.isOnline, lastActiveAt: entry.lastActiveAt))
-            }
+            },
+            uniquingKeysWith: { _, latest in latest }
         )
         presenceMap.merge(updates) { _, newEntry in newEntry }
     }
 
-    deinit {
+    nonisolated deinit {
         recalcTimer?.invalidate()
         recalcTimer = nil
         persistTask?.cancel()
@@ -344,8 +421,7 @@ final class PresenceManager: ObservableObject {
     private nonisolated func schedulePersist() {
         persistTask?.cancel()
         persistTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.persistDebounce * 1_000_000_000))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(Self.persistDebounce)), !Task.isCancelled, let self else { return }
             self.persistToDisk()
         }
     }
@@ -367,8 +443,8 @@ final class PresenceManager: ObservableObject {
     private nonisolated func scheduleVersionBump() {
         versionBumpTask?.cancel()
         versionBumpTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.versionBumpDebounce * 1_000_000_000))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(Self.versionBumpDebounce)), !Task.isCancelled, let self else { return }
+            self.publishedStates = Self.resolvedStates(of: self.presenceMap, at: Date())
             self.refreshSignal.bump()
         }
     }
@@ -419,5 +495,5 @@ final class PresenceManager: ObservableObject {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let presence = Logger(subsystem: "me.meeshy.app", category: "presence")
+    nonisolated static let presence = MeeshyLog.logger(.presence)
 }

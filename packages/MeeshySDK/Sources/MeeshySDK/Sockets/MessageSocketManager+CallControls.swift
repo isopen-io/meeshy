@@ -7,7 +7,7 @@ import SocketIO
 // `packages/shared/types/call-controls.ts`. La passerelle décide qui a le
 // droit ; ce fichier émet les verbes, rend leur accusé et relaie les trois
 // diffusions. Dans son propre fichier : `MessageSocketManager.swift` est hors
-// budget, il n'y porte que `registerCallControlHandlers(on:)`.
+// budget, la table des routes n'y porte que `callControlRoutes`.
 
 /// Les huit réactions d'un appel — liste FERMÉE, dans l'ordre de la passerelle.
 public enum CallReactionEmoji: String, CaseIterable, Sendable, Equatable, Decodable {
@@ -130,67 +130,53 @@ extension MessageSocketManager: CallControlsSocketProviding {
         CallControlSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallControlHandlers(on socket: SocketIOClient) {
-        socket.on("call:participant-invited") { [weak self] data, _ in
-            self?.decode(CallParticipantInvitedEvent.self, from: data) { event in
+    var callControlRoutes: [SocketInboundRoute] {
+        let controls: [SocketInboundRoute] = [
+            route(.callParticipantInvited, CallParticipantInvitedEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.participantInvited(event))
-            }
-        }
-        socket.on("call:invite-declined") { [weak self] data, _ in
-            self?.decode(CallInviteSettledEvent.self, from: data) { event in
+            },
+            route(.callInviteDeclined, CallInviteSettledEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.inviteDeclined(event))
-            }
-        }
-        socket.on("call:invite-expired") { [weak self] data, _ in
-            self?.decode(CallInviteSettledEvent.self, from: data) { event in
+            },
+            route(.callInviteExpired, CallInviteSettledEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.inviteExpired(event))
-            }
-        }
-        socket.on("call:muted-by-moderator") { [weak self] data, _ in
-            self?.decode(CallMutedByModeratorEvent.self, from: data) { event in
+            },
+            route(.callMutedByModerator, CallMutedByModeratorEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.mutedByModerator(event))
-            }
-        }
-        socket.on("call:reaction-received") { [weak self] data, _ in
-            self?.decode(CallReactionReceivedEvent.self, from: data) { event in
+            },
+            route(.callReactionReceived, CallReactionReceivedEvent.self) { _, event in
                 CallControlSocketChannel.events.send(.reactionReceived(event))
-            }
-        }
-        registerCallLiveFrameHandlers(on: socket)
+            },
+        ]
+        return controls + callLiveFrameRoutes
     }
 
     public func inviteCallParticipant(callId: String, userId: String) async throws {
-        try await emitCallControl("call:invite-participant", ["callId": callId, "userId": userId])
+        try await emitCallControl(.callInviteParticipant, ["callId": callId, "userId": userId])
     }
 
     public func muteCallParticipant(callId: String, targetUserId: String) async throws {
-        try await emitCallControl("call:mute-participant", ["callId": callId, "targetUserId": targetUserId])
+        try await emitCallControl(.callMuteParticipant, ["callId": callId, "targetUserId": targetUserId])
     }
 
     public func sendCallReaction(callId: String, emoji: CallReactionEmoji) async throws {
-        try await emitCallControl("call:reaction", ["callId": callId, "emoji": emoji.rawValue])
+        try await emitCallControl(.callReaction, ["callId": callId, "emoji": emoji.rawValue])
     }
 
-    private func emitCallControl(_ event: String, _ payload: [String: Any]) async throws {
+    private func emitCallControl(_ event: SocketEvent, _ payload: [String: Any]) async throws {
         guard let socket else { throw CallControlRefusal(code: "NO_SOCKET") }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            socket.emitWithAck(event, payload).timingOut(after: 10) { items in
-                if let refusal = Self.callControlRefusal(items.first) {
-                    continuation.resume(throwing: refusal)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(event, payload, as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 10)
+        if let refusal = Self.callControlRefusal(ack) { throw refusal }
     }
 
     /// `nil` pour `{ success: true }` ; tout le reste (dont l'échéance, que
     /// Socket.IO rend en `"NO ACK"`) est un refus.
-    static func callControlRefusal(_ item: Any?) -> CallControlRefusal? {
-        guard let response = item as? [String: Any] else { return CallControlRefusal(code: "TIMEOUT") }
-        guard response["success"] as? Bool == true else {
-            return CallControlRefusal(code: response["code"] as? String ?? "MALFORMED_ACK")
+    static func callControlRefusal(_ ack: SocketAck<SocketAckNoPayload>) -> CallControlRefusal? {
+        switch ack {
+        case .accepted: return nil
+        case .timedOut: return CallControlRefusal(code: "TIMEOUT")
+        case .refused(let refusal): return CallControlRefusal(code: refusal.code ?? "MALFORMED_ACK")
+        case .acceptedWithoutPayload, .undecodable: return CallControlRefusal(code: "MALFORMED_ACK")
         }
-        return nil
     }
 }

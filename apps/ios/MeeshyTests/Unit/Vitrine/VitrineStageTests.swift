@@ -22,4 +22,16 @@ final class VitrineStageTests: XCTestCase {
         XCTAssertTrue(ouvert)
         XCTAssertEqual(phaseALOuverture, .gone)
     }
+
+    func test_device_isDecidedByTheSceneSize() throws {
+        XCTAssertEqual(VitrineAppareil(sizeClass: .regular), .ipad)
+        XCTAssertEqual(VitrineAppareil(sizeClass: .compact), .iphone)
+        XCTAssertEqual(VitrineAppareil(sizeClass: nil), .iphone)
+        XCTAssertEqual(
+            VitrineScene.progression.rendusAttendus(conversationId: nil, appareil: VitrineAppareil(sizeClass: .compact)),
+            [.progression]
+        )
+        let code = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Vitrine/VitrineStage.swift"))
+        XCTAssertFalse(code.contains("userInterfaceIdiom"))
+    }
 }

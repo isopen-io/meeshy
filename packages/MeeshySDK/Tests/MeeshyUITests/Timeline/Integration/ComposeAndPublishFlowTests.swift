@@ -105,7 +105,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func requestMediaCaptionTranslation(mediaId: String, targetLanguage: String) async throws {}
     func pinPost(postId: String) async throws {}
     func unpinPost(postId: String) async throws {}
-    func viewPost(postId: String, duration: Int?) async throws {}
     func getPostViews(postId: String, limit: Int, offset: Int) async throws -> OffsetPaginatedAPIResponse<[APIPostViewer]> {
         throw NSError(domain: "mock", code: -1)
     }
@@ -118,9 +117,6 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     func getCommunityPosts(communityId: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[APIPost]> {
         throw NSError(domain: "mock", code: -1)
     }
-    func recordImpressions(postIds: [String], source: String) async throws {}
-    func recordImpression(postId: String, source: String) async throws {}
-    func recordEngagement(_ sessions: [EngagementSession]) async throws {}
 }
 
 // MARK: - ComposeAndPublishFlowTests

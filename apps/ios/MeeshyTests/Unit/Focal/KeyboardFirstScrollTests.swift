@@ -93,7 +93,7 @@ final class KeyboardFirstScrollTests: XCTestCase {
     }
 
     private func normalized(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try String(contentsOf: Self.iosRoot.appendingPathComponent(relativePath), encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.text(at: Self.iosRoot.appendingPathComponent(relativePath)))
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 
@@ -110,8 +110,8 @@ final class KeyboardFirstScrollTests: XCTestCase {
     }
 
     func test_scrollToBottomButton_doesNotFollowTheScrollCollapse() throws {
-        let code = try normalized("Meeshy/Features/Main/Views/ConversationView.swift")
-        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChromeForScroll, .bottom)").count - 1, 1,
+        let code = try normalized("Meeshy/Features/Main/Views/ConversationLayers/ConversationBodyStage.swift")
+        XCTAssertEqual(code.components(separatedBy: ".hiddenTowardsEdge(hidesComposerChrome, .bottom)").count - 1, 1,
                        "seul le composeur glisse vers le bas ; la bulle « retour en bas » reste (#8002)")
     }
 }

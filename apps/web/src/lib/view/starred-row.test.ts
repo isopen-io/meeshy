@@ -149,3 +149,15 @@ describe('starredRowModel — l’auteur, la date, la conversation, l’accent',
     expect(starredRowModel(item({ conversation: { name: null } }), { preferredLanguages: ['fr'], locale: 'fr-FR' }).conversationName).toBe('equipe');
   });
 });
+
+describe('starredRowModel — l’accent PERSONNEL du lecteur (#10631)', () => {
+  const personal = [{ appearance: { v: 1, background: { kind: 'signature' }, accent: 'corail', animate: true } }];
+
+  test('la barre prend l’accent choisi pour la conversation, et la calculée sans choix', () => {
+    const starred = item();
+    const withChoice = starredRowModel(starred, { preferredLanguages: ['fr'], locale: 'fr', preferencesOf: () => personal });
+    const without = starredRowModel(starred, { preferredLanguages: ['fr'], locale: 'fr' });
+    expect(withChoice.accent).not.toBe(without.accent);
+    expect(without.accent).toBe(conversationAccentPalette({ name: 'Équipe déploiement', type: 'group' }).primary);
+  });
+});

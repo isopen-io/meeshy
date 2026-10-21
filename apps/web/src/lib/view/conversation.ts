@@ -72,6 +72,14 @@ export const peerOf = (conversation: Conversation, viewerId: string): Participan
     : undefined;
 
 /**
+ * LA CLÉ DE PRÉSENCE d'un participant — celle que la passerelle pose sur
+ * `user:status` : l'id du compte, ou l'id de la ligne pour un invité sans
+ * compte (#10571).
+ */
+export const presenceKeyOf = (participant: Participant | undefined): string | undefined =>
+  participant === undefined ? undefined : (participant.userId ?? participant.user?.id ?? participant.id);
+
+/**
  * LA FORME MINIMALE D'UN PORTEUR DE PHOTO, DITE DANS LES TERMES DE CE CLIENT.
  *
  * `AvatarBearingParticipant` (shared) déclare `avatar?: string | null` — juste

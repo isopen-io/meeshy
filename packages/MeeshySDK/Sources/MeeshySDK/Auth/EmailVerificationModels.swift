@@ -84,12 +84,20 @@ public struct EmailVerificationRequest: Encodable, Equatable, Sendable {
     public let code: String?
     public let token: String?
     public let password: String?
+    /// #10872 — avec le LIEN seulement : le secret gardé par l'appareil qui l'a
+    /// demandé, et le « oui » explicite de l'utilisateur à la confirmation.
+    /// Omis du corps quand `nil` — une passerelle antérieure les ignore.
+    public let linkDeviceSecret: String?
+    public let confirm: Bool?
 
-    private init(email: String, code: String?, token: String?, password: String?) {
+    private init(email: String, code: String?, token: String?, password: String?,
+                 linkDeviceSecret: String? = nil, confirm: Bool? = nil) {
         self.email = email
         self.code = code
         self.token = token
         self.password = password
+        self.linkDeviceSecret = linkDeviceSecret
+        self.confirm = confirm
     }
 
     public static func code(_ code: String, email: String, password: String? = nil) -> EmailVerificationRequest {
@@ -97,7 +105,14 @@ public struct EmailVerificationRequest: Encodable, Equatable, Sendable {
         return EmailVerificationRequest(email: email, code: code, token: nil, password: typed)
     }
 
-    public static func link(token: String, email: String) -> EmailVerificationRequest {
-        EmailVerificationRequest(email: email, code: nil, token: token, password: nil)
+    public static func link(token: String, email: String, confirmed: Bool = false) -> EmailVerificationRequest {
+        EmailVerificationRequest(email: email, code: nil, token: token, password: nil, confirm: confirmed ? true : nil)
+    }
+
+    /// La même preuve, portant le secret de l'appareil — jamais pour un code.
+    func presenting(linkDeviceSecret secret: String?) -> EmailVerificationRequest {
+        guard token != nil else { return self }
+        return EmailVerificationRequest(email: email, code: code, token: token, password: password,
+                                        linkDeviceSecret: secret, confirm: confirm)
     }
 }

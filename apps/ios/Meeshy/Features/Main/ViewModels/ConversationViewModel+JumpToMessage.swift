@@ -21,13 +21,10 @@ extension ConversationViewModel {
 
     func loadMessagesAround(messageId: String) async {
         do {
-            let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
+            let response = try await collaborators.windowFetcher.around(
+                messageId, in: conversationId, limit: limit, readerPrism: preferredLanguages,
+                label: "conversationViewModelJumpToMessage.messages.upsertFromAPIMessages"
             )
-
-            // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
-
             await applyJumpedWindow(response, around: messageId)
         } catch {
             self.error = userFacingMessage(for: error)
@@ -79,12 +76,12 @@ extension ConversationViewModel {
         isLoadingNewer = true
         defer { releaseNewerPageLoading(of: generation) }
         do {
-            let response = try await messageService.listAfter(
-                conversationId: conversationId, after: watermark.addingTimeInterval(-0.001), limit: limit,
-                includeReplies: true, includeTranslations: true, languages: nil
-            )
+            let response = try await collaborators.windowFetcher.fetchAfter(watermark, in: conversationId, limit: limit)
             guard isInJumpedState else { return }
-            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            await collaborators.windowFetcher.upsert(
+                response, readerPrism: preferredLanguages,
+                label: "conversationViewModelJumpToMessage.messages.upsertFromAPIMessages.2"
+            )
             guard isInJumpedState, messageStore.windowGeneration == generation else { return }
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
@@ -158,17 +155,7 @@ extension ConversationViewModel {
         return messageStore.jumpedNewerEdge != edgeBefore
     }
 
-    /// Outcome of `jumpToQuotedMessage`.
-    enum JumpResult {
-        /// The message was already present in the local store — caller should
-        /// perform an instant scroll + highlight.
-        case foundLocally
-        /// The message was fetched from the server and loaded into the store.
-        /// Caller should scroll + highlight after the snapshot settles.
-        case loadedFromServer
-        /// The message could not be found (deleted, not accessible, network error).
-        case notFound
-    }
+    typealias JumpResult = ConversationJumpResult
 
     /// High-level "jump to a quoted message" flow called when the user taps
     /// a reply reference. If the message is already in the local store's
@@ -192,12 +179,10 @@ extension ConversationViewModel {
         }
 
         do {
-            let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
+            let response = try await collaborators.windowFetcher.around(
+                messageId, in: conversationId, limit: limit, readerPrism: preferredLanguages,
+                label: "conversationViewModelJumpToMessage.messages.upsertFromAPIMessages.3"
             )
-
-            // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
 
             // Check if the target message was in the response
             let found = response.data.contains(where: { $0.id == messageId })

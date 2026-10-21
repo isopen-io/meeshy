@@ -115,6 +115,21 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     /// La carte `url → token` des liens suivis (#9104), en `[TrackedLink]` JSON.
     public var trackedLinksJson: String?
 
+    /// L'auteur n'a pas de compte (`Participant.type == "anonymous"`, #10286).
+    /// Le fil ne lit que GRDB : sans cette colonne, ses adresses redevenaient
+    /// cliquables au premier rechargement. `nil` (lignes antérieures) ⇒ inconnu.
+    public var senderIsAnonymous: Bool?
+
+    /// L'auteur a prouvé un compte (`sender.type` user ou bot, #10286) — ne
+    /// gouverne que les liens. `nil` (lignes antérieures, écho sans sender
+    /// jamais complété) ⇒ inconnu : liens inertes, sauf message propre ou
+    /// système (fail-closed).
+    public var senderHasAccount: Bool?
+
+    /// Le contour d'avatar équipé de l'auteur (#10713), en `ServedProfileDecorItem` JSON.
+    /// `nil` ⇒ aucun contour (ou ligne antérieure, remplie à la revalidation).
+    public var senderRingJson: String?
+
     /// **L'instant où CE lecteur a ouvert cette vue unique** (#7579) — `nil`
     /// tant qu'il ne l'a pas ouverte. Colonne LOCALE et par personne : ce que
     /// les autres ouvrent n'y touche pas. Non nulle, elle est PERMANENTE : la
@@ -175,7 +190,10 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         stickerJson: String? = nil,
         ephemeralDuration: Int? = nil,
         viewOnceOpenedAt: Date? = nil,
-        trackedLinksJson: String? = nil
+        trackedLinksJson: String? = nil,
+        senderIsAnonymous: Bool? = nil,
+        senderHasAccount: Bool? = nil,
+        senderRingJson: String? = nil
     ) {
         self.viewOnceOpenedAt = viewOnceOpenedAt
         self.localId = localId
@@ -242,6 +260,9 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.locationJson = locationJson
         self.stickerJson = stickerJson
         self.trackedLinksJson = trackedLinksJson
+        self.senderIsAnonymous = senderIsAnonymous
+        self.senderHasAccount = senderHasAccount
+        self.senderRingJson = senderRingJson
     }
 
     // MARK: - Timestamp pre-compute helper
@@ -252,22 +273,21 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 }
 
 // Thread-safe singleton formatter — avoids per-call DateFormatter allocations.
-// DateFormatter.string(from:) is not thread-safe; NSLock guards concurrent callers.
-public final class TimeStringCache: @unchecked Sendable {
+// DateFormatter.string(from:) is not thread-safe; Locked serializes concurrent callers.
+public final class TimeStringCache: Sendable {
     public static let shared = TimeStringCache()
 
-    private let lock = NSLock()
-    private let formatter: DateFormatter = {
+    private let formatter = Locked(uncheckedState: TimeStringCache.makeFormatter())
+
+    private static func makeFormatter() -> DateFormatter {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         f.locale = Locale.current
         return f
-    }()
+    }
 
     public func format(_ date: Date) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return formatter.string(from: date)
+        formatter.read { $0.string(from: date) }
     }
 }
 

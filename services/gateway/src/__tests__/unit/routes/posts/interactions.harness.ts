@@ -45,7 +45,6 @@ export const mockBookmarkPost = jest.fn<any>().mockResolvedValue({ bookmarkCount
 export const mockUnbookmarkPost = jest.fn<any>().mockResolvedValue({ bookmarkCount: 0 });
 export const mockRecordView = jest.fn<any>().mockResolvedValue(true);
 export const mockGetPostById = jest.fn<any>().mockResolvedValue({ id: 'post-001', type: 'POST', authorId: 'author-1', viewCount: 1 });
-export const mockRecordAnonymousOpen = jest.fn<any>().mockResolvedValue(true);
 export const mockSharePost = jest.fn<any>().mockResolvedValue({ shareCount: 5 });
 export const mockShareWithTrackingLink = jest.fn<any>().mockResolvedValue({ shareCount: 5, token: 'abc123', shortUrl: 'https://app.example.com/l/abc123' });
 export const mockGetPostShareLink = jest.fn<any>().mockResolvedValue({ token: 'abc123', shortUrl: 'https://app.example.com/l/abc123', clickCount: 3 });
@@ -66,7 +65,6 @@ export const postServiceModule = () => ({
     unbookmarkPost: (...args: any[]) => mockUnbookmarkPost(...args),
     recordView: (...args: any[]) => mockRecordView(...args),
     getPostById: (...args: any[]) => mockGetPostById(...args),
-    recordAnonymousOpen: (...args: any[]) => mockRecordAnonymousOpen(...args),
     sharePost: (...args: any[]) => mockSharePost(...args),
     shareWithTrackingLink: (...args: any[]) => mockShareWithTrackingLink(...args),
     getPostShareLink: (...args: any[]) => mockGetPostShareLink(...args),
@@ -158,6 +156,9 @@ export function makePreValidationAuth(authenticated: boolean) {
  */
 export const publicAcl = (id: string) => ({
   id, authorId: 'author-1', visibility: 'PUBLIC', visibilityUserIds: [] as string[], expiresAt: null,
+  // Ce que la garde ANONYME lit en plus (#10483, `readServableToAnonymous`).
+  deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
+  author: { isActive: true, deletedAt: null, deactivatedAt: null },
 });
 
 /**
@@ -186,7 +187,11 @@ export async function buildApp(opts: {
   const { authenticated = true, withNotifications = false, withSocialEvents = false, prisma: prismaOverride } = opts;
 
   const prisma = prismaOverride ?? {
-    postImpression: {
+    anonymousPostOpen: {
+      create: jest.fn<any>().mockResolvedValue({}),
+      updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
+    },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }),
       create: jest.fn<any>().mockResolvedValue({}),
       createMany: jest.fn<any>().mockResolvedValue({ count: 2 }),
     },
@@ -208,6 +213,11 @@ export async function buildApp(opts: {
       findMany: aclAwareFindMany(),
     },
   };
+
+  // #10402 — les compteurs de lecture s'écrivent par `$runCommandRaw`
+  // (`services/posts/postCounters.ts`). Un double qui ne le porte pas le reçoit
+  // ici, pour que chaque témoin puisse relire ce qui a été écrit.
+  prisma.$runCommandRaw ??= jest.fn<any>().mockResolvedValue({ ok: 1 });
 
   const app = Fastify({ logger: false });
   app.decorate('prisma', prisma);

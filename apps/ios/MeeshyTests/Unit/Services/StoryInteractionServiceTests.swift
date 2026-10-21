@@ -261,8 +261,34 @@ final class StoryInteractionServiceTests: XCTestCase {
 
         let outcome = await sut.loadViewerList(postId: Self.storyId)
 
-        guard case .loaded(let rows) = outcome else { return XCTFail("expected .loaded, got \(outcome)") }
+        guard case .loaded(let rows, _) = outcome else { return XCTFail("expected .loaded, got \(outcome)") }
         XCTAssertEqual(rows.count, 2)
+    }
+
+    func test_loadViewerList_servedCounts_areReadWithTheList() async {
+        let (sut, api) = makeSUT()
+        api.stub("/posts/\(Self.storyId)/interactions", result: JSONStub.decode("""
+        {
+          "success": true,
+          "data": { "viewers": [], "viewCount": 4, "impressionCount": 7, "anonymousViewCount": 1 },
+          "error": null
+        }
+        """) as APIResponse<StoryViewersWireResponse>)
+
+        let outcome = await sut.loadViewerList(postId: Self.storyId)
+
+        guard case .loaded(_, let counts) = outcome else { return XCTFail("expected .loaded, got \(outcome)") }
+        XCTAssertEqual(counts, ViewerListCounts(viewCount: 4, impressionCount: 7, anonymousViewCount: 1))
+    }
+
+    func test_loadViewerList_olderServer_servesNoCounts() async {
+        let (sut, api) = makeSUT()
+        api.stub("/posts/\(Self.storyId)/interactions", result: makeViewersResponse(count: 1))
+
+        let outcome = await sut.loadViewerList(postId: Self.storyId)
+
+        guard case .loaded(_, let counts) = outcome else { return XCTFail("expected .loaded, got \(outcome)") }
+        XCTAssertEqual(counts, ViewerListCounts(viewCount: nil, impressionCount: nil, anonymousViewCount: nil))
     }
 
     func test_loadViewers_forbidden_returnsNil() async {
@@ -272,6 +298,37 @@ final class StoryInteractionServiceTests: XCTestCase {
         let result = await sut.loadViewers(storyId: Self.storyId)
 
         XCTAssertNil(result)
+    }
+}
+
+/// #11065 — l'en-tête de la feuille « Vues » lit les compteurs relus AVEC la
+/// liste ; l'instantané reçu à l'ouverture n'est qu'un repli, et l'en-tête ne
+/// compte jamais moins de vues que la liste ne montre de personnes.
+@MainActor
+final class PublicationViewersHeaderTests: XCTestCase {
+
+    func test_counts_servedWithTheList_winOverTheOpeningSnapshot() {
+        let counts = PublicationViewersHeader.counts(
+            served: ViewerListCounts(viewCount: 4, impressionCount: 7, anonymousViewCount: 0),
+            snapshotViews: 2, snapshotImpressions: 5, listedPeople: 3
+        )
+        XCTAssertEqual(counts.views, 4)
+        XCTAssertEqual(counts.impressions, 7)
+    }
+
+    func test_counts_olderServer_fallBackToTheSnapshot() {
+        let counts = PublicationViewersHeader.counts(
+            served: nil, snapshotViews: 5, snapshotImpressions: 9, listedPeople: 3
+        )
+        XCTAssertEqual(counts.views, 5)
+        XCTAssertEqual(counts.impressions, 9)
+    }
+
+    func test_counts_neverFewerViewsThanListedPeople() {
+        let counts = PublicationViewersHeader.counts(
+            served: nil, snapshotViews: 2, snapshotImpressions: 5, listedPeople: 3
+        )
+        XCTAssertEqual(counts.views, 3, "trois personnes listées ont au moins fait trois vues")
     }
 }
 

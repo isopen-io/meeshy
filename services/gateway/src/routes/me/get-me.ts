@@ -88,6 +88,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { userSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { servedUserPermissions } from '../../services/admin/served-permissions';
+import { PROFILE_DECOR_COLUMNS, servedProfileDecor, servedProfileDecorJsonSchema } from '../../services/appearance/profileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
+import { EMPTY_PROFILE_DECOR } from '@meeshy/shared/types/profile-decor';
 import {
   loadAutoTranslateEnabled,
   resolveAutoTranslateEnabled,
@@ -346,6 +349,32 @@ async function withAutoTranslatePreference(
 }
 
 /**
+ * `profileDecor` (#10632) — le contour d'avatar et la bannière de design
+ * ÉQUIPÉS, additif. Comme `autoTranslateEnabled`, le cache d'auth ne porte pas
+ * ces deux colonnes : elles sont relues ICI, et seulement quand la clé est
+ * SERVIE (`?fields=` ne la nomme pas ⇒ aucune requête). Une panne de cette
+ * lecture ne casse jamais « qui suis-je » : le décor se sert alors vide.
+ */
+async function withProfileDecor(
+  request: FastifyRequest,
+  authContext: UnifiedAuthContext,
+  fields: readonly string[] | undefined,
+  served: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  if (authContext.type !== 'user' || !authContext.userId) return served;
+  if (fields !== undefined && fields.length > 0 && !fields.includes('profileDecor')) return served;
+  try {
+    const row = await request.server.prisma.user.findUnique({
+      where: { id: authContext.userId },
+      select: PROFILE_DECOR_COLUMNS,
+    });
+    return { ...served, profileDecor: servedProfileDecor(startupPackIndex(), row) };
+  } catch {
+    return { ...served, profileDecor: EMPTY_PROFILE_DECOR };
+  }
+}
+
+/**
  * Le SEUL calcul de « qui suis-je ». Enregistré par `me/index.ts` (adresse
  * CIBLE) et par `auth/magic-link.ts` (ALIAS déprécié) — voir le doc-comment
  * de tête. Ne rien recalculer ici indépendamment ailleurs dans le dépôt : un
@@ -370,7 +399,12 @@ export async function handleGetMe(request: FastifyRequest, reply: FastifyReply):
     return;
   }
 
-  const filtered = await withAutoTranslatePreference(request, authContext, pickFields(base, fields));
+  const filtered = await withProfileDecor(
+    request,
+    authContext,
+    fields,
+    await withAutoTranslatePreference(request, authContext, pickFields(base, fields))
+  );
 
   if (!expand.includes('security')) {
     sendSuccess(reply, { user: filtered });
@@ -457,6 +491,11 @@ const meUserSchema = {
   description: 'Le compte tel que rendu par la seule route de lecture de soi (#4178).',
   properties: {
     ...userSchema.properties,
+    profileDecor: {
+      ...servedProfileDecorJsonSchema,
+      nullable: true,
+      description: 'Equipped avatar ring, design banner and banner frame (#10632, #10932), additive.',
+    },
     security: {
       type: 'object',
       nullable: true,

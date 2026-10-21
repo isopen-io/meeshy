@@ -42,10 +42,37 @@ final class CommunityDetailViewModelTests: XCTestCase {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let direct = try decoder.decode(APIConversation.self, from: JSONSerialization.data(withJSONObject: payload))
-        let viewModel = CommunityDetailViewModel(communityId: "test-id")
+        // Le lecteur est NOMMÉ : sans lui, le SDK refuse d'élire l'interlocuteur
+        // (`interlocutor(readerId:)`) et sert le nom générique honnête.
+        let viewModel = CommunityDetailViewModel(communityId: "test-id", currentUserId: { "u1" })
 
         viewModel.conversations = [direct]
 
         XCTAssertEqual(viewModel.conversationTitles["conv-direct"], "Bob Martin")
+    }
+
+    func test_load_createurSansFicheMembre_estAdmin() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: []))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-creator" })
+
+        await viewModel.load()
+
+        XCTAssertTrue(viewModel.isCreator)
+        XCTAssertTrue(viewModel.isMember)
+        XCTAssertTrue(viewModel.isAdmin)
+        XCTAssertEqual(viewModel.currentUserRole, .admin)
+    }
+
+    func test_load_visiteurNonMembre_neChargePasLesConversations() async {
+        let service = MockCommunityService()
+        service.getResult = .success(CommunityStubs.community(createdBy: "u-creator", members: []))
+        let viewModel = CommunityDetailViewModel(communityId: "c1", service: service, currentUserId: { "u-visitor" })
+
+        await viewModel.load()
+
+        XCTAssertFalse(viewModel.isMember)
+        XCTAssertFalse(viewModel.isAdmin)
+        XCTAssertTrue(viewModel.conversations.isEmpty)
     }
 }

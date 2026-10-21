@@ -220,22 +220,38 @@ struct MessageCardCompositionBar: View {
     @Binding var showsPost: Bool
     @Binding var chosen: Set<String>
 
+    /// Ce que la rangée montre : les modes, qui DÉFILENT, et « Post en tête », ÉPINGLÉE à
+    /// leur suite hors du défilement — avec les trois modes d'une réponse, elle finissait
+    /// coupée au bord de l'écran, un choix qui existait sans se voir (#11477).
+    struct Layout: Equatable {
+        let scrollingModes: [PostCommentCardMode]
+        let pinsPostToggle: Bool
+    }
+
+    static func layout(modes: [PostCommentCardMode], offersPostToggle: Bool) -> Layout {
+        Layout(scrollingModes: modes.count > 1 ? modes : [], pinsPostToggle: offersPostToggle)
+    }
+
     var body: some View {
+        let layout = Self.layout(modes: composition.modes, offersPostToggle: composition.offersPostToggle)
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.sm) {
-                    if composition.modes.count > 1 {
-                        ForEach(composition.modes, id: \.self) { item in
-                            chip(MessageCardCommentComposition.label(of: item), systemImage: nil, selected: mode == item) {
-                                select(item)
+            HStack(spacing: MeeshySpacing.sm) {
+                if !layout.scrollingModes.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: MeeshySpacing.sm) {
+                            ForEach(layout.scrollingModes, id: \.self) { item in
+                                chip(MessageCardCommentComposition.label(of: item), systemImage: nil, selected: mode == item) {
+                                    select(item)
+                                }
                             }
                         }
                     }
-                    if composition.offersPostToggle {
-                        chip(MessageCardCommentComposition.postToggleLabel, systemImage: showsPost ? "checkmark" : "plus", selected: showsPost) {
-                            showsPost.toggle()
-                        }
+                }
+                if layout.pinsPostToggle {
+                    chip(MessageCardCommentComposition.postToggleLabel, systemImage: showsPost ? "checkmark" : "plus", selected: showsPost) {
+                        showsPost.toggle()
                     }
+                    .fixedSize()
                 }
             }
             if mode == .chosenReplies {

@@ -135,7 +135,7 @@ final class DraftStoryReplyScopeTests: XCTestCase {
 
     func test_draftRestore_goesThroughTheScopedLaw() throws {
         let code = try conversationViewUnit()
-        XCTAssertTrue(code.contains("draft.restoredReply(conversationIsDirect: isDirect, participantUserId: conversation?.participantUserId)"))
+        XCTAssertTrue(code.contains("draft.restoredReply(conversationIsDirect: isDirect, participantUserId: participantUserId)"))
         XCTAssertTrue(code.contains("MessageDraft.composing("),
                       "Le brouillon grave la marque de story : sans elle, l'id d'un post revient en réponse à un message.")
     }

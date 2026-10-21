@@ -35,7 +35,6 @@ public struct UserProfileSheet: View {
     public var onCall: ((ProfileCallRequest) -> Void)? = nil
 
     @State var isBlocked: Bool = false
-    @State var isBlockedByTarget: Bool = false
     @State var connectionStatus: ConnectionStatus = .none
     @State private var pendingRequestId: String?
 
@@ -60,21 +59,20 @@ public struct UserProfileSheet: View {
     @ObservedObject var theme = ThemeManager.shared
     /// L'emplacement du jeu (#9481) — fourni par l'app, vide sinon.
     @Environment(\.profileGameSection) var gameSection
+    @Environment(\.profileLoading) private var injectedProfileLoading
     @Environment(\.dismiss) var dismiss
     @State var selectedTab: ProfileTab = .details
-    @State private var showFullscreenImage = false
-    @State private var fullscreenImageURL: String? = nil
-    @State private var fullscreenImageFallback: String = ""
+    /// #10093 — la bannière ou la photo ouverte en plein écran, PRÉSENTÉE par-dessus la feuille (`fullScreenCover`) :
+    /// posée dans la pile de la feuille, la visionneuse ne pouvait pas déborder de sa hauteur (mi-écran en `.medium`).
+    @State private var fullscreenImage: ProfileFullscreenImage?
     @State var showReportSheet = false
     /// Signed scroll offset feeding `ProfileHeaderMetrics.progress`. Negative
     /// while scrolling content down. Updated by the iOS 16-17 preference path
     /// and the iOS 18+ `trackScrollContentOffset` path simultaneously.
     @State var scrollRelay = ScrollOffsetRelay()
-    @State private var internalFullUser: MeeshyUser?
-    @State private var internalUserStats: UserStats?
+    /// #10093 — profil et statistiques : le cache d'abord, la synchronisation dès l'ouverture.
+    @StateObject var loader = ProfileSheetLoader()
     @State private var internalConversations: [MeeshyConversation] = []
-    @State private var internalIsLoading = false
-    @State private var internalIsLoadingStats = false
     @State private var internalIsLoadingConversations = false
 
     public init(
@@ -107,23 +105,33 @@ public struct UserProfileSheet: View {
         user.accentColor
     }
 
+    /// La couleur du PROFIL (#10754) — avatar sans photo, bannière de design — et non
+    /// l'accent de l'écran d'où la fiche s'ouvre : la même source que ma propre fiche.
+    var profileAccent: String {
+        DynamicColorGenerator.profileAccentHex(userId: displayUser.userId, name: displayUser.resolvedDisplayName)
+    }
+
+    var isBlockedByTarget: Bool {
+        loader.isBlockedByTarget
+    }
+
     var displayUser: ProfileSheetUser {
-        if let loaded = internalFullUser {
+        if let loaded = loader.profile {
             return ProfileSheetUser.from(user: loaded, accentColor: user.accentColor)
         }
         return user
     }
 
     var effectiveIsLoading: Bool {
-        internalIsLoading
+        loader.isLoadingProfile
     }
 
     var effectiveUserStats: UserStats? {
-        internalUserStats
+        loader.stats
     }
 
     var effectiveIsLoadingStats: Bool {
-        internalIsLoadingStats
+        loader.isLoadingStats
     }
 
     var effectiveConversations: [MeeshyConversation] {
@@ -139,21 +147,9 @@ public struct UserProfileSheet: View {
             } else {
                 collapsibleLayout
             }
-
-            if showFullscreenImage {
-                FullscreenImageView(
-                    imageURL: fullscreenImageURL,
-                    fallbackText: fullscreenImageFallback,
-                    accentColor: resolvedAccent
-                )
-                .transition(.opacity)
-                .zIndex(100)
-                .onTapGesture {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        showFullscreenImage = false
-                    }
-                }
-            }
+        }
+        .fullScreenCover(item: $fullscreenImage) { image in
+            FullscreenImageView(imageURL: image.url, fallbackText: image.fallbackText, accentColor: resolvedAccent)
         }
         .task {
             await resolveInitialState()
@@ -162,8 +158,8 @@ public struct UserProfileSheet: View {
             resolveConnectionStatus()
         }
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
-            guard let repainted = Self.repaintedProfile(internalFullUser, with: event) else { return }
-            internalFullUser = repainted
+            guard let repainted = Self.repaintedProfile(loader.profile, with: event) else { return }
+            loader.repaint(repainted)
         }
         .adaptiveWideSheet()
     }
@@ -256,6 +252,9 @@ public struct UserProfileSheet: View {
         if effectiveIsLoading {
             loadingPlaceholder
                 .padding(.horizontal, MeeshySpacing.xl)
+        } else if loader.profileLoadFailed {
+            profileLoadFailedState
+                .padding(.horizontal, MeeshySpacing.xl)
         } else {
             switch selectedTab {
             case .posts:
@@ -268,91 +267,64 @@ public struct UserProfileSheet: View {
         }
     }
 
+    // MARK: - Profil non chargé (#8025)
+
+    /// Le profil n'a pas pu se charger et le cache n'a rien à montrer : la
+    /// fiche le dit et propose de réessayer, au lieu d'onglets vides.
+    private var profileLoadFailedState: some View {
+        VStack(spacing: MeeshySpacing.md) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(MeeshyFont.relative(28, weight: .light))
+                .foregroundColor(theme.textMuted)
+                .accessibilityHidden(true)
+            Text(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
+                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+            Button {
+                HapticFeedback.light()
+                Task { await retryProfile() }
+            } label: {
+                Text(String(localized: "common.retry", defaultValue: "Réessayer", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, MeeshySpacing.xl)
+                    .frame(minHeight: MeeshyControlSize.tapTarget)
+                    .background(Capsule().fill(Color(hex: resolvedAccent)))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint(String(localized: "profile.loadFailed.message", defaultValue: "Ce profil n'a pas pu se charger.", bundle: .module))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, MeeshySpacing.xl)
+    }
+
+    private func retryProfile() async {
+        await loader.retry(userId: user.userId, username: user.username, using: profileLoading)
+        resolveConnectionStatus()
+        if internalConversations.isEmpty {
+            await loadConversationsIfNeeded()
+        }
+    }
+
     // MARK: - Auto-loading
 
     private func loadDataIfNeeded() async {
-        let identifier = user.userId ?? user.username
-        guard !identifier.isEmpty else { return }
-
-        let cacheResult = await CacheCoordinator.shared.profiles.load(for: identifier)
-
-        switch cacheResult {
-        case .fresh(let cached, _):
-            if let profile = cached.first { internalFullUser = profile }
-        case .stale(let cached, _):
-            if let profile = cached.first { internalFullUser = profile }
-            await fetchAndCacheProfile(identifier)
-        case .expired, .empty:
-            internalIsLoading = internalFullUser == nil
-            await fetchAndCacheProfile(identifier)
-        }
-        // Every profile visit extends the 30-day TTL (cache-first behavior):
-        // touch under both the lookup identifier and the resolved id so the
-        // entry survives a month of inactivity regardless of which key was used.
-        await CacheCoordinator.shared.profiles.touch(for: identifier)
-        if let resolvedId = resolvedUserId, resolvedId != identifier {
-            await CacheCoordinator.shared.profiles.touch(for: resolvedId)
-        }
+        await loader.open(userId: user.userId, username: user.username, using: profileLoading)
         resolveConnectionStatus()
     }
 
-    private func fetchAndCacheProfile(_ idOrUsername: String) async {
-        defer { internalIsLoading = false }
-        do {
-            // `presence` POSE la question (#9063) : la passerelle ne sert
-            // `isOnline` / `lastActiveAt` qu'à un ami accepté, sous les réglages
-            // de la personne regardée — sans elle, le profil chargé écrasait
-            // jusqu'à la présence qu'apportait l'hôte, et « vu il y a » ne
-            // s'affichait jamais.
-            let fetchedUser = try await UserService.shared.getProfile(handle: idOrUsername, expand: [.presence]).user
-            internalFullUser = fetchedUser
-            UserDisplayNameCache.shared.trackFromUser(fetchedUser)
-            // `MeeshyUser.id` is non-optional — save under the resolved id.
-            let cacheKey = fetchedUser.id
-            try await CacheCoordinator.shared.profiles.save([fetchedUser], for: cacheKey)
-            // When opened by username, the lookup key differs from the resolved
-            // id. Persist under the username too so a future username-open hits
-            // the cache instead of cold-fetching, and touch both keys so the
-            // 30-day TTL is extended on the entry that actually holds the data.
-            if idOrUsername != cacheKey {
-                try? await CacheCoordinator.shared.profiles.save([fetchedUser], for: idOrUsername)
-            }
-            await CacheCoordinator.shared.profiles.touch(for: cacheKey)
-            await SearchIndex.shared.indexUsers([fetchedUser])
-        } catch let error as APIError {
-            if case .serverError(403, _) = error {
-                isBlockedByTarget = true
-            }
-        } catch {}
-    }
+    private var profileLoading: any ProfileLoading { injectedProfileLoading ?? UncachedProfileLoading() }
 
     var resolvedUserId: String? {
-        user.userId ?? internalFullUser?.id
-    }
-
-    func loadStatsIfNeeded() async {
-        guard let userId = resolvedUserId else { return }
-        internalIsLoadingStats = true
-        do {
-            let fetchedStats = try await UserService.shared.getUserStats(userId: userId)
-            internalUserStats = fetchedStats
-        } catch {}
-        internalIsLoadingStats = false
+        user.userId ?? loader.profile?.id
     }
 
     private func loadConversationsIfNeeded() async {
         guard let userId = resolvedUserId else { return }
         internalIsLoadingConversations = true
-        do {
-            let apiConversations = try await ConversationService.shared.listSharedWith(userId: userId)
-            let mapped = apiConversations.map { $0.toConversation(currentUserId: currentUserId) }
-            internalConversations = mapped
-            // Extend the TTL of the shared conversations we just surfaced so a
-            // returning visitor keeps them warm in the conversations cache.
-            for conv in mapped {
-                await CacheCoordinator.shared.conversations.touch(for: conv.id)
-            }
-        } catch {}
+        internalConversations = (try? await profileLoading.sharedConversations(with: userId, currentUserId: currentUserId)) ?? internalConversations
         internalIsLoadingConversations = false
     }
 
@@ -401,7 +373,7 @@ public struct UserProfileSheet: View {
             pendingRequestId = request.id
             connectionStatus = .pendingSent(requestId: request.id)
             HapticFeedback.success()
-            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module), isSuccess: true)
         } catch {
             HapticFeedback.error()
             postToast(String(localized: "profile.toast.requestSendFailed", defaultValue: "Impossible d'envoyer la demande", bundle: .module), isSuccess: false)
@@ -416,7 +388,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             try await FriendService.shared.deleteRequest(requestId: requestId)
-            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestCancelled", defaultValue: "Demande annulée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.didSendRequest(to: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -439,7 +411,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.success()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: true)
-            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.connectionAccepted", defaultValue: "Connexion acceptée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackAccept(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -456,7 +428,7 @@ public struct UserProfileSheet: View {
         HapticFeedback.medium()
         do {
             let _ = try await FriendService.shared.respond(requestId: requestId, accepted: false)
-            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusee", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.requestDeclined", defaultValue: "Demande refusée", bundle: .module), isSuccess: true)
         } catch {
             FriendshipCache.shared.rollbackReject(senderId: userId, requestId: requestId)
             resolveConnectionStatus()
@@ -473,7 +445,7 @@ public struct UserProfileSheet: View {
             try await BlockService.shared.blockUser(userId: userId)
             isBlocked = true
             HapticFeedback.medium()
-            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloque", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.userBlocked", defaultValue: "Utilisateur bloqué", bundle: .module), isSuccess: true)
         } catch {
             postToast(String(localized: "profile.toast.blockFailed", defaultValue: "Impossible de bloquer", bundle: .module), isSuccess: false)
         }
@@ -486,9 +458,9 @@ public struct UserProfileSheet: View {
             isBlocked = false
             resolveConnectionStatus()
             HapticFeedback.light()
-            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur debloque", bundle: .module), isSuccess: true)
+            postToast(String(localized: "profile.toast.userUnblocked", defaultValue: "Utilisateur débloqué", bundle: .module), isSuccess: true)
         } catch {
-            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de debloquer", bundle: .module), isSuccess: false)
+            postToast(String(localized: "profile.toast.unblockFailed", defaultValue: "Impossible de débloquer", bundle: .module), isSuccess: false)
         }
     }
 
@@ -522,7 +494,7 @@ public struct UserProfileSheet: View {
                     .foregroundColor(Color(hex: resolvedAccent))
             }
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -543,7 +515,7 @@ public struct UserProfileSheet: View {
                 .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "profile.e2ee.enabled", defaultValue: "Chiffrement de bout en bout activé", bundle: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(MeeshyColors.success)
         }
         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -580,7 +552,7 @@ public struct UserProfileSheet: View {
             Text(lang.flag)
                 .font(.system(size: MeeshyFont.labelSize))
             Text(lang.name)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
         }
         .padding(.horizontal, MeeshySpacing.md)
@@ -607,7 +579,7 @@ public struct UserProfileSheet: View {
             HapticFeedback.medium()
             if let onSendMessage {
                 onSendMessage()
-            } else if let targetUserId = internalFullUser?.id ?? user.userId {
+            } else if let targetUserId = loader.profile?.id ?? user.userId {
                 dismiss()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                     NotificationCenter.default.post(
@@ -665,7 +637,7 @@ public struct UserProfileSheet: View {
 
     private var blockedByMeCard: some View {
         VStack(spacing: MeeshySpacing.md) {
-            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloque cet utilisateur", bundle: .module))
+            Text(String(localized: "profile.blocked.byMe", defaultValue: "Vous avez bloqué cet utilisateur", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
 
@@ -673,7 +645,7 @@ public struct UserProfileSheet: View {
                 HapticFeedback.medium()
                 Task { await unblockUser() }
             } label: {
-                Text(String(localized: "profile.blocked.unblock", defaultValue: "Debloquer", bundle: .module))
+                Text(String(localized: "profile.blocked.unblock", defaultValue: "Débloquer", bundle: .module))
                     .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, MeeshySpacing.xxl)
@@ -700,12 +672,9 @@ public struct UserProfileSheet: View {
         date.formatted(.dateTime.year().month(.wide).day().locale(Locale(identifier: "fr_FR")))
     }
 
+    /// Sans image, rien ne s'ouvre : un plein écran de l'avatar à initiales n'a rien à montrer.
     func openFullscreenImage(url: String?, fallback: String) {
-        fullscreenImageURL = url
-        fullscreenImageFallback = fallback
-        withAnimation(.easeIn(duration: 0.2)) {
-            showFullscreenImage = true
-        }
+        fullscreenImage = ProfileFullscreenImage.opening(url, fallbackText: fallback)
     }
 }
 

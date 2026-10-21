@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 // MARK: - Call Signal Strength
 
@@ -171,8 +172,7 @@ struct TransientCallSignalGlyph: View {
         // annule le Task et le glyphe reste.
         .task(id: lingerKey) {
             guard isVisible, !strength.isDegraded else { return }
-            try? await Task.sleep(nanoseconds: Self.recoveryLingerSeconds * 1_000_000_000)
-            if !Task.isCancelled {
+            if await cancellableSleep(for: .seconds(Self.recoveryLingerSeconds)), !Task.isCancelled {
                 withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.4)) { isVisible = false }
             }
         }

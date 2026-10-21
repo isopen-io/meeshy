@@ -252,7 +252,7 @@ function makeIo() {
 function makePrisma(overrides: Record<string, any> = {}) {
   return {
     ...openCallRingTables(),
-    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }), findMany: jest.fn<any>().mockResolvedValue([]) },
+    participant: { findFirst: jest.fn<any>().mockResolvedValue({ id: PARTICIPANT_ID }), findMany: jest.fn<any>(async (a: any) => (Object.keys(a?.where ?? {}).join() === 'userId' && a?.select?.id ? [{ id: PARTICIPANT_ID }] : [])) },
     callSession: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: CALL_ID, conversationId: CONV_ID }),
       findMany: jest.fn<any>().mockResolvedValue([]),
@@ -1539,10 +1539,10 @@ describe('CallEventsHandler', () => {
   // ── call:end ─────────────────────────────────────────────────────────────
 
   describe('call:request-ice-servers', () => {
-    // Scoping par appel (contrat CallError.callId) — cf. 43d4d7b7e. Le refus
-    // « pas dans la call room » doit nommer l'appel : un client avec un appel
-    // actif A ne doit pas interpréter le refus d'un refresh pour l'appel B.
-    it('scopes the not-in-room rejection to the callId', async () => {
+    // Scoping par appel (CallError.callId, 43d4d7b7e) : le refus d'un refresh nomme l'appel, un client en appel A
+    // n'interprète pas le refus pour B. Depuis #11463 il porte sur la PARTICIPATION : « aucun participant actif ».
+    it('scopes the not-a-participant rejection to the callId', async () => {
+      mockCallServiceGetCallSession.mockResolvedValueOnce(makeCallSession({ participants: [] }));
       const { socket } = setupWithSocket();
       await socket._trigger('call:request-ice-servers', { callId: CALL_ID });
       expect(socket.emit).toHaveBeenCalledWith('call:error', expect.objectContaining({

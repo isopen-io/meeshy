@@ -1,6 +1,7 @@
 import { Glyph } from './glyph';
 import { BrandMark } from './brand-mark';
-import { BRAND_CREDIT, BRAND_SIGNATURE_MASK_PATH, brandVersionLine } from '@/lib/brand';
+import { useInterfaceLanguage } from './public-header';
+import { BRAND_CREDIT, BRAND_CREDIT_LINK, BRAND_SIGNATURE_MASK_PATH, brandCreditHint, brandVersionLine } from '@/lib/brand';
 
 /**
  * LE CHROME PARTAGÉ DES ÉCRANS D'AUTHENTIFICATION (#5816, E1) — extrait de
@@ -69,15 +70,25 @@ export function AuthTitle({ gradient }: { gradient: 'login' | 'brand' }) {
  * DÉCRIT une directive ne doit jamais pouvoir EN ÊTRE une.
  */
 export function AuthBrandFooter() {
+  const language = useInterfaceLanguage();
   /* La respiration au-dessus du pied (24 px) cède sous 724 px de haut, et
      disparaît à 700 : sur un téléphone, c'est elle qui faisait défiler la
      connexion par mot de passe (#8418). */
   return (
     <div className="mt-[clamp(0px,calc(100dvh-700px),24px)] flex flex-col items-center gap-1 text-center text-sm">
       <p style={{ color: 'var(--color-ios-ink-2)' }}>{brandVersionLine(__APP_VERSION__)}</p>
-      <p className="font-medium" style={{ color: 'var(--color-ios-ink-3)' }}>
+      {/* Le crédit est un LIEN (#10096) : 44 px de cible par `min-h`, rendus au
+          flux par une marge négative de 12 px de chaque côté — la ligne occupe
+          toujours ses 20 px (`text-sm`), rien du pied ne bouge. `relative`
+          le pose au-dessus du glyphe, qu'il chevauche de quelques pixels. */}
+      <a
+        {...BRAND_CREDIT_LINK}
+        className="relative -my-[12px] flex min-h-[44px] items-center px-3 font-medium"
+        style={{ color: 'var(--color-ios-ink-3)' }}
+      >
         {BRAND_CREDIT}
-      </p>
+        <span className="sr-only">{brandCreditHint(language)}</span>
+      </a>
       <span
         aria-hidden="true"
         style={{

@@ -271,9 +271,9 @@ nonisolated extension CallFrameRenderer {
         guard let place = stage.look.brand?.place,
               place == .topLeft || place == .topRight || place == .bottomLeft || place == .bottomRight else { return nil }
         let pad = stage.unit * 0.035
-        let inner = stage.areas.inner
-        let x = place == .topLeft || place == .bottomLeft ? inner.minX + pad : inner.maxX - pad - box.width
-        let y = place == .topLeft || place == .topRight ? inner.minY + pad : inner.maxY - pad - box.height
+        let areas = stage.areas
+        let x = place == .topLeft || place == .bottomLeft ? areas.inner.minX + pad : areas.inner.maxX - pad - box.width
+        let y = place == .topLeft || place == .topRight ? areas.top.minY + pad : areas.bottom.maxY - pad - box.height
         return CGRect(x: x, y: y, width: box.width, height: box.height)
     }
 

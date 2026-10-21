@@ -26,7 +26,7 @@ jest.mock('../../../../middleware/auth', () => ({
 jest.mock('../../../../services/GeoIPService', () => ({
   getRequestContext: jest.fn(async () => ({ ip: '203.0.113.7', userAgent: 'test', deviceInfo: null, geoData: null })),
 }));
-const mockCreateSession = jest.fn(async (_args: unknown) => ({
+const sessionNeuve = (adoptBy?: Date) => ({
   id: 'session-neuve',
   deviceType: 'desktop',
   browserName: null,
@@ -35,7 +35,9 @@ const mockCreateSession = jest.fn(async (_args: unknown) => ({
   isMobile: false,
   isTrusted: false,
   createdAt: new Date(),
-}));
+  adoptBy,
+});
+const mockCreateSession = jest.fn(async (_args: unknown) => sessionNeuve());
 jest.mock('../../../../services/SessionService', () => ({
   createSession: mockCreateSession,
   generateSessionToken: jest.fn(() => 'session-token-neuf'),
@@ -126,6 +128,62 @@ describe('la preuve ouvre la session', () => {
     const res = await verifier(app, { email: 'marie@example.com', code: '123456' });
 
     expect(res.json().data).toMatchObject({ verified: true, alreadyVerified: true, token: 'jwt-neuf' });
+    await app.close();
+  });
+});
+
+describe('la réponse dit combien de temps la preuve reste adoptable (#10518)', () => {
+  const DIX_MINUTES = 10 * 60 * 1000;
+
+  it('session prouvée : `adoptWithinSeconds` vient de l’échéance de la SESSION, à travers le schéma réel', async () => {
+    mockCreateSession.mockImplementationOnce(async () => sessionNeuve(new Date(Date.now() + DIX_MINUTES)));
+    const { app } = await construire();
+    const data = (await verifier(app, { email: 'marie@example.com', code: '123456' })).json().data;
+
+    expect(data.adoptWithinSeconds).toBeGreaterThanOrEqual(595);
+    expect(data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+    expect(Number.isInteger(data.adoptWithinSeconds)).toBe(true);
+    expect(data.session).not.toHaveProperty('adoptBy');
+    await app.close();
+  });
+
+  it('une session entamée sert ce qui RESTE, pas la fenêtre entière', async () => {
+    mockCreateSession.mockImplementationOnce(async () => sessionNeuve(new Date(Date.now() + 2 * 60 * 1000)));
+    const { app } = await construire();
+    const data = (await verifier(app, { email: 'marie@example.com', code: '123456' })).json().data;
+
+    expect(data.adoptWithinSeconds).toBeGreaterThanOrEqual(115);
+    expect(data.adoptWithinSeconds).toBeLessThanOrEqual(120);
+    await app.close();
+  });
+
+  it('ce que le CLIENT prétend ne décide de rien : son `adoptWithinSeconds` n’est ni lu ni rendu', async () => {
+    mockCreateSession.mockImplementationOnce(async () => sessionNeuve(new Date(Date.now() + DIX_MINUTES)));
+    const { app, verifyEmail } = await construire();
+    const res = await verifier(app, { email: 'marie@example.com', code: '123456', adoptWithinSeconds: 31536000 });
+
+    expect(res.json().data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+    expect(JSON.stringify(verifyEmail.mock.calls)).not.toContain('31536000');
+    expect(JSON.stringify(mockCreateSession.mock.calls)).not.toContain('31536000');
+    await app.close();
+  });
+
+  it('une session que rien n’attend ne sert aucun délai — le client garde son repli', async () => {
+    const { app } = await construire();
+    const data = (await verifier(app, { email: 'marie@example.com', code: '123456' })).json().data;
+
+    expect(data.token).toBe('jwt-neuf');
+    expect(data).not.toHaveProperty('adoptWithinSeconds');
+    await app.close();
+  });
+
+  it('compte à second facteur : le délai est celui du DÉFI', async () => {
+    const { app } = await construire({ verifyEmail: async () => succes({ secondFactor: 'required' }) });
+    const data = (await verifier(app, { email: 'marie@example.com', code: '123456' })).json().data;
+
+    expect(data.requires2FA).toBe(true);
+    expect(data.adoptWithinSeconds).toBe(300);
+    expect(data).not.toHaveProperty('token');
     await app.close();
   });
 });

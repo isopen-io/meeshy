@@ -28,7 +28,7 @@ public enum SettingsRowMetrics {
     public static let horizontalPadding: CGFloat = 16
     public static let verticalPadding: CGFloat = 15
     /// Cible tactile minimale (Apple HIG).
-    public static let minimumHeight: CGFloat = 44
+    public static let minimumHeight: CGFloat = MeeshyControlSize.tapTarget
 
     /// Décalage gauche du filet séparateur — aligné sur le titre.
     public static var separatorInset: CGFloat {

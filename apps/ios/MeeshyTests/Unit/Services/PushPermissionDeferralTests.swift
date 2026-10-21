@@ -108,9 +108,9 @@ final class PushPermissionDeferralTests: XCTestCase {
     /// `PushPermissionPrompt` — l'écrire là-haut la séparerait de sa raison, et
     /// ferait grossir un fichier déjà hors budget (directive 2026-08-28).
     func test_sessionOpen_defersOnlyForARegistration() throws {
-        let app = try source("Meeshy/MeeshyApp.swift")
+        let app = try source("Meeshy/MeeshyApp+Lifecycle.swift")
         XCTAssertTrue(
-            app.contains("Task { await PushPermissionPrompt.onSessionOpened(origin: authManager.sessionOrigin) }"),
+            app.contains("Task { await PushPermissionPrompt.onSessionOpened(origin: AuthManager.shared.sessionOrigin) }"),
             "l'ouverture de session doit PASSER l'origine, pas décider sur place"
         )
 

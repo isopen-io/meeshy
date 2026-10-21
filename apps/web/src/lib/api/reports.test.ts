@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { REPORT_REASONS, reportComment, reportUser, type ReportOutcome } from './reports';
+import { REPORT_REASONS, reportComment, reportMessage, reportUser, type ReportOutcome } from './reports';
 
 /**
  * **SIGNALER — LE PORT QUI EXISTAIT SANS APPELANT** (#7187).
@@ -81,6 +81,20 @@ describe('la charge est celle que le serveur DÉCLARE', () => {
 
     expect(issue).toBe('done');
     expect(appels[0]?.body).toEqual({ reportedType: 'comment', reportedEntityId: 'c-cible', reportType: 'harassment' });
+  });
+
+  test('un MESSAGE se signale sous son propre type (#7558), son détail libre compris', async () => {
+    const { transport, appels } = transportQui(() => ({ ok: true, data: {} }));
+
+    const issue = await reportMessage({
+      messageId: 'm-cible',
+      reason: 'spam',
+      details: '  liens répétés  ',
+      deps: { source: 'gateway', transport: transport as never },
+    });
+
+    expect(issue).toBe('done');
+    expect(appels[0]?.body).toEqual({ reportedType: 'message', reportedEntityId: 'm-cible', reportType: 'spam', reason: 'liens répétés' });
   });
 
   /**

@@ -23,6 +23,38 @@ final class WidgetDataManagerTests: XCTestCase {
         return (sut, defaults, dirs)
     }
 
+    /// Les fiches de relais et de studio de l'extension portent le texte et les
+    /// fichiers du compte sortant : le wipe de logout les purge avec le reste.
+    func test_theLogoutWipe_purgesTheShareRelaysAndStudioHandoffs() throws {
+        let relays = try XCTUnwrap(ShareRelayHandoff.directoryURL(), "le conteneur App Group est accessible à l'hôte des tests")
+        let composes = try XCTUnwrap(ShareComposeHandoffConsumer.directoryURL())
+        let purged = WidgetDataManager.accountStagingDirectories()
+        XCTAssertTrue(purged.contains(relays))
+        XCTAssertTrue(purged.contains(composes))
+    }
+
+    /// Ce que l'app tient EN MÉMOIRE d'une fiche de l'extension part avec la
+    /// déconnexion : un studio armé pour le compte sortant ne s'ouvre pas sous
+    /// le suivant (#10986).
+    func test_theLogoutForget_dropsTheStudioComposeHeldInMemory() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("wipe-compose-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: dir) }
+        let fiche = ShareComposeHandoff(shareId: "cid_a", createdAt: Date(timeIntervalSince1970: 1_000), text: "Texte",
+                                        media: [], ownerUserId: "alice")
+        try JSONEncoder.meeshyShareCompose.encode(fiche).write(to: dir.appendingPathComponent("cid_a.json"))
+        let compose = ShareComposeHandoffConsumer(directory: { dir }, mediaRoot: { nil }, currentUserId: { "alice" })
+        await compose.consumeNext()
+        XCTAssertNotNil(compose.pending)
+
+        WidgetDataManager.forgetHeldShares(
+            relay: ShareRelayConsumer(directory: { nil }, mediaRoot: { nil }, currentUserId: { nil }),
+            compose: compose
+        )
+
+        XCTAssertNil(compose.pending)
+    }
+
     func test_wipeAll_removesWidgetKeysAndStagingDirs() throws {
         let (sut, defaults, dirs) = try makeWipeSUT()
         let keys = [
@@ -166,6 +198,111 @@ final class WidgetDataManagerTests: XCTestCase {
         ])
 
         XCTAssertEqual(try publishedPreviews(from: defaults), ["Alice: Bonjour"])
+    }
+
+    // MARK: - #9622 — le texte d'un message qui disparaît ne sort pas sur l'écran d'accueil
+
+    /// Le serveur sert le TEXTE d'une flamme à durée dans l'aperçu de liste
+    /// (avec son décompte) ; le widget l'affichait sur l'écran d'accueil, hors
+    /// de toute couche sécurisée, et le gardait après la destruction du message
+    /// tant que sa frise n'était pas rafraîchie.
+    private func makeDisappearingConversation(
+        type: MeeshyConversation.ConversationType = .direct,
+        senderName: String? = nil,
+        protect: (inout MeeshyConversation) -> Void
+    ) -> MeeshyConversation {
+        var conversation = makeConversation(
+            type: type,
+            lastMessagePreview: "Rendez-vous à 18 h au quai",
+            lastMessageOriginalLanguage: "fr",
+            lastMessageTranslations: nil,
+            lastMessageSenderName: senderName
+        )
+        protect(&conversation)
+        return conversation
+    }
+
+    func test_publishConversations_timedFlame_publishesItsProtectionLabel_neverItsText() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation {
+                $0.lastMessageNature = LastMessageNature(
+                    effectFlags: Int(MessageEffectFlags.ephemeral.rawValue), ephemeralDuration: 30
+                )
+            }
+        ])
+
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            [try XCTUnwrap(OutsidePreview.protectionLabel(for: .timedFlame))],
+            "une flamme à durée ne laisse sur l'écran d'accueil que son libellé de protection"
+        )
+    }
+
+    func test_publishConversations_viewOnceAndAfterReadFlame_publishTheirProtectionLabels() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation { $0.lastMessageIsViewOnce = true },
+        ])
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            [try XCTUnwrap(OutsidePreview.protectionLabel(for: .viewOnce))]
+        )
+
+        sut.publishConversations([
+            makeDisappearingConversation {
+                $0.lastMessageNature = LastMessageNature(
+                    effectFlags: Int(MessageEffectFlags.ephemeral.rawValue | MessageEffectFlags.ephemeralAfterRead.rawValue)
+                )
+            },
+        ])
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            [try XCTUnwrap(OutsidePreview.protectionLabel(for: .afterReadFlame))]
+        )
+    }
+
+    /// Fermé par défaut : une échéance servie SANS nature (serveur antérieur,
+    /// cache ancien) déclare un éphémère dont la durée ne se lit pas.
+    func test_publishConversations_servedDeadlineWithoutNature_isTreatedAsDisappearing() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation { $0.lastMessageExpiresAt = Date().addingTimeInterval(60) }
+        ])
+
+        let published = try XCTUnwrap(try publishedPreviews(from: defaults).first)
+        XCTAssertFalse(published.contains("Rendez-vous"), "aucun mot du texte ne sort : \(published)")
+    }
+
+    func test_publishConversations_disappearingInAGroup_keepsTheSenderPrefixOverTheLabel() throws {
+        let (sut, defaults) = try makePrismSUT(preferredLanguages: ["fr"])
+        sut.publishConversations([
+            makeDisappearingConversation(type: .group, senderName: "Alice") {
+                $0.lastMessageNature = LastMessageNature(
+                    effectFlags: Int(MessageEffectFlags.ephemeral.rawValue), ephemeralDuration: 30
+                )
+            }
+        ])
+
+        XCTAssertEqual(
+            try publishedPreviews(from: defaults),
+            ["Alice: \(try XCTUnwrap(OutsidePreview.protectionLabel(for: .timedFlame)))"]
+        )
+    }
+
+    func test_outsidePreview_ordinaryMessage_keepsTheResolvedPreview() {
+        XCTAssertNil(OutsidePreview.protectionLabel(for: .ordinary))
+        XCTAssertEqual(
+            OutsidePreview.lastMessage(
+                of: makeConversation(
+                    lastMessagePreview: "Hello there",
+                    lastMessageOriginalLanguage: "en",
+                    lastMessageTranslations: ["fr": "Bonjour"]
+                ),
+                preferredLanguages: ["fr"]
+            ),
+            "Bonjour"
+        )
     }
 
     // MARK: - WidgetConversation Data Model

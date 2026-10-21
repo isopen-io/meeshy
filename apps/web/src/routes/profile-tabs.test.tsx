@@ -38,10 +38,19 @@ afterEach(() => {
   appQueryClient.clear();
 });
 
-const settle = () =>
-  act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
+const SETTLE_ROUNDS = 200;
+
+/** Un tour, PUIS tant qu'une requête de l'écran est en vol (#10530 : la fiche
+ * lit aussi le corpus des humeurs) — une réponse qui retombe après le dernier
+ * tour est une mise à jour hors `act`. */
+const settle = async (): Promise<void> => {
+  for (let round = 0; round === 0 || appQueryClient.isFetching() > 0; round += 1) {
+    if (round === SETTLE_ROUNDS) throw new Error('une requête de la fiche n’a jamais reçu sa réponse');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+};
 
 async function mount(): Promise<HTMLDivElement> {
   const container = document.createElement('div');

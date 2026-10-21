@@ -1,0 +1,56 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "brume-vivante",
+   "style": "gradient",
+   "palettes": {
+    "light": {
+     "base": "#F5F4FB",
+     "ink": "#A5B4FC",
+     "soft": "#DDD6FE"
+    },
+    "dark": {
+     "base": "#0C0B1A",
+     "ink": "#4F46E5",
+     "soft": "#312E81"
+    }
+   },
+   "gradient": {
+    "angle": 180,
+    "stops": [
+     {
+      "role": "base",
+      "at": 0
+     },
+     {
+      "role": "soft",
+      "at": 1
+     }
+    ],
+    "blobs": [
+     {
+      "x": 0.25,
+      "y": 0.15,
+      "r": 0.7,
+      "role": "ink",
+      "opacity": 0.35
+     },
+     {
+      "x": 0.8,
+      "y": 0.85,
+      "r": 0.6,
+      "role": "accent",
+      "opacity": 0.25
+     }
+    ]
+   },
+   "fit": "fill",
+   "lottie": {
+    "src": "b19ebab0f4cfeed8.json",
+    "bytes": 1842,
+    "sha256": "b19ebab0f4cfeed8715e0264fab552c11fcce89f71ba78b2f01feb0b78ab634e"
+   }
+  }
+ ]
+}

@@ -34,7 +34,7 @@ enum GameNavigationMap {
         switch route {
         case .progressionConcept, .progressionNotebook, .progressionRules:
             return .progression
-        case .gamePage(let page):
+        case .gamePage(let page, _):
             return concept(owning: page).map { Route.progressionConcept($0) } ?? .progression
         case .progressionSection(let section):
             return .progressionConcept(concept(owning: section))

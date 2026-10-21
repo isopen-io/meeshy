@@ -421,6 +421,7 @@ extension MeeshyComposerHost {
             // La surface, elle, ne compte rien : elle relaie.
             railBadges: railDoorBadges,
             onRailDoor: { door in handleRailDoor(door) },
+            onRailDoorLongPress: railDoorLongPress,
             onRailToolControl: { control in handleRailToolControl(control) },
             onRailExitTool: { handleRailExitTool() },
             // **Le COLLAGE** (#4092) — la cinquième entrée de la vue `3b`, et la
@@ -515,8 +516,8 @@ extension MeeshyComposerHost {
             onPickBandFitMode: { applySceneFitMode($0) },
             onPickBandBackdrop: { applySceneBackdrop($0) },
             // Le `(+)` d'une nouvelle scène, à la place de l'éclair (#8713).
-            topBarAccessory: returnsToConversation ? nil : sceneAddSlideButton,
-            onTimeButton: sceneIsAnimated && !returnsToConversation ? { toggleSceneFrise() } : nil,
+            topBarAccessory: sceneAddSlideButton,
+            onTimeButton: sceneIsAnimated ? { toggleSceneFrise() } : nil,
             timeIsOpen: viewModel.timelineIsOpen,
             timelinePanel: sceneTimelinePanel,
             timelineBridge: viewModel.canvasTimelineBridge,
@@ -544,10 +545,10 @@ extension MeeshyComposerHost {
             // **Les contrôles de l'outil du FOND prennent la même place** (#8847).
             // **Les options d'un objet en ÉDITION EN PLACE ne passent plus par
             // le bas** (#9138) : elles s'ouvrent à droite, depuis le haut
-            // (`inlinePanel`), et la scène ne remonte plus pour elles. Le bas
-            // ne sert plus que le dessin.
+            // (`inlinePanel`), et la scène ne remonte plus pour elles. Celles
+            // du DESSIN non plus (#9145) : le bas ne sert plus que le texte
+            // saisi hors édition en place.
             toolOptions: ComposerFirstView.lowZoneShowsToolOptions(
-                drawing: viewModel.isDrawingActive,
                 textEditing: sceneTextEditing && activeInlineEdit == nil)
                 ? AnyView(MeeshyToolOptionsPanel(viewModel: viewModel)) : nil,
             editsInline: activeInlineEdit != nil,
@@ -589,7 +590,7 @@ extension MeeshyComposerHost {
                 guard editedObject == nil else { return }
                 viewModel.exitTextEditingMode()
             },
-            descriptionPanel: returnsToConversation ? nil : sceneDescriptionPanel,
+            descriptionPanel: sceneDescriptionPanel,
             // `nil` hors mode dessin, et c'est ce `nil` qui gouverne TOUT le
             // reste : le canvas garde son calque persisté, il continue de
             // recevoir les touches, et aucune surface ne se pose dessus.
@@ -682,9 +683,7 @@ extension MeeshyComposerHost {
         return AnyView(
             ComposerSceneDescriptionPanel(
                 text: sceneDescriptionBinding,
-                placeholder: String(localized: "composer.description.placeholder",
-                                    defaultValue: "Ajouter une description",
-                                    bundle: .main),
+                placeholder: ComposerDescriptionCopy.amorce,
                 isCollapsed: $sceneDescriptionCollapsed,
                 // **L'encre suit le FOND** (#6127). Même loi que le reste du
                 // chrome de l'atelier — `CanvasChromeScheme`, résolue une fois
@@ -925,32 +924,6 @@ extension MeeshyComposerHost {
         )
     }
 
-    /// L'unique lecture du juge de l'historique. Le socle posait la même
-    /// question à deux endroits ; le rail la pose une fois.
-    var composerServesHistory: Bool {
-        ComposerHistoryService.servesHistory(on: mountedComposerView)
-    }
-
-    /// **Les jetons de l'objet sélectionné — un site unique.** Trois
-    /// consommateurs les lisent (la rangée, le jeton encadré, le geste), et
-    /// trois résolutions du même jeu peuvent diverger.
-    var sceneObjectChips: [ComposerObjectChips.Chip] {
-        ComposerObjectChips.chips(forSelected: selectedSceneItemId,
-                                  in: viewModel.currentSlide)
-    }
-
-    /// **Les bandes qu'on peut OUVRIR à cet instant** — un site unique.
-    ///
-    /// Elle servait deux consommateurs par deux appels séparés : la bande
-    /// elle-même, et les jetons de l'inspecteur qui doivent savoir si leur
-    /// destination mène quelque part. Deux calculs du même jeu peuvent
-    /// diverger, et le jour où ils divergent le jeton s'illumine sur une bande
-    /// que `opened` refuse — un contrôle inerte qui a l'air vivant, c'est-à-dire
-    /// exactement le défaut que ce câblage vient de fermer.
-    var openableSceneBands: Set<ComposerSceneBand> {
-        ComposerSceneCapabilities.bands
-    }
-
     // MARK: - Ce que le `body` empile, et ce qu'il voile
 
     // **Extraits de `MeeshyComposerHost.swift` le 2026-09-12** (#6126). Le lot
@@ -1013,75 +986,5 @@ extension MeeshyComposerHost {
                 .animation(ComposerToolFocus.transition(reduceMotion: UIAccessibility.isReduceMotionEnabled),
                            value: servi)
         }
-    }
-
-    /// **Le voile de progression du bake** (#4996) — un type NOMMÉ hors du
-    /// `body`, comme `ComposerSceneDescriptionEditor` : monté en fermeture
-    /// d'`.overlay`, il ajoute un niveau à la profondeur de type SwiftUI de ce
-    /// corps, qui a déjà coûté un débordement de pile à cet écran.
-    @ViewBuilder
-    var composerExportProgress: some View {
-        if let fraction = sceneExport.progress {
-            ZStack {
-                Color.black.opacity(0.55).ignoresSafeArea()
-                VStack(spacing: MeeshySpacing.md) {
-                    ProgressView(value: fraction)
-                        .progressViewStyle(.linear)
-                        .tint(MeeshyColors.brandPrimary)
-                        .frame(width: 180)
-                    Text(ComposerExportCopy.inProgress)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundStyle(.white)
-                }
-                .padding(MeeshySpacing.xxl)
-                .adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.lgPlus, style: .continuous))
-            }
-            .transition(.opacity)
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(Text(ComposerExportCopy.inProgress))
-            .accessibilityValue(Text(LocalizedNumber.percent(Int((fraction * 100).rounded()))))
-            .accessibilityAddTraits(.updatesFrequently)
-        }
-    }
-
-    /// **Un texte se saisit-il SUR la scène ?** L'état d'édition existe aussi
-    /// pendant que l'éditeur plein écran est monté (`openObjectEditor`) — la
-    /// scène, couverte, n'a alors rien à montrer.
-    var sceneTextEditing: Bool {
-        viewModel.textEditingMode.activeTextId != nil && editedObject == nil
-    }
-
-    /// **Ce que le rail de la scène montre** — un site unique, lu par la
-    /// surface ET par le socle : les deux doivent céder au MÊME outil ouvert.
-    var sceneRailMode: ComposerRailMode {
-        ComposerRailMode.resolve(
-            drawing: viewModel.isDrawingActive,
-            // Un texte en ÉDITION EN PLACE montre ses sous-outils par la
-            // colonne de l'objet (#9138), jamais par le mode du rail.
-            textEditing: ComposerFirstView.railShowsTextTools(
-                textEditing: sceneTextEditing && activeInlineEdit == nil),
-            expandedDrawingTool: viewModel.drawingEditingMode.expandedTool,
-            expandedTextTool: viewModel.textEditingMode.expandedTool,
-            doors: sceneDoors)
-    }
-
-    /// **Un outil de la SCÈNE occupe-t-il l'écran ?** (#8652) Faux sous toute
-    /// autre surface : le document et l'humeur gardent leur socle.
-    var sceneToolOwnsScreen: Bool {
-        mountedComposerView == .scene
-            && ComposerToolFocus.toolIsOpen(railOpensTool: sceneRailMode.opensTool,
-                                             editsInline: activeInlineEdit != nil)
-    }
-
-    /// **L'indication grise de la capture rapide** (#8653) — la MÊME question
-    /// que celle que le toucher pose (`handleSceneQuickTap`) : l'indication ne
-    /// promet jamais un geste que la scène refuserait.
-    var sceneQuickCaptureHint: ComposerSceneQuickCapture.Hint? {
-        guard ComposerSceneQuickCapture.offers(
-            sceneIsBlank: ComposerSceneQuickCapture.sceneIsBlank(viewModel.currentSlide),
-            format: selectedFormat,
-            stage: sceneCameraStage,
-            toolIsOpen: sceneToolOwnsScreen) else { return nil }
-        return ComposerSceneQuickCapture.hint(format: selectedFormat)
     }
 }

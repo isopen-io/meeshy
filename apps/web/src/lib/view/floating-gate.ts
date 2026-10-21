@@ -1,3 +1,5 @@
+import { splitPaneOf } from './split-query';
+
 /**
  * **LE PORTILLON DES MENUS FLOTTANTS** (#6104) — la seule partie de ce lot qui
  * reste au SOCLE, et elle y reste pour la raison que la coquille écrit déjà
@@ -46,4 +48,39 @@ const ROUTES_WITH_MENUS: ReadonlySet<string> = new Set([
 
 export function showsFloatingMenus(routeKey: string): boolean {
   return ROUTES_WITH_MENUS.has(routeKey);
+}
+
+/**
+ * **OÙ LES MENUS SE POSENT** (#10117). La liste ci-dessus répond pour UN écran
+ * plein cadre. Dans le cadre côte à côte (dès 1024 px, `split-query.ts`), la
+ * liste reste montée à gauche du fil : les disques vivent dans SA colonne, sur
+ * `/chats` comme sur `/c/:id`. Une conversation ouverte ne les retire donc
+ * plus, et ils ne se posent jamais sur le volet du fil — ni sur son en-tête,
+ * ni sur son composeur, la raison pour laquelle le téléphone les retire.
+ *
+ * `screen` : la coquille les pose sur la fenêtre (`shell.tsx`) ;
+ * `list-column` : le cadre les pose dans la colonne de la liste
+ * (`routes/split-frame.tsx`) ; `null` : nulle part. Une seule règle pour les
+ * deux hôtes, celle qui décide du cadre : jamais deux couches à la fois.
+ */
+export type FloatingMenusHost = 'screen' | 'list-column';
+
+export function floatingMenusHost(frame: {
+  readonly routeKey: string;
+  readonly wide: boolean;
+  readonly guest: boolean;
+}): FloatingMenusHost | null {
+  if (splitPaneOf(frame) !== null) return 'list-column';
+  return showsFloatingMenus(frame.routeKey) ? 'screen' : null;
+}
+
+/**
+ * **UN VOLET DES RÉGLAGES EST UN ÉCRAN PROFOND** (#10748) — `/settings?volet=…`
+ * (packs, sécurité…) porte son propre en-tête et son retour ; les deux disques
+ * y recouvraient la ligne de solde de la vitrine à 390 px. Même doctrine que
+ * le fil (`Router.swift:274-276`) : un bouton flottant qui masque le contenu
+ * qu'il commande est un obstacle. La clé rendue sort de la liste fermée.
+ */
+export function floatingMenusRouteKey(route: { readonly key: string; readonly search: { get(name: string): string | null } }): string {
+  return route.key === 'settings' && route.search.get('volet') !== null ? 'settings:volet' : route.key;
 }

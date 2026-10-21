@@ -240,7 +240,7 @@ public enum StoryExportOutro {
                 throw OutroError.pixelBufferCreationFailed
             }
             while !input.isReadyForMoreMediaData {
-                try await Task.sleep(nanoseconds: 5_000_000)   // 5 ms — écriture offline, rare
+                try await Task.sleep(for: .milliseconds(5))   // 5 ms — écriture offline, rare
             }
             adaptor.append(buffer, withPresentationTime: CMTime(seconds: t, preferredTimescale: timescale))
         }

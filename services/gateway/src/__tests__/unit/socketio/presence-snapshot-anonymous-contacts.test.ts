@@ -34,7 +34,9 @@ describe('les contacts de l’instantané de présence (#8309)', () => {
     expect(contacts({ viewerId: READER, isAnonymous: false })).toEqual(['p-friend', 'p-guest']);
   });
 
-  it('rend, à un anonyme, tous les autres participants actifs, sans lui-même', () => {
-    expect(contacts({ viewerId: 'p-guest', isAnonymous: true })).toEqual(['p-reader', 'p-friend']);
+  // #10205 (directive porteur du 2026-10-11) : un invité sans compte ne reçoit
+  // pas la liste des participants — l'instantané n'en est qu'une autre forme.
+  it('ne rend AUCUN contact à un anonyme : la liste des participants ne lui est pas servie', () => {
+    expect(contacts({ viewerId: 'p-guest', isAnonymous: true })).toEqual([]);
   });
 });

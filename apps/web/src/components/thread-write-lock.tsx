@@ -4,6 +4,7 @@ import type { Conversation } from '@/lib/api/types';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useWriteRestriction } from '@/lib/view/use-write-restriction';
 
+import { ThreadComposerChrome } from './thread-composer-chrome';
 import { WriteRestrictionBand } from './write-restriction-band';
 
 /**
@@ -24,8 +25,8 @@ export function ThreadWriteLock({
   const restriction = useWriteRestriction({ conversationId, conversation });
   if (restriction === null) return <>{children}</>;
   return (
-    <div className="thread-composer-chrome glass-prominent">
+    <ThreadComposerChrome>
       <WriteRestrictionBand restriction={restriction} language={currentInterfaceLanguage()} />
-    </div>
+    </ThreadComposerChrome>
   );
 }

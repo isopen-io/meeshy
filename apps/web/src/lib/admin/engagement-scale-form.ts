@@ -3,6 +3,7 @@ import {
   ENGAGEMENT_OPERATION_CATALOG,
   type EngagementOperationKey,
 } from '@meeshy/shared/types/engagement-operations';
+import { ENGAGEMENT_STREAK_ACTS, type EngagementStreakAct, type EngagementStreakTier } from '@meeshy/shared/types/engagement-act-streaks';
 import {
   parseEngagementScale,
   type EngagementAbuseRules,
@@ -53,19 +54,33 @@ export const LINK_VISIT_FIELDS: readonly LinkVisitField[] = [
   'dailyCapPerCreator',
 ];
 
-export const ABUSE_FIELDS: readonly AbuseField[] = ['heavyPoints', 'clawbackHours', 'unverifiedMaxPoints'];
+export const ABUSE_FIELDS: readonly AbuseField[] = ['heavyPoints', 'unverifiedMaxPoints'];
 
 export type LevelCapDraft = { readonly minLevel: string; readonly maxFactor: string };
-export type StreakBonusDraft = { readonly days: string; readonly points: string };
+/** Un palier de série ou de fidélité (#10395) : jours, points (sans plafond à 1000), libellé facultatif. */
+export type TierDraft = { readonly days: string; readonly points: string; readonly label: string };
+/** @deprecated nom d'avant #10395 — un palier de la série globale. */
+export type StreakBonusDraft = TierDraft;
+
+/** Une liste de paliers du brouillon : la série globale, celle d'un acte, ou la fidélité. */
+export type TierListKey = { readonly kind: 'global' } | { readonly kind: 'act'; readonly act: EngagementStreakAct } | { readonly kind: 'loyalty' };
 
 export type ScaleDraft = {
   readonly operations: Readonly<Record<EngagementOperationKey, OperationDraft>>;
   readonly multiplier: Readonly<Record<MultiplierField, string>>;
   readonly levelCaps: readonly LevelCapDraft[];
   readonly linkVisits: Readonly<Record<LinkVisitField, string>>;
-  readonly streakBonuses: readonly StreakBonusDraft[];
+  /** La série globale ; `streakBonuses` en est la projection que la loi partagée écrit (anciens serveurs). */
+  readonly streakBonuses: readonly TierDraft[];
+  readonly actStreaks: Readonly<Record<EngagementStreakAct, readonly TierDraft[]>>;
+  readonly loyalty: readonly TierDraft[];
   readonly abuse: Readonly<Record<AbuseField, string>>;
 };
+
+const tierDraftOf = (tier: EngagementStreakTier): TierDraft => ({ days: String(tier.days), points: String(tier.points), label: tier.label ?? '' });
+
+/** Au-delà, un palier se signale (avertissement non bloquant) : on vérifie avant de distribuer gros. */
+export const BIG_POINTS_WARNING = 10_000;
 
 const textOf = (value: number | null): string => (value === null ? '' : String(value));
 
@@ -90,7 +105,9 @@ export function draftOf(scale: EngagementScale): ScaleDraft {
       LinkVisitField,
       string
     >,
-    streakBonuses: scale.streakBonuses.map((bonus) => ({ days: String(bonus.days), points: String(bonus.points) })),
+    streakBonuses: (scale.streaks?.global ?? scale.streakBonuses).map(tierDraftOf),
+    actStreaks: Object.fromEntries(ENGAGEMENT_STREAK_ACTS.map((act) => [act, (scale.streaks?.acts[act] ?? []).map(tierDraftOf)])) as unknown as Record<EngagementStreakAct, readonly TierDraft[]>,
+    loyalty: (scale.loyalty ?? []).map(tierDraftOf),
     abuse: Object.fromEntries(ABUSE_FIELDS.map((field) => [field, String(scale.abuse[field])])) as Record<AbuseField, string>,
   };
 }
@@ -129,9 +146,70 @@ export function scaleOfDraft(draft: ScaleDraft): EngagementScale | null {
         field === 'dailyCapPerCreator' ? optionalNumberOf(draft.linkVisits[field]) : numberOf(draft.linkVisits[field]),
       ]),
     ),
-    streakBonuses: draft.streakBonuses.map((bonus) => ({ days: numberOf(bonus.days), points: numberOf(bonus.points) })),
+    streaks: {
+      global: draft.streakBonuses.map(tierOfDraft),
+      acts: Object.fromEntries(ENGAGEMENT_STREAK_ACTS.map((act) => [act, draft.actStreaks[act].map(tierOfDraft)])),
+    },
+    loyalty: draft.loyalty.map(tierOfDraft),
     abuse: Object.fromEntries(ABUSE_FIELDS.map((field) => [field, numberOf(draft.abuse[field])])),
   });
+}
+
+const tierOfDraft = (tier: TierDraft) => ({ days: numberOf(tier.days), points: numberOf(tier.points), ...(tier.label.trim() === '' ? {} : { label: tier.label.trim() }) });
+
+export function tiersOf(draft: ScaleDraft, key: TierListKey): readonly TierDraft[] {
+  switch (key.kind) {
+    case 'global':
+      return draft.streakBonuses;
+    case 'act':
+      return draft.actStreaks[key.act];
+    case 'loyalty':
+      return draft.loyalty;
+  }
+}
+
+function withTiers(draft: ScaleDraft, key: TierListKey, tiers: readonly TierDraft[]): ScaleDraft {
+  switch (key.kind) {
+    case 'global':
+      return { ...draft, streakBonuses: tiers };
+    case 'act':
+      return { ...draft, actStreaks: { ...draft.actStreaks, [key.act]: tiers } };
+    case 'loyalty':
+      return { ...draft, loyalty: tiers };
+  }
+}
+
+export function withTier(draft: ScaleDraft, key: TierListKey, index: number, patch: Partial<TierDraft>): ScaleDraft {
+  return withTiers(draft, key, tiersOf(draft, key).map((tier, i) => (i === index ? { ...tier, ...patch } : tier)));
+}
+
+/** Un palier de plus : au double du dernier (7 jours pour une liste vide), à 0 point. */
+export function withAddedTier(draft: ScaleDraft, key: TierListKey): ScaleDraft {
+  const tiers = tiersOf(draft, key);
+  const last = tiers.reduce((max, tier) => Math.max(max, Number.isFinite(numberOf(tier.days)) ? numberOf(tier.days) : 0), 0);
+  return withTiers(draft, key, [...tiers, { days: String(last === 0 ? 7 : last * 2), points: '0', label: '' }]);
+}
+
+export function withoutTier(draft: ScaleDraft, key: TierListKey, index: number): ScaleDraft {
+  return withTiers(draft, key, tiersOf(draft, key).filter((_, i) => i !== index));
+}
+
+/** « Un an de fidélité » : 365 jours → 100 000 points, ou ce palier mis à jour s'il existe. */
+export function withLoyaltyYearPreset(draft: ScaleDraft, label: string): ScaleDraft {
+  const year: TierDraft = { days: '365', points: '100000', label };
+  const others = draft.loyalty.filter((tier) => numberOf(tier.days) !== 365);
+  return { ...draft, loyalty: [...others, year].sort((a, b) => numberOf(a.days) - numberOf(b.days)) };
+}
+
+/** Les paliers au-delà de 10 000 points — dits, jamais refusés. */
+export function bigPointsTiers(draft: ScaleDraft): readonly { readonly key: TierListKey; readonly index: number; readonly points: number }[] {
+  const keys: readonly TierListKey[] = [{ kind: 'global' }, ...ENGAGEMENT_STREAK_ACTS.map((act): TierListKey => ({ kind: 'act', act })), { kind: 'loyalty' }];
+  return keys.flatMap((key) =>
+    tiersOf(draft, key).flatMap((tier, index) => {
+      const points = numberOf(tier.points);
+      return Number.isFinite(points) && points > BIG_POINTS_WARNING ? [{ key, index, points }] : [];
+    }),
+  );
 }
 
 export function withOperation(draft: ScaleDraft, key: EngagementOperationKey, patch: Partial<OperationDraft>): ScaleDraft {
@@ -176,7 +254,7 @@ export function withStreakBonus(draft: ScaleDraft, index: number, patch: Partial
 /** Un palier de plus, au double du dernier. */
 export function withAddedStreakBonus(draft: ScaleDraft): ScaleDraft {
   const last = draft.streakBonuses.reduce((max, bonus) => Math.max(max, Number.isFinite(numberOf(bonus.days)) ? numberOf(bonus.days) : 0), 0);
-  return { ...draft, streakBonuses: [...draft.streakBonuses, { days: String(Math.max(1, last * 2)), points: '0' }] };
+  return { ...draft, streakBonuses: [...draft.streakBonuses, { days: String(Math.max(1, last * 2)), points: '0', label: '' }] };
 }
 
 export function withoutStreakBonus(draft: ScaleDraft, index: number): ScaleDraft {

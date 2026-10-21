@@ -19,6 +19,7 @@ function stage(history: HistoryView) {
   const listeners = new Set<Listener>();
   const opened: string[] = [];
   const retreats: Array<'back' | 'home'> = [];
+  const went: string[] = [];
   const page = {
     visibilityState: 'visible' as DocumentVisibilityState,
     addEventListener: (_: 'visibilitychange', listener: Listener) => {
@@ -40,12 +41,16 @@ function stage(history: HistoryView) {
     home: () => {
       retreats.push('home');
     },
+    inside: (target) => (target.startsWith('https://meeshy.me/') ? target.slice('https://meeshy.me'.length) : null),
+    go: (path) => {
+      went.push(path);
+    },
   };
   const become = (state: DocumentVisibilityState) => {
     page.visibilityState = state;
     [...listeners].forEach((listener) => listener());
   };
-  return { host, opened, retreats, become, listeners };
+  return { host, opened, retreats, went, become, listeners };
 }
 
 const FROM_A_THREAD: HistoryView = { canGoBack: true, historyLength: 3, onLandingEntry: false };
@@ -86,5 +91,30 @@ describe('shellLeave — la cible part au navigateur, l’app ne reste pas sur l
     become('visible');
     expect(retreats).toEqual(['back']);
     expect(listeners.size).toBe(0);
+  });
+});
+
+describe('shellLeave — une cible qui est un écran de Meeshy reste dans l’app (#10329)', () => {
+  test('la cible meeshy.me servie par le routeur navigue dans l’app, sans passer par le navigateur', () => {
+    const { host, opened, went } = stage(FROM_A_THREAD);
+    shellLeave(host)('https://meeshy.me/u/alice?x=1');
+    expect(went).toEqual(['/u/alice?x=1']);
+    expect(opened).toEqual([]);
+  });
+
+  test('aucune écoute de retour n’est laissée : revenir au premier plan ne recule pas', () => {
+    const { host, retreats, become, listeners } = stage(FROM_A_THREAD);
+    shellLeave(host)('https://meeshy.me/feeds');
+    expect(listeners.size).toBe(0);
+    become('hidden');
+    become('visible');
+    expect(retreats).toEqual([]);
+  });
+
+  test('une cible externe part toujours au navigateur', () => {
+    const { host, opened, went } = stage(FROM_A_THREAD);
+    shellLeave(host)('https://example.com/a');
+    expect(opened).toEqual(['https://example.com/a']);
+    expect(went).toEqual([]);
   });
 });

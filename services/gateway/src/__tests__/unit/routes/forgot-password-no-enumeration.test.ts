@@ -53,7 +53,9 @@ jest.mock('../../../utils/rate-limiter.js', () => {
     createPhoneResetLookupRateLimiter: laisserPasser,
     createPhoneResetIdentityRateLimiter: laisserPasser,
     createPhoneResetCodeRateLimiter: laisserPasser,
-    createPhoneResetResendRateLimiter: laisserPasser
+    createPhoneResetResendRateLimiter: laisserPasser,
+    createResetTokenVerifyIpRateLimiter: laisserPasser,
+    createResetTokenVerifyTokenRateLimiter: laisserPasser
   };
 });
 

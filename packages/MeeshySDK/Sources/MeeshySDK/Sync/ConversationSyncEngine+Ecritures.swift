@@ -343,10 +343,7 @@ extension ConversationSyncEngine {
     }
 
     public func noteUnreadRemaining(_ conversationId: String, _ remaining: Int) {
-        stateQueue.sync {
-            guard _currentlyOpenConversationId == conversationId else { return }
-            _unreadToRestoreOnClose = max(0, remaining)
-        }
+        openLedger.mutate { $0.noteUnreadRemaining(conversationId, remaining) }
     }
 
     /// Redonne à la conversation qu'on QUITTE le compte que la lecture a
@@ -359,7 +356,7 @@ extension ConversationSyncEngine {
     /// nulle arrivée du serveur depuis la fermeture fait autorité.
     /* partagé entre les fichiers du moteur (#4172) */ func restoreUnreadOnClose(_ conversationId: String, _ remaining: Int) {
         guard remaining > 0 else { return }
-        stateQueue.sync { _unreadByConversation[conversationId] = remaining }
+        openLedger.mutate { $0.unreadByConversation[conversationId] = remaining }
         Task {
             await self.cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
@@ -431,6 +428,17 @@ extension ConversationSyncEngine {
         openConversationId: String?,
         now: Date = Date()
     ) -> MeeshyConversation {
+        reconcileUnread(incoming: incoming, local: local,
+                        openConversationIds: openConversationId.map { [$0] } ?? [], now: now)
+    }
+
+    /// Multi-fenêtre : TOUTE conversation qu'une scène affiche se lit à zéro.
+    public nonisolated static func reconcileUnread(
+        incoming: MeeshyConversation,
+        local: MeeshyConversation?,
+        openConversationIds: Set<String>,
+        now: Date = Date()
+    ) -> MeeshyConversation {
         var result = incoming
         // La frontière ne voyage que localement : la reprendre du cache est la
         // seule façon qu'elle traverse l'écrasement par l'instantané serveur.
@@ -445,7 +453,7 @@ extension ConversationSyncEngine {
             local?.userState.lastReadAt, incoming.userState.lastReadAt
         ].compactMap { $0 }.max()
 
-        if incoming.id == openConversationId {
+        if openConversationIds.contains(incoming.id) {
             result.userState.unreadCount = 0
             return result
         }
@@ -464,13 +472,23 @@ extension ConversationSyncEngine {
         openConversationId: String?,
         now: Date = Date()
     ) -> [MeeshyConversation] {
+        reconcileUnread(incoming: incoming, existing: existing,
+                        openConversationIds: openConversationId.map { [$0] } ?? [], now: now)
+    }
+
+    public nonisolated static func reconcileUnread(
+        incoming: [MeeshyConversation],
+        existing: [MeeshyConversation],
+        openConversationIds: Set<String>,
+        now: Date = Date()
+    ) -> [MeeshyConversation] {
         guard !incoming.isEmpty else { return incoming }
         let localById = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return incoming.map {
             reconcileUnread(
                 incoming: $0,
                 local: localById[$0.id],
-                openConversationId: openConversationId,
+                openConversationIds: openConversationIds,
                 now: now
             )
         }
@@ -486,7 +504,7 @@ extension ConversationSyncEngine {
             cached.map { ($0.id, $0.userState.unreadCount) },
             uniquingKeysWith: { first, _ in first }
         )
-        stateQueue.sync { _unreadByConversation = mirror }
+        openLedger.mutate { $0.unreadByConversation = mirror }
         publishTotalUnread()
     }
 
@@ -503,11 +521,7 @@ extension ConversationSyncEngine {
     /// juste après, recevait le total INCLUANT la conversation qu'on vient
     /// d'ouvrir : la pastille affichait « 99 » puis retombait — le glitch.
     /* partagé entre les fichiers du moteur (#4172) */ func publishTotalUnread() {
-        let (mirror, openId) = stateQueue.sync { (_unreadByConversation, _currentlyOpenConversationId) }
-        let total = mirror.reduce(0) { acc, entry in
-            guard entry.key != openId else { return acc }
-            return acc + max(0, entry.value)
-        }
+        let total = openLedger.read { $0.aggregateUnread() }
         _totalConversationsUnread.send(total)
     }
 

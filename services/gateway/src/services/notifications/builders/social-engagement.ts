@@ -224,6 +224,12 @@ export async function createPostRepostNotification(
 ): Promise<Notification | null> {
   if (params.actorId === params.postAuthorId) return null;
 
+  // #10525 — la notification DIT qu'une republication existe : l'auteur de
+  // l'original ne l'apprend que s'il peut la VOIR (republication privée, ou
+  // dont l'audience l'exclut). Même verdict, fail-closed, que les autres
+  // notifications à destinataire unique du fil.
+  if (!(await deps.canNotifyAboutPost(params.repostId, params.postAuthorId))) return null;
+
   const actor = await deps.prisma.user.findUnique({
     where: { id: params.actorId },
     select: { username: true, displayName: true, avatar: true },
@@ -234,11 +240,9 @@ export async function createPostRepostNotification(
   const lang = prism.lang;
   const trimmedPostPreview = await servedExcerpt(deps, params.originalPostId, prism.ordered);
   const media = await resolvePostMedia(deps.prisma, params.originalPostId);
-  // Cf. `targetPreviewBody` : un partage n'apporte aucun contenu neuf, le
-  // détail du contenu partagé descend donc dans le corps.
-  const subtitle = notificationString(lang, 'comment.subtitleOwner', {
-    postType: params.postType ?? 'POST',
-  });
+  // Cf. `targetPreviewBody` : une republication n'apporte aucun contenu neuf,
+  // le détail du contenu republié descend donc dans le corps.
+  const subtitle = notificationString(lang, 'comment.subtitleOwner', { postType: params.postType ?? 'POST' });
 
   return deps.createNotification({
     userId: params.postAuthorId,
@@ -583,7 +587,7 @@ export async function createCommentReactionNotification(
     metadata: {
       action: 'view_post',
       reactionEmoji: params.reactionEmoji,
-      // Entité portant le commentaire → le client affiche « Réel »/« Statut »/« Story »/
+      // Entité portant le commentaire → le client affiche « Réel »/« Humeur »/« Story »/
       // « Publication » (et non un libellé générique). Ne s'effondre plus vers 'POST'
       // pour les REEL/STATUS (F58) — cohérent avec le sibling post-reaction.
       postType: params.postType ?? 'POST',

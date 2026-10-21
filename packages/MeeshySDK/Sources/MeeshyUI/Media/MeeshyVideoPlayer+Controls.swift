@@ -38,7 +38,7 @@ internal struct _InlineOverlayControls: View {
     /// `AVPictureInPictureController.isPictureInPictureSupported()`, donc le
     /// test ne dépend jamais de l'environnement (faux en CI/simulateur).
     nonisolated static func showsPipButton(controls: MeeshyVideoPlayer.ControlSet, isPipSupported: Bool) -> Bool {
-        controls.contains(.pip) && isPipSupported
+        MeeshyVideoPlayer.surfaceEnablesPip(style: .inline, controls: controls) && isPipSupported
     }
 
     /// Les sauts ±10 s suivent le jeu de contrôles, comme tous les autres
@@ -228,7 +228,7 @@ internal struct _InlineOverlayControls: View {
 
     private var centerControls: some View {
         AdaptiveGlassContainer(spacing: 24) {
-            HStack(spacing: MeeshySpacing.xxl) {
+            HStack(spacing: MeeshySpacing.xxl - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular)) {
                 if Self.showsSkipButtons(controls: controls) {
                     skipButton(systemName: "gobackward.10", seconds: -10)
                 }
@@ -250,6 +250,7 @@ internal struct _InlineOverlayControls: View {
                 .foregroundColor(.white)
                 .frame(width: 36, height: 36)
                 .adaptiveGlass(in: Circle(), interactive: true)
+                .meeshyTapTarget()
         }
     }
 
@@ -357,6 +358,8 @@ internal struct _InlineOverlayControls: View {
 // at the bottom. Drawn ON the video. Used by `_FullscreenRenderer`.
 
 internal struct _FullscreenOverlayControls: View {
+    /// Les marges sûres de la fenêtre qui porte le lecteur, mesurées par sa racine.
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     @ObservedObject var manager: SharedAVPlayerManager
     let accentColor: String
     let controls: MeeshyVideoPlayer.ControlSet
@@ -370,6 +373,8 @@ internal struct _FullscreenOverlayControls: View {
     /// La ligne `largeur × hauteur · poids · durée` (#9577) — `nil` ⇒ aucune.
     var infoSegments: [MediaInfoLine.Segment] = []
     var declaredDuration: Double = 0
+    /// Le média est déjà dans l'album Meeshy (#10370) : une coche, pas une flèche.
+    var isInAlbum = false
 
     /// **De haut en bas : barre haute, scène, progression sur toute la largeur
     /// de l'écran, ligne d'informations** (#9577, directive porteur
@@ -378,7 +383,7 @@ internal struct _FullscreenOverlayControls: View {
     /// dans le renderer, sous sa propre règle d'effacement.
     var body: some View {
         ZStack {
-            FullscreenScrims(topInset: WindowMetrics.safeAreaInsets.top, chromeVisible: true)
+            FullscreenScrims(topInset: SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets).top, chromeVisible: true)
             VStack(spacing: 0) {
                 topBar
                     .padding(.top, FullscreenChromeMetrics.topInset)
@@ -475,7 +480,9 @@ internal struct _FullscreenOverlayControls: View {
         } else {
             FullscreenChromeButton(
                 systemImage: saveGlyph,
-                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+                label: isInAlbum && saveState == .idle
+                    ? PhotoAlbumSaveFeedback.alreadyInAlbumMessage
+                    : String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
             ) {
                 exitGate.perform { onSave?() }
             }
@@ -485,7 +492,8 @@ internal struct _FullscreenOverlayControls: View {
 
     private var saveGlyph: String {
         switch saveState {
-        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .idle: return isInAlbum ? FullscreenChromeSymbol.saved : FullscreenChromeSymbol.save
+        case .saving: return FullscreenChromeSymbol.save
         case .saved: return FullscreenChromeSymbol.saved
         case .failed: return FullscreenChromeSymbol.close
         }

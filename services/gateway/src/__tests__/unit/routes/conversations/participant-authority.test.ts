@@ -28,6 +28,7 @@
  * @jest-environment node
  */
 
+import { roomDeliveries } from '../../../helpers/room-deliveries';
 import { describe, it, expect, jest } from '@jest/globals';
 import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
@@ -143,7 +144,7 @@ function makePrisma(rows: Row[]) {
           .map((row) => ({ id: row.id, userId: row.userId, role: row.role, user: { role: 'USER' } })),
       ),
     },
-    conversationShareLink: { update: jest.fn(async () => ({ id: SHARE_LINK_ID, isActive: false })) },
+    conversationShareLink: { updateMany: jest.fn(async () => ({ count: 1 })) },
   };
 }
 
@@ -151,7 +152,7 @@ type Emitted = { rooms: string[]; event: string; payload: any };
 
 function makeSocket(emitted: Emitted[]) {
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
     emit: (event: string, payload: any) => emitted.push({ rooms, event, payload }),
   });
   const io = {
@@ -241,12 +242,12 @@ describe('DELETE …/participants/:key — la diffusion garde son audience', () 
 
     await app.inject({ method: 'DELETE', url: `/conversations/${CONV_ID}/participants/${TARGET_ID}` });
 
-    const left = emitted.find((e) => e.event === 'conversation:participant-left');
-    expect(left).toBeDefined();
+    const delivered = roomDeliveries(emitted.filter((e) => e.event === 'conversation:participant-left'));
     // Le retiré est sur l'écran de LISTE, hors de la room du fil : sans sa room
     // personnelle il garde une ligne que `GET /conversations` ne sert plus.
-    expect(left?.rooms).toEqual(expect.arrayContaining([`conversation:${CONV_ID}`, `user:${TARGET_ID}`, `user:${CALLER_ID}`]));
-    expect(left?.payload).toEqual(expect.objectContaining({
+    expect([...delivered.keys()]).toEqual(expect.arrayContaining([`conversation:${CONV_ID}`, `user:${TARGET_ID}`, `user:${CALLER_ID}`]));
+    expect(delivered.get(`user:${TARGET_ID}`)).not.toHaveProperty('memberCount');
+    expect(delivered.get(`user:${CALLER_ID}`)).toEqual(expect.objectContaining({
       conversationId: CONV_ID,
       participantId: 'part-target',
       userId: TARGET_ID,

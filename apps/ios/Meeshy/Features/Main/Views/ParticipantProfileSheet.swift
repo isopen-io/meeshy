@@ -46,11 +46,11 @@ struct ParticipantProfileSheet: View {
     let conversationId: String
     let participantId: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
-    @State private var profile: ConversationParticipantProfile?
-    @State private var loadFailed = false
-    @State private var hasLeft = false
+    /// #10111 — la fiche s'ouvre depuis le cache et se synchronise dès l'ouverture.
+    @StateObject private var loader: ParticipantProfileLoader
     @State private var rightsWriteInFlight = false
     @State private var historyGrantWriteInFlight = false
     @State private var historyGrantErrorMessage: String?
@@ -59,6 +59,14 @@ struct ParticipantProfileSheet: View {
     /// PRÉSENCE est la réponse du gateway à « ce lecteur peut-il écrire ». La
     /// vue ne refait pas cet arbitrage — un droit recalculé côté client n'est
     /// pas un droit.
+    init(conversationId: String, participantId: String) {
+        self.conversationId = conversationId
+        self.participantId = participantId
+        _loader = StateObject(wrappedValue: ParticipantProfileLoader(conversationId: conversationId, participantId: participantId))
+    }
+
+    private var profile: ConversationParticipantProfile? { loader.profile }
+
     private var canEditRights: Bool { profile?.entryLink != nil }
 
     /// Distinct de `canEditRights` : l'octroi d'historique par date vaut pour
@@ -76,8 +84,8 @@ struct ParticipantProfileSheet: View {
                     // posé de conditions : elle doit défiler, sinon un lien très
                     // configuré tronque ses propres réglages.
                     ScrollView { content(profile) }
-                } else if loadFailed {
-                    Text(hasLeft
+                } else if loader.loadFailed {
+                    Text(loader.hasLeft
                         ? String(
                             localized: "participantProfile.hasLeft",
                             defaultValue: "Cette personne a quitté la conversation",
@@ -108,28 +116,9 @@ struct ParticipantProfileSheet: View {
         }
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
-        .task {
-            do {
-                profile = try await ConversationService.shared.getParticipantProfile(
-                    conversationId: conversationId,
-                    participantId: participantId
-                )
-            } catch {
-                // 404 et panne ne se disent pas pareil. Un avis d'arrivée reste
-                // dans le fil pour toujours et mène ici longtemps après le
-                // départ de son auteur : servir « Fiche indisponible » ferait
-                // passer un fait de conversation pour une panne.
-                //
-                // Le STATUT suffit à trancher — le gateway ne rend 404 sur cette
-                // route que pour un participant qu'il ne sert pas — là où une
-                // coupure réseau lève `networkError` et garde le message
-                // générique, qui est alors le bon.
-                if case APIError.serverError(404, _) = error {
-                    hasLeft = true
-                }
-                loadFailed = true
-            }
-        }
+        // 404 et panne ne se disent pas pareil (`ParticipantProfileLoader`) : un avis d'arrivée mène ici longtemps
+        // après le départ de son auteur, et « Fiche indisponible » ferait passer un fait de conversation pour une panne.
+        .task { await loader.open() }
         // Un AUTRE hôte peut modifier ces droits pendant que cette fiche est
         // ouverte. L'événement porte l'état résolu : on le pose, sans recharger
         // — la charge utile est déjà la vérité.
@@ -139,21 +128,24 @@ struct ParticipantProfileSheet: View {
         ) { event in
             guard event.participantId == participantId,
                   event.conversationId == conversationId else { return }
-            profile?.entryCapabilities = event.rights
+            let carriesHistoryGrant = event.carriesHistoryGrant
+            Task {
+                await loader.update {
+                    $0.entryCapabilities = event.rights
+                    if carriesHistoryGrant { $0.historyVisibleFrom = event.historyVisibleFrom }
+                }
+            }
             // La PRÉSENCE de la clé, jamais sa valeur : `null` efface (le
             // serveur affirme qu'il n'y a pas d'octroi), une clé ABSENTE
             // n'affirme rien — un gateway antérieur au champ — et ne doit pas
             // faire disparaître un octroi affiché. Même règle que le web.
-            if event.carriesHistoryGrant {
-                profile?.historyVisibleFrom = event.historyVisibleFrom
-            }
         }
         // #9359 — un pair qui se renomme ou change de photo pendant que sa
         // fiche est ouverte : la loi du SDK, sans relecture ; muet (aucune
         // écriture d'état) quand l'annonce vise quelqu'un d'autre.
         .onReceive(MessageSocketManager.shared.userUpdated.receive(on: DispatchQueue.main)) { event in
             guard let repainted = Self.repaintedProfile(profile, with: event) else { return }
-            profile = repainted
+            Task { await loader.update { $0 = repainted } }
         }
     }
 
@@ -508,7 +500,7 @@ struct ParticipantProfileSheet: View {
                 participantId: participantId,
                 rights: [capability.rawValue: value]
             )
-            profile?.entryCapabilities = updated
+            await loader.update { $0.entryCapabilities = updated }
         } catch {
             // L'échec laisse l'état serveur intact ; le rendu suivant réaligne
             // l'interrupteur sur `profile`.
@@ -533,7 +525,7 @@ struct ParticipantProfileSheet: View {
                 participantId: participantId,
                 historyVisibleFrom: date
             )
-            profile?.historyVisibleFrom = updated
+            await loader.update { $0.historyVisibleFrom = updated }
         } catch {
             let message = String(
                 localized: "participantProfile.historyGrant.error",

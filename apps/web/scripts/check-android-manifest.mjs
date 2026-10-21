@@ -39,8 +39,7 @@ const MANIFEST_PATH = join(APP, 'android', 'app', 'src', 'main', 'AndroidManifes
  * (`src/lib/view/use-location-request.ts`). Les autres (`INTERNET`, `RECORD_AUDIO`,
  * `MODIFY_AUDIO_SETTINGS`) sont déjà posées (#5668) et restent gardées ici
  * pour que ce témoin soit la référence UNIQUE des permissions de la coque.
- * `FOREGROUND_SERVICE` (+ `_MICROPHONE`, `_CAMERA`), `USE_FULL_SCREEN_INTENT`,
- * `BLUETOOTH_CONNECT`, `WAKE_LOCK`, `VIBRATE` (#8049) : l'appel natif de la
+ * `FOREGROUND_SERVICE` (+ `_MICROPHONE`), `BLUETOOTH_CONNECT`, `WAKE_LOCK`, `VIBRATE` (#8049) : l'appel natif de la
  * coque (`src/lib/calls/shell-call.ts`, `MeeshyCallPlugin.java`).
  * `DETECT_SCREEN_CAPTURE` (API 34) et `DETECT_SCREEN_RECORDING` (API 35)
  * (#9617) : la capture et l'enregistrement d'un éphémère s'annoncent
@@ -57,14 +56,39 @@ export const REQUIRED_PERMISSIONS = [
   'android.permission.CAMERA',
   'android.permission.FOREGROUND_SERVICE',
   'android.permission.FOREGROUND_SERVICE_MICROPHONE',
-  'android.permission.FOREGROUND_SERVICE_CAMERA',
-  'android.permission.USE_FULL_SCREEN_INTENT',
   'android.permission.BLUETOOTH_CONNECT',
   'android.permission.WAKE_LOCK',
   'android.permission.VIBRATE',
   'android.permission.DETECT_SCREEN_CAPTURE',
   'android.permission.DETECT_SCREEN_RECORDING',
 ];
+
+/**
+ * Ce que SEUL l'appel natif demande (#8049) : la caméra tenue écran éteint et
+ * la sonnerie plein écran. Tant que les appels de la coque sont coupés
+ * (`CallPush.CALLS_ENABLED`, première version Play Store, #10611), ils sont
+ * INTERDITS : la Play Console exige une justification par type de service au
+ * premier plan, et une caméra déclarée pour des appels absents s'y refuse.
+ */
+export const CALL_ONLY_PERMISSIONS = [
+  'android.permission.FOREGROUND_SERVICE_CAMERA',
+  'android.permission.USE_FULL_SCREEN_INTENT',
+];
+
+export const requiredPermissions = ({ callsEnabled }) =>
+  callsEnabled ? [...REQUIRED_PERMISSIONS, ...CALL_ONLY_PERMISSIONS] : REQUIRED_PERMISSIONS;
+
+export const forbiddenPermissions = ({ callsEnabled }) =>
+  callsEnabled ? FORBIDDEN_PERMISSIONS : [...FORBIDDEN_PERMISSIONS, ...CALL_ONLY_PERMISSIONS];
+
+const CALL_PUSH_PATH = join(APP, 'android', 'app', 'src', 'main', 'java', 'me', 'meeshy', 'app', 'CallPush.java');
+
+/** Le drapeau natif des appels, lu dans `CallPush.java` : absent, le témoin refuse plutôt que de deviner. */
+export const callsEnabledIn = (callPushSource) => {
+  const match = /public static final boolean CALLS_ENABLED = (true|false);/.exec(callPushSource);
+  if (match === null) throw new Error('check-android-manifest: CallPush.CALLS_ENABLED introuvable dans CallPush.java.');
+  return match[1] === 'true';
+};
 
 const XML_COMMENT = /<!--[\s\S]*?-->/g;
 const USES_PERMISSION_ELEMENT = /<uses-permission(?=[\s/>])([^>]*)>/g;
@@ -152,7 +176,7 @@ const named = (components, tag, name) =>
  * et le récepteur de refus n'est pas exporté (sinon n'importe quelle app
  * raccrocherait un appel au nom de l'utilisateur).
  */
-export const auditCallComponents = ({ manifest }) => {
+export const auditCallComponents = ({ manifest, callsEnabled = true }) => {
   const components = componentsOf(manifest);
   const plugin = named(components, 'service', PLUGIN_MESSAGING_SERVICE);
   const messaging = named(components, 'service', '.MeeshyMessagingService');
@@ -166,9 +190,13 @@ export const auditCallComponents = ({ manifest }) => {
     messaging?.body.includes('com.google.firebase.MESSAGING_EVENT') === true
       ? null
       : '.MeeshyMessagingService — absent ou sans com.google.firebase.MESSAGING_EVENT',
-    types.has('microphone') && types.has('camera')
-      ? null
-      : '.CallForegroundService — foregroundServiceType doit porter microphone ET camera',
+    callsEnabled
+      ? types.has('microphone') && types.has('camera')
+        ? null
+        : '.CallForegroundService — foregroundServiceType doit porter microphone ET camera'
+      : foreground === undefined
+        ? null
+        : '.CallForegroundService — déclaré alors que les appels de la coque sont coupés (CallPush.CALLS_ENABLED)',
     decline?.attributes.get('android:exported') === 'false' ? null : '.DeclineCallReceiver — absent ou exporté',
   ].filter((violation) => violation !== null);
 };
@@ -200,9 +228,10 @@ const intentFiltersOf = (activityBody) =>
  * (`MeeshyShareIntentPlugin.java` les copie) ; un type en plus ferait figurer
  * l'app pour un contenu qu'elle refuserait.
  */
+// D9 (#10949) : tout fichier — image, vidéo, son, document — et le texte seul.
 export const SHARE_INTENT_FILTERS = [
-  { action: 'android.intent.action.SEND', mimeTypes: ['image/*', 'video/*', 'text/plain'] },
-  { action: 'android.intent.action.SEND_MULTIPLE', mimeTypes: ['image/*', 'video/*'] },
+  { action: 'android.intent.action.SEND', mimeTypes: ['*/*', 'text/plain'] },
+  { action: 'android.intent.action.SEND_MULTIPLE', mimeTypes: ['*/*'] },
 ];
 
 export const auditShareIntentFilters = ({ manifest, required = SHARE_INTENT_FILTERS }) => {
@@ -248,13 +277,14 @@ function main() {
   }
 
   const manifest = readFileSync(MANIFEST_PATH, 'utf8');
-  const violations = auditManifestPermissions({ manifest });
+  const callsEnabled = callsEnabledIn(readFileSync(CALL_PUSH_PATH, 'utf8'));
+  const violations = auditManifestPermissions({ manifest, required: requiredPermissions({ callsEnabled }) });
 
   if (violations.length > 0) {
     throw new Error(formatViolations({ manifestPath: MANIFEST_PATH, violations }));
   }
 
-  const forbidden = auditForbiddenPermissions({ manifest });
+  const forbidden = auditForbiddenPermissions({ manifest, forbidden: forbiddenPermissions({ callsEnabled }) });
   if (forbidden.length > 0) {
     throw new Error(
       [
@@ -264,7 +294,7 @@ function main() {
     );
   }
 
-  const componentViolations = auditCallComponents({ manifest });
+  const componentViolations = auditCallComponents({ manifest, callsEnabled });
   if (componentViolations.length > 0) {
     throw new Error(
       [
@@ -285,7 +315,7 @@ function main() {
   }
 
   console.log(
-    `✓ AndroidManifest.xml de la coque déclare les ${REQUIRED_PERMISSIONS.length} permissions requises (dont ACCESS_NETWORK_STATE, #7844) et reçoit les partages (SEND, SEND_MULTIPLE, #8884).`,
+    `✓ AndroidManifest.xml de la coque déclare les ${requiredPermissions({ callsEnabled }).length} permissions requises (dont ACCESS_NETWORK_STATE, #7844) et reçoit les partages (SEND, SEND_MULTIPLE, #8884).`,
   );
 }
 

@@ -458,6 +458,92 @@ final class ConversationViewModelTests: XCTestCase {
         )
     }
 
+    /// #10572 — cinq messages détenus, puis une absence de plus de trente :
+    /// le refresh pose les trente plus récents, TOUS postérieurs au bloc
+    /// détenu. Le rattrapage doit repartir du plus récent message détenu AVANT
+    /// ce refresh. Relu après, le curseur tombait sur le plus récent des
+    /// trente, et le trou entre les deux blocs ne se comblait jamais.
+    func test_loadMessages_surUnTrouPlusLongQueLaPage_rattrapeDepuisLeCurseurDAvantLeRefresh() async throws {
+        let (sut, newestHeld) = try await makeWarmSUT(heldAt: Date(timeIntervalSince1970: 1_748_736_000))
+        mockMessageService.listResult = .success(
+            makeBackfillResponse(idPrefix: "recent", count: 30, createdAtISO: "2026-06-01T10:00:00.000Z")
+        )
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())
+
+        await sut.loadMessages()
+        let rattrape = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listAfterCallCount >= 1
+        }
+
+        XCTAssertTrue(rattrape, "un refresh qui ne rejoint pas le bloc détenu laisse un trou à combler")
+        let after = try XCTUnwrap(mockMessageService.lastListAfterAfter)
+        XCTAssertLessThanOrEqual(after, newestHeld)
+        XCTAssertGreaterThan(
+            after, newestHeld.addingTimeInterval(-0.01),
+            "le curseur est le plus récent message détenu AVANT le refresh, pas le plus récent servi par lui"
+        )
+    }
+
+    /// La moitié négative : une page de refresh qui REMONTE jusqu'au bloc
+    /// détenu le recouvre sans trou — un rattrapage n'y serait qu'une seconde
+    /// lecture des mêmes messages, à chaque ouverture.
+    func test_loadMessages_quandLeRefreshRejointLeBlocDetenu_neRattrapePas() async throws {
+        let (sut, _) = try await makeWarmSUT(heldAt: Date(timeIntervalSince1970: 1_748_736_000))
+        mockMessageService.listResult = .success(
+            makeBackfillResponse(idPrefix: "overlap", count: 30, createdAtISO: "2025-01-01T00:00:00.000Z")
+        )
+
+        await sut.loadMessages()
+        let revalide = await MessageStoreObservationHelper.awaitCondition(timeout: 2.0) {
+            self.mockMessageService.listCallCount >= 1 && !sut.isRevalidating
+        }
+
+        XCTAssertTrue(revalide)
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 0)
+    }
+
+    func test_openingGapCursor_withNothingHeld_returnsNil() {
+        XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: nil, refreshReachedBackTo: Date()))
+    }
+
+    func test_openingGapCursor_whenTheRefreshServedNothing_returnsTheHeldWatermark() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: nil), held)
+    }
+
+    func test_openingGapCursor_whenThePageStartsAfterTheHeldBlock_returnsTheHeldWatermark() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertEqual(
+            ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: held.addingTimeInterval(60)),
+            held
+        )
+    }
+
+    func test_openingGapCursor_whenThePageReachesTheHeldBlock_returnsNil() {
+        let held = Date(timeIntervalSince1970: 1_000)
+        XCTAssertNil(ConversationViewModel.openingGapCursor(heldUpTo: held, refreshReachedBackTo: held))
+    }
+
+    /// Cinq messages SERVEUR détenus en GRDB, le plus récent à `heldAt + 4 s`.
+    private func makeWarmSUT(heldAt base: Date) async throws -> (ConversationViewModel, Date) {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let records: [MessageRecord] = (0..<5).map { i in
+            var record = MessageStoreObservationHelper.makeRecord(
+                localId: "held-\(i)", conversationId: testConversationId,
+                senderId: testUserId, content: "msg \(i)",
+                state: .sent, createdAt: base.addingTimeInterval(Double(i))
+            )
+            record.cachedTimeString = MessageRecord.computeTimeString(for: record.createdAt)
+            return record
+        }
+        try await pool.write { db in
+            for record in records { try record.insert(db) }
+        }
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        return (sut, base.addingTimeInterval(4))
+    }
+
     // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
 
     /// The backfill must ask the gateway for messages created *after* the
@@ -523,7 +609,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_emptyContent_returnsFalse() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "")
+        let result = await sut.send(outgoingMessage(content: "", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertTrue(sut.messages.isEmpty)
@@ -532,7 +618,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_whitespaceOnly_returnsFalse() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "   \n  ")
+        let result = await sut.send(outgoingMessage(content: "   \n  ", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
     }
@@ -545,7 +631,7 @@ final class ConversationViewModelTests: XCTestCase {
         // which crosses several runloop hops — poll for the condition instead
         // of a fixed sleep (a 50 ms delay races the pipeline under load).
         let sendTask = Task {
-            await sut.sendMessage(content: "Hello world")
+            await sut.send(outgoingMessage(content: "Hello world", conversationId: sut.conversationId)).isAccepted
         }
 
         let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) {
@@ -561,7 +647,7 @@ final class ConversationViewModelTests: XCTestCase {
         let persistence = MessagePersistenceActor(dbWriter: pool)
         let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
 
-        let result = await sut.sendMessage(content: "Hello")
+        let result = await sut.send(outgoingMessage(content: "Hello", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         // Post Phase 1.5: insertOptimistic + applyEvent(.serverAck) write
@@ -586,7 +672,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500, userInfo: [NSLocalizedDescriptionKey: "Send failed"]))
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fail me")
+        let result = await sut.send(outgoingMessage(content: "Fail me", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertEqual(sut.messages.count, 1)
@@ -601,7 +687,7 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         XCTAssertEqual(sut.messages.count, 0)
 
-        _ = await sut.sendMessage(content: "Test")
+        _ = await sut.send(outgoingMessage(content: "Test", conversationId: sut.conversationId)).isAccepted
 
         // The optimistic GRDB insert surfaces through the store observation
         // (notification → store refresh → @Published messages), which hops the
@@ -619,7 +705,7 @@ final class ConversationViewModelTests: XCTestCase {
         let sut = makeSUT()
         sut.messages = [makeMessage(id: "parent-msg", content: "Original", isMe: false)]
 
-        _ = await sut.sendMessage(content: "Reply", replyToId: "parent-msg")
+        _ = await sut.send(outgoingMessage(content: "Reply", conversationId: sut.conversationId, relation: .reply(to: MessageID("parent-msg"), citing: nil))).isAccepted
 
         XCTAssertEqual(mockMessageService.lastSendRequest?.replyToId, "parent-msg")
     }
@@ -633,7 +719,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fallback me")
+        let result = await sut.send(outgoingMessage(content: "Fallback me", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
@@ -642,7 +728,7 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_restSucceeds_skipsSocketFallback() async {
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Plain send")
+        let result = await sut.send(outgoingMessage(content: "Plain send", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
@@ -659,7 +745,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Fast via socket")
+        let result = await sut.send(outgoingMessage(content: "Fast via socket", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first sends via the socket")
@@ -673,7 +759,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageSocket.sendViaSocketFallbackResult = nil
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Socket miss then REST")
+        let result = await sut.send(outgoingMessage(content: "Socket miss then REST", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1, "socket-first was attempted")
@@ -685,7 +771,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockMessageSocket.sendViaSocketFallbackResult = nil
         let sut = makeSUT()
 
-        let result = await sut.sendMessage(content: "Both down")
+        let result = await sut.send(outgoingMessage(content: "Both down", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertFalse(result)
         XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
@@ -698,7 +784,7 @@ final class ConversationViewModelTests: XCTestCase {
         )
         let sut = makeSUT()
 
-        _ = await sut.sendMessage(content: "Dedup key check")
+        _ = await sut.send(outgoingMessage(content: "Dedup key check", conversationId: sut.conversationId)).isAccepted
 
         // The fallback MUST reuse the cid_<uuid> optimistic id so the gateway
         // dedup (conversationId, clientMessageId) prevents a duplicate when the
@@ -2145,11 +2231,11 @@ final class ConversationViewModelTests: XCTestCase {
         // change. We assert the row remains in GRDB (count == 1).
         sut.removeFailedMessage(messageId: "sent-msg")
 
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        let row = try await MessageStoreObservationHelper.fetchRecord(
+        let row = await MessageStoreObservationHelper.awaitRecord(
             localId: "sent-msg", from: pool
-        )
+        ) { $0.deletedAt != nil }
         XCTAssertNotNil(row, "Row must still exist (markDeleted is a soft delete)")
+        XCTAssertNotNil(row?.deletedAt, "the soft delete must land")
     }
 
     // MARK: - reportMessage Tests
@@ -3137,6 +3223,21 @@ final class ConversationViewModelTests: XCTestCase {
         await fulfillment(of: [neverCalled], timeout: 0.5)
         XCTAssertTrue(spy.rejoinCalls.isEmpty)
         XCTAssertEqual(spy.broughtUIForwardCount, 0)
+    }
+
+    // MARK: - Drapeau de scroll programmatique
+
+    func test_markProgrammaticScroll_twoCloseScrolls_keepTheFlagUntilTheSecondDeadline() async {
+        let sut = makeSUT()
+
+        sut.markProgrammaticScroll()
+        _ = await cancellableSleep(for: .milliseconds(300))
+        sut.markProgrammaticScroll()
+        _ = await cancellableSleep(for: .milliseconds(300))
+        XCTAssertTrue(sut.isProgrammaticScroll, "le premier délai ne lève pas le drapeau du second scroll")
+
+        _ = await cancellableSleep(for: .milliseconds(400))
+        XCTAssertFalse(sut.isProgrammaticScroll, "le drapeau retombe 500 ms après le DERNIER scroll")
     }
 
     // MARK: - Helpers

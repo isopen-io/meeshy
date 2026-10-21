@@ -78,55 +78,24 @@ extension ConversationView {
     /// séparait donc le tap du premier pixel. L'image, elle, EST déjà
     /// rasterisée : elle amorce le cache d'aperçu sous l'URL locale — connue
     /// avant que le fichier existe — et la bulle peint sans rien attendre.
-    func sendStickerImage(_ image: UIImage, sticker: MessageSticker?) {
+    ///
+    /// **Un sticker ANIMÉ part avec son fichier d'origine** (#9210) : `original`
+    /// porte les octets et le type du pack cinématique, écrits tels quels ;
+    /// `image`, sa première image, ne sert qu'à peindre la bulle tout de suite.
+    func sendStickerImage(_ image: UIImage, sticker: MessageSticker?,
+                          original: StickerSendPipeline.OriginalFile? = nil) {
         let attachmentId = UUID().uuidString
         let directory = FileManager.default.temporaryDirectory
-        let fileName = StickerSendPipeline.fileName(for: attachmentId)
-        let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory)
+        let mimeType = original?.mimeType ?? StickerSendPipeline.pngMimeType
+        let fileURL = StickerSendPipeline.fileURL(id: attachmentId, in: directory, mimeType: mimeType)
 
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderColor = DynamicColorGenerator.colorForName(AuthManager.shared.currentUser?.displayName ?? "?")
         let localKey = fileURL.absoluteString
-        var local = MeeshyMessageAttachment(
-            id: attachmentId,
-            fileName: fileName, originalName: fileName,
-            // Le poids n'est pas encore connu — il naîtra de l'encodage, et
-            // toutes les surfaces le taisent quand il vaut zéro. L'ESTIMER
-            // afficherait un chiffre faux sous une image que le serveur
-            // remplacera par sa propre pièce jointe deux secondes plus tard.
-            mimeType: "image/png", fileSize: 0,
-            fileUrl: localKey,
-            width: Int(image.size.width * image.scale),
-            height: Int(image.size.height * image.scale),
-            thumbnailUrl: localKey,
-            uploadedBy: currentUserId,
-            thumbnailColor: senderColor
+        let local = StickerOptimisticAttachment.make(
+            image: image, attachmentId: attachmentId, mimeType: mimeType, fileURL: fileURL,
+            sticker: sticker, uploadedBy: currentUserId, color: senderColor
         )
-        /*
-         LE TEXTE DU STICKER VOYAGE AVEC SON IMAGE (#6377, porteur 2026-09-14).
-
-         Un sticker part comme un PNG : sans ces deux champs, le fil ne reçoit
-         qu'une image muette. `alt` et `caption` existaient déjà sur
-         `MeeshyMessageAttachment` et le texte était déjà là, dans le
-         `MessageSticker` que cet appel transporte — les deux n'étaient pas
-         reliés.
-
-         Ce que leur absence coûtait : un lecteur d'écran annonçait « image »,
-         une bannière de notification ne montrait rien, et une recherche dans le
-         fil ne pouvait pas retrouver un sticker par ce qu'il DIT.
-
-         Les deux champs portent le MÊME texte, et c'est voulu : ce qu'un
-         sticker montre EST sa légende, il n'a pas de description alternative
-         distincte de son contenu. Les séparer inviterait à en remplir un seul.
-
-         `sticker == nil` — un PNG de « Mes stickers », collé tel quel — n'a
-         aucun texte à décrire : les champs restent nils plutôt que de porter
-         un nom de fichier, qui ne décrit rien et se lirait à voix haute.
-        */
-        if let texte = sticker.flatMap(StickerAltText.describe) {
-            local.alt = texte
-            local.caption = texte
-        }
         // La bulle optimiste lit `file://…` : amorcer le cache MÉMOIRE sous
         // cette clé AVANT de la poser pour qu'elle peigne l'image déjà rendue,
         // sans relire le disque ni le réseau. Le cache DISQUE, lui, attend les
@@ -155,9 +124,9 @@ extension ConversationView {
 
         Task {
             await encodeWriteAndSendSticker(
-                image: image, attachmentId: attachmentId, directory: directory, localKey: localKey,
-                tempId: tempId, sticker: sticker,
-                replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
+                image: image, original: original, attachmentId: attachmentId, directory: directory,
+                localKey: localKey, tempId: tempId, sticker: sticker,
+                relation: ComposerSendRelation.of(route, citing: nil),
                 originalLanguage: lang, currentUserId: currentUserId, protection: protection
             )
         }
@@ -170,14 +139,19 @@ extension ConversationView {
     /// bascule en échec (`markOptimisticMediaFailed`) au lieu de rester un
     /// spinner fantôme pour un fichier qui n'existera jamais.
     private func encodeWriteAndSendSticker(
-        image: UIImage, attachmentId: String, directory: URL, localKey: String,
+        image: UIImage, original: StickerSendPipeline.OriginalFile?,
+        attachmentId: String, directory: URL, localKey: String,
         tempId: String, sticker: MessageSticker?,
-        replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
+        relation: MessageRelation,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         let écrit: StickerSendPipeline.WrittenSticker
         do {
-            écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+            if let original {
+                écrit = try await StickerSendPipeline.prepare(original, id: attachmentId, directory: directory)
+            } else {
+                écrit = try await StickerSendPipeline.prepare(image, id: attachmentId, directory: directory)
+            }
         } catch {
             Logger.messages.error("Sticker temp write failed: \(error.localizedDescription, privacy: .public)")
             await viewModel.markOptimisticMediaFailed(tempId: tempId, reason: error.localizedDescription)
@@ -189,8 +163,9 @@ extension ConversationView {
         // que la bulle peint déjà depuis le cache mémoire.
         Task { await CacheCoordinator.shared.images.save(écrit.data, for: localKey) }
         await uploadAndSendSticker(
-            fileURL: écrit.url, data: écrit.data, image: image, tempId: tempId, sticker: sticker,
-            replyId: replyId, storyReplyId: storyReplyId, storyRef: storyRef,
+            fileURL: écrit.url, data: écrit.data, mimeType: original?.mimeType ?? StickerSendPipeline.pngMimeType,
+            image: image, tempId: tempId, sticker: sticker,
+            relation: relation,
             originalLanguage: originalLanguage, currentUserId: currentUserId, protection: protection
         )
     }
@@ -201,13 +176,13 @@ extension ConversationView {
     /// à côté de l'id remonté — sans lui, le destinataire recevrait une image
     /// muette.
     private func uploadAndSendSticker(
-        fileURL: URL, data: Data, image: UIImage, tempId: String, sticker: MessageSticker?,
-        replyId: String?, storyReplyId: String?, storyRef: ReplyReference?,
+        fileURL: URL, data: Data, mimeType: String, image: UIImage, tempId: String, sticker: MessageSticker?,
+        relation: MessageRelation,
         originalLanguage: String, currentUserId: String, protection: MessageProtectionIntent
     ) async {
         if NetworkMonitor.shared.isOffline {
-            await enqueueStickerOffline(fileURL: fileURL, tempId: tempId, sticker: sticker,
-                                        replyId: replyId, originalLanguage: originalLanguage)
+            await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
+                                        replyId: relation.replyToId, originalLanguage: originalLanguage)
             return
         }
         // Une pièce jointe de MESSAGE ne demande pas de compte : un invité de
@@ -220,25 +195,23 @@ extension ConversationView {
         }
         let uploader = TusUploadManager(baseURL: baseURL)
         do {
-            let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: "image/png", credential: credential)
+            let result = try await uploader.uploadFile(fileURL: fileURL, mimeType: mimeType, credential: credential)
             // Amorcer sous la clé que le rendu résout : la transition bulle
             // optimiste → confirmée (file:// → URL serveur) lit un cache chaud
             // et ne retélécharge jamais notre propre upload.
             let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
             await CacheCoordinator.shared.images.store(data, for: renderKey)
             DiskCacheStore.cacheImageForPreview(image, key: renderKey)
-            _ = await viewModel.sendMessage(
+            _ = await viewModel.send(OutgoingMessage(
+                conversationId: ConversationID(viewModel.conversationId),
                 content: "",
-                replyToId: replyId,
-                storyReplyToId: storyReplyId,
-                storyReplyReference: storyRef,
-                attachmentIds: [result.id],
-                localAttachments: [result.toMessageAttachment(uploadedBy: currentUserId)],
+                relation: relation,
+                attachments: OutgoingAttachments(ids: [result.id], previews: [result.toMessageAttachment(uploadedBy: currentUserId)]),
                 protection: protection,
                 originalLanguage: originalLanguage,
-                existingTempId: tempId,
+                reusedClientMessageId: MessageID(tempId),
                 sticker: sticker
-            )
+            ))
             // Le fichier a fini son travail : le serveur porte l'image, et un
             // échec d'envoi APRÈS l'upload est rejoué par `sendMessage` avec
             // l'id remonté, jamais depuis ce fichier.
@@ -247,9 +220,9 @@ extension ConversationView {
             Logger.messages.error("Sticker upload failed: \(error.localizedDescription, privacy: .public)")
             // Même contrat que le groupe visuel : la bulle passe `.sending` →
             // `.queued` (horloge conservée) et l'outbox rejoue l'upload.
-            _ = try? await viewModel.messagePersistence.applyEvent(localId: tempId, event: .sendFailed(error))
-            await enqueueStickerOffline(fileURL: fileURL, tempId: tempId, sticker: sticker,
-                                        replyId: replyId, originalLanguage: originalLanguage)
+            await viewModel.recordSendFailure(tempId: tempId, error: error)
+            await enqueueStickerOffline(fileURL: fileURL, mimeType: mimeType, tempId: tempId, sticker: sticker,
+                                        replyId: relation.replyToId, originalLanguage: originalLanguage)
         }
     }
 
@@ -257,13 +230,13 @@ extension ConversationView {
     /// `pending-media/`), AVEC son `sticker` — c'est l'exigence de protocole
     /// qui le garantit, pas un défaut concret (voir `OfflineMessageQueueing`).
     private func enqueueStickerOffline(
-        fileURL: URL, tempId: String, sticker: MessageSticker?,
+        fileURL: URL, mimeType: String, tempId: String, sticker: MessageSticker?,
         replyId: String?, originalLanguage: String
     ) async {
         do {
             _ = try await OfflineQueue.shared.enqueueMedia(
                 sourceMediaURLs: [fileURL],
-                kinds: [AttachmentKind(mimeType: "image/png").rawValue],
+                kinds: [AttachmentKind(mimeType: mimeType).rawValue],
                 conversationId: viewModel.conversationId,
                 content: nil,
                 clientMessageId: tempId,

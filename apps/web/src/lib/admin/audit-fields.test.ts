@@ -65,7 +65,13 @@ describe('auditFieldLabel — le champ en mots', () => {
     expect(auditFieldLabel('multiplier.windowDays', 'fr', 'EngagementScaleConfig')).toBe('Multiplicateur › Fenêtre glissante (jours)');
     expect(auditFieldLabel('multiplier.levelCaps', 'fr', 'EngagementScaleConfig')).toBe('Multiplicateur maximal par niveau');
     expect(auditFieldLabel('streakBonuses', 'fr', 'EngagementScaleConfig')).toBe(translateAdmin('fr', 'admin.scale.streak.title'));
+    // #10395 — les séries par acte et la fidélité se disent en mots dans le journal.
+    expect(auditFieldLabel('streaks.global', 'fr', 'EngagementScaleConfig')).toBe(translateAdmin('fr', 'admin.scale.streaks.global.title'));
+    expect(auditFieldLabel('streaks.acts.reaction_reel', 'fr', 'EngagementScaleConfig')).toBe(`${translateAdmin('fr', 'admin.scale.tab.streaks')} › ${translateAdmin('fr', 'admin.scale.act.reaction_reel')}`);
+    expect(auditFieldLabel('loyalty', 'fr', 'EngagementScaleConfig')).toBe(translateAdmin('fr', 'admin.scale.loyalty.title'));
     expect(auditFieldLabel('abuse.heavyPoints', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.abuse.heavyPoints'));
+    // #11491 — le réglage a quitté la console, mais les entrées du journal écrites avant se lisent toujours.
+    expect(auditFieldLabel('abuse.clawbackHours', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.abuse.clawbackHours'));
     expect(auditFieldLabel('linkVisits.basePoints', 'fr', 'EngagementScaleConfig')).toContain(translateAdmin('fr', 'admin.scale.links.basePoints'));
   });
 

@@ -17,6 +17,7 @@ import { depreciee, type AdresseDepreciee } from '../../utils/deprecation';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { revokePasswordResetTokensForEmailChange } from '../../utils/password-reset-revocation';
 import { creditContactProof } from '../../services/auth/contact-proof-engagement';
+import { emailSecretLink } from '../../utils/email-secret-link';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -348,7 +349,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       const { EmailService } = await import('../../services/EmailService');
       const emailService = new EmailService();
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const verificationLink = `${frontendUrl}/settings/verify-email-change?token=${verificationToken}`;
+      const verificationLink = emailSecretLink({ base: frontendUrl, path: '/settings/verify-email-change', secret: { token: verificationToken } });
 
       await emailService.sendEmailChangeVerification({
         to: newEmail,
@@ -631,7 +632,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
       const { EmailService } = await import('../../services/EmailService');
       const emailService = new EmailService();
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const verificationLink = `${frontendUrl}/settings/verify-email-change?token=${verificationToken}`;
+      const verificationLink = emailSecretLink({ base: frontendUrl, path: '/settings/verify-email-change', secret: { token: verificationToken } });
 
       await emailService.sendEmailChangeVerification({
         to: user.pendingEmail,

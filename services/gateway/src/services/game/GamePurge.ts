@@ -5,7 +5,8 @@
  * quotas, registres de Gloire et de Meeshes, réglages, pseudonyme, ligues,
  * points de semaine, duos, saisons, trophées, Atlas et leurs colonnes de `User` —
  * et ce que chaque post a rapporté au compte (#9569) : une ligne par post, donc
- * la trace de ses gestes, de même nature que les quotas par cible.
+ * la trace de ses gestes, de même nature que les quotas par cible — et le registre de ses moments
+ * photo (#10162), comme les réglages photo de `GameProfile`.
  *
  * Ce que la purge garantit au-delà de l'effacement (intégrité référentielle) :
  *  - un duo OUVERT est terminé proprement avant d'être effacé : le partenaire qui
@@ -56,6 +57,8 @@ export const GAME_PURGED_MODELS = [
   'gameTrophy',
   'atlasStamp',
   'engagementPostPoints',
+  'gamePhotoMoment',
+  'engagementActStreak',
 ] as const;
 
 /** Les modèles de jeu par compte qui ne se purgent PAS par `deleteMany({ userId })`, et la raison. */
@@ -201,6 +204,8 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
     prisma.gameTrophy.deleteMany({ where }),
     prisma.atlasStamp.deleteMany({ where }),
     prisma.engagementPostPoints.deleteMany({ where }),
+    prisma.gamePhotoMoment.deleteMany({ where }),
+    prisma.engagementActStreak.deleteMany({ where }),
   ]);
   const deleted = Object.fromEntries(GAME_PURGED_MODELS.map((model, index) => [model, counts[index]!.count]));
 
@@ -224,6 +229,7 @@ export async function purgeGameData(prisma: PurgeDb, userId: string, deps: GameP
       guideSeen: [],
       levelRecord: null,
       prestige: null,
+      prestigeLevelRecords: [],
       flameFreezes: null,
       lastRelightDay: null,
       brokenStreakDays: null,

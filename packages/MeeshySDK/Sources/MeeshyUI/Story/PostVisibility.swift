@@ -30,16 +30,16 @@ public enum PostVisibility: String, CaseIterable, Sendable, Codable, Identifiabl
         }
     }
 
-    /// Libellé localisé. `defaultValue` rend la valeur FR même sans entrée catalogue ;
-    /// pas de `bundle:` (Bundle.module est MainActor-isolé sous MeeshyUI) → reste sûr.
-    public nonisolated var label: String {
+    @MainActor public var label: String { label(in: .module) }
+
+    nonisolated func label(in bundle: Bundle) -> String {
         switch self {
-        case .public:    return String(localized: "post.visibility.public", defaultValue: "Public")
-        case .community: return String(localized: "post.visibility.community", defaultValue: "Communautés")
-        case .friends:   return String(localized: "post.visibility.friends", defaultValue: "Contacts")
-        case .except:    return String(localized: "post.visibility.except", defaultValue: "Sauf…")
-        case .only:      return String(localized: "post.visibility.only", defaultValue: "Seulement…")
-        case .private:   return String(localized: "post.visibility.private", defaultValue: "Privé")
+        case .public:    return String(localized: "post.visibility.public", defaultValue: "Public", bundle: bundle)
+        case .community: return String(localized: "post.visibility.community", defaultValue: "Communautés", bundle: bundle)
+        case .friends:   return String(localized: "post.visibility.friends", defaultValue: "Contacts", bundle: bundle)
+        case .except:    return String(localized: "post.visibility.except", defaultValue: "Sauf…", bundle: bundle)
+        case .only:      return String(localized: "post.visibility.only", defaultValue: "Seulement…", bundle: bundle)
+        case .private:   return String(localized: "post.visibility.private", defaultValue: "Privé", bundle: bundle)
         }
     }
 

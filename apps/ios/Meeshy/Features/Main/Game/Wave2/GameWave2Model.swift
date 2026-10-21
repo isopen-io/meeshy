@@ -92,6 +92,10 @@ final class GameWave2Model: ObservableObject {
     /// (`loadSettings`, `GET /me/game/privacy`), puis mis à jour par la réponse de chaque écriture. Hors ligne, la copie
     /// de l'appareil (`GameDevicePrefsStore`) répond à sa place — le dernier état connu.
     @Published private(set) var privacy: GamePrivacyResponse?
+    /// Le calendrier des saisons SERVI (#10232) — gardé hors ligne par le SDK (`GameSeasonScheduleStore`). Avant toute
+    /// lecture : la copie déjà chargée, sinon la constante de `GameSeason` ; jamais un vide.
+    @Published private(set) var seasonSchedule: SeasonSchedule
+    private let seasonScheduleProvider: GameSeasonScheduleProviding
 
     init(
         progression: ProgressionViewModel? = nil,
@@ -100,6 +104,7 @@ final class GameWave2Model: ObservableObject {
         cache: GameWave2Caching? = nil,
         friends: GameFriendsProviding = CachedGameFriends(),
         prefs: GameDevicePrefsStore? = nil,
+        seasonSchedule: GameSeasonScheduleProviding? = nil,
         currentUserId: String = AuthManager.shared.currentUser?.id ?? ""
     ) {
         self.progression = progression ?? ProgressionViewModel()
@@ -109,6 +114,9 @@ final class GameWave2Model: ObservableObject {
         self.cache = cache ?? disk
         self.friendsProvider = friends
         self.prefs = prefs ?? GameDevicePrefsStore.current(userId: currentUserId)
+        let scheduleProvider = seasonSchedule ?? GameSeasonScheduleStore.shared
+        self.seasonScheduleProvider = scheduleProvider
+        self.seasonSchedule = scheduleProvider.current
         Task { await disk.purgeOtherAccounts() }
     }
 
@@ -129,6 +137,13 @@ final class GameWave2Model: ObservableObject {
         guard !pending.hide, !pending.friendsOptOut else { return }
         privacy = GamePrivacyResponse(gameHidden: served.gameHidden, friendsLeagueOptOut: served.friendsLeagueOptOut)
         prefs.set(hidden: served.gameHidden, friendsLeagueOptOut: served.friendsLeagueOptOut)
+    }
+
+    /// Le calendrier des saisons : la copie disque puis la relecture conditionnelle, hors du fil principal (l'acteur
+    /// du SDK). L'écran se peint d'abord avec ce qu'il a ; hors ligne, la copie (ou la constante) reste.
+    func loadSeasonSchedule() async {
+        let schedule = await seasonScheduleProvider.load()
+        if schedule != seasonSchedule { seasonSchedule = schedule }
     }
 
     /// Le classement de MA ligue cette semaine : le cache d'abord, le réseau en silence derrière.

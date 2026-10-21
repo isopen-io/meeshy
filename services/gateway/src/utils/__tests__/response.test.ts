@@ -116,7 +116,7 @@ describe('sendError sert une forme ⊆ errorResponseSchema, et réciproquement (
     sendError(reply, 422, 'Validation failed', {
       message: 'Bad data',
       code: 'INVALID',
-      violations: [{ path: 'x', message: 'y' }],
+      violations: [{ path: 'x', message: 'y' }], accountId: 'compte-1',
     });
     const clesServies = Object.keys(reply._body as Record<string, unknown>).sort();
     expect(clesServies).toEqual(clesDeErrorResponseSchema);

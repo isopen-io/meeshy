@@ -66,32 +66,38 @@ public enum NotificationDateFormatter {
 /// Boîte `DateFormatter` thread-safe (`DateFormatter.string(from:)` n'est pas
 /// thread-safe), même pattern que `RelativeTimeFormatter`. Le fuseau est appliqué
 /// par appel pour rester cohérent avec le calendrier (UTC en tests, local en prod).
-private final class NotificationDateFormatterBox: @unchecked Sendable {
-    private let lock = NSLock()
-    private let dateTimeFormatter: DateFormatter
-    private let timeFormatter: DateFormatter
+private final class NotificationDateFormatterBox: Sendable {
+    private struct Formatters {
+        let dateTime: DateFormatter
+        let time: DateFormatter
 
-    init() {
-        let locale = Locale.current
-        // `setLocalizedDateFormatFromTemplate` réordonne selon la locale :
-        // fr → "23/06/2026 14:30", en → "06/23/2026 2:30 PM".
-        dateTimeFormatter = DateFormatter()
-        dateTimeFormatter.locale = locale
-        dateTimeFormatter.setLocalizedDateFormatFromTemplate("ddMMyyyy HHmm")
-        timeFormatter = DateFormatter()
-        timeFormatter.locale = locale
-        timeFormatter.setLocalizedDateFormatFromTemplate("HHmm")
+        static func make() -> Formatters {
+            let locale = Locale.current
+            // `setLocalizedDateFormatFromTemplate` réordonne selon la locale :
+            // fr → "23/06/2026 14:30", en → "06/23/2026 2:30 PM".
+            let dateTime = DateFormatter()
+            dateTime.locale = locale
+            dateTime.setLocalizedDateFormatFromTemplate("ddMMyyyy HHmm")
+            let time = DateFormatter()
+            time.locale = locale
+            time.setLocalizedDateFormatFromTemplate("HHmm")
+            return Formatters(dateTime: dateTime, time: time)
+        }
     }
 
+    private let formatters = Locked(uncheckedState: Formatters.make())
+
     func dateTime(from date: Date, timeZone: TimeZone) -> String {
-        lock.lock(); defer { lock.unlock() }
-        dateTimeFormatter.timeZone = timeZone
-        return dateTimeFormatter.string(from: date)
+        formatters.mutate { state -> String in
+            state.dateTime.timeZone = timeZone
+            return state.dateTime.string(from: date)
+        }
     }
 
     func time(from date: Date, timeZone: TimeZone) -> String {
-        lock.lock(); defer { lock.unlock() }
-        timeFormatter.timeZone = timeZone
-        return timeFormatter.string(from: date)
+        formatters.mutate { state -> String in
+            state.time.timeZone = timeZone
+            return state.time.string(from: date)
+        }
     }
 }

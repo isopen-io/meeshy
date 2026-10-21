@@ -24,6 +24,8 @@ import {
   seasonStarsForMission,
   seasonStepReward,
   seasonWeek,
+  liveSeasonTense,
+  seasonTenseAt,
 } from '../../utils/game/season.js';
 import { GLORY_POINTS } from '../../utils/game/glory.js';
 import { leagueWeekKey } from '../../utils/game/league.js';
@@ -203,5 +205,37 @@ describe('le règlement', () => {
 
   it('ne rend rien d\'un parcours inachevé', () => {
     expect(seasonSettlement({ season: 1, stepsReached: 39 })).toEqual({ completed: false, glory: 0, cup: false, badgeKey: null });
+  });
+});
+
+/**
+ * L'ÉTAT D'UNE SAISON À UN MOMENT (#10131) — calculé depuis ses dates SERVIES et l'horloge locale, pour qu'une copie
+ * hors ligne « à venir » bascule d'elle-même le jour de l'ouverture. La fermeture du dimanche 20 h ouvre la semaine
+ * suivante, comme pour la ligue : la saison 1 (lundi 2026-12-21) est en cours dès le dimanche 20 h.
+ */
+describe('l’état d’une saison à un moment (#10131)', () => {
+  const one = { startDay: '2026-12-21', endDay: '2027-02-14' } as const;
+
+  it('à venir avant la fermeture du dimanche qui la précède, en cours dès 20 h', () => {
+    expect(seasonTenseAt(one, { dayKey: '2026-12-20', minuteOfDay: 1199 })).toBe('upcoming');
+    expect(seasonTenseAt(one, { dayKey: '2026-12-20', minuteOfDay: 1200 })).toBe('current');
+    expect(seasonTenseAt(one, { dayKey: '2026-12-21', minuteOfDay: 0 })).toBe('current');
+  });
+
+  it('terminée à la fermeture de sa dernière semaine', () => {
+    expect(seasonTenseAt(one, { dayKey: '2027-02-14', minuteOfDay: 1199 })).toBe('current');
+    expect(seasonTenseAt(one, { dayKey: '2027-02-14', minuteOfDay: 1200 })).toBe('past');
+    expect(seasonTenseAt(one, { dayKey: '2027-06-01', minuteOfDay: 0 })).toBe('past');
+  });
+
+  it('une copie « à venir » gardée hors ligne bascule d’elle-même le jour J', () => {
+    expect(liveSeasonTense({ served: 'upcoming', ...one }, { dayKey: '2026-12-19', minuteOfDay: 600 })).toBe('upcoming');
+    expect(liveSeasonTense({ served: 'upcoming', ...one }, { dayKey: '2026-12-21', minuteOfDay: 600 })).toBe('current');
+    expect(liveSeasonTense({ served: 'upcoming', ...one }, { dayKey: '2027-03-01', minuteOfDay: 600 })).toBe('past');
+  });
+
+  it('une horloge en retard ne fait jamais reculer l’état servi', () => {
+    expect(liveSeasonTense({ served: 'current', ...one }, { dayKey: '2026-12-01', minuteOfDay: 0 })).toBe('current');
+    expect(liveSeasonTense({ served: 'past', ...one }, { dayKey: '2027-01-10', minuteOfDay: 600 })).toBe('past');
   });
 });

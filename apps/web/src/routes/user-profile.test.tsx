@@ -9,7 +9,10 @@ import { VIEWER_ID } from '@/lib/api/fixtures';
 import { friendRequestsQueryKey } from '@/lib/api/friend-requests';
 import { fixtureAuthorPosts } from '@/lib/api/fixtures-rich-text';
 import { sharedConversationsQueryKey } from '@/lib/api/shared-conversations';
+import { presenceStore } from '@/lib/api/presence-store';
+import { sessionStore } from '@/lib/api/session';
 import { appQueryClient } from '@/lib/api/query-client';
+import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { UserProfileView } from './user-profile';
@@ -45,6 +48,7 @@ afterEach(() => {
   mounted?.container.remove();
   mounted = null;
   appQueryClient.clear();
+  presenceStore.getState().clear();
   /* LE RÉSEAU SE REMET ICI, jamais en fin de corps de témoin : une assertion
      qui casse avant la ligne de restauration laisserait l'`onlineManager` de
      TanStack en pause pour tout le reste du PROCESSUS — donc pour les autres
@@ -175,10 +179,39 @@ describe('la présence sur la fiche', () => {
     expect(text(el.querySelector('[data-user-presence]'))).toBe('En ligne');
   });
 
+  test('SA PROPRE fiche : ni pastille ni « En ligne », même servis (décision porteur 2026-10-21, #11412)', async () => {
+    sessionStore.getState().establish({ user: { id: 'u-bruno', username: 'bruno.laurent', displayName: 'Bruno Laurent' }, token: 't', sessionToken: 's', expiresIn: 3600 });
+    try {
+      const el = await mount('bruno.laurent');
+      expect(el.querySelector('[data-user-presence]')).toBeNull();
+      expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+    } finally {
+      sessionStore.getState().clearSession();
+    }
+  });
+
   test('un TIERS : ni pastille ni ligne — rien de servi, rien de peint', async () => {
     const el = await mount('kwame-mensah');
     expect(el.querySelector('[data-user-presence]')).toBeNull();
     expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+  });
+
+  /* VIVANTE (#10571) : un `user:status` arrivé après la requête du profil
+     prime sur la présence que la requête avait servie. */
+  test('un AMI parti : le user:status reçu éteint « En ligne » sans recharger la fiche', async () => {
+    const el = await mount('bruno.laurent');
+
+    act(() => presenceStore.getState().put('u-bruno', { isOnline: false, lastActiveAt: new Date(Date.now() - 2 * 86_400_000).toISOString() }));
+
+    expect(el.querySelector('[data-user-hero] [data-presence="online"]')).toBeNull();
+    expect(text(el.querySelector('[data-user-presence]'))).not.toBe('En ligne');
+  });
+
+  test('un TIERS reste muet même si une présence vivante le concerne : la fiche ne montre que ce que la passerelle y sert', async () => {
+    const el = await mount('kwame-mensah');
+    act(() => presenceStore.getState().put('u-kwame', { isOnline: true, lastActiveAt: new Date().toISOString() }));
+
+    expect(el.querySelector('[data-user-presence]')).toBeNull();
   });
 });
 
@@ -633,5 +666,22 @@ describe('signaler ouvre la feuille des motifs (#7187)', () => {
     await settle();
 
     expect(text(document.querySelector('[data-report-body]'))).toContain('modération');
+  });
+});
+
+/** D15 (#10949) — « Envoyer le profil » ouvre l'écran de partage unique, avec la carte profil. */
+describe('Envoyer le profil', () => {
+  test('le bouton ouvre l’écran de partage avec la carte de CE profil', async () => {
+    const el = await mount('kwame-mensah');
+    const button = el.querySelector<HTMLButtonElement>('[data-profile-send]');
+    expect(button?.getAttribute('aria-label')).toBe('Envoyer le profil');
+    act(() => button?.click());
+    expect(sendSheetStore.getState().request?.payload).toMatchObject({ kind: 'profile', url: 'https://meeshy.me/u/kwame-mensah' });
+    sendSheetStore.getState().close();
+  });
+
+  test('un compte bloqué n’offre pas d’envoyer son profil', async () => {
+    const blocked = await mount('yann.legoff');
+    expect(blocked.querySelector('[data-profile-send]')).toBeNull();
   });
 });

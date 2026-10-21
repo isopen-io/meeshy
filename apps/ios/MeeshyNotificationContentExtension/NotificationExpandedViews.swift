@@ -11,6 +11,7 @@ enum NotificationExpandedLayout {
     static let locationMapHeight: CGFloat = 190
     static let locationHeight: CGFloat = 262
     static let contactHeight: CGFloat = 132
+    static let ephemeralHeight: CGFloat = 76
     static let accent = Color(red: 0x63 / 255, green: 0x66 / 255, blue: 0xF1 / 255)
 
     static func height(for content: NotificationExpandedContent) -> CGFloat {
@@ -18,6 +19,7 @@ enum NotificationExpandedLayout {
         case .audio: return player.height
         case .location: return locationHeight
         case .contact: return contactHeight
+        case .ephemeral: return ephemeralHeight
         }
     }
 }
@@ -41,6 +43,8 @@ struct NotificationExpandedRoot: View {
             }
         case .contact(let card):
             NotificationContactCardView(card: card)
+        case .ephemeral(let deadline):
+            NotificationEphemeralCountdownView(deadline: deadline)
         }
     }
 }
@@ -218,6 +222,43 @@ struct NotificationMapView: UIViewRepresentable {
     }
 
     func updateUIView(_ map: MKMapView, context: Context) {}
+}
+
+// MARK: - Éphémère (#7455)
+
+/// Le décompte VIVANT d'un message éphémère : il bat à la seconde jusqu'à
+/// l'échéance locale, ce qu'une bannière standard ne sait pas faire (#7453 y
+/// pose l'HEURE). La flamme est celle de l'éphémère partout ailleurs ; aucun
+/// contenu du message n'est rendu — le corps affiché dessous par le système
+/// est déjà le placeholder protégé.
+struct NotificationEphemeralCountdownView: View {
+    let deadline: Date
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "flame.fill")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(NotificationExpandedLayout.accent)
+                .frame(width: NotificationExpandedLayout.player.pillSide, height: NotificationExpandedLayout.player.pillSide)
+                .background(Circle().fill(NotificationExpandedLayout.accent.opacity(0.14)))
+                .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(localized: "notification.expanded.ephemeral.disappearsIn", defaultValue: "Disappears in", bundle: InterfaceLanguageResolver.bundle()))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text(timerInterval: NotificationExpandedContent.countdownRange(deadline: deadline, now: Date()), countsDown: true)
+                    .font(.title2.weight(.bold).monospacedDigit())
+                    .foregroundStyle(NotificationExpandedLayout.accent)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, NotificationExpandedLayout.inset)
+        .frame(height: NotificationExpandedLayout.ephemeralHeight)
+        .accessibilityElement(children: .combine)
+    }
 }
 
 // MARK: - Carte de visite

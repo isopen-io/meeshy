@@ -4,6 +4,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { visibilityVariant } from '@meeshy/shared/types/engagement-operations';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
+import { NOT_DELETED } from '../../services/posts/softDelete';
+import { ContentRemovalRefused, decideContentRemoval, MODERATION_REASON_MESSAGE, notifyContentRemoved, recordContentRemoval } from '../../services/moderation/contentRemoval';
 import { retractReactionNotifications } from '../../services/notifications/retractReactionNotifications';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { PostAudioService } from '../../services/posts/PostAudioService';
@@ -36,6 +38,7 @@ import {
   resolveConsumptionTarget,
 } from '../../services/posts/postVisibility';
 import { sliceCodePointsOrUndefined } from '@meeshy/shared/utils/text-truncate';
+import { servedPerson } from '../../services/appearance/authorProfileDecor';
 
 /**
  * Hisse `metadata.trackingLinks` ([{ url, token }]) en top-level sur le payload
@@ -61,7 +64,13 @@ function hoistCommentTrackingLinks<T extends Record<string, unknown>>(comment: T
  * dans un post (`hoistLocationDeep`) — pas de copie locale de la logique.
  */
 function hoistCommentCarriers<T extends Record<string, unknown>>(comment: T): T {
-  return hoistStickerOnto(hoistLocationOnto(comment));
+  return withServedCommentAuthor(hoistStickerOnto(hoistLocationOnto(comment)));
+}
+
+/** #10945 — l'auteur part avec son contour résolu (`profileDecor`), jamais avec la colonne brute. */
+function withServedCommentAuthor<T extends Record<string, unknown>>(comment: T): T {
+  const author = comment.author as { equippedAvatarRing?: string | null } | null | undefined;
+  return author === null || author === undefined ? comment : { ...comment, author: servedPerson(author) };
 }
 
 /**
@@ -853,6 +862,25 @@ export function registerCommentRoutes(
       }
 
       const { commentId } = request.params;
+      const actor = authContext.registeredUser;
+      // #11149 — l'auteur d'abord, sans lecture de plus. La garde d'auteur du
+      // service refuse un tiers ; il retire alors par la modération s'il y est
+      // admis (`canModerateContent`, hiérarchie) et donne un motif.
+      const moderated: { removal?: { readonly authorId: string; readonly postId: string; readonly reason: string } } = {};
+      const deleteAsAuthorOrModerator = async () => {
+        try {
+          return await commentService.deleteComment(commentId, actor.id);
+        } catch (err) {
+          if (!(err instanceof Error && err.message === 'FORBIDDEN')) throw err;
+          const target = await prisma.postComment.findFirst({ where: { id: commentId, deletedAt: NOT_DELETED }, select: { authorId: true, postId: true } });
+          if (!target) return null;
+          const decision = await decideContentRemoval(prisma, { actorId: actor.id, actorRole: actor.role, authorId: target.authorId, body: request.body });
+          if (decision.kind === 'author') throw err;
+          if (decision.kind === 'refused') throw new ContentRemovalRefused(decision);
+          moderated.removal = { authorId: target.authorId, postId: target.postId, reason: decision.reason };
+          return commentService.deleteComment(commentId, actor.id, undefined, { byModeration: true });
+        }
+      };
       // Le `:postId` du chemin n'est LU par rien ici : la cible est adressée
       // par `commentId` seul, et l'annonce l'est par le post que le service
       // rend. Cf. `GET .../replies`, qui pose la même règle pour la lecture.
@@ -873,7 +901,7 @@ export function registerCommentRoutes(
         // `converges` — voir `ReplayCost` : rejouer cette op rend le même état.
         replayCost: 'converges',
         op: async () => {
-          const res = await commentService.deleteComment(commentId, authContext.registeredUser.id);
+          const res = await deleteAsAuthorOrModerator();
           if (!res) throw new Error('COMMENT_NOT_FOUND');
           return { id: commentId, ...res };
         },
@@ -894,6 +922,12 @@ export function registerCommentRoutes(
       });
       if (!result) {
         return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
+      }
+      const removal = moderated.removal;
+      if (removal) {
+        await recordContentRemoval(prisma, { actorUserId: actor.id, authorUserId: removal.authorId, entity: 'Comment', entityId: commentId, reason: removal.reason });
+        notifyContentRemoved({ prisma }, { authorUserId: removal.authorId, contentType: 'comment', contentId: commentId, postId: removal.postId, reason: removal.reason })
+          .catch((err) => enhancedLogger.warn('[DELETE comments/:commentId]: author notification failed', { err }));
       }
 
       // Broadcast comment deleted via Socket.IO
@@ -950,6 +984,11 @@ export function registerCommentRoutes(
 
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
+      if (error instanceof ContentRemovalRefused) {
+        return error.decision.status === 400
+          ? sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: error.decision.code })
+          : sendForbidden(reply, 'Not authorized to delete this comment', { code: error.decision.code });
+      }
       if (error instanceof Error && error.message === 'FORBIDDEN') {
         return sendForbidden(reply, 'Not authorized to delete this comment', { code: 'FORBIDDEN' });
       }

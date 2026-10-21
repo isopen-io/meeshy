@@ -2,6 +2,23 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
+// MARK: - Toucher de l'humeur de l'auteur (#10529)
+
+private struct BubbleSenderMoodTapKey: EnvironmentKey {
+    static let defaultValue: ((CGPoint) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Le toucher de la pastille d'humeur de l'auteur, posé par
+    /// `ThemedMessageBubble` pour le pied qui porte son avatar. Une valeur
+    /// d'environnement : le pied reste `Equatable` sur son seul modèle, et
+    /// `BubbleStandardLayout` n'a rien à relayer. `nil` ⇒ pastille décorative.
+    var bubbleSenderMoodTap: ((CGPoint) -> Void)? {
+        get { self[BubbleSenderMoodTapKey.self] }
+        set { self[BubbleSenderMoodTapKey.self] = newValue }
+    }
+}
+
 /// The single message-bubble footer. Renders a `BubbleFooterModel` — flags +
 /// translate on the leading edge, timestamp + delivery check pinned trailing.
 /// `Equatable` on `model` only (the actions are stateless closures), so list
@@ -11,6 +28,8 @@ struct BubbleFooter: View, Equatable {
     let actions: BubbleFooterActions
     let style: BubbleFooterStyle
     let isDark: Bool
+    @Environment(\.bubbleSenderMoodTap) private var senderMoodTap
+    @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: BubbleFooter, rhs: BubbleFooter) -> Bool {
         lhs.model == rhs.model && lhs.style == rhs.style && lhs.isDark == rhs.isDark
@@ -82,12 +101,15 @@ struct BubbleFooter: View, Equatable {
                     moodEmoji: sender.moodEmoji,
                     presenceState: sender.presence,
                     isHere: sender.isHere,
+                    ring: sender.ring,
                     enablePulse: false,
                     onTap: actions.onSenderTap,
                     onViewProfile: actions.onSenderTap,
                     onViewStory: actions.onViewStory,
+                    onMoodTap: senderMoodTap,
                     contextMenuItems: avatarMenu(sender: sender)
                 )
+                .modifier(MessageAvatarPressClaim(hasMenu: avatarMenu(sender: sender) != nil))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     HStack(spacing: MeeshySpacing.xs) {
                         // Nom borné à 16 caractères (directive user 2026-07-30) :
@@ -292,7 +314,7 @@ struct BubbleFooter: View, Equatable {
     }
 
     private var metaColor: Color {
-        model.isMe ? .white.opacity(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
+        model.isMe ? skin.ink(MeeshyOpacity.heavy) : MeeshyColors.textMuted(isDark: isDark)
     }
 
     private var readColor: Color {

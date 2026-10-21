@@ -3,6 +3,8 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest, requirePublishingGrace, createUnifiedAuthMiddleware } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { NOT_DELETED } from '../../services/posts/softDelete';
+import { decideContentRemoval, MODERATION_REASON_MESSAGE, notifyContentRemoved, removedPostContentType } from '../../services/moderation/contentRemoval';
 import { withViewerPoints } from '../../services/engagement/viewerPostPoints';
 import { storyContentEditRequested } from '../../services/posts/storyEditPolicy';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
@@ -38,6 +40,8 @@ import { protectedPreview, maskedAttachment } from '../../services/notifications
 import { contentExitLawOfSource } from '@meeshy/shared/utils/content-exit-law';
 import { canAccessConversation } from '../conversations/utils/access-control';
 import { mayServePostToAnonymous } from './anonymousPostGate';
+import { notifyRepostedAuthor, readRepostedSource, repostedAuthorToNotify } from './repostedAuthorNotification';
+import { audienceChangeVerdict, mayRepostSource } from '../../services/posts/moderationHold';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError, sendUpgradeRequired, sendGone, sendConflict } from '../../utils/response';
 import { getAppVersionFloor, getAppStoreUrl, isBelowFloor } from '../../utils/appVersion';
 import { CanvasV3Schema } from '@meeshy/shared/types/canvas-v3';
@@ -430,6 +434,9 @@ export function registerCoreRoutes(
       if (alsoAsReel === true && (creation.type !== 'STORY' || creation.repostOfId)) {
         return sendBadRequest(reply, 'alsoAsReel requires an original story', { code: ALSO_AS_REEL_REQUIRES_STORY });
       }
+      if (creation.repostOfId?.trim() && !(await mayRepostSource(prisma, creation.repostOfId, authContext.registeredUser.id))) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
       const authorId = authContext.registeredUser.id;
       type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
       let companionReel: (CreatedPost & { id: string }) | undefined;
@@ -488,6 +495,20 @@ export function registerCoreRoutes(
         }), { statusCode: 201 });
       }
 
+      // #10525 — une story ou un mood republié par le composeur passe par ICI,
+      // pas par `/repost` : son auteur doit être prévenu de la même façon. La
+      // source est relue AVANT le noyau, qui retire son auteur de l'éventail
+      // d'amis (« a republié votre story » prime sur « nouvelle story ») ; une
+      // relecture qui jette ne défait pas une publication actée (#6524).
+      const sourcePostId = (post as { repostOfId?: string | null }).repostOfId ?? null;
+      const repostedSource = sourcePostId
+        ? await readRepostedSource((id, viewer) => postService.getPostById(id, viewer), sourcePostId, authorId)
+            .catch((err: unknown) => {
+              logWarn(fastify.log, '[POST /posts]: reposted source read failed', err);
+              return null;
+            })
+        : null;
+
       // Le CORPS de la publication — le noyau partagé avec
       // `POST /posts/from-attachment` (#4151). Il porte le Prisme, les
       // mentions, la relecture des références, la diffusion, les hashtags,
@@ -506,8 +527,9 @@ export function registerCoreRoutes(
         submittedContent: parsed.data.content,
         // Le texte d'une story ne vit pas dans sa légende : il vit dans les
         // objets de canevas. Sans ce champ, un `@handle` tapé sur une slide ne
-        // nommait personne.
-        storyEffects: parsed.data.storyEffects,
+        // nommait personne. Le canvas ENREGISTRÉ, jamais celui de la requête :
+        // `createPost` a pu y retirer une puce de crédit indue (#10497).
+        storyEffects: (post as { storyEffects?: unknown }).storyEffects,
         // Les nommés que le TEXTE ne porte pas : badge posé sur le canevas
         // d'une story, note sous le contenu, métadonnée silencieuse. Sans ce
         // canal, les nommer imposait d'écrire leur `@handle` dans la légende —
@@ -519,7 +541,17 @@ export function registerCoreRoutes(
         detectedLanguage: parsed.data.detectedLanguage,
         editedInApp: parsed.data.editedInApp,
         porte: 'POST /posts',
+        repostedAuthorId: repostedAuthorToNotify(repostedSource, authorId),
       });
+
+      if (sourcePostId) {
+        notifyRepostedAuthor(fastify.notificationService, {
+          actorId: authorId,
+          source: repostedSource,
+          sourcePostId,
+          repostId: post.id,
+        }).catch((err: unknown) => logWarn(fastify.log, '[POST /posts]: notify post repost failed', err));
+      }
 
       if (!companionReel) {
         return sendSuccess(reply, served, { statusCode: 201 });
@@ -634,6 +666,13 @@ export function registerCoreRoutes(
         return;
       }
 
+      // #10315 — une publication mise hors ligne par la modération ne se
+      // rouvre pas par une édition de son auteur, ni une republication au-delà
+      // de sa source.
+      const audience = await audienceChangeVerdict(prisma, { postId, userId: authContext.registeredUser.id, requestedVisibility: parsed.data.visibility });
+      if (audience.refusal === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
+      if (audience.refusal === 'repost-broader') return sendForbidden(reply, 'A repost cannot be broader than its source', { code: 'REPOST_AUDIENCE_BROADER' });
+
       // Lieu à l'édition — tri-état : absent = inchangé, null = retrait,
       // objet = remplacement validé par le MÊME parseSharedPlace que la
       // création (jamais de passthrough du bloc client vers metadata).
@@ -654,9 +693,21 @@ export function registerCoreRoutes(
         ? { ...parsed.data, content: SecuritySanitizer.sanitizeText(parsed.data.content) }
         : parsed.data;
       const sanitizedUpdateData = { ...baseUpdateData, location: locationUpdate };
-      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData);
+      // L'écriture porte la condition « pas hors ligne » (`updatePost`) : un retrait posé
+      // pendant la requête la fait échouer (P2025), et ce refus se dit comme le verdict.
+      const post = await postService.updatePost(postId, authContext.registeredUser.id, sanitizedUpdateData).catch((error: unknown) => {
+        if (parsed.data.visibility !== undefined && parsed.data.visibility !== 'PRIVATE' && (error as { code?: unknown } | null)?.code === 'P2025') return 'held' as const;
+        throw error;
+      });
+      if (post === 'held') return sendForbidden(reply, 'This publication is held offline by moderation', { code: 'POST_MODERATION_HELD' });
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      if (audience.clearsPriorVisibility) {
+        await prisma.post.updateMany({
+          where: { id: postId, authorId: authContext.registeredUser.id, OR: [{ moderationHiddenAt: null }, { moderationHiddenAt: { isSet: false } }] },
+          data: { moderationPriorVisibility: null },
+        });
       }
 
       // Une édition RÉCONCILIE : elle retire les lignes des partants et ne
@@ -787,11 +838,33 @@ export function registerCoreRoutes(
       }
 
       const { postId } = request.params;
-      const result = await postService.deletePost(postId, authContext.registeredUser.id, {
-        actorRole: authContext.registeredUser.role,
+      const actor = authContext.registeredUser;
+      const target = await prisma.post.findFirst({ where: { id: postId, deletedAt: NOT_DELETED }, select: { authorId: true, type: true } });
+      if (!target) {
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      // #11149 — un tiers (MODERATOR+, dominant l'auteur) retire avec un motif.
+      const decision = await decideContentRemoval(prisma, { actorId: actor.id, actorRole: actor.role, authorId: target.authorId, body: request.body });
+      if (decision.kind === 'refused') {
+        return decision.status === 400
+          ? sendBadRequest(reply, MODERATION_REASON_MESSAGE, { code: decision.code })
+          : sendForbidden(reply, 'Not authorized to delete this post', { code: decision.code });
+      }
+      const result = await postService.deletePost(postId, actor.id, {
+        actorRole: actor.role,
+        ...(decision.kind === 'moderation' ? { reason: decision.reason } : {}),
       });
       if (!result) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
+      }
+      if (decision.kind === 'moderation') {
+        notifyContentRemoved({ prisma }, {
+          authorUserId: target.authorId,
+          contentType: removedPostContentType(target.type),
+          contentId: postId,
+          postId,
+          reason: decision.reason,
+        }).catch((err) => logWarn(fastify.log, '[DELETE /posts/:postId]: author notification failed', err));
       }
 
       // `deletePost` autorise « l'auteur OU un modérateur et plus » : l'acteur

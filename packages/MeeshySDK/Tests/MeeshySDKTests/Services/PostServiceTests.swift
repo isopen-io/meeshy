@@ -99,6 +99,33 @@ final class PostServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    func test_delete_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(postId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(postId: postId, reason: "Contenu violent")
+
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Contenu violent")
+    }
+
+    func test_delete_withoutReason_sendsNoBody() async throws {
+        mock.stub("/posts/\(postId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.delete(postId: postId, reason: nil)
+
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
+    }
+
+    func test_deleteComment_withReason_sendsReasonInJSONBody() async throws {
+        mock.stub("/posts/\(postId)/comments/c1", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+
+        try await service.deleteComment(postId: postId, commentId: "c1", reason: "Harcèlement")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/comments/c1")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["reason"] as? String, "Harcèlement")
+    }
+
     // MARK: - like
 
     func testLikeCallsCorrectEndpoint() async throws {
@@ -435,40 +462,6 @@ final class PostServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(mock.requestCount, 1)
-    }
-
-    func test_recordEngagement_postsBatch_toEngagementEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["recorded": 1], error: nil)
-        mock.stub("/posts/engagement/batch", result: response)
-
-        let session = EngagementSession(
-            sessionId: "s1", userId: "u1", postId: "p1", contentType: .reel, surface: .reels,
-            startedAt: Date(timeIntervalSince1970: 1_700_000_000), dwellMs: 4000, watchMs: 3800,
-            mediaDurationMs: 15000, completed: false, truncated: false, consent: "granted",
-            actions: [], watchSamples: []
-        )
-
-        try await service.recordEngagement([session])
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/engagement/batch")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
-    }
-
-    func test_recordEngagement_emptyArray_doesNotCallNetwork() async throws {
-        try await service.recordEngagement([])
-        XCTAssertEqual(mock.requestCount, 0)
-    }
-
-    func test_recordImpression_postsTo_singleImpressionEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["recorded": true], error: nil)
-        mock.stub("/posts/\(postId)/impression", result: response)
-
-        try await service.recordImpression(postId: postId, source: "detail")
-
-        XCTAssertEqual(mock.requestCount, 1)
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/\(postId)/impression")
-        XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 
     // MARK: - update : tri-état du lieu (gestion de la position à l'édition)

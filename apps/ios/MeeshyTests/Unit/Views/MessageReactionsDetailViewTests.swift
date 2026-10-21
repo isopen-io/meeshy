@@ -113,4 +113,39 @@ final class MessageReactionsDetailViewTests: XCTestCase {
 
         XCTAssertNotEqual(groups.first?.users.first?.username, "Moi")
     }
+
+    // MARK: - Rangées à identité unique
+
+    /// La liste paresseuse rend `ForEach(filteredReactionUsers)` d'identité
+    /// `"\(userId)-\(emoji)"`. Une même personne deux fois sous le même emoji
+    /// (ligne optimiste + écho socket, doublon serveur, deux groupes serveur pour
+    /// un emoji) donnait deux rangées de même identité dans un `LazyVStack`.
+    func test_reactionUserRows_sameUserSameEmojiTwice_rendersOneRow() {
+        let older = Date(timeIntervalSince1970: 100)
+        let newer = Date(timeIntervalSince1970: 200)
+        let groups = [
+            ReactionGroup(emoji: "❤️", count: 2, users: [
+                ReactionUserDetail(userId: "u1", username: "Awa", createdAt: older),
+                ReactionUserDetail(userId: "u1", username: "Awa", createdAt: newer),
+            ]),
+            ReactionGroup(emoji: "❤️", count: 1, users: [
+                ReactionUserDetail(userId: "u1", username: "Awa", createdAt: older),
+            ]),
+            ReactionGroup(emoji: "😂", count: 1, users: [
+                ReactionUserDetail(userId: "u1", username: "Awa", createdAt: older),
+            ]),
+        ]
+        let rows = MessageReactionsDetailView.reactionUserRows(from: groups, filter: "all")
+        XCTAssertEqual(rows.map(\.id), ["u1-❤️", "u1-😂"])
+        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+        XCTAssertEqual(rows.first?.createdAt, newer, "la plus récente des deux est gardée")
+    }
+
+    func test_reactionUserRows_filterKeepsOnlyThatEmoji() {
+        let groups = [
+            ReactionGroup(emoji: "❤️", count: 1, users: [ReactionUserDetail(userId: "u1", username: "A")]),
+            ReactionGroup(emoji: "😂", count: 1, users: [ReactionUserDetail(userId: "u2", username: "B")]),
+        ]
+        XCTAssertEqual(MessageReactionsDetailView.reactionUserRows(from: groups, filter: "😂").map(\.userId), ["u2"])
+    }
 }

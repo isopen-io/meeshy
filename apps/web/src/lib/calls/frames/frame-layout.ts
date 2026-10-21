@@ -1,4 +1,6 @@
 import { gridRects, scatter, type Rect, type Size } from '../call-montage-shapes';
+import { chromeBands, isNoChromeReserve, NO_CHROME_RESERVE, type FrameChromeReserve } from './frame-chrome-reserve';
+import { footprint } from './frame-paint-kit';
 import type { FrameLook, SlotShape } from './frame-spec';
 
 /**
@@ -40,7 +42,7 @@ const centerOf = (area: Rect): { readonly x: number; readonly y: number } => ({ 
 
 const isPortrait = (size: Size): boolean => size.height >= size.width;
 
-export function frameAreas(layout: FrameLook['layout'], size: Size): FrameAreas {
+function canonicalAreas(layout: FrameLook['layout'], size: Size): FrameAreas {
   const unit = Math.min(size.width, size.height);
   const margin = Math.min(layout.margin * unit, unit / 2);
   const inner = rect(margin, margin, size.width - margin * 2, size.height - margin * 2);
@@ -50,6 +52,30 @@ export function frameAreas(layout: FrameLook['layout'], size: Size): FrameAreas 
   const bottom = rect(inner.x, inner.y + inner.height - bottomHeight, inner.width, bottomHeight);
   const content = rect(inner.x, inner.y + topHeight, inner.width, inner.height - topHeight - bottomHeight);
   return { unit, inner, top, content, bottom };
+}
+
+/** La part de la zone des visages qu'aucune bande de contrôles ne prend : au-delà, les réserves ne s'écartent plus que d'autant. */
+export const RESERVE_CONTENT_FLOOR = 0.5;
+
+/**
+ * Les zones d'un cadre — sous des contrôles (#10481, miroir de
+ * `CallFrameLayoutGeometry.areas(_:size:reserve:)`), la réserve haute descend
+ * sous la bande haute, la basse remonte au-dessus de la bande basse, le
+ * contenu se resserre entre elles. Sans réserve, la géométrie canonique.
+ */
+export function frameAreas(layout: FrameLook['layout'], size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): FrameAreas {
+  const canonical = canonicalAreas(layout, size);
+  if (isNoChromeReserve(reserve)) return canonical;
+  const bands = chromeBands(reserve, size);
+  const wantTop = Math.max(0, bands.top.y + bands.top.height - canonical.top.y);
+  const wantBottom = Math.max(0, canonical.bottom.y + canonical.bottom.height - bands.bottom.y);
+  const wanted = wantTop + wantBottom;
+  const room = canonical.content.height * (1 - RESERVE_CONTENT_FLOOR);
+  const factor = wanted > room && wanted > 0 ? room / wanted : 1;
+  const top = { ...canonical.top, y: canonical.top.y + wantTop * factor };
+  const bottom = { ...canonical.bottom, y: canonical.bottom.y - wantBottom * factor };
+  const content = rect(canonical.content.x, top.y + top.height, canonical.content.width, bottom.y - top.y - top.height);
+  return { unit: canonical.unit, inner: canonical.inner, top, content, bottom };
 }
 
 export const contentArea = (layout: FrameLook['layout'], size: Size): Rect => frameAreas(layout, size).content;
@@ -344,14 +370,48 @@ function keepInside(box: Rect, degrees: number, bounds: Rect): Rect {
  * son centre jusqu'à ce que son encombrement tourné tienne dans la zone de
  * contenu : un visage ne déborde jamais sur un titre.
  */
-export function frameSlots(frame: FrameLayoutInput, people: number, size: Size): readonly FrameSlotBox[] {
+export function frameSlots(frame: FrameLayoutInput, people: number, size: Size, reserve: FrameChromeReserve = NO_CHROME_RESERVE): readonly FrameSlotBox[] {
   const count = Math.max(0, Math.floor(people));
   if (count === 0) return [];
-  const areas = frameAreas(frame.layout, size);
+  const areas = frameAreas(frame.layout, size, reserve);
   const gap = frame.layout.gap * areas.unit;
   const shape: SlotShape = frame.layout.arrangement === 'honeycomb' ? 'hex' : frame.slot.shape;
   return arrangementRects(frame, count, areas.content, gap, isPortrait(size)).map((box, index) => {
     const rotation = tiltDegrees(frame.slot.tilt, index);
     return { rect: keepInside(box, rotation, areas.content), shape, rotation, index };
   });
+}
+
+/** La marge gardée en plus de la place demandée : un texte de la réserve basse peut mordre d'un point sur le contenu. */
+export const NAME_ROOM_SLACK = 2;
+/** Une case ne cède jamais plus de la moitié de sa hauteur à ses noms : au-delà, ils se replient dans la case. */
+export const NAME_ROOM_MAX_SHARE = 0.5;
+
+/**
+ * **LA PLACE DES NOMS SOUS LES CASES** (#10478, miroir de
+ * `CallFrameLayoutGeometry.leavingRoomBelow`, #9780) — raccourcit par le bas,
+ * le haut de son encombrement fixe, chaque case qui n'a pas `room` de libre
+ * au-dessus de la case suivante (ou de `floor`). Tout ou rien : si une case
+ * ne peut pas la céder (cases qui se chevauchent, case trop petite), aucune
+ * ne change.
+ */
+export function leavingRoomBelow(boxes: readonly FrameSlotBox[], room: number, floor: number): readonly FrameSlotBox[] {
+  if (room <= 0) return boxes;
+  const footprints = boxes.map(footprint);
+  const made = boxes.map((box, index): FrameSlotBox | null => {
+    const own = footprints[index] as Rect;
+    const ownBottom = own.y + own.height;
+    const below = footprints.filter((other, at) => at !== index && other.x < own.x + own.width && own.x < other.x + other.width && other.y + other.height > ownBottom);
+    if (below.some((other) => other.y < ownBottom)) return null;
+    const ground = Math.min(floor, ...below.map((other) => other.y));
+    const deficit = room + NAME_ROOM_SLACK - (ground - ownBottom);
+    if (deficit <= 0) return box;
+    const cos = Math.cos((Math.abs(box.rotation) * Math.PI) / 180);
+    const cut = deficit / cos;
+    if (cut > box.rect.height * NAME_ROOM_MAX_SHARE) return null;
+    const lift = (cut * (1 - cos)) / 2;
+    return { ...box, rect: rect(box.rect.x, box.rect.y + lift, box.rect.width, box.rect.height - cut) };
+  });
+  const all = made.filter((box): box is FrameSlotBox => box !== null);
+  return all.length === boxes.length ? all : boxes;
 }

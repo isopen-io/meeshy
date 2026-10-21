@@ -166,7 +166,7 @@ describe('une rangée', () => {
     const html = row(
       record({ type: 'post_comment', context: { postId: 'p1' }, metadata: { postType: 'POST', postThumbnailUrl: 'https://cdn.meeshy.me/p1.jpg' } }),
     );
-    expect(html).toContain('href="/post/p1"');
+    expect(html).toContain('href="/post/p1?from=notification"');
     expect(html).toContain('src="https://cdn.meeshy.me/p1.jpg"');
     expect(html).toContain('alt=""');
   });

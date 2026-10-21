@@ -43,6 +43,7 @@ type LienFactice = {
   readonly name?: string | null;
   readonly conversationActive?: boolean;
   readonly closedAt?: Date | null;
+  readonly allowedIpRanges?: readonly string[];
   readonly hote?: Hote | null;
 };
 
@@ -65,6 +66,7 @@ const lien = (o: LienFactice = {}) => ({
   expiresAt: o.expiresAt ?? null,
   maxUses: o.maxUses ?? null,
   currentUses: o.currentUses ?? 0,
+  allowedIpRanges: o.allowedIpRanges ?? [],
   conversation: {
     title: o.title === undefined ? 'Les bêta-testeurs' : o.title,
     description: 'Un groupe privé où Bob parle de la date de sortie',
@@ -317,6 +319,7 @@ describe("Un lien mort ou inconnu rend l'aperçu GÉNÉRIQUE, sans dire s'il a e
     ['épuisé', lien({ maxUses: 3, currentUses: 3 })],
     ['conversation close', lien({ closedAt: new Date('2026-09-01') })],
     ['conversation inactive', lien({ conversationActive: false })],
+    ['non public — borné à des plages d’adresses (#10192)', lien({ allowedIpRanges: ['10.0.0.0/8'] })],
     ['inconnu', null],
   ];
 

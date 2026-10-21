@@ -35,6 +35,7 @@ jest.mock('../../../socketio/disconnectRevokedSessions', () => ({
 }));
 
 import { registerRevokeAllSessionsRoute } from '../../../routes/auth/revoke-all-sessions';
+import { signRevokeAllLinkToken } from '../../../services/auth/revoke-all-link-token';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -57,7 +58,7 @@ async function buildApp(): Promise<FastifyInstance> {
 describe('GET /api/v1/auth/revoke-all-sessions — le chemin que l’e-mail envoie', () => {
   it('répond à l’URL exacte que NotificationService compose', async () => {
     const app = await buildApp();
-    const token = jwt.sign({ userId: USER_ID, action: 'revoke-all' }, JWT_SECRET);
+    const token = jwt.sign({ userId: USER_ID, action: 'revoke-all' }, JWT_SECRET, { expiresIn: '24h' });
 
     const res = await app.inject({
       method: 'GET',
@@ -75,7 +76,7 @@ describe('GET /api/v1/auth/revoke-all-sessions — le chemin que l’e-mail envo
 
   it('n’est PAS servie sous le chemin doublé', async () => {
     const app = await buildApp();
-    const token = jwt.sign({ userId: USER_ID, action: 'revoke-all' }, JWT_SECRET);
+    const token = jwt.sign({ userId: USER_ID, action: 'revoke-all' }, JWT_SECRET, { expiresIn: '24h' });
 
     const res = await app.inject({
       method: 'GET',
@@ -84,6 +85,28 @@ describe('GET /api/v1/auth/revoke-all-sessions — le chemin que l’e-mail envo
 
     expect(res.statusCode).toBe(404);
 
+    await app.close();
+  });
+});
+
+describe('GET /api/v1/auth/revoke-all-sessions — le jeton du lien (#10493)', () => {
+  it('honore la forme NOUVELLE, que plus aucune porte d’authentification ne vérifie', async () => {
+    const app = await buildApp();
+    const token = signRevokeAllLinkToken({ userId: USER_ID, jwtSecret: JWT_SECRET });
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/auth/revoke-all-sessions?token=${token}` });
+
+    expect(res.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('refuse un jeton de SESSION authentique : le lien ne révoque que sur son propre jeton', async () => {
+    const app = await buildApp();
+    const session = jwt.sign({ userId: USER_ID, username: 'u', role: 'USER', sid: '507f1f77bcf86cd799439022' }, JWT_SECRET);
+
+    const res = await app.inject({ method: 'GET', url: `/api/v1/auth/revoke-all-sessions?token=${session}` });
+
+    expect(res.statusCode).toBe(400);
     await app.close();
   });
 });

@@ -114,9 +114,12 @@ struct BubbleSystemNoticeView: View, Equatable {
 /// l'information la plus utile quand la porte est un lien public.
 /// Loi de présentation de l'avis d'arrivée — décidable à part de SwiftUI.
 ///
-/// Le nom DONNÉ au formulaire prime, le pseudo `ano_…` descend en @handle —
-/// chacun à sa place. Sans nom donné, le pseudo reste le nom principal et le
-/// handle disparaît : « ano_bob » suivi de « @ano_bob » ne dirait rien de plus.
+/// Le nom DONNÉ au formulaire prime. Le pseudo d'un participant SANS COMPTE
+/// n'est jamais affiché en @handle (#9717, jumelle de #9710) : `ano_…` est un
+/// identifiant technique, et la pastille « sans compte » dit déjà qui il est.
+/// La décision lit `isAnonymous`, jamais le préfixe — un compte nommé
+/// `ano_bob` garde son @handle. Un handle identique au nom principal disparaît
+/// aussi : « bob » suivi de « @bob » ne dirait rien de plus.
 struct JoinNoticePresentation: Equatable {
     let primaryName: String
     let handle: String?
@@ -126,7 +129,7 @@ struct JoinNoticePresentation: Equatable {
     init(notice: BubbleContent.JoinNotice) {
         let givenName = notice.givenName?.isEmpty == false ? notice.givenName : nil
         self.primaryName = givenName ?? notice.displayName
-        let username = notice.username?.isEmpty == false ? notice.username : nil
+        let username = notice.isAnonymous ? nil : (notice.username?.isEmpty == false ? notice.username : nil)
         self.handle = username.flatMap { $0 == (givenName ?? notice.displayName) ? nil : "@\($0)" }
         self.showsNoAccountBadge = notice.isAnonymous
         self.rules = notice.linkRules

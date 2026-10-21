@@ -90,14 +90,11 @@ final class DeepLinkParserTests: XCTestCase {
         XCTAssertNil(urlString)
     }
 
-    func test_parse_customScheme_magicLink_returnsToken() {
+    /// #10870 — n'importe quelle page ou app ouvre `meeshy://` : un lien de
+    /// connexion n'y est jamais lu, il connecterait au compte d'un tiers.
+    func test_parse_customScheme_magicLink_isRefused() {
         let url = URL(string: "meeshy://auth/magic-link?token=abc123xyz")!
-        let result = DeepLinkParser.parse(url)
-        guard case .magicLink(let token) = result else {
-            XCTFail("Expected .magicLink, got \(result)")
-            return
-        }
-        XCTAssertEqual(token, "abc123xyz")
+        XCTAssertEqual(DeepLinkParser.parse(url), .external(url))
     }
 
     func test_parse_customScheme_unknownPath_returnsExternal() {
@@ -635,14 +632,14 @@ final class DeepLinkRouterTests: XCTestCase {
         XCTAssertEqual(sut.pendingDeepLink, .conversation(id: "conv222"))
     }
 
-    func test_handle_customScheme_auth_magicLink_setsPendingDeepLink() {
+    func test_handle_customScheme_auth_magicLink_isNotClaimed() {
         let sut = makeSUT()
         let url = URL(string: "meeshy://auth/magic-link?token=tok999")!
 
         let handled = sut.handle(url: url)
 
-        XCTAssertTrue(handled)
-        XCTAssertEqual(sut.pendingDeepLink, .magicLink(token: "tok999"))
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
     }
 
     func test_handle_customScheme_auth_noToken_returnsFalse() {

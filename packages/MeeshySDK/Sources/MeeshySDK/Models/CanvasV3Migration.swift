@@ -14,16 +14,11 @@ enum CanvasBandAnchorY {
 }
 
 private let sceneAspect = Double(SceneShape.aspect)
-private let centerPivot = CGPoint(x: 0.5, y: 0.5)
 
 /// `Double(Float(0.6))` vaudrait 0.6000000238… — la représentation décimale la
 /// plus courte restitue la valeur que le JSON d'origine portait.
 private func exactDouble(_ value: Float) -> Double {
     Double("\(value)") ?? Double(value)
-}
-
-private func nonEmpty(_ value: String?) -> String? {
-    value.flatMap { $0.isEmpty ? nil : $0 }
 }
 
 private func wireObject<T: Encodable>(_ value: T) -> [String: CanvasJSONValue]? {
@@ -34,16 +29,6 @@ private func wireObject<T: Encodable>(_ value: T) -> [String: CanvasJSONValue]? 
 private func wireArray<T: Encodable>(_ value: [T]) -> [CanvasJSONValue]? {
     guard let data = try? JSONEncoder().encode(value) else { return nil }
     return try? JSONDecoder().decode([CanvasJSONValue].self, from: data)
-}
-
-private func decodeWireArray<T: Decodable>(_ type: T.Type, from array: [CanvasJSONValue]?) -> [T]? {
-    guard let array, let data = try? JSONEncoder().encode(array) else { return nil }
-    return try? JSONDecoder().decode([T].self, from: data)
-}
-
-private func decodeWire<T: Decodable>(_ type: T.Type, from object: [String: CanvasJSONValue]?) -> T? {
-    guard let object, let data = try? JSONEncoder().encode(object) else { return nil }
-    return try? JSONDecoder().decode(type, from: data)
 }
 
 private func remapFreeAnchor(_ anchor: ObjectAnchor, carrierAspect: Double) -> ObjectAnchor {
@@ -107,42 +92,6 @@ private func wireAnchor(_ memo: [String: ObjectAnchor.Edge]?,
     memo?[id].map(ObjectAnchor.band) ?? .free(x: x, y: y)
 }
 
-private extension [String: CanvasJSONValue] {
-    func string(_ key: String) -> String? {
-        if case .string(let value)? = self[key] { return value }
-        return nil
-    }
-
-    func double(_ key: String) -> Double? {
-        if case .number(let value)? = self[key] { return value }
-        return nil
-    }
-
-    func bool(_ key: String) -> Bool? {
-        if case .bool(let value)? = self[key] { return value }
-        return nil
-    }
-
-    func array(_ key: String) -> [CanvasJSONValue]? {
-        if case .array(let value)? = self[key] { return value }
-        return nil
-    }
-
-    func object(_ key: String) -> [String: CanvasJSONValue]? {
-        if case .object(let value)? = self[key] { return value }
-        return nil
-    }
-
-    func stringMap(_ key: String) -> [String: String]? {
-        guard let object = object(key) else { return nil }
-        let pairs = object.compactMap { entry -> (String, String)? in
-            if case .string(let value) = entry.value { return (entry.key, value) }
-            return nil
-        }
-        return pairs.isEmpty ? nil : [String: String](uniqueKeysWithValues: pairs)
-    }
-}
-
 private extension KeyframeV3 {
     init(migrating keyframe: StoryKeyframe) {
         self.init(time: exactDouble(keyframe.time),
@@ -152,18 +101,6 @@ private extension KeyframeV3 {
                   opacity: keyframe.opacity.map(Double.init),
                   volume: keyframe.volume.map(exactDouble),
                   easing: keyframe.easing?.rawValue)
-    }
-}
-
-private extension StoryKeyframe {
-    init(rendering keyframe: KeyframeV3) {
-        self.init(time: Float(keyframe.time),
-                  x: keyframe.x.map { CGFloat($0) },
-                  y: keyframe.y.map { CGFloat($0) },
-                  scale: keyframe.scale.map { CGFloat($0) },
-                  opacity: keyframe.opacity.map { CGFloat($0) },
-                  volume: keyframe.volume.map { Float($0) },
-                  easing: keyframe.easing.flatMap(StoryEasing.init(rawValue:)))
     }
 }
 
@@ -190,45 +127,43 @@ public extension CanvasV3 {
 
     /// Une slide, une scène — ou `nil` quand elle ne porte rien (règle O3).
     ///
-    /// Extrait de `init(migrating:)` le 2026-09-06 pour qu'une publication
-    /// puisse en produire PLUSIEURS. Le corps est inchangé, à deux choses
-    /// près : l'identité de la scène est un paramètre (elle était gravée
-    /// `"s1"`), et le son en est sorti — il appartient au DOCUMENT, pas à une
+    /// Extrait de `init(migrating:)` pour qu'une publication
+    /// puisse en produire PLUSIEURS. L'identité de la scène est un paramètre,
+    /// et le son en est sorti — il appartient au DOCUMENT, pas à une
     /// scène, et le laisser ici en aurait fabriqué un par slide.
     static func migratedScene(_ effects: StoryEffects, id: String) -> SceneV3? {
         var objects: [ObjectV3] = []
         var slot = 0
 
-        // **Le porteur du FOND existe dès que le fond a quelque chose à dire**
-        // (#5406). Son existence était conditionnée à la seule COULEUR, et
-        // `backgroundTransform` — qui ne voyage QUE dans sa charge — partait
-        // avec lui ou pas du tout.
+        // **Le porteur du FOND existe dès que le fond a quelque chose à dire.**
+        // Son existence conditionnée à la seule COULEUR perdrait
+        // `backgroundTransform` — qui ne voyage QUE dans sa charge.
         //
         // Or le champ le plus utile de ce transform, `videoFitMode` (le cadrage
         // que le double-tap fond choisit : centré-letterbox ou plein cadre), ne
         // vaut que sur un fond MÉDIA, c'est-à-dire précisément là où une couleur
         // n'a aucune raison d'exister. La condition de perte et la condition
-        // d'utilité du geste étaient la même : sur la surface document
+        // d'utilité du geste seraient la même : sur la surface document
         // (composer v3), `effects.background` reste nil — le `didSet` de
         // `backgroundColor` ne tire pas à l'initialisation et la chaîne de sync
-        // de l'atelier n'y tourne pas —, donc le cadrage choisi n'atteignait
-        // JAMAIS le fil. Le lecteur retombait sur l'auto, qui est `aspectFill` :
+        // de l'atelier n'y tourne pas —, donc le cadrage choisi n'atteindrait
+        // JAMAIS le fil. Le lecteur retomberait sur l'auto, qui est `aspectFill` :
         // « l'image remplit toujours le canvas quoi qu'il arrive ».
         //
         // > **Un porteur dont l'existence dépend d'un seul de ses champs perd
         // > tous les autres en silence.** Rien ne rougit : l'objet n'est pas
         // > amputé, il n'est pas là.
         //
-        // La clé `background` devient donc conditionnelle — un fond média sans
+        // La clé `background` est donc conditionnelle — un fond média sans
         // couleur émet un porteur qui ne porte QUE son cadrage, et la relecture
         // (`background = payload.string("background")`) rend `nil`, ce qu'elle
-        // rendait déjà en l'absence de porteur.
+        // rend en l'absence de porteur.
         let backgroundHex = nonEmpty(effects.background)
         let backgroundTransform = effects.backgroundTransform.flatMap { $0.isIdentity ? nil : $0 }
         // **Un objet référencé peut avoir porté LUI-MÊME le cadrage** —
         // `payload.mediaId`/`postMediaId` ET `payload.transform.videoFitMode`
-        // sur le MÊME objet, forme servie par la passerelle (revue
-        // 2026-09-17). `wireBackgroundTransformCarrierId` mémorise son id ;
+        // sur le MÊME objet, forme servie par la passerelle.
+        // `wireBackgroundTransformCarrierId` mémorise son id ;
         // tant que ce même id existe encore parmi `mediaObjects`, le cadrage
         // lui est replacé PLUS BAS (boucle `.media`) plutôt qu'ici — le
         // scinder en deux objets le dédoublerait (id neuf) ou l'effacerait
@@ -345,8 +280,8 @@ public extension CanvasV3 {
                 "place": wireObject(location.place).map(CanvasJSONValue.object) ?? .null,
             ]
             if location.anchor != centerPivot { payload["anchor"] = pivotWire(location.anchor) }
-            // **Le gabarit qui DÉCORE la pastille** (#4717) doit voyager (#4832).
-            // Omis quand `nil` — toute pastille publiée avant ce lot se réencode
+            // **Le gabarit qui DÉCORE la pastille** doit voyager.
+            // Omis quand `nil` — toute pastille publiée sans gabarit se réencode
             // alors octet pour octet, et son repli reste celui que
             // `StoryLocationLayer` applique déjà.
             //
@@ -355,15 +290,15 @@ public extension CanvasV3 {
             // DÉCORÉ (`StickerTemplate.swift`, la ligne de partage). Deux noms
             // délibérés — ne pas les unifier.
             if let styleId = nonEmpty(location.styleId) { payload["styleId"] = .string(styleId) }
-            // **La FENÊTRE TEMPORELLE voyage** (#4840) — quatrième morsure du
-            // même piège, sur l'ENVELOPPE cette fois. #4832 a réparé `styleId`
-            // trois lignes plus haut en demandant « qu'est-ce qui part À CÔTÉ de
-            // ce que je viens de corriger ? », mais à la CHARGE seule : le
-            // `start: nil` de `timingV3` attendait juste en dessous, écrit en dur.
+            // **La FENÊTRE TEMPORELLE voyage**, sur l'ENVELOPPE comme sur la charge :
+            // `styleId`, trois lignes plus haut, voyage dans la CHARGE ; la question
+            // « qu'est-ce qui part À CÔTÉ de ce que je viens de corriger ? » vaut aussi
+            // pour l'enveloppe, dont le `start` ne doit pas être écrit en dur à `nil`
+            // dans `timingV3`.
             //
             // Les trois autres clés suivent le sticker à la lettre — c'est la
             // MÊME famille temporelle (`TimelineClipKind.place`). Omises quand
-            // `nil`, donc toute pastille posée avant ce lot se réencode octet
+            // `nil`, donc toute pastille posée sans fenêtre se réencode octet
             // pour octet, et sa barre reste le FANTÔME que la timeline rend
             // pour une fenêtre absente (le type qui le dessine vit dans `MeeshyUI` —
             // le nommer ici ferait fuir le plan dans la cible core, et une garde
@@ -396,10 +331,9 @@ public extension CanvasV3 {
                                     // `updateScale` / `updateRotation`
                                     // (`StoryCanvasUIView+Manipulation.swift`) les
                                     // écrivent pour les CINQ familles, audio compris.
-                                    // Un `TransformV3()` par défaut jetait les deux :
-                                    // chaque lecteur voyait la puce à l'échelle 1,
-                                    // sans angle. Trouvé par le témoin d'exhaustivité
-                                    // (#4833) à son premier tour, sur la seule famille
+                                    // Un `TransformV3()` par défaut jetterait les deux :
+                                    // chaque lecteur verrait la puce à l'échelle 1,
+                                    // sans angle. Le témoin d'exhaustivité couvre la seule famille
                                     // que personne n'avait regardée.
                                     // `TransformV3` ne sait pas dire « absent » :
                                     // le défaut du décodeur EST la valeur neutre
@@ -418,10 +352,10 @@ public extension CanvasV3 {
                                     payload: Self.audioPayload(audio)))
         }
 
-        // **Le filtre de SLIDE est celui du FOND** (#8502). La clé
+        // **Le filtre de SLIDE est celui du FOND.** La clé
         // `payload.filter` est partagée avec le filtre PROPRE d'un média posé
         // (`StoryMediaObject.filter`) : l'élire sur « le premier média content »
-        // écrasait le réglage d'un objet placé devant le fond. Il va donc au
+        // écraserait le réglage d'un objet placé devant le fond. Il va donc au
         // fond, et ne se replie que sur un média qui n'a pas le sien. Même
         // règle que le convertisseur gateway (`storyEffectsV3.ts`).
         if let filter = nonEmpty(effects.filter) {
@@ -449,8 +383,8 @@ public extension CanvasV3 {
             remapped = objects
         }
 
-        // **Ce que le runtime v1 ne sait pas exprimer est réémis VERBATIM**
-        // (revue 2026-09-17, #6893) : un kind réservé ou une mention n'entre
+        // **Ce que le runtime v1 ne sait pas exprimer est réémis VERBATIM** :
+        // un kind réservé ou une mention n'entre
         // dans aucune famille ci-dessus (`init(rendering:)` les saute), donc
         // rien ne les régénère depuis `effects` — ils ne survivent que par
         // cette restitution par IDENTITÉ. Déjà en coordonnées WIRE (jamais
@@ -540,14 +474,12 @@ public extension CanvasV3 {
     }
 
     /// **Une publication à plusieurs slides part avec TOUTES ses scènes**
-    /// (directive porteur 2026-09-06).
     ///
-    /// Le fil, le détail et le plein écran savaient montrer plusieurs scènes
-    /// avant que quoi que ce soit puisse en produire : `scenes: [scene]`
-    /// n'émettait que la slide courante, si bien que la mosaïque, le carrousel
-    /// et le défilement vertical n'avaient RIEN à peindre. C'est la forme la
-    /// plus coûteuse du défaut « une vue sans consommateur » — quatre surfaces
-    /// livrées, testées, correctes, et aucun site où rougir.
+    /// Le fil, le détail et le plein écran savent montrer plusieurs scènes :
+    /// émettre `scenes: [scene]` — la seule slide courante — laisserait la
+    /// mosaïque, le carrousel et le défilement vertical sans RIEN à peindre.
+    /// C'est la forme la plus coûteuse du défaut « une vue sans consommateur » —
+    /// quatre surfaces livrées, testées, correctes, et aucun site où rougir.
     ///
     /// Une slide qui ne porte rien n'émet pas de scène (O3, par slide) ; les
     /// suivantes ne se décalent pas pour autant.
@@ -568,28 +500,26 @@ public extension CanvasV3 {
     ///
     /// `StoryEffects.encode` part du runtime courant, jamais du `canvasV3`
     /// mémorisé, et cette règle est juste : une composition neuve doit émettre
-    /// l'état RÉEL du canvas, pas un document servi par le serveur. Elle
-    /// n'était fausse que sur ce qu'elle ne dit pas — le runtime ne décrit
-    /// qu'UNE slide, donc tout ce qui vivait au-delà disparaissait.
+    /// l'état RÉEL du canvas, pas un document servi par le serveur. Elle ne
+    /// dit pas tout : le runtime ne décrit qu'UNE slide, donc tout ce qui vit
+    /// au-delà disparaîtrait.
     ///
     /// > **Rouvrir un post servi à trois scènes, changer son texte et
-    /// > renvoyer en émettait UNE.** Le défaut existait avant ce lot ; il
-    /// > n'était visible nulle part, faute de publication multi-scènes.
+    /// > renvoyer en émettrait UNE** sans le document mémorisé.
     ///
     /// La disposition (`layout`) vient elle aussi du document : le runtime v1
     /// ne l'exprime pas, et la jeter à chaque aller-retour ramènerait tout le
     /// monde au défaut sans qu'aucun témoin ne tombe.
     ///
-    /// **La scène 0 n'est plus fusionnée avec le document mémorisé** (revue du
-    /// 2026-09-17, suivi #6893/#6894). Le merge par identité qui vivait ici ne
-    /// portait plus qu'UN cas : un fond `plane: .bg` à référence média — et
-    /// depuis #6894, `StoryEffects.init(rendering:)` fait déjà entrer ce fond
-    /// dans `mediaObjects`, d'où `migratedScene` ci-dessus le réémet lui-même,
-    /// à identité égale. Le merge ne s'activait donc plus que sur son cas
+    /// **La scène 0 n'est pas fusionnée avec le document mémorisé.** Un merge
+    /// par identité ne porterait plus qu'UN cas : un fond `plane: .bg` à
+    /// référence média — et `StoryEffects.init(rendering:)` fait déjà entrer ce
+    /// fond dans `mediaObjects`, d'où `migratedScene` ci-dessus le réémet
+    /// lui-même, à identité égale. Le merge ne s'activerait donc que sur son cas
     /// PATHOLOGIQUE : un fond que l'auteur vient de retirer par
-    /// `deleteElement` (désormais possible, précisément grâce à #6894) —
-    /// auquel cas il RESSUSCITAIT ce que l'auteur venait de supprimer à
-    /// l'autosave suivant. Le retirer ne perd rien que #6894 ne couvre déjà.
+    /// `deleteElement` — auquel cas il RESSUSCITERAIT ce que l'auteur venait de
+    /// supprimer à l'autosave suivant. Ne pas le fusionner ne perd rien que
+    /// `init(rendering:)` ne couvre déjà.
     init(migrating effects: StoryEffects, keeping document: CanvasV3?) {
         let migree = CanvasV3.migratedScene(effects, id: "s1")
         let suivantes = Array((document?.scenes ?? []).dropFirst())
@@ -615,16 +545,16 @@ public extension CanvasV3 {
         }
         if media.loop { payload["loop"] = .bool(true) }
         if media.isBackground { payload["isBackground"] = .bool(true) }
-        // Le filtre PROPRE d'un média posé (#8502). Celui du fond est le filtre
+        // Le filtre PROPRE d'un média posé. Celui du fond est le filtre
         // de slide, posé plus loin sur le même objet.
         if !media.isBackground, let filter = nonEmpty(media.filter) { payload["filter"] = .string(filter) }
         if let adjustments = media.adjustments?.canvasPayload { payload["adjustments"] = adjustments } // #9175
         if let duration = media.duration { payload["duration"] = .number(duration) }
         // **La clé sort quand la MESURE existe, pas quand la valeur diffère de 1**
-        // (#5182, suivi de #5100). Le test `!= 1` interrogeait la PROJECTION
-        // (`measured ?? 1.0`) : il omettait donc la clé pour un non-mesuré — ce
+        // — le test `!= 1` interrogerait la PROJECTION
+        // (`measured ?? 1.0`) : il omettrait donc la clé pour un non-mesuré — ce
         // qui est juste — mais AUSSI pour un carré RÉELLEMENT mesuré, effaçant
-        // à l'aller la seule distinction que #5100 existe pour créer. Le pont
+        // à l'aller la seule distinction que cette clé existe pour créer. Le pont
         // d'en face lit la PRÉSENCE de la clé, comme le décodeur JSON : lui
         // taire un carré mesuré, c'est le lui rendre inconnu.
         if let measured = media.measuredAspectRatio { payload["aspectRatio"] = .number(measured) }
@@ -635,7 +565,7 @@ public extension CanvasV3 {
         }
         if let sourceStart = media.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = media.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
-        // **Le recadrage voyage en QUATRE fractions plates** (#5085), du même
+        // **Le recadrage voyage en QUATRE fractions plates**, du même
         // style que ses voisines temporelles — et OMISES quand le cadre est
         // entier : « les décode-défauts sont omis, leur absence les restitue ».
         // Un objet imbriqué aurait demandé au payload une forme que le contrat
@@ -660,13 +590,13 @@ public extension CanvasV3 {
         // `wireEmoji`, jamais `emoji` : un sticker image parti sans repli
         // disparaît chez un lecteur qui ne rend que l'emoji.
         var payload: [String: CanvasJSONValue] = ["emoji": .string(sticker.wireEmoji)]
-        // **Le GABARIT voyage, pas seulement son repli** (#4741).
+        // **Le GABARIT voyage, pas seulement son repli.**
         //
         // `wireEmoji` ci-dessus rend, pour un sticker à gabarit, l'emoji de
-        // REPLI du catalogue. Le fil portait donc soigneusement le repli d'une
-        // décoration qu'il ne portait pas : une pastille de lieu publiée
-        // revenait « 📍 », un cadre de cœurs « 💕 ». Le composer dessinait, le
-        // lecteur rendait un glyphe.
+        // REPLI du catalogue. Un fil qui ne porterait que le repli d'une
+        // décoration qu'il ne porte pas ferait revenir une pastille de lieu
+        // publiée « 📍 », un cadre de cœurs « 💕 » : le composer dessine, le
+        // lecteur rendrait un glyphe.
         //
         // > Un repli conservé sans la chose dont il est le repli n'est plus un
         // > repli : c'est le contenu.
@@ -684,7 +614,7 @@ public extension CanvasV3 {
             payload["postMediaId"] = .string(postMediaId)
         }
         if let provider = nonEmpty(sticker.provider) { payload["provider"] = .string(provider) }
-        // **Le mouvement voyage avec la décoration** (#4821) — une propriété de
+        // **Le mouvement voyage avec la décoration** — une propriété de
         // la charge, jamais un kind ; web et Android l'ignorent.
         if let animation = sticker.animation { payload["animation"] = .string(animation.rawValue) }
         if sticker.baseSize != 140 { payload["baseSize"] = .number(sticker.baseSize) }
@@ -722,9 +652,8 @@ public extension CanvasV3 {
         if let sourceStart = audio.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = audio.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
         // **La forme d'onde d'une note vocale** — ~80 échantillons figés à la
-        // composition (`StoryModels.swift`), que `StoryAudioPlayerView` peint
-        // barre par barre. Sans eux, son `guard !samples.isEmpty else { return }`
-        // ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
+        // composition (`StoryModels.swift`), que la pastille audio peint
+        // barre par barre. Sans eux, elle ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
         // vocale posée sur la scène. Quatre-vingts nombres pour ne pas servir un
         // trou — le calcul n'a pas besoin d'être long.
         //
@@ -846,21 +775,21 @@ public extension StoryEffects {
                 backgroundTransform = decodeWire(StoryBackgroundTransform.self,
                                                  from: object.payload.object("transform"))
                 // **Un fond RÉFÉRENCÉ (mediaId/postMediaId) entre dans le
-                // runtime v1 comme un média de fond** (#6894) — sans ce
+                // runtime v1 comme un média de fond** — sans ce
                 // ramage, un canvas qui adresse un enregistrement réel du
                 // post par cette forme (`payload.mediaId`, servie par la
-                // passerelle, jamais écrite par le composer) n'avait aucun
+                // passerelle, jamais écrite par le composer) n'aurait aucun
                 // représentant v1, et le LECTEUR (`StoryReaderRepresentable`,
-                // via `resolvedBackgroundMedia`) n'avait rien à peindre.
-                // `Self.mediaObject` normalise déjà les deux orthographes
+                // via `resolvedBackgroundMedia`) n'aurait rien à peindre.
+                // `CanvasV3RenderRules.mediaObject` normalise déjà les deux orthographes
                 // (`ObjectV3.mediaReference`) sur `postMediaId` — le seul
                 // champ que le résolveur du lecteur lit.
                 if object.mediaReference != nil {
-                    var fond = Self.mediaObject(object, at: position)
+                    var fond = CanvasV3RenderRules.mediaObject(object, at: position)
                     fond.isBackground = true
                     fond.filter = nil
                     medias.append(fond)
-                    // **Le collision guard (revue 2026-09-17)** : ce MÊME
+                    // **Le collision guard** : ce MÊME
                     // objet porte à la fois la référence et le cadrage — le
                     // mémoriser permet au réencodage de replacer les deux sur
                     // lui plutôt que de fabriquer un second objet.
@@ -869,11 +798,11 @@ public extension StoryEffects {
                     }
                 }
             case .media:
-                let media = Self.mediaObject(object, at: position)
+                let media = CanvasV3RenderRules.mediaObject(object, at: position)
                 medias.append(media)
-                // **Second passage** (revue 2026-09-17) : après un premier
+                // **Second passage** : après un premier
                 // réencodage, l'objet élu ci-dessus revient en `plane:
-                // content` et porte désormais lui-même `transform`/`background`
+                // content` et porte lui-même `transform`/`background`
                 // dans son payload — le décoder ici referme la boucle sans
                 // perdre le cadrage à chaque aller-retour supplémentaire.
                 if media.isBackground {
@@ -888,13 +817,13 @@ public extension StoryEffects {
                     }
                 }
             case .text:
-                if let text = Self.textObject(object, at: position) { texts.append(text) }
+                if let text = CanvasV3RenderRules.textObject(object, at: position) { texts.append(text) }
             case .sticker:
-                if let sticker = Self.stickerObject(object, at: position) { stickerFamily.append(sticker) }
+                if let sticker = CanvasV3RenderRules.stickerObject(object, at: position) { stickerFamily.append(sticker) }
             case .place:
-                if let location = Self.locationObject(object, at: position) { locations.append(location) }
+                if let location = CanvasV3RenderRules.locationObject(object, at: position) { locations.append(location) }
             case .audio:
-                audios.append(Self.audioObject(object, at: position))
+                audios.append(CanvasV3RenderRules.audioObject(object, at: position))
             case .drawing:
                 drawingStrokes = decodeWireArray(StoryDrawingStroke.self,
                                                  from: object.payload.array("strokes"))
@@ -903,22 +832,20 @@ public extension StoryEffects {
                 // Kind CONNU que la scène ne peint pas : une mention est une
                 // métadonnée, pas un objet. Ne JAMAIS le compter comme une
                 // rupture — la sentinelle rougirait sur toute story qui cite
-                // quelqu'un. Mémorisé quand même (revue 2026-09-17, #6893) :
-                // sans `unpaintableObjects`, cette métadonnée ne survivait à
-                // AUCUN aller-retour par le cache du fil — `migratedScene`
-                // n'avait rien à réémettre.
+                // quelqu'un. Mémorisé quand même : sans `unpaintableObjects`, cette
+                // métadonnée ne survivrait à AUCUN aller-retour par le cache du fil —
+                // `migratedScene` n'aurait rien à réémettre.
                 unpaintableObjects.append(object)
                 continue
             case .reserved(let raw):
-                // **Un kind d'un document plus récent que ce build** (#4088).
+                // **Un kind d'un document plus récent que ce build.**
                 // Le décodeur l'a gardé ; la conversion ne sait pas le loger.
                 // Sans ce mémo, le lecteur peindrait la scène AMPUTÉE comme si
                 // c'était la composition de l'auteur.
                 unpaintable.append(raw)
-                // **L'objet lui-même est mémorisé** (revue 2026-09-17,
-                // #6893) : `wireUnpaintableKinds` ne nommait que le KIND, pas
-                // assez pour que `migratedScene` le réémette — un tel objet
-                // (poll, gif3d, …) disparaissait ENTIÈREMENT à chaque
+                // **L'objet lui-même est mémorisé** : `wireUnpaintableKinds` ne nomme
+                // que le KIND, pas assez pour que `migratedScene` le réémette — un tel
+                // objet (poll, gif3d, …) disparaîtrait ENTIÈREMENT à chaque
                 // aller-retour par le cache du fil.
                 unpaintableObjects.append(object)
                 continue
@@ -936,7 +863,7 @@ public extension StoryEffects {
         wireTimingEnd = timingEnds.isEmpty ? nil : timingEnds
         wireAnchorPoint = anchorPoints.isEmpty ? nil : anchorPoints
 
-        // Le filtre de slide se relit sur le FOND seul (#8502) ; le filtre d'un
+        // Le filtre de slide se relit sur le FOND seul ; le filtre d'un
         // média posé est rendu à cet objet par `mediaObject(_:at:)`.
         let filterCarrier = scene.objects.first {
             $0.kind == .media && $0.payload.bool("isBackground") == true && $0.payload.string("filter") != nil
@@ -949,9 +876,9 @@ public extension StoryEffects {
         timelineDuration = scene.timelineDuration
         thumbHash = scene.thumbHash
         openingWire = scene.opening
-        opening = Self.transitionEffect(scene.opening)
+        opening = CanvasV3RenderRules.transitionEffect(scene.opening)
         closingWire = scene.closing
-        closing = Self.transitionEffect(scene.closing)
+        closing = CanvasV3RenderRules.transitionEffect(scene.closing)
         clipTransitions = scene.clipTransitions.map {
             $0.compactMap { decodeWire(StoryClipTransition.self, from: $0) }
         }
@@ -974,202 +901,5 @@ public extension StoryEffects {
                                        language: $0.language,
                                        isAutoGenerated: $0.isAutoGenerated) }
         }
-    }
-
-    private static func transitionEffect(_ wire: [String: CanvasJSONValue]?) -> StoryTransitionEffect? {
-        wire?.string("type").flatMap(StoryTransitionEffect.init(rawValue:))
-    }
-
-    private static func pivotPoint(_ payload: [String: CanvasJSONValue]) -> CGPoint {
-        if payload.string("anchorPoint") == "center" { return centerPivot }
-        guard let anchor = payload.object("anchor"),
-              let x = anchor.double("x"), let y = anchor.double("y") else { return centerPivot }
-        return CGPoint(x: x, y: y)
-    }
-
-    private static func textObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryTextObject? {
-        guard let text = object.payload.string("text") else { return nil }
-        var result = StoryTextObject(
-            id: object.id,
-            text: text,
-            x: position.x, y: position.y,
-            scale: object.transform.scale, rotation: object.transform.rotation,
-            zIndex: object.z,
-            anchor: pivotPoint(object.payload),
-            fontSize: object.payload.double("fontSize") ?? 64,
-            fontFamily: object.payload.string("fontFamily") ?? "system",
-            textStyle: object.payload.string("textStyle"),
-            textColor: object.payload.string("textColor"),
-            textAlign: object.payload.string("textAlign"),
-            textBg: object.payload.string("textBg"),
-            backgroundStyle: decodeWire(StoryTextBackgroundStyle.self,
-                                        from: object.payload.object("backgroundStyle")),
-            fontWeight: object.payload.string("fontWeight"),
-            frameShape: object.payload.string("frameShape"),
-            framePaddingScale: object.payload.double("framePaddingScale"),
-            frameBorderWidth: object.payload.double("frameBorderWidth"),
-            frameBorderColor: object.payload.string("frameBorderColor"),
-            borderColor: object.payload.string("borderColor"),
-            borderWidth: object.payload.double("borderWidth"),
-            textEffect: object.payload.string("textEffect"),
-            translations: object.payload.stringMap("translations"),
-            sourceLanguage: object.locale,
-            startTime: object.timing?.start,
-            duration: object.payload.double("duration"),
-            fadeIn: object.payload.double("fadeIn"),
-            fadeOut: object.payload.double("fadeOut"),
-            isLocked: object.payload.bool("isLocked"),
-            keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
-            name: object.payload.string("name"))
-        result.referenceUserId = object.payload.string("referenceUserId")
-        return result
-    }
-
-    private static func mediaObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryMediaObject {
-        let muted = object.payload.bool("muted") ?? false
-        let volume = object.payload.double("volume").map { Float($0) } ?? 1
-        // Les quatre fractions ne se lisent qu'ENSEMBLE : trois sur quatre
-        // décriraient un rectangle que personne n'a posé. Leur absence rend le
-        // cadre entier, qui est le défaut.
-        let crop: MediaCropRect? = {
-            guard let x = object.payload.double("cropX"),
-                  let y = object.payload.double("cropY"),
-                  let w = object.payload.double("cropW"),
-                  let h = object.payload.double("cropH") else { return nil }
-            return MediaCropRule.clamped(MediaCropRect(x: x, y: y, width: w, height: h))
-        }()
-        var media = StoryMediaObject(
-            id: object.id,
-            // Site unique des deux orthographes (#6894) : `postMediaId`
-            // (composer) et `mediaId` (passerelle) résolvent au MÊME champ v1.
-            postMediaId: object.mediaReference ?? "",
-            mediaURL: object.payload.string("mediaURL"),
-            mediaType: object.payload.string("mediaType") ?? "image",
-            placement: object.payload.string("placement") ?? "media",
-            // **Aucun `?? 1.0` ici** (#5182, suivi de #5100) : le paramètre est
-            // `Double?` SANS défaut, et l'absence de la clé DOIT traverser.
-            // Le repli fabriquait une mesure que la charge ne portait pas —
-            // `measuredAspectRatio` cessait donc d'être `nil`, et
-            // `StoryItem.toRenderableSlide` sautait l'hydratation read-time
-            // depuis `FeedMedia.width/height`, sa source de dimensionnement
-            // PRIMAIRE. Un 1080×1920 s'affichait squishé en carré chez le
-            // lecteur, sur le chemin que prend TOUT document v3.
-            aspectRatio: object.payload.double("aspectRatio"),
-            x: position.x, y: position.y,
-            scale: object.transform.scale, rotation: object.transform.rotation,
-            anchor: pivotPoint(object.payload),
-            volume: muted ? 0 : volume,
-            isBackground: object.payload.bool("isBackground") ?? false,
-            loop: object.payload.bool("loop") ?? false,
-            zIndex: object.z,
-            intrinsicDuration: object.payload.double("intrinsicDuration"),
-            startTime: object.timing?.start,
-            duration: object.payload.double("duration"),
-            fadeIn: object.payload.double("fadeIn"),
-            fadeOut: object.payload.double("fadeOut"),
-            sourceLanguage: object.locale,
-            keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
-            thumbHash: object.payload.string("thumbHash"),
-            name: object.payload.string("name"),
-            isDuckingDisabled: object.payload.bool("isDuckingDisabled"))
-        media.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
-        if !media.isBackground { media.filter = object.payload.string("filter") }
-        media.adjustments = ImageAdjustments(canvasPayload: object.payload["adjustments"]) // #9175
-        media.sourceStart = object.payload.double("sourceStart")
-        media.sourceEnd = object.payload.double("sourceEnd")
-        media.crop = crop
-        return media
-    }
-
-    private static func stickerObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StorySticker? {
-        let postMediaId = object.payload.string("postMediaId") ?? ""
-        let templateId = object.payload.string("templateId") ?? ""
-        guard let emoji = stickerEmoji(object.payload.string("emoji"),
-                                       hasImage: !postMediaId.isEmpty,
-                                       templateId: templateId) else { return nil }
-        return StorySticker(
-            id: object.id,
-            emoji: emoji,
-            postMediaId: postMediaId,
-            provider: object.payload.string("provider"),
-            templateId: templateId,
-            slots: object.payload.stringMap("slots") ?? [:],
-            animation: object.payload.string("animation").flatMap(StickerAnimation.init(rawValue:)),
-            sourceLanguage: object.locale,
-            x: position.x, y: position.y,
-            scale: object.transform.scale, rotation: object.transform.rotation,
-            zIndex: object.z,
-            baseSize: object.payload.double("baseSize") ?? 140,
-            anchor: pivotPoint(object.payload),
-            startTime: object.timing?.start,
-            duration: object.payload.double("duration"),
-            fadeIn: object.payload.double("fadeIn"),
-            fadeOut: object.payload.double("fadeOut"))
-    }
-
-    /// Un sticker image reste rendable même si l'écrivain d'en face n'a posé
-    /// aucun repli emoji ; sans image ni emoji, il n'y a rien à rendre.
-    ///
-    /// Un sticker GABARIT sans repli reçoit celui que son gabarit déclare — ou
-    /// le repli générique si ce binaire ne le connaît pas (#4819, #4741) — `nil` ⇒ l'objet est REJETÉ, et
-    /// une décoration jetée pour un repli manquant serait perdue au lieu d'être
-    /// dégradée.
-    private static func stickerEmoji(_ wire: String?, hasImage: Bool, templateId: String) -> String? {
-        if let repli = nonEmpty(wire) { return repli }
-        if !templateId.isEmpty {
-            return StickerTemplateCatalog.fallbackEmoji(forTemplateID: templateId)
-                ?? StorySticker.imageFallbackEmoji
-        }
-        return hasImage ? StorySticker.imageFallbackEmoji : wire
-    }
-
-    private static func locationObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryLocationObject? {
-        guard let place = decodeWire(SharedPlace.self, from: object.payload.object("place")) else { return nil }
-        return StoryLocationObject(
-            id: object.id,
-            place: place,
-            x: position.x, y: position.y,
-            scale: object.transform.scale, rotation: object.transform.rotation,
-            zIndex: object.z,
-            anchor: pivotPoint(object.payload),
-            sourceLanguage: object.locale,
-            styleId: nonEmpty(object.payload.string("styleId")),
-            startTime: object.timing?.start,
-            duration: object.payload.double("duration"),
-            fadeIn: object.payload.double("fadeIn"),
-            fadeOut: object.payload.double("fadeOut"))
-    }
-
-    private static func audioObject(_ object: ObjectV3, at position: (x: Double, y: Double)) -> StoryAudioPlayerObject {
-        var audio = StoryAudioPlayerObject(
-            id: object.id,
-            postMediaId: object.payload.string("postMediaId") ?? "",
-            placement: object.payload.string("placement") ?? "overlay",
-            x: CGFloat(position.x), y: CGFloat(position.y),
-            volume: object.payload.double("volume").map { Float($0) } ?? 1,
-            waveformSamples: object.payload.array("waveformSamples")?
-                .compactMap { if case .number(let v) = $0 { return Float(v) } else { return nil } } ?? [],
-            isBackground: object.payload.bool("isBackground"),
-            backgroundAudioVariants: decodeWireArray(StoryAudioVariant.self,
-                                                     from: object.payload.array("variants")),
-            startTime: object.timing?.start.map { Float($0) },
-            duration: object.payload.double("duration").map { Float($0) },
-            loop: object.payload.bool("loop"),
-            fadeIn: object.payload.double("fadeIn").map { Float($0) },
-            fadeOut: object.payload.double("fadeOut").map { Float($0) },
-            sourceLanguage: object.locale,
-            name: object.payload.string("name"),
-            keyframes: object.timing?.keyframes.map { $0.map(StoryKeyframe.init(rendering:)) },
-            mediaURL: object.payload.string("mediaURL"),
-            soundId: object.payload.string("soundId"),
-            soundAuthorUsername: object.payload.string("soundAuthorUsername"),
-            soundCreatedAt: object.payload.string("soundCreatedAt"))
-        audio.zIndex = object.z
-        audio.scale = object.transform.scale == 1 ? nil : object.transform.scale
-        audio.rotation = object.transform.rotation == 0 ? nil : object.transform.rotation
-        audio.mutedVolumeMemento = object.payload.double("mutedVolumeMemento").map { Float($0) }
-        audio.sourceStart = object.payload.double("sourceStart")
-        audio.sourceEnd = object.payload.double("sourceEnd")
-        return audio
     }
 }

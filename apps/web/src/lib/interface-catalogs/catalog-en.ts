@@ -26,6 +26,7 @@ import enSignup from './catalog-en-signup';
 import enGallery from './catalog-en-gallery';
 import enMessageCard from './catalog-en-message-card';
 import enMentions from './catalog-en-mentions';
+import enShellLabels from './catalog-en-shell-labels';
 import enStudioChrome from './catalog-en-studio-chrome';
 import enEphemeral from './catalog-en-ephemeral';
 import enWriteRestriction from './catalog-en-write-restriction';
@@ -38,6 +39,10 @@ import enContactDiscovery from './catalog-en-contact-discovery';
 import enDownload from './catalog-en-download';
 import enPhonePrompt from './catalog-en-phone-prompt';
 import enUserProfile from './catalog-en-user-profile';
+import enContentRefused from './catalog-en-content-refused';
+import enContentRemoval from './catalog-en-content-removal';
+import enPublicEntry from './catalog-en-public-entry';
+import enThreadSearch from './catalog-en-thread-search';
 
 const en = {
   'announce.messageSent': 'Message sent',
@@ -304,6 +309,7 @@ const en = {
   'notFound.title': "This address doesn't exist.",
 
   'pending.back': 'Back to conversations',
+  'pending.screen': 'The screen is on its way',
 
   'linkPage.home': 'Back to Meeshy',
   'linkPage.retry': 'Try again',
@@ -320,8 +326,6 @@ const en = {
   'trackingLink.opening': 'Opening the link…',
   'trackingLink.dead.title': 'This link is no longer available',
   'trackingLink.dead.body': 'It has expired, been disabled, or never existed.',
-  'accountDeletion.incomplete.title': 'Incomplete link',
-  'accountDeletion.incomplete.body': 'This link is missing the information it needs. Sign in to request the deletion of your account.',
   'accountDeletion.confirm.title': 'Confirm the deletion of your account',
   'accountDeletion.confirm.body':
     'Your account will be deactivated after a 30-day grace period. Until then, the “Cancel” link in the email lets you change your mind.',
@@ -400,6 +404,8 @@ const en = {
   'profile.avatar.updated': 'Profile photo updated',
   'profile.avatar.error': "Couldn't update the profile photo",
   'profile.banner.edit': 'Edit banner',
+  'profile.avatar.view': 'View profile photo full screen',
+  'profile.banner.view': 'View banner full screen',
   'profile.banner.updated': 'Banner updated',
   'profile.banner.error': "Couldn't update the banner",
   'profile.image.uploading': 'Uploading',
@@ -701,55 +707,6 @@ const en = {
   'links.announce.activated': 'Link activated',
   'links.announce.toggleFailed': 'Could not change this link',
   'links.announce.offline': 'Offline: nothing was sent.',
-  'links.create.title': 'New share link',
-  'links.create.section.conversation': 'Conversation',
-  'links.create.choose': 'Choose a group or community',
-  'links.create.picker.title': 'Choose a conversation',
-  'links.create.picker.empty': 'No conversation can receive a link yet.',
-  'links.create.section.identity': 'Link identity',
-  'links.create.name': 'Link name',
-  'links.create.name.placeholder': 'e.g. Twitter share',
-  'links.create.description': 'Description (optional)',
-  'links.create.description.placeholder': 'e.g. Join our group…',
-  'links.create.section.access': 'Guest access',
-  'links.create.section.access.subtitle': 'What visitors must provide to join',
-  'links.create.access.account': 'Account required',
-  'links.create.access.account.caption': 'Only Meeshy members can join',
-  'links.create.access.nickname': 'Nickname required',
-  'links.create.access.nickname.caption': 'Visitors must choose a nickname',
-  'links.create.access.email': 'Email required',
-  'links.create.access.email.caption': 'Visitors must provide their email',
-  'links.create.access.birthday': 'Date of birth required',
-  'links.create.access.birthday.caption': 'Enables age checks',
-  'links.create.section.permissions': 'Permissions',
-  'links.create.section.permissions.subtitle': 'What anonymous guests can do',
-  'links.create.permission.messages': 'Send messages',
-  'links.create.permission.messages.caption': 'Guests can write in the conversation',
-  'links.create.permission.images': 'Send images',
-  'links.create.permission.images.caption': 'Guests can share photos',
-  'links.create.permission.files': 'Send files',
-  'links.create.permission.files.caption': 'Guests can send documents',
-  'links.create.permission.history': 'See history',
-  'links.create.permission.history.caption': 'Guests see earlier messages',
-  'links.create.section.limits': 'Limits',
-  'links.create.section.limits.subtitle': 'Control the audience and lifetime of the link',
-  'links.create.limit.uses': 'Limit uses',
-  'links.create.limit.max.one': 'At most {count} use',
-  'links.create.limit.max.other': 'At most {count} uses',
-  'links.create.limit.count': 'Number of uses',
-  'links.create.limit.invalid': 'Choose a whole number between 1 and {max}.',
-  'links.create.expiration': 'Expiration',
-  'links.create.expiration.never': 'Never',
-  'links.create.expiration.h24': '24 hours',
-  'links.create.expiration.d7': '7 days',
-  'links.create.expiration.d30': '30 days',
-  'links.create.expiration.m3': '3 months',
-  'links.create.button': 'Create share link',
-  'links.create.inprogress': 'Creating…',
-  'links.create.error.conversation': 'Choose a conversation first.',
-  'links.create.error.offline': 'Offline: the link was not created.',
-  'links.create.error.refused': 'You cannot create a link for this conversation.',
-  'links.create.error.default': 'The link could not be created. Try again.',
 
   'feed.scene.carousel.previous': 'Previous scene',
   'feed.scene.carousel.next': 'Next scene',
@@ -787,6 +744,8 @@ const en = {
   'story.studio.kind.reel': 'Reel',
   'story.studio.refusal.reel': 'A reel needs a video or a sound of at least 3 seconds, or at least two images.',
   'story.studio.offline': 'Offline — the story will publish when the network is back.',
+  'story.studio.pending.sending': 'Your post is being sent.',
+  'story.studio.pending.cancel': 'Cancel sending',
   'story.studio.stage': 'Story preview',
   'story.studio.background.add': 'Add a photo or video',
   'story.studio.background.label': 'Background',
@@ -923,6 +882,8 @@ const en = {
   'story.action.reply': 'Reply',
   'story.action.forward': 'Send',
   'story.action.repost': 'Repost',
+  'story.viewer.repost': 'Repost',
+  'story.viewer.repostOf': 'Reposted from @{handle}',
   'story.action.views': 'Views',
   'story.action.share': 'Share',
   'story.action.save': 'Save',
@@ -1095,6 +1056,7 @@ const en = {
   'message.detail.language.original': '{language} (original)',
 
   ...enMentions,
+  ...enShellLabels,
   ...enStudioChrome,
   ...enEphemeral,
   ...enWriteRestriction,
@@ -1103,11 +1065,17 @@ const en = {
   ...enConversationCard,
   ...enStoriesMine,
   'settings.tools.sounds': 'My sounds',
+  'settings.section.packs': 'Packs and downloads',
+  'settings.packs.shop': 'Sticker and frame shop',
   ...enContactCard,
   ...enQuote,
   ...enCommentRow,
   ...enContactDiscovery,
   ...enUserProfile,
+  ...enContentRefused,
+  ...enContentRemoval,
+  ...enPublicEntry,
+  ...enThreadSearch,
 } satisfies InterfaceCatalog;
 
 export default en;

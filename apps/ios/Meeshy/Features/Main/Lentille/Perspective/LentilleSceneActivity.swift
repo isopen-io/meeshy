@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 /// Activité de la SCÈNE de la liste (2026-08-21, directive user : « le cadre
@@ -26,7 +27,7 @@ nonisolated final class LentilleSceneActivity: ObservableObject, @unchecked Send
         willSet { objectWillChange.send() }
     }
     private(set) var offset: CGFloat = 0
-    private var flattenWork: DispatchWorkItem?
+    private var flattenTask: Task<Void, Never>?
 
     init() {}
 
@@ -37,20 +38,21 @@ nonisolated final class LentilleSceneActivity: ObservableObject, @unchecked Send
     @MainActor
     func noteScroll(offset: CGFloat) {
         self.offset = offset
-        flattenWork?.cancel()
+        flattenTask?.cancel()
         if level == 0 {
             withAnimation(.easeOut(duration: FocalMetrics.Scene.enterDuration)) { level = 1 }
         }
-        let work = DispatchWorkItem { [weak self] in self?.flatten() }
-        flattenWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + FocalMetrics.Scene.restDelay, execute: work)
+        flattenTask = Task { @MainActor [weak self] in
+            guard await cancellableSleep(for: .seconds(FocalMetrics.Scene.restDelay)) else { return }
+            self?.flatten()
+        }
     }
 
     /// Retour à plat, animé (`flattenDuration`).
     @MainActor
     func flatten() {
-        flattenWork?.cancel()
-        flattenWork = nil
+        flattenTask?.cancel()
+        flattenTask = nil
         guard level != 0 else { return }
         withAnimation(.easeInOut(duration: FocalMetrics.Scene.flattenDuration)) { level = 0 }
     }
@@ -111,7 +113,7 @@ final class LentilleRowMetaReveal: ObservableObject {
 
     @Published private(set) var isRevealed = false
     private var openingArmed = false
-    private var hideWork: DispatchWorkItem?
+    private var hideTask: Task<Void, Never>?
 
     init() {}
 
@@ -134,18 +136,19 @@ final class LentilleRowMetaReveal: ObservableObject {
     }
 
     func hide() {
-        hideWork?.cancel()
-        hideWork = nil
+        hideTask?.cancel()
+        hideTask = nil
         guard isRevealed else { return }
         isRevealed = false
     }
 
     private func reveal() {
         if !isRevealed { isRevealed = true }
-        hideWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.hide() }
-        hideWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.lingerSeconds, execute: work)
+        hideTask?.cancel()
+        hideTask = Task { [weak self] in
+            guard await cancellableSleep(for: .seconds(LentilleRowMetaReveal.lingerSeconds)) else { return }
+            self?.hide()
+        }
     }
 }
 

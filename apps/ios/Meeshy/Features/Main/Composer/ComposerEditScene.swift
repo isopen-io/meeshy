@@ -1,6 +1,7 @@
 import CoreGraphics
 import Foundation
 import MeeshySDK
+import MeeshyUI
 
 /// Ce qui s'ouvre sous la scène de retouche, au-dessus des outils.
 nonisolated enum ComposerEditPanel: Hashable, Sendable {
@@ -63,17 +64,37 @@ nonisolated enum ComposerEditScene {
         }
     }
 
+    /// **Une famille ouverte descend AU NIVEAU de son rail** (#10311, porteur
+    /// 2026-10-12 : « ses éléments descendent au niveau du rail, pas un panneau
+    /// flottant plus haut ») : Filtres · Effets · Cadres en colonne, la bande à
+    /// leur droite, sur une seule rangée — elle prend la place des outils.
+    static var familyRow: CGFloat {
+        let familles = CGFloat(ComposerLookFamily.allCases.count)
+        let rail = familles * MeeshyControlSize.tapTarget + (familles - 1) * MeeshySpacing.sm
+        return max(bandHeight + 2 * ComposerTriggerOutline.outset, rail)
+    }
+
     /// Ce que le bas retient sous la scène : les outils, et chaque panneau
-    /// montré — les outils composent (#9754), leurs panneaux s'empilent.
+    /// montré — les outils composent (#9754), leurs panneaux s'empilent. La
+    /// bande d'une famille, elle, remplace la rangée des outils (#10311).
     static func bottomReserve(_ panels: [ComposerEditPanel]) -> CGFloat {
+        guard panels != [.band] else { return familyRow + gap * 2 }
         let montes = panels.map(panelHeight).filter { $0 > 0 }
         return toolsRow + montes.map { $0 + gap }.reduce(0, +) + gap * 2
     }
 
     /// La zone où la scène tient, dans un conteneur dont `top` et `bottom`
     /// sont les marges système (nulles pour une couche qui les respecte déjà).
-    static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel]) -> CGRect {
-        let haut = top + topBand
+    ///
+    /// **Hors recadrage, c'est le conteneur entier** (#10930) : la prise
+    /// « fit » le viewport et le chrome se pose par-dessus. `framed` — le
+    /// recadrage montré — est le seul cas où elle se réduit, pour laisser ses
+    /// bords aux crochets.
+    /// Une vidéo recadrée commence sous la bande de sa lecture (porteur 2026-10-20).
+    static func area(container: CGSize, top: CGFloat, bottom: CGFloat, panels: [ComposerEditPanel],
+                     framed: Bool = true, playback: Bool = false) -> CGRect {
+        guard framed else { return CGRect(origin: .zero, size: container) }
+        let haut = top + topBand + (playback ? ComposerEditPlaybackLayout.band : 0)
         let bas = container.height - bottom - bottomReserve(panels)
         return CGRect(x: margin, y: haut, width: max(0, container.width - margin * 2), height: max(0, bas - haut))
     }
@@ -145,4 +166,25 @@ nonisolated enum ComposerCropPreset: CaseIterable, Hashable, Sendable {
     static func matching(_ aspect: CGFloat, source: CGSize) -> ComposerCropPreset? {
         allCases.first { abs($0.aspect(source: source) - aspect) < 0.005 }
     }
+}
+
+/// **Les formats, sur une bande pleine largeur juste SOUS la scène** (porteur
+/// 2026-10-20 : « les rails d'outils doivent être le moins coupés possible et
+/// on doit les laisser aller soit hors viewport soit hors cadre de la
+/// scène »). Ni le cadre ni ses crochets ne la coupent : elle va d'un bord de
+/// l'écran à l'autre, dans la place que le panneau `.presets` retient sous la
+/// scène, et défile au-delà.
+nonisolated enum ComposerEditPresetsLayout {
+
+    /// La scène est centrée dans son conteneur (`ComposerEditScene.area` est
+    /// symétrique, `rect` centre) : la largeur de l'écran est donc le double de
+    /// son milieu.
+    static func frame(scene: CGRect) -> CGRect {
+        CGRect(x: 0, y: scene.maxY + ComposerEditScene.gap,
+               width: max(0, scene.midX * 2), height: ComposerEditScene.presetsHeight)
+    }
+
+    /// Le retrait de tête des bandes défilantes : la première case s'aligne sur
+    /// le bord du contenu, la dernière peut sortir de l'écran.
+    static let leadingInset: CGFloat = MeeshySpacing.mdPlus
 }

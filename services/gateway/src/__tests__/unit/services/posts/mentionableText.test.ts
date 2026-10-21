@@ -39,6 +39,20 @@ describe('collectMentionableText', () => {
     expect(result).toEqual(['ma story', 'coucou @bob']);
   });
 
+  it('IGNORE la puce de crédit verrouillée d\'une republication (#10524)', () => {
+    const result = collectMentionableText({
+      content: null,
+      storyEffects: {
+        textObjects: [
+          { id: 'credit', text: 'Reposté de @ada', isLocked: true },
+          { id: 't2', text: 'coucou @bob' },
+        ],
+      },
+    });
+
+    expect(result).toEqual(['coucou @bob']);
+  });
+
   it('survit à des effets malformés sans lever', () => {
     expect(collectMentionableText({ content: 'x', storyEffects: 'pas un objet' })).toEqual(['x']);
     expect(collectMentionableText({ content: 'x', storyEffects: { textObjects: 'nope' } })).toEqual(['x']);

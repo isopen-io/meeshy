@@ -153,8 +153,10 @@ function buildPrisma() {
   return {
     user: { findUnique: jest.fn<any>().mockResolvedValue(registeredUserRow()) },
     participant: { findFirst: jest.fn<any>().mockResolvedValue(anonymousParticipantRow()) },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: { findUnique: jest.fn<any>().mockResolvedValue({ expiresAt: null }) },
     userSession: {
-      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findFirst: jest.fn<any>().mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
       update: jest.fn<any>().mockResolvedValue({}),
     },
     signalPreKeyBundle: {
@@ -172,7 +174,7 @@ function buildPrisma() {
 }
 
 function signJwt(userId: string = USER_ID): string {
-  return jwt.sign({ userId, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 let app: FastifyInstance;
@@ -239,8 +241,12 @@ describe('GET /api/v1/me — JWT (utilisateur enregistré)', () => {
     });
     // Le gain visé par #4178 : la lecture de soi ne relit pas `User` une
     // deuxième fois — `authContext.registeredUser` (posé par le middleware)
-    // suffit. `findUnique` n'est appelé QUE par le middleware lui-même.
-    expect(prisma.user.findUnique).toHaveBeenCalledTimes(1);
+    // suffit. `findUnique` n'est appelé que par le middleware lui-même, et par
+    // la relecture du DÉCOR de profil (#10632) — deux colonnes que le cache d'auth
+    // ne porte pas (un contour équipé à l'instant doit se lire à l'instant), et
+    // qui ne s'ouvre que lorsque `profileDecor` est servi.
+    expect(prisma.user.findUnique).toHaveBeenCalledTimes(2);
+    expect(prisma.user.findUnique.mock.calls[1][0].select).toEqual({ equippedAvatarRing: true, equippedBanner: true, equippedBannerFrame: true });
   });
 
   it('sert des permissions ADMIN pour un rôle ADMIN — via servedUserPermissions, la loi centrale', async () => {

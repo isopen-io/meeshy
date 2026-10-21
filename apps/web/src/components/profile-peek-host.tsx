@@ -1,6 +1,6 @@
 import { lazy, Suspense, useLayoutEffect } from 'react';
 
-import { routeKey, useRoute } from '@/lib/router';
+import { useCloseOnNavigation } from '@/lib/router';
 import { closeProfilePeek, registerProfilePeekHost, useProfilePeek } from '@/lib/view/profile-peek';
 
 /**
@@ -24,10 +24,9 @@ const LazyProfilePeekSheet = lazy(() => import('@/components/profile-peek-sheet'
 
 export function ProfilePeekHost() {
   const username = useProfilePeek();
-  const address = routeKey(useRoute());
 
   useLayoutEffect(() => registerProfilePeekHost(), []);
-  useLayoutEffect(() => closeProfilePeek, [address]);
+  useCloseOnNavigation(closeProfilePeek);
 
   return username === null ? null : (
     <Suspense fallback={null}>

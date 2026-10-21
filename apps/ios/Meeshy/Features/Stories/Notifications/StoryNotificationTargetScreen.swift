@@ -37,6 +37,13 @@ public struct StoryNotificationTargetScreen: View {
     @StateObject private var vm: StoryNotificationTargetViewModel
     @EnvironmentObject private var storyViewerCoordinator: StoryViewerCoordinator
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.isPresented) private var isPresented
+    @Environment(\.meeshyPanelDismiss) private var panelDismiss
+    /// Retour opérant dans les trois contextes : pile iPhone, panneau droit iPad — à la racine de sa pile,
+    /// où la fermeture de l’environnement ne fait rien et laissait la colonne sur son chargeur —, et feuille.
+    private var back: PanelBackAction {
+        PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
+    }
 
     private let commentId: String?
     private let parentCommentId: String?
@@ -71,7 +78,7 @@ public struct StoryNotificationTargetScreen: View {
                     viewerCoordinator: storyViewerCoordinator,
                     commentId: commentId,
                     parentCommentId: parentCommentId,
-                    dismiss: { dismiss() }
+                    dismiss: { back() }
                 )
             case .expired, .expiredConsumed:
                 StoryExpiredContent(storyId: vm.storyId, context: vm.context)

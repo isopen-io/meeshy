@@ -1,0 +1,212 @@
+[
+ {
+  "file": "moments-flamme-100",
+  "overlap": 79,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   95,
+   421,
+   445,
+   492
+  ],
+  "windowPx": 142261,
+  "layout": "côtés",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-flamme-30",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 130400,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-flamme-365",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 134892,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-flamme-7",
+  "overlap": 44,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   102,
+   714,
+   401,
+   719
+  ],
+  "windowPx": 154205,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-jour-a",
+  "overlap": 79,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   119,
+   708,
+   428,
+   720
+  ],
+  "windowPx": 147341,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-jour-b",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 144727,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-meesh-1",
+  "overlap": 49,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   107,
+   720,
+   126,
+   723
+  ],
+  "windowPx": 137049,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-meesh-10",
+  "overlap": 73,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   91,
+   418,
+   450,
+   500
+  ],
+  "windowPx": 151271,
+  "layout": "côtés",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-meesh-100",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 148392,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-meesh-1000",
+  "overlap": 10571,
+  "face": 0,
+  "depth": 118,
+  "bbox": [
+   332,
+   556,
+   449,
+   712
+  ],
+  "windowPx": 142560,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-palier-aurore",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 162736,
+  "layout": "perchés",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-palier-galaxie",
+  "overlap": 33,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   406,
+   637,
+   414,
+   648
+  ],
+  "windowPx": 130017,
+  "layout": "coins",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-palier-lueur",
+  "overlap": 20,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   439,
+   703,
+   447,
+   713
+  ],
+  "windowPx": 148797,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-palier-nebuleuse",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 143787,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-palier-singularite",
+  "overlap": 67,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   141,
+   714,
+   189,
+   717
+  ],
+  "windowPx": 135984,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "moments-palier-supernova",
+  "overlap": 6759,
+  "face": 0,
+  "depth": 85,
+  "bbox": [
+   370,
+   568,
+   454,
+   719
+  ],
+  "windowPx": 160347,
+  "layout": "selfie",
+  "verdict": "ok"
+ }
+]

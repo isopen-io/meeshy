@@ -58,12 +58,12 @@ function passValues(level: GamePrestigeProps['level'], score: number, prestige: 
   const pass = prestigeTransition({ score, prestige: prestige.stars, levelRecord: level.record });
   if (!pass.allowed) return [];
   return [
-    { fact: 'score', label: gameText('game.fact.balance'), value: arrow(pointsLabel(score), pointsLabel(pass.scoreAfter)) },
+    { fact: 'score', label: gameText('game.fact.to_convert'), value: arrow(pointsLabel(score), pointsLabel(pass.scoreAfter)) },
     { fact: 'level_now', label: gameText('game.mint.row.level'), value: arrow(formatCount(level.level), formatCount(pass.levelAfter)) },
     { fact: 'level_record', label: gameText('game.fact.record'), value: arrow(formatCount(level.record), formatCount(pass.levelRecordAfter)) },
     {
       fact: 'prestige_glory',
-      label: gameText('game.fact.stars'),
+      label: gameText('game.fact.rebirths'),
       value: arrow(formatCount(prestige.stars), formatCount(pass.prestigeAfter)),
       detail: starDetail(prestige, pass.prestigeAfter),
     },

@@ -22,8 +22,10 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { withRetry } from '../MessageMediaConsumptionService';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
 import { GameRefusal } from './GameRefusal';
+import { announceGameState } from './GameStateBroadcast';
+import { gameRevisionColumn, gameRevisionValue, nextGameRevision } from './GameRevision';
 
-export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll' | 'season-seal';
+export type SpendKind = 'flame-freeze' | 'flame-relight' | 'mission-reroll' | 'season-seal' | 'pack-purchase';
 
 /** La transaction que `apply` reçoit : le client Prisme interactif. */
 export type SpendTx = Prisma.TransactionClient;
@@ -93,7 +95,7 @@ export class MeeshSpend {
     await request.guard?.();
 
     try {
-      return await this.prisma.$transaction(async (tx): Promise<SpendOutcome<T>> => {
+      const outcome = await this.prisma.$transaction(async (tx): Promise<SpendOutcome<T>> => {
         const avant = await meeshTotalsFromLedger(tx, userId);
         if (avant.balance < price) return { status: 'insufficient', balance: avant.balance };
 
@@ -108,12 +110,21 @@ export class MeeshSpend {
           },
         });
         const apres = await meeshTotalsFromLedger(tx, userId);
+        // La révision de l'état du jeu (#10912), lue et gravée DANS la transaction qui débite : elle ne recule jamais.
+        const compte = await tx.user.findUnique({ where: { id: userId }, select: { gameRevision: true } });
         await tx.user.update({
           where: { id: userId },
-          data: { meeshBalance: apres.balance, meeshMintedLifetime: apres.mintedLifetime },
+          data: {
+            meeshBalance: apres.balance,
+            meeshMintedLifetime: apres.mintedLifetime,
+            gameRevision: gameRevisionColumn(nextGameRevision(gameRevisionValue(compte?.gameRevision), Date.now())),
+          },
         });
         return { status: 'spent', balance: apres.balance, result };
       });
+      // Le trésor a baissé : les appareils du compte le voient sans attendre (#10900).
+      if (outcome.status === 'spent') announceGameState(userId, 'spend');
+      return outcome;
     } catch (err) {
       // Deux requêtes de même identifiant : l'index unique a tranché, la
       // première a gagné — on rend SON résultat plutôt qu'une erreur.

@@ -95,6 +95,14 @@ export const OPS_ONLY_ROUTES: readonly OpsOnlyRoute[] = [
       "sert aux ROBOTS d'aperçu des messageries quand ils déplient `/chat/<lien>` : aucun écran " +
       "d'app ne l'appelle, l'app lit l'invitation par `GET /anonymous/link/:identifier`.",
   },
+  {
+    method: 'GET',
+    path: '/api/v1/tracking-links/:token/og',
+    reason:
+      "`services/gateway/src/routes/links/unfurl.ts` (#10192) — aperçu que Traefik sert aux ROBOTS " +
+      "d'aperçu quand ils déplient un lien suivi `/l/<jeton>` : aucun écran d'app ne l'appelle, l'app " +
+      'résout le lien par `GET /tracking-links/:token/resolve`.',
+  },
 ];
 
 function routeKey(method: string, path: string): string {

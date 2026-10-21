@@ -113,51 +113,20 @@ extension MessageSocketManager: ConversationViewingEmitting {
         socket?.emit(event, ["conversationId": conversationId])
     }
 
-    func registerActivitySignalHandlers(on socket: SocketIOClient) {
+    func registerActivitySignalLifecycle(on socket: SocketIOClient) {
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             self?.handleViewingSessionStarted()
         }
+    }
 
-        socket.on("typing:start") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TypingEvent.self, from: data) { [weak self] event in
-                self?.typingStarted.send(event)
-            }
-        }
-
-        socket.on("typing:stop") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(TypingEvent.self, from: data) { [weak self] event in
-                self?.typingStopped.send(event)
-            }
-        }
-
-        socket.on("viewing:start") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
-                self?.conversationViewing.send(.arrived(event))
-            }
-        }
-
-        socket.on("viewing:stop") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
-                self?.conversationViewing.send(.left(event))
-            }
-        }
-
-        socket.on("viewing:activity") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ConversationViewingChange.self, from: data) { [weak self] event in
-                self?.handleViewingActivity(event)
-            }
-        }
-
-        socket.on("viewing:snapshot") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ConversationViewingSnapshot.self, from: data) { [weak self] event in
-                self?.conversationViewing.send(.snapshot(event))
-            }
-        }
+    var activityRoutes: [SocketInboundRoute] {
+        [
+            route(.typingStart, TypingEvent.self) { $0.typingStarted.send($1) },
+            route(.typingStop, TypingEvent.self) { $0.typingStopped.send($1) },
+            route(.viewingStart, ConversationViewingChange.self) { $0.conversationViewing.send(.arrived($1)) },
+            route(.viewingStop, ConversationViewingChange.self) { $0.conversationViewing.send(.left($1)) },
+            route(.viewingActivity, ConversationViewingChange.self) { $0.handleViewingActivity($1) },
+            route(.viewingSnapshot, ConversationViewingSnapshot.self) { $0.conversationViewing.send(.snapshot($1)) },
+        ]
     }
 }

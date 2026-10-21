@@ -44,7 +44,8 @@ nonisolated public enum FaceRampRanking {
                     presence: entry.presence,
                     awaitingCount: evidence.count,
                     needScore: score,
-                    evidenceMessageIds: evidence
+                    evidenceMessageIds: evidence,
+                    ring: entry.ring
                 )
             }
             .sorted { lhs, rhs in
@@ -102,7 +103,7 @@ nonisolated public enum FaceRampRanking {
             byUser[item.fromUserId] = bucket
         }
 
-        let participantsById = Dictionary(uniqueKeysWithValues: participants.map { ($0.id, $0) })
+        let participantsById = Dictionary(participants.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         return byUser
             .compactMap { userId, bucket -> FaceRampRankingInput? in
@@ -116,7 +117,8 @@ nonisolated public enum FaceRampRanking {
                     mentionEvidence: bucket.mention,
                     directReplyEvidence: bucket.reply,
                     unansweredQuestionEvidence: bucket.question,
-                    mostRecentEvidenceAt: bucket.mostRecent
+                    mostRecentEvidenceAt: bucket.mostRecent,
+                    ring: participant.ring
                 )
             }
             .sorted { $0.id < $1.id } // ordre déterministe AVANT `rank` (qui retriera par score)

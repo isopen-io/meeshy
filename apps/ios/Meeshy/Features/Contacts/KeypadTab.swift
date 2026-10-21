@@ -86,7 +86,7 @@ struct KeypadTab: View {
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.matches) { user in
-                        resultRow(user)
+                        liveResultRow(user)
                     }
                 }
                 .padding(.top, MeeshySpacing.xsPlus)
@@ -132,6 +132,10 @@ struct KeypadTab: View {
         .padding(.top, MeeshySpacing.xxl)
     }
 
+    private func liveResultRow(_ user: UserSearchResult) -> some View {
+        LivePresence { resultRow(user) }
+    }
+
     private func resultRow(_ user: UserSearchResult) -> some View {
         let name = user.displayName ?? user.username
         let color = DynamicColorGenerator.colorForName(name)
@@ -147,7 +151,8 @@ struct KeypadTab: View {
                         context: .userListItem,
                         accentColor: color,
                         avatarURL: user.avatar,
-                        presenceState: presence
+                        presenceState: presence,
+                        ring: user.avatarRing
                     )
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(name)

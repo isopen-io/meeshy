@@ -33,11 +33,16 @@ import type { ApiResult, HttpTransport } from './http';
  *    (`services/calls/callRingPolicy.ts`, #8073) ;
  *  - `privacy.notifyContactsOnReturn` — l'ÉMISSION de « X était sur Meeshy
  *    récemment » vers les amis et les porteurs du numéro ou de l'e-mail
- *    (#8285), jamais quand la présence est masquée.
+ *    (#8285), jamais quand la présence est masquée ;
+ *  - `privacy.allowAnalytics` — LUE seulement (#10502) : la bascule
+ *    « Analytique » d'iOS, qui gouverne le consentement que la télémétrie
+ *    déclare (`lib/telemetry/analytics-consent.ts`) ; coupée ⇒ `denied`, et
+ *    la passerelle ne range alors aucune ligne de comportement. OPTIONNELLE à
+ *    la lecture : absente, elle reste INCONNUE, jamais un refus ni un accord.
  * Les vibrations (aucun lecteur serveur, aucun effet web) et le téléchargement
  * automatique des médias (#5563, issue dédiée) n'y sont PAS.
  *
- * **La lecture est une PROJECTION** : `?fields=` ne demande que ces douze
+ * **La lecture est une PROJECTION** : `?fields=` ne demande que ces treize
  * valeurs, et le décodeur n'en laisse entrer aucune autre — le cache de
  * requêtes est persisté dans le `localStorage` (`query-client.ts`). Une valeur
  * de mauvais type rend la lecture ILLISIBLE plutôt qu'une valeur devinée : une
@@ -67,6 +72,7 @@ const Privacy = z.object({
   hideProfileFromSearch: z.boolean(),
   acceptCallsFromNonContacts: z.boolean(),
   notifyContactsOnReturn: z.boolean(),
+  allowAnalytics: z.optional(z.boolean()),
 });
 
 const Complete = z.object({ application: Application, notification: Notification, privacy: Privacy });
@@ -102,6 +108,7 @@ export const APP_PREFERENCE_FIELDS = {
   hideProfileFromSearch: 'privacy',
   acceptCallsFromNonContacts: 'privacy',
   notifyContactsOnReturn: 'privacy',
+  allowAnalytics: 'privacy',
 } as const satisfies Readonly<Record<keyof AppPreferences, PreferenceCategory>>;
 
 type PreferenceKey = keyof typeof APP_PREFERENCE_FIELDS;
@@ -113,10 +120,12 @@ const FIELDS_QUERY = PREFERENCE_KEYS.map((key) => `${APP_PREFERENCE_FIELDS[key]}
 export function decodeAppPreferences(raw: unknown): AppPreferences | null {
   const parsed = Complete.safeParse(raw);
   if (!parsed.success) return null;
+  const { allowAnalytics, ...privacy } = parsed.data.privacy;
   return {
     ...parsed.data.application,
     ...parsed.data.notification,
-    ...parsed.data.privacy,
+    ...privacy,
+    ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
     gameEnabled: parsed.data.notification.gameEnabled ?? true,
   };
 }
@@ -125,11 +134,13 @@ export function decodeServedPreferences(raw: unknown): PreferencesPatch | null {
   const parsed = Served.safeParse(raw);
   if (!parsed.success) return null;
   const { gameEnabled, ...notification } = parsed.data.notification ?? {};
+  const { allowAnalytics, ...privacy } = parsed.data.privacy ?? {};
   return {
     ...parsed.data.application,
     ...notification,
     ...(gameEnabled === undefined ? {} : { gameEnabled }),
-    ...parsed.data.privacy,
+    ...privacy,
+    ...(allowAnalytics === undefined ? {} : { allowAnalytics }),
   };
 }
 

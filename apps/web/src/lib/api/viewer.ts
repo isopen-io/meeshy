@@ -56,8 +56,9 @@ export function resolveViewer(input: { readonly source: DataSource; readonly ses
     return {
       id: input.session.guest.participantId,
       handle: null,
-      /* Un lien peut ne PAS exiger de pseudo : la passerelle en génère alors un
-       * qu'elle ne remet pas à la jonction. Plutôt que d'inventer un nom ou
+      /* Depuis #10602 la jonction remet le pseudo FINAL (`entry.username`) ;
+       * un serveur d'avant ne remettait pas celui qu'il générait quand rien
+       * n'était saisi. Plutôt que d'inventer un nom ou
        * d'en afficher un vide, on nomme le RÔLE — et le fil relira le vrai
        * pseudo quand il interrogera `PATCH /guest-sessions/me`. */
       displayName: nickname === '' ? 'Invité' : nickname,

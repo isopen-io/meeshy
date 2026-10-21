@@ -7,6 +7,7 @@ import type { Virtualizer } from '@tanstack/react-virtual';
 import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { SCROLL_TO_BOTTOM_FRAMES } from './pin-to-bottom';
 import { useThreadChromeSignals, type ThreadChromeSignals } from './use-thread-chrome-signals';
 import type { Message } from '@/lib/api/types';
 import type { PlacedMessage } from '@/lib/grouping';
@@ -111,8 +112,19 @@ function mount(params: {
   });
 
   const scroller = container.querySelector('[data-testid="scroller"]') as HTMLElement;
+  // `scrollTop` reste ÉCRIVABLE, comme dans un vrai DOM : le bouton « revenir
+  // en bas » l'écrit, et une propriété figée par `value` faisait lever cette
+  // écriture HORS du témoin (« Attempted to assign to readonly property »).
+  let top = 0;
   const setGeometry = (g: { scrollTop: number; clientHeight: number }) => {
-    Object.defineProperty(scroller, 'scrollTop', { value: g.scrollTop, configurable: true });
+    top = g.scrollTop;
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = value;
+      },
+    });
     Object.defineProperty(scroller, 'clientHeight', { value: g.clientHeight, configurable: true });
     act(() => {
       scroller.dispatchEvent(new Event('scroll'));
@@ -271,6 +283,78 @@ describe('useThreadChromeSignals — composition (#5774, travail 3/3)', () => {
       signals().onScrollToBottom();
     });
     expect(returned).toBe(1);
+  });
+
+  /**
+   * L'ANCRAGE NE SURVIT PAS AU FIL — `pinToBottom` rend son `cancel`, que le
+   * bouton jetait : les images restantes écrivaient encore `scrollTop` après
+   * le démontage, et levaient HORS du témoin (« Attempted to assign to
+   * readonly property », `pin-to-bottom.ts`, journal de « Test web », run
+   * 38119734883).
+   */
+  function countScrollWrites(scroller: HTMLElement): () => number {
+    let writes = 0;
+    Object.defineProperty(scroller, 'scrollHeight', { value: 4321, configurable: true });
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => 0,
+      set: () => {
+        writes += 1;
+      },
+    });
+    return () => writes;
+  }
+
+  async function letFramesRun(): Promise<void> {
+    await act(async () => {
+      for (let frame = 0; frame < SCROLL_TO_BOTTOM_FRAMES * 3; frame += 1) {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      }
+    });
+  }
+
+  test('démonter le fil en plein ancrage : aucune image n’écrit plus dans le défileur quitté', async () => {
+    const placed: readonly PlacedMessage[] = [{ message: messageOf('m1', 'v1'), head: true, tail: true, opensDay: 'Aujourd’hui' }];
+    const { scroller, signals } = mount({
+      placed,
+      messages: placed.map((p) => p.message),
+      viewerId: 'v1',
+      group: false,
+      items: [{ index: 0, start: 0, end: 88 }],
+      totalSize: 88,
+    });
+    const writes = countScrollWrites(scroller);
+
+    act(() => {
+      signals().onScrollToBottom();
+    });
+    act(() => {
+      root.unmount();
+    });
+    await letFramesRun();
+
+    expect(writes()).toBe(0);
+  });
+
+  test('deux touchers rapprochés : un seul ancrage écrit, le premier est annulé', async () => {
+    const placed: readonly PlacedMessage[] = [{ message: messageOf('m1', 'v1'), head: true, tail: true, opensDay: 'Aujourd’hui' }];
+    const { scroller, signals } = mount({
+      placed,
+      messages: placed.map((p) => p.message),
+      viewerId: 'v1',
+      group: false,
+      items: [{ index: 0, start: 0, end: 88 }],
+      totalSize: 88,
+    });
+    const writes = countScrollWrites(scroller);
+
+    act(() => {
+      signals().onScrollToBottom();
+      signals().onScrollToBottom();
+    });
+    await letFramesRun();
+
+    expect(writes()).toBe(SCROLL_TO_BOTTOM_FRAMES);
   });
 
   test('scrollButtonSenderName : jamais renseigné hors GROUPE (DM)', () => {

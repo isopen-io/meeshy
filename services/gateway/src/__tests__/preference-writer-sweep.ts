@@ -1,8 +1,9 @@
 /**
- * Balayage des ÉCRIVAINS des deux tables de préférences par utilisateur.
+ * Balayage des ÉCRIVAINS des tables de préférences par utilisateur.
  *
- * `UserConversationPreferences` et `UserCommunityPreferences` sont par
- * UTILISATEUR, pas par appareil. Toute écriture doit donc être suivie d'une
+ * `UserConversationPreferences`, `UserCommunityPreferences` et, depuis LP0
+ * (#10148), `UserStickerPack` — l'installation d'un pack, de tout domaine —
+ * sont par UTILISATEUR, pas par appareil. Toute écriture doit donc être suivie d'une
  * diffusion sur la room personnelle, faute de quoi les autres appareils du même
  * compte restent sur un état périmé — ils tiennent leur liste avec le socket
  * pour source primaire, et rien ne les envoie relire.
@@ -33,7 +34,7 @@ import { join } from 'path';
 
 const SRC_ROOT = join(__dirname, '..');
 
-const PREFERENCE_MODELS = ['userConversationPreferences', 'userCommunityPreferences'] as const;
+const PREFERENCE_MODELS = ['userConversationPreferences', 'userCommunityPreferences', 'userStickerPack'] as const;
 
 const WRITE_METHODS = ['upsert', 'update', 'updateMany', 'create', 'createMany', 'delete', 'deleteMany'] as const;
 

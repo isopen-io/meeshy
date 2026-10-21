@@ -34,6 +34,11 @@ nonisolated enum ComposerCaptureAction: Equatable, Sendable {
     case select
     case openFamily
     case reframe
+    /// En retouche, un toucher sur la prise montre ou cache ses outils (#10930).
+    case toggleEditChrome
+
+    /// Une photo part : sur un déclencheur, le second toucher d'un double l'est déjà.
+    var takesAPhoto: Bool { self == .photoToEdit || self == .photoToGallery }
 }
 
 nonisolated struct ComposerCaptureGestureContext: Equatable, Sendable {
@@ -44,6 +49,9 @@ nonisolated struct ComposerCaptureGestureContext: Equatable, Sendable {
     var pendingSegments = 0
     var allowsPhoto = true
     var allowsVideo = true
+    /// La case choisie porte un VRAI cadre. Sur « Aucun », elle prend hors cadre
+    /// (décision porteur 2026-10-12, #10284) : retouche, prise gardée dans l'app.
+    var frameChosen = true
 }
 
 /// Le toucher précédent, et la zone où il est tombé : un double ne se fait
@@ -95,16 +103,22 @@ nonisolated enum ComposerCaptureGesture {
     /// toucher : le premier vise tout de suite ; le second, dans la fenêtre,
     /// après l'armement et DANS LA MÊME ZONE, est un double. Un double que la
     /// table refuse (segments en attente, format sans photo) reste un toucher :
-    /// il vise encore. L'issue rend la mémoire à garder pour le toucher suivant.
+    /// il vise encore. Sur un DÉCLENCHEUR (la case choisie, le rond), le premier
+    /// toucher a déjà photographié : le second est absorbé — jamais deux photos
+    /// d'un double (#10284). L'issue rend la mémoire à garder pour le suivant.
     static func tap(zone: ComposerCaptureZone, context: ComposerCaptureGestureContext,
                     now: Date, lastTap: ComposerCaptureLastTap?, armedAt: Date?) -> ComposerCaptureTapOutcome {
         let precedent = lastTap.flatMap { $0.zone == zone ? $0.at : nil }
         let regle = ComposerCaptureTapRule.action(stage: context.stage, now: now, lastTapAt: precedent, armedAt: armedAt)
+        let simple = action(zone: zone, gesture: .tap, context: context)
+        guard regle != .photo || !simple.takesAPhoto else {
+            return ComposerCaptureTapOutcome(action: .none, consumedDouble: true, memory: nil)
+        }
         let double = regle == .photo ? action(zone: zone, gesture: .doubleTap, context: context) : .none
         guard double == .none else {
             return ComposerCaptureTapOutcome(action: double, consumedDouble: true, memory: nil)
         }
-        return ComposerCaptureTapOutcome(action: action(zone: zone, gesture: .tap, context: context),
+        return ComposerCaptureTapOutcome(action: simple,
                                          consumedDouble: false,
                                          memory: ComposerCaptureLastTap(zone: zone, at: now))
     }
@@ -126,7 +140,7 @@ nonisolated enum ComposerCaptureGesture {
                     .focus].filter { $0 != .none }
         case .chosenThumbnail:
             guard context.stage == .armed else { return [.stopTake] }
-            return [action(zone: .chosenThumbnail, gesture: .doubleTap, context: context),
+            return [action(zone: .chosenThumbnail, gesture: .tap, context: context),
                     action(zone: .chosenThumbnail, gesture: .longPress, context: context)].filter { $0 != .none }
         case .shutter:
             guard context.stage == .armed else { return [.stopTake] }
@@ -154,7 +168,7 @@ nonisolated enum ComposerCaptureGesture {
         case .filmToGallery:
             return String(localized: "composer.capture.a11y.videoToGallery", defaultValue: "Vidéo vers la galerie",
                           bundle: .main)
-        case .none, .zoom, .steerTake, .close, .select, .openFamily, .reframe:
+        case .none, .zoom, .steerTake, .close, .select, .openFamily, .reframe, .toggleEditChrome:
             return nil
         }
     }
@@ -182,10 +196,17 @@ nonisolated enum ComposerCaptureGesture {
         }
     }
 
+    /// **Le cadre EST le déclencheur** (#10284, directive porteur 2026-10-12) :
+    /// la case choisie photographie d'UN toucher (le double reste une photo) et
+    /// filme à l'appui long ; ces prises partent en galerie PUIS en retouche
+    /// (`CaptureSaveLaw.destination(for: .frame)`).
     private static func chosen(_ gesture: ComposerCaptureGestureKind,
                                _ context: ComposerCaptureGestureContext) -> ComposerCaptureAction {
+        guard context.frameChosen else { return shutter(gesture, context) }
         switch gesture {
-        case .tap: return context.stage == .recording && context.locked ? .stopTake : .none
+        case .tap:
+            if context.stage == .recording { return context.locked ? .stopTake : .none }
+            return mayShootAlone(context) && context.allowsPhoto ? .photoToGallery : .none
         case .doubleTap: return mayShootAlone(context) && context.allowsPhoto ? .photoToGallery : .none
         case .longPress: return mayShootAlone(context) && context.allowsVideo ? .filmToGallery : .none
         case .pinch: return .zoom
@@ -212,6 +233,7 @@ nonisolated enum ComposerCaptureGesture {
     private static func editing(zone: ComposerCaptureZone, gesture: ComposerCaptureGestureKind) -> ComposerCaptureAction {
         switch (zone, gesture) {
         case (.scene, .drag), (.scene, .pinch): return .reframe
+        case (.scene, .tap): return .toggleEditChrome
         case (.otherThumbnail, .tap): return .select
         case (.rail, .tap): return .openFamily
         default: return .none

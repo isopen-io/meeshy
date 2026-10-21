@@ -93,8 +93,7 @@ final class NotificationGapResyncCoordinator {
         let work = resync
         let delay = debounce
         debounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            guard !Task.isCancelled, self != nil else { return }
+            guard await cancellableSleep(for: .seconds(delay)), !Task.isCancelled, self != nil else { return }
             await work()
         }
     }
@@ -139,5 +138,5 @@ final class NotificationGapResyncCoordinator {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let notifResync = Logger(subsystem: "me.meeshy.app", category: "notif-resync")
+    nonisolated static let notifResync = MeeshyLog.logger(.notifResync)
 }

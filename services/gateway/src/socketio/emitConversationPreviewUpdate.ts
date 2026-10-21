@@ -19,6 +19,7 @@ import type { ServerEmitIO } from './serverEmit';
 import { withOrphanedSenderRepair } from '../services/messaging/withOrphanedSenderRepair';
 import { loadViewOnceConsumptions, viewOnceConsumptionKey } from '../services/messaging/readViewOnceConsumption';
 import { withoutCaptureNotices } from '../services/messaging/captureNoticeVisibility';
+import { loadSealedQuoteAudience, quotedDeathFor } from './quotedEphemeralAudience';
 
 /**
  * Minimal Socket.IO surface used by this helper. Kept structural so the
@@ -78,6 +79,8 @@ const PREVIEW_MESSAGE_SELECT = {
   messageSource: true,
   effectFlags: true,
   forwardedFromId: true,
+  // #8686 — la chaîne citée : une réponse morte pour un lecteur lui part « expirée ».
+  replyToId: true,
   sender: { select: PREVIEW_MEDIA_SENDER_SELECT },
   // Bornée, plus plafonnée à 1 : le résumé (« 3 photos · 1,4 Mo ») lit
   // TOUTES les pièces jointes ; le groupe n'en sert que la première en détail.
@@ -142,6 +145,7 @@ type PreviewMessage = {
   messageSource?: string | null;
   effectFlags?: number | null;
   forwardedFromId?: string | null;
+  replyToId?: string | null;
   sender?: { displayName?: string | null; userId?: string | null; user?: { displayName?: string | null } | null } | null;
   attachments?: readonly PreviewMediaAttachmentInput[];
   _count?: { attachments?: number } | null;
@@ -411,6 +415,21 @@ export async function emitConversationPreviewUpdate(
       onError,
     );
 
+    // #8686 — une réponse meurt, pour son lecteur, avec ce qu'elle cite (#8630) :
+    // sa ligne part « expirée », comme `GET /conversations` la sert. Une lecture
+    // par message cité distinct ; aucune pour une page sans réponse.
+    const quoting = new Map(
+      served.flatMap((p) => {
+        const own = ownMessageOf(p.id);
+        return own?.replyToId ? [[own.id, own.replyToId] as const] : [];
+      }),
+    );
+    const quotedDeaths = new Map(
+      await Promise.all(
+        [...quoting].map(async ([messageId, replyToId]) => [messageId, await loadSealedQuoteAudience(prisma, { id: replyToId })] as const),
+      ),
+    );
+
     for (const { room, participant } of participantUserRoomTargets(served)) {
       // La sonde a pu échouer (carte vide, aperçu global pour tous) : sous un
       // plancher, l'aperçu global est précisément ce que ce lecteur n'a pas le
@@ -426,6 +445,7 @@ export async function emitConversationPreviewUpdate(
       const own = ownMessageOf(participant.id);
       const group = resolveLastMessagePreviewGroup(participant, own, new Date(), {
         viewOnceConsumed: own !== null && consumed.has(viewOnceConsumptionKey({ messageId: own.id, participantId: participant.id })),
+        quotedDeathAt: own ? quotedDeathFor(quotedDeaths.get(own.id), participant) : null,
       });
       if (wantedLanguage != null && !carriesLanguage(group.lastMessageTranslations, wantedLanguage)) continue;
       io.to(room).emit(SERVER_EVENTS.CONVERSATION_UPDATED, {

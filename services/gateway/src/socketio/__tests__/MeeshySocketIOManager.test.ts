@@ -82,6 +82,7 @@ jest.mock('../../services/MaintenanceService', () => ({
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
       setSessionRevoker: jest.fn(),
+      setShareLinkRevocationLive: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),
@@ -91,6 +92,7 @@ let mockStatusServiceInstance: any;
 jest.mock('../../services/StatusService', () => ({
   StatusService: jest.fn().mockImplementation(() => {
     mockStatusServiceInstance = {
+      setPresenceCallback: jest.fn(),
       updateUserOnline: jest.fn().mockResolvedValue(undefined),
       updateUserOffline: jest.fn().mockResolvedValue(undefined),
     };
@@ -207,8 +209,11 @@ jest.mock('../handlers/LocationHandler', () => ({
 
 let mockAuthHandlerInstance: any;
 jest.mock('../handlers/AuthHandler', () => ({
-  AuthHandler: jest.fn().mockImplementation(() => {
+  AuthHandler: jest.fn().mockImplementation((deps: any) => {
     mockAuthHandlerInstance = {
+      // #10575 — par défaut, toute socket connectée est au premier plan.
+      isPresent: jest.fn((key: string) => deps.connectedUsers.has(key)),
+      handleAppState: jest.fn().mockResolvedValue(undefined),
       handleTokenAuthentication: jest.fn(),
       handleManualAuthentication: jest.fn().mockResolvedValue(undefined),
       handleHeartbeat: jest.fn().mockResolvedValue(undefined),
@@ -647,6 +652,34 @@ describe('MeeshySocketIOManager', () => {
       expect(mockMaintenanceServiceInstance.setStatusBroadcastCallback).toHaveBeenCalledWith(expect.any(Function));
     });
 
+    // #10575 — le battement d'un connecté passif rediffuse sa présence ; le
+    // StatusService de la socket n'avait aucun rappel, et ce battement-là
+    // n'atteignait personne.
+    it('wires the socket StatusService heartbeat to the user:status broadcast', async () => {
+      expect(mockStatusServiceInstance.setPresenceCallback).toHaveBeenCalledWith(expect.any(Function));
+      const broadcast = jest.spyOn(manager as any, '_broadcastUserStatus').mockResolvedValue(undefined);
+      mockAuthHandlerInstance.isPresent.mockReturnValue(true);
+      const callback = mockStatusServiceInstance.setPresenceCallback.mock.calls[0][0];
+
+      callback('user-beat', true, false);
+
+      expect(broadcast).toHaveBeenCalledWith('user-beat', true, false);
+      broadcast.mockRestore();
+    });
+
+    // Un battement dont l'écriture finit APRÈS l'annonce du départ ne rallume
+    // pas la pastille d'un utilisateur parti en arrière-plan (audit adverse).
+    it('drops a heartbeat « online » for a user who is no longer in the foreground', () => {
+      const broadcast = jest.spyOn(manager as any, '_broadcastUserStatus').mockResolvedValue(undefined);
+      mockAuthHandlerInstance.isPresent.mockReturnValue(false);
+      const callback = mockStatusServiceInstance.setPresenceCallback.mock.calls[0][0];
+
+      callback('user-hidden', true, false);
+
+      expect(broadcast).not.toHaveBeenCalled();
+      broadcast.mockRestore();
+    });
+
     it('registers isCurrentlyConnected predicate on MaintenanceService', () => {
       expect(mockMaintenanceServiceInstance.setIsCurrentlyConnected).toHaveBeenCalledWith(expect.any(Function));
     });
@@ -656,6 +689,14 @@ describe('MeeshySocketIOManager', () => {
     // producteur du révocateur est le manager (il tient `io`).
     it('registers a session revoker on MaintenanceService', () => {
       expect(mockMaintenanceServiceInstance.setSessionRevoker).toHaveBeenCalledWith(expect.any(Function));
+    });
+
+    // #10440 — le balayage journalier révoque les invités d'un lien expiré par
+    // `revokeShareLinkGuests` : il lui faut le vivant que seul le manager tient.
+    it('gives MaintenanceService the live io and manager for share-link revocation', () => {
+      const live = mockMaintenanceServiceInstance.setShareLinkRevocationLive.mock.calls[0][0];
+      expect(live.resolveIO()).toBe(manager.getIO());
+      expect(live.resolveManager()).toBe(manager);
     });
 
     it('wires CallEventsHandler message broadcaster', () => {
@@ -746,6 +787,16 @@ describe('MeeshySocketIOManager', () => {
 
     it('isPresenceOnline returns false for disconnected user', () => {
       expect(manager.isPresenceOnline('user-Z')).toBe(false);
+    });
+
+    // #10575 — connecté n'est pas présent : un onglet caché garde sa socket.
+    it('presence reads the foreground law, not the connection map', () => {
+      mockAuthHandlerInstance.isPresent.mockImplementation((key: string) => key === 'user-B');
+
+      expect(manager.isPresenceOnline('user-A')).toBe(false);
+      expect(manager.getPresenceForIds(['user-A', 'user-B'])).toEqual(new Map([['user-A', false], ['user-B', true]]));
+      expect(manager.listOnlineAmong(['user-A', 'user-B'])).toEqual(['user-B']);
+      expect((manager as any).isUserConnected('user-A')).toBe(true);
     });
 
     it('getPresenceForIds returns correct map', () => {
@@ -1096,6 +1147,15 @@ describe('MeeshySocketIOManager', () => {
       socket._connHandlers['packet']({ type: 'pong' });
 
       expect(mockAuthHandlerInstance.handleEnginePong).toHaveBeenCalledWith(socket);
+    });
+
+    it('routes presence:app-state to authHandler.handleAppState', () => {
+      const socket = makeSocket();
+      triggerConnection(socket);
+
+      socket._handlers[CLIENT_EVENTS.PRESENCE_APP_STATE]({ foreground: false });
+
+      expect(mockAuthHandlerInstance.handleAppState).toHaveBeenCalledWith(socket, { foreground: false });
     });
 
     it('ignores non-pong engine packets', () => {
@@ -5152,13 +5212,13 @@ describe('MeeshySocketIOManager', () => {
       disconnectRevokedSessions.mockClear();
       const revoke = mockMaintenanceServiceInstance.setSessionRevoker.mock.calls[0][0];
       await revoke('user-expired');
-      expect(disconnectRevokedSessions).toHaveBeenCalledTimes(1);
-      expect(disconnectRevokedSessions).toHaveBeenCalledWith(expect.objectContaining({
+      expect(disconnectRevokedSessions.mock.calls).toEqual([[{
         io: (manager as any).io,
         userId: 'user-expired',
         reason: 'logout_all_devices',
+        message: expect.any(String),
         onError: expect.any(Function),
-      }));
+      }]]);
     });
 
     it('setIsCurrentlyConnected callback returns true for connected user', () => {
@@ -6348,6 +6408,7 @@ describe('MeeshySocketIOManager', () => {
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
         setSessionRevoker: jest.fn(),
+        setShareLinkRevocationLive: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);
@@ -7645,6 +7706,7 @@ describe('MeeshySocketIOManager', () => {
         setStatusBroadcastCallback: jest.fn(),
         setIsCurrentlyConnected: jest.fn(),
         setSessionRevoker: jest.fn(),
+        setShareLinkRevocationLive: jest.fn(),
       }));
 
       const m = new MeeshySocketIOManager({} as any, prisma as any, makeTranslationService() as any);

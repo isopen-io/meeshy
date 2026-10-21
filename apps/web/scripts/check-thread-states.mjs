@@ -32,6 +32,7 @@ import {
   TRANSLATED_UNVEILED_WITNESS_ID,
   checkProtectionStates,
 } from './lib/check-protection-states.mjs';
+import { reportFailures } from './lib/ci-annotation.mjs';
 
 const DIST = join(fileURLToPath(new URL('..', import.meta.url)), 'dist');
 /* Le serveur vit dans `lib/` depuis #6988 : celui qui était écrit ici
@@ -383,19 +384,22 @@ await checkProtectionStates({ browser, BASE, expect });
   await menuPage.keyboard.press('Escape');
   await awaitFact(cluster, { state: 'detached' });
 
-  // 6.5 — L'APPUI LONG (500 ms, souris tenue) ouvre le même menu, et le geste
-  // ne laisse AUCUNE sélection de texte native derrière lui.
+  // 6.5 — L'APPUI LONG (`LONG_PRESS_MS`, 350 ms depuis #11207 — D-209 —,
+  // souris tenue) ouvre le même menu, et le geste ne laisse AUCUNE sélection
+  // de texte native derrière lui.
   await rows.nth(0).scrollIntoViewIfNeeded();
   await rows.nth(0).hover();
   // DÉLAI DE GESTE, pas d'état (#7054) : le temps tenu EST l'entrée — le
-  // seuil d'appui long (500 ms) se mesure en le TENANT, aucun fait ne le
-  // remplace. La seule occurrence autorisée par `no-fixed-delays.test.ts`.
+  // seuil d'appui long (`LONG_PRESS_MS`, `src/lib/view/long-press.ts`) se
+  // mesure en le TENANT, aucun fait ne le remplace ; 700 ms le dépassent avec
+  // la marge d'un moteur chargé. La seule occurrence autorisée par
+  // `no-fixed-delays.test.ts`.
   await menuPage.mouse.down();
   await menuPage.waitForTimeout(700);
   await menuPage.mouse.up();
   const longPressOpened = expect(
     (await awaitFact(cluster)) && (await cluster.count()) === 1,
-    'un appui tenu 500 ms ouvre le menu',
+    'un appui tenu au-delà de LONG_PRESS_MS ouvre le menu',
   );
   expect(
     await menuPage.evaluate(() => (window.getSelection()?.toString() ?? '') === ''),
@@ -517,16 +521,21 @@ await checkProtectionStates({ browser, BASE, expect });
   }
 
   /**
-   * 6.10 bis — « TRANSFÉRER » ARME LA SÉLECTION, ET LA BARRE OUVRE LES
-   * DESTINATAIRES (#5866, décision porteur #5989).
+   * 6.10 bis — « TRANSFÉRER » OUVRE L'ÉCRAN DE PARTAGE UNIQUE (D1, #10949).
    *
-   * Le porteur a tranché : la porte « Transférer » a le MÊME effet que
-   * « Sélectionner », avec ce message déjà coché — pas un sélecteur de
-   * conversations qui s'ouvre d'un coup. Ce témoin mesure LES DEUX ÉTAPES,
-   * parce que la première seule ne distingue pas le geste voulu d'un
-   * « Transférer » qui aurait simplement été câblé sur « Sélectionner » par
-   * erreur : c'est la SECONDE qui prouve que le mot mène quelque part.
+   * Le porteur a révisé #5989 le 2026-10-18 : « Transférer » ouvre l'écran de
+   * partage unique depuis TOUTES les portes, ce message déjà choisi ; la
+   * sélection multiple reste le geste « Sélectionner ». Le témoin mesure donc
+   * les deux moitiés de D1 : la barre de sélection garde son « Transférer »
+   * (le transfert de plusieurs messages), et l'entrée du menu ouvre les
+   * destinataires SANS armer de sélection — sans cette seconde assertion, une
+   * porte restée sur l'ancien geste verdirait dès que la feuille finit par
+   * s'ouvrir depuis la barre.
    */
+  expect(
+    (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).getByRole('button', { name: 'Transférer' }).count()) === 1,
+    'la barre de sélection porte « Transférer » (le transfert de plusieurs messages, D1)',
+  );
   /* ON QUITTE LA SÉLECTION PAR SON PROPRE GESTE — Échap ne la ferme pas, et
      `openMenuFor` REFUSE d'ouvrir un menu tant qu'une sélection est armée
      (`use-message-menu.ts`, « en sélection, un tap bascule déjà »). Sans ce
@@ -544,8 +553,8 @@ await checkProtectionStates({ browser, BASE, expect });
      était le seul resté sur l'ancien contrat. */
   /* « Transférer » ouvre désormais un SOUS-MENU (#9039) : Transférer /
      Imager la discussion. Le témoin mesure les deux : le sous-menu porte
-     bien « Imager la discussion », et son « Transférer » garde l'effet tranché
-     par #5989. */
+     bien « Imager la discussion », et son « Transférer » ouvre l'écran de
+     partage unique (D1, #10949, qui révise #5989). */
   if (await clickMenuItem('forward')) {
     const forwardPanel = menuPage.locator('.message-menu-list[data-message-menu-forward]');
     await awaitFact(forwardPanel);
@@ -554,27 +563,17 @@ await checkProtectionStates({ browser, BASE, expect });
       '« Transférer » ouvre son sous-menu, avec « Imager la discussion » (#9039)',
     );
     await forwardPanel.locator('[role="menuitem"][data-action="forward"]').first().click();
-    await awaitFact(menuPage.getByRole('toolbar', { name: 'Sélection de messages' }));
-    expect(
-      (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 1,
-      '« Transférer » arme la sélection multiple (décision #5989)',
-    );
-    expect(
-      (await menuPage.locator('[role="checkbox"][aria-checked="true"]').count()) === 1,
-      '« Transférer » coche CE message, et lui seul',
-    );
-    const forwardButton = menuPage
-      .getByRole('toolbar', { name: 'Sélection de messages' })
-      .getByRole('button', { name: 'Transférer' });
-    expect((await forwardButton.count()) === 1, 'la barre de sélection porte « Transférer »');
-    await forwardButton.click();
     /* Le FAIT est la feuille de destinataires — pas un état qui se stabilise :
        `useConversations` sert le cache tout de suite quand il en a, et
        n'attend le réseau que sur un cache vide (cache-first, D-113). */
     await awaitFact(menuPage.locator('[data-send-target]').first());
     expect(
       (await menuPage.locator('[data-send-target]').count()) > 0,
-      'valider ouvre la feuille de destinataires, avec au moins une conversation',
+      '« Transférer » ouvre l’écran de partage unique, avec au moins une conversation (D1, #10949)',
+    );
+    expect(
+      (await menuPage.getByRole('toolbar', { name: 'Sélection de messages' }).count()) === 0,
+      '« Transférer » n’arme plus la sélection multiple — elle reste « Sélectionner » (D1, #10949)',
     );
   }
 
@@ -912,7 +911,7 @@ if (failures.length > 0) {
   // SEULE ligne qui reste visible quel que soit le bruit qui précède
   // (défaut #5676 revue 3, flake non identifiable dans check-thread-states.mjs).
   console.error(`\n  ${failures.length} état(s) du fil non tenus :\n`);
-  for (const what of failures) console.error(`    - ${what}`);
+  reportFailures({ gate: 'check-thread-states', failures, bullet: '-' });
   console.error('');
   process.exit(1);
 }

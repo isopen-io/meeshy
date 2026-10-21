@@ -65,6 +65,25 @@ export const GAME_INTEGRATION_ROUTES = {
 
 export const GAME_INTEGRATION_ROUTE_METHODS = { settings: 'GET', userGame: 'GET' } as const satisfies Record<keyof typeof GAME_INTEGRATION_ROUTES, 'GET'>;
 
+/**
+ * LES MOMENTS PHOTO ET LES CADRES (#10162, L10a) : une table À PART, comme `GAME_INTEGRATION_ROUTES` —
+ * `GameRoutesTests.swift` compte les entrées de `GAME_ROUTES`, et ces routes n'y changent rien.
+ */
+export const GAME_PHOTO_ROUTES = {
+  /** Choisir son atmosphère de cadres, qui INSTALLE aussi son pack. PUT. */
+  frameAtmosphere: '/me/game/frames/atmosphere',
+  /** « Me proposer d'immortaliser » : chaque étape, les grands moments, jamais. PUT. */
+  photoInvitations: '/me/game/photo-moments/invitations',
+  /** Accuser la présentation d'étapes (au plus 64), idempotent. POST. */
+  photoPresented: '/me/game/photo-moments/presented',
+} as const;
+
+export const GAME_PHOTO_ROUTE_METHODS = {
+  frameAtmosphere: 'PUT',
+  photoInvitations: 'PUT',
+  photoPresented: 'POST',
+} as const satisfies Record<keyof typeof GAME_PHOTO_ROUTES, 'PUT' | 'POST'>;
+
 export type GameRouteKey = keyof typeof GAME_ROUTES;
 
 /** La méthode HTTP de chaque route NOUVELLE — les anciennes gardent la leur. */
@@ -138,6 +157,15 @@ export const GAME_ERROR_CODES = {
   sealAlreadyOwned: 'SEAL_ALREADY_OWNED',
   prestigeLevelTooLow: 'PRESTIGE_LEVEL_TOO_LOW',
   prestigeAtMaximum: 'PRESTIGE_AT_MAXIMUM',
+  /**
+   * La frappe ferait entrer dans une réserve du trésor que le rang de Gloire n'ouvre pas encore (#10848). Le refus
+   * porte `details` : `{ tier, minHeld, requires: { rank, division, division5 } }`.
+   */
+  treasuryLocked: 'TREASURY_LOCKED',
+  /** La frappe est refusée tant qu'une dette d'étincelles existe (porteur, 2026-10-16). Le refus porte `{ sparksDebt }` à la racine. */
+  mintBlockedByDebt: 'MINT_BLOCKED_BY_DEBT',
+  /** Le prix rejugé dépasse la garde `maxPrice` du client (#10903). Le refus porte `{ number, price, basePrice, costFactor }` à la racine. */
+  priceChanged: 'PRICE_CHANGED',
 } as const;
 
 export type GameErrorCode = (typeof GAME_ERROR_CODES)[keyof typeof GAME_ERROR_CODES];

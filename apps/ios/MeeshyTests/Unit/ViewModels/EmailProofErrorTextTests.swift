@@ -121,7 +121,7 @@ private final class RejectingConfirmer: EmailVerificationConfirming {
     let error: Error
     init(error: Error) { self.error = error }
     func verifyEmail(_ request: EmailVerificationRequest) async throws -> EmailProvenSession? { throw error }
-    func openSession(_ proven: EmailProvenSession) {}
+    func openSession(_ proven: EmailProvenSession) -> Bool { false }
 }
 
 private final class IdleWatcher: EmailVerificationWatching, @unchecked Sendable {

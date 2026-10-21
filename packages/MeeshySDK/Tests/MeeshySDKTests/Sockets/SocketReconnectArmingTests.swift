@@ -141,3 +141,38 @@ final class SocketReconnectArmingTests: XCTestCase {
         )
     }
 }
+
+/// Un salon de publication se tient par ÉCRAN : la feuille de commentaires fermée par-dessus un réel ne doit pas
+/// faire quitter le salon que le réel, resté visible, tient encore.
+@MainActor
+final class SocialPostRoomHoldingTests: XCTestCase {
+
+    override func setUp() async throws {
+        try await super.setUp()
+        SocialSocketManager.shared.disconnect()
+    }
+
+    override func tearDown() async throws {
+        SocialSocketManager.shared.disconnect()
+        try await super.tearDown()
+    }
+
+    func test_aRoomHeldByTwoScreens_survivesTheFirstLeave() {
+        let sut = SocialSocketManager.shared
+        sut.joinPostRoom(postId: "reel-1")       // le lecteur de réels
+        sut.joinPostRoom(postId: "reel-1")       // la feuille de commentaires
+        sut.leavePostRoom(postId: "reel-1")      // la feuille se ferme
+        XCTAssertEqual(sut.postRoomsToRejoinOnConnect(), ["reel-1"], "le réel visible tient toujours son salon")
+        sut.leavePostRoom(postId: "reel-1")
+        XCTAssertEqual(sut.postRoomsToRejoinOnConnect(), [])
+    }
+
+    func test_anUnheldRoom_leavesNothingBehind() {
+        let sut = SocialSocketManager.shared
+        sut.leavePostRoom(postId: "ghost")
+        sut.joinPostRoom(postId: "a")
+        sut.leavePostRoom(postId: "a")
+        sut.leavePostRoom(postId: "a")
+        XCTAssertEqual(sut.postRoomsToRejoinOnConnect(), [])
+    }
+}

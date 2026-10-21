@@ -1,4 +1,4 @@
-import { navigate } from '@/lib/router';
+import { openNotificationTarget } from './open-target';
 
 /**
  * LE TAP D'UNE BANNIÈRE SYSTÈME ABOUTIT, MÊME APPLICATION OUVERTE (#7305).
@@ -54,6 +54,6 @@ export function listenNotificationTapsInBrowser(): void {
       'serviceWorker' in navigator
         ? (navigator.serviceWorker as unknown as TapNavigationEnvironment['container'])
         : undefined,
-    navigate: (url) => navigate(url),
+    navigate: openNotificationTarget,
   });
 }

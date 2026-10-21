@@ -16,7 +16,7 @@ import {
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { shareLinkSchema } from './types';
-import { revokeShareLinkGuests } from '../../socketio/revokeShareLinkGuests';
+import { closeShareLinkRevokingGuests } from '../../socketio/closeShareLinkRevokingGuests';
 import { depreciee } from '../../utils/deprecation';
 // #4170 — le bloc « charger par linkId public + décider créateur/modérateur »
 // vivait quatre fois (ici trois, plus le PATCH générique de `management.ts`) ;
@@ -524,16 +524,17 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
       // révocation + `update` NU parce que sa réponse ne porte que son
       // message : lui faire traverser `applyShareLinkUpdate` la ferait payer
       // la projection `include` que personne ne lit ici.
-      await revokeShareLinkGuests({
+      // #10470 — un gros lien est fermé sans attendre l'éviction de ses
+      // invités (`closeShareLinkRevokingGuests`).
+      await closeShareLinkRevokingGuests({
         prisma: fastify.prisma,
         io: fastify.socketIOHandler?.getManager()?.getIO(),
         manager: fastify.socketIOHandler?.getManager(),
         shareLinkId: loaded.id,
-      });
-
-      await fastify.prisma.conversationShareLink.update({
-        where: { id: loaded.id },
-        data: { isActive: false },
+        close: (mark) => fastify.prisma.conversationShareLink.update({
+          where: { id: loaded.id },
+          data: { isActive: false, ...mark },
+        }),
       });
 
       return sendSuccess(reply, { message: 'Lien fermé avec succès' });

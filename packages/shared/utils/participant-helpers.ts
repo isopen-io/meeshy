@@ -105,6 +105,39 @@ export const resolveAnonymousSenderIdentity = (participant: {
   return { displayName: givenName || pseudo, username: pseudo };
 };
 
+type AnonymousSessionNames = {
+  readonly profile?: {
+    readonly firstName?: string | null;
+    readonly lastName?: string | null;
+  } | null;
+};
+
+/**
+ * L'auteur d'un message NEUF tel qu'il part vers les clients (#10120) — la
+ * réponse de `POST /conversations/:id/messages`, l'accusé de `message:send` et
+ * `message:new`. Même forme que la liste des messages : pour un invité, le nom
+ * DONNÉ en `displayName` et le pseudo `ano_…` en `username`, résolus par
+ * `resolveAnonymousSenderIdentity` ; le profil de session ne sort jamais.
+ *
+ * Idempotente : un auteur sans `anonymousSession` (un compte, ou un invité
+ * déjà servi) repart tel quel — les deux producteurs de `message:new` la
+ * rejouent sur la réponse déjà servie.
+ */
+export const servedMessageSender = <
+  T extends {
+    readonly type?: string | null;
+    readonly displayName?: string | null;
+    readonly anonymousSession?: AnonymousSessionNames | null;
+  },
+>(
+  sender: T,
+): Omit<T, 'anonymousSession'> & { readonly username?: string } => {
+  const { anonymousSession, ...rest } = sender;
+  if (sender.type !== 'anonymous' || anonymousSession === undefined || anonymousSession === null) return rest;
+  const identity = resolveAnonymousSenderIdentity(sender);
+  return { ...rest, displayName: identity.displayName, username: identity.username };
+};
+
 /**
  * Forme minimale d'un rang `Participant` sérialisable vers le fil. Structurelle
  * — la fabrique ne dépend pas du client Prisma, elle ne lit que ce qu'elle

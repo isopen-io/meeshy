@@ -1,6 +1,7 @@
 // apps/ios/Meeshy/Features/Main/Views/MessageListLayout.swift
 
 import UIKit
+import MeeshySDK
 
 /// **Loi pure de stabilité du champ visuel** de la liste de messages
 /// (chasse Fable 2026-08-16, causes n°1 et n°2 restantes du chantier Focal).
@@ -339,11 +340,12 @@ final class MessageListLayout: UICollectionViewCompositionalLayout {
     }
 
     private var recoveryRetryScheduled = false
+    private let delays = DelayedActions()
 
     private func scheduleRecoveryRetry() {
         guard !recoveryRetryScheduled else { return }
         recoveryRetryScheduled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.recoveryRetryInterval) { [weak self] in
+        delays.run(after: .seconds(Self.recoveryRetryInterval)) { [weak self] in
             guard let self else { return }
             self.recoveryRetryScheduled = false
             guard self.recoveryInvalidationPending else { return }

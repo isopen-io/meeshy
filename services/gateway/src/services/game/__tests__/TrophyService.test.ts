@@ -14,6 +14,9 @@ jest.mock('../../preferences/privacy-cache', () => ({
   loadPrivacyPreferencesCached: async (_prisma: unknown, ids: string[]) => new Map(ids.map((id) => [id, {}])),
 }));
 
+/** Après tous les trophées gravés dans ces témoins (le dernier en décembre 2026). */
+const AFTER_AWARDS = new Date('2027-01-15T12:00:00Z');
+
 const setup = () => {
   const db = fakeGameDb();
   seedUser(db, {}, USER);
@@ -46,9 +49,10 @@ describe('TrophyService.showcaseFor', () => {
     db.friendRequest.rows.push({ id: 'f', status: 'accepted', senderId: OTHER, receiverId: USER });
     await service.award(USER, seasonCupTrophy(1), new Date('2026-12-06T21:45:00Z'));
 
-    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER });
+    // Lu APRÈS le mois d'obtention : un visiteur ne voit un trophée qu'au 1er du mois suivant (#10240).
+    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER, now: AFTER_AWARDS });
 
-    expect(view).toEqual({ visible: true, items: [{ key: 'trophy.season-cup.1', awardedMonth: '2026-12' }], order: ['trophy.season-cup.1'] });
+    expect(view).toEqual({ visible: true, items: [{ key: 'trophy.season-cup.1', awardedMonth: '2026-12' }], order: ['trophy.season-cup.1'], constellation: { stars: 0 } });
     expect(JSON.stringify(view)).not.toContain('06T21');
   });
 
@@ -65,7 +69,8 @@ describe('TrophyService.showcaseFor', () => {
     await service.award(USER, leagueCupTrophy({ weekKey: '2026-10-12', league: 'quartz', cup: 'bronze' }), new Date('2026-10-18T00:00:00Z'));
     db.gameProfile.rows.push({ id: 'p', userId: USER, showcaseOrder: ['trophy.league-cup.2026-10-12.quartz.bronze'] });
 
-    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER });
+    // Lu APRÈS le mois d'obtention : un visiteur ne voit un trophée qu'au 1er du mois suivant (#10240).
+    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER, now: AFTER_AWARDS });
 
     expect(view.order).toEqual(['trophy.league-cup.2026-10.quartz.bronze', 'trophy.season-cup.1']);
   });
@@ -78,7 +83,8 @@ describe('TrophyService.showcaseFor', () => {
     await service.award(USER, seasonCupTrophy(1), new Date('2026-12-06T21:45:00Z'));
     db.gameProfile.rows.push({ id: 'p', userId: USER, showcaseOrder: ['trophy.league-cup.2026-09-28.jade.gold'] });
 
-    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER });
+    // Lu APRÈS le mois d'obtention : un visiteur ne voit un trophée qu'au 1er du mois suivant (#10240).
+    const view = await service.showcaseFor({ viewer: { userId: OTHER, role: 'USER' }, targetId: USER, now: AFTER_AWARDS });
 
     expect(JSON.stringify(view)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(view.items).toEqual([

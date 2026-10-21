@@ -41,7 +41,10 @@ struct VideoAvailabilityResolver<Content: View>: View {
     let mayAutoStart: Bool
     let content: (VideoAvailability, @escaping () -> Void) -> Content
 
-    @State private var resolvedAvailability: VideoAvailability = .needsDownload
+    /// `nil` tant que la tâche n'a pas résolu : le premier rendu lit alors le
+    /// disque en synchrone (`VideoAvailability.atFirstRender`), si bien qu'une
+    /// vidéo déjà téléchargée ne se dessine jamais « ↓ » (#10370).
+    @State private var resolvedAvailability: VideoAvailability?
     @StateObject private var downloader = AttachmentDownloader()
 
     private var availability: VideoAvailability {
@@ -51,7 +54,7 @@ struct VideoAvailabilityResolver<Content: View>: View {
         if downloader.isCached {
             return .ready
         }
-        return resolvedAvailability
+        return resolvedAvailability ?? VideoAvailability.atFirstRender(for: attachment)
     }
 
     init(
@@ -76,8 +79,9 @@ struct VideoAvailabilityResolver<Content: View>: View {
             // (galerie, autre cellule) s'affiche ici, et sa fin la rend
             // « prête » sans re-télécharger (#7492).
             downloader.observe(attachment)
-            resolvedAvailability = await Self.resolveStatic(attachment)
-            if case .needsDownload = resolvedAvailability,
+            let resting = await Self.resolveStatic(attachment)
+            resolvedAvailability = resting
+            if case .needsDownload = resting,
                !downloader.isDownloading,
                !downloader.isCached {
                 let condition = NetworkConditionMonitor.shared.condition
@@ -119,6 +123,24 @@ struct VideoAvailabilityResolver<Content: View>: View {
 }
 
 extension VideoAvailability {
+    /// **La disponibilité au PREMIER rendu se lit sur le disque** (#10370),
+    /// comme celle d'un vocal (#7660) : un `stat` synchrone par la règle
+    /// unique `AttachmentDownloadCenter.isOnDevice`. Sans elle, la vidéo
+    /// partait de `.needsDownload` et montrait « ↓ » jusqu'au retour de
+    /// `resting(for:)`, même déjà téléchargée.
+    nonisolated static func atFirstRender(
+        for attachment: MessageAttachment,
+        stat: (String, AttachmentDownloadCenter.CacheStoreKind) -> Bool = {
+            AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1)
+        },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> VideoAvailability {
+        let onDevice = AttachmentDownloadCenter.isOnDevice(
+            urlString: attachment.fileUrl, kind: .video, stat: stat, fileExists: fileExists
+        )
+        return onDevice ? .ready : .needsDownload
+    }
+
     /// La disponibilité AU REPOS d'une vidéo — fichier local ou cache vidéo.
     /// Site UNIQUE (#7492) : la galerie plein écran en tenait une copie.
     static func resting(for attachment: MessageAttachment) async -> VideoAvailability {

@@ -3,12 +3,12 @@ import type { StoreApi } from 'zustand/vanilla';
 
 import type { ConversationStoreState, OverrideKey } from '@/lib/conversation-store';
 import { effectiveFlagsOf, effectiveUnreadOf } from '@/lib/conversation-store';
-import type { RowActionId } from '@/lib/view/row-actions';
+import type { RowFlagActionId } from '@/lib/view/row-actions';
 
-import { findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
+import { conversationQueryKey, findCachedConversation, patchConversation, patchConversationDetail, type ConversationsDeps } from './conversations';
 import { toDate } from './decode';
 import { outcomeOf } from './outcome';
-import { pushConversationFlags, pushRead, pushUnread } from './preferences';
+import { pushConversationFlags, pushRead, pushUnread, type ConversationPreferencePatch } from './preferences';
 import { caughtUpConversation } from './receipts';
 import type { Conversation } from './types';
 
@@ -52,7 +52,7 @@ type ActionPlan = {
 
 function planOf(params: {
   readonly conversationId: string;
-  readonly action: RowActionId;
+  readonly action: RowFlagActionId;
   readonly conversation: Conversation;
   readonly deps: ConversationActionDeps;
   readonly store: ConversationStoreState;
@@ -74,10 +74,9 @@ function planOf(params: {
       request: gateway ? () => pushConversationFlags(transport, conversationId, { [field]: next }) : null,
       applyConfirmed: (result) => {
         const confirmed = successDataOf(result) ?? { [field]: next };
-        patchConversation(queryClient, conversationId, (c) => ({
-          ...c,
-          userPreferences: [{ ...preferenceEntryOf(c), ...confirmed }],
-        }));
+        const apply = (c: Conversation): Conversation => ({ ...c, userPreferences: [{ ...preferenceEntryOf(c), ...confirmed }] });
+        patchConversation(queryClient, conversationId, apply);
+        patchConversationDetail(queryClient, conversationId, apply);
       },
     };
   }
@@ -130,11 +129,14 @@ function readThroughLastMessage(row: Conversation): (conversation: Conversation)
  */
 export async function performRowAction(params: {
   readonly conversationId: string;
-  readonly action: RowActionId;
+  readonly action: RowFlagActionId;
   readonly deps: ConversationActionDeps;
 }): Promise<void> {
   const { conversationId, action, deps } = params;
-  const conversation = findCachedConversation(deps.queryClient, conversationId);
+  /* La feuille de détails d'un fil ouvert par son adresse (#7836) : la liste
+     n'est pas encore chargée, le cache du FIL connaît la conversation. */
+  const conversation =
+    findCachedConversation(deps.queryClient, conversationId) ?? deps.queryClient.getQueryData<Conversation>(conversationQueryKey(conversationId));
   if (conversation === undefined) return;
 
   const store = deps.store.getState();
@@ -157,4 +159,39 @@ export async function performRowAction(params: {
   }
   plan.applyConfirmed(result);
   deps.store.getState().clearOverride(conversationId, plan.keys);
+}
+
+/**
+ * `performPreferenceAction` (#10593) — favori, catégorie, nom personnel, par
+ * la MÊME loi que les drapeaux : correction optimiste dans le store, PUT
+ * PARTIEL (`PUT /user-preferences/conversations/:id`, le seul champ touché),
+ * puis la valeur SERVIE gagne (2xx, liste ET fiche du fil), le refus défait
+ * (4xx), la panne garde la correction (réseau, 5xx).
+ */
+export async function performPreferenceAction(params: {
+  readonly conversationId: string;
+  readonly patch: ConversationPreferencePatch;
+  readonly deps: ConversationActionDeps;
+}): Promise<void> {
+  const { conversationId, patch, deps } = params;
+  const keys = Object.keys(patch) as (keyof ConversationPreferencePatch)[];
+  deps.store.getState().setPreference(conversationId, patch);
+  if (deps.source !== 'gateway') return;
+
+  let result: unknown;
+  try {
+    result = await pushConversationFlags(deps.transport, conversationId, patch);
+  } catch {
+    return;
+  }
+
+  const outcome = outcomeOf(result);
+  if (outcome === 'transient') return;
+  if (outcome === 'success') {
+    const confirmed = { ...patch, ...successDataOf(result) };
+    const apply = (c: Conversation): Conversation => ({ ...c, userPreferences: [{ ...preferenceEntryOf(c), ...confirmed }] });
+    patchConversation(deps.queryClient, conversationId, apply);
+    patchConversationDetail(deps.queryClient, conversationId, apply);
+  }
+  deps.store.getState().clearOverride(conversationId, keys);
 }

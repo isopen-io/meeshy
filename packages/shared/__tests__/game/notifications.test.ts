@@ -22,13 +22,14 @@ import { personalMissionPhrase } from '../../utils/game/personal-mission-copy.js
 import { notificationTypeEnum } from '../../utils/notification-type-enum.js';
 
 describe('les types de notification du jeu', () => {
-  it('sont cinq, uniques, déclarés par l’énumération ET par le schéma de validation', () => {
+  it('sont six, uniques, déclarés par l’énumération ET par le schéma de validation', () => {
     expect([...GAME_NOTIFICATION_TYPES]).toEqual([
       'game_duo_invited',
       'game_duo_accepted',
       'game_league_result',
       'game_season_step',
       'game_mission_window',
+      'game_photo_moment',
     ]);
     for (const type of GAME_NOTIFICATION_TYPES) {
       expect(Object.values(NotificationTypeEnum)).toContain(type);
@@ -61,7 +62,7 @@ describe('la préférence « Jeu » (notification.gameEnabled)', () => {
     expect(NotificationPreferenceSchema.strict().parse({ gameEnabled: false }).gameEnabled).toBe(false);
   });
 
-  it('gouverne les cinq types, et eux seuls', () => {
+  it('gouverne les six types, et eux seuls', () => {
     const prefs = { ...NOTIFICATION_PREFERENCE_DEFAULTS, gameEnabled: false } as unknown as NotificationPreference;
     for (const type of GAME_NOTIFICATION_TYPES) expect(isNotificationTypeEnabled(prefs, type)).toBe(false);
     expect(isNotificationTypeEnabled(prefs, 'new_message')).toBe(true);
@@ -106,7 +107,7 @@ describe('les textes', () => {
       expect(text, lang).not.toContain('{');
     }
     expect(notificationString('fr', 'game.missionWindow', { mission: 'envoyer des stickers', start: '18:00', end: '20:00' })).toBe(
-      'Ta mission du jour : envoyer des stickers, entre 18:00 et 20:00.',
+      'Un acte rien que pour toi : envoyer des stickers, entre 18:00 et 20:00.',
     );
   });
 

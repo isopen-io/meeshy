@@ -40,6 +40,9 @@ let package = Package(
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
         .package(url: "https://github.com/stasel/WebRTC", exact: "146.0.0"),
         .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", exact: "1.17.6"),
+        // Le moteur Lottie des stickers, fonds, contours et bannières (#10638) :
+        // un XCFramework précompilé, lié à MeeshyUI seul — jamais aux extensions.
+        .package(url: "https://github.com/airbnb/lottie-spm.git", exact: "4.6.1"),
     ],
     targets: [
         .target(
@@ -49,19 +52,39 @@ let package = Package(
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "WebRTC", package: "WebRTC"),
             ],
+            // `Resources/appearance-catalog.json` n'est PAS une ressource SwiftPM : elle ferait générer
+            // `Bundle.module` ici, ambigu avec celui de MeeshyUI dans tout test qui importe les deux.
+            // Son contenu est embarqué en Swift (`AppearanceCatalogData.swift`), copie gardée identique.
+            exclude: ["Resources"],
             swiftSettings: coreSwiftSettings
         ),
         .target(
             name: "MeeshyUI",
-            dependencies: ["MeeshySDK"],
+            dependencies: [
+                "MeeshySDK",
+                .product(name: "Lottie", package: "lottie-spm"),
+            ],
             resources: [
                 .process("Resources"),
             ],
             swiftSettings: uiSwiftSettings
         ),
+        // #10854 — le sceau réseau de CHAQUE bundle de test du package. Cible
+        // de support : dépendance des seules cibles de test, jamais d'un
+        // produit livré. Le chargeur C pose un constructeur qui s'exécute au
+        // chargement du bundle, avant la première classe de test.
+        .target(
+            name: "MeeshyTestSupportLoader",
+            path: "Sources/MeeshyTestSupportLoader"
+        ),
+        .target(
+            name: "MeeshyTestSupport",
+            dependencies: ["MeeshySDK", "MeeshyTestSupportLoader"],
+            swiftSettings: coreSwiftSettings
+        ),
         .testTarget(
             name: "MeeshySDKTests",
-            dependencies: ["MeeshySDK"],
+            dependencies: ["MeeshySDK", "MeeshyTestSupport"],
             swiftSettings: coreSwiftSettings
         ),
         .testTarget(
@@ -69,6 +92,7 @@ let package = Package(
             dependencies: [
                 "MeeshyUI",
                 "MeeshySDK",
+                "MeeshyTestSupport",
                 .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
             ],
             exclude: ["__Snapshots__"],

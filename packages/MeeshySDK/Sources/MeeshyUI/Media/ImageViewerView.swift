@@ -6,6 +6,9 @@ import MeeshySDK
 // MARK: - Image Viewer View
 
 public struct ImageViewerView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).height }
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
     public var accentColor: String = MeeshyColors.brandPrimaryHex
@@ -51,7 +54,7 @@ public struct ImageViewerView: View {
         case .messageBubble: return 200
         case .composerAttachment: return 80
         case .feedPost: return 350
-        case .storyOverlay, .fullscreen: return WindowMetrics.windowSize.height
+        case .storyOverlay, .fullscreen: return hostHeight
         }
     }
 
@@ -76,12 +79,9 @@ public struct ImageViewerView: View {
         .frame(maxWidth: maxWidth, maxHeight: maxHeight)
         .clipShape(RoundedRectangle(cornerRadius: context.cornerRadius))
         .contentShape(RoundedRectangle(cornerRadius: context.cornerRadius))
-        .onTapGesture {
-            if !context.isEditable {
-                showFullscreen = true
-                HapticFeedback.light()
-            }
-        }
+        .onTapGesture { openFullscreen() }
+        .accessibilityAddTraits(context.isEditable ? [] : .isButton)
+        .accessibilityAction(named: Text(String(localized: "media.image.open.a11y", bundle: .module))) { openFullscreen() }
         .fullScreenCover(isPresented: $showFullscreen) {
             ImageFullscreen(
                 imageUrl: imageURL,
@@ -92,6 +92,12 @@ public struct ImageViewerView: View {
             .contentExitGate(exitGate)
             .captureShield(isCaptureShielded)
         }
+    }
+
+    private func openFullscreen() {
+        guard !context.isEditable else { return }
+        showFullscreen = true
+        HapticFeedback.light()
     }
 
     // MARK: - Image Content
@@ -207,11 +213,12 @@ public struct ImageFullscreen: View {
     @Environment(\.contentExitGate) private var exitGate
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
-    @State private var showControls = true
+    // #10930 : on entre sans chrome ; tout toucher le pose par-dessus l'image.
+    @State private var showControls = false
     @State private var saveState: SaveState = .idle
     @State private var viewStartTime: Date?
 
-    private enum SaveState {
+    private nonisolated enum SaveState: Equatable, Sendable {
         case idle, saving, saved, failed
     }
 
@@ -224,21 +231,20 @@ public struct ImageFullscreen: View {
         self.onSaveRequested = onSaveRequested
     }
 
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.2)) { showControls.toggle() }
+    }
+
     public var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        showControls.toggle()
-                    }
-                }
+                .onTapGesture { toggleControls() }
 
             if let url = imageUrl {
-                // autoLoad: true — a manual tap to open fullscreen is
-                // explicit user intent and must override the ambient network
-                // policy gate (contract §14.1). Without this, Low Data Mode /
-                // Wi-Fi-only leaves the viewer on an infinite spinner even
-                // though the user just asked to see the image.
+                // autoLoad: true — l'ouverture en plein écran est une intention
+                // explicite qui prime sur la politique réseau ambiante (contrat
+                // §14.1) : sans cela, Low Data Mode / Wi-Fi seul laisse un
+                // spinner infini alors que l'utilisateur a demandé l'image.
                 CachedAsyncImage(url: url.absoluteString, autoLoad: true) {
                     ProgressView().tint(.white)
                 }
@@ -281,6 +287,7 @@ public struct ImageFullscreen: View {
                         offset = .zero
                     }
                 }
+                .onTapGesture { toggleControls() }
             }
 
             if showControls {
@@ -312,9 +319,10 @@ public struct ImageFullscreen: View {
                 .transition(.opacity)
             }
         }
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     @ViewBuilder
@@ -327,7 +335,9 @@ public struct ImageFullscreen: View {
         } else {
             FullscreenChromeButton(
                 systemImage: saveGlyph,
-                label: String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
+                label: isInAlbum && saveState == .idle
+                    ? PhotoAlbumSaveFeedback.alreadyInAlbumMessage
+                    : String(localized: "common.save", defaultValue: "Enregistrer", bundle: .module)
             ) {
                 exitGate.perform {
                     if let onSaveRequested {
@@ -343,10 +353,16 @@ public struct ImageFullscreen: View {
 
     private var saveGlyph: String {
         switch saveState {
-        case .idle, .saving: return FullscreenChromeSymbol.save
+        case .idle: return isInAlbum ? FullscreenChromeSymbol.saved : FullscreenChromeSymbol.save
+        case .saving: return FullscreenChromeSymbol.save
         case .saved: return FullscreenChromeSymbol.saved
         case .failed: return FullscreenChromeSymbol.close
         }
+    }
+
+    /// Déjà dans l'album Meeshy (#10370) : lu au registre, dès le premier rendu.
+    private var isInAlbum: Bool {
+        PhotoAlbumSaveFeedback.isInAlbum(attachmentId: attachmentId)
     }
 
     private func reportImageViewed() {
@@ -365,8 +381,10 @@ public struct ImageFullscreen: View {
         saveState = .saving
         HapticFeedback.light()
         Task {
-            let saved = await saveAsReceived(url)
-            if saved, let attId = attachmentId {
+            let outcome = await saveAsReceived(url)
+            let saved = outcome.isInAlbum
+            if outcome == .alreadyPresent { PhotoAlbumSaveFeedback.announceAlreadyInAlbum() }
+            if outcome == .saved, let attId = attachmentId {
                 let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
                 AttachmentStatusReporter.report(attachmentId: attId, body: body)
             }
@@ -375,9 +393,6 @@ public struct ImageFullscreen: View {
                     saveState = saved ? .saved : .failed
                 }
                 if saved { HapticFeedback.success() } else { HapticFeedback.error() }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation { saveState = .idle }
-                }
             }
         }
     }
@@ -404,14 +419,15 @@ public struct ImageFullscreen: View {
     /// cette vue ne décide rien, elle sert des octets déjà qualifiés par le seul
     /// chemin qui puisse l'atteindre.
     @MainActor
-    private func saveAsReceived(_ url: URL) async -> Bool {
+    private func saveAsReceived(_ url: URL) async -> PhotoLibrarySaveOutcome {
         // Le fichier du cache part PAR RÉFÉRENCE : rien n'est relu ni décodé (#9685).
+        // Dédoublonné par l'empreinte du contenu (#10370).
         if let onDisk = CacheCoordinator.imageLocalFileURL(for: url.absoluteString) {
-            return await PhotoLibraryManager.shared.saveImageFile(at: onDisk)
+            return await PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)
         }
         guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
-            return false
+            return .failed
         }
-        return await PhotoLibraryManager.shared.saveImage(data)
+        return await PhotoLibraryManager.shared.addImage(data, alias: attachmentId)
     }
 }

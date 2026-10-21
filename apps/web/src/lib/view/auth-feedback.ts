@@ -1,9 +1,13 @@
 import { usernameMaxLength, usernameMinLength } from '@meeshy/shared/types/api-schemas/auth';
 import type { UsernameRefusal } from '@meeshy/shared/utils/username-rule';
 
+import { translate } from '../i18n-catalog';
+import type { InterfaceLanguage } from '../interface-language';
+
 import { decodeEmailOwner, type EmailOwner } from '../api/email-owner';
 import type { ApiFailure, ApiResult } from '../api/http';
-import { verificationOpensSession, type VerifyEmailData } from '../api/verify-email';
+import { provenSessionOf } from '../api/proven-session';
+import type { VerifyEmailData } from '../api/verify-email';
 
 /**
  * LE PLACEMENT D'UN REFUS DE CONNEXION / D'INSCRIPTION (#5555, E5) — pur,
@@ -55,14 +59,14 @@ const VALIDATION_ERROR_CODE = 'VALIDATION_ERROR';
  * saisie, et à la place du texte d'Ajv quand la passerelle refuse le pseudo.
  * Les bornes sont LUES sur le schéma partagé, jamais recopiées.
  */
-export function usernameRefusalMessage(refusal: UsernameRefusal): string {
+export function usernameRefusalMessage(language: InterfaceLanguage, refusal: UsernameRefusal): string {
   switch (refusal) {
     case 'too-long':
-      return `${usernameMaxLength} caractères au plus.`;
+      return translate(language, 'signup.username.tooLong', { max: String(usernameMaxLength) });
     case 'too-short':
-      return `${usernameMinLength} caractères au moins.`;
+      return translate(language, 'signup.username.tooShort', { min: String(usernameMinLength) });
     case 'invalid-characters':
-      return 'Lettres sans accent, chiffres, - et _ uniquement — pas d’espace.';
+      return translate(language, 'signup.username.invalidCharacters');
   }
 }
 
@@ -303,6 +307,7 @@ export function placeMagicLinkValidationFailure(failure: ApiFailure): MagicLinkV
 
 export type VerifyEmailOutcome =
   | { readonly kind: 'signed-in' }
+  | { readonly kind: 'second-factor' }
   | { readonly kind: 'verified' }
   | { readonly kind: 'rate-limited' }
   | { readonly kind: 'invalid-code' }
@@ -316,10 +321,17 @@ export type VerifyEmailOutcome =
  * `alreadyVerified` (magic-link.ts:349-354) est un SUCCÈS, jamais un refus :
  * l'écran affiche le même overlay de confirmation. Une réponse qui porte une
  * SESSION (#8034, contrat #8033) est `signed-in` : l'écran quitte la
- * vérification pour l'accueil, comme après une connexion.
+ * vérification pour l'accueil, comme après une connexion. Un défi de SECOND
+ * FACTEUR est `second-factor` (#10474) : l'écran mène à la saisie du code,
+ * jamais à la célébration. La lecture de la réponse est celle de la décision
+ * (`provenSessionOf`) : une seule règle.
  */
 export function resolveVerifyEmailOutcome(result: ApiResult<VerifyEmailData>): VerifyEmailOutcome {
-  if (result.ok) return verificationOpensSession(result.data) ? { kind: 'signed-in' } : { kind: 'verified' };
+  if (result.ok) {
+    const proven = provenSessionOf(result.data);
+    if (proven === null) return { kind: 'verified' };
+    return proven.kind === 'second-factor' ? { kind: 'second-factor' } : { kind: 'signed-in' };
+  }
   if (result.status === 0) return { kind: 'offline' };
   if (result.status === 400) return { kind: 'invalid-code' };
   if (result.status === 429) return { kind: 'rate-limited' };
@@ -343,22 +355,78 @@ export function resolveResetTokenState(result: ApiResult<VerifyResetTokenData>):
   return result.data.valid ? 'valid' : 'invalid';
 }
 
+/**
+ * LE JETON EXIGE-T-IL LE CODE 2FA ? (#10866) — `requires2FA` de la
+ * vérification, sur un jeton VALIDE seulement. Le formulaire montre alors la
+ * saisie du code d'emblée, au lieu d'échouer une première fois à l'envoi.
+ */
+export function resetTokenRequiresSecondFactor(result: ApiResult<VerifyResetTokenData>): boolean {
+  return result.ok && result.data.valid && result.data.requires2FA === true;
+}
+
 export type ResetPasswordOutcome =
   | { readonly kind: 'reset' }
   | { readonly kind: 'invalid-token' }
+  | { readonly kind: 'attempts-exhausted' }
+  | { readonly kind: 'weak-password' }
+  | { readonly kind: 'reused-password' }
+  | { readonly kind: 'second-factor-required' }
+  | { readonly kind: 'second-factor-invalid' }
+  | { readonly kind: 'account-locked' }
+  | { readonly kind: 'rate-limited' }
   | { readonly kind: 'offline' }
   | { readonly kind: 'failed'; readonly message: string };
 
+type ResetRefusalKind = Exclude<ResetPasswordOutcome['kind'], 'reset' | 'rate-limited' | 'offline' | 'failed'>;
+
 /**
- * Un 400 sur `POST /reset-password` couvre en pratique le jeton
- * invalide/expiré (mot de passe trop court ou dépareillé étant déjà bloqués
- * côté client par `isPasswordValid` + l'égalité des deux champs) — l'écran
- * en tire la même sortie que `verifyResetToken` invalide : retour vers
- * `/forgot-password`.
+ * Les refus de `POST /auth/reset-password` (#10866) : le `code` de la
+ * passerelle (`PasswordResetService`) d'abord, puis le texte historique, que
+ * la passerelle sert inchangé — une passerelle plus ancienne que l'écran ne
+ * sert pas encore de `code`, et ses refus doivent garder leur raison.
+ */
+const RESET_REFUSALS: ReadonlyArray<{ readonly code: string; readonly text: RegExp; readonly kind: ResetRefusalKind }> = [
+  { code: 'RESET_TOKEN_INVALID', text: /invalid or expired reset token/i, kind: 'invalid-token' },
+  { code: 'TWO_FACTOR_ATTEMPTS_EXHAUSTED', text: /too many invalid 2fa codes/i, kind: 'attempts-exhausted' },
+  { code: 'RESET_PASSWORD_WEAK', text: /^password requirements/i, kind: 'weak-password' },
+  { code: 'RESET_PASSWORD_REUSED', text: /password was used recently/i, kind: 'reused-password' },
+  { code: 'TWO_FACTOR_REQUIRED', text: /2fa code required/i, kind: 'second-factor-required' },
+  { code: 'TWO_FACTOR_INVALID', text: /invalid 2fa code/i, kind: 'second-factor-invalid' },
+  { code: 'ACCOUNT_LOCKED', text: /account is locked/i, kind: 'account-locked' },
+];
+
+function resetRefusalOf(failure: { readonly error: string; readonly code?: string }): ResetRefusalKind | null {
+  const byCode = RESET_REFUSALS.find((refusal) => refusal.code === failure.code);
+  if (byCode !== undefined) return byCode.kind;
+  return RESET_REFUSALS.find((refusal) => refusal.text.test(failure.error))?.kind ?? null;
+}
+
+/**
+ * Un 400 de `POST /reset-password` n'est « lien invalide » que s'il NOMME le
+ * jeton (#10866) : un mot de passe refusé, un code 2FA manquant ou faux
+ * laissent l'écran sur le formulaire, avec leur raison. Un lien désactivé par
+ * trop de codes faux a son propre texte.
  */
 export function resolveResetPasswordOutcome(result: ApiResult<ResetPasswordData>): ResetPasswordOutcome {
   if (result.ok) return { kind: 'reset' };
   if (result.status === 0) return { kind: 'offline' };
-  if (result.status === 400) return { kind: 'invalid-token' };
+  if (result.status === 429) return { kind: 'rate-limited' };
+  const refusal = result.status === 400 ? resetRefusalOf(result) : null;
+  if (refusal !== null) return { kind: refusal };
   return { kind: 'failed', message: `${AUTH_GENERIC_FAILURE_MESSAGE} (${result.code ?? result.status})` };
+}
+
+/**
+ * LE JETON DE RÉINITIALISATION EST-IL PROUVÉ MORT ? (#10864) — seule preuve :
+ * `valid:false` servi en 200 par la vérification, ou le 400 de l'envoi qui
+ * nomme le jeton (`PasswordResetService` : « Invalid or expired reset token »)
+ * ou sa révocation après trop de codes 2FA faux (#10866). Un débit dépassé,
+ * une panne, un mot de passe refusé ou un code 2FA manquant ou faux laissent
+ * le jeton intact : l'écran le garde pour un rechargement.
+ */
+export function resetTokenProvenSpent(result: ApiResult<VerifyResetTokenData | ResetPasswordData>): boolean {
+  if (result.ok) return 'valid' in result.data && !result.data.valid;
+  if (result.status !== 400) return false;
+  const refusal = resetRefusalOf(result);
+  return refusal === 'invalid-token' || refusal === 'attempts-exhausted';
 }

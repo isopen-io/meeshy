@@ -43,6 +43,7 @@ const AUCUNE: AdminPermissions = {
   canManageNotifications: false,
   canManageTranslations: false,
   canManageAgent: false,
+  canManageGame: false,
 };
 
 const TOUTES: AdminPermissions = {
@@ -56,44 +57,47 @@ const TOUTES: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: true,
+  canManageGame: true,
 };
 
-describe('le registre des dix-neuf sections (spécification § 1.2)', () => {
+describe('le registre des vingt sections (spécification § 1.2)', () => {
   const ligne = (section: AdminSection) => [section.id, section.group, section.permission, section.adminRankOnly === true, section.route];
 
   test('les ids, leur groupe, leur permission, leur rang et leur route, dans l’ordre du menu', () => {
     expect(ADMIN_SECTIONS.map(ligne)).toEqual([
       ['dashboard', 'overview', 'canAccessAdmin', false, 'admin'],
+      ['posts', 'content', 'canModerateContent', false, 'adminPosts'],
+      ['reports', 'moderation', 'canModerateContent', false, 'adminReports'],
+      ['audit', 'moderation', 'canViewAuditLogs', false, 'adminAudit'],
       ['users', 'people', 'canManageUsers', false, 'adminUsers'],
       ['anonymous', 'people', 'canManageUsers', false, 'adminAnonymous'],
       ['invitations', 'people', 'canManageUsers', false, 'adminInvitations'],
       ['conversations', 'exchanges', 'canManageConversations', true, 'adminConversations'],
       ['communities', 'exchanges', 'canManageGroups', false, 'adminCommunities'],
       ['shareLinks', 'exchanges', 'canManageConversations', false, 'adminShareLinks'],
-      ['posts', 'content', 'canModerateContent', false, 'adminPosts'],
-      ['reports', 'moderation', 'canModerateContent', false, 'adminReports'],
-      ['audit', 'moderation', 'canViewAuditLogs', false, 'adminAudit'],
       ['analytics', 'growth', 'canViewAnalytics', false, 'adminAnalytics'],
       ['ranking', 'growth', 'canViewAnalytics', false, 'adminRanking'],
       ['trackingLinks', 'growth', 'canViewAnalytics', false, 'adminTrackingLinks'],
       ['broadcasts', 'growth', 'canManageNotifications', false, 'adminBroadcasts'],
-      ['monitoring', 'platform', 'canViewAnalytics', true, 'adminMonitoring'],
-      ['languages', 'platform', 'canViewAnalytics', false, 'adminLanguages'],
-      ['agent', 'platform', 'canManageAgent', false, 'adminAgent'],
-      ['engagementScale', 'platform', 'canAccessAdmin', true, 'adminEngagementScale'],
-      ['settings', 'platform', 'canAccessAdmin', false, 'adminSettings'],
+      ['engagementScale', 'scales', 'canAccessAdmin', true, 'adminEngagementScale'],
+      ['operations', 'operations', 'canAccessAdmin', true, 'adminOperations'],
+      ['monitoring', 'operations', 'canViewAnalytics', true, 'adminMonitoring'],
+      ['languages', 'operations', 'canViewAnalytics', false, 'adminLanguages'],
+      ['agent', 'operations', 'canManageAgent', false, 'adminAgent'],
+      ['settings', 'operations', 'canAccessAdmin', false, 'adminSettings'],
     ]);
   });
 
-  test('les sept groupes, dans leur ordre, chacun avec sa clé de catalogue', () => {
+  test('les huit groupes par domaine (#10391), dans leur ordre, chacun avec sa clé de catalogue', () => {
     expect(ADMIN_GROUPS).toEqual([
       { id: 'overview', labelKey: 'admin.group.overview' },
-      { id: 'people', labelKey: 'admin.group.people' },
-      { id: 'exchanges', labelKey: 'admin.group.exchanges' },
       { id: 'content', labelKey: 'admin.group.content' },
       { id: 'moderation', labelKey: 'admin.group.moderation' },
+      { id: 'people', labelKey: 'admin.group.people' },
+      { id: 'exchanges', labelKey: 'admin.group.exchanges' },
       { id: 'growth', labelKey: 'admin.group.growth' },
-      { id: 'platform', labelKey: 'admin.group.platform' },
+      { id: 'scales', labelKey: 'admin.group.scales' },
+      { id: 'operations', labelKey: 'admin.group.operations' },
     ]);
   });
 
@@ -121,14 +125,14 @@ describe('le registre des dix-neuf sections (spécification § 1.2)', () => {
 
   test('chaque genre d’entité a sa fiche, dans les deux espaces, sous la route de sa section', () => {
     expect(ADMIN_FICHES.map((fiche) => fiche.entity)).toEqual([
+      'post',
+      'report',
       'user',
       'anonymous',
       'invitation',
       'conversation',
       'community',
       'shareLink',
-      'post',
-      'report',
       'trackingLink',
       'broadcast',
     ]);
@@ -142,7 +146,7 @@ describe('le registre des dix-neuf sections (spécification § 1.2)', () => {
 
 const section = (id: AdminSection['id'], extra: Partial<AdminSection> = {}): AdminSection => ({
   id,
-  group: 'platform',
+  group: 'operations',
   labelKey: `admin.nav.${id}`,
   route: 'admin',
   permission: 'canAccessAdmin',

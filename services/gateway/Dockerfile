@@ -204,6 +204,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+# Le magasin adressé par contenu des packs officiels (#10157, L5) — servi par
+# `GET /api/v1/pack-assets/:file` depuis `/app/assets/packs`. Couche DÉDIÉE et
+# PRÉCOCE : ces fichiers changent rarement, leur couche se réutilise d'une
+# construction à l'autre. Les fichiers du registre d'EXEMPLES y sont aussi, mais
+# ne sont servis que sous `PACK_SAMPLES=1` (staging seulement).
+COPY --chown=gateway:nodejs services/gateway/assets/ ./assets/
+
 # Copy production node_modules from prod-deps
 COPY --from=prod-deps --chown=gateway:nodejs /app/node_modules ./node_modules
 
@@ -223,6 +230,14 @@ RUN chmod +x /app/docker-entrypoint.sh || true
 
 # Copy package.json for runtime metadata
 COPY --chown=gateway:nodejs services/gateway/package.json ./
+
+# Témoin des migrations embarquées (#10865) : les migrations nommées
+# (`dist/src/migrations/named/`, pilote `mongodb` en dépendance de production)
+# et les scripts mongosh (`packages/shared/prisma/migrations/*.mongodb.js`)
+# doivent être exécutables DEPUIS cette image. La construction échoue si l'un
+# manque — le 2026-10-16, il avait fallu les porter à la main en mongosh.
+# Mode d'emploi : `node dist/src/migrations/named/cli.js list`.
+RUN node dist/src/migrations/named/cli.js verify-image
 
 USER gateway
 

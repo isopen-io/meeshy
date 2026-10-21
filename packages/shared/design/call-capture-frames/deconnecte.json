@@ -5,6 +5,10 @@
       "id": "deconnecte.carte-postale",
       "mood": "deconnecte",
       "name": "Carte postale",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "scatter",
@@ -171,6 +175,10 @@
       "id": "deconnecte.road-trip",
       "mood": "deconnecte",
       "name": "Road trip",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "row",
@@ -298,6 +306,10 @@
       "id": "deconnecte.cahier-de-vacances",
       "mood": "deconnecte",
       "name": "Cahier de vacances",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "scatter",
@@ -457,6 +469,10 @@
       "id": "deconnecte.coucher-de-soleil",
       "mood": "deconnecte",
       "name": "Coucher de soleil",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "column",

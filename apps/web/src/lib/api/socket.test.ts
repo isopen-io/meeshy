@@ -8,7 +8,7 @@ import { conversationStore } from '@/lib/conversation-store';
 import type { SocketClient, SocketFactory, SocketHandler } from '@/lib/net/socket';
 import { createOutboxStore, entriesOf } from '@/lib/send/outbox-store';
 
-import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { CONVERSATIONS_QUERY_KEY, conversationQueryKey } from './conversations';
 import { messagesQueryKey } from './messages';
 import type { MessagesInfiniteData } from './messages-pages';
 import { attachmentStatusDetailsQueryKey } from './attachments';
@@ -823,37 +823,47 @@ describe('createRealtimeConnection (#5793) — la connexion, sans réseau', () =
    * signal, et le rejeu est une invalidation par PRÉFIXE — liste, case du fil
    * et page du fil d'un coup.
    */
-  test('une RE-authentification (reconnexion) invalide la liste ET le fil ; la PREMIÈRE ne rejoue rien', async () => {
+  test('une RE-authentification (reconnexion) invalide la liste, la case ET le fil', async () => {
     const { deps, socket, queryClient } = buildDeps();
-    let listFetches = 0;
-    let threadFetches = 0;
-    await queryClient.fetchQuery({
-      queryKey: ['conversations'],
-      queryFn: async () => {
-        listFetches += 1;
-        return [];
-      },
-    });
-    await queryClient.fetchQuery({
-      queryKey: messagesQueryKey('c-a'),
-      queryFn: async () => {
-        threadFetches += 1;
-        return threadPages([]);
-      },
-    });
-    expect([listFetches, threadFetches]).toEqual([1, 1]);
-
     createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
-    await queryClient.refetchQueries({ type: 'active' });
-    // Première authentification : aucun trou à combler, aucune requête de plus
-    // (les deux requêtes ci-dessus ne sont plus OBSERVÉES, donc inactives —
-    // seule leur péremption pourrait se mesurer).
-    expect(queryClient.getQueryState(['conversations'])?.isInvalidated).toBe(false);
+    await queryClient.fetchQuery({ queryKey: ['conversations'], queryFn: async () => [] });
+    await queryClient.fetchQuery({ queryKey: conversationQueryKey('c-a'), queryFn: async () => ({ id: 'c-a' }) });
+    await queryClient.fetchQuery({ queryKey: messagesQueryKey('c-a'), queryFn: async () => threadPages([]) });
 
     socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
     expect(queryClient.getQueryState(['conversations'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(conversationQueryKey('c-a'))?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(true);
+  });
+
+  /**
+   * LA PREMIÈRE AUTHENTIFICATION (#10573) — elle ne rejouait rien, et tout
+   * message parti entre la lecture REST de l'écran et l'entrée du socket dans
+   * ses rooms était perdu. Elle relit désormais la liste et le fil DÉJÀ servis ;
+   * une requête jamais servie (le démarrage à froid, encore en vol) n'est pas
+   * redemandée — c'était la raison d'être de l'ancienne garde, et elle tient.
+   */
+  test('la PREMIÈRE authentification relit ce qui a été servi, jamais une requête encore en vol', async () => {
+    const { deps, socket, queryClient } = buildDeps();
+    let pendingFetches = 0;
+    await queryClient.fetchQuery({ queryKey: ['conversations'], queryFn: async () => [] });
+    await queryClient.fetchQuery({ queryKey: messagesQueryKey('c-a'), queryFn: async () => threadPages([]) });
+    void queryClient.fetchQuery({
+      queryKey: messagesQueryKey('c-b'),
+      queryFn: () => {
+        pendingFetches += 1;
+        return new Promise<MessagesInfiniteData>(() => undefined);
+      },
+    });
+
+    createRealtimeConnection({ token: 't', sessionToken: 's' }, deps);
+    socket.fire(SERVER_EVENTS.AUTHENTICATED, { success: true });
+
+    expect(queryClient.getQueryState(['conversations'])?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(messagesQueryKey('c-a'))?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(messagesQueryKey('c-b'))?.isInvalidated).toBe(false);
+    expect(pendingFetches).toBe(1);
   });
 
   test('`destroy` démonte les écouteurs, annule les minuteurs et déconnecte', () => {

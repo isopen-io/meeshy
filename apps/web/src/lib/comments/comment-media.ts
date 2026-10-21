@@ -2,6 +2,7 @@ import { MAX_POST_MEDIA } from '@meeshy/shared/types/attachment';
 
 import type { ApiResult } from '@/lib/api/http';
 import type { PostMediaUploadResult } from '@/lib/api/post-media-upload';
+import { prepareImageForUpload } from '@/lib/media/prepare-image-upload';
 import { fileSignature, pendingAttachmentOf, type PendingAttachment } from '@/lib/send/attachments';
 
 /**
@@ -125,7 +126,7 @@ export const browserCommentUploadFor =
     return uploadPostMedia({
       ...postMediaUploadDeps,
       credential: () => currentOwnerCredential(owner),
-      file,
+      file: await prepareImageForUpload(file),
       uploadContext: 'comment',
       ...(onProgress === undefined ? {} : { onProgress }),
     });

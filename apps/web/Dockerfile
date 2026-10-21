@@ -84,12 +84,12 @@ RUN cd packages/shared && bun run build
 RUN test -s packages/shared/dist/utils/conversation-helpers.js \
     || { echo "packages/shared n'a pas produit son dist"; exit 1; }
 
-# **L'ORIGINE DE L'API SE FIGE ICI, ou nulle part (#5872).** `import.meta.env`
-# est remplacé à la CONSTRUCTION : une variable posée au démarrage du conteneur
-# n'atteindrait jamais le bundle. Sans cet `ARG`, `resolveApiConfig` retombe
-# sur l'origine de PRODUCTION — un défaut qui fonctionne, mais qui fait pointer
-# staging vers la passerelle de production. C'est le workflow qui déclare la
-# valeur par environnement (`docker.yml`, § build-args de `webapp`).
+# **L'ORIGINE DE L'API SE DÉCLARE AU DÉMARRAGE, plus au build (#10208).**
+# `MEESHY_API_URL` / `MEESHY_WEB_URL`, lues par `docker/runtime-config.sh`
+# (étape `runner`), sinon la passerelle se déduit de l'hôte de la page. Cet
+# `ARG` reste pour une COQUE ou une image qui veut figer son origine : il passe
+# après la configuration de démarrage, avant la déduction. `docker.yml` ne le
+# pose plus — une même image vaut pour le staging et la production.
 ARG VITE_API_BASE=""
 ENV VITE_API_BASE=${VITE_API_BASE}
 
@@ -113,6 +113,14 @@ ENV VITE_DATA_SOURCE=${VITE_DATA_SOURCE}
 # déploiement, quelle que soit la valeur qu'on croit lui donner.
 ARG VITE_READING_MODES=""
 ENV VITE_READING_MODES=${VITE_READING_MODES}
+
+# **L'ADRESSE DU MOTEUR DE TRADUCTION DE L'APPAREIL se fige ici aussi (#9898).**
+# Le Worker charge transformers.js par `import()` à la première traduction ;
+# `VITE_DEVICE_TRANSLATION_RUNTIME` permet de l'héberger chez nous plutôt que sur
+# le CDN. Vide (le défaut), `deviceRuntimeUrl` retombe sur le CDN épinglé — un
+# `ARG` sans valeur ne désigne aucune adresse.
+ARG VITE_DEVICE_TRANSLATION_RUNTIME=""
+ENV VITE_DEVICE_TRANSLATION_RUNTIME=${VITE_DEVICE_TRANSLATION_RUNTIME}
 
 # **LA RÉVISION SERVIE DOIT ÊTRE LISIBLE DE L'EXTÉRIEUR, comme pour le gateway
 # (#6551).** `VCS_REF`/`BUILD_DATE` sont déjà poussés à CHAQUE image du
@@ -160,10 +168,12 @@ RUN set -eu; for p in about contact partners privacy terms; do \
     grep -q 'about.html' /app/dist/sw.js || { echo "sw.js ne precache pas les pages"; exit 1; }; \
     test -s /app/dist/build-info.json \
       || { echo "MANQUE dist/build-info.json"; exit 1; }; \
+    test -s /app/dist/config.js || { echo "MANQUE dist/config.js"; exit 1; }; \
+    if grep -q '"url":"config.js"\|url:"config.js"' /app/dist/sw.js; then echo "sw.js precache config.js"; exit 1; fi; \
     echo "les cinq pages sont presentes et precachees, build-info.json ecrit"
 
 # ===== SERVICE =====
-FROM docker.io/nginx:1.29-alpine AS runner
+FROM docker.io/nginx:1.31-alpine AS runner
 
 RUN apk add --no-cache tini curl
 
@@ -177,6 +187,18 @@ COPY --from=builder /app/dist/ /usr/share/nginx/html/
 COPY apps/web/scripts/check-nginx-public.sh /tmp/check-nginx-public.sh
 RUN sh /tmp/check-nginx-public.sh && rm /tmp/check-nginx-public.sh
 
+# LA CONFIGURATION DE DÉMARRAGE (#10208), prouvée ICI : une origine déclarée
+# s'écrit dans `config.js`, une origine invalide refuse de démarrer.
+COPY apps/web/docker/runtime-config.sh /usr/local/bin/meeshy-runtime-config
+RUN set -eu; chmod 0755 /usr/local/bin/meeshy-runtime-config; \
+    MEESHY_CONFIG_FILE=/tmp/c.js MEESHY_API_URL=http://10.0.0.5:3000 MEESHY_WEB_URL=https://chat.acme.fr \
+      meeshy-runtime-config true; \
+    grep -q '"apiUrl": "http://10.0.0.5:3000"' /tmp/c.js && grep -q '"webUrl": "https://chat.acme.fr"' /tmp/c.js \
+      || { echo "config.js ne porte pas les origines declarees"; exit 1; }; \
+    if MEESHY_CONFIG_FILE=/tmp/c.js MEESHY_API_URL='https://x";alert(1)//' meeshy-runtime-config true 2>/dev/null; then \
+      echo "une origine invalide a ete acceptee"; exit 1; fi; \
+    rm -f /tmp/c.js
+
 # 3400 : 3100 est au legacy, 3300 à l'ancienne refonte. Les trois peuvent
 # tourner côte à côte pendant la bascule.
 EXPOSE 3400
@@ -184,5 +206,5 @@ EXPOSE 3400
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD curl -fsS http://127.0.0.1:3400/healthz || exit 1
 
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/meeshy-runtime-config"]
 CMD ["nginx", "-g", "daemon off;"]

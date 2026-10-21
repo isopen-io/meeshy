@@ -127,22 +127,32 @@ struct ConversationMediaFilmstrip: View {
     /// bande se relanceraient mutuellement.
     @State private var scrollAnchorID: String?
 
+    /// La largeur MESURÉE du conteneur de la galerie (sa colonne, son plein écran), remise par la galerie.
+    let containerWidth: CGFloat?
+
     init(
         attachments: [MessageAttachment],
         currentPageID: Binding<String?>,
-        accentColor: String
+        accentColor: String,
+        containerWidth: CGFloat? = nil
     ) {
+        self.containerWidth = containerWidth
         self.attachments = attachments
         self._currentPageID = currentPageID
         self.accentColor = accentColor
         _scrollAnchorID = State(initialValue: currentPageID.wrappedValue)
     }
 
-    /// Espace à réserver EN TÊTE pour que le premier média puisse venir se
-    /// poser sous la tête de lecture. `DeviceLayout.windowSize` et non l'écran :
-    /// sous Split View la fenêtre n'est qu'une fraction de l'affichage.
+    /// La taille de la fenêtre qui PORTE la galerie, publiée par sa racine bien avant que la galerie ne s'ouvre.
+    @Environment(\.sceneWindowSize) private var sceneWindowSize
+
+    /// Espace à réserver EN TÊTE pour que le premier média puisse venir se poser sous la tête de lecture — sur la
+    /// largeur que la galerie a MESURÉE pour elle (sa colonne iPad, son plein écran), connue avant que la bande ne
+    /// naisse ; à défaut, SA fenêtre (Stage Manager, fenêtre détachée), la fenêtre clé n'étant que le repli.
+    /// Jamais une largeur mesurée après coup : la bande, déjà calée par `scrollPosition`, gardait l'ancienne marge
+    /// et la vignette courante se décalait d'un pas (cycle 8, mesuré).
     private var leadingInset: CGFloat {
-        FilmstripMetrics.leadingInset(containerWidth: DeviceLayout.windowSize.width)
+        FilmstripMetrics.leadingInset(containerWidth: containerWidth ?? SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).width)
     }
 
     var body: some View {

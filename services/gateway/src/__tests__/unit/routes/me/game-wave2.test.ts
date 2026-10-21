@@ -362,6 +362,16 @@ describe('PUT /game/privacy', () => {
 });
 
 describe('GET /users/:userId/game/showcase', () => {
+  // Un visiteur ne voit un trophée qu'au 1er du mois qui suit son obtention (#10240) : ces témoins lisent la
+  // vitrine en janvier 2027, après tous les trophées qu'ils gravent. Seule l'horloge `Date` est simulée.
+  beforeEach(() => {
+    jest.useFakeTimers({
+      now: new Date('2027-01-15T12:00:00Z'),
+      doNotFake: ['nextTick', 'setImmediate', 'clearImmediate', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'queueMicrotask', 'hrtime', 'performance'],
+    });
+  });
+  afterEach(() => jest.useRealTimers());
+
   const showcaseApp = async (db: FakeGameDb, viewerId: string, role = 'USER') => {
     const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
     app.decorate('prisma', db.prisma as never);
@@ -392,6 +402,7 @@ describe('GET /users/:userId/game/showcase', () => {
       visible: true,
       items: [{ key: 'trophy.season-cup.1', awardedMonth: '2026-12' }],
       order: ['trophy.season-cup.1'],
+      constellation: { stars: 0 },
     });
     expect(shown.body).not.toContain('06T21');
     await stranger.close();
@@ -427,6 +438,7 @@ describe('GET /users/:userId/game/showcase', () => {
         { key: 'trophy.league-cup.2026-10.ambre.bronze', awardedMonth: '2026-10' },
       ],
       order: ['trophy.league-cup.2026-10.jade.gold', 'trophy.flame.365', 'trophy.league-cup.2026-10.ambre.bronze'],
+      constellation: { stars: 0 },
     });
     await app.close();
   });

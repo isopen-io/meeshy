@@ -124,9 +124,14 @@ nonisolated enum ComposerLookPainter {
     }
 
     /// Le graphe. `scene` doit avoir été cuite pour `canvas`.
+    /// L'effet de l'appel (#10311) se pose sur la source tonifiée, avant le
+    /// cadrage : le visage se lit là où il est. `still` : une photo, dont le
+    /// visage se cherche sur elle ; `faces` : le suivi d'un aperçu ou d'un export.
     static func paint(_ source: CIImage, look: ComposerPhotoLook, framing: ComposerFraming,
-                      scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace? = nil) -> CIImage {
-        let graded = ComposerLiveLookRule.graded(source, filter: look.filter, declared: declared)
+                      scene: CallLiveFrameScene?, canvas: CGSize, declared: CGColorSpace? = nil,
+                      faces: ComposerFaceEffects = .live, still: Bool = false) -> CIImage {
+        let tonifiee = ComposerLiveLookRule.graded(source, filter: look.filter, declared: declared)
+        let graded = faces.apply(look.effect, to: tonifiee, probing: source, still: still)
         guard let scene, let slot = scene.slots.first, slot.photo.height > 0 else {
             return filled(graded, framing: framing, into: CGRect(origin: .zero, size: canvas))
         }
@@ -155,7 +160,7 @@ nonisolated enum ComposerLookPainter {
         let toile = canvas ?? Self.canvas(for: CGSize(width: image.width, height: image.height))
         let espace = ComposerPhotoLookRule.colorSpace(of: image)
         let peinte = paint(CIImage(cgImage: image), look: look, framing: framing, scene: scene,
-                           canvas: toile, declared: espace)
+                           canvas: toile, declared: espace, still: true)
         return ComposerLookGPU.context.createCGImage(peinte, from: CGRect(origin: .zero, size: toile),
                                                      format: .RGBA8, colorSpace: espace)
     }

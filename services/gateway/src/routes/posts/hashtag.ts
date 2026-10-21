@@ -11,6 +11,7 @@ import { wireReaderFromRequest, type WireReader } from '../../services/posts/sto
 import { hoistLocationDeep } from '../../services/location/sharedPlace';
 import { getCommunityCoMemberIds } from '../../services/posts/communityVisibility';
 import { depreciee } from '../../utils/deprecation';
+import { rankedListingPage } from '../../services/social/listingContext';
 
 /**
  * GET /posts/hashtag/:tag + GET /hashtags/trending — recherche et tendances
@@ -204,7 +205,8 @@ export function registerHashtagRoutes(
       wireReaderFromRequest(request as UnifiedAuthRequest),
     );
 
-    return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+    const page = rankedListingPage(resultat, 'hashtag');
+    return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
   });
 
   fastify.get('/hashtags/trending', {

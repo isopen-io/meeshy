@@ -10,8 +10,14 @@ struct PhotoNotice: Equatable {
         case error
     }
 
+    /// Le geste que l'avis propose : enregistrer dans Photos quand le carnet n'a plus de place (#10161).
+    enum Action: Equatable {
+        case saveToLibrary
+    }
+
     let tone: Tone
     let text: String
+    var action: Action?
 }
 
 /// LE DÉROULÉ D'UNE PHOTO (#9382) — conception, partie VI :
@@ -23,7 +29,7 @@ struct PhotoNotice: Equatable {
 ///     photo se fige.
 ///  4. Image 9:16 pour la story et 1:1 pour le profil : enregistrer dans Photos,
 ///     partager, ou garder au carnet.
-///  5. « Plus tard » laisse le moment en attente 7 jours dans le carnet.
+///  5. « Plus tard » laisse le moment en attente dans le carnet, sans échéance (#10161).
 ///
 /// La carte porte le lien de parrainage de l'utilisateur en carré QR (#9554) et sa Flamme (#7742, `ReferralCard`) ;
 /// le partage transmet aussi le lien en texte. Le lien d'un jeton EXISTANT se lit PENDANT la proposition
@@ -58,8 +64,14 @@ final class GamePhotoSession: ObservableObject {
     /// Le lien d'invitation se montre sur la carte — et part en texte — tant que l'utilisateur ne l'a pas retiré
     /// (conformité H-2 : le lien est retirable, comme la Flamme).
     @Published private(set) var linkOnCard = true
+    /// L'enregistrement de la prise dans Photos, loi partagée (#10284) : `nil` tant qu'aucune prise n'est composée.
+    @Published private(set) var takeSave: TakeSaveState?
+    /// Le format montré et enregistré : la story (9:16) ou le carré (1:1) — une autre version (#10296).
+    @Published private(set) var squareFormat = false
 
     let moment: PhotoMoment
+    /// L'auteur dont la plaque grave le pseudo (#10816) : le compte connecté ; `nil` pour un invité.
+    let author: PhotoAuthor?
     let camera: GamePhotoCameraProviding
 
     private let composer: GamePhotoComposing
@@ -80,6 +92,8 @@ final class GamePhotoSession: ObservableObject {
     private var shareInFlight: Task<Void, Never>?
     private var composedSource: UIImage?
     private var composedMode: PhotoMode?
+    /// Une prise est en cours : le second toucher d'un double sur la case ne déclenche pas une seconde prise.
+    private var taking = false
 
     /// La Flamme de l'utilisateur, quand elle brûle : c'est ce que le bandeau peut montrer.
     var hasFlame: Bool { flame != nil }
@@ -99,9 +113,11 @@ final class GamePhotoSession: ObservableObject {
         now: @escaping () -> Date = { Date() },
         strikeDuration: UInt64 = 1_200_000_000,
         flame: ReferralCard.Flame? = nil,
-        referralLinks: ReferralLinkProviding = ReferralLinkService.shared
+        referralLinks: ReferralLinkProviding = ReferralLinkService.shared,
+        author: PhotoAuthor? = PhotoAuthor.current()
     ) {
         self.moment = moment
+        self.author = author
         self.camera = camera
         self.composer = composer
         self.notebook = notebook
@@ -216,12 +232,12 @@ final class GamePhotoSession: ObservableObject {
     private func exportable() -> ComposedPhoto? {
         guard let composed else { return nil }
         guard referral?.isPlaceholder == true, let mode = composedMode else { return composed }
-        return composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: nil)
+        return composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: nil, author: author)
     }
 
     private func recompose() {
         guard case .result = state, let mode = composedMode else { return }
-        if let result = composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: referral) {
+        if let result = composer.compose(moment: moment, source: composedSource, mode: mode, date: now(), referral: referral, author: author) {
             composed = result
         }
     }
@@ -258,15 +274,64 @@ final class GamePhotoSession: ObservableObject {
 
     // MARK: - Étape 2 et 3 : la prise et la frappe en place
 
-    func shutter() async {
-        guard case .camera(.live) = state else { return }
+    // MARK: - Le cadre est le déclencheur (#10284)
+
+    /// Le cadre posé sur la prise : celui du moment, seul que le déroulé sait peindre tant que le peintre
+    /// des cadres décorés (#10160) n'existe pas — même identité que le web (`moment.id`).
+    var momentFrameId: String { moment.id }
+
+    /// « Enregistrer » ne se montre que si la prise n'est pas déjà dans Photos dans la version courante (cadre, format).
+    var showsSave: Bool { takeSave.map(CaptureSaveLaw.saveButtonVisible) ?? false }
+
+    /// Le contexte que lit la table des gestes du composer : un viseur armé seulement quand la caméra vit,
+    /// et jamais de vidéo — le déroulé du jeu ne filme pas.
+    var captureContext: ComposerCaptureGestureContext {
+        ComposerCaptureGestureContext(stage: state == .camera(.live) ? .armed : .off, allowsVideo: false)
+    }
+
+    /// Un geste sur une zone de la caméra : la table du composer décide (`ComposerCaptureGesture`), la session exécute.
+    func gesture(_ kind: ComposerCaptureGestureKind, on zone: ComposerCaptureZone) async {
+        await perform(ComposerCaptureGesture.action(zone: zone, gesture: kind, context: captureContext))
+    }
+
+    /// Une action de la table — par un geste, ou nommée par VoiceOver.
+    func perform(_ action: ComposerCaptureAction) async {
+        switch action {
+        case .photoToGallery: await take(from: .frame)
+        case .photoToEdit: await take(from: .outside)
+        default: return
+        }
+    }
+
+    /// Changer de format sur le résultat : le carré est une autre image, « Enregistrer » revient s'il
+    /// n'est pas en galerie avec ce cadre (#10296, porteur 2026-10-12).
+    func chooseFormat(square: Bool) {
+        squareFormat = square
+        guard let takeSave else { return }
+        self.takeSave = CaptureSaveLaw.applyFormatChange(takeSave, format: Self.format(square: square))
+    }
+
+    static func format(square: Bool) -> String { (square ? PhotoFormat.square : PhotoFormat.story).rawValue }
+
+    /// Changer de cadre après la prise : « Enregistrer » revient si la prise n'est pas en galerie avec lui.
+    func chooseFrame(_ frameId: String?) {
+        guard let takeSave else { return }
+        self.takeSave = CaptureSaveLaw.applyFrameChange(takeSave, frameId: frameId)
+    }
+
+    /// La prise : par la case du cadre, elle part dans Photos puis le résultat s'ouvre ; hors cadre (la scène),
+    /// le résultat s'ouvre et la prise reste dans l'app (`CaptureSaveLaw.destination(for:)`).
+    func take(from zone: CaptureZone) async {
+        guard case .camera(.live) = state, !taking else { return }
+        taking = true
+        defer { taking = false }
         guard let shot = await camera.capture() else {
             send(.cameraFailed(.unavailable))
             return
         }
         camera.stop()
         send(.shutter)
-        await strikeInPlace(source: shot, mode: .selfie)
+        await strikeInPlace(source: shot, mode: .selfie, zone: zone)
     }
 
     func useGalleryPhoto(_ data: Data) async {
@@ -276,48 +341,82 @@ final class GamePhotoSession: ObservableObject {
         await strikeInPlace(source: image, mode: .gallery)
     }
 
-    private func strikeInPlace(source: UIImage?, mode: PhotoMode) async {
+    private func strikeInPlace(source: UIImage?, mode: PhotoMode, zone: CaptureZone = .outside) async {
         guard case .striking = state else { return }
         frozen = source
         strike = 0
         haptics.play(GameHapticPattern.strikeInPlace)
         if strikeDuration > 0 {
             // Un rendu à 0 d'abord : sans lui, l'emblème naîtrait déjà posé et rien ne s'animerait.
-            try? await Task.sleep(nanoseconds: 40_000_000)
+            _ = await cancellableSleep(for: .milliseconds(40))
             strike = 1
-            try? await Task.sleep(nanoseconds: strikeDuration)
+            _ = await cancellableSleep(for: .nanoseconds(strikeDuration))
         } else {
             strike = 1
         }
         composedSource = source
         composedMode = mode
-        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now(), referral: referral) else {
+        guard let result = composer.compose(moment: moment, source: source, mode: mode, date: now(), referral: referral, author: author) else {
             send(.composeFailed)
             return
         }
         composed = result
         send(.composed)
+        let frame = momentFrameId
+        let format = Self.format(square: squareFormat)
+        takeSave = CaptureSaveLaw.beginTake(zone == .frame ? .frame(frameId: frame, format: format) : .outside(frameId: frame, format: format))
+        guard CaptureSaveLaw.destination(for: zone).gallery, let takeSave else { return }
+        await writeToLibrary(takeSave.currentVersion)
     }
 
     // MARK: - Étape 4 : le résultat
 
+    /// Garde le 9:16, la photo d'origine réduite (jamais pour une carte seule) et la recette (#10161).
+    /// Un disque plein se DESSINE et propose Photos ; l'entrée n'est pas créée.
     func keep() async {
         guard case .result = state else { return }
-        var ok = false
-        if let kept = exportable()?.kept { ok = await notebook.keep(moment, photo: kept) }
-        send(.kept(ok))
-        notice = ok
-            ? PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée au carnet de progression.", bundle: .main))
-            : PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "Le carnet n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
+        var outcome = NotebookKeepOutcome.unavailable
+        if let composed = exportable() {
+            let taken = composedMode == .card ? nil : composedSource
+            var source: Data?
+            if let taken {
+                let box = SendableSourceImage(image: taken)
+                source = await Task.detached(priority: .userInitiated) { GamePhotoNotebook.sourceData(from: box.image) }.value
+            }
+            let recipe = NotebookRecipe(frameId: takeSave?.currentFrame, mirror: taken == nil ? nil : composedMode == .selfie, showLink: referral != nil && linkOnCard)
+            outcome = await notebook.keep(moment, photo: KeptPhoto(story: composed.storyData, mode: composed.mode, source: source, recipe: recipe))
+        }
+        send(.kept(outcome == .kept))
+        switch outcome {
+        case .kept:
+            notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.kept", defaultValue: "Gardée dans ta Chronique.", bundle: .main))
+        case .noSpace:
+            notice = PhotoNotice(
+                tone: .error,
+                text: String(localized: "game.photo.notice.no_space", defaultValue: "Plus de place sur cet appareil : la photo n’a pas été gardée.", bundle: .main),
+                action: .saveToLibrary
+            )
+        case .unavailable:
+            notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.keep_failed", defaultValue: "La Chronique n’est pas disponible sur cet appareil : la photo n’a pas été gardée.", bundle: .main))
+        }
     }
 
-    /// Enregistre dans Photos (autorisation en ajout seul) l'image du format choisi.
-    func save(square: Bool) async {
-        guard case .result = state, let outgoing = exportable() else { return }
+    /// « Enregistrer » : la prise part dans Photos (autorisation en ajout seul) avec le cadre et le format
+    /// courants. Déjà enregistrée dans cette version, rien ne part — le bouton est d'ailleurs masqué.
+    func save() async {
+        guard case .result = state, showsSave, let takeSave else { return }
+        self.takeSave = CaptureSaveLaw.applySaved(takeSave)
+        await writeToLibrary(takeSave.currentVersion)
+    }
+
+    /// L'écriture dans Photos, déjà comptée par l'état (optimiste) : un échec rend CETTE version à enregistrer.
+    private func writeToLibrary(_ version: SavedVersion) async {
         do {
-            try await library.saveImage(square ? outgoing.squareData : outgoing.storyData)
+            guard let outgoing = exportable() else { throw MediaSaveError.sourceUnavailable }
+            try await library.saveImage(version.format == PhotoFormat.square.rawValue ? outgoing.squareData : outgoing.storyData)
             notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.saved", defaultValue: "Image enregistrée dans Photos.", bundle: .main))
         } catch {
+            if let takeSave { self.takeSave = CaptureSaveLaw.applySaveFailed(takeSave, version: version) }
             notice = PhotoNotice(tone: .error, text: String(localized: "game.photo.notice.save_failed", defaultValue: "L’enregistrement n’a pas pu aboutir.", bundle: .main))
         }
     }
@@ -326,4 +425,10 @@ final class GamePhotoSession: ObservableObject {
         guard completed else { return }
         notice = PhotoNotice(tone: .good, text: String(localized: "game.photo.notice.shared", defaultValue: "Image partagée.", bundle: .main))
     }
+}
+
+/// Traversée de la photo prise vers la tâche qui la réduit pour le carnet — même discipline que
+/// `SendableAttachmentImage` : l'image n'est que LUE, jamais mutée.
+private nonisolated struct SendableSourceImage: @unchecked Sendable {
+    let image: UIImage
 }

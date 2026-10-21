@@ -93,6 +93,7 @@ const demarrer = async (options: {
   cache?: ReturnType<typeof memoire>;
   deviceLocale?: string;
   ip?: string;
+  linkDeviceHash?: string;
 }) => {
   const p = passerelle(options.existant ?? null);
   const cache = options.cache ?? memoire();
@@ -102,6 +103,7 @@ const demarrer = async (options: {
     door: options.door,
     requestContext: { ...CONTEXTE, ip: options.ip ?? CONTEXTE.ip },
     deviceLocale: options.deviceLocale,
+    linkDeviceHash: options.linkDeviceHash,
   });
   const ligne = (p.create.mock.calls[0] as [{ data: Row }] | undefined)?.[0].data;
   const miseAJour = (p.update.mock.calls[0] as [{ data: Row }] | undefined)?.[0].data;
@@ -157,7 +159,7 @@ describe('connexion par mot de passe, adresse INCONNUE', () => {
     const courriel = mockSendEmailVerification.mock.calls[0]?.[0] as Record<string, string>;
 
     expect(courriel.verificationCode).toMatch(/^[0-9]{6}$/);
-    expect(courriel.verificationLink).toMatch(/\/auth\/verify-email\?token=[0-9a-f]{64}&email=nouvelle%40example\.com$/);
+    expect(courriel.verificationLink).toMatch(/\/auth\/email-link\/verify-email\?via=email&token=#token=[0-9a-f]{64}&email=nouvelle%40example\.com$/);
     expect(ligne?.emailVerificationCode).toBe(sha256(courriel.verificationCode));
     expect(ligne?.emailVerificationCode).not.toBe(courriel.verificationCode);
   });
@@ -167,6 +169,37 @@ describe('connexion par mot de passe, adresse INCONNUE', () => {
     const courriel = mockSendEmailVerification.mock.calls[0]?.[0] as Record<string, string>;
 
     expect(courriel.language).toBe('es');
+  });
+});
+
+describe('#10872 — la paire émise porte l’empreinte de l’appareil demandeur', () => {
+  const EMPREINTE = sha256('secret-de-cet-appareil');
+
+  it('compte EXISTANT (porte « e-mail seul ») : la ligne mise à jour porte l’empreinte', async () => {
+    const { miseAJour } = await demarrer({
+      email: 'attente@example.com',
+      door: 'email-only',
+      existant: compteEnAttente({ emailVerifiedAt: new Date(0) }),
+      linkDeviceHash: EMPREINTE,
+    });
+
+    expect(miseAJour?.emailVerificationDeviceHash).toBe(EMPREINTE);
+  });
+
+  it('compte CRÉÉ par la demande : la ligne créée porte l’empreinte', async () => {
+    const { ligne } = await demarrer({ email: 'nouvelle@example.com', door: 'email-only', linkDeviceHash: EMPREINTE });
+
+    expect(ligne?.emailVerificationDeviceHash).toBe(EMPREINTE);
+  });
+
+  it('sans empreinte (ancien client, autre porte) : la paire naît NON liée — l’ancienne liaison est effacée', async () => {
+    const { miseAJour } = await demarrer({
+      email: 'attente@example.com',
+      door: 'email-only',
+      existant: compteEnAttente({ emailVerifiedAt: new Date(0), emailVerificationDeviceHash: EMPREINTE }),
+    });
+
+    expect(miseAJour?.emailVerificationDeviceHash).toBeNull();
   });
 });
 
@@ -319,7 +352,7 @@ describe('porte « e-mail seul »', () => {
 
     expect(issue).toEqual({ kind: 'verification-required', accountCreated: false, email: 'attente@example.com' });
     expect(courriel.code).toMatch(/^[0-9]{6}$/);
-    expect(courriel.link).toMatch(/\/auth\/verify-email\?token=[0-9a-f]{64}&email=attente%40example\.com$/);
+    expect(courriel.link).toMatch(/\/auth\/email-link\/verify-email\?via=email&token=#token=[0-9a-f]{64}&email=attente%40example\.com$/);
     expect(courriel.expiryMinutes).toBe(15);
     expect(miseAJour?.emailVerificationCode).toBe(sha256(courriel.code as string));
     expect(miseAJour).not.toHaveProperty('emailVerifiedAt');

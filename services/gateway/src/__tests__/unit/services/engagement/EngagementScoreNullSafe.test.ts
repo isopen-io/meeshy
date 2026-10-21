@@ -30,6 +30,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { counterWriteOf, type CounterWrite } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
@@ -62,20 +63,25 @@ function makeMongoLikePrisma(initialScore: number | null | undefined) {
     return { engagementScore: state.engagementScore };
   });
 
+  const counterCredit = jest.fn(async (_write: CounterWrite) => ({ count: 2, points: 6 }));
+
   const runCommandRaw = jest.fn(async (command: unknown) => {
     const cmd = command as { findAndModify?: string; update?: unknown };
     if (cmd.findAndModify === undefined) return { ok: 1 };
+    // Le compteur passe par la même porte depuis #10541 : sa commande est
+    // RELUE (elle lève sans `$ifNull`) et remise au double du compteur.
+    const counterWrite = counterWriteOf(command);
+    if (counterWrite !== null) return { ok: 1, value: await counterCredit(counterWrite) };
     // Le pipeline `$ifNull` traite null ET absent comme zéro — c'est tout
     // l'intérêt de cette forme d'écriture.
-    const pipeline = cmd.update as Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
-    const added = pipeline[0].$set.engagementScore.$add[1];
+    const pipeline = cmd.update as Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
+    const added = pipeline[0].$set.sparksSincePrestige.$add[1];
     state.engagementScore = (state.engagementScore ?? 0) + added;
     return { ok: 1, value: { engagementScore: state.engagementScore } };
   });
 
   const prisma = {
     engagementCounter: {
-      upsert: jest.fn().mockResolvedValue({ count: 2, points: 6 }),
       findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
@@ -87,7 +93,7 @@ function makeMongoLikePrisma(initialScore: number | null | undefined) {
     $runCommandRaw: runCommandRaw,
   } as unknown as PrismaClient;
 
-  return { prisma, state, userUpdate, runCommandRaw };
+  return { prisma, state, userUpdate, runCommandRaw, counterCredit };
 }
 
 describe('updateEngagementScore — un champ null ne fait plus perdre le point', () => {
@@ -143,19 +149,16 @@ describe('updateEngagementScore — un champ null ne fait plus perdre le point',
 describe('EngagementCounter.points — l\'invariant qui remplace `Σ(compteur × poids)`', () => {
   it('crédite le poids de l\'axe en POINTS, à côté du compte d\'actions', async () => {
     mockGetShared.mockReturnValue(undefined as never);
-    const { prisma } = makeMongoLikePrisma(0);
-    const upsert = (prisma as unknown as { engagementCounter: { upsert: jest.Mock } }).engagementCounter.upsert;
+    const { prisma, counterCredit } = makeMongoLikePrisma(0);
 
     await new EngagementService(prisma).recordActivity('u-5', 'content.audio_message');
 
-    const args = upsert.mock.calls[0][0] as {
-      create: { count: number; points: number };
-      update: { count: { increment: number }; points: { increment: number } };
-    };
-    const poids = poidsParDefaut('content.audio_message');
-    expect(args.create.points).toBe(poids);
-    expect(args.update.points.increment).toBe(poids);
-    expect(args.create.count).toBe(1);
-    expect(args.update.count.increment).toBe(1);
+    expect(counterCredit.mock.calls[0][0]).toEqual({
+      kind: 'credit',
+      userId: 'u-5',
+      axisKey: 'content.audio_message',
+      count: 1,
+      points: poidsParDefaut('content.audio_message'),
+    });
   });
 });

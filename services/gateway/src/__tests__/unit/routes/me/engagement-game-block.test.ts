@@ -69,7 +69,7 @@ describe('GET /me/engagement — le bloc game', () => {
     const { data } = (await get(app)).json();
 
     expect(data.streak).toEqual({ currentStreakDays: 3, longestStreakDays: 5 });
-    expect(data.level).toEqual({ engagementScore: 120 });
+    expect(data.level).toMatchObject({ engagementScore: 120, sparks: 120 });
     expect(data.counters).toEqual([{ axisKey: 'content.text_message', count: 40, points: 120 }]);
     expect(parseGameBlock(data.game)).toEqual(game);
     await app.close();
@@ -99,7 +99,7 @@ describe('GET /me/engagement — le bloc game', () => {
 
     expect(res.statusCode).toBe(200);
     expect('game' in res.json().data).toBe(false);
-    expect(res.json().data.level).toEqual({ engagementScore: 120 });
+    expect(res.json().data.level).toMatchObject({ engagementScore: 120 });
     await app.close();
   });
 
@@ -116,12 +116,30 @@ describe('GET /me/engagement — le bloc game', () => {
     await app.close();
   });
 
-  it('`meesh.mintCost` sert le prix de la PROCHAINE pièce : la 11e coûte 1 294, pour les anciens clients aussi', async () => {
+  it('`meesh.baseMintCost` sert le prix de rang de la PROCHAINE pièce (la 11e : 1 587) et `mintCost` le prix effectif du niveau actuel (#10847)', async () => {
     const app = await buildApp(async () => null, 10);
 
     const { data } = (await get(app)).json();
 
-    expect(data.meesh.mintCost).toBe(1294);
+    expect(data.meesh.baseMintCost).toBe(1587);
+    // Niveau 1 (120 étincelles) : le facteur vaut 0,505.
+    expect(data.meesh.mintCost).toBe(801);
+    await app.close();
+  });
+
+  it('sert `gameRevision`, l\'instant serveur pris AVANT la lecture du bloc (#10900)', async () => {
+    let readAt = 0;
+    const app = await buildApp(async () => {
+      readAt = Date.now();
+      return realBlock();
+    });
+    const before = Date.now();
+
+    const { data } = (await get(app)).json();
+
+    expect(typeof data.gameRevision).toBe('number');
+    expect(data.gameRevision).toBeGreaterThanOrEqual(before);
+    expect(data.gameRevision).toBeLessThanOrEqual(readAt);
     await app.close();
   });
 });

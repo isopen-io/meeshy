@@ -16,6 +16,7 @@ import { MENTIONED_USER_IDS_SHAPE } from './mention-list.js';
 import { EPHEMERAL_DURATION_SHAPE } from './ephemeral-duration';
 import { OBJECT_ID_REGEX } from '@meeshy/shared/utils/object-id';
 import { MAX_CONTENT_BYTES } from './content-limits.js';
+import { FORWARDED_ATTACHMENT_IDS_SHAPE } from './forwarded-attachments.js';
 
 const mongoId = z
   .string()
@@ -55,6 +56,8 @@ export const SocketMessageSendSchema = z.object({
   // broadcastNewMessage (which would otherwise throw P2023 on a bad id).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // #9914 — la pièce (ou le sous-ensemble) de la source à recopier.
+  ...FORWARDED_ATTACHMENT_IDS_SHAPE,
   // TROISIÈME PORTE de l'exemption de contenu vide (`MessageValidator`
   // :55-69) : une diffusion à plusieurs destinataires copie ses pièces jointes
   // CÔTÉ SERVEUR (`copyAttachments.ts`) et n'envoie donc ni texte ni
@@ -111,6 +114,8 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   // Forward references — validated as ObjectIds (mirrors SocketMessageSendSchema).
   forwardedFromId: mongoId.optional(),
   forwardedFromConversationId: mongoId.optional(),
+  // #9914 — la pièce (ou le sous-ensemble) de la source à recopier.
+  ...FORWARDED_ATTACHMENT_IDS_SHAPE,
   // Effets de message — parité avec SocketMessageSendSchema (path texte) et la
   // route REST POST /messages. Sans ces champs, `z.object` strip un
   // `isViewOnce` / `isBlurred` / `expiresAt` envoyé avec une photo sur le path
@@ -332,6 +337,7 @@ export type SocketMessageEditData = z.infer<typeof SocketMessageEditSchema>;
 
 export const SocketMessageDeleteSchema = z.object({
   messageId: mongoId,
+  reason: z.unknown().optional(),
 });
 
 export type SocketMessageDeleteData = z.infer<typeof SocketMessageDeleteSchema>;

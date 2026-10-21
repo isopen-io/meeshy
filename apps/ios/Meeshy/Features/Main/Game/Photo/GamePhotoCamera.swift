@@ -107,7 +107,7 @@ final class GamePhotoCamera: NSObject, GamePhotoCameraProviding {
         let limit = Date().addingTimeInterval(timeout)
         while !session.isRunning {
             guard wantsRunning, !Task.isCancelled, Date() < limit else { return false }
-            try? await Task.sleep(nanoseconds: 50_000_000)
+            _ = await cancellableSleep(for: .milliseconds(50))
         }
         return true
     }

@@ -51,8 +51,8 @@ final class BubbleStickerMountingGuardTests: XCTestCase {
 
         XCTAssertTrue(builder.contains("resolveSticker("),
                       "BubbleContentBuilder doit projeter le sticker via `resolveSticker`.")
-        XCTAssertTrue(builder.contains("ifRenderable"),
-                      "un sticker non rendable vaut absent — la règle vit dans MessageSticker.ifRenderable.")
+        XCTAssertTrue(builder.contains("ifWireWorthy"),
+                      "un sticker non rendable vaut absent — la règle vit dans MessageSticker.ifWireWorthy.")
     }
 
     /// Le mouvement est une fonction PURE du temps : `TimelineView` + Reduce

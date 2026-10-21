@@ -26,7 +26,7 @@ extension ConversationSyncEngine {
     /// functions. Previously a single network blip silently dropped an
     /// entire page — `succeeded` flipped false and the user landed on a
     /// partial list with no recovery path.
-    private static func fetchPageWithRetry(
+    static func fetchPageWithRetry(
         via service: ConversationServiceProviding,
         offset: Int,
         limit: Int
@@ -38,7 +38,7 @@ extension ConversationSyncEngine {
             } catch {
                 lastError = error
                 if attempt < 2 {
-                    try? await Task.sleep(for: .seconds(1 << attempt))
+                    try await Task.sleep(for: .seconds(1 << attempt))
                 }
             }
         }
@@ -67,11 +67,26 @@ extension ConversationSyncEngine {
         // du compte quitté ne bloque pas celle du suivant, et ne peut plus
         // écrire dans son cache (`saveSorted` → `ownsSession`).
         let owner = await currentUserId()
-        guard claimSync(for: owner) else { return true }
+        guard claimSync(for: owner) else { return await rejoinsLaSynchroEnVol(de: owner) }
         defer { releaseSync(for: owner) }
         return await Self.$syncOwner.withValue(owner) {
             await self.fullSyncForOwner()
         }
+    }
+
+    /// #10927 — une synchro du même compte tient déjà le verrou. Sur un cache
+    /// CHAUD, la liste est servie : rendre `true` dit vrai. Sur un cache VIDE,
+    /// c'était déclarer chargée une liste que personne n'avait lue — l'appelant
+    /// attend donc la synchro en vol, et si elle n'a rien livré, tente la sienne.
+    private func rejoinsLaSynchroEnVol(de owner: String) async -> Bool {
+        guard await listeAFroid() else { return true }
+        await awaitSyncRelease(for: owner)
+        guard await listeAFroid() else { return true }
+        return await fullSync()
+    }
+
+    private func listeAFroid() async -> Bool {
+        (await cache.conversations.load(for: "list").snapshot() ?? []).isEmpty
     }
 
     private func fullSyncForOwner() async -> Bool {
@@ -85,7 +100,7 @@ extension ConversationSyncEngine {
         // À FROID, `/sync` peindrait une liste SANS APERÇUS (#7787) : ses lignes
         // maigres ne portent ni le dernier message ni les non-lus, et chacune
         // serait à réhydrater. La route riche sert tout en un passage.
-        let aFroid = (await cache.conversations.load(for: "list").snapshot() ?? []).isEmpty
+        let aFroid = await listeAFroid()
         let issueDuPlein: IssueDuPleinParSync
         if aFroid {
             issueDuPlein = .indisponible(.cacheVide)
@@ -449,11 +464,11 @@ extension ConversationSyncEngine {
     /// `echouee` (retenter coûterait moins que rejouer ≈ 100 requêtes, et le
     /// cache garde la portion déjà peinte).
     private func fullSyncViaSyncPages() async -> IssueDuPleinParSync {
-        guard let creance = creanceDeSync() else { return .indisponible(.creanceAbsente) }
+        guard let creance = await creanceDeSync() else { return .indisponible(.creanceAbsente) }
 
         let userId = await currentUserId()
         let baseline = await cache.conversations.load(for: "list").snapshot() ?? []
-        let parId = Dictionary(uniqueKeysWithValues: baseline.map { ($0.id, $0) })
+        let parId = Dictionary(baseline.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         var servies: [MeeshyConversation] = []
         var idsServis = Set<String>()
@@ -567,35 +582,46 @@ extension ConversationSyncEngine {
     /// jusqu'au modèle web — chantier de contrat, pas garde de fusion.
     private func deltaSyncCore() async -> DeltaOutcome {
         let owner = await currentUserId()
+        // Une synchro est déjà en vol : un rattrapage de reconnexion demandé
+        // reste posé, et c'est elle qui le rejoue (boucle plus bas).
         guard claimSync(for: owner) else { return .complete }
-        defer { releaseSync(for: owner) }
+        var catchUp = takeReconnectCatchUp()
         // Throttle bursts: when several signals (socket reconnect,
         // foreground return, cache-stale revalidate) fire within the
         // same window, only the first one hits the network. Returning
         // `.complete` is intentional — from the caller's perspective the
-        // delta is "fresh enough" since a recent one just landed.
-        let now = Date()
-        if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
+        // delta is "fresh enough" since a recent one just landed. A socket
+        // RECONNECT is not throttled: it is evidence of a gap.
+        if !catchUp, Date().timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
+            releaseSync(for: owner)
             return .complete
         }
-        lastDeltaSyncAt = now
-
-        let outcome = await Self.$syncOwner.withValue(owner) {
-            await self.deltaSansGarde()
-        }
-        // Un ÉCHEC ne compte pas dans l'anti-rafale : au réveil, le premier
-        // essai tombe souvent sur un réseau pas encore rétabli, et le signal
-        // suivant (reconnexion du socket, coordinateur de premier plan) doit
-        // retenter au lieu d'être absorbé pendant `deltaSyncCooldown` (#7787).
-        if !outcome.succeeded { lastDeltaSyncAt = .distantPast }
+        var outcome = DeltaOutcome.complete
+        var passes = 0
+        repeat {
+            lastDeltaSyncAt = Date()
+            outcome = await Self.$syncOwner.withValue(owner) {
+                await self.deltaSansGarde()
+            }
+            // Un ÉCHEC ne compte pas dans l'anti-rafale : au réveil, le premier
+            // essai tombe souvent sur un réseau pas encore rétabli, et le signal
+            // suivant (reconnexion du socket, coordinateur de premier plan) doit
+            // retenter au lieu d'être absorbé pendant `deltaSyncCooldown` (#7787).
+            if !outcome.succeeded { lastDeltaSyncAt = .distantPast }
+            passes += 1
+            catchUp = takeReconnectCatchUp()
+        } while catchUp && passes < 3
+        releaseSync(for: owner)
+        // Demandé entre la dernière vérification et la libération : rejoué.
+        if hasReconnectCatchUpPending { return await deltaSyncCore() }
         return outcome
     }
 
     private func deltaSansGarde() async -> DeltaOutcome {
-        // LE CHEMIN NOMINAL EST `/sync` (#4172 tranche 2b) : UN aller-retour au
-        // lieu du rejouage à la main, la requête Prisma rétrécie côté serveur.
-        // Le repli vers `GET /conversations?updatedSince=` est NOMMÉ (critère 2)
-        // — jamais un `try?` qui fondrait un refus dans une absence de réseau.
+        // LE CHEMIN NOMINAL EST `/sync` (#4172 tranche 2b) ; le repli vers `GET /conversations?updatedSince=`
+        // est NOMMÉ (critère 2) — jamais un `try?` qui fondrait un refus dans une absence de réseau.
+        // #11164 — un direct gravé sous le lecteur est resservi par `/sync`, qui rend son interlocuteur.
+        if let horizon = await ConversationDeltaRules.repareLesInterlocuteurs(dans: cache, lecteur: await currentUserId()) { lastSyncTimestamp = min(lastSyncTimestamp, horizon) }
         let sinceAvant = lastSyncTimestamp
         switch await deltaViaSync() {
         case let .traite(outcome, nil):
@@ -738,8 +764,10 @@ extension ConversationSyncEngine {
         syncDeltaOverride ?? SyncDeltaClient(baseURL: api.baseURL)
     }
 
-    private func creanceDeSync() -> SyncDeltaCredential? {
-        if let jeton = api.authToken { return .membre(jeton: jeton) }
+    /// #10927 — le jeton RAFRAÎCHI s'il était échu : `/sync` part par son propre
+    /// transport, que la garde d'expiration d'`APIClient` ne couvre pas.
+    private func creanceDeSync() async -> SyncDeltaCredential? {
+        if let jeton = await api.freshAuthToken() { return .membre(jeton: jeton) }
         if let session = api.anonymousSessionToken { return .invite(session: session) }
         return nil
     }
@@ -755,7 +783,7 @@ extension ConversationSyncEngine {
     /// FUSIONNÉE dans l'existante : les champs que `/sync` sert avancent, le
     /// reste ne bouge pas (`fusionneLigneDeSync`).
     private func deltaViaSync() async -> CheminDuDelta {
-        guard let creance = creanceDeSync() else { return .repli(.creanceAbsente) }
+        guard let creance = await creanceDeSync() else { return .repli(.creanceAbsente) }
 
         let demande = SyncDeltaRequest(
             since: WireDate.string(from: lastSyncTimestamp),
@@ -782,7 +810,7 @@ extension ConversationSyncEngine {
             let supprimees = collection?.deleted ?? []
 
             let existing = await cache.conversations.load(for: "list").snapshot() ?? []
-            let parId = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
+            let parId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
             let userId = await currentUserId()
             let mappees = await Self.mapConversationsOffMain(recues, userId: userId)
@@ -827,87 +855,18 @@ extension ConversationSyncEngine {
         }
     }
 
-    /// LA FUSION PAR CHAMPS SERVIS — l'exact miroir de `syncConversationSelect`
-    /// (`routes/sync/conversations.ts`) : ce que `/sync` sert avance, ce qu'il
-    /// ne sert pas (aperçu, traductions, non-lus, participants, préférences,
-    /// rôle courant) reste au cache. Un champ ajouté au select serveur doit
-    /// s'ajouter ICI — le témoin de préservation
-    /// (`ConversationSyncEngineTests`) rougit si une ligne maigre efface ce
-    /// qu'elle ne portait pas.
+    /// Façade : la fusion par champs servis vit dans `ConversationDeltaRules`.
     static func fusionneLigneDeSync(existante: MeeshyConversation?, recue: MeeshyConversation) -> MeeshyConversation {
-        guard var fusion = existante else { return recue }
-        // Ce que `/sync` SERT avance — verbatim, y compris ses `nil` (un titre
-        // effacé côté serveur est une valeur, pas une absence).
-        fusion.title = recue.title
-        fusion.description = recue.description
-        fusion.avatar = recue.avatar
-        fusion.banner = recue.banner
-        fusion.communityId = recue.communityId
-        fusion.isActive = recue.isActive
-        fusion.memberCount = recue.memberCount
-        fusion.encryptionMode = recue.encryptionMode
-        fusion.updatedAt = recue.updatedAt
-        fusion.slowModeSeconds = recue.slowModeSeconds
-        fusion.autoTranslateEnabled = recue.autoTranslateEnabled
-        fusion.closedAt = recue.closedAt
-        // `lastMessageAt` NE s'avance PAS ici (#7787) : l'activité voyage avec
-        // son aperçu, que seule la route riche sert. Une ligne dont l'activité
-        // a bougé est réhydratée (`doitEtreRehydratee`) ; si la réhydratation
-        // échoue, l'ancienne activité reste, et le prochain delta la redétecte.
-        // Ce que `/sync` NE SERT PAS ne bouge pas : `userState` (non-lus, nom
-        // personnalisé), l'aperçu et ses traductions, les pièces, les
-        // participants, le rôle courant, les vignettes — et la palette (`let`),
-        // qui reste celle de la ligne existante par construction.
-        return fusion
+        ConversationDeltaRules.fusionneLigneDeSync(existante: existante, recue: recue)
     }
 
-    /// Merge a batch of delta conversations into `existing` by id. Active deltas
-    /// upsert (replace-or-insert); inactive deltas remove. Returns the merged
-    /// list plus every inactive delta id (so the caller can invalidate their
-    /// message caches, exactly as the previous per-delta loop did). The merged
-    /// order is intentionally unspecified — callers re-sort via `saveSorted`.
-    /// O(existing + deltas) instead of O(deltas × existing).
-    ///
-    /// `tombstoneIds` (`meta.deletedConversationIds`) est le TROISIÈME canal, et
-    /// le seul par lequel une SORTIE de vue parvient au client : `deltas` ne
-    /// porte que des lignes servies, et la clause serveur exclut précisément une
-    /// conversation fermée, quittée, bannie ou supprimée-pour-moi depuis un
-    /// autre appareil. Un `isActive: false` ne suffisait donc pas — il ne décrit
-    /// que les sorties que la page peut encore SERVIR.
-    ///
-    /// Les tombstones s'appliquent APRÈS les upserts, jamais avant : quand les
-    /// deux flux du même lot se contredisent (la page a servi une ligne encore
-    /// visible à la lecture, le stream des sorties la déclare partie), la SORTIE
-    /// est le fait le plus spécifique. La garder affichée rendrait la purge
-    /// inatteignable jusqu'à la réconciliation complète (24 h).
+    /// Façade : la fusion des deltas (upserts, inactifs, tombstones) vit dans `ConversationDeltaRules`.
     static func mergeDeltaConversations(
         existing: [MeeshyConversation],
         deltas: [MeeshyConversation],
         tombstoneIds: [String] = []
     ) -> (merged: [MeeshyConversation], removedIds: [String]) {
-        var byId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-        var removedIds: [String] = []
-        // `removedIds` pilote une invalidation par id chez l'appelant : un même
-        // retrait annoncé par les DEUX canaux ne doit la déclencher qu'une fois.
-        var alreadyRemoved = Set<String>()
-        for delta in deltas {
-            if delta.isActive {
-                byId[delta.id] = delta
-            } else {
-                byId.removeValue(forKey: delta.id)
-                if alreadyRemoved.insert(delta.id).inserted { removedIds.append(delta.id) }
-            }
-        }
-        // Un id inconnu de la liste est rapporté quand même — même règle que
-        // pour un delta inactif inconnu : la liste et le cache des messages sont
-        // deux magasins DISTINCTS, et une conversation absente de l'une peut
-        // très bien laisser un fil dans l'autre. (Divergence assumée avec le
-        // web, dont le cache dérivé est indexé par la même clé que la liste.)
-        for tombstoneId in tombstoneIds {
-            byId.removeValue(forKey: tombstoneId)
-            if alreadyRemoved.insert(tombstoneId).inserted { removedIds.append(tombstoneId) }
-        }
-        return (Array(byId.values), removedIds)
+        ConversationDeltaRules.mergeDeltaConversations(existing: existing, deltas: deltas, tombstoneIds: tombstoneIds)
     }
 
     // MARK: - Messages

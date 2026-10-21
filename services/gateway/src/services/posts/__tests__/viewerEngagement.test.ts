@@ -22,6 +22,7 @@ import {
   readViewerInteractions,
   viewerEngagementGates,
   viewerListAccess,
+  viewerListCounts,
   type ViewerEngagementGates,
   type ViewerEngagementPrisma,
 } from '../viewerEngagement';
@@ -434,7 +435,7 @@ describe('« seulement à partir de maintenant » pour les posts et les réels (
     const prisma = makePrisma();
     await read(prisma);
     expect(prisma.post.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ select: { id: true, authorId: true, type: true } }),
+      expect.objectContaining({ select: expect.objectContaining({ id: true, authorId: true, type: true }) }),
     );
   });
 
@@ -631,5 +632,65 @@ describe('engagementOf — un compteur à zéro n’est pas servi', () => {
       repostCount: 1,
       replyCount: 4,
     });
+  });
+});
+
+describe('« et N visiteurs » — la part anonyme des vues (#10483)', () => {
+  const story = (anonymousViewCount: number | null | undefined) =>
+    ({ id: POST, authorId: AUTHOR, type: 'STORY', ...(anonymousViewCount !== undefined ? { anonymousViewCount } : {}) });
+
+  it("l'auteur lit le nombre de visiteurs sans compte, sur les deux listes", async () => {
+    const prisma = makePrisma({ post: story(7) });
+    const enrichie = await read(prisma, { id: AUTHOR, role: 'USER' });
+    const ancienne = await readPostViews(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR, role: 'USER' }, 50, 0, SINCE);
+
+    expect(enrichie?.anonymousViewCount).toBe(7);
+    expect(ancienne?.anonymousViewCount).toBe(7);
+  });
+
+  it('un post antérieur à la colonne (null ou absent) sert 0', async () => {
+    expect((await read(makePrisma({ post: story(null) }), { id: AUTHOR, role: 'USER' }))?.anonymousViewCount).toBe(0);
+    expect((await read(makePrisma({ post: story(undefined) }), { id: AUTHOR, role: 'USER' }))?.anonymousViewCount).toBe(0);
+  });
+
+  it('le nombre est lu avec la porte, dans la même lecture du post', async () => {
+    const prisma = makePrisma({ post: story(3) });
+    await read(prisma, { id: AUTHOR, role: 'USER' });
+
+    expect(prisma.post.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ anonymousViewCount: true }),
+    }));
+  });
+
+  it('les vues UNIQUES par jeton sont servies sur les deux listes (null ⇒ 0), lues avec la porte', async () => {
+    const post = { ...story(9), uniqueViewCount: 5, anonymousUniqueViewCount: null };
+    const prisma = makePrisma({ post });
+    const enrichie = await read(prisma, { id: AUTHOR, role: 'USER' });
+    const ancienne = await readPostViews(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR, role: 'USER' }, 50, 0, SINCE);
+
+    expect(enrichie).toMatchObject({ anonymousViewCount: 9, uniqueViewCount: 5, anonymousUniqueViewCount: 0 });
+    expect(ancienne).toMatchObject({ anonymousViewCount: 9, uniqueViewCount: 5, anonymousUniqueViewCount: 0 });
+    expect(prisma.post.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ uniqueViewCount: true, anonymousUniqueViewCount: true }),
+    }));
+  });
+
+  it("#11065 — l'en-tête lit les compteurs relus AVEC la liste : vues et impressions servies, lues avec la porte", async () => {
+    const post = { ...story(0), viewCount: 4, uniqueViewCount: 3, impressionCount: 7 };
+    const prisma = makePrisma({ post });
+    const enrichie = await read(prisma, { id: AUTHOR, role: 'USER' });
+    const ancienne = await readPostViews(prisma as unknown as ViewerEngagementPrisma, POST, { id: AUTHOR, role: 'USER' }, 50, 0, SINCE);
+
+    expect(enrichie).toMatchObject({ viewCount: 4, uniqueViewCount: 3, impressionCount: 7 });
+    expect(ancienne).toMatchObject({ viewCount: 4, uniqueViewCount: 3, impressionCount: 7 });
+    expect(viewerListCounts(enrichie!)).toMatchObject({ viewCount: 4, impressionCount: 7 });
+    expect(prisma.post.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ viewCount: true, impressionCount: true }),
+    }));
+  });
+
+  it("un tiers ne lit ni la liste ni le nombre : la porte n'a pas bougé", async () => {
+    const prisma = makePrisma({ post: story(7) });
+    await expect(read(prisma, { id: ANNA, role: 'USER' })).rejects.toThrow('FORBIDDEN');
   });
 });

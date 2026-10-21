@@ -153,6 +153,7 @@ export function messageCardInputOf(params: {
   const credited = (card: CardMedia, author: CardMediaAuthor | null | undefined): CardMedia =>
     !format.showsMediaAuthor || card.kind === 'audio' || author === null || author === undefined ? card : { ...card, credit: creditOf(author) };
   const featured = params.featured === undefined || params.featured === null ? -1 : subject.media.findIndex((item) => item.id === params.featured);
+  const heroRank = subject.media.findIndex((item) => item.hero === true);
   const time = (date: Date | null) => (format.showTimes && date !== null && params.formatTime !== undefined ? params.formatTime(date) : null);
   const part = (source: MessageCardSubjectPart, anonymized: boolean, at: Date | null): MessageCardPart => ({
     author: anonymized ? params.anonymousLabel : format.usePseudonyms && source.handle !== null ? `@${source.handle}` : source.author,
@@ -169,7 +170,12 @@ export function messageCardInputOf(params: {
     showAuthors: format.showAuthors,
     aspect: format.aspect,
     frame: { header: format.header, authors: format.authorsAt, tilt: format.tilt },
-    media: subject.media.map((item) => credited(item.card, item.author)),
+    media: subject.media.map((item) => (item.hero === true ? item.card : credited(item.card, item.author))),
+    heroMedia: heroRank === -1 ? null : heroRank,
+    ...(subject.context === undefined || subject.context.length === 0
+      ? {}
+      : { context: subject.context.map((entry) => ({ part: part(entry.part, entry.folded ? false : format.anonymizeQuoted, null), depth: entry.depth })) }),
+    ...(subject.replyDepth === undefined ? {} : { replyDepth: subject.replyDepth }),
     mediaLayout: format.mediaLayout,
     mediaArrangement: format.mediaArrangement,
     featuredMedia: featured === -1 ? null : featured,
@@ -273,7 +279,7 @@ export function MessageExportSheet({
   /* Ce que la carte PEINT (#9236) — les sorties offertes et le média qu'un export animé décode le suivent. */
   const cards = subject.media.map((item) => item.card);
   const featuredIndex = featured === null ? -1 : subject.media.findIndex((item) => item.id === featured);
-  const disposition: CardMediaDisposition = { layout: format.mediaLayout, arrangement: format.mediaArrangement, featured: featuredIndex === -1 ? null : featuredIndex };
+  const disposition: CardMediaDisposition = { layout: format.mediaLayout, arrangement: format.mediaArrangement, featured: featuredIndex === -1 ? null : featuredIndex, hero: subject.media.findIndex((item) => item.hero === true) };
   const painted = paintedMediaIndexes(cards, disposition);
   const shownId = subject.media[paintedVisualIndexes(cards, disposition)[0] ?? -1]?.id ?? null;
   const outputs = cardOutputsOf(painted.flatMap((index) => cards[index] ?? []));

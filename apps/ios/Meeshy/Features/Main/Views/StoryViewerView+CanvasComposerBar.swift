@@ -239,10 +239,8 @@ struct StoryComposerBarView: View {
                     #selector(UIResponder.resignFirstResponder),
                     to: nil, from: nil, for: nil
                 )
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showTextEmojiPicker = true
-                    }
+                delays.run(after: .milliseconds(100)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showTextEmojiPicker = true }
                 }
             },
             injectedEmoji: $emojiToInject,
@@ -279,7 +277,7 @@ struct StoryComposerBarView: View {
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: 1,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,

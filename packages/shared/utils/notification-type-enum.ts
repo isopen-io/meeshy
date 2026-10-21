@@ -138,6 +138,7 @@ export const notificationTypeEnum = z.enum([
   'game_league_result',       // Résultat de ta semaine de ligue
   'game_season_step',         // Étape de saison atteinte
   'game_mission_window',      // La mission personnelle du jour commence (plage horaire)
+  'game_photo_moment',        // Des étapes franchies app fermée peuvent rejoindre le carnet (#10175)
 
   // ===== PAYMENT/SUBSCRIPTION (future) =====
   'subscription_expiring',    // Abonnement expire bientôt

@@ -462,6 +462,24 @@ export function latestCachedThreadMessage(queryClient: QueryClient, conversation
 }
 
 /**
+ * `latestSurvivingThreadMessage` (#11466) — le message le plus récent du fil en
+ * cache qui reste VISIBLE une fois `excludingId` supprimé : ni supprimé, ni
+ * bulle optimiste. Toutes les fenêtres et toutes les pages, parce que le
+ * remplaçant peut vivre sur une page plus ancienne que celle du supprimé.
+ * `undefined` si le fil n'est pas chargé ou ne porte aucun survivant — seul le
+ * serveur sait alors ce qui précède. Miroir iOS `mostRecentSurvivor`.
+ */
+export function latestSurvivingThreadMessage(queryClient: QueryClient, conversationId: string, excludingId: string): Message | undefined {
+  return threadWindowsOf(queryClient, conversationId)
+    .flatMap((data) => data.pages.flatMap((page) => page.messages))
+    .filter((m) => m.id !== excludingId && m.deletedAt == null && !isUnconfirmedLocalMessage(m))
+    .reduce<Message | undefined>(
+      (latest, m) => (latest === undefined || new Date(m.createdAt).getTime() > new Date(latest.createdAt).getTime() ? m : latest),
+      undefined,
+    );
+}
+
+/**
  * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —
  * `POST conversations.byIdMessages`
  * (`services/gateway/src/routes/conversations/messages-send.ts:117-120`,
@@ -490,6 +508,9 @@ export type SendMessageBody = {
   readonly replyToId?: string;
   /** La pièce NOMMÉE d'une réponse (#6303, #6164) — `messages-send.ts:70`, vérifiée côté passerelle. */
   readonly attachmentReplyTo?: { readonly attachmentId: string };
+  /** LA STORY OU L'HUMEUR CITÉE (#10813) — `messages-send.ts:74`, admise par
+   * `admitStoryReply` dans la seule conversation directe avec son auteur. */
+  readonly storyReplyToId?: string;
   /**
    * LE TRANSFERT (#5866) — `messages-send.ts:71-72`. Aucune route dédiée :
    * un transfert EST un envoi qui désigne sa source, et la passerelle copie
@@ -505,6 +526,8 @@ export type SendMessageBody = {
   readonly forwardedFromId?: string;
   /** OMIS quand la source est inconnue — `''` casse l'écriture `@db.ObjectId`. */
   readonly forwardedFromConversationId?: string;
+  /** Les SEULES pièces du message source à recopier (#9914), avec `forwardedFromId` ; absent ⇒ tout le lot. */
+  readonly forwardedAttachmentIds?: readonly string[];
   /**
    * LA COPIE SERVEUR D'UNE PIÈCE, SANS RÉ-UPLOAD (#8884) — `messages-send.ts:79`.
    * Le serveur recopie les pièces du message désigné vers le nouveau message

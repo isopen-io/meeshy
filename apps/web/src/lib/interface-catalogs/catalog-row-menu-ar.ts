@@ -1,0 +1,42 @@
+import type { RowMenuCatalog } from '../i18n-row-menu-catalog';
+
+/** LE MENU D'UNE LIGNE ET LES PUCES DE LA LISTE, ARABE (#10593). */
+const ar = {
+  'rowMenu.details': 'التفاصيل',
+  'rowMenu.rename': 'إعادة تسمية',
+  'rowMenu.favorite': 'مفضّل',
+  'rowMenu.favorite.remove': 'إزالة من المفضلة',
+  'rowMenu.moveTo': 'نقل إلى…',
+  'rowMenu.moveTo.mine': 'محادثاتي',
+  'rowMenu.block': 'حظر',
+  'rowMenu.unblock': 'إلغاء الحظر',
+  'rowMenu.invite': 'دعوة',
+  'rowMenu.manageMembers': 'إدارة الأعضاء',
+  'rowMenu.adminOpen': 'فتح في الإدارة',
+  'rowMenu.leave': 'مغادرة',
+  'rowMenu.peek': 'معاينة المحادثة',
+  'rowMenu.peek.open': 'فتح المحادثة',
+  'rowMenu.peek.e2ee': 'مشفرة من طرف إلى طرف',
+  'rowMenu.peek.empty': 'لا توجد رسائل بعد',
+  'rowMenu.back': 'رجوع',
+  'rowMenu.block.title': 'حظر هذا المستخدم؟',
+  'rowMenu.block.message': 'لن يتمكّن هذا الشخص من إرسال رسائل إليك. تنتقل المحادثة إلى أرشيفك.',
+  'rowMenu.rename.title': 'إعادة تسمية المحادثة',
+  'rowMenu.rename.label': 'الاسم',
+  'rowMenu.rename.hint': 'اتركه فارغًا لاستعادة اسمها الأصلي.',
+  'rowMenu.rename.save': 'حفظ',
+  'listFilter.nav': 'عوامل التصفية',
+  'listFilter.all': 'الكل',
+  'listFilter.unread': 'غير مقروءة',
+  'listFilter.favorites': 'المفضلة',
+  'listFilter.personal': 'شخصية',
+  'listFilter.private': 'خاصة',
+  'listFilter.open': 'مفتوحة',
+  'listFilter.global': 'عامة',
+  'listFilter.channels': 'قنوات',
+  'listFilter.pinned': 'المثبّتة',
+  'listFilter.archived': 'المؤرشفة',
+  'listRow.muted': 'مكتومة',
+} as const satisfies RowMenuCatalog;
+
+export default ar;

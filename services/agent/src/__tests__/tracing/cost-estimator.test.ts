@@ -17,7 +17,8 @@ describe('estimateCostUsd', () => {
 
   it('uses fallback rate for unknown models', () => {
     const cost = estimateCostUsd('unknown-model-v9', 1000, 500);
-    expect(cost).toBeGreaterThan(0);
+    // #10287 — tarif du plus cher (15 $ / 75 $ par million) : (1000×15 + 500×75) / 1e6.
+    expect(cost).toBeCloseTo(0.0525, 6);
   });
 
   it('returns 0 for zero tokens', () => {

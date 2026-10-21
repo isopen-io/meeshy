@@ -209,7 +209,7 @@ extension CallManager {
             rtc.unlockForConfiguration()
         }
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
+            _ = await cancellableSleep(for: .seconds(QualityThresholds.mediaServicesResetSpeakerDelaySeconds))
             self?.applySpeakerRoute()
         }
     }
@@ -217,5 +217,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

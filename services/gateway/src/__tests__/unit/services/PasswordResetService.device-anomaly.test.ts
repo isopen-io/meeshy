@@ -39,7 +39,9 @@ const mockPrisma = {
   },
   passwordResetToken: {
     findUnique: jest.fn(),
-    update: jest.fn()
+    update: jest.fn(),
+    // #10475 — le jeton se consomme par une écriture conditionnelle.
+    updateMany: jest.fn(async () => ({ count: 1 }))
   },
   passwordHistory: {
     findMany: jest.fn(),

@@ -296,7 +296,7 @@ export async function createStoryCommentNotificationsBatch(
     : '';
 
   // Wording typé : le destinataire doit savoir SUR QUOI porte le commentaire
-  // (story / publication / humeur / statut) et, pour les buckets fan-out, la
+  // (story / publication / humeur) et, pour les buckets fan-out, la
   // story/publication DE QUI. Le contexte voyage en `subtitle` (APN-natif,
   // restauré côté NSE après la donation d'intent), le body reste le contenu
   // du commentaire.

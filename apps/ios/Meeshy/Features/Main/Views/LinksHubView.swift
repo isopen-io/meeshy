@@ -9,7 +9,7 @@ import MeeshyUI
 /// Deep link : https://meeshy.me/links
 struct LinksHubView: View {
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.meeshyConversationList) private var conversationListViewModel
 
     // Sheets de création rapide

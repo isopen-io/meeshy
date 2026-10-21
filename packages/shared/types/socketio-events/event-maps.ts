@@ -9,7 +9,9 @@
  * @see ../socketio-events.ts — la façade qui garde l'adresse historique.
  */
 
+import type { AdminMetricsSubscribeAck, HostMetricsSample } from '../admin-ops.js';
 import type { ConversationEngagementSnapshot, PostEngagementSnapshot } from '../engagement-scale.js';
+import type { GameUpdatedEventData } from '../game-sync.js';
 import type { ContentCaptureAck, ContentCaptureReportInput } from '../content-capture.js';
 // Import pour les événements sociaux (posts, stories, statuts, commentaires)
 import type {
@@ -51,6 +53,7 @@ import type {
 
 // La ligne de réaction persistée — ce que l'accusé de `reaction:add` porte.
 import type { ReactionData } from '../reaction.js';
+import type { PackInstallationUpdatedEventData, ProfileDecorUpdatedEventData } from './pack.js';
 
 // Import pour les événements d'appels vidéo
 import type {
@@ -236,6 +239,7 @@ import type { SocketIOResponse } from './socket.js';
 import type {
   RequestTranslationData,
   StoryTranslationUpdatedEventData,
+  MessageTranslationSharedEventData,
   TranslationEvent,
 } from './translation.js';
 import type { UserUpdatedEventData } from './user.js';
@@ -252,14 +256,17 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME]: (data: MessageHiddenForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_RESTORED_FOR_ME]: (data: MessageRestoredForMeEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
+  [SERVER_EVENTS.MESSAGE_TRANSLATION_SHARED]: (data: MessageTranslationSharedEventData) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;
   [SERVER_EVENTS.TYPING_STOP]: (data: TypingEvent) => void;
   [SERVER_EVENTS.VIEWING_START]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_STOP]: (data: ViewingEvent) => void;
   [SERVER_EVENTS.VIEWING_SNAPSHOT]: (data: ViewingSnapshotEvent) => void;
   [SERVER_EVENTS.VIEWING_ACTIVITY]: (data: ViewingEvent) => void;
+  [SERVER_EVENTS.ADMIN_METRICS_SAMPLE]: (sample: HostMetricsSample) => void;
   [SERVER_EVENTS.ENGAGEMENT_CONVERSATION_UPDATED]: (data: ConversationEngagementSnapshot) => void;
   [SERVER_EVENTS.ENGAGEMENT_POST_UPDATED]: (data: PostEngagementSnapshot) => void;
+  [SERVER_EVENTS.GAME_UPDATED]: (data: GameUpdatedEventData) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
   [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
@@ -389,6 +396,10 @@ export interface ServerToClientEvents {
     data: UserPreferencesCommunityReorderedEventData
   ) => void;
 
+  // Packs
+  [SERVER_EVENTS.PACK_INSTALLATION_UPDATED]: (data: PackInstallationUpdatedEventData) => void;
+  [SERVER_EVENTS.PROFILE_DECOR_UPDATED]: (data: ProfileDecorUpdatedEventData) => void;
+
   // User Profile
   [SERVER_EVENTS.USER_UPDATED]: (data: UserUpdatedEventData) => void;
 
@@ -469,6 +480,8 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.VIEWING_START]: (data: ViewingActionData) => void;
   [CLIENT_EVENTS.VIEWING_STOP]: (data: ViewingActionData) => void;
   [CLIENT_EVENTS.VIEWING_ACTIVITY]: (data: ViewingActivityData) => void;
+  [CLIENT_EVENTS.ADMIN_METRICS_SUBSCRIBE]: (data: Record<string, never> | undefined, ack?: (response: AdminMetricsSubscribeAck) => void) => void;
+  [CLIENT_EVENTS.ADMIN_METRICS_UNSUBSCRIBE]: () => void;
   [CLIENT_EVENTS.AUTHENTICATE]: (data: AuthenticateData) => void;
   [CLIENT_EVENTS.REQUEST_TRANSLATION]: (data: RequestTranslationData) => void;
   /**

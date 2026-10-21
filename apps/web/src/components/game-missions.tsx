@@ -9,8 +9,10 @@ import { personalMissionClock } from '@/lib/game/personal-mission-clock';
 import { timerLabel } from '@/lib/view/game-copy-v2';
 
 import { Chest, useChoreography } from '@/components/game';
+import { Glyph } from '@/components/glyph';
 import { ProgressBar } from '@/components/progress-bar';
 import { difficultyName, formatCount, gameText, meeshCount, missionTitle, pointsLabel } from '@/lib/view/game-copy';
+import { chestRewardLines, starFragmentsLabel } from '@/lib/view/game-chest-copy';
 import { chestDetail, missionDetail } from '@/lib/view/game-detail';
 
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2, GAME_ON_WARM, GAME_WARM, GameCard, GameChip } from './game-surface';
@@ -21,9 +23,9 @@ import { GameFactChips, GameRequirementLine, GameSpendLine, GameTouch } from './
  * un changement par jour (1 Meesh), et le coffre qui s'ouvre quand tout est
  * fait (conception, partie II « Missions du jour »).
  *
- * Le coffre dit son contenu AVANT l'ouverture (60 à 200 points, une chance sur
- * six d'un fragment, une sur vingt d'un gel) : un tirage dont on ignore les
- * chances est une loterie, pas un jeu. Ouvert, ses récompenses se posent AU-
+ * Le coffre garde son contenu SECRET jusqu'à l'ouverture (#10567, qui renverse
+ * #10011) : fermé, il ne dit ni montant, ni chance, ni borne — la surprise est
+ * son contenu. Ouvert, ses récompenses se posent AU-
  * DESSUS de lui (`data-game-reward`) — c'est la cible de la chorégraphie
  * « chest », que ce composant joue quand le contenu servi arrive.
  *
@@ -39,6 +41,8 @@ type PrismHour = NonNullable<GameBlock['boosts']['prismHour']>;
 export type GameMissionsProps = {
   readonly missions: GameMissionsBlock;
   readonly chest: GameChest;
+  /** Les fragments d'étoile collectés (#10011) — absent devant un serveur antérieur. */
+  readonly starFragments?: number | undefined;
   /** Meeshes gardées : de quoi payer un changement. */
   readonly held: number;
   readonly level: number;
@@ -52,12 +56,15 @@ export type GameMissionsProps = {
   readonly errors?: { readonly reroll?: string | undefined; readonly chest?: string | undefined };
   /** L'horloge des minuteurs (#9539) ; absente, les cartes lisent l'heure et se mettent à jour d'elles-mêmes. */
   readonly now?: Date | undefined;
+  /** La fin de mission se photographie (#10816) : présent, une mission personnelle accomplie propose sa carte. */
+  readonly onPhotoMission?: ((mission: MissionPhotoRef) => void) | undefined;
 };
+
+/** Ce que la photo d'une fin de mission retient d'elle : son identité, son modèle et sa cible (le titre s'en déduit). */
+export type MissionPhotoRef = { readonly id: string; readonly templateKey: string; readonly target: number };
 
 const clock = (minute: number): string =>
   `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
-
-const chance = (fraction: number): string => gameText('game.chest.chance', { odds: formatCount(Math.round(1 / fraction)) });
 
 function MissionRow({
   mission,
@@ -184,7 +191,15 @@ function useClockNow(fixed: Date | undefined, end: number): Date {
  * venir) puis jusqu'à la FIN (en cours) ; passée la fin, la carte dit « Terminée » ou « Manquée », sans
  * décompte. Elle ne se change pas : le tirage est le sien, une fois par jour.
  */
-function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<GameMissionsBlock['personal']>; readonly now: Date }) {
+function PersonalMissionRow({
+  mission,
+  now,
+  onPhoto,
+}: {
+  readonly mission: NonNullable<GameMissionsBlock['personal']>;
+  readonly now: Date;
+  readonly onPhoto?: ((mission: MissionPhotoRef) => void) | undefined;
+}) {
   const clock = personalMissionClock({ startsAt: mission.startsAt, endsAt: mission.endsAt, completedAt: mission.completedAt, now });
   const done = clock.phase === 'completed';
   const title = missionTitle(mission.templateKey, mission.target);
@@ -202,6 +217,18 @@ function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<Ga
       <div className="flex flex-wrap items-center gap-1.5">
         <GameChip tint={GAME_BRAND}>{gameText('game.mission.personal.chip')}</GameChip>
         <GameChip tint={done ? GAME_GOOD : clock.phase === 'missed' ? GAME_INK_2 : GAME_WARM}>{status}</GameChip>
+        {done && onPhoto !== undefined ? (
+          <button
+            type="button"
+            data-mission-photo={mission.id}
+            aria-label={`${gameText('game.photo.offer.start')} — ${title}`}
+            onClick={() => onPhoto({ id: mission.id, templateKey: mission.templateKey, target: mission.target })}
+            className="ms-auto grid size-11 shrink-0 place-items-center rounded-chip"
+            style={{ color: GAME_BRAND }}
+          >
+            <Glyph name="image" size={18} />
+          </button>
+        ) : null}
       </div>
       <p className="text-body font-semibold" style={{ color: GAME_INK }}>
         {title}
@@ -219,19 +246,11 @@ function PersonalMissionRow({ mission, now }: { readonly mission: NonNullable<Ga
 function Rewards({ reward }: { readonly reward: NonNullable<GameChest['reward']> }) {
   return (
     <ul className="flex flex-wrap justify-center gap-2" aria-label={gameText('game.chest.contents')}>
-      <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-        {gameText('game.fmt.signed', { value: pointsLabel(reward.points) })}
-      </li>
-      {reward.fragment ? (
-        <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-          {gameText('game.chest.reward.fragment')}
+      {chestRewardLines(reward).map((line) => (
+        <li key={line} data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
+          {line}
         </li>
-      ) : null}
-      {reward.freeze ? (
-        <li data-game-reward="" className="rounded-chip px-2.5 py-1 text-check font-semibold" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 18%, transparent)', color: GAME_INK }}>
-          {gameText('game.chest.reward.freeze')}
-        </li>
-      ) : null}
+      ))}
     </ul>
   );
 }
@@ -243,8 +262,10 @@ function ChestCard({
   online,
   onClaim,
   error,
+  starFragments,
 }: {
   readonly chest: GameChest;
+  readonly starFragments: number | undefined;
   /** Les missions du jour faites, sur celles du jour : ce que le coffre attend. */
   readonly done: { readonly count: number; readonly total: number };
   readonly opening: boolean;
@@ -261,12 +282,11 @@ function ChestCard({
     }
     if (rewarded.current) return;
     rewarded.current = true;
-    play('chest', { rewards: 1 + Number(chest.reward.fragment) + Number(chest.reward.freeze) });
+    play('chest', { rewards: chestRewardLines(chest.reward).length });
   }, [chest.reward, play]);
 
   const state = opening || chest.status === 'claimed' ? (chest.reward === null ? 'opening' : 'claimed') : chest.status;
   const open = state === 'opening' || state === 'claimed';
-  const { odds } = chest;
   return (
     <div data-game-chest-state={state} className="flex flex-col items-center gap-2 rounded-card px-3 py-3" style={{ backgroundColor: 'color-mix(in srgb, var(--ios-warning) 8%, transparent)' }}>
       <div ref={ref} className="flex flex-col items-center gap-2">
@@ -312,14 +332,11 @@ function ChestCard({
           {gameText('game.chest.claimed')}
         </p>
       ) : null}
-      <p className="text-center text-caption" style={{ color: GAME_INK_2 }}>
-        {gameText('game.chest.odds', {
-          min: formatCount(odds.minPoints),
-          max: pointsLabel(odds.maxPoints),
-          fragment: chance(odds.fragment),
-          freeze: chance(odds.freeze),
-        })}
-      </p>
+      {starFragments === undefined ? null : (
+        <p data-game-star-fragments="" className="text-center text-caption" style={{ color: GAME_INK_2 }}>
+          {starFragmentsLabel(starFragments)}
+        </p>
+      )}
       {error === undefined || opening ? null : (
         <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
           {error}
@@ -340,7 +357,7 @@ function lastWindowEnd(missions: GameMissionsBlock): number {
 }
 
 export function GameMissions(props: GameMissionsProps) {
-  const { missions, chest, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors } = props;
+  const { missions, chest, starFragments, held, level, prismHour, online, pendingRerollId, chestOpening, onReroll, onClaim, errors, onPhotoMission } = props;
   const now = useClockNow(props.now, missions.unlocked ? lastWindowEnd(missions) : 0);
 
   if (!missions.unlocked) {
@@ -392,7 +409,7 @@ export function GameMissions(props: GameMissionsProps) {
             onReroll={onReroll}
           />
         ))}
-        {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} />}
+        {missions.personal == null ? null : <PersonalMissionRow mission={missions.personal} now={now} onPhoto={onPhotoMission} />}
       </ul>
       {/* Le prix d'un changement, avant le geste (#9705) : une ligne pour la liste, pas une par mission. */}
       {rerollShown ? (
@@ -400,7 +417,7 @@ export function GameMissions(props: GameMissionsProps) {
           <p className="text-caption font-semibold" style={{ color: GAME_INK_2 }}>
             {gameText('game.mission.reroll', { price: meeshCount(MISSION_REROLL_PRICE) })}
           </p>
-          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} />
+          <GameSpendLine concept="missions" held={held} cost={MISSION_REROLL_PRICE} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.reroll', { missing }) }} />
         </div>
       ) : null}
       {errors?.reroll === undefined ? null : (
@@ -413,7 +430,7 @@ export function GameMissions(props: GameMissionsProps) {
           {gameText('game.missions.offline')}
         </p>
       )}
-      <ChestCard chest={chest} done={done} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} />
+      <ChestCard chest={chest} done={done} opening={chestOpening} online={online} onClaim={onClaim} error={errors?.chest} starFragments={starFragments} />
     </GameCard>
   );
 }

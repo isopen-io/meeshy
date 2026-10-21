@@ -226,9 +226,13 @@ struct DiscoverTab: View {
                 avatarURL: match.user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: match.user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: match.user.id, isOnline: match.user.isOnline),
+                ring: match.user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
             )
             .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .countsImpression(of: statusViewModel.statusForUser(userId: match.user.id)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(displayName)
@@ -337,9 +341,13 @@ struct DiscoverTab: View {
                 avatarURL: user.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline),
+                ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
             .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .countsImpression(of: statusViewModel.statusForUser(userId: user.id)?.id) {
+                statusViewModel.trackImpression($0)
+            }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)

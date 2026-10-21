@@ -63,6 +63,9 @@ export const DOMAINES = {
     'apps/web/scripts/lib/files.mjs',
     'apps/web/scripts/lib/fixture-markers.mjs',
   ],
+  // Les sources de design des cadres de gloire (lot L2, #10153) : la garde d'empiètement régénère les SVG des
+  // ateliers et mesure Mee et Meo contre la fenêtre photo. Rien d'autre ne lit ces fichiers.
+  glory_frames: ['docs/product/cadres-de-gloire/'],
 };
 
 const toutVrai = () => Object.fromEntries(Object.keys(DOMAINES).map((domaine) => [domaine, true]));
@@ -97,25 +100,27 @@ const fichiersChanges = ({ event, base, head }) => {
 };
 
 const CAS = [
-  ['iOS seul', ['apps/ios/Meeshy/App.swift', 'packages/MeeshySDK/Package.swift'], { translator: false, shell_android: false }],
-  ['traducteur', ['services/translator/src/main.py'], { translator: true, shell_android: false }],
-  ['passerelle (tests vocaux)', ['services/gateway/src/voice.ts'], { translator: true, shell_android: false }],
-  ['schéma partagé', ['packages/shared/prisma/schema.prisma'], { translator: true, shell_android: false }],
-  ['fiche marketing', ['docs/marketing/app-store-fiche-2026-08.md'], { translator: true, shell_android: false }],
-  ['pages institutionnelles', ['apps/web/src/institutional/faq.ts'], { translator: true, shell_android: false }],
-  ['web hors institutionnel', ['apps/web/src/routes/thread.tsx'], { translator: false, shell_android: false }],
-  ['docs hors marketing', ['docs/product/roadmap.md', 'tasks/lessons.md'], { translator: false, shell_android: false }],
-  ['ce workflow', ['apps/ios/x.swift', '.github/workflows/ci.yml'], { translator: true, shell_android: true }],
-  ['lockfile', ['bun.lock'], { translator: true, shell_android: true }],
-  ['diff illisible', null, { translator: true, shell_android: true }],
-  ['diff vide', [], { translator: true, shell_android: true }],
-  ['préfixe trompeur', ['services/translator-old/x.py', 'packages/shared-legacy/x.ts'], { translator: false, shell_android: false }],
-  ['coque Android (gradle)', ['apps/web/android/app/build.gradle'], { translator: false, shell_android: true }],
-  ['version de l\'app web', ['apps/web/package.json'], { translator: false, shell_android: true }],
-  ['pilote des coques', ['apps/web/scripts/build-shells.mjs'], { translator: false, shell_android: true }],
-  ['config Capacitor', ['apps/web/capacitor.config.ts'], { translator: false, shell_android: true }],
-  ['coque iOS seule', ['apps/web/ios/App/App/Info.plist'], { translator: false, shell_android: false }],
-  ['témoin des coques', ['apps/web/scripts/build-shells.test.ts'], { translator: false, shell_android: false }],
+  ['iOS seul', ['apps/ios/Meeshy/App.swift', 'packages/MeeshySDK/Package.swift'], { translator: false, shell_android: false, glory_frames: false }],
+  ['traducteur', ['services/translator/src/main.py'], { translator: true, shell_android: false, glory_frames: false }],
+  ['passerelle (tests vocaux)', ['services/gateway/src/voice.ts'], { translator: true, shell_android: false, glory_frames: false }],
+  ['schéma partagé', ['packages/shared/prisma/schema.prisma'], { translator: true, shell_android: false, glory_frames: false }],
+  ['fiche marketing', ['docs/marketing/app-store-fiche-2026-08.md'], { translator: true, shell_android: false, glory_frames: false }],
+  ['pages institutionnelles', ['apps/web/src/institutional/faq.ts'], { translator: true, shell_android: false, glory_frames: false }],
+  ['web hors institutionnel', ['apps/web/src/routes/thread.tsx'], { translator: false, shell_android: false, glory_frames: false }],
+  ['docs hors marketing', ['docs/product/roadmap.md', 'tasks/lessons.md'], { translator: false, shell_android: false, glory_frames: false }],
+  ['ce workflow', ['apps/ios/x.swift', '.github/workflows/ci.yml'], { translator: true, shell_android: true, glory_frames: true }],
+  ['lockfile', ['bun.lock'], { translator: true, shell_android: true, glory_frames: true }],
+  ['diff illisible', null, { translator: true, shell_android: true, glory_frames: true }],
+  ['diff vide', [], { translator: true, shell_android: true, glory_frames: true }],
+  ['préfixe trompeur', ['services/translator-old/x.py', 'packages/shared-legacy/x.ts'], { translator: false, shell_android: false, glory_frames: false }],
+  ['coque Android (gradle)', ['apps/web/android/app/build.gradle'], { translator: false, shell_android: true, glory_frames: false }],
+  ['version de l\'app web', ['apps/web/package.json'], { translator: false, shell_android: true, glory_frames: false }],
+  ['pilote des coques', ['apps/web/scripts/build-shells.mjs'], { translator: false, shell_android: true, glory_frames: false }],
+  ['config Capacitor', ['apps/web/capacitor.config.ts'], { translator: false, shell_android: true, glory_frames: false }],
+  ['coque iOS seule', ['apps/web/ios/App/App/Info.plist'], { translator: false, shell_android: false, glory_frames: false }],
+  ['témoin des coques', ['apps/web/scripts/build-shells.test.ts'], { translator: false, shell_android: false, glory_frames: false }],
+  ['cadres de gloire', ['docs/product/cadres-de-gloire/generateur/lib/overlap.mjs'], { translator: false, shell_android: false, glory_frames: true }],
+  ['autre doc produit', ['docs/product/cadres-de-gloire-old/x.md', 'docs/product/roadmap.md'], { translator: false, shell_android: false, glory_frames: false }],
 ];
 
 const selfTest = () => {

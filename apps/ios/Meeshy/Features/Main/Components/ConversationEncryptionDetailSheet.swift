@@ -14,7 +14,7 @@ struct ConversationEncryptionDetailSheet: View {
     @State private var selectedMode: E2EAPI.ConversationEncryptionMode = .server
     @State private var errorMessage: String?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-encryption")
+    private static let logger = MeeshyLog.logger(.conversationEncryption)
 
     var body: some View {
         NavigationStack {
@@ -224,7 +224,7 @@ struct ConversationEncryptionDetailSheet: View {
         switch mode {
         case .e2ee:
             return String(localized: "conversation.encryption.mode.e2ee.label",
-                          defaultValue: "Bout en bout (Signal)",
+                          defaultValue: "Bout en bout (sur vos appareils)",
                           bundle: .main)
         case .server:
             return String(localized: "conversation.encryption.mode.server.label",

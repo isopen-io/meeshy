@@ -1,0 +1,333 @@
+import SwiftUI
+import Combine
+import MeeshySDK
+
+public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
+    @ObservedObject private var viewModel: ViewModel
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
+    @Environment(\.dismiss) private var dismiss
+
+    public var onSelectCommunity: ((MeeshyCommunity) -> Void)?
+    public var onCreateCommunity: (() -> Void)?
+    public var onDismiss: (() -> Void)?
+
+    @State private var scrollRelay = ScrollOffsetRelay()
+
+    public init(
+        viewModel: ViewModel,
+        onSelectCommunity: ((MeeshyCommunity) -> Void)? = nil,
+        onCreateCommunity: (() -> Void)? = nil,
+        onDismiss: (() -> Void)? = nil
+    ) {
+        self.viewModel = viewModel
+        self.onSelectCommunity = onSelectCommunity
+        self.onCreateCommunity = onCreateCommunity
+        self.onDismiss = onDismiss
+    }
+
+    public var body: some View {
+        ZStack {
+            theme.backgroundPrimary.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                navigationHeader
+                searchBar
+
+                if viewModel.isLoading && viewModel.communities.isEmpty {
+                    Spacer()
+                    ProgressView()
+                        .tint(MeeshyColors.brandPrimary)
+                    Spacer()
+                } else if viewModel.communities.isEmpty && !viewModel.isLoading {
+                    Spacer()
+                    emptyState
+                    Spacer()
+                } else {
+                    communityGrid
+                }
+            }
+        }
+        .refreshable { await viewModel.refresh() }
+        .task { await viewModel.loadIfNeeded() }
+    }
+
+    // MARK: - Navigation Header
+
+    private var navigationHeader: some View {
+        // Seul ce reader se re-rend au fil du scroll — la racine écrit
+        // `scrollRelay.offset` sans s'y abonner (P1-1).
+        ScrollOffsetReader(relay: scrollRelay) { offset in
+        CollapsibleHeader(
+            title: String(localized: "community.list.title", defaultValue: "Communautés", bundle: .module),
+            scrollOffset: offset,
+            onBack: {
+                if let onDismiss {
+                    onDismiss()
+                } else {
+                    dismiss()
+                }
+            },
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.indigo500,
+            backgroundColor: theme.backgroundPrimary,
+            trailing: {
+                Button { onCreateCommunity?() } label: {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: MeeshyIconSize.xxl))
+                        .foregroundStyle(
+                            LinearGradient(
+                                colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+                .accessibilityLabel(String(localized: "community.list.create.accessibilityLabel", defaultValue: "Créer une communauté", bundle: .module))
+            }
+        )
+        }
+    }
+
+    // MARK: - Search Bar
+
+    private var searchBar: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: MeeshyIconSize.sm))
+                .foregroundColor(theme.textMuted)
+
+            TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
+                .textFieldStyle(.plain)
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            if !viewModel.searchText.isEmpty {
+                Button {
+                    viewModel.searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: MeeshyIconSize.sm))
+                        .foregroundColor(theme.textMuted)
+                }
+            }
+        }
+        .padding(MeeshySpacing.smPlus)
+        .background(theme.backgroundSecondary.opacity(0.5))
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
+        .padding(.horizontal, MeeshySpacing.lg)
+        .padding(.bottom, MeeshySpacing.sm)
+    }
+
+    // MARK: - Empty State
+
+    private var emptyState: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Image(systemName: "person.3.fill")
+                .font(.system(size: MeeshyIconSize.hero))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communauté", bundle: .module))
+                .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+
+            Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou crée une communauté pour collaborer", bundle: .module))
+                .font(.system(size: MeeshyFont.labelSize, design: .rounded))
+                .foregroundColor(theme.textSecondary)
+                .multilineTextAlignment(.center)
+
+            Button { onCreateCommunity?() } label: {
+                HStack(spacing: MeeshySpacing.xsPlus) {
+                    Image(systemName: "plus.circle.fill")
+                    Text(String(localized: "community.list.empty.createButton", defaultValue: "Créer une communauté", bundle: .module))
+                }
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .padding(.horizontal, MeeshySpacing.xxl)
+                .padding(.vertical, MeeshySpacing.md)
+                .background(
+                    LinearGradient(
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .clipShape(Capsule())
+            }
+        }
+        .padding(.horizontal, 40)
+    }
+
+    // MARK: - Community Grid
+
+    private var communityGrid: some View {
+        ScrollView {
+            GeometryReader { geo in
+                Color.clear.preference(
+                    key: ScrollOffsetPreferenceKey.self,
+                    value: geo.frame(in: .named("scroll")).minY
+                )
+            }
+            .frame(height: 0)
+
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: MeeshySpacing.mdPlus), GridItem(.flexible(), spacing: MeeshySpacing.mdPlus)],
+                spacing: 14
+            ) {
+                ForEach(Array(viewModel.communities.enumerated()), id: \.element.id) { index, community in
+                    VibrantCommunityCard(community: community) {
+                        onSelectCommunity?(community)
+                    }
+                    .equatable()
+                    .animation(
+                        .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
+                        value: viewModel.communities.count
+                    )
+                }
+
+                if viewModel.hasMore {
+                    ProgressView()
+                        .tint(MeeshyColors.brandPrimary)
+                        .padding()
+                        .task { await viewModel.loadMore() }
+                }
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.top, MeeshySpacing.xs)
+            .padding(.bottom, MeeshySpacing.xl)
+        }
+        .coordinateSpace(name: "scroll")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { scrollRelay.offset = $0 }      // iOS 16–17
+        .trackScrollContentOffset { scrollRelay.offset = -$0 }                               // iOS 18+ (preference path is dead there)
+    }
+}
+
+// MARK: - Vibrant Community Card
+
+private struct VibrantCommunityCard: View, Equatable {
+    let community: MeeshyCommunity
+    var onTap: () -> Void
+    @State private var isPressed = false
+
+    // Leaf-cell equality (CLAUDE.md "Leaf Views"): only the community data
+    // drives the body — the `onTap` closure and transient `@State` do not.
+    static func == (lhs: VibrantCommunityCard, rhs: VibrantCommunityCard) -> Bool {
+        lhs.community == rhs.community
+    }
+
+    private var accentColor: String {
+        community.color.isEmpty ? DynamicColorGenerator.colorForName(community.name) : community.color
+    }
+
+    private var avatarBadge: some View {
+        // Community avatar — circular, top-trailing, ringed for
+        // separation from the banner.
+        CachedAvatarImage(
+            urlString: community.avatar,
+            name: community.name,
+            size: 44,
+            accentColor: accentColor
+        )
+        .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: MeeshyBorder.strong))
+        .shadow(color: Color.black.opacity(0.25), radius: 4, y: 2)
+        .rotationEffect(.degrees(isPressed ? -8 : 0))
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+        .padding(.trailing, MeeshySpacing.smPlus)
+        .padding(.top, MeeshySpacing.smPlus)
+    }
+
+    private var privacyChip: some View {
+        HStack(spacing: MeeshySpacing.xxs) {
+            Image(systemName: community.isPrivate ? "lock.fill" : "globe")
+                .font(.system(size: 8, weight: .semibold))
+    }
+    .foregroundColor(.white.opacity(0.85))
+    .padding(.horizontal, MeeshySpacing.xsPlus)
+    .padding(.vertical, MeeshySpacing.xxs)
+    .background(Color.black.opacity(0.25))
+    .clipShape(Capsule())
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .padding(.leading, MeeshySpacing.smPlus)
+    .padding(.top, MeeshySpacing.smPlus)
+    }
+
+    var body: some View {
+        Button {
+            withAnimation { isPressed = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation { isPressed = false }
+            }
+            onTap()
+        } label: {
+            cardContent
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: MeeshyRadius.xl)))
+    }
+
+    private var cardContent: some View {
+        ZStack(alignment: .bottomLeading) {
+            // Banner image — full-bleed. Falls back to the community's
+            // derived accent colour gradient when no banner is set.
+            CachedBannerImage(
+                urlString: community.banner,
+                fallbackColor: accentColor,
+                height: 180
+            )
+
+            avatarBadge
+
+            privacyChip
+
+            LinearGradient(
+                colors: [.clear, .clear, Color.black.opacity(0.65)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
+                Text(community.name)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+
+                if let desc = community.description, !desc.isEmpty {
+                    Text(desc)
+                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
+                        .foregroundColor(.white.opacity(0.8))
+                        .lineLimit(2)
+                }
+
+                HStack(spacing: MeeshySpacing.sm) {
+                    HStack(spacing: MeeshySpacing.xxs) {
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: MeeshyIconSize.xxs))
+                        Text(CompactCountLabel.text(community.memberCount))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                    }
+
+                    HStack(spacing: MeeshySpacing.xxs) {
+                        Image(systemName: "bubble.left.fill")
+                            .font(.system(size: MeeshyIconSize.xxs))
+                        Text(CompactCountLabel.text(community.conversationCount))
+                            .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
+                    }
+                }
+                .foregroundColor(.white.opacity(0.9))
+            }
+            .padding(MeeshySpacing.md)
+        }
+        .frame(height: 180)
+        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
+        .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 8, y: 4)
+        .scaleEffect(isPressed ? 0.95 : 1)
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isPressed)
+    }
+}

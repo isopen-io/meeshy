@@ -148,9 +148,12 @@ enum MessageCardExportMenu {
     /// post + la racine + elle, ou les réponses choisies. L'atelier ouvre sur le
     /// mode par défaut et offre les autres au-dessus de l'aperçu. `nil` quand
     /// rien ne s'image (`PostCommentCardComposition` en tient les gardes).
-    static func request(post: FeedPost, comment: FeedComment, thread: [FeedComment], showOriginal: Bool, accentColor: String,
+    ///
+    /// Le support est un POST ou un RÉEL (`post`) ou une STORY (`story`, #10915) : son
+    /// visuel s'imprime en HERO au sommet de la carte, avant tout texte.
+    static func request(post: FeedPost?, story: PostCommentCardStory? = nil, comment: FeedComment, thread: [FeedComment], showOriginal: Bool, accentColor: String,
                         viewer: MessageCardSubject.Viewer, handle: String?, audioPrism: [String] = []) -> MessageCardExportRequest? {
-        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
+        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal, story: story)
         let served = (thread + [comment]).reduce(into: [String: String]()) { languages, item in
             guard !(item.id == comment.id && showOriginal) else { return }
             languages.merge(servedAudioLanguages(of: item, prism: audioPrism)) { own, _ in own }

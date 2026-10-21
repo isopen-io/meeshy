@@ -70,9 +70,11 @@ final class CallFrameFormatExtensionTests: XCTestCase {
         XCTAssertEqual(sut.cost, .light)
     }
 
-    func test_catalogue_declaresNoNewKeyYet_soEveryFrameStaysCaptureOnly() {
-        let declaring = CallFrameCatalogue.all.filter { $0.surfaces != [.capture] || $0.credits != nil || $0.cost != nil }.map(\.id)
-        XCTAssertEqual(declaring, [])
+    /// #10195 — chaque motif DÉCLARE où il sert : le direct se lit dans la donnée, plus dans le coût.
+    func test_catalogue_declaresItsSurfaces_andNoCreditOrCostYet() {
+        XCTAssertTrue(CallFrameCatalogue.all.allSatisfy { $0.surfaces.contains(.capture) })
+        XCTAssertTrue(CallFrameCatalogue.all.contains { $0.isOffered(on: .live) })
+        XCTAssertEqual(CallFrameCatalogue.all.filter { $0.credits != nil || $0.cost != nil }.map(\.id), [])
     }
 
     // MARK: - Signature facultative

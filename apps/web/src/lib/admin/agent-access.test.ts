@@ -35,6 +35,7 @@ const AUCUNE: AdminPermissions = {
   canManageNotifications: false,
   canManageTranslations: false,
   canManageAgent: false,
+  canManageGame: false,
 };
 
 describe('agentAccess', () => {

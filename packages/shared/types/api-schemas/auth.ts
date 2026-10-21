@@ -355,6 +355,61 @@ export const refreshTokenRequestSchema = {
 } as const;
 
 /**
+ * #10872 — le lien de connexion est LIÉ À L'APPAREIL qui l'a demandé
+ * (`services/gateway/src/services/auth/link-device-binding.ts`). À la demande,
+ * l'appareil envoie l'EMPREINTE d'un secret qu'il garde ; à la consommation, il
+ * présente le secret. Sans correspondance et sans `confirm`, la passerelle
+ * n'ouvre AUCUNE session : elle rend `requiresConfirmation` et le compte cible.
+ */
+export const linkDeviceHashProperty = {
+  type: 'string',
+  pattern: '^[0-9a-fA-F]{64}$',
+  description: 'OPTIONAL (#10872). Lowercase hex SHA-256 of a random secret (>= 128 bits) this device keeps. The link sent by email signs in without a question only when that secret is presented back.'
+} as const;
+
+export const linkDeviceSecretProperty = {
+  type: 'string',
+  pattern: '^[A-Za-z0-9_-]{22,256}$',
+  description: 'OPTIONAL (#10872). The secret whose SHA-256 was sent when the link was requested. Matches ⇒ direct sign-in; absent or wrong ⇒ `requiresConfirmation`, no session.'
+} as const;
+
+export const linkConfirmProperty = {
+  type: 'boolean',
+  description: 'OPTIONAL (#10872). The user saw the target account (`requiresConfirmation` branch) and said yes: the link is consumed and the session opened.'
+} as const;
+
+/**
+ * La branche « confirmez le compte » (#10872) — EXCLUSIVE : ni session, ni
+ * jeton, ni défi ; le lien n'a pas été consommé. Le client montre le compte et
+ * rejoue la requête avec `confirm: true` si l'utilisateur dit oui.
+ */
+export const linkConfirmationProperties = {
+  requiresConfirmation: {
+    type: 'boolean',
+    description: 'True when the link was opened on another device than the one that requested it (or the link is not device-bound): NO session was opened and the link was NOT consumed. Show `account`, then resend with `confirm: true` on yes.'
+  },
+  account: {
+    type: 'object',
+    description: 'The account the link would sign in to — shown before the yes.',
+    properties: {
+      id: { type: 'string' },
+      username: { type: 'string' },
+      displayName: { type: ['string', 'null'] },
+      avatar: { type: ['string', 'null'] }
+    }
+  },
+  intent: {
+    type: 'string',
+    enum: ['sign-in', 'claim-email'],
+    description: 'OPTIONAL (#10879). What the yes does: `sign-in` opens `account`; `claim-email` opens `account` AND attaches the claimed email address to it (#8214) — the screen must say so. Absent from servers before #10879: read as `sign-in`.'
+  },
+  maskedEmail: {
+    type: 'string',
+    description: 'OPTIONAL (#10879). The email address at stake (the account address, or the claimed one), masked by the server (`ma....e@e*****om`) — never the full address.'
+  }
+} as const;
+
+/**
  * Verify email request body schema
  */
 export const verifyEmailRequestSchema = {
@@ -372,7 +427,9 @@ export const verifyEmailRequestSchema = {
           type: 'string',
           format: 'email',
           description: 'Email address to verify'
-        }
+        },
+        linkDeviceSecret: linkDeviceSecretProperty,
+        confirm: linkConfirmProperty
       },
       additionalProperties: false
     },
@@ -416,6 +473,20 @@ export const verifyEmailRequestSchema = {
 export const pendingSessionTokenProperty = {
   type: 'string',
   description: 'Opaque watch token for THIS device (#8083). Present it to POST /auth/verification/status to learn whether the address was proven elsewhere (`pending` / `proven`). It never yields a session.'
+} as const;
+
+/**
+ * Le délai d'adoption d'une preuve par lien (#10518) — `ProvenSessionAdoption`
+ * (`utils/proven-session-adoption.ts`). Déclaré par les DEUX routes qui
+ * remettent une telle preuve (`POST /auth/verify-email`,
+ * `POST /auth/magic-link/validate`) : un champ absent du schéma n'atteint
+ * aucun client.
+ */
+export const adoptWithinSecondsProperty = {
+  type: 'integer',
+  minimum: 0,
+  example: 599,
+  description: 'UPPER BOUND, in seconds, counted from when this response was produced, to adopt what the proof returned: the session (first authenticated call, at most 600) or the second-factor challenge (POST /auth/login/2fa, at most 300). A duration, to be applied to the instant the client received the response. It is a ceiling, not a promise: a newer challenge for the same account replaces this one, and a session can be revoked earlier. Decided and enforced by the server alone.'
 } as const;
 
 /**
@@ -477,7 +548,9 @@ export const verifyEmailResponseSchema = {
         expiresIn: { type: 'number', example: 86400 },
         passwordSet: { type: 'boolean', description: 'True when the optional password was applied' },
         requires2FA: { type: 'boolean' },
-        twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' }
+        twoFactorToken: { type: 'string', description: 'Present it to POST /login/2fa with the second-factor code' },
+        adoptWithinSeconds: adoptWithinSecondsProperty,
+        ...linkConfirmationProperties
       }
     }
   }

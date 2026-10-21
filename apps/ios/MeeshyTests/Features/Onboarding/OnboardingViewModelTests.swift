@@ -232,6 +232,54 @@ final class OnboardingViewModelTests: XCTestCase {
         XCTAssertTrue(sut.model.isPresented)
     }
 
+    // MARK: - #7780 — sur iPad, la destination ouverte vit hors du routeur
+
+    func test_start_whileATabletDestinationIsOpen_defersThePresentation() async {
+        let sut = makeSUT()
+        sut.model.tabletDestinationChanged(isOpen: true)
+
+        await sut.model.start(user: makeUser())
+
+        XCTAssertFalse(sut.model.isPresented, "une conversation ouverte par un push sur iPad n'est pas recouverte")
+    }
+
+    func test_tabletDestinationClosed_presentsTheDeferredCard() async {
+        let sut = makeSUT()
+        sut.model.tabletDestinationChanged(isOpen: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.tabletDestinationChanged(isOpen: false)
+
+        XCTAssertTrue(sut.model.isPresented)
+        XCTAssertEqual(sut.model.card, .step(.languages))
+    }
+
+    func test_routerBackHome_whileATabletDestinationIsOpen_stillWaits() async {
+        let sut = makeSUT()
+        sut.model.routingChanged(isElsewhere: true)
+        sut.model.tabletDestinationChanged(isOpen: true)
+        await sut.model.start(user: makeUser())
+
+        sut.model.routingChanged(isElsewhere: false)
+        XCTAssertFalse(sut.model.isPresented, "le routeur revenu à la racine ne dit rien de la colonne iPad")
+
+        sut.model.tabletDestinationChanged(isOpen: false)
+        XCTAssertTrue(sut.model.isPresented)
+    }
+
+    func test_iPadRoot_tellsTheHostWhichDestinationIsOpen() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let layers = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Main/Views/RootLayers/iPadRootViewLayers.swift"), encoding: .utf8)
+        let host = try String(contentsOf: root.appendingPathComponent(
+            "Meeshy/Features/Onboarding/OnboardingOverlay.swift"), encoding: .utf8)
+        XCTAssertTrue(layers.contains("tabletDestinationIsOpen: activeConversationId != nil || rightPanelRoute != nil"),
+                      "la racine iPad dit à l'onboarding qu'une conversation ou un panneau est ouvert")
+        XCTAssertTrue(host.contains("model.tabletDestinationChanged(isOpen:"),
+                      "l'hôte relaie la destination iPad au modèle")
+    }
+
     // MARK: - #8089 — la célébration de l'arrivée passe d'abord
 
     func test_start_whileTheArrivalIsCelebrated_defersThePresentation() async {

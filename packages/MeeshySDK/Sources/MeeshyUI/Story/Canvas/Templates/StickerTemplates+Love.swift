@@ -8,7 +8,10 @@ import MeeshySDK
 /// texte pour les mots, et un emplacement de PROSE ouvrirait la question du
 /// Prisme Linguistique (#4721) que ce lot ne traite pas. `love.since` porte une
 /// DATE — une valeur, jamais un discours : elle ne part pas à la traduction.
-extension StickerTemplateRenderer {
+enum LoveStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .love
+    static let drawers: [StickerTemplateDrawer] = loveDrawers + loveExtraDrawers
+
 
     static func sinceDate(_ slots: [String: String]) -> String {
         slots[StickerSlotFiller.dateSlot] ?? ""

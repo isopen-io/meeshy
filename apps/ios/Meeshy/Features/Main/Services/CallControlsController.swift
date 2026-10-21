@@ -99,7 +99,7 @@ final class CallControlsController: ObservableObject {
     private var subscription: AnyCancellable?
     private var changeForwarding: AnyCancellable?
     private(set) var pendingExpiry: Task<Void, Never>?
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "call-controls")
+    private let logger = MeeshyLog.logger(.callControls)
 
     nonisolated deinit {}
 
@@ -116,7 +116,7 @@ final class CallControlsController: ObservableObject {
         self.remote = remote ?? CallModerationRemoteService.shared
         self.viewerId = viewerId ?? { AuthManager.shared.currentUser?.id }
         self.now = now ?? Date.init
-        self.wait = wait ?? { try? await Task.sleep(nanoseconds: $0) }
+        self.wait = wait ?? { _ = await cancellableSleep(for: .nanoseconds($0)) }
         subscription = (events ?? resolvedSocket.callControlEvents)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.receive(event) }

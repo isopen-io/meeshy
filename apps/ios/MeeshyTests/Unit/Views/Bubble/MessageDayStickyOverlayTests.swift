@@ -111,4 +111,54 @@ final class MessageDayStickyOverlayTests: XCTestCase {
         XCTAssertEqual(ThreadHeadClearance.value(usesFlatRow: true, headerBandHeight: 0), 60)
         XCTAssertEqual(ThreadHeadClearance.value(usesFlatRow: false, headerBandHeight: 110), 0)
     }
+
+    // MARK: - MessageDayStickyLaw — jamais deux pastilles de date (#4602)
+
+    private typealias Row = MessageDayStickyLaw.Row
+    private let line: CGFloat = 140
+    private let bottom: CGFloat = 780
+
+    private func sticky(_ rows: [Row]) -> Int? {
+        MessageDayStickyLaw.stickyRow(rows: rows, readingLine: line, viewportBottom: bottom)
+    }
+
+    /// Recette iPad 2026-10-16 : le message du 1er octobre est SORTI par le haut
+    /// (sous la bande de l'en-tête) ; la pastille le nommait encore. Une rangée
+    /// entièrement au-dessus de la ligne de lecture ne compte pas.
+    func test_stickyRow_ignoresARowThatAlreadyLeftUnderTheHeader() {
+        let rows = [Row(isDayHeader: false, minY: 20, maxY: 130),
+                    Row(isDayHeader: false, minY: 132, maxY: 260),
+                    Row(isDayHeader: false, minY: 262, maxY: 400)]
+        XCTAssertEqual(sticky(rows), 1)
+    }
+
+    /// « Hier » en pastille flottante et, juste dessous, « Aujourd'hui » en
+    /// pastille de section : une pastille de section visible fait taire la
+    /// flottante — jamais deux dates à l'écran.
+    func test_stickyRow_isHidden_whenADaySectionPillIsVisible() {
+        let rows = [Row(isDayHeader: false, minY: 60, maxY: 170),
+                    Row(isDayHeader: true, minY: 175, maxY: 205),
+                    Row(isDayHeader: false, minY: 210, maxY: 320)]
+        XCTAssertNil(sticky(rows))
+    }
+
+    func test_stickyRow_isHidden_whenTheTopVisibleRowIsItsDaySectionPill() {
+        let rows = [Row(isDayHeader: true, minY: 150, maxY: 180),
+                    Row(isDayHeader: false, minY: 185, maxY: 300)]
+        XCTAssertNil(sticky(rows))
+    }
+
+    /// Une pastille de section cachée sous l'en-tête, ou sortie sous la barre de
+    /// composition, n'est pas visible : la flottante parle.
+    func test_stickyRow_ignoresSectionPillsOutsideTheViewport() {
+        let rows = [Row(isDayHeader: true, minY: 90, maxY: 120),
+                    Row(isDayHeader: false, minY: 125, maxY: 500),
+                    Row(isDayHeader: true, minY: 790, maxY: 820)]
+        XCTAssertEqual(sticky(rows), 1)
+    }
+
+    func test_stickyRow_withNoVisibleRow_isHidden() {
+        XCTAssertNil(sticky([]))
+        XCTAssertNil(sticky([Row(isDayHeader: false, minY: 0, maxY: 100)]))
+    }
 }

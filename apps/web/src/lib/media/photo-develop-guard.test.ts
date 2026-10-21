@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 const SRC = fileURLToPath(new URL('../..', import.meta.url));
 
 const NOT_A_CAPTURE: Readonly<Record<string, string>> = {
-  'lib/media/photo-develop.ts': 'le développement lui-même',
+  'lib/media/photo-develop-core.ts': 'le développement lui-même',
   'lib/stickers/prepare.ts': 'un autocollant importé de la photothèque',
   'lib/stories/studio-retouch.ts': 'la retouche d’une image déjà posée dans le fil',
   'lib/profile/image-recompress.ts': 'un avatar ou une bannière choisis dans la photothèque',

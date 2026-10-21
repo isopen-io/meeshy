@@ -22,7 +22,7 @@ public protocol CommunityServiceProviding: Sendable {
     func addConversation(communityId: String, conversationId: String) async throws -> APIConversation
 }
 
-public final class CommunityService: CommunityServiceProviding, @unchecked Sendable {
+public final class CommunityService: CommunityServiceProviding, Sendable {
     public static let shared = CommunityService()
     private let api: APIClientProviding
 

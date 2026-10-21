@@ -1,11 +1,11 @@
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
-import { webOriginOf } from '@/lib/links/web-origin';
 import type { PlayOptions } from '@/lib/game/play';
 import { browserFileDeliveryHost } from '@/lib/media/file-delivery-host';
 import { memoriserLienParLecteur } from '@/lib/view/invitation';
+import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 import { loadArt } from './art';
 import { openFrontCamera, type CameraResult } from './camera';
@@ -13,9 +13,10 @@ import type { PhotoPalette, PhotoSource } from './compose';
 import { rasterizeSvg } from './compose';
 import { rootVarReader } from './css-vars';
 import type { PhotoMoment } from './moments';
-import { createNotebook, lazyBackend, openIndexedDbBackend, type Notebook } from './notebook';
+import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
+import { indexedDbLegacyStore, knownAccountsOf, settleLegacyNotebook, type KeyedStorage } from './notebook-legacy';
 import type { PhotoReferral } from './referral';
-import { renderPhotoFiles, type PhotoFiles } from './render';
+import { keptStoryOf, renderPhotoFiles, type PhotoFiles } from './render';
 import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './share';
 
 /**
@@ -32,6 +33,12 @@ import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './sha
 
 export type PhotoEnv = {
   readonly openCamera: () => Promise<CameraResult>;
+  /**
+   * La fiche de l'app dans les réglages (#10833, `appSettingsOpener`) : dans la
+   * coque Android, deux refus et la caméra ne se redemande plus. `null` ou
+   * absent (navigateur) : rouvrir le selfie rejoue la demande du navigateur.
+   */
+  readonly openSettings?: (() => void) | null;
   readonly notebook: Notebook;
   /** `text` : le lien de parrainage (#7742), que la feuille de partage redit à côté de l'image. */
   readonly share: (file: File, title: string, text?: string) => Promise<ShareOutcome>;
@@ -57,6 +64,10 @@ export type PhotoEnv = {
    * carte part sans bandeau. Absent : aucun emplacement n'est proposé.
    */
   readonly createReferral?: () => Promise<string | null>;
+  /** La photo d'origine réduite pour le carnet (`developNotebookSource`, #10161) ; absent ou `null` : gardée sans source. */
+  readonly developSource?: (photo: PhotoSource) => Promise<Blob | null>;
+  /** Le 9:16 tel qu'il se garde au carnet : un JPEG (`keptStoryOf`, #10238) ; absent : le PNG du partage. */
+  readonly keptStory?: (story: File) => Promise<Blob>;
   readonly captureVideo: (video: HTMLVideoElement) => PhotoSource | null;
   readonly readGallery: (file: File) => Promise<PhotoSource | null>;
   readonly now: () => Date;
@@ -116,14 +127,14 @@ async function readGallery(file: File): Promise<PhotoSource | null> {
  */
 const shareableReferralLink = memoriserLienParLecteur(async () => {
   const { loadShareableReferralLink } = await import('@/lib/api/referral-link');
-  const result = await loadShareableReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  const result = await loadShareableReferralLink({ origin: publicWebOrigin(window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 
 /** Le lien d'un jeton EXISTANT, sans rien créer (décision porteur : aucun jeton sans geste). Un « aucun » n'est pas gardé : le prochain déroulé relit. */
 const existingReferralLink = memoriserLienParLecteur(async () => {
   const { findExistingReferralLink } = await import('@/lib/api/referral-link');
-  const result = await findExistingReferralLink({ origin: webOriginOf(apiConfig.base, window.location.origin), now: new Date(), deps: apiDeps });
+  const result = await findExistingReferralLink({ origin: publicWebOrigin(window.location.origin), now: new Date(), deps: apiDeps });
   return result.ok ? result.data : null;
 });
 
@@ -138,14 +149,60 @@ const doors = (): PhotoDoors => ({
   saver: currentGallerySaver(),
 });
 
+const browserStorage = (): KeyedStorage => ({
+  keys: () => {
+    const storage = globalThis.localStorage;
+    return Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => key !== null);
+  },
+  getItem: (key) => globalThis.localStorage.getItem(key),
+});
+
+/**
+ * LE CARNET DU COMPTE CONNECTÉ (D-154) : sa base s'ouvre au premier geste, et
+ * c'est là que se règle UNE fois le sort de l'ancienne base partagée —
+ * adoptée si l'appareil n'a connu que ce compte, en quarantaine sinon.
+ */
+function browserNotebook(now: () => Date): Notebook {
+  const factory = typeof indexedDB === 'undefined' ? undefined : indexedDB;
+  const legacyStates = new Map<string, Promise<LegacyState>>();
+  const open = async (userId: string): Promise<NotebookBackend | null> => {
+    const backend = await openIndexedDbBackend(factory, notebookDbName(userId));
+    if (backend === null || factory === undefined) return backend;
+    const settled = settleLegacyNotebook({ legacy: indexedDbLegacyStore(factory), userId, known: knownAccountsOf(browserStorage(), userId), target: backend });
+    legacyStates.set(userId, settled);
+    await settled;
+    return backend;
+  };
+  const backend = accountBackend({ reader: currentReader, open });
+  return createNotebook({
+    backend,
+    now,
+    persist: async () => navigator.storage?.persist?.(),
+    legacy: async () => {
+      const userId = currentReader();
+      if (userId === null) return 'none';
+      await backend.all().catch(() => undefined);
+      return (await legacyStates.get(userId)) ?? 'none';
+    },
+    discardLegacy: async () => {
+      if (factory === undefined) return false;
+      try {
+        await indexedDbLegacyStore(factory).discard();
+        legacyStates.clear();
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
+}
+
 export function browserPhotoEnv(): PhotoEnv {
   const now = (): Date => new Date();
-  const notebook = createNotebook({
-    backend: lazyBackend(() => openIndexedDbBackend(typeof indexedDB === 'undefined' ? undefined : indexedDB)),
-    now,
-  });
+  const notebook = browserNotebook(now);
   return {
     openCamera: () => openFrontCamera(typeof navigator === 'undefined' ? undefined : navigator.mediaDevices),
+    openSettings: appSettingsOpener(),
     notebook,
     share: (file, title, text) => sharePhoto(file, title, doors(), text),
     referral: () => existingReferralLink(currentReader()),
@@ -167,6 +224,8 @@ export function browserPhotoEnv(): PhotoEnv {
       if (art === null) return null;
       return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null });
     },
+    developSource: (photo) => developNotebookSource(photo),
+    keptStory: (story) => keptStoryOf(story, { createCanvas, decode: (blob) => createImageBitmap(blob) }),
     captureVideo,
     readGallery,
     now,
