@@ -87,8 +87,23 @@ final class AudioTrackActivationLawTests: XCTestCase {
                        "la piste se rallume sous la sortie encore muette : le son revient sans coupure")
     }
 
-    func test_steps_noChange_doesNothing() {
-        XCTAssertEqual(Law.steps(playerIsMuted: true, wantsMuted: true), [])
-        XCTAssertEqual(Law.steps(playerIsMuted: false, wantsMuted: false), [])
+    /// La sortie déjà dans l'état voulu ne prouve rien sur les pistes : un
+    /// lecteur rendu par le pool arrive muet, pistes rallumées ; une surface
+    /// qui écrit `isMuted` en direct (`MeeshyVideoSurface`) peut l'ouvrir
+    /// alors que ses pistes sont éteintes. Sans réconciliation, le démute
+    /// suivant ne voyait « aucun changement » et la vidéo restait muette à vie.
+    func test_steps_unchangedOutput_stillReconcilesTheTracks_neverTouchesTheOutput() {
+        XCTAssertEqual(Law.steps(playerIsMuted: true, wantsMuted: true), [.disableAudioTracks],
+                       "lecteur muet aux pistes allumées : elles s'éteignent, la sortie ne bouge pas")
+        XCTAssertEqual(Law.steps(playerIsMuted: false, wantsMuted: false), [.enableAudioTracks],
+                       "sortie ouverte aux pistes éteintes : elles se rallument, sinon le son ne revient jamais")
+    }
+
+    func test_steps_neverWriteTheOutputWhenItIsAlreadyRight() {
+        for muted in [true, false] {
+            let steps = Law.steps(playerIsMuted: muted, wantsMuted: muted)
+            XCTAssertFalse(steps.contains(.silencePlayer))
+            XCTAssertFalse(steps.contains(.soundPlayer))
+        }
     }
 }
