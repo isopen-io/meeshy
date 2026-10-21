@@ -392,7 +392,9 @@ final class MessageActionResolverTests: XCTestCase {
     }
 
     func test_moreSections_mediaBeforeMessageDelete_whenBothPresent() {
-        let items = actionItems(MessageActionResolver.moreSections(ctx(isMine: true, canDelete: true, hasMedia: true)))
+        var author = ctx(isMine: true, canDelete: true, hasMedia: true)
+        author.canDeleteForEveryone = true
+        let items = actionItems(MessageActionResolver.moreSections(author))
         guard let mediaIdx = items.firstIndex(of: .media), let msgIdx = items.firstIndex(of: .delete) else {
             return XCTFail("media et delete attendus")
         }
@@ -657,13 +659,13 @@ final class MessageActionResolverTests: XCTestCase {
         XCTAssertFalse(sections.contains { if case .moderation = $0 { return true }; return false })
     }
 
-    func test_endToEnd_retiresServerTranscriptionAndSentiment_keepsLanguage() {
+    func test_endToEnd_retiresServerTranscription_keepsOnDeviceSentiment() {
         var sealed = ctx(hasTimebasedMedia: true)
         sealed.serverFeaturesAbsent = true
         let info = infoItems(MessageActionResolver.moreSections(sealed))
         XCTAssertFalse(info.contains(.transcription))
-        XCTAssertFalse(info.contains(.sentiment))
-        XCTAssertTrue(info.contains(.language), "la traduction se fait sur l'appareil")
+        XCTAssertTrue(info.contains(.sentiment), "le sentiment se calcule sur l'appareil (NLTagger)")
+        XCTAssertTrue(info.contains(.language), "la traduction servie du texte reste lisible")
     }
 }
 

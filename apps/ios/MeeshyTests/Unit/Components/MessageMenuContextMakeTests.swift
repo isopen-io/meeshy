@@ -46,25 +46,47 @@ final class MessageMenuContextMakeTests: XCTestCase {
 
     private func message(
         mine: Bool,
+        id: String = "6a0ad86a6e21a483b4443d11",
         age: TimeInterval = 3600,
         content: String = "Bonjour",
         deletedAt: Date? = nil,
+        attachments: [MessageAttachment] = [],
+        senderIsAnonymous: Bool = false,
+        senderHasAccount: Bool = true,
         deliveryStatus: Message.DeliveryStatus = .sent,
-        location: SharedPlace? = nil
+        location: SharedPlace? = nil,
+        trackedLinkMap: [String: String] = [:]
     ) -> Message {
         Message(
-            id: "6a0ad86a6e21a483b4443d11",
+            id: id,
             conversationId: "6a0ad86a6e21a483b4443d99",
             senderId: mine ? "6a0ad86a6e21a483b4443da1" : "6a0ad86a6e21a483b4443da2",
             content: content,
             deletedAt: deletedAt,
             createdAt: now.addingTimeInterval(-age),
             updatedAt: now.addingTimeInterval(-age),
+            attachments: attachments,
             senderUserId: mine ? viewerId : otherId,
+            senderIsAnonymous: senderIsAnonymous,
+            senderHasAccount: senderHasAccount,
             deliveryStatus: deliveryStatus,
             isMe: mine,
-            location: location
+            location: location,
+            trackedLinkMap: trackedLinkMap
         )
+    }
+
+    private func photo() -> MessageAttachment {
+        MessageAttachment(id: "6a0ad86a6e21a483b4443d21", messageId: "6a0ad86a6e21a483b4443d11",
+                          fileName: "p.jpg", mimeType: "image/jpeg", fileUrl: "https://staging.meeshy.me/p.jpg",
+                          width: 1200, height: 800)
+    }
+
+    private func infoItems(_ ctx: MessageMenuContext) -> [MoreItem] {
+        MessageActionResolver.moreSections(ctx).flatMap { section -> [MoreItem] in
+            if case .info(let items) = section { return items }
+            return []
+        }
     }
 
     private func make(_ message: Message, _ authority: ConversationMenuAuthority) -> MessageMenuContext {
@@ -163,6 +185,48 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertFalse(ctx.canReply, "un envoi raté ne se cite pas")
     }
 
+    /// Un envoi jamais parti porte un id `cid_…` : la loi le lit OPTIMISTE, ni
+    /// « pour moi » ni « pour tous » — mais `.discard`. Sans lui, le message
+    /// restait dans le fil pour toujours.
+    func test_make_anUnsentFailedMessage_canBeDiscarded() {
+        let ctx = make(message(mine: true, id: ClientMessageId.generate(), deliveryStatus: .failed), authority(viewer()))
+        XCTAssertTrue(ctx.isFailed)
+        XCTAssertTrue(ctx.canDiscard, "la loi range `.discard` dans les destructives d'un envoi raté")
+        XCTAssertFalse(ctx.canDeleteForEveryone)
+        XCTAssertFalse(ctx.canDeleteOnServer)
+        XCTAssertTrue(ctx.canDelete)
+        XCTAssertTrue(actionItems(ctx).contains(.delete), "un envoi raté se retire du fil")
+        XCTAssertEqual(MessageActionResolver.primaryActions(ctx).first, .retry)
+    }
+
+    // MARK: - Supprimer sur le serveur ≠ supprimer pour moi
+
+    /// « Supprimer pour moi » est local ; « Supprimer le média » et la
+    /// suppression d'une pièce partent vers la passerelle, qui refuse un
+    /// membre ordinaire sur le message d'autrui.
+    func test_make_aMemberOnSomeoneElsesPhoto_offersNoServerDeletion() {
+        let ctx = make(message(mine: false, content: "Regarde", attachments: [photo()]), authority(viewer()))
+        XCTAssertTrue(ctx.canDeleteForMe)
+        XCTAssertFalse(ctx.canDeleteOnServer)
+        XCTAssertFalse(actionItems(ctx).contains(.media), "le média d'autrui ne se supprime pas")
+        let piece = MessagePieceMenu.actions(MessagePieceMenu.Context(isProtected: false, menu: ctx))
+        XCTAssertFalse(piece.contains(.deletePiece), "la pièce d'autrui ne se supprime pas")
+    }
+
+    func test_make_theAuthorOfAPhoto_deletesTheMedia() {
+        let ctx = make(message(mine: true, content: "Regarde", attachments: [photo()]), authority(viewer()))
+        XCTAssertTrue(ctx.canDeleteOnServer)
+        XCTAssertTrue(actionItems(ctx).contains(.media))
+        XCTAssertTrue(MessagePieceMenu.actions(MessagePieceMenu.Context(isProtected: false, menu: ctx)).contains(.deletePiece))
+    }
+
+    func test_make_aGroupModeratorOnSomeoneElsesPhoto_deletesTheMedia() {
+        let ctx = make(message(mine: false, content: "Regarde", attachments: [photo()]), authority(viewer(conversationRole: "moderator")))
+        XCTAssertTrue(ctx.canRemove)
+        XCTAssertTrue(ctx.canDeleteOnServer)
+        XCTAssertTrue(actionItems(ctx).contains(.media))
+    }
+
     func test_make_aDeletedMessage_offersOnlyDeleteForMe() {
         let ctx = make(message(mine: true, deletedAt: now), authority(viewer()))
         XCTAssertTrue(ctx.isGone)
@@ -191,6 +255,27 @@ final class MessageMenuContextMakeTests: XCTestCase {
         XCTAssertFalse(primary.contains(.copy))
     }
 
+    /// #10286 — le lien d'un invité sans compte est INERTE dans la bulle : le
+    /// menu ne rouvre pas la porte que la bulle garde fermée.
+    func test_make_anAnonymousAuthorsLink_isNotOpenable() {
+        let anonymous = make(message(mine: false, content: "https://phishing.example/login", senderIsAnonymous: true), authority(viewer()))
+        XCTAssertFalse(anonymous.kindActions.contains(.openLink))
+        let accountless = make(message(mine: false, content: "https://phishing.example/login", senderHasAccount: false), authority(viewer()))
+        XCTAssertFalse(accountless.kindActions.contains(.openLink))
+        XCTAssertFalse(MessageActionResolver.primaryActions(accountless).contains(.openLink))
+    }
+
+    func test_kindTarget_openableLink_followsTheTrackedRedirect() throws {
+        let raw = "https://meeshy.me/a"
+        let tracked = message(mine: false, content: "Regarde \(raw)", trackedLinkMap: [raw: "tok123"])
+        let url = try XCTUnwrap(MessageKindTarget.openableLink(of: tracked))
+        XCTAssertEqual(url, TrackedLink.redirectURL(token: "tok123"))
+        let plain = message(mine: false, content: "Regarde \(raw)")
+        XCTAssertEqual(MessageKindTarget.openableLink(of: plain)?.absoluteString, raw)
+        let anonymous = message(mine: false, content: "Regarde \(raw)", senderIsAnonymous: true)
+        XCTAssertNil(MessageKindTarget.openableLink(of: anonymous))
+    }
+
     func test_kindTarget_mapsURL_carriesTheCoordinatesAndTheName() throws {
         let place = SharedPlace(latitude: 48.85, longitude: 2.35, name: "Notre-Dame")
         let url = try XCTUnwrap(MessageKindTarget.mapsURL(for: place))
@@ -210,9 +295,58 @@ final class MessageMenuContextMakeTests: XCTestCase {
         let ctx = make(message(mine: true), authority(viewer(), encryptionMode: "e2ee"))
         XCTAssertTrue(ctx.serverFeaturesAbsent)
         XCTAssertFalse(ctx.canEdit, "le serveur ne lit pas le clair : il ne peut pas l'éditer")
-        let info = allItems(ctx)
-        XCTAssertFalse(info.contains(.sentiment))
+        XCTAssertFalse(allItems(ctx).contains(.transcription))
+    }
+
+    /// Le sentiment iOS se calcule SUR L'APPAREIL (`NLTagger`) : rien ne part.
+    func test_make_endToEnd_keepsTheOnDeviceSentiment() {
+        let ctx = make(message(mine: false), authority(viewer(), encryptionMode: "e2ee"))
+        XCTAssertTrue(infoItems(ctx).contains(.sentiment))
+    }
+
+    /// La loi refuse le transfert en E2EE : le clair repartirait vers une
+    /// conversation que le serveur lit.
+    func test_make_endToEnd_offersNoForward() {
+        let ctx = make(message(mine: false, attachments: [photo()]), authority(viewer(), encryptionMode: "e2ee"))
+        XCTAssertFalse(ctx.canForward)
+        XCTAssertFalse(actionItems(ctx).contains(.forward))
+        XCTAssertFalse(MessagePieceMenu.actions(MessagePieceMenu.Context(isProtected: false, menu: ctx)).contains(.forwardPiece))
+    }
+
+    func test_make_aPlainMessage_forwards() {
+        let ctx = make(message(mine: false), authority(viewer()))
+        XCTAssertTrue(ctx.canForward)
+        XCTAssertTrue(actionItems(ctx).contains(.forward))
+    }
+
+    /// « Traduire » n'ouvre pas une vue dont chaque langue est refusée : tant
+    /// que la traduction à la demande ne passe pas par l'appareil, elle n'est
+    /// pas offerte en E2EE.
+    func test_make_endToEnd_offersNoServerTranslation() {
+        let ctx = make(message(mine: false), authority(viewer(), encryptionMode: "e2ee"))
+        XCTAssertFalse(ctx.canTranslate)
+        XCTAssertFalse(MessageActionResolver.primaryActions(ctx).contains(.translate))
+        XCTAssertFalse(infoItems(ctx).contains(.language))
+        XCTAssertTrue(make(message(mine: false), authority(viewer())).canTranslate)
+    }
+
+    /// Une note vocale en E2EE : ni transcription, ni traduction serveur — la
+    /// vue Langue, dont chaque langue serait refusée, n'est pas offerte.
+    func test_make_endToEndVoiceNote_offersNoLanguageView() {
+        let voice = MessageAttachment(id: "6a0ad86a6e21a483b4443d22", messageId: "6a0ad86a6e21a483b4443d11",
+                                      fileName: "v.m4a", mimeType: "audio/mp4", fileUrl: "https://staging.meeshy.me/v.m4a")
+        let ctx = make(message(mine: false, content: "", attachments: [voice]), authority(viewer(), encryptionMode: "e2ee"))
+        let info = infoItems(ctx)
+        XCTAssertFalse(info.contains(.language))
         XCTAssertFalse(info.contains(.transcription))
+        let served = make(message(mine: false, content: "", attachments: [voice]), authority(viewer()))
+        XCTAssertTrue(infoItems(served).contains(.language))
+    }
+
+    func test_make_systemNotice_offersNoForward() {
+        var notice = message(mine: false)
+        notice.messageSource = .system
+        XCTAssertFalse(make(notice, authority(viewer())).canForward)
     }
 
     // MARK: - Gardes de source
@@ -239,6 +373,21 @@ final class MessageMenuContextMakeTests: XCTestCase {
             return AppSourceGuard.stripComments(raw).contains("MessageMenuContext(")
         }.map(\.lastPathComponent)
         XCTAssertEqual(builders, ["MessageMenuContext+Make.swift"])
+    }
+
+    /// L'aperçu d'une pièce et la confirmation de suppression lisent la
+    /// fabrique : « Supprimer pour moi » n'ouvre aucune suppression serveur.
+    func test_theHosts_readTheFactoryVerdicts() throws {
+        let menu = AppSourceGuard.stripComments(try String(
+            contentsOf: appRoot().appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+LongPressMenu.swift"),
+            encoding: .utf8
+        ))
+        XCTAssertTrue(menu.contains("canDelete: menu.canDeleteOnServer"))
+        XCTAssertTrue(menu.contains("canForward: menu.canForward"))
+        XCTAssertFalse(menu.contains("viewModel.canDeleteForEveryone("), "la confirmation lit `canDeleteForEveryone` de la fabrique")
+        XCTAssertTrue(menu.contains("verdicts.canDeleteForEveryone"))
+        XCTAssertTrue(menu.contains("verdicts.canRemove"))
+        XCTAssertTrue(menu.contains("verdicts.canDeleteForMe"))
     }
 
     func test_theDeadNativeMenu_isGoneFromDiskAndProject() throws {
