@@ -378,22 +378,7 @@ extension ConversationViewModel {
                         // Batché : 1 transaction + 1 refresh pour la rafale,
                         // au lieu de N awaits → N notifications → N relectures.
                         let persistence = self.messagePersistence
-                        let freshById = Dictionary(data.map { ($0.id, $0) },
-                                                   uniquingKeysWith: { _, last in last })
-                        let updates: [MessagePersistenceActor.DeliveryCounterUpdate] = self.messages
-                            .filter(\.isMe)
-                            .compactMap { existing in
-                                guard let fresh = freshById[existing.id],
-                                      fresh.deliveryStatus.isBetterThan(existing.deliveryStatus)
-                                else { return nil }
-                                return MessagePersistenceActor.DeliveryCounterUpdate(
-                                    localId: existing.id,
-                                    deliveredCount: fresh.deliveredCount,
-                                    readCount: fresh.readCount,
-                                    deliveredToAllAt: fresh.deliveredToAllAt,
-                                    readByAllAt: fresh.readByAllAt
-                                )
-                            }
+                        let updates = DeliveryCounterReconciliation.updates(own: self.messages, fresh: data)
                         if !updates.isEmpty {
                             try? await persistence.updateDeliveryCounters(updates)
                         }
