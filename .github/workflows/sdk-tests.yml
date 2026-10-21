@@ -52,6 +52,9 @@ on:
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
+      # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
+      # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/device-tier-vectors.json'
   pull_request:
     branches:
       - dev
@@ -78,6 +81,9 @@ on:
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
+      # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
+      # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/device-tier-vectors.json'
   # Intentionally NOT triggered by changes to this workflow file itself: an
   # app-only PR that merely touches CI config must not be gated by the SDK suite.
   # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.
