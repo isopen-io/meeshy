@@ -35,7 +35,9 @@ import {
  * checkpoint, un refus définitif de la passerelle le PURGE.
  *
  * **Page à l'arrière-plan en plein envoi : le reste part dans le navigateur.**
- * Là où Background Fetch existe (Chrome, PWA Chromium — DEC-WEB, #11253), la
+ * Là où Background Fetch existe (Chrome, PWA Chromium — DEC-WEB, #11253) et
+ * que la session partage l'origine de la page (Chromium refuse tout pré-vol
+ * CORS à un envoi de fond : `gate.<hôte>` reste au premier plan), la
  * tranche en vol est annulée, l'offset relu, et UN `PATCH` du reste est confié
  * au navigateur (`tus-background.ts`) ; le service worker range l'accusé sur le
  * checkpoint (`public/sw-background-upload.js`) et la page qui revient le rend

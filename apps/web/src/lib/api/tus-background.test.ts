@@ -12,10 +12,13 @@ import {
 
 type Fetched = { readonly id: string; readonly request: Request; readonly options: Record<string, unknown> };
 
-function fakeWorld(options: { readonly supported?: boolean; readonly duplicate?: boolean; readonly running?: Record<string, string> } = {}) {
+function fakeWorld(
+  options: { readonly supported?: boolean; readonly duplicate?: boolean; readonly running?: Record<string, string>; readonly scope?: string } = {},
+) {
   const fetched: Fetched[] = [];
   const listeners = new Set<(event: { readonly data: unknown }) => void>();
   const registration: BackgroundRegistration = {
+    ...(options.scope !== undefined ? { scope: options.scope } : {}),
     backgroundFetch:
       options.supported === false
         ? undefined
@@ -57,14 +60,16 @@ describe('backgroundUploadPort — seulement où Background Fetch existe', () =>
 
 describe('backgroundUploadPort.reaches — Background Fetch refuse toute requête qui exige un pré-vol CORS', () => {
   test('seule une session de l’origine de la page est confiée au navigateur', async () => {
-    const port = await backgroundUploadPort(fakeWorld().container, 'https://meeshy.me');
+    const port = await backgroundUploadPort(fakeWorld({ scope: 'https://meeshy.me/' }).container);
     expect(port?.reaches('https://meeshy.me/api/v1/uploads/up-1')).toBe(true);
     expect(port?.reaches('https://gate.meeshy.me/api/v1/uploads/up-1')).toBe(false);
     expect(port?.reaches('http://meeshy.me/api/v1/uploads/up-1')).toBe(false);
     expect(port?.reaches('pas une adresse')).toBe(false);
   });
 
-  test('origine de la page inconnue : aucune session n’est confiée au navigateur', async () => {
+  test('portée du worker inconnue ou illisible : aucune session n’est confiée au navigateur', async () => {
+    const illegible = await backgroundUploadPort(fakeWorld({ scope: 'pas une portée' }).container);
+    expect(illegible?.reaches('https://gate.meeshy.me/api/v1/uploads/up-1')).toBe(false);
     const port = await backgroundUploadPort(fakeWorld().container);
     expect(port?.reaches('https://gate.meeshy.me/api/v1/uploads/up-1')).toBe(false);
   });

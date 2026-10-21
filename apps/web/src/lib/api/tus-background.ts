@@ -29,6 +29,8 @@ type BackgroundFetchHandle = { readonly result?: string };
 
 /** La part de `ServiceWorkerRegistration.backgroundFetch` que ce module utilise (absente de `lib.dom`). */
 export type BackgroundRegistration = {
+  /** La portée du worker — une URL de l'origine de la page, celle qui émettrait l'envoi de fond. */
+  readonly scope?: string;
   readonly backgroundFetch?:
     | {
         fetch(id: string, request: Request, options: { readonly title: string }): Promise<unknown>;
@@ -103,14 +105,12 @@ const originOf = (location: string): string | null => {
   }
 };
 
-export async function backgroundUploadPort(
-  container: BackgroundContainer | undefined,
-  pageOrigin?: string,
-): Promise<BackgroundUploadPort | null> {
+export async function backgroundUploadPort(container: BackgroundContainer | undefined): Promise<BackgroundUploadPort | null> {
   if (container === undefined) return null;
   const registration = await container.getRegistration().catch((): undefined => undefined);
   const backgroundFetch = registration?.backgroundFetch;
   if (backgroundFetch === undefined) return null;
+  const pageOrigin = registration?.scope === undefined ? null : originOf(registration.scope);
 
   const isRunning = async (fingerprint: string): Promise<boolean> => {
     try {
@@ -122,7 +122,7 @@ export async function backgroundUploadPort(
   };
 
   return {
-    reaches: (location) => pageOrigin !== undefined && originOf(location) === pageOrigin,
+    reaches: (location) => pageOrigin !== null && originOf(location) === pageOrigin,
     start: async ({ fingerprint, location, offset, file, headers, title }) => {
       try {
         const request = new Request(location, { method: 'PATCH', headers: { ...headers }, body: file.slice(offset) });
@@ -158,9 +158,6 @@ let defaultPort: Promise<BackgroundUploadPort | null> | undefined;
 
 /** Le port du navigateur courant, résolu UNE fois : `null` partout où Background Fetch n'existe pas. */
 export function defaultBackgroundUploadPort(): Promise<BackgroundUploadPort | null> {
-  defaultPort ??= backgroundUploadPort(
-    typeof navigator === 'undefined' ? undefined : (navigator.serviceWorker as unknown as BackgroundContainer | undefined),
-    typeof location === 'undefined' ? undefined : location.origin,
-  );
+  defaultPort ??= backgroundUploadPort(typeof navigator === 'undefined' ? undefined : (navigator.serviceWorker as unknown as BackgroundContainer | undefined));
   return defaultPort;
 }
