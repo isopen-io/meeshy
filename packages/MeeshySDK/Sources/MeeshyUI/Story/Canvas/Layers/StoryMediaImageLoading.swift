@@ -11,8 +11,10 @@ import MeeshySDK
 /// and exercise the cancel chain without hitting the real disk cache or
 /// `URLSession`. Marked `nonisolated` on the requirement so witnesses don't
 /// pick up MeeshyUI's `defaultIsolation(MainActor)` — actor-isolated
-/// witnesses (e.g. `DiskCacheStore.image(for:)`) match cleanly.
-public protocol StoryMediaImageLoading: Sendable {
+/// witnesses (e.g. `DiskCacheStore.image(for:)`) match cleanly. The protocol
+/// itself is `nonisolated` too: from Xcode 27 on, `defaultIsolation` also
+/// isolates a protocol to the main actor, and no actor could conform (#11064).
+nonisolated public protocol StoryMediaImageLoading: Sendable {
     nonisolated func image(for urlString: String) async -> UIImage?
 
     /// **Les OCTETS, et pas seulement l'image** (#4925).

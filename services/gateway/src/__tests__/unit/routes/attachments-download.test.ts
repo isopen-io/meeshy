@@ -50,6 +50,7 @@ jest.mock('fs', () => ({
 // ─── Import after mocks ───────────────────────────────────────────────────────
 
 import { registerDownloadRoutes } from '../../../routes/attachments/download';
+import { storedFileETag } from '../../../utils/etag';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -433,9 +434,9 @@ describe('GET /attachments/file/*', () => {
 
   describe('ETag / conditional GET', () => {
     let app: FastifyInstance;
-    const fileStats = { size: 2048, mtimeMs: 1700000000000 };
+    const fileStats = { size: 2048, mtimeMs: 1700000000000, ino: 4242 };
     // precompute the etag the route will generate
-    const expectedEtag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
+    const expectedEtag = storedFileETag(fileStats);
 
     beforeAll(async () => {
       mockStat.mockResolvedValue(fileStats);
@@ -475,7 +476,7 @@ describe('GET /attachments/file/*', () => {
 
   describe('Range requests on media files', () => {
     let app: FastifyInstance;
-    const fileStats = { size: 10000, mtimeMs: 1700000001000 };
+    const fileStats = { size: 10000, mtimeMs: 1700000001000, ino: 4242 };
 
     beforeAll(async () => {
       mockStat.mockResolvedValue(fileStats);
@@ -553,7 +554,7 @@ describe('GET /attachments/file/*', () => {
 
   describe('regular file (non-media)', () => {
     let app: FastifyInstance;
-    const fileStats = { size: 512, mtimeMs: 1700000002000 };
+    const fileStats = { size: 512, mtimeMs: 1700000002000, ino: 4242 };
 
     beforeAll(async () => {
       mockStat.mockResolvedValue(fileStats);
@@ -590,7 +591,7 @@ describe('GET /attachments/file/*', () => {
         method: 'GET',
         url: '/attachments/file/uploads/photo.jpg',
       });
-      const expectedEtag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
+      const expectedEtag = storedFileETag(fileStats);
       expect(res.headers['etag']).toBe(expectedEtag);
     });
 
@@ -908,7 +909,7 @@ describe('cycle de vie du message porteur', () => {
  */
 describe('#9315 — aucun média de conversation en cache partagé', () => {
   let app: FastifyInstance;
-  const fileStats = { size: 2048, mtimeMs: 1700000003000 };
+  const fileStats = { size: 2048, mtimeMs: 1700000003000, ino: 4242 };
 
   beforeAll(async () => {
     mockGetAttachment.mockResolvedValue(DEFAULT_ATTACHMENT);
@@ -932,7 +933,7 @@ describe('#9315 — aucun média de conversation en cache partagé', () => {
   });
 
   it('garde le cache privé sur la revalidation 304', async () => {
-    const etag = `W/"${fileStats.size}-${Math.floor(fileStats.mtimeMs)}"`;
+    const etag = storedFileETag(fileStats);
     const res = await app.inject({
       method: 'GET',
       url: '/attachments/file/2024%2F01%2Fuser%2Fphoto.jpg',

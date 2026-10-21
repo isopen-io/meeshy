@@ -22,7 +22,10 @@ nonisolated enum ShareLoadOutcome: Sendable {
 nonisolated struct ShareGathered: Sendable {
     let content: String?
     let media: [ShareStagedMedia]
-    let failure: ShareMediaStagingError?
+    /// Chaque fichier qui n'a pas été copié, dans l'ordre des fournisseurs.
+    let failures: [ShareMediaStagingError]
+
+    var failure: ShareMediaStagingError? { failures.first }
 }
 
 nonisolated enum ShareExtractionReduction {
@@ -43,7 +46,7 @@ nonisolated enum ShareExtractionReduction {
         return ShareGathered(
             content: ShareSender.composeContent(text: text.text, url: text.url),
             media: staged.media,
-            failure: staged.failure
+            failures: staged.failures
         )
     }
 
@@ -59,16 +62,16 @@ nonisolated enum ShareExtractionReduction {
         return (texts.first, urls.first)
     }
 
-    static func staging(from results: [ShareStagingResult]) -> (media: [ShareStagedMedia], failure: ShareMediaStagingError?) {
+    static func staging(from results: [ShareStagingResult]) -> (media: [ShareStagedMedia], failures: [ShareMediaStagingError]) {
         let ordered = results.sorted { $0.index < $1.index }
         let media = ordered.compactMap { result -> ShareStagedMedia? in
             guard case .success(let staged) = result.outcome else { return nil }
             return staged
         }
-        let failure = ordered.lazy.compactMap { result -> ShareMediaStagingError? in
+        let failures = ordered.compactMap { result -> ShareMediaStagingError? in
             guard case .failure(let error) = result.outcome else { return nil }
             return error
-        }.first
-        return (media, failure)
+        }
+        return (media, failures)
     }
 }

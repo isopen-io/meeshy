@@ -28,17 +28,13 @@ import XCTest
 /// actor, et la deinit cesse d'être isolée. Cette garde exige donc que TOUTE
 /// classe in-scope — `@MainActor` (explicite ou par défaut de cible) ET
 /// conforme à `ObservableObject` — déclare un `deinit` dans son corps (le
-/// sweep les pose toutes `nonisolated`). Une classe qui porte DÉJÀ une `deinit`
-/// écrite est hors de portée de cette garde — MAIS pas parce qu'elle serait
-/// sûre : une deinit écrite SANS `nonisolated` sur une classe @MainActor est
-/// ELLE AUSSI isolée (c'est l'ISOLATION, pas l'absence de deinit, qui déclenche
-/// le crash). Ces classes (18 app, 6 SDK au 2026-08-26) forment un SUIVI
-/// distinct, jugé empiriquement sur 26.1 : certaines se corrigent en marquant
-/// leur deinit `nonisolated` (corps ne touchant que du Sendable), d'autres non —
-/// `AudioRecorderManager` crashe ENCORE avec `nonisolated deinit` (cause
-/// AVFoundation mesurée, pas l'isolation). Cette garde couvre la famille SANS
-/// deinit écrite ; la famille À deinit écrite reste OUVERTE (voir la revue Opus
-/// de la vague 1c et la leçon SE-0466).
+/// sweep les pose toutes `nonisolated`). Un `deinit` ÉCRIT d'une classe à acteur
+/// global est déjà non isolé (SE-0371) : le binaire `check-ios-isolated-deinits.sh`
+/// fait foi, et le source se borne à rendre explicite ce qui est vrai — la seconde
+/// garde exige `nonisolated` devant tout `deinit` écrit, sauf les exceptions gelées
+/// de `pendingBareDeinits`, qui ne peuvent que rétrécir. `AudioRecorderManager`
+/// crashe ENCORE avec `nonisolated deinit` (cause AVFoundation mesurée, pas
+/// l'isolation).
 ///
 /// **L'in-scope N'EST PAS restreint à `ObservableObject`** — il l'a été, et le
 /// critère a été ÉLARGI à « toute classe non `nonisolated` » (constat 4 de la
@@ -74,7 +70,12 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
         let isMainActor: Bool
         let conformsObservableObject: Bool
         let hasDeinit: Bool
+        let hasBareDeinit: Bool
     }
+
+    static let pendingBareDeinits: Set<String> = [
+        "Features/Main/Components/RecentMediaStrip.swift: RecentMediaStripModel"
+    ]
 
     /// Toutes les déclarations `class` de `apps/ios/Meeshy/**`, commentaires et
     /// littéraux ET chaînes neutralisés (`DeclarationBodyScanner.mask`), avec les faits
@@ -179,24 +180,27 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             } else { inherit = "" }
             let conforms = inherit.contains("ObservableObject")
             // corps équilibré
-            let hasDeinit = Self.bodyContainsDeinit(chars: chars,
-                                                    startOffset: code.distance(from: code.startIndex, to: afterName.startIndex))
+            let members = Self.topLevelMembers(chars: chars,
+                                               startOffset: code.distance(from: code.startIndex, to: afterName.startIndex))
+            let hasDeinit = members.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+            let hasIsolationKeyword = members.range(of: "\\bnonisolated\\s+deinit\\b", options: .regularExpression) != nil
             out.append(ClassDecl(relativePath: relativePath, name: rawName,
                                  isNonisolated: isNonisolated, isMainActor: isMainActor,
-                                 conformsObservableObject: conforms, hasDeinit: hasDeinit))
+                                 conformsObservableObject: conforms, hasDeinit: hasDeinit,
+                                 hasBareDeinit: hasDeinit && !hasIsolationKeyword))
         }
         return out
     }
 
-    /// `true` si le corps `{ … }` de la déclaration commençant à `startOffset`
-    /// déclare un `deinit` À SON PROPRE NIVEAU. Le corps est balayé par
+    /// Texte des membres DIRECTS du corps `{ … }` de la déclaration commençant à
+    /// `startOffset` (le contenu des accolades internes est écarté). Le corps est balayé par
     /// équilibrage d'accolades sur le texte déjà masqué (commentaires ET
     /// contenu des chaînes neutralisés en amont via `DeclarationBodyScanner.mask`),
     /// et SEULS les caractères de profondeur 1 — les membres DIRECTS de la classe —
     /// sont retenus : un `deinit` appartenant à un TYPE IMBRIQUÉ (profondeur ≥ 2)
     /// ne blanchit donc pas la classe hôte (constat 2 de la revue Opus).
-    private static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
-        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return false }
+    private static func topLevelMembers(chars: [Character], startOffset: Int) -> String {
+        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return "" }
         var depth = 0
         var topLevel = ""
         var idx = open
@@ -210,7 +214,7 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             if depth == 1 { topLevel.append(c) }
             idx += 1
         }
-        return topLevel.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+        return topLevel
     }
 
     private func inScope(_ d: ClassDecl) -> Bool {
@@ -245,6 +249,32 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
             "ISOLÉE et double-libère sur iOS 26.1 (abrt). Le critère est l'ISOLATION seule — " +
             "ni `@MainActor` écrit, ni conformité `ObservableObject` ne sont requis pour être " +
             "in-scope. Ajouter `nonisolated deinit {}`.\n" + offenders.joined(separator: "\n")
+        )
+    }
+
+    /// Le binaire `check-ios-isolated-deinits.sh` fait foi sur l'isolation ; cette
+    /// garde exige que le source la rende explicite : tout `deinit` écrit porte
+    /// `nonisolated`.
+    func test_everyInScopeClass_writtenDeinit_isNonisolated() throws {
+        let offenders = Set(try classDecls().filter { inScope($0) && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" })
+            .subtracting(Self.pendingBareDeinits)
+            .sorted()
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces classes écrivent un `deinit` sans `nonisolated`. Écrire `nonisolated deinit`.\n" +
+            offenders.joined(separator: "\n")
+        )
+    }
+
+    func test_pendingBareDeinits_onlyShrinks() throws {
+        let bare = Set(try classDecls().filter { inScope($0) && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" })
+        let stale = Self.pendingBareDeinits.subtracting(bare).sorted()
+        XCTAssertTrue(
+            stale.isEmpty,
+            "Ces exceptions gelées sont corrigées ou disparues : les retirer de `pendingBareDeinits`.\n" +
+            stale.joined(separator: "\n")
         )
     }
 
@@ -319,5 +349,48 @@ final class MainActorDeinitSourceGuardTests: XCTestCase {
         """
         let names = Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").map(\.name)
         XCTAssertEqual(names, ["Widget"], "`class var` ne doit pas être pris pour une déclaration de classe")
+    }
+
+    private func parseSample(_ sample: String, named name: String) -> ClassDecl? {
+        Self.parse(DeclarationBodyScanner.mask(sample), relativePath: "S.swift").first { $0.name == name }
+    }
+
+    func test_parser_flagsBareWrittenDeinit() {
+        let bar = parseSample("""
+        @MainActor final class Bar: ObservableObject { deinit { t?.cancel() } }
+        """, named: "Bar")
+        XCTAssertEqual(bar?.hasDeinit, true)
+        XCTAssertEqual(bar?.hasBareDeinit, true)
+    }
+
+    func test_parser_acceptsNonisolatedWrittenDeinit() {
+        let same = parseSample("""
+        @MainActor final class Bar: ObservableObject { nonisolated deinit {} }
+        """, named: "Bar")
+        let split = parseSample("""
+        @MainActor final class Baz: ObservableObject {
+            nonisolated
+            deinit {}
+        }
+        """, named: "Baz")
+        XCTAssertEqual(same?.hasBareDeinit, false)
+        XCTAssertEqual(split?.hasBareDeinit, false)
+    }
+
+    func test_parser_ignoresNestedTypeBareDeinit() {
+        let host = parseSample("""
+        final class Host {
+            nonisolated deinit {}
+            final class Inner { deinit {} }
+        }
+        """, named: "Host")
+        XCTAssertEqual(host?.hasBareDeinit, false)
+    }
+
+    func test_parser_ignoresBareDeinitInsideStringLiteral() {
+        let host = parseSample("""
+        final class Q { let s = "deinit { }"; nonisolated deinit {} }
+        """, named: "Q")
+        XCTAssertEqual(host?.hasBareDeinit, false)
     }
 }

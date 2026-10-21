@@ -221,7 +221,7 @@ describe('un identifiant déjà pris par une autre écriture (REQUEST_ID_CONFLIC
     });
     await act(async () => actions().mint());
     await settle();
-    expect(actions().errors.mint).toContain('identifiant');
+    expect(actions().errors.mint).toContain('déjà servi');
     expect(actions().errors.mint).not.toContain('connexion');
     await act(async () => actions().mint());
     await settle();

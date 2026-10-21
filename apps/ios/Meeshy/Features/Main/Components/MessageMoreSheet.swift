@@ -152,7 +152,7 @@ struct MessageMoreSheet: View {
             systemImage: "lock.fill"
         )
         .font(.footnote)
-        .foregroundColor(theme.textMuted)
+        .foregroundStyle(theme.textMuted)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.lg)
         .accessibilityElement(children: .combine)

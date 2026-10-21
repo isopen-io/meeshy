@@ -159,8 +159,8 @@ struct CallInviteStrip: View, Equatable {
         HStack(spacing: MeeshySpacing.sm) {
             ForEach(invites) { invite in
                 HStack(spacing: MeeshySpacing.xsPlus) {
-                    MeeshyAvatar(name: invite.displayName, context: .typingIndicator, avatarURL: invite.avatar,
-                                 presenceState: PresenceManager.shared.knownPresenceState(for: invite.userId))
+                    LivePresence { MeeshyAvatar(name: invite.displayName, context: .typingIndicator, avatarURL: invite.avatar,
+                                 presenceState: PresenceManager.shared.knownPresenceState(for: invite.userId)) }
                     Text(invite.displayName)
                         .font(.footnote.weight(.semibold))
                         .foregroundColor(.white)
@@ -245,9 +245,9 @@ struct CallAddPeopleSheet: View {
                             dismiss()
                         } label: {
                             HStack(spacing: MeeshySpacing.md) {
-                                MeeshyAvatar(name: friend.displayName ?? friend.username, context: .userListItem, avatarURL: friend.avatar,
+                                LivePresence { MeeshyAvatar(name: friend.displayName ?? friend.username, context: .userListItem, avatarURL: friend.avatar,
                                              presenceState: PresenceManager.shared.resolvedState(userId: friend.id, isOnline: friend.isOnline, lastActiveAt: friend.lastActiveAt),
-                                             ring: friend.avatarRing)
+                                             ring: friend.avatarRing) }
                                 Text(friend.displayName ?? friend.username)
                                     .font(.body)
                                 Spacer()

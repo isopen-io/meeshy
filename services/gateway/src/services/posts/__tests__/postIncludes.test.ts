@@ -93,6 +93,7 @@ describe('posts/postIncludes — canonical shared selects', () => {
         'height',
         'thumbnailUrl',
         'thumbHash',
+        'imageVariants',
         'duration',
         'order',
         'caption',

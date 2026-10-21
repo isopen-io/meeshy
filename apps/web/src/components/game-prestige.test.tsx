@@ -83,7 +83,8 @@ describe('la proposition au niveau 100', () => {
     const rows = plain(text(host.querySelector('[data-game-prestige-values]')?.innerHTML ?? ''));
     expect(rows).toContain(plain(`Ta lumière ${formatCount(props().score, 'fr')} étincelles → 0 étincelle`));
     expect(rows).toContain('Niveau 100 → 1');
-    expect(rows).toContain('Étoiles 1 → 2');
+    expect(rows).toContain('Renaissances 1 → 2');
+    expect(rows).not.toContain('Étoiles');
     expect(rows).toContain(plain(`Gloire +${formatCount(GLORY_POINTS.prestige, 'fr')}`));
   });
 
@@ -102,10 +103,11 @@ describe('la proposition au niveau 100', () => {
     expect(host.textContent).toContain('Renaissance 2 !');
   });
 
-  test('« Garder ma lumière » referme la confirmation sans rien envoyer', async () => {
+  test('« Continuer à briller » referme la confirmation sans rien envoyer, avec le mot d’iOS', async () => {
     let passes = 0;
     const host = await mount(<GamePrestige {...props(undefined, 1, { onPass: () => (passes += 1) })} />);
     await click(host.querySelector('[data-game-prestige-go]'));
+    expect(host.querySelector('[data-game-prestige-confirm-stay]')?.textContent).toContain('Continuer à briller');
     await click(host.querySelector('[data-game-prestige-confirm-stay]'));
     expect(passes).toBe(0);
     expect(host.querySelector('[data-game-prestige-confirm]')).toBeNull();

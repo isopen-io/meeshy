@@ -152,6 +152,34 @@ enum GamePalette {
         .init(color: Color(hex: "e2a72e"), location: 0.5),
         .init(color: Color(hex: "8a5a10"), location: 1),
     ]
+    /// Les champs de la Meesh (épopée § 6) : l'or PUR jusqu'au centre, l'or mêlé de diamant du prisme — jetons
+    /// `--game-coin-gold-in-*` et `--game-coin-diamond-in-*` du web.
+    static let coinGoldInner: [Gradient.Stop] = [
+        .init(color: Color(hex: "ffeaa6"), location: 0),
+        .init(color: Color(hex: "e3a935"), location: 0.55),
+        .init(color: Color(hex: "a86f14"), location: 1),
+    ]
+    static let coinDiamondInner: [Gradient.Stop] = [
+        .init(color: Color(hex: "fff3c8"), location: 0),
+        .init(color: Color(hex: "f6fbff"), location: 0.3),
+        .init(color: Color(hex: "e8b545"), location: 0.62),
+        .init(color: Color(hex: "a2701a"), location: 1),
+    ]
+    /// Le diamant taillé : les cabochons et les joyaux de la couronne du prisme (`--game-diamond-*`).
+    static let diamond: [Gradient.Stop] = [
+        .init(color: Color(hex: "ffffff"), location: 0),
+        .init(color: Color(hex: "d7efff"), location: 0.5),
+        .init(color: Color(hex: "8fb6de"), location: 1),
+    ]
+    /// L'encre gravée sur chaque champ de la Meesh (`--game-coin-*-in-ink`).
+    static let coinGoldInk = Color(hex: "5e3c0b")
+    static let coinDiamondInk = Color(hex: "5a3a0c")
+    /// La veine d'or de l'argent, et les cinq teintes des éclats de diamant (`--game-coin-vein`, `--game-sparkle-*`).
+    static let coinVein = Color(hex: "d6a93c")
+    static let sparkles: [Color] = ["ffffff", "cdeeff", "ffd6f2", "d8ffe9", "fff3c4"].map { Color(hex: $0) }
+    /// Le blanc du reflet (`--game-glint`).
+    static let glint = Color.white
+
     static let indigo: [Gradient.Stop] = [
         .init(color: Color(hex: "6366f1"), location: 0),
         .init(color: Color(hex: "312e81"), location: 1),

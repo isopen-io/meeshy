@@ -69,7 +69,7 @@ public class AudioWaveformAnalyzer: ObservableObject {
         }
     }
 
-    deinit {
+    nonisolated deinit {
         analyzeTask?.cancel()
     }
 }

@@ -144,7 +144,7 @@ struct NearbyDiscoveryView: View {
         .animation(.easeInOut(duration: 0.2), value: viewModel.mode)
         .animation(.easeInOut(duration: 0.2), value: viewModel.section)
         .task { await viewModel.load() }
-        .onChange(of: selectedPostId) { postId in
+        .adaptiveOnChange(of: selectedPostId) { _, postId in
             if let postId { impressions.record(postId) }
         }
         .onDisappear { Task { await impressions.flushNow() } }

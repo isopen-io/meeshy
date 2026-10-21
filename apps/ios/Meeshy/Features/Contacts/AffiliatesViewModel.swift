@@ -30,7 +30,7 @@ final class AffiliatesViewModel: ObservableObject {
         self.currentUserId = currentUserId
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
     }
 

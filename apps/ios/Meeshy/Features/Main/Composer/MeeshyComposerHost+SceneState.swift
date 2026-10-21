@@ -41,6 +41,16 @@ extension MeeshyComposerHost {
         viewModel.textEditingMode.activeTextId != nil && editedObject == nil
     }
 
+    /// **Les portes servies sur la scène.** La porte « Fond » peint une
+    /// COULEUR : sous un média de fond, elle n'a plus d'objet — le Cadre du
+    /// rail droit prend le relais.
+    var sceneDoors: [ComposerRailDoor] {
+        let offertes = ComposerRailDoor.offered(served: ComposerSceneCapabilities.doors,
+                                                format: selectedFormat,
+                                                allowsCapture: profile.allowsCapture)
+        return sceneHasBackgroundMedia ? offertes.filter { $0 != .background } : offertes
+    }
+
     /// **Ce que le rail de la scène montre** — un site unique, lu par la
     /// surface ET par le socle : les deux doivent céder au MÊME outil ouvert.
     var sceneRailMode: ComposerRailMode {

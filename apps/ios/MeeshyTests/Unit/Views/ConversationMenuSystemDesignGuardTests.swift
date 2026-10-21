@@ -304,8 +304,8 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
     /// iOS 26+ : le builder natif doit exposer « Rechercher » et « Appeler »
     /// (décision 2026-07-14) — l'aperçu natif étant statique, ces actions
     /// vivent dans le menu, câblées sur les MÊMES chemins que les boutons de
-    /// l'aperçu du fallback custom : Rechercher arme `pendingOpenSearch` puis
-    /// ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
+    /// l'aperçu du fallback custom : Rechercher passe la porte du verrou, qui
+    /// arme `pendingOpenSearch` puis ouvre la conversation, Appeler passe par `CallManager.shared.startCall`.
     func test_nativeContextMenuBuilder_offersSearchAndCall() throws {
         let overlaysSource = try source("Meeshy/Features/Main/Views/ConversationListView+Overlays.swift")
 
@@ -324,9 +324,10 @@ final class ConversationMenuSystemDesignGuardTests: XCTestCase {
             "Le builder natif doit offrir « Rechercher » (icône magnifyingglass)."
         )
         XCTAssertTrue(
-            builderBlock.contains("router.pendingOpenSearch = true"),
-            "« Rechercher » doit armer router.pendingOpenSearch — même chemin que " +
-            "le bouton onSearch de l'aperçu custom (SSOT)."
+            builderBlock.contains("openConversation(conversation, searching: true)"),
+            "« Rechercher » doit passer la porte du verrou `openConversation(_:searching:)`, " +
+            "qui arme router.pendingOpenSearch (après le PIN si la conversation est " +
+            "verrouillée) — même chemin que le bouton onSearch de l'aperçu custom (SSOT)."
         )
         XCTAssertTrue(
             builderBlock.contains("context.call") && builderBlock.contains("phone.fill"),
