@@ -250,6 +250,17 @@ public class NotificationVoiceRulesTest {
     }
 
     @Test
+    public void aLanguageTheGatewayAcceptsTravelsLikeInTheApp() {
+        // wireLanguageCode (messages-schemas.ts) : 2 a 16 caracteres, 2 ou 3 lettres et un sous-code (#11376).
+        String head = "{\"action\":\"listened\",\"playPositionMs\":4000,\"complete\":false";
+        assertEquals(head + ",\"language\":\"bas\"}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "bas"));
+        assertEquals(head + ",\"language\":\"pt-br\"}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), " pt-BR "));
+        assertEquals(head + "}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "x"));
+        assertEquals(head + "}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "12"));
+        assertEquals(head + "}", NotificationVoiceRules.reportBody(4000, -1, false, Collections.emptyList(), "fr-" + "a".repeat(20)));
+    }
+
+    @Test
     public void emptyOrInvertedStretchesAreDroppedAndTheTraceIsCapped() {
         List<NotificationVoiceRules.Stretch> trace = Arrays.asList(
             new NotificationVoiceRules.Stretch(10, 10, "pause"),
