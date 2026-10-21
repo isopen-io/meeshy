@@ -130,18 +130,18 @@ nonisolated extension MintCeremonyParticles {
             (0..<group.count).map { j -> Grain in
                 let mee = group.from == .mee
                 let home = mee ? Stage.meeSow : Stage.meoSow
-                let ox = home.x + (random.next() - 0.5) * 18
-                let oy = home.y + (random.next() - 0.5) * 26
+                let ox = Double(home.x) + (random.next() - 0.5) * 18
+                let oy = Double(home.y) + (random.next() - 0.5) * 26
                 let rho = (Stage.radius - 8) * sqrt(random.next())
                 let psi = random.next() * Double.pi * 2
-                let tx = Stage.circle.x + rho * cos(psi)
-                let ty = Stage.circle.y + rho * sin(psi)
+                let tx = Double(Stage.circle.x) + rho * cos(psi)
+                let ty = Double(Stage.circle.y) + rho * sin(psi)
                 let s = E.lerp(dust.from, dust.to, random.next())
                 let d = 0.45 + random.next() * 0.3
                 let cy = min(oy, ty) - 50 - random.next() * 40
                 let size = 0.9 + random.next() * 0.9
                 return Grain(s: s, d: d, origin: CGPoint(x: ox, y: oy), target: CGPoint(x: tx, y: ty),
-                             control: CGPoint(x: (ox + tx) / 2 + (mee ? 10 : -10), y: cy),
+                             control: CGPoint(x: (ox + tx) / 2 + (mee ? 10.0 : -10.0), y: cy),
                              rho: rho, psi: psi, size: size, material: group.material, tone: j)
             }
         }
@@ -158,7 +158,7 @@ nonisolated extension MintCeremonyParticles {
                 let x = 180 + (random.next() - 0.5) * 20
                 let life = 0.45 + random.next() * 0.6
                 let size = 1.2 + random.next() * 1.6
-                return Spark(strike: strike, x: x, y: Stage.anvilCenter.y - Stage.anvil / 2 - 4,
+                return Spark(strike: strike, x: x, y: Double(Stage.anvilCenter.y) - Stage.anvil / 2 - 4,
                              vx: cos(angle) * speed, vy: sin(angle) * speed, life: life, size: size, tone: b)
             }
         }

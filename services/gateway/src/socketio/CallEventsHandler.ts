@@ -3840,17 +3840,17 @@ export class CallEventsHandler {
           return;
         }
 
-        // Authorization: socket must be in the call room (joined on call:join).
-        if (!socket.rooms.has(ROOMS.call(data.callId))) {
-          socket.emit(CALL_EVENTS.ERROR, {
-            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
-            message: 'Not in call room',
-            callId: data?.callId
-          } as CallError);
-          return;
-        }
-
-        // Defense-in-depth: confirm the caller is still an active participant
+        // #11463 — l'autorisation est la PARTICIPATION ACTIVE ci-dessous, pas
+        // l'appartenance de la socket à la room. La room n'est qu'un détail de
+        // routage : une socket fraîchement reconnectée, ou qui demande avant
+        // la fin de l'`await socket.join` de son `call:join`, n'y est pas
+        // encore. Elle recevait `NOT_A_PARTICIPANT « Not in call room »`, que
+        // l'iOS publié traite comme fatal — l'appel …dbe19a du 2026-10-21 s'est
+        // terminé ainsi 0,3 s après que l'appelé eut rejoint. Les identifiants
+        // ne servent que leur propriétaire, et la socket n'est remise dans
+        // aucune room (une socket évincée par C8 reste dehors).
+        //
+        // Confirm the caller is still an active participant
         // of THIS call (not just that their socket is in the room — room
         // membership and participant state could diverge if cleanup ever
         // races — and not merely a member of its conversation, which is all

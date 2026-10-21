@@ -230,7 +230,7 @@ public struct LanguagePickerSheet: View {
 
             HStack {
                 Text(String(localized: "languagePicker.title", defaultValue: "Langue de traduction", bundle: .module))
-                    .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                     .foregroundColor(style == .dark ? .white : .primary)
                 Spacer()
                 Button {
@@ -255,7 +255,7 @@ public struct LanguagePickerSheet: View {
                 .font(.system(size: MeeshyIconSize.sm))
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
-                .font(.system(size: MeeshyFont.bodySize))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(style == .dark ? .white : .primary)
                 .tint(MeeshyColors.brandPrimary)
         }
