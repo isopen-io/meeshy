@@ -289,6 +289,7 @@ extension ConversationViewModel {
     /// une fenêtre centrée (`listAround`) qui ramène aussi les voisins. Aucun `loadWindow` : le geste vient
     /// d'un AUTRE appareil et ne déplace pas le regard de celui-ci ; l'upsert suffit, le store relit sa fenêtre.
     func restoreMessagesForMe(ids: [String]) async {
+        await messageStore.reveal(ids)
         let served = await historyLoader.restoreAround(ids: ids, limit: limit, readerPrism: preferredLanguages)
         extractAttachmentTranscriptions(from: served)
         extractTextTranslations(from: served)
