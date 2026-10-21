@@ -46,12 +46,14 @@ jest.mock('fs', () => ({
 
 import { registerDownloadRoutes } from '../../../routes/attachments/download';
 import { VIEW_ONCE_ATTACHMENT_CACHE } from '../../../services/attachments/fileRouteVerdict';
+import { storedFileETag } from '../../../utils/etag';
 
 const ID = 'aaaaaaaaaaaaaaaaaaaaaaa0';
 const KEY = '2026/10/68f2a81417a557e8ce4ddfc1/clip_8b1f0c1e-3c55-4f5e-9a51-0f6b3a9d2f10.mp4';
 const SIZE = 4096;
 const MTIME = 1700000000000;
-const ETAG = `W/"${SIZE}-${MTIME}"`;
+const INO = 7340033;
+const ETAG = storedFileETag({ size: SIZE, mtimeMs: MTIME, ino: INO });
 
 type Row = { id: string; filePath: string; messageId: string | null; isViewOnce?: boolean };
 type Carrier = { id: string; isViewOnce?: boolean };
@@ -116,7 +118,7 @@ const ordinaryCarriers = (): Carrier[] => [{ id: 'm1' }];
 
 beforeEach(() => {
   mockStat.mockReset();
-  mockStat.mockResolvedValue({ size: SIZE, mtimeMs: MTIME });
+  mockStat.mockResolvedValue({ size: SIZE, mtimeMs: MTIME, ino: INO });
   mockGetAttachment.mockReset();
   mockGetAttachment.mockResolvedValue({
     id: ID,
@@ -226,6 +228,39 @@ describe.each(ROUTES)('#11265 — %s par identifiant : en-têtes de transport ju
     const strong = await app.inject({ method: 'GET', url, headers: { 'if-none-match': ETAG.replace(/^W\//, '') } });
     expect(listed.statusCode).toBe(304);
     expect(strong.statusCode).toBe(304);
+    await app.close();
+  });
+
+  it('sert un ETag FORT — If-Range (RFC 9110 §13.1.5) ne se compare qu’à un validateur fort', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const res = await app.inject({ method: 'GET', url });
+    expect(res.headers['etag']).toMatch(/^"[0-9a-f]+"$/);
+    await app.close();
+  });
+
+  it('honore la plage quand If-Range porte l’ETag servi', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const res = await app.inject({ method: 'GET', url, headers: { range: 'bytes=0-99', 'if-range': ETAG } });
+    expect(res.statusCode).toBe(206);
+    expect(res.headers['content-range']).toBe(`bytes 0-99/${SIZE}`);
+    await app.close();
+  });
+
+  it('sert le fichier entier quand If-Range porte un validateur FAIBLE, même d’opaque identique', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    const res = await app.inject({ method: 'GET', url, headers: { range: 'bytes=0-99', 'if-range': `W/${ETAG}` } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-range']).toBeUndefined();
+    expect(res.headers['content-length']).toBe(String(SIZE));
+    await app.close();
+  });
+
+  it('change d’ETag quand le fichier est remplacé à taille et date égales (autre inode)', async () => {
+    const app = await buildApp(makePrisma(ordinaryRows(), ordinaryCarriers()));
+    mockStat.mockResolvedValue({ size: SIZE, mtimeMs: MTIME, ino: INO + 1 });
+    const res = await app.inject({ method: 'GET', url, headers: { range: 'bytes=0-99', 'if-range': ETAG } });
+    expect(res.headers['etag']).not.toBe(ETAG);
+    expect(res.statusCode).toBe(200);
     await app.close();
   });
 
