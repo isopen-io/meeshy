@@ -31,7 +31,7 @@ const pinner = (overrides: Partial<NonNullable<PinnerRow>> = {}): PinnerRow => (
 });
 
 const readerOf = (row: PinnerRow) => {
-  const findFirst = jest.fn(async () => row);
+  const findFirst = jest.fn(async (_args: unknown) => row);
   return { prisma: { participant: { findFirst } } as unknown as MessagePinReader, findFirst };
 };
 
