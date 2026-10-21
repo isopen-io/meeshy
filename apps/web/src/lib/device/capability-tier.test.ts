@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import { classifyDeviceTier, deviceTierOf, type DeviceHost, type DeviceTier, type DeviceTierInputs } from './capability-tier';
+import { classifyDeviceTier, connectionOf, deviceMemoryOf, deviceTierOf, onConnectionChange, type DeviceHost, type DeviceTier, type DeviceTierInputs } from './capability-tier';
 
 /**
  * LE TIER DE CAPACITE (W10, #11316) - jumeau de `DeviceMediaTier.classify` (iOS).
@@ -76,5 +76,23 @@ describe('deviceTierOf - ce que le navigateur declare', () => {
 
   test('une contrainte ne releve jamais un appareil bas', () => {
     expect(deviceTierOf(host({ navigator: { deviceMemory: 1, connection: { saveData: true } } }))).toBe('low');
+  });
+});
+
+describe('les lecteurs de signaux', () => {
+  test('la memoire n\'est servie que si elle est positive', () => {
+    expect(deviceMemoryOf({ deviceMemory: 4 })).toBe(4);
+    expect(deviceMemoryOf({ deviceMemory: 0 })).toBeUndefined();
+    expect(deviceMemoryOf(undefined)).toBeUndefined();
+  });
+
+  test('la connexion ignore les valeurs de type inattendu', () => {
+    const odd = { connection: { type: 4, effectiveType: '4g', saveData: 'oui' } } as unknown as Parameters<typeof connectionOf>[0];
+    expect(connectionOf(odd)).toEqual({ effectiveType: '4g' });
+    expect(connectionOf(undefined)).toEqual({});
+  });
+
+  test('s\'abonner sans API de connexion rend un desabonnement inoffensif', () => {
+    expect(() => onConnectionChange(() => undefined)()).not.toThrow();
   });
 });
