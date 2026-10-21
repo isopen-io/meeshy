@@ -115,6 +115,8 @@
 		07408FC46C804C676E69029A /* InviteFriendsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6834C2BE376B2B08DEEEA67F /* InviteFriendsSheet.swift */; };
 		07551F112B656AC9B01E4AD5 /* WorldGuestEntryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F60AC23D6EDC20560A6D90 /* WorldGuestEntryViewModel.swift */; };
 		07759D14018DE6F0B667BEC8 /* ConversationListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 075404A5EA3E157B7FA97333 /* ConversationListViewModelTests.swift */; };
+		D9CE5F05EFEE76F93F97785B /* ConversationListPreviewLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FD10E312B641A0CA59F03FB /* ConversationListPreviewLoaderTests.swift */; };
+		89F5EA0507F40C2C5006CD50 /* ConversationListReorderMotionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F768011DB5F9B4B7E46CD4B /* ConversationListReorderMotionTests.swift */; };
 		077D81884BD1DBDFD614F2E3 /* ComposerBounceButtonStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F577D931ECE35842FC98C92 /* ComposerBounceButtonStyle.swift */; };
 		07980AC4B57C93BFDEE09AA0 /* RecentMediaCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AC3614B98C66E285DC33433 /* RecentMediaCell.swift */; };
 		07AF29FC6D16FBEB83B36EF4 /* MeeshyLaunch.swift in Sources */ = {isa = PBXBuildFile; fileRef = B656BE8BF3EEAFA29EB65708 /* MeeshyLaunch.swift */; };
@@ -986,6 +988,7 @@
 		426AA904FB73B1E7860853B3 /* ConversationViewingReporterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F7FF04174A9E9D8AA237BE /* ConversationViewingReporterTests.swift */; };
 		426CA0978E32656AACCE5C4A /* TaskTimeoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F7E1D1D084836A9A2CC68CE /* TaskTimeoutTests.swift */; };
 		427113167C934DC93DA115B4 /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D218074EE027B958057E149 /* ConversationListViewModel.swift */; };
+		177F34353B495E0B3BC4C418 /* ConversationListReorderMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20F481CA5353EE7D724E5A9 /* ConversationListReorderMotion.swift */; };
 		4272AC638B6547B7C1193080 /* GroupCallModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B2C2D525C900072F62595D5 /* GroupCallModelTests.swift */; };
 		429B5468C9C2EBC9280B93C9 /* PostDetailView+CommentEdit.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA86FC9C5094C8170DB92BB1 /* PostDetailView+CommentEdit.swift */; };
 		42B52D33EEDA9CE2B9359484 /* ConversationSearchTextIsolationSourceGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D7C45FD649273697AA550FF /* ConversationSearchTextIsolationSourceGuardTests.swift */; };
@@ -4025,6 +4028,8 @@
 		072A040F93254AA1DF345DAE /* ShareSheetView+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ShareSheetView+Actions.swift"; sourceTree = "<group>"; };
 		072C62967316D93D37CCC330 /* ShareableLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareableLink.swift; sourceTree = "<group>"; };
 		075404A5EA3E157B7FA97333 /* ConversationListViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModelTests.swift; sourceTree = "<group>"; };
+		8FD10E312B641A0CA59F03FB /* ConversationListPreviewLoaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListPreviewLoaderTests.swift; sourceTree = "<group>"; };
+		6F768011DB5F9B4B7E46CD4B /* ConversationListReorderMotionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListReorderMotionTests.swift; sourceTree = "<group>"; };
 		076F8538B94129B87FDDE3C9 /* BrandSignature.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrandSignature.swift; sourceTree = "<group>"; };
 		0774EDA36B133625109FDF59 /* ProfileDecorModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileDecorModelTests.swift; sourceTree = "<group>"; };
 		077BBACA9CCF6A8F14ACBFC7 /* LinkSignInConfirmationContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LinkSignInConfirmationContentTests.swift; sourceTree = "<group>"; };
@@ -4105,6 +4110,7 @@
 		0CF7B103B0F8988D37B90C39 /* GameArchiveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameArchiveTests.swift; sourceTree = "<group>"; };
 		0D1A4197AA812E9A746B3BAA /* GamePhotoCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GamePhotoCoordinator.swift; sourceTree = "<group>"; };
 		0D218074EE027B958057E149 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
+		E20F481CA5353EE7D724E5A9 /* ConversationListReorderMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListReorderMotion.swift; sourceTree = "<group>"; };
 		0D3BA9CE16CD2979D931125D /* ShareItemRepresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareItemRepresentation.swift; sourceTree = "<group>"; };
 		0D3D8782CFED9EFFA4271C2B /* ComposerCaptureFocusGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerCaptureFocusGeometry.swift; sourceTree = "<group>"; };
 		0D557F503A4B6E478F0F69F2 /* SyncPillRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotator.swift; sourceTree = "<group>"; };
@@ -7737,6 +7743,7 @@
 				20BA18D6D81524E33F3069EB /* ConversationListPaginationCursor.swift */,
 				9438AD80CB6543A434AE2C3E /* ConversationListPersister.swift */,
 				B5F5010031289002243D0545 /* ConversationListPreviewLoader.swift */,
+				E20F481CA5353EE7D724E5A9 /* ConversationListReorderMotion.swift */,
 				D60AA8A78BDAE4CCBFFC46B4 /* ConversationListTypingTracker.swift */,
 				0D218074EE027B958057E149 /* ConversationListViewModel.swift */,
 				FF71CBB59AE7B52B6648BB62 /* ConversationListViewModel+Actions.swift */,
@@ -11941,6 +11948,8 @@
 				9B0EF29C4341CC72AF66B0D6 /* ConversationListPaginationCursorTests.swift */,
 				638ACF273DAA772785063EA6 /* ConversationListPrefetchAccountSwitchTests.swift */,
 				04BD59A46B965E1D5FE7BB22 /* ConversationListStoreReconciliationTests.swift */,
+				8FD10E312B641A0CA59F03FB /* ConversationListPreviewLoaderTests.swift */,
+				6F768011DB5F9B4B7E46CD4B /* ConversationListReorderMotionTests.swift */,
 				075404A5EA3E157B7FA97333 /* ConversationListViewModelTests.swift */,
 				E251AB677658FF784D4D30A8 /* ConversationListWorldFirstTests.swift */,
 				3DBC82FDA5DAC57E5B2DFCD5 /* ConversationMediaCatalogTests.swift */,
@@ -13611,6 +13620,7 @@
 				39CDC7C4A67BE3038A422FC2 /* ConversationListPaginationCursor.swift in Sources */,
 				C7C32E24F2F444D8EC1F6F04 /* ConversationListPersister.swift in Sources */,
 				A4D6835DC8B9BA77FE188843 /* ConversationListPreviewLoader.swift in Sources */,
+				177F34353B495E0B3BC4C418 /* ConversationListReorderMotion.swift in Sources */,
 				5C484DA964240EC8EC7DDFA3 /* ConversationListQuickActions.swift in Sources */,
 				AFB028F562299E108482B0C0 /* ConversationListSectionMemory.swift in Sources */,
 				81E40577153953344B78FA94 /* ConversationListSheetTargets.swift in Sources */,
@@ -15465,6 +15475,8 @@
 				9EB0CF9F14424E9B01D53B27 /* ConversationListStoreReconciliationTests.swift in Sources */,
 				FCB5E7DC3AB71680BC34291B /* ConversationListViewEmptyBranchTests.swift in Sources */,
 				07759D14018DE6F0B667BEC8 /* ConversationListViewModelTests.swift in Sources */,
+				D9CE5F05EFEE76F93F97785B /* ConversationListPreviewLoaderTests.swift in Sources */,
+				89F5EA0507F40C2C5006CD50 /* ConversationListReorderMotionTests.swift in Sources */,
 				14F70E2E24893F082658E341 /* ConversationListViewPresenceRefreshWiringTests.swift in Sources */,
 				C5DA8E66372A3DCD87839D88 /* ConversationListWorldFirstTests.swift in Sources */,
 				BE0304B870D8192E8894846D /* ConversationLoadingPhaseTests.swift in Sources */,
