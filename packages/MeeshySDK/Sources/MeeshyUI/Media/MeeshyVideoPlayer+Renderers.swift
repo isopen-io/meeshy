@@ -171,6 +171,7 @@ internal struct _FullscreenRenderer: View {
         }
         .onDisappear { onDisappearTeardown() }
         .statusBarHidden(true)
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     private var isActive: Bool {

@@ -321,20 +321,15 @@ public struct DocumentFullSheet: View {
                         saveState = .saved
                     }
                     HapticFeedback.success()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             } catch {
                 await MainActor.run {
                     withAnimation { saveState = .failed }
                     HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             }
         }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     private var noPreviewView: some View {
