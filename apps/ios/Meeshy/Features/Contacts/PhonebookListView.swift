@@ -40,15 +40,20 @@ struct PhonebookListView: View {
     // MARK: - Header (sync + filters)
 
     private var header: some View {
-        VStack(spacing: MeeshySpacing.smPlus) {
-            HStack(spacing: MeeshySpacing.smPlus) {
+        VStack(spacing: MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: 38)) {
+            HStack(spacing: MeeshySpacing.smPlus - MeeshyTapTarget.inset(forVisualSide: 38)) {
                 ContactsSearchField(
                     placeholder: String(localized: "contacts.phonebook.search-placeholder", defaultValue: "Rechercher dans le répertoire", bundle: .main),
                     query: $viewModel.searchQuery
                 )
                 syncButton
             }
-            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(EdgeInsets(
+                top: 0,
+                leading: MeeshySpacing.lg,
+                bottom: 0,
+                trailing: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: 38)
+            ))
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: MeeshySpacing.sm) {
@@ -59,7 +64,12 @@ struct PhonebookListView: View {
                 .padding(.horizontal, MeeshySpacing.lg)
             }
         }
-        .padding(.vertical, MeeshySpacing.sm)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.sm - MeeshyTapTarget.inset(forVisualSide: 38),
+            leading: 0,
+            bottom: MeeshySpacing.sm,
+            trailing: 0
+        ))
     }
 
     /// Synchronisation explicite : relit le carnet de l'appareil et le renvoie.
@@ -78,6 +88,7 @@ struct PhonebookListView: View {
             }
             .frame(width: 38, height: 38)
             .background(Circle().fill(MeeshyColors.indigo500))
+            .meeshyTapTarget()
         }
         .disabled(viewModel.isSyncing)
         .accessibilityLabel(String(localized: "contacts.phonebook.sync-a11y", defaultValue: "Synchroniser le répertoire", bundle: .main))
