@@ -443,7 +443,7 @@ struct ConversationInfoSheet: View {
                         Rectangle()
                             .fill(isSelected ? accent : Color.clear)
                             .frame(height: 2)
-                            .cornerRadius(1)
+                            .clipShape(RoundedRectangle(cornerRadius: 1))
                     }
                 }
                 .frame(maxWidth: .infinity)

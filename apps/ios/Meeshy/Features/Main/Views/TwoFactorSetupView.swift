@@ -99,7 +99,7 @@ struct TwoFactorSetupView: View {
                     .scaledToFit()
                     .frame(width: 200, height: 200)
                     .background(Color.white)
-                    .cornerRadius(MeeshyRadius.md)
+                    .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.md))
             } else {
                 Image(systemName: "exclamationmark.triangle")
                     .font(MeeshyFont.relative(40))

@@ -208,7 +208,7 @@ struct GlobalSearchView: View {
                         AnyShapeStyle(Color.clear)
                     )
                     .frame(height: 2)
-                    .cornerRadius(1)
+                    .clipShape(RoundedRectangle(cornerRadius: 1))
             }
         }
         .frame(maxWidth: .infinity)

@@ -58,7 +58,7 @@ struct MoodSpotlightView: View {
         .navigationBarHidden(true)
         .environment(\.colorScheme, .dark)
         .task { await viewModel.load() }
-        .onChange(of: viewModel.replyState) { state in
+        .adaptiveOnChange(of: viewModel.replyState) { _, state in
             switch state {
             case .sent:
                 HapticFeedback.success()

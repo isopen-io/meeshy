@@ -73,7 +73,7 @@ struct GalleryMediaMetadataBlock: View {
                     Spacer()
                 }
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 // Regroupe dimensions + poids en un seul arrêt VoiceOver et
                 // remplace le « × » (lu « multiplication ») par un « par » localisé.
                 .accessibilityElement(children: .ignore)
