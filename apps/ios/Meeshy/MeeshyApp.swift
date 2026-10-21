@@ -140,11 +140,11 @@ struct MeeshyApp: App {
                             holdSplashUntilCeiling: { await launchSplash.holdUntilCeiling() }
                         )
                     )
-                    .guestSessionCover(
+                    .modifier(GuestSessionCover(
                         guest: inputs.activeGuestSession,
                         isAuthenticated: session.isAuthenticated,
                         actions: guestSessionCoverActions
-                    )
+                    ))
                     .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
                     .visitorContentCover(
                         presenter: visitorPresenter,
