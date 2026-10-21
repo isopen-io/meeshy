@@ -89,7 +89,7 @@ struct ComposerDropTargetModifier: ViewModifier {
                     Image(systemName: "arrow.down.doc.fill")
                         .font(.footnote.weight(.semibold))
                 }
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xsPlus)
                 .background(Capsule().fill(accent))

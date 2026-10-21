@@ -33,7 +33,7 @@ extension MeeshyComposerHost {
             } label: {
                 Image(systemName: "plus")
                     .font(.footnote.weight(.bold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
                     .contentShape(Circle())
