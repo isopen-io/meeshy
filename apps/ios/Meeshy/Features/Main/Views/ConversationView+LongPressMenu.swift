@@ -132,7 +132,7 @@ extension ConversationView {
                 accentHex: accentColor,
                 focusedPieceId: $overlayState.overlayPieceId,
                 isPresented: $overlayState.showOverlayMenu,
-                canDelete: message.isMe || isCurrentUserAdminOrMod || canRemoveMessage(message),
+                canDelete: MessageMenuContext.make(message: message, viewModel: viewModel, authority: menuAuthority).canDelete,
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
                 },
@@ -182,9 +182,8 @@ extension ConversationView {
                 titleVisibility: .visible,
                 presenting: overlayState.deleteConfirmMessageId
             ) { msgId in
-                // "Delete for everyone" only if the user authored the
-                // message AND the 2-hour window hasn't elapsed — matches
-                // WhatsApp's "Delete for everyone" gating.
+                // « Supprimer pour tous » : l'auteur, sans fenêtre — la
+                // passerelle n'en impose aucune (`admitMessageDelete`, #11214).
                 if let idx = viewModel.messageIndex(for: msgId),
                    viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
                     Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
@@ -208,7 +207,7 @@ extension ConversationView {
             // #4024 — même contrat que la confirmation ci-dessus, sur la
             // SÉLECTION entière plutôt qu'un seul message : "pour tous"
             // n'apparaît que si `selectionAllowsDeleteForAll` (TOUS les
-            // messages sélectionnés sont miens ET encore dans la fenêtre).
+            // messages sélectionnés sont miens, sans fenêtre — #11214).
             .confirmationDialog(
                 String(localized: "conversation.view.delete_message.title", bundle: .main),
                 isPresented: $overlayState.deleteConfirmSelectionActive,

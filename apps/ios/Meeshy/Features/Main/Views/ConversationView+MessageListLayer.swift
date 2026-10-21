@@ -59,7 +59,7 @@ struct ConversationMessageListLayer: View {
     let insets: ConversationListInsets
     let isHeaderExpanded: Bool
     let readingMode: ReadingModeOrchestrator.ConversationReadingMode
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let messageActions: ConversationMessageActions
     let actions: ConversationMessageListActions
 
@@ -287,13 +287,10 @@ struct ConversationMessageListLayer: View {
             // grand menu et non le menu longpress ».
             onOpenMoreSheet: { messageId in
                 guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                overlayState.moreSheetInitialItem = nil
                 overlayState.detailSheetMessage = msg
             },
-            // La règle d'éditabilité est REMISE, pas recopiée : même expression que les trois autres sites de ce fichier.
-            canEditMessage: { messageId in
-                guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return false }
-                return msg.isMe || isAdminOrMod
-            },
+            canEditMessage: { editable($0) },
             onAddReaction: { messageId, bubbleFrame in
                 // Exclusivité mutuelle : ouvrir la barre de quick-reaction
                 // ferme d'abord l'overlay d'appui-long s'il est visible.
@@ -388,5 +385,13 @@ struct ConversationMessageListLayer: View {
         // compose dans `contentInset.top`), compensée de
         // `safeAreaBottom` au site d'appel — le repos est inchangé.
         .ignoresSafeArea(.container, edges: [.top, .bottom])
+    }
+
+    /// #11214 — l'éditabilité du double toucher est REMISE par la fabrique
+    /// unique, que l'overlay et la feuille « Plus… » lisent aussi.
+    private func editable(_ messageId: String) -> Bool {
+        guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return false }
+        let menu = MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority)
+        return menu.isMine && menu.canEdit && menu.hasText
     }
 }

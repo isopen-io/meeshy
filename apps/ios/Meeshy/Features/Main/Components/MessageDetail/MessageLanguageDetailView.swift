@@ -368,6 +368,8 @@ struct MessageLanguageDetailView: View {
 
     private func translateToLocal(_ targetLang: String, from sourceLang: String) async {
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // #11214 — un message chiffré de bout en bout ne part jamais vers la traduction serveur.
+        guard ServerTranslationAdmission.admits(message, conversationEncryptionMode: nil) else { return }
         localTranslatingLanguages.insert(targetLang)
         translationError = nil
         defer { localTranslatingLanguages.remove(targetLang) }
@@ -404,6 +406,7 @@ struct MessageLanguageDetailView: View {
     }
 
     private func translateAudioToLocal(_ targetLang: String, attachmentId: String) async {
+        guard ServerTranslationAdmission.admits(message, conversationEncryptionMode: nil) else { return }
         localTranslatingAudioLanguages.insert(targetLang)
         translationError = nil
         defer { localTranslatingAudioLanguages.remove(targetLang) }
