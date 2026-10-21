@@ -227,11 +227,8 @@ extension MeeshyComposerHost {
             currentIndex: viewModel.currentSlideIndex,
             slideImages: viewModel.slideImages,
             loadedImages: viewModel.loadedImages,
-            onSelect: { index in
-                if retouchSeries != nil { selectRetouchScene(at: index) } else { viewModel.selectSlide(at: index) }
-            },
-            // En retouche, une scène EST une pièce du message : elle ne se jette pas ici.
-            onDelete: returnsToConversation ? nil : { retractScene(at: $0) }))
+            onSelect: { viewModel.selectSlide(at: $0) },
+            onDelete: { retractScene(at: $0) }))
     }
 
     /// **L'outil Texte du document : la scène, le texte posé, le clavier — un
