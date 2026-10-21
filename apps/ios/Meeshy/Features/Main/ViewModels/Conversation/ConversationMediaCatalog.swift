@@ -37,7 +37,7 @@ struct CachedConversationMediaIndexStore: ConversationMediaIndexStoring {
     }
 
     func save(_ carriers: [MeeshyMessage], conversationId: String) async {
-        try? await CacheCoordinator.shared.conversationMedia.save(carriers, for: conversationId)
+        await bestEffort("conversationMediaCatalog.conversationMedia.save", category: .cache) { try await CacheCoordinator.shared.conversationMedia.save(carriers, for: conversationId) }
     }
 
     func isComplete(conversationId: String) async -> Bool {
