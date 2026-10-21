@@ -49,7 +49,7 @@ struct EngagementPlayerBannerSource: PlayerBannerSourcing {
     func fetch() async -> GameBlock? {
         guard let snapshot = try? await service.fetchProgress() else { return nil }
         let store = await CacheCoordinator.shared.engagementProgress
-        try? await store.save([snapshot], for: key)
+        await bestEffort("playerBannerHost.store.save", category: .cache) { try await store.save([snapshot], for: key) }
         return snapshot.game
     }
 }

@@ -151,7 +151,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                 // complet quand le fil n'a pas (encore) été chargé ici.
                 let replies = existing
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(replies), for: "replies-\(parentId)")
+                    await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(replies), for: "replies-\(parentId)") }
                 }
             } else if !existing.contains(where: { $0.id == feedComment.id }) {
                 existing.insert(feedComment, at: 0)
@@ -172,7 +172,7 @@ struct CommentsSheetLiveSync: ViewModifier {
                 let snapshot = current
                 let postId = post.id
                 Task {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(snapshot), for: "post-\(postId)")
+                    await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(CommentSheetRules.persistableComments(snapshot), for: "post-\(postId)") }
                 }
             } else if !current.contains(where: { $0.id == feedComment.id }) {
                 current.insert(feedComment, at: 0)
@@ -232,7 +232,7 @@ struct CommentsSheetLiveSync: ViewModifier {
         guard !writes.isEmpty else { return }
         Task {
             for write in writes {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(write.comments, for: write.key)
+                await bestEffort("commentsSheetLiveSync.comments.savePreservingFreshness.3", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(write.comments, for: write.key) }
             }
         }
     }

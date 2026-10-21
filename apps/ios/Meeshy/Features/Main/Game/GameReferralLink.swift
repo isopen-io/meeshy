@@ -83,7 +83,7 @@ final class AffiliateTokenGateway: ReferralTokenGateway {
     }
 
     func store(_ tokens: [AffiliateToken]) async {
-        try? await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
+        await bestEffort("gameReferralLink.affiliateTokens.save", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list") }
     }
 }
 

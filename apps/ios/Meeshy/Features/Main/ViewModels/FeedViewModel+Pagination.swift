@@ -120,7 +120,7 @@ extension FeedViewModel {
                 // « main-feed » est écrit quand `loadFeed` rend la main. Le test
                 // `…doesNotReturnBeforeTheFetchedPageIsPersisted` en est le témoin ;
                 // la CI du 2026-08-26 en était le symptôme (cache pollué entre tests).
-                try? await feedCache.save(fetched, for: "main-feed")
+                await bestEffort("feedViewModelPagination.feedCache.save", category: .cache) { try await feedCache.save(fetched, for: "main-feed") }
 
                 // Persist to GRDB alongside cache
                 if let persistence = feedPersistence {
@@ -306,7 +306,7 @@ extension FeedViewModel {
                 let comments = await Task.detached(priority: .utility) {
                     payload.map { FeedComment(api: $0, preferredLanguages: langs) }
                 }.value
-                try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+                await bestEffort("feedViewModelPagination.comments.save", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
             } catch {
                 // Silent fail on prefetch — user-triggered open will retry the network.
             }
