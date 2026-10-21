@@ -151,6 +151,20 @@
   inset: -10px;
 }
 
+/* L'APERÇU SE SOULÈVE DEPUIS SA RANGÉE (#11206, `lib/view/message-menu-lift.ts`)
+   — un FLIP joué par l'API d'animation, sur `transform` et `opacity` seuls.
+   Le calque composité ne vit QUE le temps du geste (`data-lifting`, posé puis
+   retiré par `playLift`) : un calque gardé au repos floute le texte posé. Le
+   fantôme du retour (`data-message-menu-return`) ne reçoit aucun geste. Sous
+   `prefers-reduced-motion`, le même module joue un fondu de 150 ms. */
+[data-message-menu-preview-host][data-lifting],
+[data-message-menu-return] {
+  will-change: transform, opacity;
+}
+[data-message-menu-return] {
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .message-menu-backdrop,
   .message-menu-rail,

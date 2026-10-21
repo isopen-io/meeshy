@@ -166,6 +166,7 @@ export function ThreadMessageSheets({
             choices={data.choices}
             forwardItems={data.forwardItems}
             subjectLabel={data.subjectLabel}
+            canReact={data.canReact}
             onClose={messageMenu.onCloseMenu}
             /* LA PIÈCE VISÉE (#9907, #9908) — l'aperçu la montre seule, le
                défilement change la cible, le rail réagit sur elle. */
