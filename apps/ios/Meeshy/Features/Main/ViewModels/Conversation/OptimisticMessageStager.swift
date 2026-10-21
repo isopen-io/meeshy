@@ -26,7 +26,7 @@ struct OptimisticMediaDraft {
     let protection: MessageProtectionIntent
 }
 
-typealias ThreadCacheMerge = @Sendable (_ conversationId: String, _ mutate: @Sendable ([Message]) -> [Message]) async -> Void
+typealias ThreadCacheMerge = @Sendable @concurrent (_ conversationId: String, _ mutate: @Sendable ([Message]) -> [Message]) async -> Void
 
 protocol OptimisticMessageStagerProviding {
     func stageOffline(

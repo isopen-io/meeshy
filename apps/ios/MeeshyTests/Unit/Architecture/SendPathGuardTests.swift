@@ -46,6 +46,24 @@ final class SendPathGuardTests: XCTestCase {
                        "ces fichiers appellent encore `sendMessage(content:…)` : construire un OutgoingMessage et appeler `send(_:)`")
     }
 
+    func test_deprecatedSendSignature_isGone() throws {
+        let declarers = try swiftFiles(under: "Meeshy").filter { url in
+            try matches(#"func sendMessage\(\s*content:"#, in: code(of: url)) > 0
+        }
+        XCTAssertEqual(declarers.map(\.lastPathComponent), [],
+                       "le pont `sendMessage(content:…)` est retiré : tout envoi construit un OutgoingMessage")
+    }
+
+    /// `FailedMessageReplay.swift` garde l'unique `.legacy(` restant (#11118) : la migration
+    /// vers `.reply` / `.forward` (le `.reply` reste prioritaire) attend sa possession.
+    func test_ownedSendSites_buildRelationsWithoutLegacy() throws {
+        let legacyFiles = try swiftFiles(under: "Meeshy").filter { url in
+            try matches(#"\.legacy\("#, in: code(of: url)) > 0
+        }
+        XCTAssertEqual(legacyFiles.map(\.lastPathComponent), ["FailedMessageReplay.swift"],
+                       "un site d'envoi construit sa relation sans `.legacy` : `ComposerSendRelation.of` ou un cas explicite")
+    }
+
     func test_sendPath_hasNoSilentTryOnPersistence() throws {
         let silentWrite = #"try\?\s+await[^\n]*(applyEvent|markOptimisticFailed|purgeMessages|markDeleted|resolveServerId)"#
         let silentEncode = #"try\? JSONEncoder"#

@@ -129,7 +129,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_single_offline_send_enqueues_one_item_and_inserts_one_bubble() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(content: "Hello world")
+        let ok = await fx.sut.send(outgoingMessage(content: "Hello world", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertTrue(ok)
         let enqueueCount = await fx.offlineQueue.enqueueCount
@@ -152,7 +152,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_offline_send_persistsCallerOriginalLanguage_notHardcodedFr() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(content: "Hello world", originalLanguage: "es")
+        let ok = await fx.sut.send(outgoingMessage(content: "Hello world", conversationId: fx.sut.conversationId, originalLanguage: "es")).isAccepted
 
         XCTAssertTrue(ok)
         let enqueuedIds = await fx.offlineQueue.enqueuedClientMessageIds
@@ -172,7 +172,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_offline_send_withNoOriginalLanguage_fallsBackToUserSystemLanguage_notHardcodedFr() async throws {
         let fx = try await makeFixture(userSystemLanguage: "es")
 
-        let ok = await fx.sut.sendMessage(content: "Hola", originalLanguage: nil)
+        let ok = await fx.sut.send(outgoingMessage(content: "Hola", conversationId: fx.sut.conversationId, originalLanguage: nil)).isAccepted
 
         XCTAssertTrue(ok)
         let enqueuedIds = await fx.offlineQueue.enqueuedClientMessageIds
@@ -188,8 +188,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_two_offline_sends_back_to_back_enqueue_two_items() async throws {
         let fx = try await makeFixture()
 
-        let firstOk = await fx.sut.sendMessage(content: "First")
-        let secondOk = await fx.sut.sendMessage(content: "Second")
+        let firstOk = await fx.sut.send(outgoingMessage(content: "First", conversationId: fx.sut.conversationId)).isAccepted
+        let secondOk = await fx.sut.send(outgoingMessage(content: "Second", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertTrue(firstOk)
         XCTAssertTrue(secondOk)
@@ -207,8 +207,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_concurrent_distinct_sends_both_proceed() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
 
-        async let a = fx.sut.sendMessage(content: "Tap A")
-        async let b = fx.sut.sendMessage(content: "Tap B")
+        async let a = fx.sut.send(outgoingMessage(content: "Tap A", conversationId: fx.sut.conversationId)).isAccepted
+        async let b = fx.sut.send(outgoingMessage(content: "Tap B", conversationId: fx.sut.conversationId)).isAccepted
         let results = await [a, b]
 
         let succeeded = results.filter { $0 }.count
@@ -227,8 +227,8 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_identical_rapid_sends_both_enqueue() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
 
-        async let a = fx.sut.sendMessage(content: "😂")
-        async let b = fx.sut.sendMessage(content: "😂")
+        async let a = fx.sut.send(outgoingMessage(content: "😂", conversationId: fx.sut.conversationId)).isAccepted
+        async let b = fx.sut.send(outgoingMessage(content: "😂", conversationId: fx.sut.conversationId)).isAccepted
         let results = await [a, b]
 
         XCTAssertEqual(results.filter { $0 }.count, 2, "Two identical taps in a row send twice")
@@ -243,10 +243,10 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_three_distinct_sends_all_enqueue() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(80))
 
-        async let a = fx.sut.sendMessage(content: "Tap A")
-        async let b = fx.sut.sendMessage(content: "Tap B")
+        async let a = fx.sut.send(outgoingMessage(content: "Tap A", conversationId: fx.sut.conversationId)).isAccepted
+        async let b = fx.sut.send(outgoingMessage(content: "Tap B", conversationId: fx.sut.conversationId)).isAccepted
         _ = await [a, b]
-        let later = await fx.sut.sendMessage(content: "Tap C")
+        let later = await fx.sut.send(outgoingMessage(content: "Tap C", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertTrue(later)
         let enqueueCount = await fx.offlineQueue.enqueueCount
@@ -261,7 +261,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_enqueue_throws_marks_bubble_failed() async throws {
         let fx = try await makeFixture(offlineQueueThrows: true)
 
-        let ok = await fx.sut.sendMessage(content: "Doomed")
+        let ok = await fx.sut.send(outgoingMessage(content: "Doomed", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertFalse(ok)
         let convId = fx.conversationId
@@ -282,10 +282,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_attachment_ids_are_preserved_through_offline_enqueue() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(
-            content: "Photo caption",
-            attachmentIds: ["att-1", "att-2", "att-3"]
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "Photo caption", conversationId: fx.sut.conversationId, attachmentIds: ["att-1", "att-2", "att-3"])).isAccepted
 
         XCTAssertTrue(ok)
         let attachmentIds = await fx.offlineQueue.enqueuedAttachmentIds
@@ -297,10 +294,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_reply_to_id_is_preserved_through_offline_enqueue() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(
-            content: "Replying",
-            replyToId: "parent-message-id"
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "Replying", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID("parent-message-id"), citing: nil))).isAccepted
 
         XCTAssertTrue(ok)
         let replyToIds = await fx.offlineQueue.enqueuedReplyToIds
@@ -313,11 +307,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
     func test_forwarded_metadata_is_preserved_through_offline_enqueue() async throws {
         let fx = try await makeFixture()
 
-        let ok = await fx.sut.sendMessage(
-            content: "Forwarded",
-            forwardedFromId: "orig-msg-id",
-            forwardedFromConversationId: "orig-conv-id"
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "Forwarded", conversationId: fx.sut.conversationId, relation: .forward(of: MessageID("orig-msg-id"), from: ConversationID("orig-conv-id")))).isAccepted
 
         XCTAssertTrue(ok)
         let forwardedFromIds = await fx.offlineQueue.enqueuedForwardedFromIds
@@ -348,7 +338,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         // Default MockMessageSocket.sendViaSocketFallbackResult is nil → the
         // catch block skips the socket-recovery early-return and falls
         // through to the retry-enqueue path under test.
-        let ok = await fx.sut.sendMessage(content: "online-then-retry")
+        let ok = await fx.sut.send(outgoingMessage(content: "online-then-retry", conversationId: fx.sut.conversationId)).isAccepted
 
         XCTAssertFalse(ok, "Online send with REST failure + no socket ack returns false")
         let enqueueCount = await fx.offlineQueue.enqueueCount
@@ -371,7 +361,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             )
         )
 
-        let ok = await fx.sut.sendMessage(content: "hola", originalLanguage: "es")
+        let ok = await fx.sut.send(outgoingMessage(content: "hola", conversationId: fx.sut.conversationId, originalLanguage: "es")).isAccepted
 
         XCTAssertFalse(ok)
         let enqueuedItems = await fx.offlineQueue.enqueuedItems
@@ -433,7 +423,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
         )
 
-        _ = await fx.sut.sendMessage(content: "réponse à une story", storyReplyToId: "s1")
+        _ = await fx.sut.send(outgoingMessage(content: "réponse à une story", conversationId: fx.sut.conversationId, relation: .storyReply(to: StoryID("s1"), reference: nil))).isAccepted
 
         let items = await fx.offlineQueue.enqueuedItems
         XCTAssertEqual(items.count, 1)
@@ -446,7 +436,7 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
             restSendFailure: NSError(domain: "ConversationViewModelOfflineQueueTests", code: 500)
         )
 
-        _ = await fx.sut.sendMessage(content: "transfert", forwardedFromId: "m9", forwardedFromConversationId: "c9")
+        _ = await fx.sut.send(outgoingMessage(content: "transfert", conversationId: fx.sut.conversationId, relation: .forward(of: MessageID("m9"), from: ConversationID("c9")))).isAccepted
 
         let items = await fx.offlineQueue.enqueuedItems
         let socketCalls = fx.messageSocket.sendViaSocketFallbackCallCount
