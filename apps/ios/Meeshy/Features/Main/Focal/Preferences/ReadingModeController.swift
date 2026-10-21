@@ -84,23 +84,52 @@ final class ReadingModeController: ObservableObject {
             self.decision = forced
             self.mode = forced.mode
         } else {
-            let sticky = store.mode(for: conversationId, scope: scope)
-            let resolved = Self.renderDecision(
-                stickyMode: sticky,
-                lawDecision: Self.decide(
-                    stickyMode: sticky,
-                    unreadCount: unreadCount,
-                    lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
-                    now: now(),
-                    capabilities: capabilities,
-                    isFlagEnabled: isFlagEnabled
-                ),
-                isFlagEnabled: isFlagEnabled
+            let resolved = Self.openingDecision(
+                conversationId: conversationId,
+                scope: scope,
+                unreadCount: unreadCount,
+                capabilities: capabilities,
+                isFlagEnabled: isFlagEnabled,
+                store: store,
+                now: now()
             )
             let opening = landsOnMessage ? Self.landing(resolved) : resolved
             self.decision = opening
             self.mode = opening.mode
         }
+    }
+
+    /// **La décision d'OUVERTURE d'une conversation — la seule** (#11213).
+    ///
+    /// Préférence collante lue au magasin scopé, loi partagée
+    /// (`ReadingModeOrchestrator`), puis règle de rendu iOS (`renderDecision`).
+    /// Le fil (`init`, `recompute`) et la liste (`LentilleReadingModeContext
+    /// .openingDecision`, qui alimente l'aperçu d'appui long) la consomment
+    /// tous deux : une conversation tenue longuement montre la face que le fil
+    /// ouvrirait, jamais une décision recalculée à côté. Pure hors du magasin,
+    /// `nonisolated` : la liste l'appelle depuis une loi sans acteur.
+    nonisolated static func openingDecision(
+        conversationId: String,
+        scope: ReadingModePreferenceScope,
+        unreadCount: Int,
+        capabilities: ReadingModeOrchestrator.ReadingModeCapabilities,
+        isFlagEnabled: Bool,
+        store: FocalReadingModePreferenceStoring,
+        now: Date
+    ) -> ReadingModeOrchestrator.OrchestratorDecision {
+        let sticky = store.mode(for: conversationId, scope: scope)
+        return renderDecision(
+            stickyMode: sticky,
+            lawDecision: decide(
+                stickyMode: sticky,
+                unreadCount: unreadCount,
+                lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
+                now: now,
+                capabilities: capabilities,
+                isFlagEnabled: isFlagEnabled
+            ),
+            isFlagEnabled: isFlagEnabled
+        )
     }
 
     /// #8133 — une ouverture qui porte un message CIBLE (« Aller au message »,
@@ -142,7 +171,7 @@ final class ReadingModeController: ObservableObject {
     ///    (`use-thread-reading-mode.ts`, `THREAD_MOUNTABLE_MODES` contient
     ///    `'bubbles'`) : la loi reste INTACTE (vecteurs TS↔Swift), la règle vit
     ///    à la CONSOMMATION, comme l'ancien clamp.
-    private static func renderDecision(
+    nonisolated private static func renderDecision(
         stickyMode: ConversationReadingMode?,
         lawDecision: ReadingModeOrchestrator.OrchestratorDecision,
         isFlagEnabled: Bool
@@ -169,24 +198,20 @@ final class ReadingModeController: ObservableObject {
     }
 
     private func recompute() {
-        let sticky = store.mode(for: conversationId, scope: scope)
-        let resolved = Self.renderDecision(
-            stickyMode: sticky,
-            lawDecision: Self.decide(
-                stickyMode: sticky,
-                unreadCount: unreadCount,
-                lastOpenedAt: store.lastOpenedAt(for: conversationId, scope: scope),
-                now: now(),
-                capabilities: capabilities,
-                isFlagEnabled: isFlagEnabled
-            ),
-            isFlagEnabled: isFlagEnabled
+        let resolved = Self.openingDecision(
+            conversationId: conversationId,
+            scope: scope,
+            unreadCount: unreadCount,
+            capabilities: capabilities,
+            isFlagEnabled: isFlagEnabled,
+            store: store,
+            now: now()
         )
         decision = resolved
         mode = resolved.mode
     }
 
-    private static func decide(
+    nonisolated private static func decide(
         stickyMode: ConversationReadingMode?,
         unreadCount: Int,
         lastOpenedAt: Date?,
@@ -214,7 +239,7 @@ final class ReadingModeController: ObservableObject {
     /// elle a donc déménagé dans `ReadingModePreferenceMapping`
     /// (`ReadingModePreferenceStore.swift`, un seul domicile) et ce contrôleur
     /// s'y adresse au lieu d'en garder une copie.
-    private static func preference(
+    nonisolated private static func preference(
         for mode: ConversationReadingMode?
     ) -> ReadingModeOrchestrator.ReadingModePreference {
         ReadingModePreferenceMapping.preference(for: mode)

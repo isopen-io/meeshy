@@ -33,6 +33,7 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
         let isNonisolated: Bool
         let isMainActor: Bool
         let hasDeinit: Bool
+        let hasBareDeinit: Bool
     }
 
     private func coreRoot() -> URL {
@@ -110,20 +111,24 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
             let isNonisolated = pre.range(of: "\\bnonisolated\\b(?=[^{}]*$)", options: .regularExpression) != nil
             let isMainActor = pre.range(of: "@MainActor\\b(?=[^{}]*$)", options: .regularExpression) != nil
             let afterName = afterKeyword[nameMatch.upperBound...]
-            let hasDeinit = Self.bodyContainsDeinit(
+            let members = Self.topLevelMembers(
                 chars: chars,
                 startOffset: code.distance(from: code.startIndex, to: afterName.startIndex))
+            let hasDeinit = members.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+            let hasExplicitIsolation = members.range(
+                of: "\\bnonisolated\\s+deinit\\b", options: .regularExpression) != nil
             out.append(ClassDecl(relativePath: relativePath, name: rawName,
                                  isNonisolated: isNonisolated, isMainActor: isMainActor,
-                                 hasDeinit: hasDeinit))
+                                 hasDeinit: hasDeinit,
+                                 hasBareDeinit: hasDeinit && !hasExplicitIsolation))
         }
         return out
     }
 
-    /// `deinit` déclaré au niveau 1 du corps de classe uniquement (pas dans un
-    /// type imbriqué — constat 2 de la revue Opus).
-    private static func bodyContainsDeinit(chars: [Character], startOffset: Int) -> Bool {
-        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return false }
+    /// Membres du niveau 1 du corps de classe uniquement (pas ceux d'un type
+    /// imbriqué — constat 2 de la revue Opus).
+    private static func topLevelMembers(chars: [Character], startOffset: Int) -> String {
+        guard let open = (startOffset..<chars.count).first(where: { chars[$0] == "{" }) else { return "" }
         var depth = 0
         var topLevel = ""
         var idx = open
@@ -137,7 +142,7 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
             if depth == 1 { topLevel.append(c) }
             idx += 1
         }
-        return topLevel.range(of: "\\bdeinit\\b", options: .regularExpression) != nil
+        return topLevel
     }
 
     // MARK: - Garde principale
@@ -156,6 +161,17 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
             "Ces classes @MainActor EXPLICITES du core n'écrivent aucune `deinit` : leur deinit " +
             "synthétisée est ISOLÉE et double-libère sur iOS 26.1 (abrt). Ajouter " +
             "`nonisolated deinit {}`.\n" + offenders.joined(separator: "\n")
+        )
+    }
+
+    func test_everyExplicitMainActorCoreClass_writtenDeinit_isNonisolated() throws {
+        let offenders = try classDecls()
+            .filter { $0.isMainActor && !$0.isNonisolated && $0.hasBareDeinit }
+            .map { "\($0.relativePath): \($0.name)" }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Ces classes @MainActor EXPLICITES du core écrivent un `deinit` sans `nonisolated`. " +
+            "Écrire `nonisolated deinit`.\n" + offenders.joined(separator: "\n")
         )
     }
 
@@ -205,5 +221,27 @@ final class MeeshySDKCoreDeinitSourceGuardTests: XCTestCase {
         """), relativePath: "S.swift").first { $0.name == "Q" }
         XCTAssertNotNil(d)
         XCTAssertFalse(d!.hasDeinit, "un `deinit` dans un littéral ne compte pas")
+    }
+
+    func test_parser_flagsBareWrittenDeinit_andAcceptsNonisolated() {
+        let bare = Self.parse(Self.mask("""
+        @MainActor final class Bare { deinit { timer?.invalidate() } }
+        """), relativePath: "S.swift").first { $0.name == "Bare" }
+        let explicit = Self.parse(Self.mask("""
+        @MainActor final class Explicit {
+            nonisolated
+            deinit {}
+        }
+        """), relativePath: "S.swift").first { $0.name == "Explicit" }
+        XCTAssertEqual(bare?.hasBareDeinit, true)
+        XCTAssertEqual(explicit?.hasBareDeinit, false)
+    }
+
+    func test_parser_ignoresBareDeinit_onNonAnnotatedCoreClass() {
+        let d = Self.parse(Self.mask("""
+        public final class Plain { deinit { } }
+        """), relativePath: "S.swift").first { $0.name == "Plain" }
+        XCTAssertEqual(d?.isMainActor, false)
+        XCTAssertEqual(d?.hasBareDeinit, true)
     }
 }

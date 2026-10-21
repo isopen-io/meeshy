@@ -16,16 +16,7 @@ import MeeshySDK
 ///   le reçoit de nouveau avec son contenu.
 extension ConversationViewModel {
 
-    enum ViewOnceOpening {
-        /// Le plein écran à présenter, sur cette pièce.
-        case fullscreen(MessageAttachment)
-        /// Le texte est révélé à sa place dans le fil.
-        case inPlace
-        /// Le texte révélé a été RETOUCHÉ : il passe à « déjà ouvert » (#7579).
-        case closed
-        /// Rien à ouvrir : message inconnu, sans vue unique, ou déjà ouvert.
-        case unavailable
-    }
+    typealias ViewOnceOpening = ConversationViewOnceOpening
 
     func openViewOnce(messageId: String) -> ViewOnceOpening {
         guard let index = messages.firstIndex(where: { $0.id == messageId }),

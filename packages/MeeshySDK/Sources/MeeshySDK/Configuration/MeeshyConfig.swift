@@ -6,7 +6,12 @@ public final class MeeshyConfig: @unchecked Sendable {
     #if DEBUG
     /// Vitrine App Store (#8855, DEBUG uniquement) : l'origine web PUBLIQUE à montrer alors que
     /// l'app tourne face à un hôte injoignable. `nil` hors vitrine.
-    nonisolated(unsafe) public static var debugWebOriginOverride: String?
+    public static var debugWebOriginOverride: String? {
+        get { debugWebOriginOverrideSlot.read { $0 } }
+        set { debugWebOriginOverrideSlot.mutate { $0 = newValue } }
+    }
+
+    private static let debugWebOriginOverrideSlot = Locked<String?>(nil)
     #endif
 
     private static let remoteOrigin = "https://gate.meeshy.me"

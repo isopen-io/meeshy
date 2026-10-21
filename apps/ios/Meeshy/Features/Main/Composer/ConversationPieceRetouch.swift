@@ -23,7 +23,7 @@ struct ConversationPieceRetouch: View {
 
     @StateObject private var session: ComposerCaptureSession
     @State private var size = ComposerSceneCameraSize.card
-    @State private var settled = false
+    @State private var life = ComposerCaptureCoverLife()
 
     init(piece: ComposerRetouchPiece, onDone: @escaping (ComposerReturnedMedia) -> Void,
          onRemove: @escaping () -> Void, onCancel: @escaping () -> Void) {
@@ -45,33 +45,81 @@ struct ConversationPieceRetouch: View {
         ComposerCaptureMount(session: session, size: $size, offersSizeToggle: false,
                              onDisarm: { close(removing: false) },
                              onDeliver: { resultat in
-                                 guard !settled else { return }
-                                 settled = true
+                                 guard life.settle() else { return }
                                  onDone(ComposerReturnedMedia(capture: resultat))
                              }) {
             Color.black
                 .ignoresSafeArea()
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
         }
+        // **Une disparition n'est pas une fermeture** (#11347) : SwiftUI peut
+        // détacher puis rattacher ce plein écran sans le détruire, et relance
+        // alors cette tâche. La session désarmée se réarme et le média se rouvre.
         .task {
-            guard await ConversationPieceRetouchOpening.open(source, in: session) else { return close(removing: false) }
+            if life.attach() { ComposerCaptureCoverLife.reattach(session) }
+            guard !life.settled else { return }
+            let ouverte = await ConversationPieceRetouchOpening.open(source, in: session)
+            guard !ouverte, !Task.isCancelled else { return }
+            close(removing: false)
         }
         .adaptiveOnChange(of: session.phase.isEditing) { avant, apres in
-            guard ConversationPieceRetouchOpening.abandoned(wasEditing: avant, isEditing: apres,
-                                                             settled: settled) else { return }
+            guard life.abandoned(wasEditing: avant, isEditing: apres) else { return }
             close(removing: true)
         }
         .onDisappear {
-            settled = true
+            life.detach()
             session.disarm()
         }
         .statusBarHidden()
     }
 
     private func close(removing: Bool) {
-        guard !settled else { return }
-        settled = true
+        guard life.settle() else { return }
         removing ? onRemove() : onCancel()
+    }
+}
+
+/// **La vie d'un plein écran de capture à l'écran** (#11347, #11352) — la
+/// retouche d'une pièce ET le viseur servi seul : deux questions distinctes,
+/// que le seul « réglée » confondait. L'hôte a-t-il sa réponse ? La vue
+/// a-t-elle quitté l'écran ? Une vue détachée a sa session désarmée, mais
+/// SwiftUI peut la rattacher avec son état : elle ne répond donc pas à l'hôte,
+/// et son désarmement ne se lit pas comme « Abandonner ».
+struct ComposerCaptureCoverLife: Equatable {
+    private(set) var settled = false
+    private(set) var detached = false
+
+    mutating func detach() {
+        detached = true
+    }
+
+    /// La vue (re)vient à l'écran ; vrai si elle revient d'une disparition,
+    /// et que sa session, désarmée, doit se réarmer.
+    mutating func attach() -> Bool {
+        defer { detached = false }
+        return detached
+    }
+
+    /// La réponse à l'hôte — « Terminé », « Abandonner » ou la croix — part
+    /// une seule fois, et jamais d'une vue détachée.
+    mutating func settle() -> Bool {
+        guard !settled, !detached else { return false }
+        settled = true
+        return true
+    }
+
+    func abandoned(wasEditing: Bool, isEditing: Bool) -> Bool {
+        ConversationPieceRetouchOpening.abandoned(wasEditing: wasEditing, isEditing: isEditing,
+                                                  settled: settled || detached)
+    }
+
+    /// Le plein écran rattaché après une disparition : sa session, désarmée,
+    /// se réarme dans l'état où l'hôte l'avait fait naître — le montage ne
+    /// peint rien d'une session éteinte, ni l'aperçu, ni le média, ni la croix.
+    static func reattach(_ session: ComposerCaptureSession, mode: ComposerSceneCameraMode? = nil) {
+        guard session.stage == .off else { return }
+        session.mode = mode
+        session.stage = .armed
     }
 }
 

@@ -27,8 +27,8 @@ describe('placé dans la ligue publique', () => {
     expect(league?.current).not.toBeNull();
     expect(html).toContain('data-game-league-summary="jade"');
     expect(html).toContain('data-game-league-gem="jade"');
-    expect(text(html)).toContain('Ligue · Jade');
-    expect(html).toMatch(/data-game-league-place=""[^>]*>Rang \d+ sur \d+</);
+    expect(text(html)).toContain('Joute · Jade');
+    expect(html).toMatch(/data-game-league-place=""[^>]*>Place \d+ sur \d+</);
     expect(html).toMatch(/data-game-league-points=""[^>]*>[\d\s  ]+ étincelles? cette semaine</);
     expect(html).toMatch(/data-game-league-closes=""[^>]*>Se ferme dans /);
   });

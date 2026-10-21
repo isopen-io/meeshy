@@ -12,7 +12,9 @@ import MeeshySDK
 /// Cinq humeurs partagent le patron du cartouche (`MoodCard`) ; les cinq
 /// autres changent de SILHOUETTE — visage rond, fleur, badge, polaroid — pour
 /// se reconnaître dans la palette sans lire.
-extension StickerTemplateRenderer {
+enum MoodStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .mood
+
 
     // MARK: Le patron d'un cartouche d'humeur
 
@@ -433,7 +435,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille HUMEURS
 
-    static let moodDrawers: [StickerTemplateDrawer] = moodCards.map { moodCardDrawer($0) } + [
+    static let drawers: [StickerTemplateDrawer] = moodCards.map { moodCardDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.moodAngry,
             name: { String(localized: "sticker.template.mood.angry", defaultValue: "En colère", bundle: .module) },

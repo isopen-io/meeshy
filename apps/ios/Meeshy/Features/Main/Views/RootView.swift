@@ -38,6 +38,10 @@ struct StoryViewerRequest: Identifiable, Equatable {
     /// Parent du commentaire ciblé (réponse en thread) — repli de scroll
     /// quand la réponse elle-même n'est pas (encore) dans la liste.
     var targetParentCommentId: String? = nil
+    /// Slide d'entrée quand le point d'appel la connaît (citation d'une
+    /// réponse à une story). Ignorée si `postId` la résout, ou si
+    /// `startAtFirstUnviewed` l'emporte.
+    var initialStoryIndex: Int = 0
 }
 
 struct RootView: View {

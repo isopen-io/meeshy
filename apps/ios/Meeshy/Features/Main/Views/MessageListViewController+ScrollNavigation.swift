@@ -13,33 +13,25 @@ extension MessageListViewController {
         // Avant le premier instantané (fil en attente), la liste n'a AUCUNE section : interroger la
         // section 0 y est une incohérence que UIKit refuse. Les deux gardes, dans cet ordre.
         guard collectionView.numberOfSections > 0, collectionView.numberOfItems(inSection: 0) > 0 else { return }
-        // Scroll VOULU : le verrou de scène doit le laisser passer (sans ce
-        // drapeau, l'ancre annulait chaque frame de l'animation — le bouton
-        // « aller au dernier message » ne fonctionnait plus, user 2026-08-18).
-        // Posé APRÈS le guard (revue adversariale : une sortie précoce le
-        // laissait fuir à true). Animé : retombe à
-        // `scrollViewDidEndScrollingAnimation`, ET à `settleAtRest` — un
-        // doigt qui rattrape la liste en vol TUE l'animation sans livrer le
-        // callback UIKit, le geste se termine alors par
-        // didEndDragging/Decelerating → settleAtRest. Non animé : l'offset
-        // est posé synchrone, on retombe au tour suivant.
-        isIntentionalProgrammaticScroll = true
+        // Scroll VOULU, posé APRÈS le guard : le verrou de scène le laisse passer.
+        // Animé, il retombe à `scrollViewDidEndScrollingAnimation` ou `settleAtRest` ;
+        // non animé, au tour suivant, par une tâche qu'un saut suivant annule.
+        beginIntentionalProgrammaticScroll()
         // Un « aller au dernier message » remplace toute visée vérifiée en
         // cours — sans quoi la fin de SON animation re-viserait l'ancienne
         // cible et renverrait l'utilisateur en arrière.
         scrollSettleTarget = nil
         if !animated {
-            DispatchQueue.main.async { [weak self] in
-                self?.isIntentionalProgrammaticScroll = false
-                self?.captureSceneLockAnchor()
+            programmaticScrollRelease = Task { [weak self] in
+                guard !Task.isCancelled, let self else { return }
+                programmaticScrollRelease = nil
+                isIntentionalProgrammaticScroll = false
+                captureSceneLockAnchor()
             }
         }
         collectionView.scrollToItem(at: IndexPath(item: 0, section: 0), at: .top, animated: animated)
-        // RC2.4 — a programmatic scroll does not reliably fire
-        // `scrollViewDidScroll` (no drag/decelerate phase), so the near-bottom
-        // state and the unread badge must be resynced here. Without this the
-        // NEXT `applySnapshot` re-bumps the badge against a stale
-        // `isCurrentlyNearBottom`, and the badge never reliably clears.
+        // RC2.4 — un scroll programmatique ne déclenche pas fiablement `scrollViewDidScroll` :
+        // near-bottom et badge non-lu se resynchronisent ici, sinon le prochain apply les re-bumpe.
         if !isCurrentlyNearBottom {
             isCurrentlyNearBottom = true
             onNearBottomChanged?(true)
@@ -76,7 +68,7 @@ extension MessageListViewController {
     }
 
     func scrollToMessage(localId: String) {
-        isIntentionalProgrammaticScroll = true
+        beginIntentionalProgrammaticScroll()
         // Forward to parent first — if the message lives outside the current
         // window, the parent ViewModel will trigger a `loadWindow(around:)`
         // which repopulates the store. The store observer reapplies the
@@ -121,7 +113,7 @@ extension MessageListViewController {
     /// from the server after a quoted-message search. Stops any ongoing slow
     /// scroll, then jumps directly to the target with a highlight flash.
     func scrollToMessageFast(localId: String) {
-        isIntentionalProgrammaticScroll = true
+        beginIntentionalProgrammaticScroll()
         stopSlowScroll()
 
         // Same id-flavour bridge as `scrollToMessage` — see
@@ -187,14 +179,13 @@ extension MessageListViewController {
         // retenait le VC entier (run loop → link → VC, deinit inatteignable)
         // quand on quittait la conversation pendant une recherche de message
         // cité — tick 60-120 fps + paginations réseau pour un écran mort.
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.slowScrollTick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         slowScrollDisplayLink = link
     }

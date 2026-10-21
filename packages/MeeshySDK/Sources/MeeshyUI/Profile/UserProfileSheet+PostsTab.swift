@@ -89,7 +89,7 @@ private struct ProfilePostRow: View, Equatable {
                     .multilineTextAlignment(.leading)
             } else {
                 Text(String(localized: "profile.posts.noText", defaultValue: "Publication sans texte", bundle: .module))
-                    .font(.system(size: MeeshyFont.subheadSize))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(theme.textMuted)
                     .italic()
             }
@@ -119,7 +119,7 @@ private struct ProfilePostsEmpty: View {
                 .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.strong))
                 .accessibilityHidden(true)
             Text(String(localized: "profile.posts.empty", defaultValue: "Aucune publication", bundle: .module))
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textMuted.opacity(MeeshyOpacity.heavy))
         }
         .frame(maxWidth: .infinity)

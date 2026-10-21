@@ -33,6 +33,17 @@ const arPublicEntry = {
   'magicLink.offline': 'لا يوجد اتصال. تحقّق من شبكتك وأعد المحاولة.',
   'magicLink.submit': 'استلام الرابط',
   'magicLink.submit.busy': 'جارٍ الإرسال…',
+  'magicLink.flowTitle': 'تسجيل الدخول بالبريد الإلكتروني',
+  'magicLink.validating': 'جارٍ التحقّق من الرابط…',
+  'magicLink.invalid.title': 'رابط غير صالح أو منتهي الصلاحية',
+  'magicLink.invalid.body': 'ينتهي رابط تسجيل الدخول بعد 10 دقائق ويعمل مرة واحدة فقط.',
+  'magicLink.requestNew': 'طلب رابط جديد',
+  'magicLink.backToLogin': 'العودة إلى تسجيل الدخول',
+  'magicLink.retry': 'إعادة المحاولة',
+  'magicLink.resend': 'إعادة الإرسال',
+  'magicLink.resend.label': 'إعادة إرسال الرابط',
+  'magicLink.cancel': 'إلغاء',
+  'magicLink.linkExpired': 'انتهت صلاحية الرابط، اطلب رابطًا جديدًا',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default arPublicEntry;

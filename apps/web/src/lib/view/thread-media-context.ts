@@ -2,6 +2,7 @@ import { createContext, useMemo } from 'react';
 
 import type { Conversation } from '@/lib/api/types';
 import { avatarOf, titleOf } from './conversation';
+import type { ActionScope } from './message-action-scope';
 
 /**
  * CE QUE LE FIL PRÊTE À SES PIÈCES JOINTES (#6303) — une tuile touchée DANS
@@ -23,6 +24,12 @@ export type ThreadMediaContextValue = {
   readonly conversationAvatarUrl?: string | undefined;
   /** Le régime de chiffrement de la conversation (#10700) — « Transcrire » ne s'offre pas quand le serveur ne la lit pas. */
   readonly conversationEncryptionMode?: string | null | undefined;
+  /**
+   * QUI LIT, ET DANS QUELLE CONVERSATION (#11372) — le lecteur et la
+   * conversation que le menu remet à `messageActionsFor` : la visionneuse y lit
+   * Réagir, Répondre et Partager. Absent ⇒ aucun des trois ne s'offre.
+   */
+  readonly actionScope?: ActionScope | undefined;
 };
 
 export const ThreadMediaContext = createContext<ThreadMediaContextValue | null>(null);
@@ -32,13 +39,15 @@ export function useThreadMediaValue(params: {
   readonly viewerId: string;
   readonly onReplyToMedia: ThreadMediaContextValue['onReplyToMedia'];
   readonly conversation: Conversation | undefined;
+  /** STABLE (`useMessageMenu().scope`, mémoïsé par ses valeurs). */
+  readonly actionScope: ActionScope;
 }): ThreadMediaContextValue {
-  const { viewerId, onReplyToMedia, conversation } = params;
+  const { viewerId, onReplyToMedia, conversation, actionScope } = params;
   const conversationTitle = conversation !== undefined ? titleOf(conversation, viewerId) : undefined;
   const conversationAvatarUrl = conversation !== undefined ? avatarOf(conversation, viewerId) : undefined;
   const conversationEncryptionMode = conversation?.encryptionMode ?? null;
   return useMemo(
-    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode }),
-    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode],
+    () => ({ viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode, actionScope }),
+    [viewerId, onReplyToMedia, conversationTitle, conversationAvatarUrl, conversationEncryptionMode, actionScope],
   );
 }

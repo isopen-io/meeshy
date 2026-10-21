@@ -1,40 +1,19 @@
-import { canEditMessage } from '@meeshy/shared/utils/conversation-helpers';
-
-import type { Message } from '@/lib/api/types';
-
-import { isMineOf } from './message';
+import { messageActionsOf, webEditsAsAuthor, type ActionMessage, type ActionScope } from './message-action-scope';
 
 /**
- * « MODIFIER » EST OFFERT SI LE SERVEUR L'ACCEPTERAIT (#10581) — la règle de
- * `admitMessageEdit` (`services/gateway/src/services/messaging/
- * messageEditAdmission.ts`) lue AVANT l'aller-retour, pour qu'un refus ne se
- * découvre pas après avoir réécrit son message.
+ * « MODIFIER » EST OFFERT SI LE SERVEUR L'ACCEPTERAIT (#10581, #11210) — le
+ * verdict `edit` de `messageActionsFor` (`@meeshy/shared`), qui reprend
+ * `admitMessageEdit` : l'auteur pendant 24 heures, un rôle de plateforme
+ * MODERATOR, ADMIN ou BIGBOSS au-delà sur son propre message. Jamais sur le
+ * message d'un autre, que la loi admet pourtant (`asModerator`) : la passerelle
+ * n'enregistre pas qui a modifié, l'interface ne le dirait pas (#11372). Refusé à
+ * un invité (la passerelle reconnaît l'auteur par son `User.id`), sur un
+ * message système, supprimé, échu, à vue unique ou encore optimiste, dans une
+ * conversation close, et en bout en bout : le texte partirait en clair
+ * (fail-closed, #9224).
  *
- * LA FENÊTRE n'est pas réécrite ici : c'est `canEditMessage` de
- * `@meeshy/shared`, la source de vérité des 24 heures.
- *
- * CE QUE CETTE LOI N'OFFRE PAS, alors que le serveur l'admettrait : éditer le
- * message d'un autre au titre d'un rôle global, et dépasser la fenêtre au même
- * titre. La session du web ne garde pas le rôle global (`session.ts`, règle de
- * projection) : faute de le connaître, l'offre reste celle de l'auteur — comme
- * iOS (`MessageActionResolver.primaryActions`, `isMine && canEdit && hasText`).
- *
- * UN INVITÉ n'a pas de compte : la passerelle reconnaît l'auteur par son
- * `User.id`, qu'un invité n'a pas. UN MESSAGE SYSTÈME (l'avis de capture,
- * #9641) ne se réécrit pas. UN MESSAGE CHIFFRÉ de bout en bout ne part pas en
- * clair par cette route (fail-closed, #9224).
+ * Aucune règle n'est réécrite ici : ce fichier ne fait que lire le verdict.
  */
-export type EditViewer = { readonly id: string; readonly hasAccount: boolean };
-
-export function editOffered(
-  message: Pick<Message, 'id' | 'senderId' | 'content' | 'createdAt' | 'deletedAt' | 'expiresAt' | 'isViewOnce' | 'isEncrypted' | 'messageType'>,
-  viewer: EditViewer,
-  input: { readonly now: number },
-): boolean {
-  if (!viewer.hasAccount || !isMineOf(message as Message, viewer.id)) return false;
-  if (message.id.startsWith('cid_') || message.messageType === 'system') return false;
-  if (message.deletedAt != null || message.isViewOnce || message.isEncrypted) return false;
-  if (message.expiresAt != null && new Date(message.expiresAt).getTime() <= input.now) return false;
-  if (message.content.trim().length === 0) return false;
-  return canEditMessage(message.createdAt).canEdit;
+export function editOffered(message: ActionMessage, scope: ActionScope, input: { readonly now: number }): boolean {
+  return webEditsAsAuthor(messageActionsOf(message, scope, input));
 }

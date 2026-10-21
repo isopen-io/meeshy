@@ -195,6 +195,72 @@ final class ComposerEditToolsTests: XCTestCase {
         XCTAssertFalse(ConversationPieceRetouchOpening.abandoned(wasEditing: false, isEditing: true, settled: false))
     }
 
+    /// **Une disparition n'est pas une fermeture** (#11347) : SwiftUI détache puis
+    /// rattache le contenu d'un plein écran sans le détruire. La retouche
+    /// rattachée se réarme et rouvre sa vidéo — sans quoi elle restait noire,
+    /// sans croix ni « Terminé », sur une session éteinte.
+    func test_11347_aRetouchDetachedThenReattached_showsItsVideoAgain() async throws {
+        let choisie = try Self.piece(.video).fileURL
+        let session = ConversationPieceRetouchOpening.session(
+            gallery: MockComposerGallery(),
+            loopPlayerFactory: { _ in MockComposerLoopPlayer(duration: 6, hasAudio: true) })
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        session.disarm()
+        XCTAssertTrue(vie.attach(), "rattachée après une disparition, la retouche se réarme")
+        ComposerCaptureCoverLife.reattach(session)
+        let ouverte = await ConversationPieceRetouchOpening.open(.video(choisie), in: session)
+        XCTAssertTrue(ouverte)
+        XCTAssertNotEqual(session.stage, .off, "le montage ne peint rien sur une session éteinte")
+        guard case .editing(.video) = session.phase else { return XCTFail("la vidéo est en retouche") }
+        XCTAssertFalse(vie.attach(), "un second rattachement sans disparition ne réarme rien")
+    }
+
+    /// Détachée, la retouche ne répond pas à l'hôte : ni « Abandonner » lu
+    /// dans le désarmement, ni fermeture ; rattachée, elle répond une fois.
+    func test_11347_aDetachedRetouch_neitherSettlesNorReadsItsDisarmAsAnAbandon() {
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false),
+                       "le désarmement d'une disparition n'est pas « Abandonner »")
+        XCTAssertFalse(vie.settle(), "une retouche détachée ne ferme rien")
+        _ = vie.attach()
+        XCTAssertTrue(vie.abandoned(wasEditing: true, isEditing: false), "rattachée, « Abandonner » retire la pièce")
+        XCTAssertTrue(vie.settle(), "la première réponse part")
+        XCTAssertFalse(vie.settle(), "une seule réponse à l'hôte")
+        XCTAssertFalse(vie.abandoned(wasEditing: true, isEditing: false), "« Terminé » a déjà répondu")
+    }
+
+    /// **Le viseur servi seul subit le même cycle** (#11352) : ouvert clavier
+    /// levé, SwiftUI le détache puis le rattache sans le détruire. Sa session,
+    /// désarmée à la disparition, se réarme au mode que la porte a promis —
+    /// sans quoi le montage ne peignait ni l'aperçu ni une seule commande.
+    func test_11352_aViewfinderDetachedThenReattached_isArmedAgainInItsPromisedMode() {
+        let promis = ComposerViewfinderRules.sceneMode(for: .video)
+        let session = ComposerCaptureSession(stage: .armed, mode: promis)
+        var vie = ComposerCaptureCoverLife()
+        vie.detach()
+        session.disarm()
+        XCTAssertEqual(session.stage, .off, "la disparition éteint la session")
+        XCTAssertTrue(vie.attach(), "rattaché après une disparition, le viseur se réarme")
+        ComposerCaptureCoverLife.reattach(session, mode: promis)
+        XCTAssertEqual(session.stage, .armed, "le montage ne peint ni l'aperçu ni les commandes d'une session éteinte")
+        XCTAssertEqual(session.mode, .video, "la barre annonce encore le mode que la porte a promis")
+    }
+
+    /// Le viseur lit sa disparition comme la retouche (#11352) : une seule vie
+    /// partagée, jamais une mécanique jumelle — désarmé en disparaissant,
+    /// réarmé en revenant, et une prise qui ne part qu'une fois.
+    func test_11352_theViewfinderSharesTheCoverLifeOfTheRetouch() throws {
+        let viseur = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
+        XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife()"), "le viseur tient la même vie que la retouche")
+        XCTAssertTrue(viseur.contains("life.detach()"), "une disparition détache le viseur sans le régler")
+        XCTAssertTrue(viseur.contains("life.attach()"), "un rattachement se reconnaît")
+        XCTAssertTrue(viseur.contains("ComposerCaptureCoverLife.reattach(capture"), "et réarme la session")
+        XCTAssertTrue(viseur.contains("life.settle()"), "une prise ne part qu'une fois, jamais d'un viseur détaché")
+        XCTAssertFalse(viseur.contains("delivered"), "aucun second drapeau « déjà rendu » à côté de la vie")
+    }
+
     func test_11133_tappingAPendingPiece_opensTheCaptureRetouch_withoutTheCamera() throws {
         let toucher = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Views/ConversationView+ComposerAttachments.swift")
         XCTAssertTrue(toucher.contains("openPieceRetouch(attachment.id)"), "toucher une pièce ouvre la retouche de la caméra")

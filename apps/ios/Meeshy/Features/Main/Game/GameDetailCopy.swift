@@ -36,7 +36,7 @@ enum GameDetailText {
 
     /// Où en est une étape des niveaux, dite avec ce qu'elle vise.
     static func levelStepProgress(progress: String) -> String {
-        String(localized: "game.detail.levelstep.progress", defaultValue: "Tu en es à \(progress) pour cette étape", bundle: .main)
+        String(localized: "game.detail.levelstep.progress", defaultValue: "Tu en es à \(progress) pour cette épreuve", bundle: .main)
     }
 
     /// Le lien vers la fiche du concept, hors de cette fiche.
@@ -50,7 +50,7 @@ enum GameDetailText {
     static var rarity: String { String(localized: "game.detail.rarity", defaultValue: "Rareté", bundle: .main) }
 
     /// Le nom du groupe de l'en-tête de la première page : le blason de rang et le compteur de Meeshes.
-    static var headerGroup: String { String(localized: "game.detail.header_group", defaultValue: "Mon rang et mes Meeshes", bundle: .main) }
+    static var headerGroup: String { String(localized: "game.detail.header_group", defaultValue: "Mon rang et mon héritage", bundle: .main) }
 
 
     // MARK: Les familles d'élan
@@ -68,7 +68,7 @@ enum GameDetailText {
     // MARK: Une ligne du classement de la ligue
 
     /// Ce qu'on voit d'un autre joueur : son pseudonyme et ses points de la semaine, rien d'autre.
-    static var playerWhat: String { String(localized: "game.detail.player.what", defaultValue: "C’est un joueur de ton groupe. Tu ne vois que son pseudonyme et ses points de la semaine.", bundle: .main) }
+    static var playerWhat: String { String(localized: "game.detail.player.what", defaultValue: "C’est un héros de ta joute. Tu ne vois que son nom de joute et ses étincelles de la semaine.", bundle: .main) }
 
 
     // MARK: C’est quoi
@@ -76,25 +76,25 @@ enum GameDetailText {
     /// « C'est quoi » — la phrase de la famille. Une donnée et une ligne de classement n'en ont pas ici : `nil`.
     static func what(_ kind: GameElementKind) -> String? {
         switch kind {
-        case .badge: String(localized: "game.detail.badge.what", defaultValue: "Un badge montre combien de fois tu as fait un geste.", bundle: .main)
-        case .achievement: String(localized: "game.detail.succes.what", defaultValue: "Un succès marque un moment rare de ton histoire sur Meeshy.", bundle: .main)
+        case .badge: String(localized: "game.detail.badge.what", defaultValue: "Une médaille montre combien de fois tu as fait un geste.", bundle: .main)
+        case .achievement: String(localized: "game.detail.succes.what", defaultValue: "Un haut fait marque un moment rare de ta légende.", bundle: .main)
         case .challenge: String(localized: "game.detail.defi.what", defaultValue: "Un défi est un palier à franchir dans une famille de gestes.", bundle: .main)
         case .trophy: String(localized: "game.detail.trophy.what", defaultValue: "Un trophée garde la trace d’une victoire. Il ne rapporte rien : il se montre.", bundle: .main)
         case .stamp: String(localized: "game.detail.stamp.what", defaultValue: "Un tampon prouve que tu as vraiment échangé dans cette langue.", bundle: .main)
-        case .seasonStep: String(localized: "game.detail.step.what", defaultValue: "Une étape de saison est une récompense gratuite sur le parcours.", bundle: .main)
-        case .seal: String(localized: "game.detail.seal.what", defaultValue: "Le Sceau est un objet à collectionner. Il ne change rien au jeu.", bundle: .main)
-        case .leagueGem: String(localized: "game.detail.gem.what", defaultValue: "La gemme dit dans quelle ligue tu joues cette semaine.", bundle: .main)
-        case .prestigeStar: String(localized: "game.detail.star.what", defaultValue: "Une étoile de Prestige se pose sur ton anneau de niveau, pour toujours.", bundle: .main)
-        case .rank: String(localized: "game.detail.rank.what", defaultValue: "Ton blason montre ton rang. Un rang ne baisse jamais.", bundle: .main)
-        case .flameForm: String(localized: "game.detail.flame.what", defaultValue: "La forme de ta Flamme grandit avec ta série de jours.", bundle: .main)
-        case .freeze: String(localized: "game.detail.freeze.what", defaultValue: "Un gel protège ta Flamme : il couvre un jour où tu n’as rien fait.", bundle: .main)
-        case .mission: String(localized: "game.detail.mission.what", defaultValue: "Une mission est un petit but à atteindre aujourd’hui.", bundle: .main)
-        case .chest: String(localized: "game.detail.chest.what", defaultValue: "Le coffre du jour s’ouvre quand tes missions sont faites.", bundle: .main)
-        case .coin: String(localized: "game.detail.coin.what", defaultValue: "La Meesh est la pièce rare de Meeshy. Chaque pièce porte son numéro.", bundle: .main)
-        case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : il se remplit avec tes étincelles convertibles.", bundle: .main)
-        case .treasuryTier: String(localized: "game.detail.treasury.what", defaultValue: "Ton trésor grandit avec les Meeshes que tu gardes.", bundle: .main)
+        case .seasonStep: String(localized: "game.detail.step.what", defaultValue: "Une halte du voyage t’offre un présent gratuit sur le chemin.", bundle: .main)
+        case .seal: String(localized: "game.detail.seal.what", defaultValue: "Le Sceau du voyage est un objet à collectionner. Il ne change rien au jeu.", bundle: .main)
+        case .leagueGem: String(localized: "game.detail.gem.what", defaultValue: "La gemme dit dans quel cercle tu joutes cette semaine.", bundle: .main)
+        case .prestigeStar: String(localized: "game.detail.star.what", defaultValue: "Chaque renaissance ouvre un nouvel Âge, gravé pour toujours sur ton anneau de niveau.", bundle: .main)
+        case .rank: String(localized: "game.detail.rank.what", defaultValue: "Ton blason montre ton rang, le nom que le monde te donne. Il ne recule jamais.", bundle: .main)
+        case .flameForm: String(localized: "game.detail.flame.what", defaultValue: "La forme de ta Flamme grandit avec tes jours d’affilée.", bundle: .main)
+        case .freeze: String(localized: "game.detail.freeze.what", defaultValue: "Une Veilleuse garde ta Flamme allumée un jour où tu n’as rien fait.", bundle: .main)
+        case .mission: String(localized: "game.detail.mission.what", defaultValue: "Un acte est un petit but à réaliser aujourd’hui, dans le rêve de cette nuit.", bundle: .main)
+        case .chest: String(localized: "game.detail.chest.what", defaultValue: "L’Offrande apparaît quand les trois actes du rêve sont réalisés.", bundle: .main)
+        case .coin: String(localized: "game.detail.coin.what", defaultValue: "La Meesh, c’est ta lumière figée dans une pièce numérotée. Chaque pièce porte son numéro.", bundle: .main)
+        case .levelRing: String(localized: "game.detail.ring.what", defaultValue: "L’anneau montre ton niveau : ta lumière le remplit.", bundle: .main)
+        case .treasuryTier: String(localized: "game.detail.treasury.what", defaultValue: "Ton héritage grandit avec les Meeshes que tu gardes.", bundle: .main)
         case .elanFamily: String(localized: "game.detail.elan.what", defaultValue: "Une famille regroupe des gestes qui se ressemblent.", bundle: .main)
-        case .levelStep: String(localized: "game.detail.levelstep.what", defaultValue: "De 10 à 100, chaque dizaine de niveaux demande une étape simple.", bundle: .main)
+        case .levelStep: String(localized: "game.detail.levelstep.what", defaultValue: "De 10 à 100, tous les dix niveaux, tes aïeux demandent une épreuve simple.", bundle: .main)
         case .fact, .player: nil
         }
     }
@@ -104,25 +104,25 @@ enum GameDetailText {
     /// « Comment l'obtenir » ou « ce que ça donne » — la seconde phrase de la famille. Une donnée et une ligne de classement n'en ont pas ici : `nil`.
     static func how(_ kind: GameElementKind) -> String? {
         switch kind {
-        case .badge: String(localized: "game.detail.badge.how", defaultValue: "Refais ce geste : à chaque palier, le badge change de matière.", bundle: .main)
-        case .achievement: String(localized: "game.detail.succes.how", defaultValue: "Réunis ce qu’il demande : il se décroche d’un coup.", bundle: .main)
+        case .badge: String(localized: "game.detail.badge.how", defaultValue: "Refais ce geste : à chaque seuil, la médaille change de matière.", bundle: .main)
+        case .achievement: String(localized: "game.detail.succes.how", defaultValue: "Réunis ce qu’il demande : il s’accomplit d’un coup.", bundle: .main)
         case .challenge: String(localized: "game.detail.defi.how", defaultValue: "Atteins le nombre demandé : le palier suivant s’ouvre.", bundle: .main)
-        case .trophy: String(localized: "game.detail.trophy.how", defaultValue: "Finis en haut de ta ligue, termine une saison, passe en Prestige ou tiens ta Flamme.", bundle: .main)
+        case .trophy: String(localized: "game.detail.trophy.how", defaultValue: "Finis en haut de ta joute, achève un voyage, renais ou tiens ta Flamme.", bundle: .main)
         case .stamp: String(localized: "game.detail.stamp.how", defaultValue: "Envoie un message dans cette langue, et reçois-en un.", bundle: .main)
-        case .seasonStep: String(localized: "game.detail.step.how", defaultValue: "Gagne des étoiles avec les missions et le duo, puis réclame l’étape.", bundle: .main)
-        case .seal: String(localized: "game.detail.seal.how", defaultValue: "Prends-le avec tes Meeshes pendant la saison.", bundle: .main)
-        case .leagueGem: String(localized: "game.detail.gem.how", defaultValue: "Finis parmi les premiers de ton groupe pour monter d’une ligue.", bundle: .main)
-        case .prestigeStar: String(localized: "game.detail.star.how", defaultValue: "Atteins le niveau 100, puis passe en Prestige.", bundle: .main)
-        case .rank: String(localized: "game.detail.rank.how", defaultValue: "Gagne de la Gloire : frappe des Meeshes, bats tes records, décroche des succès.", bundle: .main)
-        case .flameForm: String(localized: "game.detail.flame.how", defaultValue: "Plus elle est grande, plus tes récompenses de mission augmentent.", bundle: .main)
-        case .freeze: String(localized: "game.detail.freeze.how", defaultValue: "Achète-le avec tes Meeshes, ou trouve-le dans le coffre du jour.", bundle: .main)
-        case .mission: String(localized: "game.detail.mission.how", defaultValue: "Elle rapporte des points et te rapproche du coffre du jour.", bundle: .main)
-        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Des points selon tes missions, de la Gloire, parfois une prime en points, un fragment d’étoile ou un gel.", bundle: .main)
-        case .coin: String(localized: "game.detail.coin.how", defaultValue: "Frappe-la avec tes points à convertir dès que tu en as assez.", bundle: .main)
-        case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Gagne des points : quand l’anneau est plein, tu montes d’un niveau.", bundle: .main)
-        case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser pour atteindre le palier suivant.", bundle: .main)
-        case .elanFamily: String(localized: "game.detail.elan.how", defaultValue: "Chaque geste rapporte des points. Plusieurs familles actives déclenchent un élan.", bundle: .main)
-        case .levelStep: String(localized: "game.detail.levelstep.how", defaultValue: "Fais l’étape : si tes points y sont déjà, le niveau monte d’un coup.", bundle: .main)
+        case .seasonStep: String(localized: "game.detail.step.how", defaultValue: "Avance de quelques pas avec les actes de ton rêve et l’alliance, puis réclame la halte.", bundle: .main)
+        case .seal: String(localized: "game.detail.seal.how", defaultValue: "Prends-le avec tes Meeshes pendant le voyage.", bundle: .main)
+        case .leagueGem: String(localized: "game.detail.gem.how", defaultValue: "Finis parmi les premiers de ta joute pour gravir le cercle suivant.", bundle: .main)
+        case .prestigeStar: String(localized: "game.detail.star.how", defaultValue: "Porte ta lumière au niveau 100, puis renais.", bundle: .main)
+        case .rank: String(localized: "game.detail.rank.how", defaultValue: "Fais grandir ta gloire : frappe des Meeshes, porte ta lumière plus haut que jamais, accomplis des hauts faits.", bundle: .main)
+        case .flameForm: String(localized: "game.detail.flame.how", defaultValue: "Plus elle est grande, plus elle nourrit tes rêves.", bundle: .main)
+        case .freeze: String(localized: "game.detail.freeze.how", defaultValue: "Prends-la avec tes Meeshes, ou trouve-la dans l’Offrande.", bundle: .main)
+        case .mission: String(localized: "game.detail.mission.how", defaultValue: "Il fait jaillir des étincelles et te rapproche de l’Offrande.", bundle: .main)
+        case .chest: String(localized: "game.detail.chest.how", defaultValue: "Un présent voilé : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
+        case .coin: String(localized: "game.detail.coin.how", defaultValue: "Frappe-la avec ta lumière dès qu’elle suffit : une part s’y fige.", bundle: .main)
+        case .levelRing: String(localized: "game.detail.ring.how", defaultValue: "Fais jaillir des étincelles : quand l’anneau est plein, ta lumière gagne un niveau.", bundle: .main)
+        case .treasuryTier: String(localized: "game.detail.treasury.how", defaultValue: "Garde tes Meeshes au lieu de les dépenser : ton héritage passe au contenant suivant.", bundle: .main)
+        case .elanFamily: String(localized: "game.detail.elan.how", defaultValue: "Chaque geste fait jaillir des étincelles. Plusieurs familles actives déclenchent un élan.", bundle: .main)
+        case .levelStep: String(localized: "game.detail.levelstep.how", defaultValue: "Réussis l’épreuve : si ta lumière y est déjà, le niveau monte d’un coup.", bundle: .main)
         case .fact, .player: nil
         }
     }
@@ -132,47 +132,47 @@ enum GameDetailText {
     /// La phrase d'une donnée (pastille ou ligne d'une fiche, du tableau de bord).
     static func fact(_ key: GameDetailFactKey) -> String {
         switch key {
-        case .tier: String(localized: "game.detail.fact.tier", defaultValue: "Dix niveaux font un palier. Chaque palier a son nom et sa couleur.", bundle: .main)
-        case .score: String(localized: "game.detail.fact.score", defaultValue: "Ce sont toutes tes étincelles du moment, celles que la frappe dépense. Elles font ton niveau : une frappe en retire le prix, et ton niveau baisse d’autant.", bundle: .main)
-        case .convertible: String(localized: "game.detail.fact.convertible", defaultValue: "C’est la part de tes points que la frappe peut reprendre. Elle seule paie une Meesh.", bundle: .main)
-        case .levelNext: String(localized: "game.detail.fact.level_next", defaultValue: "Ce sont les points en poche qu’il te manque pour monter d’un niveau.", bundle: .main)
-        case .levelRecord: String(localized: "game.detail.fact.level_record", defaultValue: "C’est ton record de niveau : le plus haut niveau que tu as atteint.", bundle: .main)
-        case .tailwind: String(localized: "game.detail.fact.tailwind", defaultValue: "+25 % sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ton record de niveau.", bundle: .main)
-        case .mintPrice: String(localized: "game.detail.fact.mint_price", defaultValue: "C’est le prix de ta prochaine Meesh, en points à convertir. Il monte toutes les dix frappes.", bundle: .main)
-        case .mintMissing: String(localized: "game.detail.fact.mint_missing", defaultValue: "Ce sont les points à convertir qu’il te manque pour frapper ta prochaine Meesh.", bundle: .main)
-        case .canMint: String(localized: "game.detail.fact.can_mint", defaultValue: "Tu as assez de points à convertir : tu peux frapper une Meesh dans sa fiche.", bundle: .main)
-        case .factor: String(localized: "game.detail.fact.factor", defaultValue: "Tes prochains gestes rapportent ce nombre de fois plus de points.", bundle: .main)
+        case .tier: String(localized: "game.detail.fact.tier", defaultValue: "Vingt états : un tous les dix niveaux jusqu’à 100, puis un par centaine, et la Singularité dès 1000.", bundle: .main)
+        case .score: String(localized: "game.detail.fact.score", defaultValue: "C’est ta lumière : les étincelles que tu as. Elle fait ton niveau, et une frappe en fige une part.", bundle: .main)
+        case .convertible: String(localized: "game.detail.fact.convertible", defaultValue: "C’est ta lumière : les étincelles qui frappent une Meesh.", bundle: .main)
+        case .levelNext: String(localized: "game.detail.fact.level_next", defaultValue: "Ce sont les étincelles qui mènent ta lumière au niveau suivant.", bundle: .main)
+        case .levelRecord: String(localized: "game.detail.fact.level_record", defaultValue: "C’est ta plus haute lumière : le plus haut niveau que tu as atteint.", bundle: .main)
+        case .tailwind: String(localized: "game.detail.fact.tailwind", defaultValue: "+25 % sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.", bundle: .main)
+        case .mintPrice: String(localized: "game.detail.fact.mint_price", defaultValue: "C’est la part de ta lumière que ta prochaine Meesh figera. Les règles disent comment elle se calcule.", bundle: .main)
+        case .mintMissing: String(localized: "game.detail.fact.mint_missing", defaultValue: "Ce sont les étincelles qui manquent à ta lumière pour frapper ta prochaine Meesh.", bundle: .main)
+        case .canMint: String(localized: "game.detail.fact.can_mint", defaultValue: "Ta lumière suffit : tu peux frapper une Meesh dans la fiche de l’Héritage.", bundle: .main)
+        case .factor: String(localized: "game.detail.fact.factor", defaultValue: "Tes prochains gestes font jaillir ce nombre de fois plus d’étincelles.", bundle: .main)
         case .mintNext: String(localized: "game.detail.fact.mint_next", defaultValue: "Chaque Meesh porte son numéro. Une sur cent est en or, une sur mille en prisme.", bundle: .main)
-        case .mintGlory: String(localized: "game.detail.fact.mint_glory", defaultValue: "Chaque frappe ajoute cette Gloire à ton rang.", bundle: .main)
-        case .minted: String(localized: "game.detail.fact.minted", defaultValue: "C’est ton record de Meeshes : toutes celles que tu as frappées depuis le début.", bundle: .main)
-        case .glory: String(localized: "game.detail.fact.glory", defaultValue: "La Gloire s’additionne et ne redescend jamais. Elle donne ton rang.", bundle: .main)
-        case .gloryMissing: String(localized: "game.detail.fact.glory_missing", defaultValue: "C’est la Gloire qu’il te manque pour le rang suivant.", bundle: .main)
-        case .streak: String(localized: "game.detail.fact.streak", defaultValue: "C’est le nombre de jours d’affilée où tu as fait au moins un geste.", bundle: .main)
-        case .streakRecord: String(localized: "game.detail.fact.streak_record", defaultValue: "C’est ta plus longue série de jours.", bundle: .main)
-        case .flameState: String(localized: "game.detail.fact.flame_state", defaultValue: "Il dit si ta Flamme est allumée, en danger, protégée ou éteinte.", bundle: .main)
-        case .missionsDone: String(localized: "game.detail.fact.missions_done", defaultValue: "Trois missions par jour. Une fois faites, elles ouvrent le coffre.", bundle: .main)
-        case .leaguePlace: String(localized: "game.detail.fact.league_place", defaultValue: "C’est ta place parmi les joueurs de ton groupe, cette semaine.", bundle: .main)
-        case .weekPoints: String(localized: "game.detail.fact.week_points", defaultValue: "Ce sont les points gagnés depuis lundi. Ils repartent de zéro chaque semaine.", bundle: .main)
-        case .leagueZone: String(localized: "game.detail.fact.league_zone", defaultValue: "Les premiers montent, les derniers descendent, les autres restent.", bundle: .main)
-        case .leagueMissing: String(localized: "game.detail.fact.league_missing", defaultValue: "Ce sont les points qu’il te manque pour entrer dans la zone de montée.", bundle: .main)
-        case .leagueCloses: String(localized: "game.detail.fact.league_closes", defaultValue: "La semaine de ligue se ferme dimanche soir. Le classement est alors figé.", bundle: .main)
+        case .mintGlory: String(localized: "game.detail.fact.mint_glory", defaultValue: "Chaque frappe fait grandir ta gloire d’autant.", bundle: .main)
+        case .minted: String(localized: "game.detail.fact.minted", defaultValue: "Ce sont toutes les Meeshes que tu as frappées depuis toujours.", bundle: .main)
+        case .glory: String(localized: "game.detail.fact.glory", defaultValue: "Ta gloire grandit et ne recule jamais. Elle te donne ton rang.", bundle: .main)
+        case .gloryMissing: String(localized: "game.detail.fact.glory_missing", defaultValue: "C’est la gloire qui te mène au rang suivant.", bundle: .main)
+        case .streak: String(localized: "game.detail.fact.streak", defaultValue: "C’est le nombre de jours d’affilée où ta Flamme a brûlé : au moins un geste chaque jour.", bundle: .main)
+        case .streakRecord: String(localized: "game.detail.fact.streak_record", defaultValue: "C’est ta plus longue Flamme.", bundle: .main)
+        case .flameState: String(localized: "game.detail.fact.flame_state", defaultValue: "Il dit si ta Flamme brûle, vacille, est gardée par une Veilleuse ou s’est éteinte.", bundle: .main)
+        case .missionsDone: String(localized: "game.detail.fact.missions_done", defaultValue: "Trois actes par rêve. Une fois réalisés, ils font apparaître l’Offrande.", bundle: .main)
+        case .leaguePlace: String(localized: "game.detail.fact.league_place", defaultValue: "C’est ta place parmi les héros de ta joute, cette semaine.", bundle: .main)
+        case .weekPoints: String(localized: "game.detail.fact.week_points", defaultValue: "Ce sont les étincelles gagnées depuis lundi. Elles repartent de zéro chaque semaine.", bundle: .main)
+        case .leagueZone: String(localized: "game.detail.fact.league_zone", defaultValue: "Les premiers gravissent le cercle suivant, les derniers redescendent, les autres restent.", bundle: .main)
+        case .leagueMissing: String(localized: "game.detail.fact.league_missing", defaultValue: "Ce sont les étincelles qui te mènent dans la zone de montée.", bundle: .main)
+        case .leagueCloses: String(localized: "game.detail.fact.league_closes", defaultValue: "La joute de la semaine se ferme dimanche soir. Les places sont alors figées.", bundle: .main)
         case .leagueFriends: String(localized: "game.detail.fact.league_friends", defaultValue: "C’est ta place parmi tes amis acceptés, cette semaine.", bundle: .main)
-        case .season: String(localized: "game.detail.fact.season", defaultValue: "Une saison dure huit semaines et porte un numéro.", bundle: .main)
-        case .seasonWeek: String(localized: "game.detail.fact.season_week", defaultValue: "C’est la semaine en cours, sur les huit de la saison.", bundle: .main)
-        case .seasonSteps: String(localized: "game.detail.fact.season_steps", defaultValue: "Ce sont les étapes que tu as ouvertes sur le parcours de la saison.", bundle: .main)
-        case .seasonStars: String(localized: "game.detail.fact.season_stars", defaultValue: "Les étoiles se gagnent avec les missions et le duo. Elles ouvrent les étapes.", bundle: .main)
-        case .prestigeGlory: String(localized: "game.detail.fact.prestige_glory", defaultValue: "C’est la Gloire que tu gagnes en passant en Prestige.", bundle: .main)
+        case .season: String(localized: "game.detail.fact.season", defaultValue: "Un voyage dure huit semaines et porte un numéro.", bundle: .main)
+        case .seasonWeek: String(localized: "game.detail.fact.season_week", defaultValue: "C’est la semaine en cours, sur les huit du voyage.", bundle: .main)
+        case .seasonSteps: String(localized: "game.detail.fact.season_steps", defaultValue: "Ce sont les haltes que tu as atteintes sur le chemin du voyage.", bundle: .main)
+        case .seasonStars: String(localized: "game.detail.fact.season_stars", defaultValue: "Les pas se gagnent avec les actes de ton rêve et l’alliance. Quatre pas mènent à la halte suivante.", bundle: .main)
+        case .prestigeGlory: String(localized: "game.detail.fact.prestige_glory", defaultValue: "C’est la gloire que tes aïeux t’offrent quand tu renais.", bundle: .main)
         case .elanFamilies: String(localized: "game.detail.fact.elan_families", defaultValue: "Ce sont les familles de gestes où tu as été actif ces derniers jours.", bundle: .main)
-        case .badgesEarned: String(localized: "game.detail.fact.badges_earned", defaultValue: "C’est le nombre de badges obtenus, sur tous ceux qui existent.", bundle: .main)
+        case .badgesEarned: String(localized: "game.detail.fact.badges_earned", defaultValue: "C’est le nombre de médailles obtenues, sur toutes celles qui existent.", bundle: .main)
         case .defisEarned: String(localized: "game.detail.fact.defis_earned", defaultValue: "Ce sont les paliers franchis, sur ceux que tu peux atteindre.", bundle: .main)
-        case .succesEarned: String(localized: "game.detail.fact.succes_earned", defaultValue: "Ce sont les succès décrochés, sur tous ceux qui existent.", bundle: .main)
-        case .trophies: String(localized: "game.detail.fact.trophies", defaultValue: "C’est le nombre de trophées rangés dans ta vitrine.", bundle: .main)
-        case .showcaseVisibility: String(localized: "game.detail.fact.showcase_visibility", defaultValue: "Tu choisis qui voit ta vitrine : tout le monde, tes amis, ou toi seul.", bundle: .main)
+        case .succesEarned: String(localized: "game.detail.fact.succes_earned", defaultValue: "Ce sont les hauts faits accomplis, sur tous ceux qui existent.", bundle: .main)
+        case .trophies: String(localized: "game.detail.fact.trophies", defaultValue: "C’est le nombre de trophées rangés sur ton étagère.", bundle: .main)
+        case .showcaseVisibility: String(localized: "game.detail.fact.showcase_visibility", defaultValue: "Tu choisis qui voit tes trophées : tout le monde, tes amis, ou toi seul.", bundle: .main)
         case .atlasStamps: String(localized: "game.detail.fact.atlas_stamps", defaultValue: "Ce sont les langues où tu as un tampon, sur toutes celles de l’Atlas.", bundle: .main)
         case .atlasPending: String(localized: "game.detail.fact.atlas_pending", defaultValue: "Ce sont les langues où il manque encore un message, envoyé ou reçu.", bundle: .main)
         case .spendHeld: String(localized: "game.detail.fact.spend_held", defaultValue: "C’est ce que tu as avant ce geste.", bundle: .main)
         case .spendCost: String(localized: "game.detail.fact.spend_cost", defaultValue: "C’est ce que ce geste te prend.", bundle: .main)
-        case .spendAfter: String(localized: "game.detail.fact.spend_after", defaultValue: "C’est ce qu’il te restera après ce geste.", bundle: .main)
+        case .spendAfter: String(localized: "game.detail.fact.spend_after", defaultValue: "C’est ce que tu garderas après ce geste.", bundle: .main)
         case .spendMissing: String(localized: "game.detail.fact.spend_missing", defaultValue: "C’est ce qu’il te manque pour faire ce geste.", bundle: .main)
         case .levelNow: String(localized: "game.detail.fact.level_now", defaultValue: "C’est ton niveau en ce moment.", bundle: .main)
         case .levelRequired: String(localized: "game.detail.fact.level_required", defaultValue: "C’est le niveau qu’il faut atteindre pour l’ouvrir.", bundle: .main)
@@ -190,7 +190,7 @@ enum GameDetailText {
 enum GameBadgeGuideText {
 
     /// Le titre de la phrase de l'axe — « Ce qui compte ».
-    static var countsLabel: String { String(localized: "game.badge.counts_label", defaultValue: "Ce qui compte", bundle: .main) }
+    static var countsLabel: String { String(localized: "game.badge.counts_label", defaultValue: "Ce qu’elle suit", bundle: .main) }
 
     static var starsLabel: String { String(localized: "game.badge.stars_label", defaultValue: "Étoiles", bundle: .main) }
 
@@ -205,10 +205,10 @@ enum GameBadgeGuideText {
         String(localized: "game.badge.a11y.imprint", defaultValue: "Éteint, encore \(missing) pour le rallumer", bundle: .main)
     }
 
-    static var guideLink: String { String(localized: "game.badge.guide_link", defaultValue: "Comprendre les badges", bundle: .main) }
+    static var guideLink: String { String(localized: "game.badge.guide_link", defaultValue: "Comprendre les médailles", bundle: .main) }
 
     static var complete: String {
-        String(localized: "game.badge.complete", defaultValue: "Les sept étoiles sont allumées : ce badge est au Prisme.", bundle: .main)
+        String(localized: "game.badge.complete", defaultValue: "Les sept étoiles sont allumées : cette médaille est au Prisme.", bundle: .main)
     }
 
     // MARK: Pourquoi cette matière
@@ -229,7 +229,7 @@ enum GameBadgeGuideText {
     /// Ce qu'il manque pour la prochaine étoile.
     static func next(missing: String, material: String, threshold: String) -> String {
         String(localized: "game.badge.next",
-               defaultValue: "Encore \(missing) pour la prochaine étoile : \(material), au seuil de \(threshold).", bundle: .main)
+               defaultValue: "\(missing) jusqu’à la prochaine étoile : \(material), au seuil de \(threshold).", bundle: .main)
     }
 
     // MARK: Un palier de l'échelle
@@ -239,7 +239,7 @@ enum GameBadgeGuideText {
     }
 
     static func rungNext(missing: String) -> String {
-        String(localized: "game.badge.rung.next", defaultValue: "Prochaine étoile · encore \(missing)", bundle: .main)
+        String(localized: "game.badge.rung.next", defaultValue: "Prochaine étoile · \(missing) de plus", bundle: .main)
     }
 
     // MARK: VoiceOver — un palier, un badge : une phrase
@@ -268,17 +268,17 @@ enum GameBadgeGuideText {
 
     // MARK: La section badges du carnet des règles
 
-    static var rulesTitle: String { String(localized: "game.rules.badges.title", defaultValue: "Les badges", bundle: .main) }
+    static var rulesTitle: String { String(localized: "game.rules.badges.title", defaultValue: "Les médailles", bundle: .main) }
 
     static var rulesIntro: String {
         String(localized: "game.rules.badges.intro",
-               defaultValue: "Chaque badge compte UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangés en cinq familles.",
+               defaultValue: "Chaque médaille suit UN geste précis : un message vocal, une story, une amitié nouée… Il y en a vingt, rangées en cinq familles.",
                bundle: .main)
     }
 
     static var rulesLadder: String {
         String(localized: "game.rules.badges.ladder",
-               defaultValue: "Chaque badge monte sur sept paliers. À chaque seuil franchi, il change de matière et allume une étoile de plus.",
+               defaultValue: "Chaque médaille gravit sept paliers. À chaque seuil franchi, elle change de matière et allume une étoile de plus.",
                bundle: .main)
     }
 
@@ -288,17 +288,17 @@ enum GameBadgeGuideText {
 
     static var rulesImprint: String {
         String(localized: "game.rules.badges.imprint",
-               defaultValue: "Frapper une Meesh peut éteindre un badge : il devient une empreinte qui dit ce qu’il manque pour le rallumer.",
+               defaultValue: "Frapper une Meesh n’éteint plus aucune médaille. Une médaille éteinte auparavant reste une empreinte qui dit ce qu’il manque pour la rallumer.",
                bundle: .main)
     }
 
     static var rulesFamilies: String {
-        String(localized: "game.rules.badges.families", defaultValue: "Les vingt badges, par famille", bundle: .main)
+        String(localized: "game.rules.badges.families", defaultValue: "Les vingt médailles, par famille", bundle: .main)
     }
 
     static var rulesSheet: String {
         String(localized: "game.rules.badges.sheet",
-               defaultValue: "Touche un badge : sa fiche dit ce qui compte pour lui, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.",
+               defaultValue: "Touche une médaille : sa fiche dit ce qu’elle suit, sa matière et pourquoi, et ce qu’il manque pour la prochaine étoile.",
                bundle: .main)
     }
 }

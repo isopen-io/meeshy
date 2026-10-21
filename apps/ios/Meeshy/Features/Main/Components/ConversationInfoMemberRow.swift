@@ -19,21 +19,20 @@ struct ConversationInfoMemberRow: View {
 
     var body: some View {
         let color = DynamicColorGenerator.colorForName(participant.name)
-        let presence = presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt)
 
         return HStack(spacing: MeeshySpacing.md) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: participant.name,
                 context: .userListItem,
                 accentColor: color,
                 avatarURL: participant.avatar,
                 moodEmoji: participant.userId.flatMap { moodEmojiResolver?($0) },
-                presenceState: presence,
+                presenceState: presenceManager.resolvedState(userId: participant.userId, isOnline: participant.isOnline, lastActiveAt: participant.lastActiveAt),
                 isHere: presenceManager.here(userId: participant.viewingKey, conversationId: conversationId),
                 // LE CONTOUR DU MEMBRE (#10713) — l'avatar le pose dans son empreinte (#10946).
                 ring: participant.avatarRing,
                 onMoodTap: participant.userId.flatMap { moodTapResolver?($0) }
-            )
+            ) }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack(spacing: MeeshySpacing.xsPlus) {

@@ -18,7 +18,8 @@ enum GameEngravedBirds {
     /// Le côté de la boîte d'une figure, en unités du dessin.
     static let box: CGFloat = 140
 
-    enum Bird: Sendable {
+    /// Le nom de la figure, celui que la géométrie partagée de la Meesh écrit (`editions.*.birds[].bird`).
+    enum Bird: String, Sendable, Decodable {
         case meeJoy
         case meoOpen
     }

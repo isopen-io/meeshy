@@ -1,7 +1,7 @@
 /**
  * Unit tests for StatusService
  * Covers: activity throttle (5s), connection throttle (60s), disconnect guard,
- * markConnected/markDisconnected, ensureUserOnline (throttle + guard),
+ * markConnected/markDisconnected, noteHeartbeat (throttle + guard + broadcast),
  * forceUpdate variants, updateLastSeen/updateLastActive dispatch,
  * anonymous equivalents, clearOldCacheEntries, getMetrics/resetMetrics,
  * and shutdown.
@@ -398,70 +398,94 @@ describe('StatusService', () => {
     });
   });
 
-  // ── ensureUserOnline ─────────────────────────────────────────────────────
+  // ── noteHeartbeat ────────────────────────────────────────────────────────
+  //
+  // #10575 — le battement d'une socket au premier plan est le SEUL rafraîchis-
+  // sement d'un connecté passif : il date l'activité ET la rediffuse, sans quoi
+  // le connecté passif s'éteint chez ses amis passé la garde anti-stale de 5 min.
 
-  describe('ensureUserOnline', () => {
-    it('calls prisma.user.update on first call', async () => {
-      const prisma = makePrisma();
-      const sut = makeSut(prisma);
-      sut.setPresenceCallback(jest.fn());
-
-      sut.ensureUserOnline('user-1', false);
-      await flushPromises();
-
-      expect(prisma.user.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'user-1' },
-          data: expect.objectContaining({ isOnline: true }),
-        })
-      );
-    });
-
-    it('throttles within 60s window', async () => {
-      const prisma = makePrisma();
-      const sut = makeSut(prisma);
-
-      sut.ensureUserOnline('user-1', false);
-      jest.advanceTimersByTime(30_000);
-      sut.ensureUserOnline('user-1', false);
-      await flushPromises();
-
-      expect(prisma.user.update).toHaveBeenCalledTimes(1);
-    });
-
-    it('skips when user is marked as disconnected', async () => {
-      const prisma = makePrisma();
-      const sut = makeSut(prisma);
-      sut.markDisconnected('user-1', false);
-
-      sut.ensureUserOnline('user-1', false);
-      await flushPromises();
-
-      expect(prisma.user.update).not.toHaveBeenCalled();
-    });
-
-    it('invokes presenceCallback on success', async () => {
+  describe('noteHeartbeat', () => {
+    it('date l’activité puis diffuse la présence', async () => {
       const prisma = makePrisma();
       const sut = makeSut(prisma);
       const callback = jest.fn<any>();
       sut.setPresenceCallback(callback);
 
-      sut.ensureUserOnline('user-1', false);
+      sut.noteHeartbeat('user-1', false);
       await flushPromises();
 
+      expect(prisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'user-1' }, data: expect.objectContaining({ lastActiveAt: expect.any(Date) }) })
+      );
       expect(callback).toHaveBeenCalledWith('user-1', true, false);
     });
 
-    it('calls participant.update for anonymous user', async () => {
+    it('ne bat qu’une fois par minute', async () => {
       const prisma = makePrisma();
       const sut = makeSut(prisma);
 
-      sut.ensureUserOnline('anon-1', true);
+      sut.noteHeartbeat('user-1', false);
+      jest.advanceTimersByTime(30_000);
+      sut.noteHeartbeat('user-1', false);
       await flushPromises();
 
-      expect(prisma.participant.update).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { id: 'anon-1' } })
-      );
+      expect(prisma.user.update).toHaveBeenCalledTimes(1);
+    });
+
+    it('ne fait rien pour un utilisateur déconnecté', async () => {
+      const prisma = makePrisma();
+      const sut = makeSut(prisma);
+      sut.markDisconnected('user-1', false);
+
+      sut.noteHeartbeat('user-1', false);
+      await flushPromises();
+
+      expect(prisma.user.update).not.toHaveBeenCalled();
+    });
+
+    it('ne rediffuse pas « en ligne » quand la déconnexion survient pendant l’écriture', async () => {
+      const prisma = makePrisma();
+      const sut = makeSut(prisma);
+      const callback = jest.fn<any>();
+      sut.setPresenceCallback(callback);
+
+      sut.noteHeartbeat('user-1', false);
+      sut.markDisconnected('user-1', false);
+      await flushPromises();
+
+      expect(callback).not.toHaveBeenCalled();
+    });
+
+    // La garde anti-stale tient 5 min : rediffuser toutes les 4 min suffit à
+    // garder vert un connecté passif, pour un quart des diffusions (audit
+    // adverse #10575 — chaque diffusion relit préférences, amitiés, blocages).
+    it('date l’activité chaque minute mais ne la rediffuse que toutes les 4 minutes', async () => {
+      const prisma = makePrisma();
+      const sut = makeSut(prisma);
+      const callback = jest.fn<any>();
+      sut.setPresenceCallback(callback);
+
+      for (const _minute of [0, 1, 2, 3]) {
+        sut.noteHeartbeat('user-1', false);
+        await flushPromises();
+        jest.advanceTimersByTime(60_000);
+      }
+      expect(prisma.user.update).toHaveBeenCalledTimes(4);
+      expect(callback).toHaveBeenCalledTimes(1);
+
+      sut.noteHeartbeat('user-1', false);
+      await flushPromises();
+      expect(callback).toHaveBeenCalledTimes(2);
+    });
+
+    it('date un invité sans compte sur sa ligne de participant', async () => {
+      const prisma = makePrisma();
+      const sut = makeSut(prisma);
+
+      sut.noteHeartbeat('anon-1', true);
+      await flushPromises();
+
+      expect(prisma.participant.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'anon-1' } }));
     });
   });
 
@@ -527,11 +551,11 @@ describe('StatusService', () => {
       expect(m.throttledRequests).toBe(0);
     });
 
-    it('recomputes cacheSize across all three throttle caches (incl. onlineEnsureCache)', () => {
+    it('recomputes cacheSize across all three throttle caches (incl. heartbeatCache)', () => {
       const sut = makeSut();
       (sut as any).activityCache.set('u1', Date.now());
       (sut as any).connectionCache.set('u2', Date.now());
-      (sut as any).onlineEnsureCache.set('u3', Date.now());
+      (sut as any).heartbeatCache.set('u3', Date.now());
 
       sut.resetMetrics();
 

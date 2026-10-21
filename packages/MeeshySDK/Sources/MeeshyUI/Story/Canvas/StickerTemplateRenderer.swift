@@ -150,27 +150,18 @@ public enum StickerTemplateRenderer {
     // MARK: Le registre
 
     /// **Tous les dessinateurs, indexés par id de gabarit** — agrégés depuis
-    /// les familles, chacune déclarée dans son propre fichier
-    /// (`StickerTemplates+<Famille>.swift`).
+    /// `StickerTemplateFamilyTable`, qui nomme UN type par famille du
+    /// catalogue, chacun déclaré dans son propre fichier.
     ///
-    /// L'ordre d'agrégation n'a pas de sens produit ; deux dessinateurs pour un
-    /// même id seraient une erreur d'inventaire, que le témoin
-    /// `everyDrawer_hasItsTemplate_andEveryTemplate_itsDrawer` attrape. Ici on
-    /// garde le PREMIER plutôt que de planter : une palette qui s'ouvre avec un
-    /// doublon vaut mieux qu'une app qui ne s'ouvre pas.
+    /// L'ordre est celui de `StickerTemplateFamily.allCases`. Deux
+    /// dessinateurs pour un même id seraient une erreur d'inventaire, que le
+    /// témoin `everyDrawer_hasItsTemplate_andEveryTemplate_itsDrawer` attrape.
+    /// Ici on garde le PREMIER plutôt que de planter : une palette qui s'ouvre
+    /// avec un doublon vaut mieux qu'une app qui ne s'ouvre pas.
     static let registry: [String: StickerTemplateDrawer] = {
-        let familles: [[StickerTemplateDrawer]] = [
-            locationDrawers, locationMoreDrawers,
-            timeDrawers, timeExtraDrawers,
-            loveDrawers, loveExtraDrawers,
-            weatherDrawers, textDrawers,
-            joyDrawers, surpriseDrawers, moodDrawers, greetingDrawers,
-            reactionDrawers, partyDrawers, availabilityDrawers,
-            natureDrawers, cheerDrawers, answerDrawers,
-            foodDrawers, sportDrawers,
-            travelDrawers, workDrawers, musicDrawers,
-        ]
-        return Dictionary(familles.joined().map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
+        let dessinateurs = StickerTemplateFamily.allCases
+            .flatMap { StickerTemplateFamilyTable.drawers(for: $0) }
+        return Dictionary(dessinateurs.map { ($0.id, $0) }, uniquingKeysWith: { premier, _ in premier })
     }()
 
     /// Le dessinateur d'un gabarit, ou `nil` s'il est inconnu de ce binaire.

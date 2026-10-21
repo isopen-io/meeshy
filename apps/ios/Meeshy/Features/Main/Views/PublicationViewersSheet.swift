@@ -207,7 +207,7 @@ struct PublicationViewersSheet: View {
             openedViewer = viewer
         } label: {
             HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: viewer.displayName,
                     context: .storyViewerRow,
                     avatarURL: viewer.avatarUrl,
@@ -215,7 +215,7 @@ struct PublicationViewersSheet: View {
                     presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil),
                     onViewProfile: { onOpenProfile(viewer) },
                     onMoodTap: moodTapHandler(viewer.id)
-                )
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     HStack {
@@ -377,13 +377,13 @@ struct ViewerEngagementDetailView: View {
         List {
             Section {
                 VStack(spacing: MeeshySpacing.sm) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: viewer.displayName,
                         context: .profileSheet,
                         avatarURL: viewer.avatarUrl,
                         moodEmoji: moodEmoji,
                         presenceState: PresenceManager.shared.resolvedState(userId: viewer.id, isOnline: nil)
-                    )
+                    ) }
                     .padding(.vertical, MeeshySpacing.sm)
                     .accessibilityHidden(true)
 

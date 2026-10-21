@@ -354,7 +354,7 @@ final class ProgressionConceptGuardTests: XCTestCase {
             let french = try XCTUnwrap(table[key]?["fr"], "\(key) : absente du catalogue")
             XCTAssertFalse(french.localizedCaseInsensitiveContains("à convertir"), "\(key) : l'ancien second solde — « \(french) »")
         }
-        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Étincelles convertibles")
+        XCTAssertEqual(table["game.concept.fact.held"]?["fr"], "Ta lumière")
     }
 
     /// La poche fait le niveau (#10892) : aucune phrase ne promet plus que la frappe épargne le niveau, ni que le niveau
@@ -371,8 +371,8 @@ final class ProgressionConceptGuardTests: XCTestCase {
                 XCTAssertFalse(french.contains(phrase), "\(key) : l'ancienne loi du niveau — « \(french) »")
             }
         }
-        XCTAssertEqual(table["game.concept.points.why"]?["fr"], "Convertibles, elles font ton niveau ; leur record, ton potentiel.")
-        XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("étincelles convertibles"))
+        XCTAssertEqual(table["game.concept.points.why"]?["fr"], "Tes étincelles forment ta lumière ; son éclat, c’est ton niveau.")
+        XCTAssertTrue((table["game.concept.level.what"]?["fr"] ?? "").contains("Il se lit sur ta lumière"))
         XCTAssertTrue((table["game.rules.4.body"]?["fr"] ?? "").contains("ton niveau baisse d’autant"))
         for key in ["game.rules.2.body", "game.rules.4.body", "game.concept.level.what", "game.concept.points.why",
                     "game.guide.moment.first_mint.means", "game.mint.chip.level_a11y",
@@ -386,9 +386,9 @@ final class ProgressionConceptGuardTests: XCTestCase {
     func test_theTailwind_saysSevenLevelsBelowTheLevelRecord_inEveryLanguage() throws {
         let table = try catalog(prefix: "game.")
         XCTAssertEqual(table["game.rules.concept.tailwind.body"]?["fr"],
-                       "+25\u{00A0}% sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ton record de niveau. Il s’arrête dès que l’écart retombe à 6.")
+                       "+25\u{00A0}% sur les étincelles de tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière. Il s’arrête dès que l’écart retombe à 6.")
         let fiche = try XCTUnwrap(table["game.detail.fact.tailwind"]?["fr"])
-        XCTAssertEqual(fiche, "+25\u{00A0}% sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ton record de niveau.")
+        XCTAssertEqual(fiche, "+25\u{00A0}% sur tes gestes tant que ton niveau est 7 niveaux ou plus sous ta plus haute lumière.")
         XCTAssertLessThanOrEqual(fiche.count, 110, "la fiche tient en 110 caractères")
         for key in ["game.rules.concept.tailwind.body", "game.detail.fact.tailwind"] {
             for locale in locales {
@@ -403,24 +403,25 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertFalse(table.values.contains { ($0["fr"] ?? "").contains("Vent arrière est éteint") }, "le Vent arrière éteint se dit encore")
     }
 
-    /// Les trois records (#10899) : record de niveau, record d'étincelles, record de Meeshes — « à vie », « max à vie »,
-    /// « depuis toujours » et « total à vie » ne se disent plus dans le Jeu.
+    /// Les trois records (#10899) racontent l'épopée (#11179, § 4) : ta plus haute lumière, les étincelles reçues depuis
+    /// toujours, les Meeshes frappées depuis toujours — « à vie », « max à vie » et « total à vie » ne se disent plus
+    /// dans le Jeu, et « record » non plus (garde de vocabulaire : `GameEpicVocabularyGuardTests`).
     func test_theGame_saysTheThreeRecords_andNoLongerLifetimeOrMax() throws {
         let table = try catalog(prefix: "game").merging(try catalog(prefix: "progression.meesh.")) { first, _ in first }
         for (key, entry) in table {
             let french = entry["fr"] ?? ""
-            for stale in ["à vie", "depuis toujours", "Max à vie", "niveau max", "total à vie"] {
+            for stale in ["à vie", "Max à vie", "niveau max", "total à vie"] {
                 XCTAssertFalse(french.contains(stale), "\(key) : « \(stale) » se dit encore — « \(french) »")
             }
         }
-        XCTAssertEqual(table["game.sparks.levelMax.label"]?["fr"], "Record de niveau")
-        XCTAssertEqual(table["game.sparks.lifetime.label"]?["fr"], "Record d’étincelles")
-        XCTAssertEqual(table["game.concept.fact.minted"]?["fr"], "Record de Meeshes")
-        XCTAssertEqual(table["progression.meesh.minted.many"]?["fr"], "Record de Meeshes : %lld")
-        XCTAssertEqual(table["game.detail.fact.level_record"]?["fr"], "C’est ton record de niveau : le plus haut niveau que tu as atteint.")
-        XCTAssertEqual(table["game.detail.fact.minted"]?["fr"], "C’est ton record de Meeshes : toutes celles que tu as frappées depuis le début.")
-        XCTAssertTrue((table["game2.prestige.meo"]?["fr"] ?? "").contains("ton record d’étincelles et ton record de niveau sont conservés"))
-        XCTAssertTrue((table["game2.prestige.confirm.access"]?["fr"] ?? "").hasSuffix("car ils lisent ton record de niveau."))
+        XCTAssertEqual(table["game.sparks.levelMax.label"]?["fr"], "Au plus haut")
+        XCTAssertEqual(table["game.sparks.lifetime.label"]?["fr"], "Reçues depuis toujours")
+        XCTAssertEqual(table["game.concept.fact.minted"]?["fr"], "Frappées depuis toujours")
+        XCTAssertEqual(table["progression.meesh.minted.many"]?["fr"], "%lld frappées depuis toujours")
+        XCTAssertEqual(table["game.detail.fact.level_record"]?["fr"], "C’est ta plus haute lumière : le plus haut niveau que tu as atteint.")
+        XCTAssertEqual(table["game.detail.fact.minted"]?["fr"], "Ce sont toutes les Meeshes que tu as frappées depuis toujours.")
+        XCTAssertTrue((table["game2.prestige.meo"]?["fr"] ?? "").contains("Ce que tu as reçu depuis toujours et ta plus haute lumière restent gravés"))
+        XCTAssertTrue((table["game2.prestige.confirm.access"]?["fr"] ?? "").hasSuffix("car elles lisent ta plus haute lumière."))
         for key in ["game.sparks.record.line", "game.sparks.cumul.record", "game.sparks.levelRecord.line", "game.concept.fact.minted",
                     "progression.meesh.minted.one", "progression.meesh.minted.many", "game2.prestige.confirm.access"] {
             for locale in locales { XCTAssertFalse((table[key]?[locale] ?? "").isEmpty, "\(key) : pas de \(locale)") }
@@ -442,19 +443,26 @@ final class ProgressionConceptGuardTests: XCTestCase {
         XCTAssertEqual(try catalog(prefix: "game.mint.")["game.mint.chip.glory"]?["fr"]?.hasPrefix("+"), true, "le « + » de la Gloire reste")
     }
 
-    /// La fiche pose les quatre réponses et la phrase d'état ; la carte porte la phrase d'état.
-    func test_theSheetAndTheCard_showTheStateAndTheFourAnswers() throws {
+    /// La fiche pose les quatre réponses, puis « Où j'en suis » : la phrase d'état d'abord, puis les lignes — l'une
+    /// et l'autre lues sur `ProgressionConceptFiche`, qui ne redit rien de ce que l'écran montre (#11180). La carte
+    /// n'a plus de phrase d'état : un nom, une valeur, une ligne.
+    func test_theSheetShowsTheFourAnswersAndItsWhere_theCardThreeStoreys() throws {
         let fiche = try source("Meeshy/Features/Main/Game/ProgressionConceptPage.swift")
         for piece in ["ConceptText.what(concept)", "ConceptText.why(concept)", "ConceptText.how(concept)", "ConceptText.use(concept)",
-                      "ProgressionConceptModel.state(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
+                      "ProgressionConceptFiche.make(concept, progress: progress, game: game)", "section(ConceptText.ficheUse)"] {
             XCTAssertTrue(fiche.contains(piece), "« \(piece) » n'est plus dans la fiche")
         }
         let where_ = try XCTUnwrap(fiche.range(of: "section(ConceptText.ficheWhere)"))
-        let stateLine = try XCTUnwrap(fiche.range(of: "sentence(state, strong: true)"))
-        let facts = try XCTUnwrap(fiche.range(of: "ProgressionConceptFacts(facts: facts, concept: concept)"))
+        let stateLine = try XCTUnwrap(fiche.range(of: "sentence(state.text, strong: true)"))
+        let facts = try XCTUnwrap(fiche.range(of: "ProgressionConceptFacts(facts: fiche.facts, concept: concept)"))
         XCTAssertTrue(where_.lowerBound < stateLine.lowerBound && stateLine.lowerBound < facts.lowerBound,
                       "la phrase d'état ouvre « Où j'en suis », avant les lignes")
         let card = try body(of: "struct ProgressionConceptCardView: View {", in: try source("Meeshy/Features/Main/Game/ProgressionConceptViews.swift"))
-        XCTAssertTrue(card.contains("if let state = card.state"), "la carte ne porte plus la phrase d'état")
+        for storey in ["Text(card.name)", "Text(card.value)", "if let line = card.line"] {
+            XCTAssertTrue(card.contains(storey), "la carte ne rend pas « \(storey) »")
+        }
+        for gone in ["card.state", "card.why", "card.how", "ProgressionBar(", "GameChip("] {
+            XCTAssertFalse(card.contains(gone), "la carte rend encore « \(gone) » : la fiche dit le reste")
+        }
     }
 }

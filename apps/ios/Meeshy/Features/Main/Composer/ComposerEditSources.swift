@@ -144,7 +144,7 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     @MainActor
     func configure(fps: Int, declaredSpace: CGColorSpace?) {
         self.fps = max(1, fps)
-        link?.preferredFramesPerSecond = self.fps
+        link?.preferredFrameRateRange = .pinned(fps: self.fps)
         lock.lock()
         space = declaredSpace
         lock.unlock()
@@ -155,9 +155,13 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         if looper == nil { setRange(0...duration) }
         player.play()
         guard link == nil else { return }
-        let lien = CADisplayLink(target: ComposerLoopPlayerTick(owner: self),
-                                 selector: #selector(ComposerLoopPlayerTick.tick(_:)))
-        lien.preferredFramesPerSecond = fps
+        let lien = WeakDisplayLinkTarget.makeLink(frameRateRange: .pinned(fps: fps)) { [weak self] lien in
+            guard let self else {
+                lien.invalidate()
+                return
+            }
+            self.tick()
+        }
         lien.add(to: .main, forMode: .common)
         link = lien
     }
@@ -307,28 +311,6 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         if element.audioMix == nil { attachBoost(to: element) }
         outputs[ObjectIdentifier(element)] = sortie
         return sortie
-    }
-}
-
-/// La cible du `CADisplayLink` — elle ne retient pas le lecteur, et coupe le lien
-/// si le lecteur est parti sans `stop()` (un lien vivant tiendrait 30 réveils par
-/// seconde pour rien).
-private final class ComposerLoopPlayerTick: NSObject {
-    weak var owner: ComposerLoopPlayer?
-
-    nonisolated deinit {}
-
-    init(owner: ComposerLoopPlayer) {
-        self.owner = owner
-        super.init()
-    }
-
-    @objc func tick(_ lien: CADisplayLink) {
-        guard let owner else {
-            lien.invalidate()
-            return
-        }
-        owner.tick()
     }
 }
 

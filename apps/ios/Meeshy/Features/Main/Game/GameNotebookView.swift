@@ -13,7 +13,7 @@ struct GameNotebookPage: View {
 
     var body: some View {
         GamePageScaffold(
-            title: String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main),
+            title: String(localized: "game.notebook.page_title", defaultValue: "La Chronique", bundle: .main),
             identifier: "game.notebook.page"
         ) {
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
@@ -45,7 +45,7 @@ struct GameNotebookPage: View {
     private var placeCaption: some View {
         let deviceOnly = String(localized: "game.notebook.device_only", defaultValue: "Tes photos vivent sur cet appareil.", bundle: .main)
         let size = ByteCountFormatter.string(fromByteCount: viewModel.occupiedBytes, countStyle: .file)
-        let occupied = String(format: String(localized: "game.notebook.size", defaultValue: "Le carnet occupe %@.", bundle: .main), size)
+        let occupied = String(format: String(localized: "game.notebook.size", defaultValue: "La Chronique occupe %@.", bundle: .main), size)
         return Text(viewModel.occupiedBytes > 0 ? "\(occupied) \(deviceOnly)" : deviceOnly)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .regular))
             .foregroundColor(theme.textMuted)
@@ -60,7 +60,7 @@ struct GameNotebookPage: View {
                 .accessibilityHidden(true)
             Text(String(
                 localized: "game.notebook.empty",
-                defaultValue: "Ton carnet est vide. Les grands moments — un rang, une première Meesh, une Flamme de 7 jours — se photographient avec Mee et Meo, et la photo reste sur ton appareil.",
+                defaultValue: "Ta Chronique attend sa première page. À chaque signe de tes aïeux (un rang, une première Meesh, une Flamme de 7 jours), Mee et Meo t’invitent à immortaliser le moment, et la photo reste sur ton appareil.",
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
@@ -203,7 +203,7 @@ struct GameNotebookPage: View {
             }
             if viewModel.removalFailed {
                 GameErrorLine(
-                    message: String(localized: "game.notebook.remove_failed", defaultValue: "Le carnet n’a pas pu retirer cette photo.", bundle: .main),
+                    message: String(localized: "game.notebook.remove_failed", defaultValue: "La Chronique n’a pas pu retirer cette photo.", bundle: .main),
                     identifier: "game.notebook.remove.error"
                 )
             }

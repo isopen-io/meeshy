@@ -120,6 +120,9 @@ export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
   height: true,
   thumbnailUrl: true,
   thumbHash: true,
+  // Variantes WebP responsives (#11260) — OPTIONNEL : absent d'une ligne héritée,
+  // un ancien client ignore la clé.
+  imageVariants: true,
   duration: true,
   order: true,
   caption: true,

@@ -42,7 +42,7 @@ extension SocialEventsV2Wire {
 /// qu'elle a REÇU — sans réseau, une ligne JSON par événement. L'app la vide
 /// dans sa file v2 au lot suivant. Bornée : au-delà de 256 Kio, rien ne
 /// s'ajoute (la boîte ne grossit jamais sans fin si l'app ne s'ouvre pas).
-public final class SocialNotificationInbox: @unchecked Sendable {
+public final class SocialNotificationInbox: Sendable {
     public static let shared = SocialNotificationInbox(
         fileURL: FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: UserPreferencesManager.appGroupSuiteName)?
@@ -51,7 +51,7 @@ public final class SocialNotificationInbox: @unchecked Sendable {
     public static let maxBytes = 256 * 1_024
 
     private let fileURL: URL?
-    private let lock = NSLock()
+    private let fileAccess = Locked(())
 
     public init(fileURL: URL?) {
         self.fileURL = fileURL
@@ -59,10 +59,10 @@ public final class SocialNotificationInbox: @unchecked Sendable {
 
     public func append(_ event: SocialEventV2) {
         guard let fileURL, let data = try? SocialEventsV2Wire.encode(event) else { return }
-        lock.withLock {
+        fileAccess.mutate { _ -> Void in
             let manager = FileManager.default
             let size = (try? manager.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
-            guard size + data.count < Self.maxBytes else { return }
+            guard size + data.count < SocialNotificationInbox.maxBytes else { return }
             let line = data + Data("\n".utf8)
             guard manager.fileExists(atPath: fileURL.path), let handle = try? FileHandle(forWritingTo: fileURL) else {
                 try? line.write(to: fileURL, options: .atomic)
@@ -79,7 +79,7 @@ public final class SocialNotificationInbox: @unchecked Sendable {
     /// boîte neuve au lieu de se perdre dans celle qu'on lit.
     public func drain() -> [Data] {
         guard let fileURL else { return [] }
-        return lock.withLock {
+        return fileAccess.mutate { _ -> [Data] in
             let manager = FileManager.default
             guard manager.fileExists(atPath: fileURL.path) else { return [] }
             let taken = fileURL.deletingLastPathComponent().appendingPathComponent("social-events-v2-inbox.\(UUID().uuidString).draining")
@@ -92,6 +92,6 @@ public final class SocialNotificationInbox: @unchecked Sendable {
 
     public func purge() {
         guard let fileURL else { return }
-        lock.withLock { try? FileManager.default.removeItem(at: fileURL) }
+        fileAccess.mutate { _ in try? FileManager.default.removeItem(at: fileURL) }
     }
 }

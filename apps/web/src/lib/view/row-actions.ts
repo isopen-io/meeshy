@@ -1,4 +1,7 @@
+import { conversationActionsFor, type ConversationActions } from '@meeshy/shared/utils/conversation-action-policy';
+
 import type { ConversationFlags } from '@/lib/api/preferences';
+import type { Conversation } from '@/lib/api/types';
 import { translate } from '@/lib/i18n-catalog';
 import { rowMenuText } from '@/lib/i18n-row-menu-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
@@ -25,10 +28,14 @@ export type RowActionId =
   | 'read'
   | 'details'
   | 'rename'
+  | 'invite'
+  | 'manageMembers'
   | 'favorite'
   | 'moveTo'
   | 'archive'
+  | 'adminOpen'
   | 'block'
+  | 'leave'
   | 'delete';
 
 export type RowCallActionId = Extract<RowActionId, 'callAudio' | 'callVideo'>;
@@ -40,6 +47,10 @@ export type RowFlagActionId = Extract<RowActionId, 'pin' | 'mute' | 'read' | 'ar
 /** Les entrées qui ne basculent pas un drapeau (#10593) : elles ouvrent une
  * fiche, une fenêtre ou une confirmation, que l'écran de la liste porte. */
 export type RowIntentActionId = Extract<RowActionId, 'details' | 'rename' | 'block'>;
+
+/** Les entrées que les RÔLES ouvrent (#11211) : la ligne les route elle-même
+ * (la fiche, le départ, l'administration), sans passer par l'écran. */
+export type RowRoleActionId = Extract<RowActionId, 'invite' | 'manageMembers' | 'adminOpen' | 'leave'>;
 
 export const isRowFlagAction = (id: RowActionId): id is RowFlagActionId => id === 'pin' || id === 'mute' || id === 'read' || id === 'archive';
 
@@ -64,7 +75,11 @@ export type RowActionGlyph =
   | 'star'
   | 'starFill'
   | 'folderSimple'
-  | 'handPalm';
+  | 'handPalm'
+  | 'userPlus'
+  | 'users'
+  | 'shieldCheck'
+  | 'signOut';
 
 /** Les deux entrées qui ouvrent un SOUS-MENU, comme les `Menu` d'iOS. */
 export type RowSubmenu = 'favorite' | 'moveTo';
@@ -114,6 +129,53 @@ type RowMenuLabelKey =
   | 'rowActions.unarchive'
   | 'rowActions.delete';
 
+/**
+ * QUI TIENT LA LIGNE (#11211) — ce que la loi partagée lit du lecteur : son
+ * compte, s'il parle en invité, et son rôle de PLATEFORME tel que la passerelle
+ * l'a servi (`null` tant qu'il ne l'a pas été : rien de ce qu'il ouvrirait ne
+ * s'offre avant).
+ */
+export type RowViewer = {
+  readonly id: string;
+  readonly hasAccount: boolean;
+  readonly isAnonymous: boolean;
+  readonly platformRole: string | null;
+};
+
+export type RowConversation = Pick<Conversation, 'type'> &
+  Partial<Pick<Conversation, 'encryptionMode' | 'isActive' | 'isAnnouncementChannel' | 'defaultWriteRole' | 'currentUserRole' | 'isMember'>>;
+
+/**
+ * LES VERDICTS DE LA LIGNE — `conversationActionsFor` (`@meeshy/shared`), la
+ * loi que le menu d'iOS lit aussi : le rang dans la conversation vient de
+ * `currentUserRole`, et une conversation que le serveur dit non membre
+ * (`isMember: false`) n'ouvre que ce que la plateforme accorde.
+ */
+export function rowConversationActions(input: { readonly conversation: RowConversation; readonly viewer: RowViewer }): ConversationActions {
+  const { conversation, viewer } = input;
+  const hasAccount = viewer.hasAccount && !viewer.isAnonymous;
+  return conversationActionsFor({
+    conversation: {
+      type: conversation.type,
+      encryptionMode: conversation.encryptionMode ?? null,
+      isActive: conversation.isActive ?? null,
+      isAnnouncementChannel: conversation.isAnnouncementChannel ?? null,
+      defaultWriteRole: conversation.defaultWriteRole ?? null,
+    },
+    viewer: {
+      id: viewer.id,
+      participantId: null,
+      hasAccount,
+      isAnonymous: viewer.isAnonymous,
+      platformRole: hasAccount ? viewer.platformRole : null,
+      conversationRole: conversation.currentUserRole ?? null,
+      isActiveMember: conversation.isMember !== false,
+      canSendMessages: hasAccount,
+      isDeclaredMinor: false,
+    },
+  });
+}
+
 export function rowMenuItems(params: {
   readonly flags: ConversationFlags;
   readonly unread: boolean;
@@ -123,11 +185,19 @@ export function rowMenuItems(params: {
   readonly canDelete?: boolean;
   /** Absent (le balayage) : aucune des entrées de #10593. */
   readonly more?: RowMenuMore;
+  /**
+   * LES VERDICTS DU RÔLE (#11211) — absents (le balayage), le menu reste
+   * celui d'avant ; présents, ils GOUVERNENT l'appel, Renommer et Supprimer,
+   * et ouvrent Inviter, Gérer les membres, l'administration et Quitter.
+   */
+  readonly actions?: ConversationActions;
 }): readonly RowMenuItem[] {
-  const { flags, unread, language, canCall = false, canDelete = false, more } = params;
+  const { flags, unread, language, canCall = false, canDelete = false, more, actions } = params;
   const label = (key: RowMenuLabelKey) => translate(language, key);
+  const call = canCall && (actions?.call ?? true);
+  const remove = canDelete && (actions?.hide ?? true);
   return [
-    ...(canCall
+    ...(call
       ? [
           { id: 'callAudio', label: label('call.action.audio'), glyph: 'phone' } as const,
           { id: 'callVideo', label: label('call.action.video'), glyph: 'videoCamera' } as const,
@@ -136,20 +206,27 @@ export function rowMenuItems(params: {
     { id: 'pin', label: label(flags.isPinned ? 'rowActions.unpin' : 'rowActions.pin'), glyph: 'pushPin' },
     { id: 'mute', label: label(flags.isMuted ? 'rowActions.unmute' : 'rowActions.mute'), glyph: flags.isMuted ? 'bell' : 'bellSlash' },
     { id: 'read', label: label(unread ? 'rowActions.read' : 'rowActions.unread'), glyph: 'envelopeOpen' },
-    ...(more === undefined ? [] : moreItems(more, language)),
+    ...(more === undefined ? [] : moreItems(more, language, actions)),
     ...(flags.archiveLocked === true
       ? []
       : [{ id: 'archive', label: label(flags.isArchived ? 'rowActions.unarchive' : 'rowActions.archive'), glyph: 'archive' } as const]),
+    ...(actions?.adminOpen === true ? [{ id: 'adminOpen', label: rowMenuText(language, 'rowMenu.adminOpen'), glyph: 'shieldCheck' } as const] : []),
     ...(more === undefined ? [] : blockItems(more, language)),
-    ...(canDelete ? [{ id: 'delete', label: label('rowActions.delete'), glyph: 'trash', destructive: true } as const] : []),
+    ...(actions?.leave === true && canDelete ? [{ id: 'leave', label: rowMenuText(language, 'rowMenu.leave'), glyph: 'signOut', destructive: true } as const] : []),
+    ...(remove ? [{ id: 'delete', label: label('rowActions.delete'), glyph: 'trash', destructive: true } as const] : []),
   ];
 }
 
-/** L'ordre d'iOS : Détails, Renommer, Favori, Déplacer vers… */
-function moreItems(more: RowMenuMore, language: InterfaceLanguage): readonly RowMenuItem[] {
+/** L'ordre d'iOS : Détails, Renommer, Inviter, Gérer les membres, Favori, Déplacer vers… */
+function moreItems(more: RowMenuMore, language: InterfaceLanguage, actions: ConversationActions | undefined): readonly RowMenuItem[] {
+  const rename = more.organize && more.rename && (actions?.rename ?? true);
   return [
     ...(more.details ? [{ id: 'details', label: rowMenuText(language, 'rowMenu.details'), glyph: 'info' } as const] : []),
-    ...(more.organize && more.rename ? [{ id: 'rename', label: rowMenuText(language, 'rowMenu.rename'), glyph: 'pencilSimple' } as const] : []),
+    ...(rename ? [{ id: 'rename', label: rowMenuText(language, 'rowMenu.rename'), glyph: 'pencilSimple' } as const] : []),
+    ...(more.details && actions?.invite === true ? [{ id: 'invite', label: rowMenuText(language, 'rowMenu.invite'), glyph: 'userPlus' } as const] : []),
+    ...(more.details && actions?.manageMembers === true
+      ? [{ id: 'manageMembers', label: rowMenuText(language, 'rowMenu.manageMembers'), glyph: 'users' } as const]
+      : []),
     ...(more.organize
       ? [
           {
@@ -185,9 +262,16 @@ export type RowSubmenuChoice =
  * bloquer ou débloquer (une confirmation pour bloquer), ou un choix de
  * sous-menu à écrire. L'écran possède les fenêtres et le store ; la ligne,
  * mémoïsée, ne fait que nommer le geste.
+ *
+ * « Inviter » et « Gérer les membres » (revue #11211) ouvrent la fiche, mais
+ * pas sur sa tête comme « Détails » : sur l'ajout de membres, ou sur la liste
+ * des membres. Trois entrées au même effet, sous trois noms, n'en font qu'une.
  */
+export type RowDetailsFocus = 'invite' | 'members';
+
 export type RowIntent =
   | { readonly kind: 'rename' }
+  | { readonly kind: 'details'; readonly focus: RowDetailsFocus }
   | { readonly kind: 'block'; readonly intent: 'block' | 'unblock' }
   | RowSubmenuChoice;
 

@@ -110,7 +110,11 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 10));
   });
 
-const mount = async (c: Conversation, replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>> = {}) => {
+const mount = async (
+  c: Conversation,
+  replies: Readonly<Record<string, ApiResult<unknown> | 'pending'>> = {},
+  focus?: 'invite' | 'members',
+) => {
   const { deps, calls } = transportOf({ [MEMBERS]: { ok: true, data: c.participants.map(wire), pagination: pagination(c.participants.length) }, ...replies });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(CONVERSATIONS_QUERY_KEY, { pages: [{ conversations: [c] }], pageParams: [undefined] });
@@ -120,7 +124,7 @@ const mount = async (c: Conversation, replies: Readonly<Record<string, ApiResult
   act(() => {
     root.render(
       <QueryClientProvider client={client}>
-        <ConversationDetailsSheet conversation={c} title={c.title ?? ''} accent="#6366f1" viewerId="u-moi" deps={deps} origin="https://meeshy.me" onClose={() => {}} />
+        <ConversationDetailsSheet conversation={c} title={c.title ?? ''} accent="#6366f1" viewerId="u-moi" deps={deps} origin="https://meeshy.me" onClose={() => {}} {...(focus === undefined ? {} : { focus })} />
       </QueryClientProvider>,
     );
   });
@@ -203,6 +207,18 @@ describe('gérer les membres (#10613)', () => {
     await settle();
     expect(writes(calls)[0]).toMatchObject({ method: 'POST', path: '/api/v1/conversations/c-groupe/participants', body: { userIds: ['u-zoe'] } });
     expect($('[data-conversation-member="pending-u-zoe"]')?.textContent).toContain('Zoé Martin');
+  });
+
+  test('ouverte pour « Inviter », la fiche ouvre d’office l’ajout de membres (revue #11211)', async () => {
+    await mount(conversation(), {}, 'invite');
+    await settle();
+    expect($('[data-add-members]')).not.toBeNull();
+  });
+
+  test('ouverte sans intention, la fiche n’ouvre pas l’ajout', async () => {
+    await mount(conversation());
+    await settle();
+    expect($('[data-add-members]')).toBeNull();
   });
 
   test('un simple membre ne voit aucun geste de gestion, ni ajout, ni réglages', async () => {

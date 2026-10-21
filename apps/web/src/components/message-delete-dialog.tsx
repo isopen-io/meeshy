@@ -23,7 +23,9 @@ import { Sheet } from './sheet';
  *
  * « RETIRER » (#11150) — le message d'un autre, pour qui modère la
  * conversation : le choix ouvre la feuille du MOTIF (`ContentRemovalSheet`),
- * et c'est elle qui confirme, motif nettoyé en main.
+ * et c'est elle qui confirme, motif nettoyé en main. Une offre qui ne porte
+ * QUE le retrait (le geste « Retirer » du menu rapide, #11210) s'ouvre
+ * directement sur le motif : il n'y a rien d'autre à choisir.
  */
 export function MessageDeleteDialog({
   count,
@@ -37,7 +39,7 @@ export function MessageDeleteDialog({
   readonly onDismiss: () => void;
 }) {
   const language = currentInterfaceLanguage();
-  const [removing, setRemoving] = useState(false);
+  const [removing, setRemoving] = useState(offer.remove && !offer.forEveryone && !offer.forMe);
   if (removing) return <ContentRemovalSheet onConfirm={(reason) => onConfirm('remove', reason)} onCancel={onDismiss} />;
   const title =
     count === 1

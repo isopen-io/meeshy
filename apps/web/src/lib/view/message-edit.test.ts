@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { message, minutesAgo } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import { editOffered } from './message-edit';
 
@@ -23,7 +24,7 @@ const mine = (overrides: Partial<Message> = {}): Message =>
     ...overrides,
   });
 
-const viewer = { id: 'u-moi', hasAccount: true } as const;
+const viewer = menuScope({ id: 'u-moi' });
 const now = () => Date.now();
 
 describe('editOffered — la règle du serveur, lue avant le geste', () => {
@@ -45,7 +46,7 @@ describe('editOffered — la règle du serveur, lue avant le geste', () => {
   });
 
   test('un invité n’a pas de compte : le serveur ne le reconnaît pas pour auteur ⇒ refusé', () => {
-    expect(editOffered(mine(), { id: 'u-moi', hasAccount: false }, { now: now() })).toBe(false);
+    expect(editOffered(mine(), menuScope({ id: 'u-moi', hasAccount: false }), { now: now() })).toBe(false);
   });
 
   test('un envoi encore optimiste n’existe pas côté serveur ⇒ refusé', () => {
@@ -64,5 +65,23 @@ describe('editOffered — la règle du serveur, lue avant le geste', () => {
 
   test('un message chiffré de bout en bout ne part pas en clair ⇒ refusé', () => {
     expect(editOffered(mine({ isEncrypted: true }), viewer, { now: now() })).toBe(false);
+  });
+
+  test('une conversation chiffrée de bout en bout ⇒ refusé, même sur mon message en clair (#11210)', () => {
+    expect(editOffered(mine(), menuScope({ id: 'u-moi' }, { encryptionMode: 'e2ee' }), { now: now() })).toBe(false);
+  });
+
+  test('le message d’un autre ne se réécrit jamais depuis le web, même par un MODERATOR de plateforme : ni l’auteur de la modification ni sa mention ne seraient dits (#11372)', () => {
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'MODERATOR' }), { now: now() })).toBe(false);
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'ADMIN' }), { now: now() })).toBe(false);
+    expect(editOffered(mine({ senderId: 'u-autre' }), menuScope({ id: 'u-moi', platformRole: 'AUDIT' }), { now: now() })).toBe(false);
+  });
+
+  test('un MODERATOR de plateforme modifie SON message au-delà des 24 heures, comme la passerelle l’admet (#11210)', () => {
+    expect(editOffered(mine({ createdAt: minutesAgo(24 * 60 + 5) }), menuScope({ id: 'u-moi', platformRole: 'MODERATOR' }), { now: now() })).toBe(true);
+  });
+
+  test('une conversation close ⇒ refusé (#11210)', () => {
+    expect(editOffered(mine(), menuScope({ id: 'u-moi' }, { isActive: false }), { now: now() })).toBe(false);
   });
 });

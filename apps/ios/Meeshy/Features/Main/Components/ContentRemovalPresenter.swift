@@ -57,6 +57,58 @@ enum ContentRemovalOffer {
             ContentRemovalPresenter.present(kind) { reason in Task { await remove(postId, reason) } }
         }
     }
+
+    /// **« Retirer » sur un commentaire** — de post ou de story (#11159) : la
+    /// modération de la plateforme, jamais sur le sien. La fermeture rendue
+    /// reçoit le motif de la feuille, que `CommentMoreMenu` présente.
+    static func comment(
+        _ comment: FeedComment,
+        viewerId: String? = AuthManager.shared.currentUser?.id,
+        viewerRole: String? = AuthManager.shared.currentUser?.role,
+        remove: @escaping (_ reason: String) -> Void
+    ) -> ((String) -> Void)? {
+        let mine = viewerId.map { !$0.isEmpty && $0 == comment.authorId } ?? false
+        guard ContentRemovalPolicy.mayRemovePublication(authoredByViewer: mine, platformRole: viewerRole) else { return nil }
+        return remove
+    }
+
+    /// **« Retirer » s'offre-t-il sur une SÉLECTION de messages ?** (#11159) Au
+    /// moins un message d'un autre, tous retirables par ce lecteur, et les siens
+    /// supprimables pour tous — ils partent avec, sans motif.
+    static func selectionOffersRemoval(
+        _ selected: [Message],
+        mayRemove: (Message) -> Bool,
+        mayDeleteForEveryone: (Message) -> Bool
+    ) -> Bool {
+        let others = selected.filter { !$0.isMe }
+        guard !others.isEmpty, others.allSatisfy(mayRemove) else { return false }
+        return selected.filter(\.isMe).allSatisfy(mayDeleteForEveryone)
+    }
+
+    /// L'entrée « Retirer » d'un dialogue de suppression de message : `before` referme ce qui la porte,
+    /// puis la feuille du motif remet le motif à `onReason`.
+    @ViewBuilder
+    static func messageButton(before: @escaping () -> Void = {}, onReason: @escaping (String) -> Void) -> some View {
+        Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
+            before()
+            ContentRemovalPresenter.present(.message, onConfirm: onReason)
+        }
+    }
+
+    /// « Retirer » sur la SÉLECTION (#11159), quand `selectionOffersRemoval` l'offre : le motif d'abord,
+    /// la sélection ne se quitte qu'une fois le retrait confirmé (`ConversationSelectionRemoval`).
+    @ViewBuilder
+    static func selectionButton(
+        _ selected: [Message], ids: Set<String>, viewModel: ConversationViewModel,
+        mayRemove: (Message) -> Bool, onConfirmed: @escaping () -> Void
+    ) -> some View {
+        if selectionOffersRemoval(selected, mayRemove: mayRemove, mayDeleteForEveryone: { viewModel.canDeleteForEveryone($0) }) {
+            messageButton { reason in
+                onConfirmed()
+                Task { await ConversationSelectionRemoval(viewModel: viewModel).run(ids, reason: reason) }
+            }
+        }
+    }
 }
 
 /// Le contrôleur présenté, tenu FAIBLEMENT : la feuille le ferme sans le retenir.

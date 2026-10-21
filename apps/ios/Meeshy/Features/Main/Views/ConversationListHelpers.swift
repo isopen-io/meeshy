@@ -123,6 +123,10 @@ struct SectionHeaderView: View {
 struct ConversationPreviewView: View {
     let conversation: Conversation
     var cachedMessages: [Message] = []
+    /// L'aperçu VIVANT (#11212) : seule la section des messages l'observe, et
+    /// passe de « chargement » à « messages » sans jamais dire « Aucun message »
+    /// avant de l'avoir constaté. `nil` ⇒ `cachedMessages`, figés.
+    var previewLoader: ConversationListPreviewLoader? = nil
 
     var bannerURL: URL? = nil
     var avatarURL: String? = nil
@@ -130,12 +134,21 @@ struct ConversationPreviewView: View {
     var moodEmoji: String? = nil
     var presenceState: PresenceState? = nil
     var isDirect: Bool = false
+    /// Le mode que le fil ouvrirait (#11213) : la face des derniers messages —
+    /// rangées plates en Script et Focal, bulles en Bulles.
+    var readingMode: ConversationReadingMode = .bubbles
+    /// L'aperçu natif d'iOS 26 n'est pas interactif : ses boutons y seraient
+    /// inertes. À `false`, l'en-tête ne garde que ce qui SE LIT — non-lus,
+    /// chiffrement, sourdine.
+    var isInteractive: Bool = true
     var onCall: (() -> Void)? = nil
     var onSearch: (() -> Void)? = nil
     var onInfo: (() -> Void)? = nil
     var onProfileInfo: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+    /// La largeur que la carte occupe vraiment : les bulles s'y mesurent.
+    @State private var cardWidth: CGFloat = ConversationPreviewWidthLaw.maximum
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -154,113 +167,21 @@ struct ConversationPreviewView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Header — banner background + dark overlay for legibility
-            HStack(alignment: .top, spacing: MeeshySpacing.md) {
-                // Real avatar with story ring / mood / presence
-                MeeshyAvatar(
-                    name: conversation.name,
-                    context: .conversationList,
-                    accentColor: accentColor,
-                    secondaryColor: secondaryColor,
-                    avatarURL: avatarURL,
-                    storyState: storyState,
-                    moodEmoji: moodEmoji,
-                    presenceState: presenceState,
-                    ring: isDirect ? conversation.participantRing : nil
-                )
+            header
+                .padding(MeeshySpacing.mdPlus)
+                .background(headerBackground)
 
-                VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
-                    // Titre pleine largeur — peut aller à la ligne (2 lignes).
-                    // displayName (customName prioritaire) : même convention
-                    // que la ligne de liste (ThemedConversationRow) — l'avatar
-                    // reste sur `name` (initiales/couleur du vrai nom).
-                    HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
-                        Text(conversation.displayName)
-                            .font(.callout.weight(.bold))
-                            .foregroundColor(headerContentColor)
-                            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3, y: 1)
-                            .lineLimit(2)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if conversation.userState.isPinned {
-                            Image(systemName: "pin.fill")
-                                .font(.caption2)
-                                .foregroundColor(MeeshyColors.error)
-                                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
-                        }
-
-                        if conversation.userState.isMuted {
-                            Image(systemName: "bell.slash.fill")
-                                .font(.caption2)
-                                .foregroundColor(headerContentColor.opacity(MeeshyOpacity.heavy))
-                                .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
-                        }
-
-                        Spacer(minLength: 0)
-                    }
-
-                    if conversation.type != .direct {
-                        HStack(spacing: MeeshySpacing.xxs) {
-                            Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
-                                .font(.caption2)
-                            Text(MembersCountLabel.text(conversation.memberCount,
-                                                        capped: conversation.memberCountCapped))
-                                .font(.caption2.weight(.medium))
-                        }
-                        .foregroundColor(headerContentColor.opacity(MeeshyOpacity.intense))
-                        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
-                    }
-
-                    // Boutons d'action SOUS le titre, alignés à droite.
-                    HStack(spacing: MeeshySpacing.sm) {
-                        Spacer(minLength: 0)
-                        headerActions
-                    }
-                }
-            }
-            .padding(MeeshySpacing.mdPlus)
-            .background(headerBackground)
-
-            // Recent messages preview
-            VStack(spacing: 0) {
-                Spacer(minLength: 0)
-
-                if cachedMessages.isEmpty {
-                    EmptyStateView(
-                        icon: "bubble.left.and.bubble.right",
-                        title: String(localized: "preview.no_messages", defaultValue: "Aucun message"),
-                        subtitle: ""
-                    )
-                    .padding(.bottom, MeeshySpacing.smPlus)
-                } else {
-                    ScrollViewReader { proxy in
-                        ScrollView(.vertical, showsIndicators: false) {
-                            VStack(spacing: 0) {
-                                ForEach(cachedMessages) { msg in
-                                    ThemedMessageBubble(
-                                        message: msg,
-                                        contactColor: accentColor,
-                                        showAvatar: !msg.isMe
-                                    )
-                                    .allowsHitTesting(false)
-                                }
-                            }
-                            .padding(.horizontal, MeeshySpacing.smPlus)
-                            .padding(.vertical, MeeshySpacing.sm)
-                        }
-                        .onAppear {
-                            guard let lastID = cachedMessages.last?.id else { return }
-                            proxy.scrollTo(lastID, anchor: .bottom)
-                        }
-                    }
-                }
-            }
+            recentMessagesSection
             .frame(minHeight: 120, maxHeight: 300)
             .background(previewBackground)
         }
         // Largeur pilotée par le call site (overlay) — source de vérité unique.
         // La carte remplit la largeur proposée ; le conteneur la fixe à 340.
         .frame(maxWidth: .infinity)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+            guard width > 0 else { return }
+            cardWidth = width
+        }
         .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.xl))
         .overlay(
             RoundedRectangle(cornerRadius: MeeshyRadius.xl)
@@ -274,6 +195,128 @@ struct ConversationPreviewView: View {
                 )
         )
         .shadow(color: Color(hex: accentColor).opacity(MeeshyOpacity.medium), radius: 20, y: 10)
+    }
+
+    // MARK: - Header (avatar, titre, indicateurs, actions)
+
+    /// Bannière en fond, voile sombre pour la lisibilité (`headerBackground`).
+    private var header: some View {
+        HStack(alignment: .top, spacing: MeeshySpacing.md) {
+            // Real avatar with story ring / mood / presence
+            MeeshyAvatar(
+                name: conversation.name,
+                context: .conversationList,
+                accentColor: accentColor,
+                secondaryColor: secondaryColor,
+                avatarURL: avatarURL,
+                storyState: storyState,
+                moodEmoji: moodEmoji,
+                presenceState: presenceState,
+                ring: isDirect ? conversation.participantRing : nil
+            )
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
+                // Titre pleine largeur — peut aller à la ligne (2 lignes).
+                // displayName (customName prioritaire) : même convention
+                // que la ligne de liste (ThemedConversationRow) — l'avatar
+                // reste sur `name` (initiales/couleur du vrai nom).
+                HStack(alignment: .top, spacing: MeeshySpacing.xsPlus) {
+                    Text(conversation.displayName)
+                        .font(.callout.weight(.bold))
+                        .foregroundStyle(headerContentColor)
+                        .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 3, y: 1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if conversation.userState.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.caption2)
+                            .foregroundStyle(MeeshyColors.error)
+                            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
+                    }
+
+                    if conversation.userState.isMuted {
+                        Image(systemName: "bell.slash.fill")
+                            .font(.caption2)
+                            .foregroundStyle(headerContentColor.opacity(MeeshyOpacity.heavy))
+                            .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
+                            .accessibilityLabel(Text(String(localized: "preview.muted.a11y", defaultValue: "Notifications désactivées", bundle: .main)))
+                    }
+
+                    Spacer(minLength: 0)
+                }
+
+                if conversation.type != .direct {
+                    HStack(spacing: MeeshySpacing.xxs) {
+                        Image(systemName: conversation.type == .group ? "person.2.fill" : "person.3.fill")
+                            .font(.caption2)
+                        Text(MembersCountLabel.text(conversation.memberCount,
+                                                    capped: conversation.memberCountCapped))
+                            .font(.caption2.weight(.medium))
+                    }
+                    .foregroundStyle(headerContentColor.opacity(MeeshyOpacity.intense))
+                    .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
+                }
+
+                // Indicateurs puis boutons d'action SOUS le titre, alignés à
+                // droite. Les boutons n'existent que si l'aperçu est
+                // interactif : un contrôle sans effet n'est pas affiché.
+                HStack(spacing: MeeshySpacing.sm) {
+                    Spacer(minLength: 0)
+                    headerIndicators
+                    if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) {
+                        // Trois cibles de 44 pt ne tiennent pas sous le titre
+                        // dans le volet gauche étroit de l'iPad : la rangée se
+                        // replie sur le cercle au lieu de déborder de la carte.
+                        ViewThatFits(in: .horizontal) {
+                            headerActions(targetSize: ConversationPreviewRenderer.headerTargetSize)
+                            headerActions(targetSize: ConversationPreviewRenderer.compactHeaderTargetSize)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Recent messages (#11212, #11213)
+
+    /// La zone des messages observe le chargeur (#11212) et se dessine dans le
+    /// mode de lecture du fil (#11213) — `ConversationRecentMessagesPreview`.
+    @ViewBuilder
+    private var recentMessagesSection: some View {
+        if let previewLoader {
+            ConversationPreviewStateReader(loader: previewLoader, conversationId: conversation.id) { state in
+                recentMessages(
+                    state.messages,
+                    translations: state.snapshot?.translations ?? [:],
+                    served: state.snapshot?.served ?? [:],
+                    phase: state.phase
+                )
+            }
+        } else {
+            recentMessages(cachedMessages, translations: [:], served: [:], phase: cachedMessages.isEmpty ? .empty : .loaded)
+        }
+    }
+
+    private func recentMessages(
+        _ messages: [Message],
+        translations: [String: [MessageTranslation]],
+        served: [String: MessageTranslation],
+        phase: ConversationPreviewPhase
+    ) -> some View {
+        ConversationRecentMessagesPreview(
+            messages: messages,
+            translations: translations,
+            served: served,
+            phase: phase,
+            readingMode: readingMode,
+            accentColor: accentColor,
+            skin: ConversationPreviewRenderer.skin(for: conversation, isDark: isDark),
+            isDirect: isDirect,
+            isDark: isDark,
+            currentUserId: AuthManager.shared.currentUser?.id ?? "",
+            cardWidth: cardWidth
+        )
     }
 
     // MARK: - Header background (banner + dark gradient)
@@ -324,11 +367,21 @@ struct ConversationPreviewView: View {
         }
     }
 
-    // MARK: - Header action buttons (glass call / search / info)
+    // MARK: - Header indicators (unread / E2EE)
 
+    /// Ce qui SE LIT dans l'en-tête, interactif ou non : les non-lus et le
+    /// chiffrement de bout en bout (la sourdine est posée près du titre).
     @ViewBuilder
-    private var headerActions: some View {
-        HStack(spacing: MeeshySpacing.sm) {
+    private var headerIndicators: some View {
+        HStack(spacing: MeeshySpacing.xsPlus) {
+            if ConversationPreviewRenderer.isEndToEnd(conversation) {
+                Image(systemName: "lock.fill")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(headerContentColor.opacity(MeeshyOpacity.heavy))
+                    .shadow(color: .black.opacity(MeeshyOpacity.strong), radius: 2, y: 1)
+                    .accessibilityLabel(Text(String(localized: "preview.e2ee.a11y", defaultValue: "Chiffrée de bout en bout", bundle: .main)))
+            }
+
             if conversation.userState.unreadCount > 0 {
                 Text(NotificationBadge.displayed(conversation.userState.unreadCount))
                     .font(.caption2.weight(NotificationBadge.fontWeight))
@@ -343,13 +396,20 @@ struct ConversationPreviewView: View {
                             )
                         )
                     )
+                    .accessibilityLabel(Text(String(localized: "preview.unread.a11y", defaultValue: "\(conversation.userState.unreadCount) messages non lus", bundle: .main)))
             }
+        }
+    }
 
+    // MARK: - Header action buttons (glass call / search / info)
+
+    private func headerActions(targetSize: CGFloat) -> some View {
+        HStack(spacing: 0) {
             if let onCall {
-                headerGlassButton(icon: "phone.fill", action: onCall)
+                headerGlassButton(icon: "phone.fill", label: String(localized: "context.call", defaultValue: "Appeler", bundle: .main), targetSize: targetSize, action: onCall)
             }
 
-            headerGlassButton(icon: "magnifyingglass") { onSearch?() }
+            headerGlassButton(icon: "magnifyingglass", label: String(localized: "context.search", defaultValue: "Rechercher", bundle: .main), targetSize: targetSize) { onSearch?() }
 
             if isDirect {
                 Menu {
@@ -364,27 +424,34 @@ struct ConversationPreviewView: View {
                         Label(String(localized: "profile.title", defaultValue: "Profil", bundle: .main), systemImage: "person.crop.circle")
                     }
                 } label: {
-                    headerGlassButtonLabel(icon: "info.circle.fill")
+                    headerGlassButtonLabel(icon: "info.circle.fill", targetSize: targetSize)
                 }
+                .accessibilityLabel(Text(String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main)))
             } else {
-                headerGlassButton(icon: "info.circle.fill") { onInfo?() }
+                headerGlassButton(icon: "info.circle.fill", label: String(localized: "conversation.info", defaultValue: "Infos conversation", bundle: .main), targetSize: targetSize) { onInfo?() }
             }
         }
     }
 
-    private func headerGlassButton(icon: String, action: @escaping () -> Void) -> some View {
+    private func headerGlassButton(icon: String, label: String, targetSize: CGFloat, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            headerGlassButtonLabel(icon: icon)
+            headerGlassButtonLabel(icon: icon, targetSize: targetSize)
         }
         .buttonStyle(PlainButtonStyle())
+        .accessibilityLabel(Text(label))
     }
 
-    private func headerGlassButtonLabel(icon: String) -> some View {
+    /// Le cercle de verre garde sa taille (32 pt) ; la cible, elle, fait au
+    /// moins 44 pt (HIG) — le doigt n'a pas à viser le dessin. Repliée
+    /// (`compactHeaderTargetSize`), elle garde 44 pt de haut.
+    private func headerGlassButtonLabel(icon: String, targetSize: CGFloat) -> some View {
         Image(systemName: icon)
             .font(.footnote.weight(.semibold))
             .foregroundColor(.white)
             .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
             .adaptiveGlass(in: Circle(), tint: Color(hex: accentColor).opacity(MeeshyOpacity.medium))
+            .frame(width: targetSize, height: ConversationPreviewRenderer.headerTargetSize)
+            .contentShape(Rectangle())
     }
 
     private var previewBackground: some View {

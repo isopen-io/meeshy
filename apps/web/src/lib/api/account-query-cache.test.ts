@@ -12,6 +12,7 @@ import {
 import { createAppQueryClient, type StorageLike } from './query-client';
 import { reactionStore } from './reaction-store';
 import { createSessionStore, type SessionStoreApi } from './session';
+import { TUS_CHECKPOINT_DB_NAME } from './tus-checkpoint';
 
 /**
  * CHANGER DE COMPTE GARDE LE CACHE DE CHAQUE COMPTE (#8674).
@@ -246,6 +247,30 @@ describe('l’étagère est bornée et se vide à la fin d’un compte', () => {
     expect(client.getQueryData(['conversations'])).toBeUndefined();
     expect(everything(storage)).not.toContain('secret de A');
     expect([...remaining]).toEqual(['workbox-precache-v2-x']);
+  });
+
+  test('fin d’A ⇒ les points de reprise de ses envois (IndexedDB `meeshy-tus`) partent avec lui (#11311, #104)', () => {
+    const deleted: string[] = [];
+    const indexedDb = { deleteDatabase: (name: string): void => {
+        deleted.push(name);
+      },
+    };
+
+    forgetAccountCaches({ userId: 'a', storage: fakeStorage(), cacheStorage: { keys: async () => [], delete: async () => false }, indexedDb });
+
+    expect(deleted).toEqual([TUS_CHECKPOINT_DB_NAME]);
+  });
+
+  test('fin d’A sans IndexedDB, ou IndexedDB qui refuse ⇒ la déconnexion aboutit quand même', () => {
+    const cacheStorage = { keys: async () => [], delete: async () => false };
+    const refusing = {
+      deleteDatabase: (): never => {
+        throw new Error('SecurityError');
+      },
+    };
+
+    expect(() => forgetAccountCaches({ userId: 'a', storage: fakeStorage(), cacheStorage, indexedDb: null })).not.toThrow();
+    expect(() => forgetAccountCaches({ userId: 'a', storage: fakeStorage(), cacheStorage, indexedDb: refusing })).not.toThrow();
   });
 
   test('session révoquée (401) ⇒ la session finit et le cache d’A part avec elle', () => {

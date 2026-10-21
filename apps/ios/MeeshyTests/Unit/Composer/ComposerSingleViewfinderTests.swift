@@ -168,7 +168,7 @@ final class ComposerPhotoLookTests: XCTestCase {
 
     func test_leViseur_neRemetQuUneFois() throws {
         let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("guard !delivered else { return }"), "deux validations rapprochées posaient deux pièces")
+        XCTAssertTrue(viseur.contains("guard life.settle() else { return }"), "deux validations rapprochées posaient deux pièces")
     }
 
     // MARK: - Les couleurs de la prise (#9327)

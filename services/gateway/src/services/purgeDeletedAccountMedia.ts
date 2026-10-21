@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../utils/logger-enhanced';
-import { reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
+import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './posts/reclaimPostMediaBytes';
 
 const log = enhancedLogger.child({ module: 'purgeDeletedAccountMedia' });
 
@@ -133,7 +133,7 @@ async function purgePostMedia(
   for (;;) {
     const rows = await prisma.postMedia.findMany({
       where: { uploaderId: userId },
-      select: { id: true, fileUrl: true, thumbnailUrl: true },
+      select: { id: true, ...POST_MEDIA_FILE_COLUMNS },
       take: batchSize,
     });
     if (rows.length === 0) break;

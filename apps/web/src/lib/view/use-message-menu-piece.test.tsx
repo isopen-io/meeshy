@@ -14,7 +14,11 @@ import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu } from '@/components/message-menu';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
+import type { ActionConversation } from '@meeshy/shared/utils/message-action-policy';
+
+import type { MenuViewer } from './message-action-scope';
 import { useMessageMenu } from './use-message-menu';
 
 /**
@@ -78,7 +82,10 @@ afterEach(() => {
   container.remove();
 });
 
-function mount(lot: Message = LOT): { api: () => MenuApi; requests: HttpRequest[]; replies: [string, string][]; queryClient: QueryClient } {
+function mount(
+  lot: Message = LOT,
+  options: { readonly viewer?: Partial<MenuViewer>; readonly conversation?: Partial<ActionConversation> } = {},
+): { api: () => MenuApi; requests: HttpRequest[]; replies: [string, string][]; queryClient: QueryClient } {
   const requests: HttpRequest[] = [];
   const replies: [string, string][] = [];
   const queryClient = new QueryClient();
@@ -97,8 +104,8 @@ function mount(lot: Message = LOT): { api: () => MenuApi; requests: HttpRequest[
       messages: [lot],
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer(options.viewer),
+      conversation: menuConversation(options.conversation),
       reply: { setReplyTarget: () => {}, setReplyToMedia: (messageId, attachmentId) => replies.push([messageId, attachmentId]) },
       announce: () => {},
       queryClient,
@@ -291,5 +298,49 @@ describe('un message protégé n’ouvre jamais l’aperçu par pièce (fail-clo
     const { api } = mount({ ...LOT, attachments: LOT.attachments!.map((a) => (a.id === 'a-1' ? { ...a, isViewOnce: true } : a)) });
     rightClick(container.querySelector('[data-tile="a-3"]')!);
     expectNoPieceExposure(api);
+  });
+});
+
+/**
+ * #11210, revue — LE MENU D'UNE PIÈCE, LA BARRE DE SÉLECTION ET LE RAIL LISENT
+ * LA MÊME LOI que le menu du message entier (`messageActionsFor`) : ce que
+ * l'un retire, les autres ne le rendent pas par une porte voisine.
+ */
+describe('les portes voisines lisent les verdicts de la loi partagée (#11210)', () => {
+  const pieceIds = (api: () => MenuApi): readonly string[] => api().menuData?.piece?.items.map((i) => i.id) ?? [];
+  const THEIRS_LOT: Message = { ...LOT, senderId: 'u-autre', attachments: LOT.attachments!.map((a) => ({ ...a, uploadedBy: 'u-autre' })) };
+
+  test('en bout en bout, ni le message ni une de ses pièces ne se transfère — ni par le menu, ni par la barre de sélection', () => {
+    const { api } = mount(LOT, { conversation: { encryptionMode: 'e2ee' } });
+    rightClick(container.querySelector('[data-tile="a-3"]')!);
+    expect(pieceIds(api)).not.toContain('pieceForward');
+    act(() => api().onPieceAction('m-lot', 'a-3', 'pieceForward'));
+    expect(sendSheetStore.getState().request).toBeNull();
+    act(() => api().onCloseMenu());
+    act(() => api().onMenuAction('m-lot', 'select'));
+    expect(api().selectionOffers.forward).toBe(false);
+  });
+
+  test('un simple membre d’un canal d’annonces ne répond pas à une pièce plus qu’au message', () => {
+    const { api, replies } = mount(THEIRS_LOT, { conversation: { type: 'group', isAnnouncementChannel: true } });
+    rightClick(container.querySelector('[data-tile="a-3"]')!);
+    expect(pieceIds(api)).not.toContain('pieceReply');
+    act(() => api().onPieceAction('m-lot', 'a-3', 'pieceReply'));
+    expect(replies).toEqual([]);
+  });
+
+  test('le modérateur de la conversation ne se voit pas offrir la suppression d’une pièce qu’il n’a pas déposée', () => {
+    const { api } = mount(THEIRS_LOT, { viewer: { conversationRole: 'moderator' } });
+    rightClick(container.querySelector('[data-tile="a-3"]')!);
+    expect(pieceIds(api)).not.toContain('pieceDelete');
+  });
+
+  test('un invité sans droit d’envoi ne voit pas le rail : ni sur le message, ni sur une pièce', () => {
+    const { api } = mount(THEIRS_LOT, { viewer: { hasAccount: false, isAnonymous: true, platformRole: null, canSendMessages: false } });
+    rightClick(container.querySelector('[data-text]')!);
+    expect(api().menuData?.canReact).toBe(false);
+    act(() => api().onCloseMenu());
+    rightClick(container.querySelector('[data-tile="a-3"]')!);
+    expect(api().menuData?.piece?.canReact).toBe(false);
   });
 });

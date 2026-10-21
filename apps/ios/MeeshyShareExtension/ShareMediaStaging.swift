@@ -1,4 +1,5 @@
 import Foundation
+import os
 import UniformTypeIdentifiers
 
 /// Un fichier déjà copié dans le conteneur App Group, décrit par la fiche.
@@ -20,7 +21,7 @@ nonisolated struct ShareStagedMedia: Codable, Equatable, Sendable {
     }
 }
 
-nonisolated enum ShareMediaStagingError: Error, Equatable {
+nonisolated enum ShareMediaStagingError: Error, Equatable, Sendable {
     case appGroupUnavailable
     case notDownloadedFromICloud
     case insufficientFreeSpace(needed: Int, free: Int)
@@ -32,6 +33,37 @@ nonisolated enum ShareMediaStagingError: Error, Equatable {
     case refusedSource
     /// La copie sortirait du dossier du partage.
     case destinationOutsideShare
+}
+
+/// Le budget d'octets CUMULÉ des copies d'un partage (D10 : 500 Mo, #11429).
+///
+/// Les copies partent en parallèle, AVANT l'écran : un contrôle fichier par
+/// fichier laissait une app hôte remplir le disque jusqu'à la marge de
+/// 128 Mio. Chaque copie réserve ses octets ici, de façon atomique ; ce qui
+/// dépasse n'est pas copié, et l'écran le dit.
+nonisolated final class ShareByteBudget: Sendable {
+    let limit: Int
+    private let reserved = OSAllocatedUnfairLock(initialState: 0)
+
+    init(limit: Int) {
+        self.limit = limit
+    }
+
+    var reservedBytes: Int { reserved.withLock { $0 } }
+
+    /// Réserve `bytes` si le cumul reste sous le plafond ; rien sinon.
+    func reserve(_ bytes: Int) -> Bool {
+        let limit = limit
+        return reserved.withLock { total in
+            guard bytes >= 0, bytes <= limit - total else { return false }
+            total += bytes
+            return true
+        }
+    }
+
+    func release(_ bytes: Int) {
+        reserved.withLock { total in total = max(0, total - max(0, bytes)) }
+    }
 }
 
 /// Copie des fichiers reçus vers le conteneur App Group.
@@ -136,9 +168,16 @@ nonisolated enum ShareMediaStaging {
 
     /// Copie `source` vers `destination` par tranches, et renvoie le nombre
     /// d'octets écrits. Une destination existante est REMPLACÉE — un résidu
-    /// d'une tentative précédente ne doit jamais survivre.
+    /// d'une tentative précédente ne doit jamais survivre. `admit` reçoit le
+    /// total qu'atteindrait la tranche suivante AVANT qu'elle soit écrite :
+    /// s'il lève, la copie s'arrête là.
     @discardableResult
-    static func streamCopy(from source: URL, to destination: URL, bufferSize: Int) throws -> Int {
+    static func streamCopy(
+        from source: URL,
+        to destination: URL,
+        bufferSize: Int,
+        admit: (Int) throws -> Void = { _ in }
+    ) throws -> Int {
         if FileManager.default.fileExists(atPath: destination.path) {
             try FileManager.default.removeItem(at: destination)
         }
@@ -157,6 +196,7 @@ nonisolated enum ShareMediaStaging {
                 try reader.read(upToCount: bufferSize)
             }
             guard let chunk, !chunk.isEmpty else { break }
+            try admit(written + chunk.count)
             try writer.write(contentsOf: chunk)
             written += chunk.count
         }
@@ -167,14 +207,18 @@ nonisolated enum ShareMediaStaging {
     ///
     /// L'espace libre est contrôlé AVANT le premier octet : un disque plein en
     /// cours de copie produirait un fichier tronqué, donc une pièce jointe
-    /// corrompue livrée sans un mot.
+    /// corrompue livrée sans un mot. Les octets se réservent dans `budget`,
+    /// commun à toutes les copies du partage : la taille annoncée d'abord,
+    /// puis ce que la copie lit au-delà (une taille illisible vaut 0). Une
+    /// copie qui échoue ne laisse RIEN : ni fichier partiel, ni réservation.
     static func stage(
         source: URL,
         into mediaRoot: URL,
         shareId: String,
         index: Int,
         mime: String,
-        freeBytes: Int
+        freeBytes: Int,
+        budget: ShareByteBudget = ShareByteBudget(limit: .max)
     ) throws -> ShareStagedMedia {
         let values = try? source.resourceValues(
             forKeys: [.fileSizeKey, .ubiquitousItemDownloadingStatusKey])
@@ -204,14 +248,25 @@ nonisolated enum ShareMediaStaging {
         guard isInsideShare(destination, mediaRoot: mediaRoot, shareId: shareId, resolvingSymlinks: true) else {
             throw ShareMediaStagingError.destinationOutsideShare
         }
+        guard budget.reserve(bytes) else {
+            throw ShareMediaStagingError.byteBudgetExceeded(total: budget.reservedBytes + bytes, limit: budget.limit)
+        }
+        var reserved = bytes
         let written: Int
         do {
-            written = try streamCopy(from: source, to: destination, bufferSize: copyBufferSize)
-        } catch let error as ShareMediaStagingError {
-            throw error
+            written = try streamCopy(from: source, to: destination, bufferSize: copyBufferSize) { total in
+                guard total > reserved else { return }
+                guard budget.reserve(total - reserved) else {
+                    throw ShareMediaStagingError.byteBudgetExceeded(total: budget.reservedBytes - reserved + total, limit: budget.limit)
+                }
+                reserved = total
+            }
         } catch {
-            throw ShareMediaStagingError.copyFailed(error.localizedDescription)
+            try? FileManager.default.removeItem(at: destination)
+            budget.release(reserved)
+            throw (error as? ShareMediaStagingError) ?? .copyFailed(error.localizedDescription)
         }
+        budget.release(reserved - written)
 
         return ShareStagedMedia(relPath: relPath, ext: ext, mime: mime, bytes: written)
     }

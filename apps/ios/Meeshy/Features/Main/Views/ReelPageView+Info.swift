@@ -96,14 +96,14 @@ extension ReelPageView {
             HStack(spacing: MeeshySpacing.smPlus) {
                 // Avatar tap → author's story (if active) else profile.
                 Button(action: onTapAvatar) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: reel.author,
                         context: .postAuthor,
                         accentColor: accentColor,
                         avatarURL: reel.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: reel.authorId),
                         ring: reel.authorRing
-                    )
+                    ) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(String(localized: "reels.author.avatar", defaultValue: "Story de l'auteur", bundle: .main))

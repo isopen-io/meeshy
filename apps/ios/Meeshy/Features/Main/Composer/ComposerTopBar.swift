@@ -82,7 +82,7 @@ struct ComposerTopBar: View {
                     // une surface qui suit le thème, faux ici : le plateau du
                     // composer est sombre EN PERMANENCE. On y aurait peint du
                     // sombre sur du sombre dès que l'appareil quitte la nuit.
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
                     .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)

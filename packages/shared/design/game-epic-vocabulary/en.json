@@ -1,0 +1,334 @@
+{
+  "$doc": "THE EPIC’S LEXICON, ENGLISH — translated term for term from fr.json, the source (#11174; design docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md § 3.1 and § 4; glossary docs/product/epopee/glossaire/en.md). Format: docs/product/epopee/glossaire/README.md. Read by the web guard (apps/web/src/lib/game/epic-vocabulary.test.ts) and, tomorrow, by the iOS guard (#11179). `banned`: the patterns NO value of the game catalogues carries, {…} parameters set aside; `names`: the exact value of each name key.",
+  "language": "en",
+  "banned": [
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])increas\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "grow, feed, awaken, shine brighter"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])counters?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "the concept’s name: “your glory”, “your Flame”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])values?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“your light”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])convertibles?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“your light”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])pockets?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“your light”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])potential(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nothing: say what you have"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])debts?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“a shadow veils N sparks of your light” (the Shadow)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])records?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“received since the beginning”, “your highest light”, “your longest Flame”, “minted since the beginning”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])more(?![\\p{L}\\p{N}])(?:\\s+\\p{L}+)?\\s+before(?![\\p{L}\\p{N}])|(?<![\\p{L}\\p{N}])more\\s+for\\s+(?:the\\s+next|level)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "in small type, “N to X”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])still\\s+(?:needed|missing)\\s+for(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "in small type, “N to X”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])cost\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "a sentence: “it binds N sparks of your light”; the arithmetic goes in the rules"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:left\\s+after|will\\s+remain|remaining)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nothing: no subtraction on a card"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:rates?|rate\\s+tables?|rate\\s+cards?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“each move makes its own sparks fly”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])base\\s+price(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nothing on a card: the arithmetic lives in the rules",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])percentages?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nothing on a card: the arithmetic lives in the rules",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])factors?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nothing on a card: the arithmetic lives in the rules",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])leagues?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“joust”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])ranks?(?:ing|ed)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“place” (the joust speaks of places; the rank is the hero’s name)",
+      "keys": [
+        "game.league.",
+        "game.state.league.",
+        "game.guide.moment.league",
+        "game.trophy.league",
+        "game.photo.title.league",
+        "game.archive.week."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:pseudonyms?|nicknames?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“joust name”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])duos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“alliance”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])seasons?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“journey”; its stars are “strides”, its steps are “stops”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])stars?(?![\\p{L}\\p{N}])(?!\\s+fragment)",
+      "flags": "iu",
+      "instead": "“strides” (the journey); “ages” (rebirth)",
+      "keys": [
+        "game.season.",
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])prestiges?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“rebirth”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:freez\\p{L}*|frozen)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“Vigil”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])streaks?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“Flame”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])missions?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“the dream”; a mission is an “act”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:daily\\s+chests?|chests?\\s+of\\s+the\\s+day)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“the Offering”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])achievements?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“great deeds”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])badges?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“medals”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])notebooks?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“the Chronicle”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])constellations?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“the ancestors’ sky” (Constellation only names the ninth phase of light)",
+      "except": [
+        "game.tier.constellation"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])celebrations?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“sign from the ancestors”"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:steps?|milestones?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“trial” (every ten levels), “stop” (the journey); “step” only names onboarding",
+      "keys": [
+        "game."
+      ],
+      "except": [
+        "game.guide.step_of",
+        "game.rules.section_steps",
+        "game.photo.kicker.start"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])treasur(?:y|ies)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "“the Legacy” (the Treasure, capitalized, only names the fifth container)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])treasures?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "“the Legacy” (the Treasure, capitalized, only names the fifth container)"
+    },
+    {
+      "pattern": "\\+\\s*\\S+\\s+Glory(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "“+250 glory”: lowercase in a sentence"
+    }
+  ],
+  "names": {
+    "game.tier.etincelle": "Spark",
+    "game.tier.lueur": "Glimmer",
+    "game.tier.lumiere": "Gleam",
+    "game.tier.eclat": "Radiance",
+    "game.tier.rayon": "Ray",
+    "game.tier.aurore": "Dawn",
+    "game.tier.comete": "Comet",
+    "game.tier.etoile": "Star",
+    "game.tier.constellation": "Constellation",
+    "game.tier.galaxie": "Galaxy",
+    "game.tier.nebuleuse": "Nebula",
+    "game.tier.pulsar": "Pulsar",
+    "game.tier.quasar": "Quasar",
+    "game.tier.supernova": "Supernova",
+    "game.tier.magnetar": "Magnetar",
+    "game.tier.amas": "Cluster",
+    "game.tier.superamas": "Supercluster",
+    "game.tier.cosmos": "Cosmos",
+    "game.tier.infini": "Infinity",
+    "game.tier.singularite": "Singularity",
+    "game.rank.murmure": "Whisper",
+    "game.rank.echo": "Echo",
+    "game.rank.voix": "Voice",
+    "game.rank.conteur": "Storyteller",
+    "game.rank.passeur": "Bridge-builder",
+    "game.rank.polyglotte": "Polyglot",
+    "game.rank.ambassadeur": "Ambassador",
+    "game.rank.orateur": "Orator",
+    "game.rank.oracle": "Oracle",
+    "game.rank.legende": "Legend",
+    "game.rank.mythe": "Myth",
+    "game.treasury.bourse": "Purse",
+    "game.treasury.escarcelle": "Pouch",
+    "game.treasury.coffret": "Casket",
+    "game.treasury.coffre": "Chest",
+    "game.treasury.tresor": "Treasure",
+    "game.treasury.reserve": "Reserve",
+    "game.flame.form.braise": "Ember",
+    "game.flame.form.flamme": "Flame",
+    "game.flame.form.brasier": "Blaze",
+    "game.flame.form.astre": "Luminary",
+    "game.flame.form.soleil": "Sun",
+    "game.league.name.quartz": "Quartz",
+    "game.league.name.ambre": "Amber",
+    "game.league.name.jade": "Jade",
+    "game.league.name.saphir": "Sapphire",
+    "game.league.name.rubis": "Ruby",
+    "game.league.name.amethyste": "Amethyst",
+    "game.league.name.diamant": "Diamond",
+    "game.league.name.prisme": "Prism",
+    "game.edition.silver": "silver",
+    "game.edition.gold": "gold",
+    "game.edition.prism": "prism",
+    "game.difficulty.easy": "Act I",
+    "game.difficulty.medium": "Act II",
+    "game.difficulty.hard": "Act III",
+    "game.difficulty.gold": "Golden Act",
+    "game.material.copper": "Copper",
+    "game.material.bronze": "Bronze",
+    "game.material.silver": "Silver",
+    "game.material.gold": "Gold",
+    "game.material.platinum": "Platinum",
+    "game.material.obsidian": "Obsidian",
+    "game.material.prism": "Prism",
+    "game.concept.level.name": "The Light",
+    "game.concept.points.name": "Sparks",
+    "game.concept.meesh.name": "The Legacy",
+    "game.concept.glory.name": "Rank",
+    "game.concept.flame.name": "The Flame",
+    "game.concept.missions.name": "The Dream",
+    "game.concept.league.name": "The Joust",
+    "game.concept.season.name": "The Journey",
+    "game.concept.prestige.name": "Rebirth",
+    "game.concept.elans.name": "Momentum",
+    "game.concept.badges.name": "Medals",
+    "game.concept.defis.name": "Challenges",
+    "game.concept.succes.name": "Great Deeds",
+    "game.concept.showcase.name": "Trophies",
+    "game.concept.atlas.name": "The Atlas",
+    "game.rules.concept.level.name": "The Light",
+    "game.rules.concept.points.name": "Sparks",
+    "game.rules.concept.meesh.name": "The Meesh",
+    "game.rules.concept.glory.name": "Rank",
+    "game.rules.concept.flame.name": "The Flame",
+    "game.rules.concept.missions.name": "The Dream",
+    "game.rules.concept.league.name": "The Joust",
+    "game.rules.concept.season.name": "The Journey",
+    "game.rules.concept.prestige.name": "Rebirth",
+    "game.rules.concept.elans.name": "Momentum",
+    "game.rules.concept.badges.name": "Medals",
+    "game.rules.concept.defis.name": "Challenges",
+    "game.rules.concept.succes.name": "Great Deeds",
+    "game.rules.concept.showcase.name": "Trophies",
+    "game.rules.concept.atlas.name": "The Atlas",
+    "game.rules.concept.chest.name": "The Offering",
+    "game.rules.concept.treasury.name": "The Legacy",
+    "game.rules.concept.steps.name": "The Trials",
+    "game.rules.concept.duo.name": "The Alliance",
+    "game.chest.title": "The Offering",
+    "game.notebook.page_title": "The Chronicle",
+    "game.door.notebook": "The Chronicle",
+    "game.constellation.title": "The ancestors’ sky",
+    "game.league.title": "Joust",
+    "game.duo.title": "Alliance",
+    "game.season.title": "Journey",
+    "game.prestige.title": "Rebirth",
+    "game.gauge.level": "Light",
+    "game.gauge.rank": "Rank",
+    "game.gauge.treasury": "Legacy",
+    "game.gauge.flame": "Flame",
+    "game.fact.strides": "Strides",
+    "game.fact.rebirths": "Rebirths"
+  }
+}

@@ -26,9 +26,9 @@ describe('les huit règles', () => {
   });
 
   test('la première règle dit que les limites comptent les gestes, jamais les points (porteur, 2026-10-08)', () => {
-    expect(gameRules('fr')[0]?.body).toContain('Les limites comptent tes gestes, jamais tes étincelles : bonus, Flamme et événements augmentent ce que chaque geste rapporte.');
-    expect(text).toContain('Les limites comptent tes gestes, jamais tes étincelles');
-    expect(gameRules('fr')[0]?.body).toContain('Une publication rapporte selon qui peut la voir : public, communauté ou amis.');
+    expect(gameRules('fr')[0]?.body).toContain('Les limites portent sur tes gestes, jamais sur tes étincelles : élans, Flamme et événements en font jaillir plus à chaque geste.');
+    expect(text).toContain('Les limites portent sur tes gestes, jamais sur tes étincelles');
+    expect(gameRules('fr')[0]?.body).toContain('Une publication en fait jaillir selon qui peut la voir : public, communauté ou amis.');
   });
 
   test('c’est une liste numérotée : le lecteur d’écran annonce « 3 sur 8 »', () => {
@@ -42,7 +42,7 @@ describe('les sept étapes de l’intégration', () => {
     for (let i = 1; i <= 7; i += 1) expect(text).toContain(`Étape ${i} sur 7`);
     expect(text).toContain('Salut, c’est Mee !');
     expect(text).toContain('Ton rang ne baisse jamais.');
-    expect(text).toContain('Un gel couvre un jour manqué.');
+    expect(text).toContain('Une Veilleuse la garde allumée un jour d’absence.');
   });
 
   test('le carnet n’a pas de bouton qui agit : il explique', () => {

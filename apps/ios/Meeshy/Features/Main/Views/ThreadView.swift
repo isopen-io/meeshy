@@ -84,7 +84,7 @@ struct ThreadView: View {
     private var parentMessageView: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: parentMessage.senderName ?? "?",
                     context: .messageBubble,
                     accentColor: accentColor,
@@ -93,7 +93,7 @@ struct ThreadView: View {
                     presenceState: parentMessage.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: parentMessage),
                     ring: parentMessage.senderRing,
                     onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.viewingKey)
-                )
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -154,7 +154,7 @@ struct ThreadView: View {
 
     private func replyRow(_ message: MeeshyMessage) -> some View {
         HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: message.senderName ?? "?",
                 context: .postComment,
                 accentColor: message.senderColor ?? accentColor,
@@ -163,7 +163,7 @@ struct ThreadView: View {
                 presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
                 ring: message.senderRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: message.viewingKey)
-            )
+            ) }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack {

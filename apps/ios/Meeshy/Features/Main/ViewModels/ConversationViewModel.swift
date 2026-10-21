@@ -19,57 +19,16 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Cache Invalidation
 
-    /// Invalidates all derived caches that depend on `messages`.
-    /// Called both from the `messages.didSet` observer (legacy pipeline) and
-    /// from the MessageStore observation subscription (GRDB pipeline).
+    /// Appelée depuis `messages.didSet` et depuis l'observation du store : tout changement de `messages`
+    /// traverse ce seul endroit, qui réarme aussi l'unique réveil d'expiration des éphémères (#7452).
     private func invalidateCaches(previousMessages: [Message]? = nil) {
-        let structureChanged: Bool
-        if let oldValue = previousMessages {
-            structureChanged = messages.count != oldValue.count
-                || messages.first?.id != oldValue.first?.id
-                || messages.last?.id != oldValue.last?.id
-        } else {
-            structureChanged = true
-        }
-        // La confirmation d'un envoi remplace les pièces LOCALES par celles du
-        // serveur sans toucher à la structure : les mémoires de médias, keyées
-        // par identifiant de pièce, se vident aussi sur ce changement (#10690).
-        let mediaChanged = structureChanged
-            || !Self.sameAttachmentIdentities(messages, previousMessages ?? [])
-
-        _messageIdIndex = nil
+        derived.invalidate(previous: previousMessages, current: messages)
         forgetPrismResolutions(whoseOriginChangedFrom: previousMessages)
-        _cachedLastReceivedIndex = .uncomputed
-        _cachedLastSentIndex = .uncomputed
-
-        if structureChanged {
-            _topActiveMembers = nil
-            _mentionDisplayNames = nil
-            _mentionCandidates = nil
-        }
-        if mediaChanged {
-            _mediaSenderInfoMap = nil
-            _allVisualAttachments = nil
-            _mediaCaptionMap = nil
-            _allAudioItems = nil
-        }
-
-        // #7452 — l'unique réveil du fil se réarme ici, au seul endroit que
-        // TOUT changement de `messages` traverse (les deux pipelines, legacy et
-        // GRDB). Le retrait lui-même est toujours différé : voir
-        // `EphemeralExpiryCoordinator`.
         refreshEphemeralExpirySchedule()
     }
 
-    /// Les mêmes messages portent-ils les mêmes pièces, aux mêmes adresses ?
-    /// Comparé message par message, sans rien allouer.
-    nonisolated static func sameAttachmentIdentities(_ lhs: [Message], _ rhs: [Message]) -> Bool {
-        guard lhs.count == rhs.count else { return false }
-        return zip(lhs, rhs).allSatisfy { new, old in
-            new.attachments.count == old.attachments.count
-                && zip(new.attachments, old.attachments).allSatisfy { $0.id == $1.id && $0.fileUrl == $1.fileUrl }
-        }
-    }
+    /// Mémos des projections dérivées de `messages` — leur invalidation est une propriété du CHAMP.
+    let derived = ConversationDerivedCache()
 
     /// L'ordonnanceur des disparitions d'éphémères — un réveil pour tout le
     /// fil, jamais un minuteur par bulle (#7452).
@@ -78,10 +37,6 @@ class ConversationViewModel: ObservableObject {
         coordinator.onExpired = { [weak self] ids in self?.expireEphemeralsIfNeeded(ids) }
         return coordinator
     }()
-
-    var _cachedLastReceivedIndex: IndexCache = .uncomputed
-
-    var _cachedLastSentIndex: IndexCache = .uncomputed
 
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
@@ -94,23 +49,14 @@ class ConversationViewModel: ObservableObject {
 
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
-    @Published var isSending = false
-    /// Number of sends currently awaiting their network round-trip. Backs
-    /// `isSending` (true ⇔ ≥1 in flight) WITHOUT gating new sends — DISTINCT
-    /// messages send concurrently (2026-06-09), identical ones too (#7985).
-    var inFlightSendCount = 0
+    /// Sends awaiting their round-trip. Deliberately NOT `@Published`: no view
+    /// renders it, and publishing it redrew the whole conversation twice per send.
+    var sendActivity: ConversationSendActivity = .idle
+    var isSending: Bool { sendActivity.isSending }
     @Published var error: String?
 
-    /// Maps a raw error to a string safe to show verbatim in the conversation
-    /// error banner. `MeeshyError.server` carries a raw debug/decoding
-    /// message meant for logs, not end users — it is swapped for a generic
-    /// localized message. Every other error keeps its `localizedDescription`
-    /// (already user-facing: `AuthError`, `NetworkError`, `MessageError`, ...).
     func userFacingMessage(for error: Error) -> String {
-        if let meeshyError = error as? MeeshyError, case .server = meeshyError {
-            return String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
-        }
-        return error.localizedDescription
+        ConversationErrorText.message(for: error)
     }
 
     /// Real-time translation/transcription/audio data keyed by messageId
@@ -126,12 +72,12 @@ class ConversationViewModel: ObservableObject {
     /// `translationResolutionCache`, jamais dans ce dictionnaire.
     @Published var messageTranslations: [String: [MessageTranslation]] = [:] {
         didSet {
-            _mediaCaptionMap = nil
+            derived.invalidateTranslationDerived()
             translationResolutionCache.removeAll()
         }
     }
     @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
     /// Per-attachment transcription keyed by `attachmentId`. The per-message
     /// `messageTranscriptions` slot only holds ONE transcription per message —
@@ -140,10 +86,10 @@ class ConversationViewModel: ObservableObject {
     /// transcription so the audio carousel can show per-page karaoke.
     /// The single-audio path still reads `messageTranscriptions[msg.id]`.
     @Published var messageTranscriptionsByAttachment: [String: MessageTranscription] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
     /// Per-attachment translated audios keyed by `attachmentId`. The per-message
     /// `messageTranslatedAudios` slot only holds ONE attachment's audios per
@@ -153,7 +99,7 @@ class ConversationViewModel: ObservableObject {
     /// buttons (Prisme Linguistique). The single-audio path still falls back to
     /// `messageTranslatedAudios[msg.id]`. Mirrors `messageTranscriptionsByAttachment`.
     @Published var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:] {
-        didSet { _allAudioItems = nil }
+        didSet { derived.invalidateAudioDerived() }
     }
 
     /// On-demand translation requests currently in flight, keyed by messageId
@@ -164,13 +110,7 @@ class ConversationViewModel: ObservableObject {
     @Published var translatingTextLanguages: [String: Set<String>] = [:]
     @Published var translatingAudioLanguages: [String: Set<String>] = [:]
 
-    struct TranslationRequestFailure: Equatable {
-        enum Kind { case text, audio }
-        let messageId: String
-        let language: String
-        let kind: Kind
-        let message: String
-    }
+    typealias TranslationRequestFailure = ConversationTranslationRequestFailure
 
     /// Mirrors the `translationFailed`/`audioTranslationFailed` pattern
     /// already consumed elsewhere for socket-driven failures — this is the
@@ -202,10 +142,7 @@ class ConversationViewModel: ObservableObject {
     /// rendent `MessageStore` et non `messages`.
     @Published var burningEphemeralIds: [String: Bool] = [:]
 
-    struct BubbleLanguageSelection: Equatable {
-        var activeDisplayLangCode: String?
-        var secondaryLangCode: String?
-    }
+    typealias BubbleLanguageSelection = ConversationBubbleLanguageSelection
 
     func setBubbleActiveDisplayLanguage(_ code: String?, for messageId: String) {
         var selection = bubbleLanguageSelections[messageId] ?? BubbleLanguageSelection()
@@ -419,61 +356,13 @@ class ConversationViewModel: ObservableObject {
     }
     var pendingServerIdSet: Set<String> = []
 
-    // MARK: - O(1) Message Index
-
-    var _messageIdIndex: [String: Int]?
-
     // MARK: - Conversation-Wide Media
 
-    struct MediaSenderInfo {
-        let senderName: String
-        let senderAvatarURL: String?
-        let senderColor: String
-        let sentAt: Date
-        /// #7362 — la galerie plein écran n'a aucune autre source pour savoir
-        /// qui a envoyé une pièce donnée ; c'est ce qui gouverne
-        /// `GalleryImageOpenReport` (jamais reporter sa propre image). Défaut
-        /// `false` : les galeries POST / COMMENTAIRE (`SocialMediaGalleryPresentation`,
-        /// `CommentMediaGallery`) construisent ce type sans connaître la
-        /// notion — elles ne reportent de toute façon aucune consommation
-        /// (`ConversationMediaGalleryView.reportsAttachmentConsumption`).
-        ///
-        /// `var`, pas `let` : un stored `let` porteur d'un initialiseur
-        /// littéral n'entre PAS dans l'init memberwise synthétisé (le
-        /// compilateur le traite comme fixé à la déclaration, pas comme un
-        /// défaut substituable) — seul un `var` avec défaut y ajoute un
-        /// paramètre substituable (SE-0242).
-        var isMe: Bool = false
-        /// #10956 — le COMPTE de l'auteur (`viewingKey`), la clé de sa présence servie ;
-        /// `nil` pour les galeries qui ne le savent pas (post, commentaire).
-        var senderUserId: String? = nil
-        /// #10946 — son contour équipé, la référence servie avec le message.
-        var senderRing: ServedProfileDecorItem? = nil
-    }
-
-    var _mediaSenderInfoMap: [String: MediaSenderInfo]?
-
-    /// All visual attachments (images + videos) across every loaded message, in chronological order.
-    var _allVisualAttachments: [MessageAttachment]?
+    typealias MediaSenderInfo = ConversationMediaSenderInfo
 
     // MARK: - Audio Items for Fullscreen Gallery
 
-    struct AudioItem: Identifiable {
-        let id: String // attachment.id
-        let attachment: MessageAttachment
-        let message: Message
-        let transcription: MessageTranscription?
-        let translatedAudios: [MessageTranslatedAudio]
-    }
-
-    var _allAudioItems: [AudioItem]? { didSet { _audioItemsByMessageId = nil } }
-    /// Index par message de `_allAudioItems` — voir `audioItemsByMessageId`
-    /// (ConversationViewModel+Projections.swift). Invalidé avec son parent.
-    var _audioItemsByMessageId: [String: [AudioItem]]?
-
-    /// Maps attachment.id -> caption text for the fullscreen gallery.
-    /// Priority: 1) attachment.caption  2) message text (only if single visual attachment)
-    var _mediaCaptionMap: [String: String]?
+    typealias AudioItem = ConversationAudioItem
 
     // MARK: - Private
 
@@ -512,7 +401,7 @@ class ConversationViewModel: ObservableObject {
     /// Exposed so ConversationView and MessageListViewController can observe typing
     /// state independently — avoids triggering the full VM objectWillChange on every keystroke.
     let stateStore: ConversationStateStore
-    let commandHandler: ConversationCommandHandler
+    let commands: any ConversationCommandProviding
     let mediaHandler: ConversationMediaHandler
     let searchHandler: ConversationSearchHandler
 
@@ -538,6 +427,8 @@ class ConversationViewModel: ObservableObject {
     let networkMonitor: NetworkMonitorProviding
     let offlineQueue: OfflineMessageQueueing
     let sendCoordinator: any ConversationSendCoordinatorProviding
+    let translationSource: any ConversationTranslationSourcing
+    let historyLoader: any ConversationHistoryLoading
     /// #8303 — les flammes-œil vues pendant la visite, et ce que la sortie en fait.
     var afterReadVisit = AfterReadVisit()
     let afterReadConsumer: AfterReadConsumptionProviding
@@ -569,35 +460,6 @@ class ConversationViewModel: ObservableObject {
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
     var currentUserIdForView: String { currentUserId }
     var currentUsername: String? { authManager.currentUser?.username }
-
-    // Token bucket rate limiter for reaction spam prevention.
-    // Allows burst of 10, refills at 3 tokens/second.
-    private var reactionTokens: Double = 10
-    private var reactionLastRefill: Date = Date()
-    private static let reactionMaxTokens: Double = 10
-    private static let reactionRefillRate: Double = 3
-
-    func consumeReactionToken() -> Bool {
-        let now = Date()
-        let elapsed = now.timeIntervalSince(reactionLastRefill)
-        reactionTokens = min(Self.reactionMaxTokens, reactionTokens + elapsed * Self.reactionRefillRate)
-        reactionLastRefill = now
-        guard reactionTokens >= 1 else { return false }
-        reactionTokens -= 1
-        return true
-    }
-
-    // MARK: - Mention Display Names (username → displayName) — cached
-
-    var _mentionDisplayNames: [String: String]?
-
-    // MARK: - Mention Autocomplete Logic — cached
-
-    var _mentionCandidates: [MentionCandidate]?
-
-    // MARK: - Top Active Members (cached)
-
-    var _topActiveMembers: [ConversationActiveMember]?
 
     // MARK: - Init
 
@@ -632,7 +494,10 @@ class ConversationViewModel: ObservableObject {
         afterReadConsumer: AfterReadConsumptionProviding = AfterReadConsumption.shared,
         protectionPreferences: ConversationProtectionPreferenceProviding = ConversationProtectionPreferenceStore.shared,
         receivedMediaAutoSaver: ReceivedMediaAutoSaving = ReceivedMediaAutoSaver.shared,
-        sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil
+        sendCoordinator: (any ConversationSendCoordinatorProviding)? = nil,
+        translationSource: (any ConversationTranslationSourcing)? = nil,
+        commands: (any ConversationCommandProviding)? = nil,
+        historyLoader: (any ConversationHistoryLoading)? = nil
     ) {
         self.receivedMediaAutoSaver = receivedMediaAutoSaver
         self.afterReadConsumer = afterReadConsumer
@@ -662,6 +527,10 @@ class ConversationViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
         self.offlineQueue = offlineQueue
         self.sendCoordinator = sendCoordinator ?? ConversationSendCoordinator(conversationId: conversationId, messageService: messageService, messageSocket: messageSocket, offlineQueue: offlineQueue, persistence: dependencies.persistence)
+        self.translationSource = translationSource ?? ConversationTranslationSource(persistence: dependencies.persistence)
+        self.historyLoader = historyLoader ?? ConversationHistoryLoader(
+            conversationId: conversationId, messageService: messageService, persistence: dependencies.persistence
+        )
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         self.startupDependencies = dependencies
@@ -669,11 +538,13 @@ class ConversationViewModel: ObservableObject {
 
         let stateStore = ConversationStateStore()
         self.stateStore = stateStore
-        self.commandHandler = ConversationCommandHandler(
+        self.commands = commands ?? ConversationCommandHandler(
             state: stateStore,
             conversationId: conversationId,
             messageService: messageService,
-            persistence: dependencies.persistence
+            persistence: dependencies.persistence,
+            offlineQueue: offlineQueue,
+            networkMonitor: networkMonitor
         )
         self.mediaHandler = ConversationMediaHandler(state: stateStore)
         self.searchHandler = ConversationSearchHandler(
@@ -687,13 +558,17 @@ class ConversationViewModel: ObservableObject {
             persistence: dependencies.persistence
         )
         self.messageStore = store
-        // Wire up the mention controller for this conversation.
-        // participants closure is evaluated lazily when a mention query fires,
-        // so mentionCandidates (which depend on messages) is always up-to-date.
-        // messageStore is initialized first: the participants closure
-        // transitively reads it through `mentionCandidates` -> `messages`,
-        // so forming it before messageStore is set is a use-before-init error.
-        self.mentionController = MentionComposerController(
+        wireMentionsAndSocket(mentionService: mentionService, mentionContacts: mentionContacts, persistence: dependencies.persistence)
+        restoreArmedProtection()
+    }
+
+    /// Le contrôleur de mentions lit `mentionCandidates` (donc `messages`) à la demande : il se câble APRÈS
+    /// `messageStore`. Le socket arme ses abonnements plus tard (`loadMessages`), jamais à l'init.
+    private func wireMentionsAndSocket(
+        mentionService: MentionServiceProviding, mentionContacts: MentionContactsProviding,
+        persistence: MessagePersistenceActor
+    ) {
+        mentionController = MentionComposerController(
             context: .conversation(id: conversationId),
             participants: { [weak self] in self?.mentionCandidates ?? [] },
             service: mentionService,
@@ -706,9 +581,8 @@ class ConversationViewModel: ObservableObject {
             messageSocket: messageSocket
         )
         handler.delegate = self
-        handler.persistence = dependencies.persistence
-        self.socketHandler = handler
-        restoreArmedProtection()
+        handler.persistence = persistence
+        socketHandler = handler
     }
 
     // MARK: - MessageStore Observation (Task 1.3)
@@ -720,7 +594,7 @@ class ConversationViewModel: ObservableObject {
     /// une extension Swift ne peut pas déclarer de propriété stockée.
     var storeRefreshGeneration: Int = 0
 
-    deinit {
+    nonisolated deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
         newerPagesChain?.cancel()
@@ -938,7 +812,7 @@ class ConversationViewModel: ObservableObject {
     /// handler — the legacy variant did the exact same call with an
     /// equally permissive error path.
     func markAsReceived() {
-        commandHandler.markAsReceived()
+        commands.markAsReceived()
         receivedMediaAutoSaver.consider(messages)
     }
 

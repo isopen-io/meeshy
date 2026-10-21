@@ -215,7 +215,7 @@ struct GameHeroView: View {
                 Text(GameCopy.rankLabel(glory))
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
-                Text(String(localized: "game.rank.glory", defaultValue: "Gloire \(GameCopy.formatCount(glory.glory))", bundle: .main))
+                Text(String(localized: "game.rank.glory", defaultValue: "\(GameCopy.formatCount(glory.glory)) de gloire", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }

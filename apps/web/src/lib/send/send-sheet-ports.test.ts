@@ -4,6 +4,8 @@ import type { ConversationsDeps } from '@/lib/api/conversations';
 import type { ApiResult, HttpRequest, HttpTransport } from '@/lib/api/http';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
+import { createImagePreparer, type ImagePort } from '@/lib/media/prepare-image-upload';
+
 import { createSendSheetPorts } from './send-sheet-ports';
 
 beforeAll(() => {
@@ -71,6 +73,49 @@ describe('fetchFile', () => {
     expect(await refused.fetchFile({ url: 'u', mime: 'image/png', name: 'x.png' })).toBeNull();
     const cut = createSendSheetPorts({ language: 'fr', fetchImpl: (async () => Promise.reject(new Error('coupé'))) as unknown as typeof fetch });
     expect(await cut.fetchFile({ url: 'u', mime: 'image/png', name: 'x.png' })).toBeNull();
+  });
+});
+
+describe('un média déjà servi par la passerelle ne se ré-encode pas (#11310, #11247)', () => {
+  const jpegFetch = (async () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { status: 200 })) as unknown as typeof fetch;
+  const spying = () => {
+    const jobs: unknown[] = [];
+    const port: ImagePort = (job) => (jobs.push(job), Promise.resolve(new Blob([new Uint8Array(1)], { type: 'image/webp' })));
+    return { jobs, prepare: createImagePreparer(port) };
+  };
+
+  test('transféré en pièce jointe : les octets servis repartent tels quels', async () => {
+    const { jobs, prepare } = spying();
+    const { deps, requests } = scripted(() => ({ ok: true, data: { attachments: [{ id: 'att-1' }] } }));
+    const ports = createSendSheetPorts({ language: 'fr', deps, fetchImpl: jpegFetch, prepare });
+    const served = await ports.fetchFile({ url: 'https://gate/a.jpg', mime: 'image/jpeg', name: 'a.jpg' });
+    if (served === null) throw new Error('média non relu');
+    expect(await ports.uploadFiles([served])).toEqual({ ok: true, data: { attachmentIds: ['att-1'] } });
+    expect(jobs).toEqual([]);
+    expect(requests).toHaveLength(1);
+  });
+
+  test('republié en story : le média servi n’est pas recompressé', async () => {
+    const { jobs, prepare } = spying();
+    const fetchImpl = (async (input: RequestInfo | URL) =>
+      String(input).startsWith('https://gate/') ? new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), { status: 200 }) : new Response(null, { status: 500 })) as unknown as typeof fetch;
+    const ports = createSendSheetPorts({
+      language: 'fr',
+      fetchImpl,
+      prepare,
+      media: { source: 'gateway', base: 'https://up.test', credential: () => null, fetchImpl },
+    });
+    const served = await ports.fetchFile({ url: 'https://gate/a.jpg', mime: 'image/jpeg', name: 'a.jpg' });
+    if (served === null) throw new Error('média non relu');
+    await ports.uploadMedia(served);
+    expect(jobs).toEqual([]);
+  });
+
+  test('un fichier choisi sur l’appareil, lui, est préparé', async () => {
+    const { jobs, prepare } = spying();
+    const { deps } = scripted(() => ({ ok: true, data: { attachments: [{ id: 'att-1' }] } }));
+    await createSendSheetPorts({ language: 'fr', deps, prepare }).uploadFiles([new File([new Uint8Array([0xff, 0xd8])], 'b.jpg', { type: 'image/jpeg' })]);
+    expect(jobs).toHaveLength(1);
   });
 });
 

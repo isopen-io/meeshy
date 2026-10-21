@@ -203,7 +203,7 @@ public struct DocumentFullSheet: View {
     @Environment(\.contentExitGate) private var exitGate
     @State private var saveState: SaveState = .idle
 
-    private enum SaveState { case idle, saving, saved, failed }
+    private nonisolated enum SaveState: Equatable, Sendable { case idle, saving, saved, failed }
 
     private var isDark: Bool { colorScheme == .dark }
 
@@ -274,6 +274,7 @@ public struct DocumentFullSheet: View {
                 }
             }
         }
+        .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })
     }
 
     /// #7362 — la fiche plein écran se PRÉSENTE : c'est l'ouverture, distincte
@@ -321,17 +322,11 @@ public struct DocumentFullSheet: View {
                         saveState = .saved
                     }
                     HapticFeedback.success()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             } catch {
                 await MainActor.run {
                     withAnimation { saveState = .failed }
                     HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             }
         }
@@ -344,7 +339,7 @@ public struct DocumentFullSheet: View {
                 .foregroundColor(Color(hex: docType.color))
 
             Text(attachment.originalName.isEmpty ? String(localized: "media.document.defaultName", defaultValue: "Document", bundle: .module) : attachment.originalName)
-                .font(.system(size: MeeshyFont.calloutSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .semibold))
                 .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
 
             Text(String(localized: "media.document.previewUnavailable", defaultValue: "Aper\u{00E7}u non disponible", bundle: .module))
@@ -353,7 +348,7 @@ public struct DocumentFullSheet: View {
 
             if attachment.fileSize > 0 {
                 Text(attachment.fileSizeFormatted)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                     .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
             }
         }

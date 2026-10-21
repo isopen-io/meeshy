@@ -12,7 +12,7 @@ import MeeshySDK
 /// **Rien ici ne lit l'horloge** (décision D1 du 2026-09-01) : chaque gabarit
 /// dessine ce que ses emplacements portent, et une valeur absente laisse une
 /// boîte non nulle — l'objet sans son heure, jamais un vide.
-extension StickerTemplateRenderer {
+extension TimeStickerTemplates {
 
     /// Les chiffres au CENTRE d'un objet rond : plus petits que dans l'afficheur
     /// numérique, sinon l'heure déborde du cadran qui la porte.
