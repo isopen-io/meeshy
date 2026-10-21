@@ -15,6 +15,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     let logger = MeeshyLog.logger(.diskCache, subsystem: .legacySDK)
     var inFlightTasks: [String: InFlightDownload] = [:]
     var fileTimestamps: [String: Date] = [:]
+    let readRegistry = CacheReadRegistry()
     private let urlSession: URLSession
     let networkTransfer: NetworkTransfer
     let fileDownloader: MediaFileDownloader
@@ -304,6 +305,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     public func localFileURL(for key: String) -> URL? {
         let fileKey = Self.fileKey(for: key)
         let filePath = diskFilePath(for: fileKey)
+        readRegistry.noteRead(fileKey)
         return fileManager.fileExists(atPath: filePath.path) ? filePath : nil
     }
 
@@ -343,6 +345,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     nonisolated public func cachedFileURL(for key: String) -> URL? {
         let fileKey = Self.fileKey(for: key)
         let filePath = baseDirectory.appendingPathComponent(fileKey)
+        readRegistry.noteRead(fileKey)
         // `attributesOfItem` lève si le fichier n'existe pas : un seul `stat`
         // là où `fileExists` + lecture de la date en auraient fait deux.
         guard let modDate = (try? FileManager.default.attributesOfItem(atPath: filePath.path))?[.modificationDate] as? Date else {

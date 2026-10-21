@@ -3,6 +3,8 @@ import Foundation
 /// Éviction sous pression DISQUE réelle (IL8, #11286) : le volume manque
 /// d'espace, indépendamment du budget du store. La règle de choix est dans
 /// `DiskPressureReclaimPlan` ; ici, la lecture du volume et la suppression.
+/// Jamais une victime : une épingle active, un téléchargement en cours, un
+/// fichier servi par URL depuis moins de `readRegistry.window`.
 extension DiskCacheStore {
 
     /// `availableBytes` injecté pour les témoins ; `nil` lit la capacité
@@ -11,7 +13,7 @@ extension DiskCacheStore {
         guard let free = availableBytes ?? volumeFreeBytes() else { return }
         let now = Date()
         purgeExpiredPins(now: now)
-        let protected = protectedFileNamesUnderPressure()
+        let protected = protectedFileNamesUnderPressure(now: now)
         let candidates = diskPressureCandidates()
         let victims = DiskPressureReclaimPlan.victims(
             candidates: candidates,
@@ -32,9 +34,14 @@ extension DiskCacheStore {
         }
     }
 
+    /// URL NEUVE à chaque lecture : une `URL` garde en cache les valeurs de
+    /// ressource déjà lues, et rien ne vide ce cache sur l'exécuteur d'un
+    /// acteur. Relire `baseDirectory` rendrait l'espace libre du premier appel
+    /// pour toute la vie du store.
     private func volumeFreeBytes() -> Int64? {
+        let volumeProbe = URL(fileURLWithPath: baseDirectory.path, isDirectory: true)
         do {
-            let values = try baseDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+            let values = try volumeProbe.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
             return values.volumeAvailableCapacityForImportantUsage
         } catch {
             logger.error("Free disk space unreadable, skipping pressure eviction: \(error.localizedDescription, privacy: .public)")
@@ -42,8 +49,10 @@ extension DiskCacheStore {
         }
     }
 
-    private func protectedFileNamesUnderPressure() -> Set<String> {
-        Set(pinExpiries.keys).union(inFlightTasks.keys)
+    private func protectedFileNamesUnderPressure(now: Date) -> Set<String> {
+        Set(pinExpiries.keys)
+            .union(inFlightTasks.keys)
+            .union(readRegistry.recentlyRead(now: now))
     }
 
     private func diskPressureCandidates() -> [DiskPressureCandidate] {
