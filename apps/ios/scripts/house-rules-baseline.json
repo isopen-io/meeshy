@@ -2,7 +2,7 @@
   "rules": {
     "anyview": 97,
     "autocapitalization": 0,
-    "available-floor": 3,
+    "available-floor": 0,
     "corner-radius-modifier": 0,
     "disable-autocorrection": 0,
     "fixed-font": 790,
