@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { ImageJob } from './image-job';
 import { createImagePreparer, type ImagePort } from './prepare-image-upload';
+import { servedMediaFile } from './served-media';
 
 /**
  * RECOMPRESSER AVANT D'ENVOYER (#11310) — une photo de téléphone pèse 3 à
@@ -43,6 +44,21 @@ describe('ce qui n’est jamais touché', () => {
       expect(await createImagePreparer(port).prepare(original)).toBe(original);
       expect(jobs).toEqual([]);
     });
+  });
+
+  test('un média relu depuis la passerelle (transfert, republication) part tel quel : jamais une seconde génération (#11247)', async () => {
+    const { port, jobs } = answering(webp(1));
+    const served = servedMediaFile(new Uint8Array(8), 'photo.jpg', { type: 'image/jpeg' });
+    const preparer = createImagePreparer(port);
+    expect(await preparer.prepare(served)).toBe(served);
+    expect((await preparer.prepareUploads([{ file: served }]))[0]?.file).toBe(served);
+    expect(jobs).toEqual([]);
+  });
+
+  test('la même photo, choisie sur l’appareil, est bien recompressée', async () => {
+    const { port, jobs } = answering(webp(1));
+    await createImagePreparer(port).prepare(file('photo.jpg', 'image/jpeg'));
+    expect(jobs).toHaveLength(1);
   });
 
   test('un PNG animé (APNG) garde son animation', async () => {
