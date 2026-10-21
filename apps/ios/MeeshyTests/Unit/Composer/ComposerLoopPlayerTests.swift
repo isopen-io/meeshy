@@ -205,6 +205,8 @@ final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Send
     private(set) var seeks: [TimeInterval] = []
     private(set) var scrubs: [TimeInterval] = []
     private(set) var volumes: [Float] = []
+    private(set) var pauseCount = 0
+    private(set) var isPlaying = false
     let hasAudio: Bool
     var currentTime: TimeInterval = 0
 
@@ -223,10 +225,28 @@ final class MockComposerLoopPlayer: ComposerLoopPlayerProviding, @unchecked Send
                                      for owner: ObjectIdentifier) {}
 
     func configure(fps: Int, declaredSpace: CGColorSpace?) { configuredFPS = fps }
-    func play() { playCount += 1 }
-    func stop() { stopCount += 1 }
-    func setRange(_ range: ClosedRange<TimeInterval>) { ranges.append(range) }
+    func play() {
+        playCount += 1
+        isPlaying = true
+    }
+    func pause() {
+        pauseCount += 1
+        isPlaying = false
+    }
+    func stop() {
+        stopCount += 1
+        isPlaying = false
+    }
+    /// Comme le vrai lecteur : la boucle reconstruite repart.
+    func setRange(_ range: ClosedRange<TimeInterval>) {
+        ranges.append(range)
+        isPlaying = true
+    }
     func seek(to time: TimeInterval) { seeks.append(time) }
-    func scrub(to time: TimeInterval) { scrubs.append(time) }
+    /// Comme le vrai lecteur : la règle suspend la boucle.
+    func scrub(to time: TimeInterval) {
+        scrubs.append(time)
+        isPlaying = false
+    }
     func setVolume(_ gain: Float) { volumes.append(gain) }
 }

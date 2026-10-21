@@ -10,6 +10,7 @@ import type { Prisma, PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { resolveParticipantAvatar, resolveParticipantDisplayName } from '@meeshy/shared/utils/participant-helpers';
 import { canViewExactMemberCount, presentMemberCount } from '@meeshy/shared/utils/member-visibility';
+import { memberCountServedToViewer, membersServedToViewer } from '../../services/guests/guestMemberVisibility';
 import {
   generateDefaultConversationTitle,
   resolveUserLanguagesOrdered
@@ -51,6 +52,9 @@ import { ReadingModePreferenceSchema, type ReadingModePreference } from '@meeshy
 import { loadWithdrawnCitations, servePostReplyCitation } from '../../services/messaging/servedPostReply';
 import type { ConversationType } from '@meeshy/shared/types/conversation';
 import { loadViewerBirthDate, servedListRowRestriction } from './viewerWriteRestriction';
+import { participantProfileDecor } from '../../services/appearance/profileDecor';
+import { authorProfileDecor } from '../../services/appearance/authorProfileDecor';
+import { startupPackIndex } from '../../services/packs/PackIndex';
 import {
   conversationListQuerySelect,
   conversationLastMessagePreviewSelect,
@@ -744,8 +748,11 @@ export function registerConversationListRoute(
             const vis = presenceFor(presenceViewer, presenceVis, m.userId);
             const hideOnline = !vis.showOnline;
             const hideLastSeen = !vis.showLastSeenTimestamp;
+            const profileDecor = participantProfileDecor(startupPackIndex(), m.user);
             return {
               ...m,
+              // #10713 — le contour équipé du pair, dessiné par la ligne de liste.
+              ...(profileDecor === undefined ? {} : { profileDecor }),
               // Bannière de profil top-level : le schéma participant (minimal) est
               // plat et strippe `user`, donc on lève la bannière au niveau
               // participant pour la remontée en DM. Réservé aux DM — en groupe le
@@ -837,13 +844,14 @@ export function registerConversationListRoute(
           // admin de groupe administrait 250 personnes sans jamais pouvoir en
           // lire l'effectif. `currentUserRoleMap` porte déjà son rôle, résolu
           // plus haut par le top-5 et son repli batché — aucune requête de plus.
-          ...presentMemberCount(activeMembers.participants, {
+          // #10205 — un invité (sans compte) : aucun effectif, sa seule ligne.
+          ...memberCountServedToViewer(presentMemberCount(activeMembers.participants, {
             viewerSeesExactCount: canViewExactMemberCount({
               platformRole: authRequest.authContext.registeredUser?.role ?? null,
               conversationRole: currentUserRoleMap.get(conversation.id) ?? null
             })
-          }),
-          participants: membersWithUser,
+          }), authRequest.authContext),
+          participants: membersServedToViewer(membersWithUser, authRequest.authContext),
           title: displayTitle,
           // Prisme Linguistique de la ligne de liste. Ces deux champs sont posés
           // au niveau CONVERSATION et non dans `lastMessage` parce que c'est là
@@ -875,7 +883,7 @@ export function registerConversationListRoute(
                   && consumedViewOnce.has(viewOnceConsumptionKey({ messageId: msg.id, participantId: readerParticipantId })),
               }), withdrawnCitations),
               sender: sender && senderVis ? {
-                ...sender,
+                ...withoutNestedUser(sender),
                 username: sender.user?.username ?? sender.username ?? null,
                 firstName: sender.user?.firstName ?? null,
                 lastName: sender.user?.lastName ?? null,
@@ -887,6 +895,7 @@ export function registerConversationListRoute(
                 lastActiveAt: senderVis.showLastSeenTimestamp
                   ? (sender.user?.lastActiveAt ?? sender.lastActiveAt ?? null)
                   : null,
+                ...authorProfileDecor(sender.user),
               } : null
             };
           })(),
@@ -972,4 +981,14 @@ export function registerConversationListRoute(
       return sendInternalError(reply, 'Error retrieving conversations');
     }
   });
+}
+
+/**
+ * #10945 — l'expéditeur d'aperçu part SANS sa jointure `user` : elle porte la
+ * colonne brute `equippedAvatarRing`, déjà résolue en `profileDecor`, et ne
+ * doit pas dépendre du sérialiseur pour être retenue.
+ */
+function withoutNestedUser<T extends { readonly user?: unknown }>(sender: T): Omit<T, 'user'> {
+  const { user: _user, ...rest } = sender;
+  return rest;
 }

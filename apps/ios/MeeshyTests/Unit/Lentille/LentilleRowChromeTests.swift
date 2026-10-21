@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 
 /// Chrome de la rangée Lentille — directive produit du 2026-08-22 (soir) :
@@ -244,4 +245,48 @@ final class LentilleRowChromeTests: XCTestCase {
         )
     }
 
+
+    // MARK: - Chips entières en colonne étroite (#10835)
+
+    /// Capture iPad du porteur : dans une colonne de Split View, de Slide
+    /// Over ou de barre latérale, les chips de la rangée en focus (catégorie,
+    /// étiquettes, mode, effectif) étaient comprimées par leur `HStack` et
+    /// coupées. Chaque ligne de chips prend désormais sa largeur IDÉALE, et
+    /// défile horizontalement quand la colonne ne la loge pas — une chip n'est
+    /// plus jamais rognée.
+    func test_magnifiedChipLines_neverCompressTheirChips_inANarrowColumn() throws {
+        let code = try rowSource()
+        let body = try block("var body: some View {", in: code)
+        let date = try viewBlock("dateLine", in: code)
+        for (name, line) in [("ligne du haut", body), ("ligne de date", date)] {
+            XCTAssertTrue(line.contains("LentilleWholeChipsLine {"), "\(name) : entières si elles tiennent, sinon elles défilent")
+            // Plus de ViewThatFits : iOS 26 mesure ses candidats sur le rendu asynchrone, où les ForEach / GeometryReader
+            // atteints (menu de catégorie, avatars, humeur) trappent sur l'isolation au main actor.
+            XCTAssertFalse(line.contains("ViewThatFits"), "\(name) : jamais de candidat ViewThatFits")
+        }
+        let container = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Lentille/Row/LentilleWholeChipsLine.swift"))
+        XCTAssertTrue(container.contains(".fixedSize(horizontal: true, vertical: false)"), "les chips gardent leur largeur idéale")
+        XCTAssertTrue(container.contains("ScrollView(.horizontal, showsIndicators: false)"), "sinon elles défilent, jamais rognées")
+        XCTAssertFalse(container.contains("ViewThatFits"))
+    }
+
+    func test_aChipLine_scrollsOnlyWhenItTrulyOverflows() {
+        typealias Line = LentilleWholeChipsLine<EmptyView>
+        XCTAssertFalse(Line.scrolls(contentWidth: 180, availableWidth: 240), "elle tient : entière, sans défilement")
+        XCTAssertFalse(Line.scrolls(contentWidth: 240.4, availableWidth: 240), "l'arrondi ne fait pas défiler")
+        XCTAssertTrue(Line.scrolls(contentWidth: 300, availableWidth: 240), "colonne étroite : elle défile")
+        XCTAssertFalse(Line.scrolls(contentWidth: 300, availableWidth: 0), "place pas encore mesurée : rien ne défile")
+    }
+
+    /// Le rognage de la rangée de liste ne vise que l'axe du glissement : la
+    /// rangée en focus dessine au-dessus et au-dessous de sa hauteur de layout.
+    func test_swipeableRow_clipsOnlyHorizontally() throws {
+        let sdk = try String(
+            contentsOf: Self.iosRoot.deletingLastPathComponent().deletingLastPathComponent()
+                .appendingPathComponent("packages/MeeshySDK/Sources/MeeshyUI/Primitives/SwipeableRow.swift"),
+            encoding: .utf8
+        )
+        XCTAssertFalse(sdk.contains("        .clipped()\n"), "un `.clipped()` rectangulaire coupait les chips en haut et en bas")
+        XCTAssertTrue(sdk.contains(".clipShape(SwipeableRowClip())"))
+    }
 }

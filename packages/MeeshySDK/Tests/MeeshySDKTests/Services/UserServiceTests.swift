@@ -63,6 +63,41 @@ final class UserServiceTests: XCTestCase {
         XCTAssertEqual(users[1].username, "another")
     }
 
+    // MARK: - searchPeople (#10505) : la recherche rend l'identifiant que la passerelle a scellé
+
+    private func servedSearchPage(meta: String) throws -> OffsetPaginatedAPIResponse<[UserSearchResult]> {
+        let json = #"{"success":true,"data":[{"id":"u1","username":"found"}],"pagination":{"total":1,"offset":0,"limit":20}"# + meta + "}"
+        return try JSONDecoder().decode(OffsetPaginatedAPIResponse<[UserSearchResult]>.self, from: Data(json.utf8))
+    }
+
+    func test_searchPeople_serverServesSearchId_returnsItWithTheUsers() async throws {
+        mock.stub("/users/search", result: try servedSearchPage(meta: #","meta":{"searchId":"a1b2c3sealed"}"#))
+
+        let page = try await service.searchPeople(query: "found", limit: 20, offset: 0)
+
+        XCTAssertEqual(page.searchId, "a1b2c3sealed")
+        XCTAssertEqual(page.users.map(\.id), ["u1"])
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/users/search")
+        XCTAssertEqual(mock.lastRequest?.queryItems?.first { $0.name == "q" }?.value, "found")
+    }
+
+    func test_searchPeople_serverServesNoMeta_returnsNoSearchId() async throws {
+        mock.stub("/users/search", result: try servedSearchPage(meta: ""))
+
+        let page = try await service.searchPeople(query: "found", limit: 20, offset: 0)
+
+        XCTAssertNil(page.searchId)
+        XCTAssertEqual(page.users.map(\.id), ["u1"])
+    }
+
+    func test_searchPeople_metaWithoutSearchId_returnsNoSearchId() async throws {
+        mock.stub("/users/search", result: try servedSearchPage(meta: #","meta":{"feedRequestId":"f1"}"#))
+
+        let page = try await service.searchPeople(query: "found", limit: 20, offset: 0)
+
+        XCTAssertNil(page.searchId)
+    }
+
     // MARK: - updateProfile
 
     func testUpdateProfileCallsPatchOnUsersMe() async throws {

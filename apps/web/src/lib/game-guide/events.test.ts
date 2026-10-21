@@ -159,16 +159,11 @@ describe('les transitions, pendant que l’écran est ouvert', () => {
     expect(kinds(transitionGuideEvents(view({ balance: 9 }), view({ balance: 10 })))).toContain('treasury-tier');
   });
 
-  test('la première frappe : le niveau avant, après, et jusqu’où court le Vent arrière', () => {
+  test('la première frappe : le moment ne porte plus de niveaux ni de Vent arrière (la frappe ne fait pas baisser le niveau)', () => {
     const before = view({ mintedLifetime: 0 });
     const after = view({ mintedLifetime: 1, score: gameOf(before).level.score - gameOf(before).mint.price, levelRecord: gameOf(before).level.level });
     const first = transitionGuideEvents(before, after).find((e) => e.kind === 'first-mint');
-    expect(first).toEqual({
-      kind: 'first-mint',
-      levelBefore: gameOf(before).level.level,
-      levelAfter: gameOf(after).level.level,
-      tailwindUntilLevel: gameOf(after).level.record,
-    });
+    expect(first).toEqual({ kind: 'first-mint' });
   });
 
   test('le prix monte à la onzième', () => {
@@ -177,14 +172,8 @@ describe('les transitions, pendant que l’écran est ouvert', () => {
     expect(transitionGuideEvents(before, after)).toContainEqual({ kind: 'price-rises', nextPrice: gameOf(after).mint.price });
   });
 
-  test('un badge qui s’éteint après une frappe, avec la distance annoncée AVANT le geste', () => {
+  test('la frappe n\'éteint plus aucun badge : jamais de moment « badge éteint », quelle que soit la progression servie', () => {
     const before = view({ mintedLifetime: 3 }, { mintBadgeLoss: 2, mintBadgeRegain: 11 });
-    const after = view({ mintedLifetime: 4, score: 23, debitablePoints: 23 });
-    expect(transitionGuideEvents(before, after)).toContainEqual({ kind: 'badge-extinguished', missingActions: 11 });
-  });
-
-  test('aucun badge ne tombe : pas de moment', () => {
-    const before = view({ mintedLifetime: 3 }, { mintBadgeLoss: 0, mintBadgeRegain: 0 });
     const after = view({ mintedLifetime: 4, score: 23, debitablePoints: 23 });
     expect(kinds(transitionGuideEvents(before, after))).not.toContain('badge-extinguished');
   });

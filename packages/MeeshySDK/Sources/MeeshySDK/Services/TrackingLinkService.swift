@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - TrackingLink Service
 
-public final class TrackingLinkService: @unchecked Sendable {
+public final class TrackingLinkService: Sendable {
     public static let shared = TrackingLinkService()
     private let api: APIClientProviding
 
@@ -34,11 +34,11 @@ public final class TrackingLinkService: @unchecked Sendable {
 
     /// Crée un nouveau lien de tracking
     public func createLink(_ request: CreateTrackingLinkRequest) async throws -> TrackingLink {
-        let response: APIResponse<TrackingLink> = try await api.post(
+        let response: APIResponse<CreatedTrackingLink> = try await api.post(
             TrackingLinksEndpoint.root,
             body: request
         )
-        return response.data
+        return response.data.link
     }
 
     /// Détails + liste des clics pour un lien

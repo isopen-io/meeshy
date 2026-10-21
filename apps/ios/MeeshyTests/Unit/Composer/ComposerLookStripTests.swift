@@ -196,7 +196,16 @@ final class ComposerLookStripTests: XCTestCase {
         XCTAssertFalse(cellule.contains("Text("), "aucune case n'écrit son nom : seul le choix se nomme")
         XCTAssertEqual(bande.components(separatedBy: "Text(chosenItemName)").count - 1, 1, "UN nom, celui du choix")
         XCTAssertTrue(bande.contains("MeeshyFont.relative(ComposerLookStripRule.chosenNameSize, weight: .bold)"))
-        XCTAssertGreaterThanOrEqual(ComposerLookStripRule.chosenNameSize, 20, "en grand")
+        XCTAssertEqual(ComposerLookStripRule.chosenNameSize, 10, "deux fois plus petit que les 20 pt d'avant (porteur 2026-10-12)")
+    }
+
+    func test_rail_sitsAtTheLevelOfTheBand_itsBottomOnTheCellsBottom() throws {
+        XCTAssertEqual(ComposerLookStripRule.railBottomInset,
+                       ComposerLookStripRule.chosenNameHeight + ComposerTriggerOutline.outset,
+                       "le bas de Filtres · Effets · Cadres s'aligne sur le bas des cases (porteur 2026-10-12)")
+        let rangee = try Self.code("Meeshy/Features/Main/Composer/ComposerCaptureBottomRow.swift")
+        XCTAssertTrue(rangee.contains(".padding(.bottom, ComposerLookStripRule.railBottomInset)"))
+        XCTAssertFalse(rangee.contains("cellSize.height + MeeshySpacing.xxxl * 2"), "la colonne ne flotte plus au-dessus de la bande")
     }
 
     func test_rail_framesWearTheCallFrameSymbol_andNoGlassSurroundsTheFamilies() throws {

@@ -72,9 +72,9 @@ final class ComposerSceneMenuTests: XCTestCase {
 
     func test_leMenu_estPeintParAdaptiveGlass() throws {
         let code = try AppSourceGuard.unit("Meeshy/Features/Main/Composer/ComposerSceneMenu.swift")
-        XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: 20"),
+        XCTAssertTrue(AppSourceGuard.stripComments(code).contains(".adaptiveGlass(in: RoundedRectangle(cornerRadius: MeeshyRadius.xl"),
                       "le verre du menu passe par l'unique implémentation du dépôt")
-        XCTAssertTrue(code.contains(".accessibilityAction(.escape)"), "VoiceOver doit pouvoir le refermer")
+        XCTAssertTrue(code.contains(".dismissOnEscape { onDismiss() }"), "VoiceOver et la touche Échap doivent pouvoir le refermer")
     }
 
     func test_leFond_nePresentePlusDeDialogueSysteme() throws {
@@ -86,7 +86,8 @@ final class ComposerSceneMenuTests: XCTestCase {
 
     func test_laSurface_remetLAppuiLongAuMeuble() throws {
         let surface = AppSourceGuard.stripComments(try AppSourceGuard.unit(
-            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift"))
+            "Meeshy/Features/Main/Composer/ComposerSceneSurface.swift",
+            alsoIncluding: ["Meeshy/Features/Main/Composer/ComposerSceneSoundChips.swift"]))
         XCTAssertTrue(surface.contains("onItemMenuRequested: onItemMenu"),
                       "le canvas doit remettre l'appui long au meuble, sans quoi le UIMenu système revient")
         XCTAssertTrue(surface.contains("onItemMenu?(son.id, .audio"),

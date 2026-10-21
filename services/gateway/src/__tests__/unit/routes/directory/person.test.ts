@@ -4,7 +4,7 @@
  * Quatre propriétés y sont gardées, et chacune correspond à un défaut MESURÉ en
  * intégration avant ce lot :
  *
- * 1. la charge ANONYME ne porte aucun des six champs privés ;
+ * 1. la charge d’un TIERS inscrit ne porte aucun des six champs privés (un anonyme est refusé, #10205) ;
  * 2. la PRÉSENCE ne part que sur `?expand=presence` ;
  * 3. `?expand=stats` ne sert les quatre compteurs intimes qu'à soi et à
  *    l'administration — le témoin est posé sur un viewer AUTHENTIFIÉ et NON
@@ -143,7 +143,7 @@ function prismaDouble(bloquesParLeLecteur: readonly string[] = [], demandes: rea
       findUnique: jest.fn<any>(async () => ({ createdAt: new Date('2025-01-01T00:00:00Z') })),
     },
     message: { count: jest.fn<any>(async () => 69), groupBy: jest.fn<any>(async () => []) },
-    participant: { count: jest.fn<any>(async () => 12) },
+    participant: { findMany: jest.fn<any>(async () => [{ id: 'p1' }]), count: jest.fn<any>(async () => 12) },
     friendRequest: {
       count: jest.fn<any>(async () => 3),
       findFirst: jest.fn<any>(async (args?: any) => {
@@ -186,8 +186,8 @@ const lire = (app: FastifyInstance, qs = '', headers: Record<string, string> = {
   app.inject({ method: 'GET', url: `${PREFIXE}/directory/people/${CIBLE}${qs}`, headers });
 
 describe('La charge publique ne porte pas les six champs privés', () => {
-  it('un appelant ANONYME ne reçoit aucun des six', async () => {
-    const app = await monter(null);
+  it('un TIERS inscrit ne reçoit aucun des six', async () => {
+    const app = await monter(TIERS);
 
     const res = await lire(app);
 
@@ -201,7 +201,7 @@ describe('La charge publique ne porte pas les six champs privés', () => {
   });
 
   it('ne porte pas non plus `autoTranslateEnabled`, ni `email`, ni `phoneNumber`', async () => {
-    const app = await monter(null);
+    const app = await monter(TIERS);
 
     const data = (await lire(app)).json().data as Record<string, unknown>;
 
@@ -276,7 +276,7 @@ describe('Les compteurs intimes de `?expand=stats`', () => {
 
 describe('Le cache conditionnel', () => {
   it('un `If-None-Match` valide rend 304 sans corps', async () => {
-    const app = await monter(null);
+    const app = await monter(TIERS);
 
     const premier = await lire(app);
     const etag = premier.headers.etag as string;
@@ -302,14 +302,16 @@ describe('Le cache conditionnel', () => {
     await app.close();
   });
 
-  it('un appelant ANONYME reçoit un cache PARTAGEABLE, un connecté non', async () => {
+  it('un appelant ANONYME est refusé (#10205) ; un connecté reçoit un cache PRIVÉ', async () => {
     const anonyme = await monter(null);
     const connecte = await monter(TIERS);
 
-    const cA = (await lire(anonyme)).headers['cache-control'] as string;
+    const refus = await lire(anonyme);
     const cC = (await lire(connecte)).headers['cache-control'] as string;
 
-    expect(cA).toContain('public');
+    // Un lecteur sans compte ne lit aucun profil : rien à mettre en cache.
+    expect(refus.statusCode).toBe(403);
+    expect(refus.json()).toMatchObject({ success: false, code: 'ACCOUNT_REQUIRED' });
     // La charge d'un lecteur connecté dépend de LUI : un cache partagé la
     // servirait à quelqu'un d'autre.
     expect(cC).toContain('private');
@@ -317,11 +319,22 @@ describe('Le cache conditionnel', () => {
     await anonyme.close();
     await connecte.close();
   });
+
+  it('un connecté revalide à chaque lecture : un blocage posé entre deux lectures n’est jamais resservi depuis le cache du navigateur (#10755)', async () => {
+    const connecte = await monter(TIERS);
+
+    const cC = (await lire(connecte)).headers['cache-control'] as string;
+
+    expect(cC).toContain('no-cache');
+    expect(cC).not.toMatch(/max-age=[1-9]/);
+    expect(cC).not.toContain('stale-while-revalidate');
+    await connecte.close();
+  });
 });
 
 describe('`fields` ne peut que RESTREINDRE', () => {
   it('un champ hors projection ne fabrique rien', async () => {
-    const app = await monter(null);
+    const app = await monter(TIERS);
 
     const data = (await lire(app, '?fields=username,email,systemLanguage')).json().data as Record<string, unknown>;
 
@@ -439,15 +452,15 @@ describe('`blockedByViewer` — le blocage répond par SUJET (#7125)', () => {
     await app.close();
   });
 
-  it("un lecteur ANONYME n'a pas de blocage, et ne paie aucune requête pour l'apprendre", async () => {
+  it("un lecteur ANONYME est refusé (#10205) avant toute requête, blocage compris", async () => {
     const app = await monter(null);
 
-    const data = (await lire(app, '?expand=relation')).json().data as Record<string, unknown>;
+    const res = await lire(app, '?expand=relation');
 
-    expect(data.blockedByViewer).toBe(false);
+    expect(res.statusCode).toBe(403);
     const appels = (app as unknown as { prisma: { user: { findFirst: { mock: { calls: unknown[][] } } } } }).prisma
       .user.findFirst.mock.calls;
-    expect(appels.some(([a]) => (a as { where?: { blockedUserIds?: unknown } })?.where?.blockedUserIds)).toBe(false);
+    expect(appels).toHaveLength(0);
     await app.close();
   });
 

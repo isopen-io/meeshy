@@ -62,7 +62,7 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
 
     // 3 — le composant garde son défaut d'ORIGINE, pour que ses appelants audio restent justes.
     func test_lAudioPickerDeclareTitre_avecDefautLangueDeLAudio() throws {
-        let picker = compact(try source("Meeshy/Features/Main/Views/AudioPostComposerView.swift"))
+        let picker = compact(try source("Meeshy/Features/Main/Views/AudioLanguagePickerView.swift"))
         XCTAssertTrue(picker.contains("structAudioLanguagePickerView"), "AudioLanguagePickerView introuvable ou vide")
         XCTAssertTrue(
             picker.contains("vartitle:LocalizedStringResource=\"Languedel'audio\""),
@@ -77,8 +77,8 @@ final class ComposerReusedComponentTitleTests: XCTestCase {
         XCTAssertTrue(sheet.contains("structEmojiPickerSheet"), "EmojiPickerSheet introuvable ou vide")
         XCTAssertTrue(sheet.contains("vartitle:LocalizedStringResource"), "`EmojiPickerSheet` doit DÉCLARER `var title`")
         XCTAssertTrue(
-            sheet.contains("\"emoji.title\",defaultValue:\"Reactions\""),
-            "Le défaut de `EmojiPickerSheet.title` doit rester `emoji.title` / « Reactions » — pour que ses "
+            sheet.contains("\"emoji.title\",defaultValue:\"Réactions\""),
+            "Le défaut de `EmojiPickerSheet.title` doit rester `emoji.title` / « Réactions » (accentué depuis e3f11b5647) — pour que ses "
                 + "appelants de réaction (fil, préférences) gardent leur titre sans le répéter."
         )
     }

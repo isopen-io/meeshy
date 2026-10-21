@@ -5,6 +5,10 @@
       "id": "elegant.gala",
       "mood": "elegant",
       "name": "Gala",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -153,6 +157,10 @@
       "id": "elegant.art-deco",
       "mood": "elegant",
       "name": "Art déco",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -298,6 +306,10 @@
       "id": "elegant.opera",
       "mood": "elegant",
       "name": "Opéra",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -448,6 +460,10 @@
       "id": "elegant.tete-a-tete",
       "mood": "elegant",
       "name": "Tête-à-tête",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "row",

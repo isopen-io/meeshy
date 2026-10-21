@@ -69,6 +69,38 @@ export function gaussianTaps(sigma: number): GaussianTaps {
   return { center: weight(0), offsets: pairs.map((pair) => pair.offset), weights: pairs.map((pair) => pair.weight) };
 }
 
+export type Rgb = readonly [number, number, number];
+
+/** Les bits de mantisse d'une précision GLSL sur un GPU MOBILE : `mediump` y est un demi-flottant, `highp` un flottant. */
+export const MANTISSA_BITS = { mediump: 10, highp: 23 } as const;
+
+export type ShaderPrecision = keyof typeof MANTISSA_BITS;
+
+/**
+ * La précision des passes du compositeur (#9203) : la coordonnée de l'image
+ * nette doit tomber sur SON pixel jusqu'en 4K — en demi-flottant, elle dérive
+ * d'un demi-pixel dès 1920 de large, et la personne prend la couleur de ses
+ * voisins.
+ */
+export const FRAGMENT_PRECISION: ShaderPrecision = 'highp';
+
+const quantized = (value: number, precision: ShaderPrecision): number => {
+  if (value === 0) return 0;
+  const step = 2 ** (Math.floor(Math.log2(Math.abs(value))) - MANTISSA_BITS[precision]);
+  return Math.round(value / step) * step;
+};
+
+/** La couleur qu'une prise BILINÉAIRE lit au centre du pixel `x` d'une rangée, la coordonnée passée par la précision du fragment. */
+export function sampledPixel(row: readonly Rgb[], x: number, precision: ShaderPrecision): Rgb {
+  const texel = quantized((x + 0.5) / row.length, precision) * row.length - 0.5;
+  const at = (index: number): Rgb => row[Math.min(row.length - 1, Math.max(0, index))] ?? [0, 0, 0];
+  const left = Math.floor(texel);
+  const weight = texel - left;
+  const [a, b] = [at(left), at(left + 1)];
+  const channel = (index: 0 | 1 | 2): number => Math.round(a[index] * (1 - weight) + b[index] * weight);
+  return [channel(0), channel(1), channel(2)];
+}
+
 type BlurDeps = {
   readonly compositor: Compositor;
   readonly canvas: CanvasImageSource;

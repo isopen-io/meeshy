@@ -65,28 +65,56 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
         try assertNestingWithinBudget(of: ConversationView.Body.self, label: "ConversationView.body")
     }
 
-    /// **Les couches de l'en-tête de conversation** (#6194, suivi de #5855).
+    /// **Les couches de l'écran de conversation** (#6194, suivi de #5855, LOT-10).
     ///
-    /// La garde ci-dessus mesure `ConversationView.Body` — or `body` rend
-    /// `bodyWithSheets`, qui EST un `AnyView` : elle imprime « 0 niveau » et
-    /// certifie le type que l'effacement a aplati, jamais le coût qui vit
-    /// derrière. C'est SOUS elle, verte, que l'app a débordé la pile à chaque
-    /// ouverture de conversation le 2026-09-12, en Debug comme en Release.
+    /// `ConversationView.Body` n'est plus effacé : il est mesuré pour de VRAI
+    /// (ci-dessus). Il l'était avant par `AnyView`, ce qui imprimait « 0 niveau »
+    /// et certifiait le type que l'effacement avait aplati, jamais le coût qui
+    /// vivait derrière — c'est SOUS cette garde, verte, que l'app a débordé la
+    /// pile à chaque ouverture de conversation le 2026-09-12.
     ///
-    /// Ces trois couches sont ce que l'effacement cachait. Elles ne sont
-    /// mesurables QUE depuis qu'elles sont nominales : une propriété calculée
-    /// n'offre aucun type à interroger — le remède et la garde sont ici le même
-    /// geste, ce qui est la vraie raison de préférer la struct à l'`AnyView`.
-    func test_conversationHeaderLayers_nestingStaysWithinStackBudget() throws {
-        try assertNestingWithinBudget(
-            of: ConversationExpandedHeaderBand.Body.self,
-            label: "ConversationExpandedHeaderBand.body")
-        try assertNestingWithinBudget(
-            of: ConversationHeaderMidContent.Body.self,
-            label: "ConversationHeaderMidContent.body")
-        try assertNestingWithinBudget(
-            of: ConversationHeaderActionsCluster.Body.self,
-            label: "ConversationHeaderActionsCluster.body")
+    /// Chaque couche est mesurable PARCE QU'elle est nominale : une propriété
+    /// calculée n'offre aucun type à interroger — le remède et la garde sont le
+    /// même geste.
+    func test_conversationLayers_nestingStaysWithinStackBudget() throws {
+        try assertNestingWithinBudget(of: ConversationBodyLifecycle.Body.self, label: "ConversationBodyLifecycle.body")
+        try assertNestingWithinBudget(of: ConversationRouterWatch.Body.self, label: "ConversationRouterWatch.body")
+        try assertNestingWithinBudget(of: ConversationDraftPersistenceWatch.Body.self, label: "ConversationDraftPersistenceWatch.body")
+        try assertNestingWithinBudget(of: ConversationBodyCovers.Body.self, label: "ConversationBodyCovers.body")
+        try assertNestingWithinBudget(of: ConversationComposerPickers.Body.self, label: "ConversationComposerPickers.body")
+        try assertNestingWithinBudget(of: ConversationComposerStickerSheet.Body.self, label: "ConversationComposerStickerSheet.body")
+        try assertNestingWithinBudget(of: ConversationComposerEditingCovers.Body.self, label: "ConversationComposerEditingCovers.body")
+        try assertNestingWithinBudget(of: ConversationComposerCore.Body.self, label: "ConversationComposerCore.body")
+        try assertNestingWithinBudget(of: ConversationReaderModeBranch.Body.self, label: "ConversationReaderModeBranch.body")
+        try assertNestingWithinBudget(of: ConversationHeaderCallButton.Body.self, label: "ConversationHeaderCallButton.body")
+    }
+
+    /// Les couches GÉNÉRIQUES sont mesurées à fentes vides : cela isole leur
+    /// composition PROPRE. Les arguments réels de chaque fente sont couverts par
+    /// `ConversationView.Body`.
+    private static let maxGenericLayerDepth = 24
+
+    func test_genericLayers_ownCompositionStaysShallow() throws {
+        typealias Empty = EmptyView
+        let layers: [(Any.Type, String)] = [
+            (ConversationBodyStage<Empty, Empty, Empty, Empty, Empty, Empty>.Body.self, "ConversationBodyStage.body"),
+            (ConversationBodySheets<Empty, Empty>.Body.self, "ConversationBodySheets.body"),
+            (ConversationBodyOverlayMenu<Empty, Empty>.Body.self, "ConversationBodyOverlayMenu.body"),
+            (ConversationOverlayMenuLayer<Empty>.Body.self, "ConversationOverlayMenuLayer.body"),
+            (ConversationScrollToBottomBranch<Empty>.Body.self, "ConversationScrollToBottomBranch.body"),
+            (ConversationExpandedHeaderBand<Empty, Empty, Empty, Empty, Empty>.Body.self, "ConversationExpandedHeaderBand.body"),
+            (ConversationHeaderMidContent<Empty, Empty>.Body.self, "ConversationHeaderMidContent.body"),
+            (ConversationHeaderActionsCluster<Empty, Empty, Empty>.Body.self, "ConversationHeaderActionsCluster.body"),
+            (ConversationFloatingHeaderSection<Empty, Empty, Empty, Empty>.Body.self, "ConversationFloatingHeaderSection.body"),
+        ]
+        for (type, label) in layers {
+            let measured = try Self.measureOnDeepStack(type)
+            print("[profondeur #5837] \(label) = \(measured.depth) niveaux (\(measured.typeNameLength) caractères)")
+            XCTAssertLessThanOrEqual(
+                measured.depth, Self.maxGenericLayerDepth,
+                "\(label) imbrique \(measured.depth) niveaux à fentes vides (plafond \(Self.maxGenericLayerDepth)) : sa composition PROPRE a grossi — la ranger dans une struct nominale.\n\(measured.excerpt)"
+            )
+        }
     }
 
     func test_bubbleStandardLayoutBody_nestingStaysWithinStackBudget() throws {
@@ -272,16 +300,11 @@ final class ConversationViewLayerErasureSourceGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     /// Maillon → fichier. Chaque entrée doit se déclarer en `AnyView`.
     private static let erasedLayers: [(declaration: String, file: String)] = [
-        ("private var bodyWithSheets: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("private var bodyWithCovers: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("private var bodyWithLifecycle: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("private var bodyContent: AnyView", "Meeshy/Features/Main/Views/ConversationView.swift"),
-        ("var themedComposer: AnyView", "Meeshy/Features/Main/Views/ConversationView+Composer.swift"),
         ("func quickReactionBarOverlay(for messageId: String) -> AnyView",
          "Meeshy/Features/Main/Views/ConversationView+MessageRow.swift"),
         ("private var mainContent: AnyView", "Meeshy/Features/Main/Views/ConversationListView.swift"),
@@ -289,7 +312,7 @@ final class ConversationViewLayerErasureSourceGuardTests: XCTestCase {
         ("private func contentStack(shouldBlur: Bool) -> AnyView",
          "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"),
         ("private var bubbleInnerContent: AnyView",
-         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift"),
+         "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+TextBubble.swift"),
         ("var visualMediaGrid: AnyView",
          "Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift"),
         ("func mediaWithReplyContainer(reply: BubbleContent.Reply) -> AnyView",

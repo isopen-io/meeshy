@@ -1,0 +1,427 @@
+/* LA FEUILLE DE LA LANDING (#10002, planche « Main »), et pourquoi elle est
+ * SÉPARÉE — la même raison que `institutional.css`.
+ *
+ * La landing est PRÉRENDUE en HTML statique, feuille INLINÉE, une page par
+ * langue (`scripts/prerender-landing.tsx`) : elle paie son CSS à chaque visite,
+ * sans le mettre en cache. Y inliner la feuille de l'application lui ferait
+ * transporter la liste, le fil et le composeur. Celle-ci ne porte que ce que
+ * `src/landing/landing-page.tsx` rend, en CSS écrit à la main (pas de Tailwind :
+ * aucun utilitaire à générer pour une seule page), et les VALEURS viennent des
+ * jetons générés depuis iOS (`@meeshy/design-tokens/ios.css`) — aucune couleur
+ * n'est écrite ici, seulement des dosages de jetons.
+ *
+ * L'en-tête et le pied vivent dans `site-chrome.css` (#10071) : toutes les
+ * pages statiques de meeshy.me les portent.
+ *
+ * Le schéma suit la règle de l'application : `:root.dark` par défaut (HTML),
+ * `:root.light` posé par `INLINE_SCHEME_BOOTSTRAP` avant la première peinture.
+ */
+@import '@meeshy/design-tokens/ios.css';
+@import './site-chrome.css';
+
+:root {
+  color-scheme: dark;
+}
+:root.light {
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--ios-surface);
+  color: var(--ios-ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.ld {
+  position: relative;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--ios-surface);
+  color: var(--ios-ink);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.ld a {
+  color: var(--ios-ink-2);
+  text-decoration: none;
+}
+.ld a:hover {
+  color: var(--ios-ink);
+}
+.ld a:focus-visible,
+.ld button:focus-visible,
+.ld select:focus-visible,
+.ld input:focus-visible {
+  outline: 2px solid var(--ios-indigo-400);
+  outline-offset: 2px;
+}
+
+.ld-glow {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 900px;
+  background: radial-gradient(60% 40% at 50% 20%, color-mix(in srgb, var(--ios-indigo-500) 18%, transparent), transparent);
+  pointer-events: none;
+}
+
+/* QUI EST LÀ — posé par le script d'amorçage AVANT la première peinture
+ * (`data-session` sur `<html>`) : un compte voit « Mes conversations » à la
+ * place de « Se connecter » et « Entrer sans compte », sans éclair. */
+[data-session-member] {
+  display: none;
+}
+:root[data-session='member'] .ld [data-session-member] {
+  display: inline-flex;
+}
+:root[data-session='member'] .ld [data-session-visitor] {
+  display: none;
+}
+.ld [hidden] {
+  display: none !important;
+}
+
+/* LE HÉROS */
+.ld-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 56px;
+  align-items: center;
+  padding-block: 72px 56px;
+}
+.ld-hero-copy {
+  flex: 999 1 460px;
+  min-width: 0;
+}
+.ld-presence {
+  margin: 0 0 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: var(--ios-surface-card);
+  border: 0.5px solid var(--ios-edge);
+  color: var(--ios-ink-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ld-presence-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ios-success);
+}
+.ld-hero h1 {
+  margin: 0;
+  font-size: clamp(36px, 5.6vw, 68px);
+  line-height: 1.04;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.ld-accent {
+  display: block;
+  background: linear-gradient(135deg, var(--ios-indigo-400), var(--ios-indigo-500));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.ld-lede {
+  margin: 20px 0 30px;
+  max-width: 520px;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ios-ink-2);
+}
+.ld-return {
+  margin-bottom: 18px;
+}
+/* LE QR VERS /world (#10784) — le seul chemin d'entrée sans compte depuis la
+ * landing. Le fond BLANC est dans le SVG et dans son cadre : tout lecteur le
+ * lit, thème sombre compris. Une image, jamais un lien. */
+.ld-qr {
+  margin: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ios-ink-2);
+}
+.ld-qr img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  padding: 6px;
+  border-radius: 16px;
+  background: #ffffff;
+  border: 0.5px solid var(--ios-edge);
+}
+/* Le lien de partage en clair sous le QR (#10811) : une adresse discrète, pas
+ * un bouton. Sur écran tactile, il reste seul (voir `pointer: coarse`). */
+.ld-qr figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ld-qr-share {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ios-ink-3);
+}
+.ld-qr-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  unicode-bidi: isolate;
+  direction: ltr;
+}
+@media (pointer: coarse) {
+  .ld-qr img,
+  .ld-qr-scan {
+    display: none;
+  }
+}
+.ld-note {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ios-ink-3);
+}
+
+/* L'APERÇU DU FIL — les rangées focal de l'application, en vitrine. */
+.ld-preview {
+  flex: 1 1 340px;
+  min-width: 0;
+  position: relative;
+  border-radius: 22px;
+  background: var(--ios-surface);
+  border: 0.5px solid var(--ios-edge);
+  box-shadow: 0 30px 80px -30px color-mix(in srgb, var(--ios-indigo-500) 50%, transparent);
+  overflow: hidden;
+}
+.ld-preview::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 160px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ios-indigo-500) 22%, transparent), transparent);
+}
+.ld-preview-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+}
+.ld-preview-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 700;
+}
+.ld-preview-sub {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ios-ink-2);
+}
+.ld-globe {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--ios-indigo-500);
+  color: var(--ios-on-brand);
+  display: grid;
+  place-items: center;
+}
+.ld-rows {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 0 18px;
+}
+.ld-row {
+  display: grid;
+  grid-template-columns: 41px minmax(0, 1fr);
+  padding: 8px 16px 3px;
+}
+.ld-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--ios-indigo-950);
+}
+.ld-row--kenji .ld-avatar {
+  background: var(--ios-warning);
+}
+.ld-row--luiza .ld-avatar {
+  background: var(--ios-success-deep);
+}
+.ld-row--you .ld-avatar {
+  background: var(--ios-indigo-500);
+  color: var(--ios-on-brand);
+}
+.ld-author {
+  font-size: 13px;
+  font-weight: 800;
+}
+.ld-row--kenji .ld-author {
+  color: var(--ios-warning);
+}
+.ld-row--luiza .ld-author {
+  color: var(--ios-success);
+}
+.ld-row--you .ld-author {
+  color: var(--ios-self-name-ink);
+}
+/* En clair, l'ambre et l'émeraude de la marque tombent sous 2:1 sur le blanc :
+ * les noms d'auteur s'assombrissent jusqu'à tenir 4,5:1, teinte gardée. */
+:root.light .ld-row--kenji .ld-author {
+  color: color-mix(in srgb, var(--ios-warning) 45%, black);
+}
+:root.light .ld-row--luiza .ld-author {
+  color: color-mix(in srgb, var(--ios-success) 45%, black);
+}
+.ld-text {
+  font-size: 15px;
+  line-height: 1.35;
+}
+.ld-translated {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ios-indigo-400);
+}
+.ld-voice {
+  margin-top: 4px;
+  padding: 8px 12px;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--ios-indigo-500) 28%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ios-indigo-500) 34%, transparent);
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.ld-wave {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+}
+.ld-wave i {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--ios-ink);
+}
+.ld-wave i:nth-child(1) { height: 10px; }
+.ld-wave i:nth-child(2) { height: 18px; }
+.ld-wave i:nth-child(3) { height: 12px; }
+.ld-wave i:nth-child(4) { height: 20px; opacity: 0.45; }
+.ld-wave i:nth-child(5) { height: 9px; opacity: 0.45; }
+.ld-wave i:nth-child(6) { height: 15px; opacity: 0.45; }
+
+/* LES SECTIONS */
+.ld-section {
+  position: relative;
+  padding-block: 48px;
+}
+.ld-section h2 {
+  margin: 0 0 28px;
+  font-size: 28px;
+  font-weight: 700;
+}
+.ld-grid {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+.ld-card {
+  padding: 24px;
+  border-radius: 16px;
+  background: var(--ios-surface-card);
+  border: 0.5px solid var(--ios-edge);
+}
+.ld-step-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ios-indigo-500) 14%, transparent);
+  color: var(--ios-indigo-400);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+}
+.ld-card h3,
+.ld-feature h3 {
+  margin: 12px 0 6px;
+  font-size: 17px;
+}
+.ld-feature h3 {
+  margin-top: 0;
+}
+.ld-card p,
+.ld-feature p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ios-ink-2);
+}
+.ld-world {
+  border-radius: 22px;
+  padding: 40px clamp(20px, 4vw, 40px);
+  background: var(--ios-surface-card);
+  border: 0.5px solid var(--ios-edge);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 32px;
+  align-items: center;
+}
+.ld-world-copy {
+  flex: 999 1 420px;
+  min-width: 0;
+}
+.ld-world-copy h2 {
+  margin-bottom: 12px;
+}
+.ld-world-copy p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ios-ink-2);
+}
+.ld-world-actions {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ld-features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 28px;
+}
+
+@media (max-width: 640px) {
+  .ld-hero {
+    padding-block: 40px 32px;
+    gap: 40px;
+  }
+}

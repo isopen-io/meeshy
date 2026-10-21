@@ -24,6 +24,10 @@ struct MessageViewsDetailView: View {
     @State private var attachmentStatuses: [String: [AttachmentStatusUser]] = [:]
     @State private var isLoadingAttachmentStatuses = false
     @State private var readStatusError: MessageViewsLabels.LoadFailure? = nil
+    /// Les membres connus de la conversation, par identifiant de PARTICIPATION (#10956) : les
+    /// listes de lecture ne servent que celui-là, et c'est ici que se retrouvent le COMPTE de la
+    /// personne (sa présence servie) et son contour équipé (#10946). Lu dans le cache seul.
+    @State private var membersByParticipant: [String: PaginatedParticipant] = [:]
 
     // Views sub-filter — `nil` tant que l'utilisateur n'a rien touché :
     // l'onglet d'ouverture est alors celui que `MessageViewsFilter.initial`
@@ -57,6 +61,7 @@ struct MessageViewsDetailView: View {
         viewsTabContent
             .onAppear {
                 Task {
+                    await loadMembers()
                     await loadSendAttempts()
                     await loadReadStatus()
                     await loadAttachmentStatuses()
@@ -202,12 +207,14 @@ struct MessageViewsDetailView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.mdPlus) {
             // Author card with avatar
             HStack(spacing: MeeshySpacing.md) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: message.senderName ?? "?",
                     context: .userListItem,
                     accentColor: message.senderColor ?? contactColor,
-                    avatarURL: message.senderAvatarURL
-                )
+                    avatarURL: message.senderAvatarURL,
+                    presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
+                    ring: message.senderRing
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -222,7 +229,7 @@ struct MessageViewsDetailView: View {
                 Spacer()
 
                 // Delivery badge
-                deliveryBadge(accent: accent)
+                MessageViewsDeliveryBadge(level: deliveryStatusLevel, accent: accent)
             }
             .padding(MeeshySpacing.md)
             .background(
@@ -236,15 +243,15 @@ struct MessageViewsDetailView: View {
 
             // Message meta info (merged from old Meta tab)
             VStack(spacing: 0) {
-                metaInfoRow(icon: "number", label: String(localized: "message-detail.meta.id", bundle: .main), value: String(message.id.prefix(12)), accent: accent)
-                metaDivider
-                metaInfoRow(icon: "bubble.left.fill", label: String(localized: "message-detail.meta.type", bundle: .main), value: message.messageType.rawValue, accent: accent)
-                metaDivider
-                metaInfoRow(icon: "antenna.radiowaves.left.and.right", label: String(localized: "message-detail.meta.source", bundle: .main), value: message.messageSource.rawValue, accent: accent)
-                metaDivider
-                metaInfoRow(icon: "globe", label: String(localized: "message-detail.meta.language", bundle: .main), value: message.originalLanguage.uppercased(), accent: accent)
-                metaDivider
-                metaInfoRow(
+                MessageViewsMetaRow(icon: "number", label: String(localized: "message-detail.meta.id", bundle: .main), value: String(message.id.prefix(12)), accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(icon: "bubble.left.fill", label: String(localized: "message-detail.meta.type", bundle: .main), value: message.messageType.rawValue, accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(icon: "antenna.radiowaves.left.and.right", label: String(localized: "message-detail.meta.source", bundle: .main), value: message.messageSource.rawValue, accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(icon: "globe", label: String(localized: "message-detail.meta.language", bundle: .main), value: message.originalLanguage.uppercased(), accent: accent)
+                MessageViewsMetaDivider()
+                MessageViewsMetaRow(
                     icon: "lock.shield.fill",
                     label: String(localized: "message-detail.meta.encryption", bundle: .main),
                     value: message.isEncrypted
@@ -255,16 +262,16 @@ struct MessageViewsDetailView: View {
                 )
 
                 if message.isEdited {
-                    metaDivider
-                    metaInfoRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
+                    MessageViewsMetaDivider()
+                    MessageViewsMetaRow(icon: "pencil", label: String(localized: "message-detail.meta.modified", bundle: .main), value: formatDateTimeFR(message.updatedAt), accent: accent, valueColor: .yellow)
                 }
 
                 if !message.attachments.isEmpty {
-                    metaDivider
+                    MessageViewsMetaDivider()
                     let types = Set(message.attachments.map {
                         $0.mimeType.components(separatedBy: "/").first ?? "file"
                     })
-                    metaInfoRow(
+                    MessageViewsMetaRow(
                         icon: "paperclip",
                         label: String(localized: "message-detail.meta.attachments", bundle: .main),
                         value: "\(message.attachments.count) (\(types.sorted().joined(separator: ", ")))",
@@ -277,8 +284,8 @@ struct MessageViewsDetailView: View {
                 // conversation source même pour un tête-à-tête. Une seule
                 // surface de vérité désormais.
                 if message.forwardedFrom != nil {
-                    metaDivider
-                    metaInfoRow(
+                    MessageViewsMetaDivider()
+                    MessageViewsMetaRow(
                         icon: "arrowshape.turn.up.forward.fill",
                         label: String(localized: "message.detail.forwarded", defaultValue: "Transféré", bundle: .main),
                         value: BubbleForwardedIndicator.label(for: ForwardBadgePolicy.attribution(for: message.forwardedFrom)),
@@ -287,8 +294,8 @@ struct MessageViewsDetailView: View {
                 }
 
                 if let reply = message.replyTo {
-                    metaDivider
-                    metaInfoRow(icon: "arrowshape.turn.up.left.fill", label: String(localized: "message-detail.meta.reply-to", bundle: .main), value: reply.authorName, accent: accent)
+                    MessageViewsMetaDivider()
+                    MessageViewsMetaRow(icon: "arrowshape.turn.up.left.fill", label: String(localized: "message-detail.meta.reply-to", bundle: .main), value: reply.authorName, accent: accent)
                 }
             }
             .background(
@@ -298,203 +305,17 @@ struct MessageViewsDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
 
             if !sendAttempts.isEmpty {
-                sendAttemptsCard(accent: accent)
+                MessageViewsSendAttemptsCard(attempts: sendAttempts, accent: accent)
             }
         }
     }
 
     // MARK: - Historique d'envoi (tentatives locales)
 
-    /// Pluriel résolu explicitement : le markup AGA inline (`^[…](inflect: true)`)
-    /// dans un `defaultValue` sans entrée String Catalog fuit en brut sur iOS 18.x.
-    /// `bundle` / `locale` : même paire que `PostStatAccessibility` — la table
-    /// et la règle de pluriel, injectables pour qu'un témoin fixe la loi.
     static func sendAttemptCountLabel(_ count: Int,
                                       bundle: Bundle = .main,
                                       locale: Locale = .current) -> String {
-        String(
-            localized: "message-detail.send-history.attempt-count",
-            defaultValue: "\(count) tentatives",
-            bundle: bundle,
-            locale: locale
-        )
-    }
-
-    private func sendAttemptsCard(accent: Color) -> some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "clock.arrow.circlepath")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(accent.opacity(0.7))
-                Text(String(localized: "message-detail.send-history.title", defaultValue: "Historique d'envoi", bundle: .main))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
-                Spacer()
-                Text(Self.sendAttemptCountLabel(sendAttempts.count))
-                    .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
-            }
-
-            if let first = sendAttempts.first {
-                metaInfoRow(
-                    icon: "paperplane",
-                    label: String(localized: "message-detail.send-history.first-attempt", defaultValue: "1re tentative", bundle: .main),
-                    value: formatDateTimeFR(first.startedAt),
-                    accent: accent
-                )
-            }
-
-            VStack(spacing: 0) {
-                ForEach(sendAttempts, id: \.attemptNumber) { attempt in
-                    sendAttemptRow(attempt, accent: accent)
-                    if attempt.attemptNumber != sendAttempts.last?.attemptNumber {
-                        metaDivider
-                    }
-                }
-            }
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
-                    .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
-            )
-            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.smPlus))
-        }
-        .padding(MeeshySpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.02))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(accent.opacity(0.1), lineWidth: MeeshyBorder.hairline)
-                )
-        )
-    }
-
-    private func sendAttemptRow(_ attempt: SendAttemptRecord, accent: Color) -> some View {
-        let isSuccess = attempt.outcome == SendAttemptRecord.Outcome.success.rawValue
-        return HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
-            Image(systemName: isSuccess ? "checkmark.circle.fill" : "xmark.circle.fill")
-                .font(.caption2.weight(.medium))
-                .foregroundColor(isSuccess ? MeeshyColors.success : MeeshyColors.error)
-                .frame(width: 16)
-                .padding(.top, 1)
-                .accessibilityLabel(isSuccess
-                    ? String(localized: "message-detail.send-history.outcome.succeeded", defaultValue: "Réussi", bundle: .main)
-                    : String(localized: "message-detail.send-history.outcome.failed", defaultValue: "Échec", bundle: .main))
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Tentative \(attempt.attemptNumber)", bundle: .main))
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
-                    Text(sendAttemptTransportLabel(attempt.transport))
-                        .font(.caption2.weight(.medium))
-                        .foregroundColor(accent.opacity(0.8))
-                        .padding(.horizontal, MeeshySpacing.xsPlus)
-                        .padding(.vertical, 1)
-                        .background(Capsule().fill(accent.opacity(0.1)))
-                }
-                if let errorMessage = attempt.errorMessage, !errorMessage.isEmpty {
-                    Text(errorMessage)
-                        .font(.caption2)
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(2)
-                }
-            }
-
-            Spacer()
-
-            Text(formatTimeWithSecondsFR(attempt.startedAt))
-                .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(theme.textMuted)
-        }
-        .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.vertical, MeeshySpacing.sm)
-        .accessibilityElement(children: .combine)
-    }
-
-    private func sendAttemptTransportLabel(_ transport: String) -> String {
-        switch SendAttemptRecord.Transport(rawValue: transport) {
-        case .socketFirst: return String(localized: "message-detail.send-history.transport.realtime", defaultValue: "Temps réel", bundle: .main)
-        case .rest: return "REST"
-        case .socketFallback: return String(localized: "message-detail.send-history.transport.realtime-fallback", defaultValue: "Repli temps réel", bundle: .main)
-        case .outbox: return String(localized: "message-detail.send-history.transport.auto-retry", defaultValue: "Nouvelle tentative automatique", bundle: .main)
-        case nil: return transport
-        }
-    }
-
-    private func deliveryBadge(accent: Color) -> some View {
-        let level = deliveryStatusLevel
-        let icon: String
-        let label: String
-        let color: Color
-
-        switch level {
-        case 3:
-            icon = "eye.fill"
-            label = String(localized: "bubble.delivery.read", defaultValue: "Lu", bundle: .main)
-            color = .green
-        case 2:
-            icon = "checkmark.circle.fill"
-            label = String(localized: "bubble.delivery.delivered", defaultValue: "Distribué", bundle: .main)
-            color = accent
-        case 1:
-            icon = "checkmark"
-            label = String(localized: "bubble.delivery.sent", defaultValue: "Envoyé", bundle: .main)
-            color = accent.opacity(0.7)
-        case 0:
-            icon = "arrow.up.circle"
-            label = String(localized: "bubble.delivery.sending", defaultValue: "Envoi en cours", bundle: .main)
-            color = theme.textMuted
-        default:
-            icon = "exclamationmark.circle"
-            label = String(localized: "bubble.delivery.failed", defaultValue: "Échec de l'envoi", bundle: .main)
-            color = .red
-        }
-
-        return HStack(spacing: MeeshySpacing.xs) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.semibold))
-            Text(label)
-                .font(.caption2.weight(.semibold))
-        }
-        .foregroundColor(color)
-        .padding(.horizontal, MeeshySpacing.sm)
-        .padding(.vertical, MeeshySpacing.xs)
-        .background(
-            Capsule()
-                .fill(color.opacity(0.12))
-        )
-        .accessibilityElement(children: .combine)
-    }
-
-    private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
-        HStack(spacing: MeeshySpacing.smPlus) {
-            Image(systemName: icon)
-                .font(.caption2.weight(.medium))
-                .foregroundColor(accent.opacity(0.6))
-                .frame(width: 16)
-
-            Text(label)
-                .font(.caption.weight(.medium))
-                .foregroundColor(theme.textMuted)
-                .frame(width: 85, alignment: .leading)
-
-            Text(value)
-                .font(.caption.weight(.medium))
-                .foregroundColor(valueColor ?? theme.textPrimary)
-                .lineLimit(1)
-
-            Spacer()
-        }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.sm)
-    }
-
-    private var metaDivider: some View {
-        Rectangle()
-            .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
-            .frame(height: 0.5)
-            .padding(.leading, 38)
+        MessageViewsSendAttemptsCard.sendAttemptCountLabel(count, bundle: bundle, locale: locale)
     }
 
     // MARK: - Distribué (Delivered) — User List
@@ -518,6 +339,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.receivedBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: user.receivedAt,
@@ -554,6 +376,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(status.readBy.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: user.readAt,
@@ -591,6 +414,7 @@ struct MessageViewsDetailView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(notSeen.enumerated()), id: \.element.participantId) { index, user in
                             userStatusRow(
+                                participantId: user.participantId,
                                 username: user.displayName,
                                 avatar: user.avatarURL,
                                 date: nil,
@@ -633,7 +457,14 @@ struct MessageViewsDetailView: View {
                 MessageDetailEmptyState(icon: Self.emptyIcon(for: family), text: Self.emptyLabel(for: family))
             } else {
                 ForEach(attachments) { attachment in
-                    mediaConsumptionCard(attachment: attachment, family: family, accent: accent)
+                    MessageViewsConsumptionCard(
+                        attachment: attachment,
+                        family: family,
+                        accent: accent,
+                        users: attachmentStatuses[attachment.id] ?? [],
+                        contactColor: contactColor,
+                        members: membersByParticipant
+                    )
                 }
             }
         }
@@ -658,29 +489,16 @@ struct MessageViewsDetailView: View {
         }
     }
 
-    /// « Personne n'a encore … » — le verbe suit la famille, et il est
-    /// LOCALISÉ : les deux libellés d'origine étaient des littéraux français
-    /// sans accents (« Pas encore ecoute »), donc servis tels quels aux sept
-    /// langues.
-    private static func notConsumedLabel(for family: MediaConsumptionFamily) -> String {
-        switch family {
-        case .listened:
-            return String(localized: "message-detail.views.not-listened", defaultValue: "Pas encore écouté", bundle: .main)
-        case .watched:
-            return String(localized: "message-detail.views.not-watched", defaultValue: "Pas encore visionné", bundle: .main)
-        case .opened:
-            return String(localized: "message-detail.views.not-opened", defaultValue: "Pas encore ouvert", bundle: .main)
-        }
-    }
-
-    private func userStatusRow(username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
+    private func userStatusRow(participantId: String, username: String, avatar: String?, date: Date?, accent: Color, index: Int, trailing: AnyView? = nil) -> some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: username,
                 context: .userListItem,
                 accentColor: contactColor,
-                avatarURL: avatar
-            )
+                avatarURL: avatar,
+                presenceState: memberPresence(participantId),
+                ring: membersByParticipant[participantId]?.avatarRing
+            ) }
 
             Text(username)
                 .font(.footnote.weight(.medium))
@@ -704,177 +522,6 @@ struct MessageViewsDetailView: View {
         }
         .padding(.vertical, MeeshySpacing.sm)
         .padding(.horizontal, MeeshySpacing.xs)
-    }
-
-    /// #7228 — la famille est PASSÉE, plus devinée depuis un booléen `isAudio`
-    /// que la vidéo et l'image partageaient déjà à contresens.
-    private func mediaConsumptionCard(attachment: MessageAttachment, family: MediaConsumptionFamily, accent: Color) -> some View {
-        let users = attachmentStatuses[attachment.id] ?? []
-        let kind = AttachmentKind(mimeType: attachment.mimeType)
-        // Audio et vidéo gardent leurs glyphes historiques ; tout le reste tire
-        // le sien d'`AttachmentKind.sfSymbolName`, seule source des glyphes de
-        // pièce jointe du dépôt (un PDF n'est pas un document Word).
-        let icon = family == .listened ? "waveform" : family == .watched ? "film" : kind.sfSymbolName
-        let name = attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName
-
-        return VStack(alignment: .leading, spacing: MeeshySpacing.smPlus) {
-            // Attachment header
-            HStack(spacing: MeeshySpacing.sm) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: MeeshyRadius.xs)
-                        .fill(accent.opacity(isDark ? 0.15 : 0.1))
-                        .frame(width: 32, height: 32)
-                    Image(systemName: icon)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(accent)
-                }
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(name)
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-
-                    if let duration = attachment.duration {
-                        Text(formatDuration(duration / 1000))
-                            .font(.system(.caption2, design: .monospaced).weight(.medium))
-                            .foregroundColor(theme.textMuted)
-                    }
-                }
-
-                Spacer()
-
-                Text("\(users.count)")
-                    .font(.system(.caption2, design: .monospaced).weight(.bold))
-                    .foregroundColor(accent)
-                    .padding(.horizontal, MeeshySpacing.xsPlus)
-                    .padding(.vertical, MeeshySpacing.xxs)
-                    .background(Capsule().fill(accent.opacity(0.12)))
-            }
-
-            if users.isEmpty {
-                Text(Self.notConsumedLabel(for: family))
-                    .font(.caption)
-                    .foregroundColor(theme.textMuted)
-                    .padding(.vertical, MeeshySpacing.xs)
-            } else {
-                // User consumption rows
-                ForEach(Array(users.enumerated()), id: \.element.id) { index, user in
-                    let reading = MessageViewsConsumption.reading(for: user, in: family)
-                    let fraction = family.showsProgress
-                        ? Self.positionFraction(positionMs: reading.positionMs, complete: reading.isComplete, durationMs: attachment.duration)
-                        : 0
-
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                        HStack(spacing: MeeshySpacing.smPlus) {
-                            MeeshyAvatar(
-                                name: user.username,
-                                context: .userListItem,
-                                accentColor: contactColor,
-                                avatarURL: user.avatar
-                            )
-
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(user.username)
-                                    .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textPrimary)
-
-                                if let date = reading.consumedAt {
-                                    Text(relativeDate(date))
-                                        .font(.caption2)
-                                        .foregroundColor(theme.textMuted)
-                                }
-                            }
-
-                            Spacer()
-
-                            // Compteur de consommations — écoutes, visionnages
-                            // ou OUVERTURES (`viewCount`, servi par la
-                            // passerelle et jeté par le décodeur avant #7228).
-                            if let c = reading.count, c > 1 {
-                                Text("\(c)x")
-                                    .font(.system(.caption2, design: .monospaced).weight(.bold))
-                                    .foregroundColor(accent.opacity(0.8))
-                                    .padding(.horizontal, MeeshySpacing.xs)
-                                    .padding(.vertical, MeeshySpacing.xxs)
-                                    .background(
-                                        Capsule().fill(accent.opacity(0.08))
-                                    )
-                            }
-
-                            // Téléchargement — servi pour toutes les familles
-                            // et affiché nulle part avant #7228. Il occupe la
-                            // place que la progression laisse libre sur ce qui
-                            // n'a pas de piste.
-                            if let downloadedAt = reading.downloadedAt {
-                                HStack(spacing: MeeshySpacing.xxs) {
-                                    Image(systemName: "arrow.down.circle.fill")
-                                        .font(.caption2)
-                                    Text(relativeDate(downloadedAt))
-                                        .font(.caption2.weight(.semibold))
-                                }
-                                .foregroundColor(theme.textMuted)
-                                .accessibilityElement(children: .combine)
-                                .accessibilityLabel(
-                                    String(
-                                        format: String(localized: "message-detail.views.downloaded.a11y", defaultValue: "Téléchargé %@", bundle: .main),
-                                        relativeDate(downloadedAt)
-                                    )
-                                )
-                            }
-
-                            // Progression — seulement pour un média à piste.
-                            if family.showsProgress {
-                                if reading.isComplete {
-                                    HStack(spacing: MeeshySpacing.xxs) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .font(.caption2)
-                                        Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                            .font(.caption2.weight(.semibold))
-                                    }
-                                    .foregroundColor(MeeshyColors.success)
-                                } else if let pos = reading.positionMs, pos > 0 {
-                                    Text(formatDuration(pos / 1000))
-                                        .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                        .foregroundColor(theme.textMuted)
-                                        .padding(.horizontal, MeeshySpacing.xsPlus)
-                                        .padding(.vertical, MeeshySpacing.xxs)
-                                        .background(
-                                            Capsule()
-                                                .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
-                                        )
-                                }
-                            }
-                        }
-
-                        // La barre ne s'affiche que pour un média à piste : une
-                        // image ouverte n'est ni « à 40 % » ni « complète ».
-                        if family.showsProgress, !reading.isComplete, fraction > 0 {
-                            HStack(spacing: MeeshySpacing.xsPlus) {
-                                ProgressView(value: fraction)
-                                    .progressViewStyle(.linear)
-                                    .tint(accent)
-                                Text("\(Int((fraction * 100).rounded()))%")
-                                    .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                    .foregroundColor(theme.textMuted)
-                                    .frame(minWidth: 30, alignment: .trailing)
-                            }
-                            .padding(.leading, 54)
-                        }
-                    }
-                    .padding(.vertical, MeeshySpacing.xs)
-                }
-            }
-        }
-        .padding(MeeshySpacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.015))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04), lineWidth: MeeshyBorder.hairline)
-                )
-        )
     }
 
     private func loadingIndicator(accent: Color) -> some View {
@@ -938,6 +585,20 @@ struct MessageViewsDetailView: View {
         MessageViewsReadStatusRules.showsSpinner(
             isLoading: isLoadingReadStatus, hasExisting: readStatusData != nil
         )
+    }
+
+    /// La présence servie d'un membre listé, par son COMPTE ; aucune pour un membre inconnu.
+    private func memberPresence(_ participantId: String) -> PresenceState? {
+        MessageViewsMemberPresence.state(of: participantId, in: membersByParticipant)
+    }
+
+    private func loadMembers() async {
+        switch await CacheCoordinator.shared.participants.load(for: conversationId) {
+        case .fresh(let members, _), .stale(let members, _):
+            membersByParticipant = Dictionary(members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        case .expired, .empty:
+            return
+        }
     }
 
     private func loadReadStatus(force: Bool = false) async {
@@ -1022,62 +683,12 @@ struct MessageViewsDetailView: View {
         date.formatted(.dateTime.day().month().year().hour().minute())
     }
 
-    private func formatTimeWithSecondsFR(_ date: Date) -> String {
-        date.formatted(.dateTime.hour().minute().second())
-    }
-
-    private func formatDuration(_ seconds: Int) -> String {
-        LocalizedNumber.duration(seconds: seconds)
-    }
-
     private func relativeDate(_ date: Date) -> String {
         RelativeTimeFormatter.longString(for: date)
     }
 
-    /// Fraction (`0...1`) of an attachment consumed by a participant — ported
-    /// from the (now-deleted) `MessageInfoSheet.mediaFraction`. `complete`
-    /// always wins: a media marked complete reads as fully consumed
-    /// regardless of the last reported position (matches the server's own
-    /// `listenedComplete`/`watchedComplete` semantics).
+    /// Fraction (`0...1`) consommée d'une pièce jointe — la règle vit dans la carte.
     static func positionFraction(positionMs: Int?, complete: Bool, durationMs: Int?) -> Double {
-        if complete { return 1 }
-        guard let durationMs, durationMs > 0, let positionMs else { return 0 }
-        return min(1, max(0, Double(positionMs) / Double(durationMs)))
+        MessageViewsConsumptionCard.positionFraction(positionMs: positionMs, complete: complete, durationMs: durationMs)
     }
-}
-
-// MARK: - Read Status API Models
-
-private struct ReadStatusData: Decodable {
-    let messageId: String
-    let totalMembers: Int
-    let receivedCount: Int
-    let readCount: Int
-    let notSeenCount: Int?
-    let receivedBy: [ReceivedByUser]
-    let readBy: [ReadByUser]
-    let notSeenBy: [NotSeenByUser]?
-}
-
-private struct ReceivedByUser: Decodable, Identifiable {
-    let participantId: String
-    let displayName: String
-    let avatarURL: String?
-    let receivedAt: Date
-    var id: String { participantId }
-}
-
-private struct ReadByUser: Decodable, Identifiable {
-    let participantId: String
-    let displayName: String
-    let avatarURL: String?
-    let readAt: Date
-    var id: String { participantId }
-}
-
-private struct NotSeenByUser: Decodable, Identifiable {
-    let participantId: String
-    let displayName: String
-    let avatarURL: String?
-    var id: String { participantId }
 }

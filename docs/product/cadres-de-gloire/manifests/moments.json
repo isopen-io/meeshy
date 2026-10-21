@@ -1,0 +1,162 @@
+[
+ {
+  "file": "moments-palier-lueur.jpg",
+  "rank": "Palier de niveau",
+  "division": null,
+  "option": "Lueur · niveau 10",
+  "name": "La Première Lueur",
+  "story": "Au soir du niveau 10, sur la savane, un baobab tend ses branches-racines vers la Voie lactée ; une seule étoile s'allume au-dessus de l'anneau d'argent et des lucioles montent en spirale des herbes : la toute petite lumière qui annonce le voyage.",
+  "layout": "pied (Mee montée au ciel, Meo salut)",
+  "message": "Le voyage commence"
+ },
+ {
+  "file": "moments-palier-aurore.jpg",
+  "rank": "Palier de niveau",
+  "division": null,
+  "option": "Aurore · niveau 50",
+  "name": "Le Rideau boréal",
+  "story": "Trois rideaux d'aurore polaire, verts, turquoise et violets, ondulent autour de la photo sous la Voie lactée ; en bas, une forêt d'épicéas boréale et des crêtes enneigées au bord d'un lac gelé, et l'anneau de glace du 50 en garde un fragment dans son disque.",
+  "layout": "perchés (Mee coucou, Meo cool)",
+  "message": null
+ },
+ {
+  "file": "moments-palier-galaxie.jpg",
+  "rank": "Palier de niveau",
+  "division": null,
+  "option": "Galaxie · niveau 90",
+  "name": "La Spirale d'or",
+  "story": "Une galaxie spirale immense enroule ses bras bleutés, ses couloirs de poussière et ses nébuleuses roses autour de l'anneau d'or du 90 ; une galaxie vue par la tranche, une compagne rose, deux amas globulaires et un collier d'étoiles ourlent la photo ovale.",
+  "layout": "coins (Mee wow en haut à gauche, Meo bravo en bas à droite)",
+  "message": "On ira jusqu'aux étoiles"
+ },
+ {
+  "file": "moments-palier-nebuleuse.jpg",
+  "rank": "Palier de niveau",
+  "division": null,
+  "option": "Nébuleuse · niveau 101",
+  "name": "La Pouponnière d'étoiles",
+  "story": "Des piliers de poussière ourlés de lumière montent à travers des nappes de gaz magenta, turquoise et or ; à leur pointe naissent des étoiles, de jeunes soleils brillent de leurs six aigrettes de diffraction et, le long des flancs, de minuscules disques forment des planètes : une pouponnière stellaire.",
+  "layout": "ruban (Mee amoureuse, Meo love)",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "moments-palier-supernova.jpg",
+  "rank": "Palier de niveau",
+  "division": null,
+  "option": "Supernova · niveau 400",
+  "name": "L'Éclat",
+  "story": "L'anneau du 400 est au cœur d'une étoile qui explose : ondes de choc en coquilles, rais de lumière, éclats en traînée, et les éléments qu'elle vient de forger (carbone, oxygène, silicium, fer, or, néon, calcium) filent vers le bord du cadre avec leurs noyaux ; l'infiniment petit naît de l'infiniment grand.",
+  "layout": "selfie (Meo feu d'artifice)",
+  "message": null
+ },
+ {
+  "file": "moments-palier-singularite.jpg",
+  "rank": "Palier de niveau",
+  "division": null,
+  "option": "Singularité · niveau 1000",
+  "name": "Entre les deux infinis",
+  "story": "À la singularité, l'infiniment grand et l'infiniment petit se rejoignent : deux échelles de lentilles en puissances de dix montent vers le trou noir qui porte l'anneau du 1000, à gauche sur la toile cosmique (de la Terre, 10⁷ m, aux filaments de l'Univers, 10²⁶ m), à droite sur un réseau d'atomes (de la cellule, 10⁻⁵ m, aux quarks, 10⁻¹⁸ m). Sous la photo, l'étiquette « 10⁰ m · NOUS » et une règle de 10²⁶ à 10⁻³⁵ m disent où nous sommes : entre les deux.",
+  "layout": "duo libre (Mee et Meo trinquent, au bord de l'inscription)",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "moments-flamme-7.jpg",
+  "rank": "Flamme",
+  "division": null,
+  "option": "7 jours d'affilée · flamme",
+  "name": "Les Sept Braises",
+  "story": "Une braise fendue garde le chiffre 7 au creux de son cœur blanc ; sous elle, sept petites lampes à huile, une par jour de la semaine, toutes allumées, et en bas un lit de charbons fendus d'où de petites flammes reprennent.",
+  "layout": "pied (Mee sourire, Meo yo)",
+  "message": null
+ },
+ {
+  "file": "moments-flamme-30.jpg",
+  "rank": "Flamme",
+  "division": null,
+  "option": "30 jours d'affilée · brasier",
+  "name": "La Flamme vive",
+  "story": "Deux colonnes de feu montent de part et d'autre d'une fenêtre en ogive, comme une flamme qui s'élance ; l'écusson en forme de goutte de feu porte le 30, et des étincelles s'envolent jusqu'à Mee et Meo perchés.",
+  "layout": "perchés (Mee fête, Meo feu d'artifice)",
+  "message": "Le feu ne s'éteint pas"
+ },
+ {
+  "file": "moments-flamme-100.jpg",
+  "rank": "Flamme",
+  "division": null,
+  "option": "100 jours d'affilée · astre",
+  "name": "Le Grand Brasier",
+  "story": "Tout le cadre brûle : un mur de flammes encercle la photo, son liseré est un fer porté au rouge, et une roue de feu tournoie autour de la médaille du 100 dans une pluie d'étincelles.",
+  "layout": "côtés (Mee wow, Meo cool, rentrés dans le cadre)",
+  "message": null
+ },
+ {
+  "file": "moments-flamme-365.jpg",
+  "rank": "Flamme",
+  "division": null,
+  "option": "365 jours d'affilée · soleil",
+  "name": "Le Phénix",
+  "story": "La flamme devient oiseau : un phénix déploie ses ailes de plumes-flammes au-dessus de la photo, porte la médaille solaire du 365 sur son poitrail, et ses plumes de traîne descendent le long du cadre jusqu'à leurs ocelles d'or ; il renaît chaque jour, comme la série.",
+  "layout": "ruban (Mee bisou volé, Meo trophée)",
+  "message": "Un an, chaque jour"
+ },
+ {
+  "file": "moments-meesh-1.jpg",
+  "rank": "Meesh frappée",
+  "division": null,
+  "option": "nº 1 · la première",
+  "name": "L'Écrin",
+  "story": "La toute première Meesh repose dans son écrin ouvert : un couvercle de satin plissé en soleil sur ses charnières d'or rose, un velours grenat, une pièce d'or rose où Mee et Meo se tiennent la main en relief, et quelques pétales tombés là, comme après une fête.",
+  "layout": "pied (Mee lettre, Meo sérénade)",
+  "message": "Ma toute première"
+ },
+ {
+  "file": "moments-meesh-10.jpg",
+  "rank": "Meesh frappée",
+  "division": null,
+  "option": "nº 10 · argent",
+  "name": "La Frappe d'argent",
+  "story": "La pièce d'argent vient d'être frappée : onde de choc, rais blancs et paillettes de métal jaillissent sur un fond de guillochis bleu nuit, ces rosaces de graveur des billets et des montres ; la fenêtre porte une tranche cannelée.",
+  "layout": "côtés (Mee bravo, Meo muscles, rentrés dans le cadre)",
+  "message": null
+ },
+ {
+  "file": "moments-meesh-100.jpg",
+  "rank": "Meesh frappée",
+  "division": null,
+  "option": "nº 100 · édition or",
+  "name": "L'Édition d'or",
+  "story": "Une pièce d'or couronnée de laurier rayonne dans un soleil Art déco ; des cadres en gradins et des éventails dorés encadrent la photo, et des feuilles d'or tombent comme une pluie de fête.",
+  "layout": "ruban (Mee jackpot, Meo champagne)",
+  "message": "Cent fois merci"
+ },
+ {
+  "file": "moments-meesh-1000.jpg",
+  "rank": "Meesh frappée",
+  "division": null,
+  "option": "nº 1000 · édition prisme",
+  "name": "L'Édition Prisme",
+  "story": "Un rai de lumière blanche, venu d'une étoile, frappe la pièce holographique et se décompose en deux éventails d'arc-en-ciel qui coulent de part et d'autre de la photo, entre des druses de quartz aux facettes irisées.",
+  "layout": "selfie (Meo selfie)",
+  "message": "Mille mercis"
+ },
+ {
+  "file": "moments-jour-a.jpg",
+  "rank": "Réalisation du jour",
+  "division": null,
+  "option": "décoration A · la page de carnet",
+  "name": "La Page du jour",
+  "story": "La photo est collée dans un carnet à grands carreaux avec deux bouts de ruban de masquage ; un tampon rouge date le « Jour 283 », et à côté, à la main, les trois missions du jour cochées une à une, « 3 / 3 ! ».",
+  "layout": "pied (Mee coucou, Meo bravo)",
+  "message": "Une belle journée"
+ },
+ {
+  "file": "moments-jour-b.jpg",
+  "rank": "Réalisation du jour",
+  "division": null,
+  "option": "décoration B · le journal d'explorateur",
+  "name": "Le Journal d'explorateur",
+  "story": "Un journal de cuir cousu main : une boussole de laiton indique le Jour 283, deux bandes de bogolan, la toile peinte à la boue du Mali, bordent la photo, et trois sceaux de cire frappés d'Adinkra ghanéens — Sankofa (revenir chercher ce qu'on a appris), Nsoromma (l'étoile qui veille) et Dwennimmen (la force humble) — scellent les trois missions accomplies.",
+  "layout": "perchés (Mee danse, Meo roi)",
+  "message": null
+ }
+]

@@ -5,6 +5,10 @@
       "id": "signature.aurore",
       "mood": "signature",
       "name": "Aurore",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -163,6 +167,10 @@
       "id": "signature.prisme",
       "mood": "signature",
       "name": "Prisme",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -323,6 +331,10 @@
       "id": "signature.bulle",
       "mood": "signature",
       "name": "Bulle",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -459,6 +471,10 @@
       "id": "signature.echo",
       "mood": "signature",
       "name": "Écho",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "column",

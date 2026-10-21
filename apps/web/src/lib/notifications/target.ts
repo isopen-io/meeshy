@@ -1,3 +1,5 @@
+import type { RemovedContentType } from '@meeshy/shared/types/notification';
+
 import { DISCOVER_TAB_PARAM, REQUEST_FILTER_PARAM } from '@/lib/discover/view';
 
 import type { NotificationRecord } from './record';
@@ -46,7 +48,7 @@ import type { NotificationRecord } from './record';
  */
 export type NotificationTarget =
   | { readonly route: 'thread'; readonly params: { readonly conversation: string } }
-  | { readonly route: 'story' | 'post'; readonly params: { readonly post: string } }
+  | { readonly route: 'story' | 'post' | 'mood'; readonly params: { readonly post: string } }
   | { readonly route: 'discover'; readonly search: Readonly<Record<string, string>> }
   | { readonly route: 'userProfile'; readonly params: { readonly username: string } }
   | { readonly route: 'progression'; readonly search?: Readonly<Record<string, string>> }
@@ -108,6 +110,15 @@ const EPHEMERAL_ONLY_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * LA NOUVELLE HUMEUR D'UN CONTACT (#10813) — sa page plein écran (`/mood/$post`) :
+ * bannière, avatar, pluie de l'emoji, réponse en privé. Le TYPE suffit ici, et
+ * c'est l'exception à « le type n'est pas un discriminant d'entité » : la
+ * passerelle n'émet `friend_new_mood` que pour une humeur PUBLIÉE (STATUS ou
+ * MOOD), jamais pour un commentaire ou une réaction sur elle.
+ */
+const MOOD_TYPES: ReadonlySet<string> = new Set(['friend_new_mood']);
+
+/**
  * Les types qui ANNONCENT une demande en attente — donc ceux dont la réponse
  * se donne dans l'onglet « Demandes ». `friend_accepted` / `contact_accepted`
  * n'en sont PAS : ils portent `conversationId` et ouvrent le fil, ce qui est
@@ -162,6 +173,14 @@ export const PROGRESSION_SECTION_PARAM = 'section';
 const GAME_MISSION_TYPES: ReadonlySet<string> = new Set(['game_mission_window']);
 const MISSIONS_SECTION: NotificationTarget = { route: 'progression', search: { [PROGRESSION_SECTION_PARAM]: 'missions' } };
 
+/**
+ * UNE PUBLICATION RETIRÉE PAR LA MODÉRATION (#11150) n'existe plus : sa
+ * notification n'ouvre rien (le push atterrit sur la cloche). Un MESSAGE
+ * retiré ouvre sa conversation, un COMMENTAIRE la publication qui le portait.
+ * Le push n'a pas `contentType` : la passerelle le recopie dans `postType`.
+ */
+const REMOVED_PUBLICATIONS: ReadonlySet<string> = new Set<RemovedContentType>(['post', 'reel', 'story']);
+
 const SECURITY_TYPES: ReadonlySet<string> = new Set([
   'security_alert',
   'login_new_device',
@@ -208,7 +227,9 @@ function hinted(route: string): PushTapTarget | null {
  * puis la déduction par type — la seule qui devine.
  */
 export function resolveTarget(input: NotificationTargetInput): PushTapTarget | null {
+  if (present(input.type) === 'content_removed' && REMOVED_PUBLICATIONS.has(present(input.contentType ?? input.postType).toLowerCase())) return null;
   const postId = present(input.postId);
+  if (postId !== '' && MOOD_TYPES.has(present(input.type))) return { route: 'mood', params: { post: postId } };
   if (postId !== '') return { route: socialSurface(input), params: { post: postId } };
 
   const conversationId = present(input.conversationId);

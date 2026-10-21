@@ -13,6 +13,7 @@ import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { DEFAULT_ENGAGEMENT_SCALE, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites, type CounterWrite } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 
 jest.mock('../../../../services/notifications/notification-service-registry');
@@ -74,11 +75,14 @@ function quotaStore() {
 
 function makePrisma(options: { verified?: boolean; streak?: { current: number; lastDay: Date | null } } = {}) {
   const quotas = quotaStore();
-  const counterUpsert = jest.fn().mockResolvedValue({ count: 1 });
-  const counterUpdateMany = jest.fn().mockResolvedValue({ count: 1 });
+  // Le compteur tel que la commande le rend : l'état NEUF d'un crédit, l'image
+  // d'AVANT d'une reprise — une ligne qui tient encore les points repris.
+  const counterWrite = jest.fn(async (write: CounterWrite) =>
+    write.kind === 'take-back' ? { count: 1, points: write.points } : { count: 1 },
+  );
   const runCommandRaw = jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 0 } });
   const prisma = {
-    engagementCounter: { upsert: counterUpsert, updateMany: counterUpdateMany, findMany: jest.fn().mockResolvedValue([]) },
+    engagementCounter: { findMany: jest.fn().mockResolvedValue([]) },
     engagementMilestone: { create: jest.fn().mockResolvedValue({}), findMany: jest.fn().mockResolvedValue([]) },
     engagementConversationCredit: { create: jest.fn().mockResolvedValue({}) },
     engagementQuota: quotas,
@@ -96,104 +100,104 @@ function makePrisma(options: { verified?: boolean; streak?: { current: number; l
       update: jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: runCommandRaw,
+    $runCommandRaw: routeCounterWrites(counterWrite, runCommandRaw),
   } as unknown as PrismaClient;
-  return { prisma, quotas, counterUpsert, counterUpdateMany, runCommandRaw };
+  return { prisma, quotas, counterWrite, runCommandRaw };
 }
 
 const scaled = (scale: EngagementScale = DEFAULT_ENGAGEMENT_SCALE) => ({ scale: { current: async () => scale } });
 
 /** Les points crédités par chaque appel au compteur, dans l'ordre. */
-const credits = (counterUpsert: jest.Mock): Array<{ key: string; points: number }> =>
-  counterUpsert.mock.calls.map((call) => {
-    const args = call[0] as { create: { axisKey: string; points: number } };
-    return { key: args.create.axisKey, points: args.create.points };
-  });
+const credits = (counterWrite: jest.Mock): Array<{ key: string; points: number }> =>
+  counterWrite.mock.calls
+    .map((call) => call[0] as CounterWrite)
+    .filter((write) => write.kind === 'credit')
+    .map((write) => ({ key: write.axisKey, points: write.points }));
 
 describe('le plafond par jour', () => {
   it('crédite les demandes de traduction jusqu’à 20 par jour, puis plus rien', async () => {
-    const { prisma, counterUpsert } = makePrisma();
+    const { prisma, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
 
     for (let i = 0; i < 22; i += 1) {
       await service.recordActivity('u1', 'tool.translation_request');
     }
 
-    expect(counterUpsert).toHaveBeenCalledTimes(20);
+    expect(counterWrite).toHaveBeenCalledTimes(20);
   });
 });
 
 describe('une fois par cible, une fois par compte', () => {
   it('ne crédite qu’une adhésion par communauté', async () => {
-    const { prisma, counterUpsert } = makePrisma();
+    const { prisma, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'social.community_joined', { targetId: 'c1' });
     await service.recordActivity('u1', 'social.community_joined', { targetId: 'c1' });
     await service.recordActivity('u1', 'social.community_joined', { targetId: 'c2' });
 
-    expect(credits(counterUpsert)).toEqual([
+    expect(credits(counterWrite)).toEqual([
       { key: 'social.community_joined', points: 2 },
       { key: 'social.community_joined', points: 2 },
     ]);
   });
 
   it('ne crédite la photo de profil qu’une fois dans la vie du compte, jamais multipliée', async () => {
-    const { prisma, counterUpsert } = makePrisma();
+    const { prisma, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'profile.avatar');
     await service.recordActivity('u1', 'profile.avatar');
 
-    expect(credits(counterUpsert)).toEqual([{ key: 'profile.avatar', points: 10 }]);
+    expect(credits(counterWrite)).toEqual([{ key: 'profile.avatar', points: 10 }]);
   });
 });
 
 describe('interagir avec son propre contenu', () => {
   it('ne rapporte rien', async () => {
-    const { prisma, counterUpsert } = makePrisma();
+    const { prisma, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'tool.post_reaction', { targetId: 'p1', targetOwnerId: 'u1' });
     await service.recordActivity('u1', 'tool.post_reaction', { targetId: 'p2', targetOwnerId: 'u2' });
 
-    expect(counterUpsert).toHaveBeenCalledTimes(1);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('les gros poids', () => {
   it('créditent un post public à 500 pour un compte vérifié, selon sa visibilité', async () => {
-    const { prisma, counterUpsert } = makePrisma({ verified: true });
+    const { prisma, counterWrite } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'content.post', { targetId: 'p1', variant: 'public' });
     await service.recordActivity('u1', 'content.post', { targetId: 'p2', variant: 'friends' });
     await service.recordActivity('u1', 'content.post', { targetId: 'p3', variant: 'other' });
 
-    expect(credits(counterUpsert).map((c) => c.points)).toEqual([500, 100, 0]);
+    expect(credits(counterWrite).map((c) => c.points)).toEqual([500, 100, 0]);
   });
 
   it('bornent un compte sans contact vérifié à la valeur plafond des non-vérifiés', async () => {
-    const { prisma, counterUpsert } = makePrisma({ verified: false });
+    const { prisma, counterWrite } = makePrisma({ verified: false });
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
 
-    expect(credits(counterUpsert)).toEqual([{ key: 'content.reel', points: 10 }]);
+    expect(credits(counterWrite)).toEqual([{ key: 'content.reel', points: 10 }]);
   });
 
   it('ne créditent un même contenu qu’une fois', async () => {
-    const { prisma, counterUpsert } = makePrisma({ verified: true });
+    const { prisma, counterWrite } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
 
-    expect(counterUpsert).toHaveBeenCalledTimes(1);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('rendent leurs points quand le contenu est supprimé dans la fenêtre, une seule fois', async () => {
-    const { prisma, counterUpdateMany, runCommandRaw } = makePrisma({ verified: true });
+    const { prisma, counterWrite, runCommandRaw } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1', variant: 'public' });
 
@@ -201,12 +205,14 @@ describe('les gros poids', () => {
     const second = await service.reclaimContent('u1', 'content.reel', 'r1');
 
     expect([first, second]).toEqual([1000, 0]);
-    expect(counterUpdateMany).toHaveBeenCalledTimes(1);
+    expect(counterWrite.mock.calls.map((call) => call[0] as CounterWrite).filter((write) => write.kind === 'take-back')).toEqual([
+      { kind: 'take-back', userId: 'u1', axisKey: 'content.reel', points: 1000, count: 1 },
+    ]);
     const last = runCommandRaw.mock.calls.at(-1)?.[0] as { update: Array<{ $set: { engagementScore: unknown } }> };
     expect(JSON.stringify(last.update)).toContain('1000');
   });
 
-  it('ne reprennent rien après la fenêtre', async () => {
+  it('se reprennent encore au-delà des 24 h du barème — l’âge se juge sur la publication, chez l’appelant (#11467)', async () => {
     const { prisma, quotas } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
@@ -214,7 +220,7 @@ describe('les gros poids', () => {
       quotas.rows.set(key, { ...row, createdAt: new Date(Date.now() - 48 * 3_600_000) });
     }
 
-    expect(await service.reclaimContent('u1', 'content.reel', 'r1')).toBe(0);
+    expect(await service.reclaimContent('u1', 'content.reel', 'r1')).toBeGreaterThan(0);
   });
 });
 
@@ -227,31 +233,31 @@ describe('les visites de lien', () => {
   });
 
   it('paient 2 par visite unique jusqu’à 10, puis 4', async () => {
-    const { prisma, counterUpsert } = makePrisma();
+    const { prisma, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
 
     for (let i = 1; i <= 11; i += 1) {
       await service.recordLinkVisit(visit(`v${i}`));
     }
 
-    const points = credits(counterUpsert).map((c) => c.points);
+    const points = credits(counterWrite).map((c) => c.points);
     expect(points.slice(0, 10)).toEqual(Array(10).fill(2));
     expect(points[10]).toBe(4);
   });
 
   it('ne comptent qu’une visite par visiteur sur la fenêtre, et jamais celle du créateur', async () => {
-    const { prisma, counterUpsert } = makePrisma();
+    const { prisma, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
 
     await service.recordLinkVisit(visit('v1'));
     await service.recordLinkVisit(visit('v1'));
     await service.recordLinkVisit(visit('creator', { visitorUserId: 'creator' }));
 
-    expect(counterUpsert).toHaveBeenCalledTimes(1);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('comptent de nouveau un visiteur revenu après la fenêtre', async () => {
-    const { prisma, quotas, counterUpsert } = makePrisma();
+    const { prisma, quotas, counterWrite } = makePrisma();
     const service = new EngagementService(prisma, scaled());
     await service.recordLinkVisit(visit('v1'));
     for (const [key, row] of quotas.rows) {
@@ -260,18 +266,18 @@ describe('les visites de lien', () => {
 
     await service.recordLinkVisit(visit('v1'));
 
-    expect(counterUpsert).toHaveBeenCalledTimes(2);
+    expect(counterWrite).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('la constance', () => {
   it('paie le bonus de 7 jours quand la série l’atteint, une fois', async () => {
     const yesterday = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), new Date().getUTCDate()) - 86_400_000);
-    const { prisma, counterUpsert } = makePrisma({ streak: { current: 6, lastDay: yesterday } });
+    const { prisma, counterWrite } = makePrisma({ streak: { current: 6, lastDay: yesterday } });
     const service = new EngagementService(prisma, scaled());
 
     await service.recordActivity('u1', 'tool.sticker');
 
-    expect(credits(counterUpsert)).toContainEqual({ key: 'streak.bonus', points: 10 });
+    expect(credits(counterWrite)).toContainEqual({ key: 'streak.bonus', points: 10 });
   });
 });

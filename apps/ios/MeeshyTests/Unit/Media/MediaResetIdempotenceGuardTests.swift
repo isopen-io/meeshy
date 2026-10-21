@@ -29,19 +29,19 @@ import Combine
 /// garde sans qu'on y pense.
 ///
 /// Le cinquième lecteur, lui, s'ajoute à la main — et c'est le prix assumé
-/// d'une garde d'inventaire.
+/// d'une garde d'inventaire. (`StoryVideoPlayerView` a quitté l'inventaire avec
+/// sa vue, sans appelant : #9890.)
 final class MediaResetIdempotenceGuardTests: XCTestCase {
 
     /// `(chemin depuis la racine du dépôt, nom de la remise à zéro)`.
-    /// Les deux premiers sont les corrigés de #6977, les trois suivants ceux de
-    /// #7005 — la garde existe pour que le sixième naisse gardé.
+    /// Les deux premiers sont les corrigés de #6977, les suivants ceux de
+    /// #7005 — la garde existe pour que le suivant naisse gardé.
     private static let inventaire: [(chemin: String, fonction: String)] = [
         // #7212 — le MOTEUR a quitté `AudioPlayerView.swift` (1 806 lignes, hors
         // budget) pour son propre fichier. La garde suit l'hôte, elle ne le devine pas.
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlaybackManager.swift", "resetState"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/SharedAVPlayerManager.swift", "cleanup"),
         ("packages/MeeshySDK/Sources/MeeshyUI/Media/AudioTrimPreviewPlayer.swift", "stop"),
-        ("packages/MeeshySDK/Sources/MeeshyUI/Story/StoryVideoPlayerView.swift", "teardown"),
         ("apps/ios/Meeshy/Features/Main/Components/OverlayAudioPlayer.swift", "stop")
     ]
 
@@ -90,8 +90,8 @@ final class MediaResetIdempotenceGuardTests: XCTestCase {
 
     /// Sans elle, la garde passerait au vert en ne lisant rien — le mode de
     /// panne d'une garde de source dont un chemin a bougé.
-    func test_laGardeLitBienSesCinqLecteurs() throws {
-        XCTAssertGreaterThanOrEqual(Self.inventaire.count, 5)
+    func test_laGardeLitBienSesQuatreLecteurs() throws {
+        XCTAssertGreaterThanOrEqual(Self.inventaire.count, 4)
         for entree in Self.inventaire {
             let url = racine.appendingPathComponent(entree.chemin)
             let source = try? String(contentsOf: url, encoding: .utf8)
@@ -107,7 +107,7 @@ final class MediaResetIdempotenceGuardTests: XCTestCase {
     /// rien.** Ce lecteur était `private` au fond de `MessageOverlayMenu.swift`
     /// — donc hors de portée de tout témoin. Son extraction (#7005) est ce qui
     /// rend cette mesure possible ; la garde de source ci-dessus couvre les
-    /// quatre autres, qui vivent dans le SDK (témoins SwiftPM :
+    /// autres, qui vivent dans le SDK (témoins SwiftPM :
     /// `MediaResetIdempotenceTests`).
     @MainActor
     func test_stop_surUnLecteurJamaisDemarre_nePublieRien() {

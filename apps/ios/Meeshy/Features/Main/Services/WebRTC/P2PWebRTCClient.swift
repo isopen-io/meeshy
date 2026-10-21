@@ -5,29 +5,6 @@ import os
 #if canImport(WebRTC)
 @preconcurrency import WebRTC
 
-// PERF-001: Cache RTCPeerConnectionFactory + SSL init as a process-wide singleton.
-// RTCInitializeSSL() and RTCPeerConnectionFactory(...) are heavy (boringssl init,
-// codec enumeration, GPU probing). Doing this on every P2PWebRTCClient.init blew
-// ~150–250ms of main-thread time per call setup. The factory is internally
-// thread-safe and meant to be reused for the process lifetime.
-//
-// PERF-002: Strip software fallback codecs (VP8/VP9) by pinning the encoder's
-// preferred codec to H.264 when available. Hardware H.264 is ~3× more energy
-// efficient than software VP8/VP9 on iOS and matches what the Apple ecosystem
-// negotiates by default for FaceTime-style calls.
-enum WebRTCSharedFactory {
-    static let factory: RTCPeerConnectionFactory = {
-        RTCInitializeSSL()
-        let encoder = RTCDefaultVideoEncoderFactory()
-        let h264Codecs = encoder.supportedCodecs().filter { $0.name == kRTCVideoCodecH264Name }
-        if let preferred = h264Codecs.first {
-            encoder.preferredCodec = preferred
-        }
-        let decoder = RTCDefaultVideoDecoderFactory()
-        return RTCPeerConnectionFactory(encoderFactory: encoder, decoderFactory: decoder)
-    }()
-}
-
 // `@unchecked Sendable` contract: every property mutation is serialised on the
 // main queue — callers arrive via @MainActor (WebRTCService / CallManager), and
 // RTCPeerConnectionDelegate callbacks are `nonisolated` + dispatch to
@@ -51,7 +28,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// Scopés sur `object: capturer.captureSession` : `CameraView` instancie une
     /// SECONDE `AVCaptureSession` dans le process (composeur story), et un
     /// `object: nil` couperait la vidéo d'appel sur un événement sans rapport.
-    private var captureInterruptionObservers: [NSObjectProtocol] = []
+    private let captureInterruptions = CaptureInterruptionObserver()
     /// Génération de session : incrémentée par `disconnect()` ET `configure()`.
     /// Capturée avant l'await non-cancellation-aware de `startCapture` et
     /// re-comparée après : sans ce token, un appel terminé pendant le warm-up
@@ -67,8 +44,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// synchronously. Every call site wraps its generation check in
     /// `await MainActor.run { ... }` so the two never interleave.
     private var sessionGeneration = 0
-    private var remoteVideoTrack_: RTCVideoTrack?
-    private var remoteAudioTrack_: RTCAudioTrack?
+    var remoteVideoTrack_: RTCVideoTrack?
+    var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
 
     // §3.4 perfect negotiation (W3C/MDN). These three flags + the polite role
@@ -89,7 +66,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// Paresseux (#7955) : une requête Vision de segmentation et un
     /// `CIContext(mtlDevice:)` naissent ici — au premier appel vidéo filtré.
     private(set) lazy var videoFilterPipeline = VideoFilterPipeline()
-    private var transcriptionDataChannel: RTCDataChannel?
+    var transcriptionDataChannel: RTCDataChannel?
     private var dataChannelPingTask: Task<Void, Never>?
     private var toggleVideoTask: Task<Void, Never>?
 
@@ -316,18 +293,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             usingFrontCamera = camera.position == .front
 
             Logger.webrtc.info("[WEBRTC] selectFormat begin")
-            guard let selectedFormat = selectFormat(for: camera) else {
+            guard let selectedFormat = camera.callCaptureFormat else {
                 Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
                 throw WebRTCError.noCameraFormatAvailable
             }
             format = selectedFormat
 
-            fps = targetFrameRate(for: format)
+            fps = format.callFrameRate
             // C3 — armé AVANT `startCapture` : une interruption survenant pendant le
             // warm-up caméra doit être vue. Après les gardes device/format, pour ne
             // pas s'abonner à une session qu'on s'apprête à abandonner (simulateur
             // sans caméra : `pickCaptureDevice` throw plus haut).
-            observeCaptureInterruptions(of: capturer.captureSession)
+            captureInterruptions.observe(session: capturer.captureSession) { [weak self] interrupted in
+                guard let self else { return }
+                self.delegate?.webRTCClient(self, didChangeCameraInterruption: interrupted)
+            }
             Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
             try await capturer.startCapture(with: camera, format: format, fps: fps)
         } catch {
@@ -383,124 +363,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         #endif
     }
 
-    // Phase 2 — Apply audio codec preferences via libwebrtc 141 API.
-    // Order: Opus first (primary), RED second (RFC 2198 redundancy).
-    // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + ADR-4
-    //
-    // RED was previously enabled via SDP munging (`addAudioRedundancy`) which
-    // triggered an iOS libwebrtc bug with `a=fmtp:63 PT/PT` (silent audio after
-    // ICE connected, commit 9e663039). Using setCodecPreferences avoids the
-    // SDP regex path entirely — libwebrtc 141 negotiates RED via the standard
-    // API correctly.
     private func applyAudioCodecPreferences(audioTransceiver: RTCRtpTransceiver) {
-        // Audit P1-5 — `setCodecPreferences` is validated against
-        // `RTCRtpSender.getCapabilities()` per the W3C WebRTC spec (and
-        // libwebrtc's internal RTPMediaSection::CreateMediaContent). For
-        // sendRecv transceivers we want the SENDER caps; using receiver caps
-        // matches in the common case but can leak codecs (notably RED) with
-        // asymmetric sender/receiver definitions, causing setCodecPreferences
-        // to throw "Invalid codec".
-        let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindAudio)
-
-        let opusCodecs = capabilities.codecs.filter { $0.name.lowercased() == "opus" }
-        let redCodecs = capabilities.codecs.filter { $0.name.lowercased() == "red" }
-
-        // Opus primary, RED secondary. Drop CN, telephone-event, G722, PCMU.
-        let preferred = opusCodecs + redCodecs
-        guard !preferred.isEmpty else {
-            Logger.webrtc.warning("[WEBRTC] no Opus/RED codecs available — leaving default preferences")
-            return
-        }
-
-        // Audit 2026-05-11 — the previous typed-function-reference trick
-        // (`let setCodecs: ([X]) throws -> Void = transceiver.setCodecPreferences`)
-        // still selected the deprecated void overload at compile time —
-        // confirmed by the persistent deprecation warning emitted at the
-        // assignment site. With the deprecated variant, the catch block was
-        // unreachable and any setCodecPreferences error (codec list empty,
-        // transceiver stopped, peer rejected the preference) was silently
-        // swallowed. Force the throwing `setCodecPreferences:error:` selector
-        // via a dynamic ObjC dispatch that bypasses Swift's overload picker.
-        do {
-            try Self.invokeSetCodecPreferences(on: audioTransceiver, codecs: preferred)
-            let names = preferred.map { $0.name }.joined(separator: ", ")
-            Logger.webrtc.info("[WEBRTC] audio codec preferences applied: \(names, privacy: .public)")
-        } catch {
-            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (audio) threw: \(error.localizedDescription, privacy: .public)")
-        }
-
-        // Phase 2 — apply Opus bitrate range via RTCRtpEncodingParameters.
-        // DTX in libwebrtc 141 iOS Objective-C binding is NOT exposed on
-        // RTCRtpEncodingParameters (the WebIDL `dtx` field has no ObjC analog
-        // in this xcframework — verified against
-        // WebRTC.xcframework/.../RTCRtpEncodingParameters.h). DTX therefore
-        // remains driven by `usedtx=1` injected into Opus fmtp via
-        // mungeOpusSDP. Bitrate min/max are honored by the encoder directly
-        // through RtpEncodingParameters.
-        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + ADR-4
-        let params = audioTransceiver.sender.parameters
-        for encoding in params.encodings {
-            // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
-            encoding.maxBitrateBps = NSNumber(value: QualityThresholds.defaultBitrate)
-            encoding.minBitrateBps = NSNumber(value: QualityThresholds.audioCodecFloorBitrateBps)
-            // networkPriority = .high → DSCP EF (Expedited Forwarding, 46) for VoIP audio.
-            // Maps to the highest WebRTC pacer priority and signals QoS to the OS network stack.
-            encoding.networkPriority = .high
-        }
-        audioTransceiver.sender.parameters = params
-        let encodingsCount = params.encodings.count
-        let maxKbps = QualityThresholds.defaultBitrate / 1000
-        let minKbps = QualityThresholds.audioCodecFloorBitrateBps / 1000
-        if encodingsCount > 0 {
-            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=\(maxKbps, privacy: .public)kbps, min=\(minKbps, privacy: .public)kbps, priority=high, encodings=\(encodingsCount, privacy: .public))")
-        } else {
-            Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
-        }
+        WebRTCCodecPreferences.applyAudio(to: audioTransceiver, factory: factory)
     }
 
-    // Phase 2 — Apply video codec preferences via libwebrtc 141 API.
-    // Order H264 > VP8 > VP9 (cross-platform iOS↔Web compatibility — §6.7).
-    // AV1 excluded (uneven HW support across iOS/Chrome/Safari).
-    // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + §6.7
-    //
-    // Priority rationale:
-    // - H264: hardware-accelerated on iOS (VideoToolbox), supported by Chrome 80+, Safari 13+
-    // - VP8: software but ubiquitous, fallback for clients without H264 HW
-    // - VP9: better compression, software-only on most iOS, optional fallback
     func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
-        // Audit P1-5 — see applyAudioCodecPreferences for rationale.
-        let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
-
-        let priorityOrder = ["H264", "VP8", "VP9"]
-        let preferred = priorityOrder.flatMap { name in
-            capabilities.codecs.filter { $0.name == name }
-        }
-        guard !preferred.isEmpty else {
-            Logger.webrtc.warning("[WEBRTC] no preferred video codecs available — leaving default")
-            return
-        }
-
-        // Same dynamic ObjC dispatch rationale as applyAudioCodecPreferences.
-        do {
-            try Self.invokeSetCodecPreferences(on: videoTransceiver, codecs: preferred)
-            let names = preferred.map { $0.name }.joined(separator: ", ")
-            Logger.webrtc.info("[WEBRTC] video codec preferences applied: \(names, privacy: .public)")
-        } catch {
-            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) threw: \(error.localizedDescription, privacy: .public)")
-        }
+        WebRTCCodecPreferences.applyVideo(to: videoTransceiver, factory: factory)
     }
 
-    // P1-1 + P1-2 — SOTA video sender parameters. libwebrtc otherwise lets the
-    // encoder run open-loop (no native cap; the SDP `x-google-max-bitrate` hint is
-    // soft and non-authoritative on iOS). We set an explicit max bitrate / max
-    // framerate / resolution-downscale on every encoding, mirroring the audio
-    // bitrate path (applyAudioCodecPreferences :295). `degradationPreference`
-    // defaults to `.maintainFramerate`, which keeps talking-head motion fluid
-    // and drops resolution first under congestion; the network-survival FREEZE
-    // floor is the one caller that asks for `.maintainResolution` — at 2 fps a
-    // still, legible image beats fluid mush.
-    // Called once at capture start (720p30 / 2.5 Mbps) and again by the adaptive
-    // quality loop (WebRTCService.adjustBitrate) with throttled targets.
+    /// Plafond d'encodage vidéo (voir `WebRTCSenderEncoding.applyVideo`).
     func applyVideoEncoding(
         maxBitrateBps: Int = QualityThresholds.maxVideoBitrate,
         maxFramerate: Int = VideoConfig.hd720p30.maxFrameRate,
@@ -508,25 +379,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         degradationPreference: VideoDegradationPreference = .maintainFramerate
     ) {
         guard let sender = videoTransceiver?.sender else { return }
-        let params = sender.parameters
-        params.degradationPreference = NSNumber(value: degradationPreference.rtcPreference.rawValue)
-        for encoding in params.encodings {
-            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
-            encoding.maxFramerate = NSNumber(value: maxFramerate)
-            encoding.scaleResolutionDownBy = NSNumber(value: max(1.0, scaleResolutionDownBy))
-            // networkPriority = .high → DSCP AF41 (Assured Forwarding, 34) for real-time video.
-            // Signals to WebRTC pacer and OS that this stream deserves elevated QoS.
-            encoding.networkPriority = .high
-        }
-        sender.parameters = params
-        let count = params.encodings.count
-        if count > 0 {
-            let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
-            let degradationStr = degradationPreference.rawValue
-            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=\(degradationStr, privacy: .public) priority=high encodings=\(count, privacy: .public))")
-        } else {
-            Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
-        }
+        WebRTCSenderEncoding.applyVideo(
+            to: sender,
+            maxBitrateBps: maxBitrateBps,
+            maxFramerate: maxFramerate,
+            scaleResolutionDownBy: scaleResolutionDownBy,
+            degradationPreference: degradationPreference
+        )
     }
 
     /// Adjusts the audio sender's max bitrate at runtime. Called by the
@@ -536,57 +395,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     /// is preserved — only the ceiling is modified.
     func applyAudioEncoding(maxBitrateBps: Int) {
         guard let sender = audioTransceiver?.sender else { return }
-        let params = sender.parameters
-        for encoding in params.encodings {
-            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
-        }
-        sender.parameters = params
-        let count = params.encodings.count
-        if count > 0 {
-            Logger.webrtc.info("[WEBRTC] audio encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps encodings=\(count, privacy: .public))")
-        } else {
-            Logger.webrtc.warning("[WEBRTC] audio encoding NOT applied — encodings array empty")
-        }
-    }
-
-    /// Calls the throwing `setCodecPreferences:error:` selector on the given
-    /// transceiver via the ObjC runtime, bypassing Swift's overload resolution
-    /// which silently prefers the deprecated void overload (see audit
-    /// 2026-05-11 §B-Claim-1). The function-pointer cast matches the real
-    /// ObjC method signature: `BOOL (*)(NSObject, Selector, NSArray, NSError**)`.
-    private static func invokeSetCodecPreferences(
-        on transceiver: RTCRtpTransceiver,
-        codecs: [RTCRtpCodecCapability]
-    ) throws {
-        typealias SetCodecsIMP = @convention(c) (
-            NSObject, Selector, NSArray, AutoreleasingUnsafeMutablePointer<NSError?>
-        ) -> Bool
-        // Use #selector with the typed protocol reference so the compiler
-        // verifies the selector exists at build time (Swift's recommendation
-        // over string-literal Selector). The Protocol-suffixed name is
-        // libwebrtc's auto-generated Swift name for the ObjC protocol.
-        let selector = #selector(RTCRtpTransceiverProtocol.setCodecPreferences(_:error:))
-        guard transceiver.responds(to: selector) else {
-            throw NSError(
-                domain: "MeeshyWebRTC", code: -1,
-                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences:error: selector not exposed by libwebrtc binding"]
-            )
-        }
-        guard let imp = transceiver.method(for: selector) else {
-            throw NSError(
-                domain: "MeeshyWebRTC", code: -2,
-                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences:error: IMP unavailable"]
-            )
-        }
-        let fn = unsafeBitCast(imp, to: SetCodecsIMP.self)
-        var nsError: NSError?
-        let ok = fn(transceiver, selector, codecs as NSArray, &nsError)
-        if !ok {
-            throw nsError ?? NSError(
-                domain: "MeeshyWebRTC", code: -3,
-                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences returned false with no error"]
-            )
-        }
+        WebRTCSenderEncoding.applyAudio(to: sender, maxBitrateBps: maxBitrateBps)
     }
 
     // MARK: - SDP Negotiation
@@ -704,7 +513,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         let constraints = RTCMediaConstraints(mandatoryConstraints: mandatoryConstraints, optionalConstraints: nil)
 
-        let sdp = try await localDescription(from: pc, constraints: constraints, asOffer: true)
+        let sdp = try await PeerConnectionAsync.localDescription(from: pc, constraints: constraints, asOffer: true)
         return try await mungeAndSetLocal(sdp, type: .offer, on: pc)
     }
 
@@ -732,12 +541,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         if offerCollision {
             Logger.webrtc.info("glare: polite peer rolling back local offer")
-            try await setLocalDescription(RTCSessionDescription(type: .rollback, sdp: ""), on: pc)
+            try await PeerConnectionAsync.setLocalDescription(RTCSessionDescription(type: .rollback, sdp: ""), on: pc)
         }
 
-        try Self.validateRemoteSDP(offer.sdp)
+        try WebRTCSdpRules.validateRemoteSDP(offer.sdp)
         let rtcOffer = RTCSessionDescription(type: .offer, sdp: offer.sdp)
-        try await setRemoteDescription(rtcOffer, on: pc)
+        try await PeerConnectionAsync.setRemoteDescription(rtcOffer, on: pc)
 
         // §5.2 — canonical Unified-Plan answerer path and the REAL fix for
         // one-way media (bug b, build 465). The remote offer was applied above,
@@ -759,19 +568,19 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // only risks the Plan-B/Unified-Plan mixing that skews directions.
         let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
 
-        let sdp = try await localDescription(from: pc, constraints: constraints, asOffer: false)
+        let sdp = try await PeerConnectionAsync.localDescription(from: pc, constraints: constraints, asOffer: false)
         return try await mungeAndSetLocal(sdp, type: .answer, on: pc)
     }
 
     func setRemoteAnswer(_ answer: SessionDescription) async throws {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
-        try Self.validateRemoteSDP(answer.sdp)
+        try WebRTCSdpRules.validateRemoteSDP(answer.sdp)
         // §3.4 — mark the answer-application window so a remote offer arriving
         // mid-apply is not misread as a glare collision (MDN invariant).
         isSettingRemoteAnswerPending = true
         defer { isSettingRemoteAnswerPending = false }
         let rtcAnswer = RTCSessionDescription(type: .answer, sdp: answer.sdp)
-        try await setRemoteDescription(rtcAnswer, on: pc)
+        try await PeerConnectionAsync.setRemoteDescription(rtcAnswer, on: pc)
         Logger.webrtc.info("remote ANSWER directions: \(Self.sdpDirections(answer.sdp), privacy: .public)")
         Logger.webrtc.info("Remote answer set")
     }
@@ -785,24 +594,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             Logger.webrtc.warning("Ignoring ICE candidate — peer connection already closed")
             return
         }
-        // Input validation: reject candidates with out-of-range indices, oversized
-        // sdpMid strings, or oversized candidate lines. libwebrtc processes these
-        // strings without bounds checks; malformed input from a hostile peer could
-        // cause parsing errors or memory pressure inside the library.
-        guard candidate.sdpMLineIndex >= 0, candidate.sdpMLineIndex <= 255 else {
-            Logger.webrtc.error("Ignoring ICE candidate — sdpMLineIndex out of range: \(candidate.sdpMLineIndex)")
-            return
-        }
-        if let mid = candidate.sdpMid {
-            guard mid.count <= QualityThresholds.iceCandidateSdpMidMaxLength else {
-                Logger.webrtc.error("Ignoring ICE candidate — sdpMid too long (\(mid.count) chars)")
-                return
-            }
-        }
-        guard candidate.candidate.count <= QualityThresholds.iceCandidateLineMaxBytes else {
-            Logger.webrtc.error("Ignoring ICE candidate — candidate line too long (\(candidate.candidate.count) chars)")
-            return
-        }
+        guard WebRTCSdpRules.admits(candidate) else { return }
         let rtcCandidate = RTCIceCandidate(
             sdp: candidate.candidate,
             sdpMLineIndex: candidate.sdpMLineIndex,
@@ -928,11 +720,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let capturer = videoCapturer else { return }
         let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
         guard let camera = Self.pickCaptureDevice(preferring: position),
-              let format = selectFormat(for: camera) else {
+              let format = camera.callCaptureFormat else {
             Logger.webrtc.warning("[WEBRTC] toggleVideo on — no camera/format available, skipping capturer restart")
             return
         }
-        let fps = targetFrameRate(for: format)
+        let fps = format.callFrameRate
         // Capture the session generation before the async suspension point.
         // If disconnect() is called while startCapture is in flight (0.5–3 s
         // warm-up window), `sessionGeneration` is incremented and the post-await
@@ -968,7 +760,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             throw WebRTCError.noCameraAvailable
         }
 
-        guard let selectedFormat = selectFormat(for: camera) else {
+        guard let selectedFormat = camera.callCaptureFormat else {
             usingFrontCamera.toggle()
             throw WebRTCError.noCameraFormatAvailable
         }
@@ -980,7 +772,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // and restartCapturerIfStopped.
         let generation = sessionGeneration
         await capturer.stopCapture()
-        let fps = targetFrameRate(for: selectedFormat)
+        let fps = selectedFormat.callFrameRate
         do {
             try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         } catch {
@@ -1028,7 +820,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.uniqueID == uniqueID }).map(Self.zoomCapable) else {
             throw WebRTCError.noCameraAvailable
         }
-        guard let selectedFormat = selectFormat(for: camera) else {
+        guard let selectedFormat = camera.callCaptureFormat else {
             throw WebRTCError.noCameraFormatAvailable
         }
         // Same session-generation guard as switchCamera / restartCapturerIfStopped:
@@ -1036,7 +828,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // orphan capturer rather than leaving the camera LED on with no shutdown path.
         let generation = sessionGeneration
         await capturer.stopCapture()
-        let fps = targetFrameRate(for: selectedFormat)
+        let fps = selectedFormat.callFrameRate
         try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
         let isStale = await MainActor.run { generation != sessionGeneration }
         if isStale {
@@ -1051,25 +843,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func getStats() async -> CallStats? {
         guard let pc = peerConnection else { return nil }
-        // Project the framework's `RTCStatisticsReport` into `[CallStats.RawEntry]`
-        // inside the nonisolated `pc.statistics` callback, then reduce it after the
-        // continuation returns (`CallStats.init` is @MainActor; getStats() runs on
-        // the main actor). The arithmetic lives in the pure, tested
-        // `CallStats.reduce` (§5.7) — here we only adapt NSObject → Double.
-        let entries: [CallStats.RawEntry] = await withCheckedContinuation { continuation in
-            pc.statistics { report in
-                let parsed = report.statistics.map { id, stats in
-                    CallStats.RawEntry(id: id, type: stats.type, raw: stats.values)
-                }
-                continuation.resume(returning: parsed)
-            }
-        }
-
-        let result = CallStats.reduce(entries: entries)
-        Logger.webrtc.info(
-            "[CALL-DIAG][STATS] sent=\(result.bandwidth)B/\(result.outboundPacketsSent)pkt recvAudio=\(result.inboundAudioPackets)pkt recvVideo=\(result.inboundVideoPackets)pkt rtt=\(result.roundTripTimeMs)ms lost=\(result.packetsLost) bwe=\(result.availableOutgoingBitrateBps)bps codec=\(result.codec ?? "?", privacy: .public)"
-        )
-        return result
+        return await PeerConnectionAsync.callStats(of: pc)
     }
 
     // MARK: - DataChannel
@@ -1109,7 +883,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("DTMF: sending \(digits.count) digit(s)")
     }
 
-    private func startDataChannelPing() {
+    func startDataChannelPing() {
         stopDataChannelPing()
         // @MainActor: keeps every transcriptionDataChannel read/send serialized with
         // disconnect()'s synchronous teardown of the same property (see toggleVideo).
@@ -1122,62 +896,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    private func stopDataChannelPing() {
+    func stopDataChannelPing() {
         dataChannelPingTask?.cancel()
         dataChannelPingTask = nil
-    }
-
-    // MARK: - Interruption de capture (C3)
-
-    /// Republie les interruptions de la session de capture de CET appel vers le
-    /// delegate, sous forme d'un booléen typé.
-    ///
-    /// Aucune lecture d'`AVCaptureSession.InterruptionReason` : une session
-    /// interrompue ne délivre plus de frames, quelle qu'en soit la raison, et le
-    /// booléen reste donc juste. C'est aussi ce qui met le code à l'abri de la
-    /// croissance de l'énumération (iOS 26 y ajoute
-    /// `.sensitiveContentMitigationActivated`) — il n'y a pas de `switch` à
-    /// tenir à jour, donc pas de `default` à oublier.
-    ///
-    /// La session ne sert QU'À la vidéo ici : WebRTC gère l'audio par
-    /// `RTCAudioSession`, séparément.
-    private func observeCaptureInterruptions(of session: AVCaptureSession) {
-        stopObservingCaptureInterruptions()
-        let center = NotificationCenter.default
-        captureInterruptionObservers = [
-            center.addObserver(
-                forName: AVCaptureSession.wasInterruptedNotification,
-                object: session,
-                queue: .main
-            ) { [weak self] _ in
-                // `Task { @MainActor }` : le bloc d'observation est `@Sendable`,
-                // or `delegate` est un existentiel non-Sendable. On le lit donc
-                // DANS le domaine MainActor plutôt que de le faire traverser —
-                // même idiome que le reste du fichier.
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    Logger.webrtc.info("[WEBRTC] capture session interrupted — peer will be notified")
-                    self.delegate?.webRTCClient(self, didChangeCameraInterruption: true)
-                }
-            },
-            center.addObserver(
-                forName: AVCaptureSession.interruptionEndedNotification,
-                object: session,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    Logger.webrtc.info("[WEBRTC] capture session interruption ended")
-                    self.delegate?.webRTCClient(self, didChangeCameraInterruption: false)
-                }
-            }
-        ]
-    }
-
-    private func stopObservingCaptureInterruptions() {
-        let center = NotificationCenter.default
-        captureInterruptionObservers.forEach(center.removeObserver)
-        captureInterruptionObservers = []
     }
 
     // MARK: - Disconnect
@@ -1212,7 +933,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         videoTransceiver = nil
         videoCapturer = nil
         Task { @MainActor in P2PWebRTCClient.releaseLiveCamera() }
-        stopObservingCaptureInterruptions()
+        captureInterruptions.stop()
         pendingIceRestart = false
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
@@ -1243,7 +964,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    deinit {
+    nonisolated deinit {
         // disconnect() is MainActor-isolated; callers must call it explicitly
         // before release. ARC handles per-property cleanup here.
         //
@@ -1258,442 +979,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     // MARK: - Private Helpers
 
-    private func setLocalDescription(_ sdp: RTCSessionDescription, on pc: RTCPeerConnection) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            pc.setLocalDescription(sdp) { error in
-                if let error { cont.resume(throwing: error) }
-                else { cont.resume() }
-            }
-        }
-    }
-
     /// Phase 2 — RED is negotiated via setCodecPreferences (libwebrtc 141 API); the
     /// legacy addAudioRedundancy SDP munger was removed (9e663039, PT/PT bug). §3.8 + ADR-4.
     private func mungeAndSetLocal(_ sdp: RTCSessionDescription, type: SDPType, on pc: RTCPeerConnection) async throws -> SessionDescription {
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp, audio: dataProfile.budget.audio)
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
-        try await setLocalDescription(RTCSessionDescription(type: sdp.type, sdp: mungedSDP), on: pc)
+        try await PeerConnectionAsync.setLocalDescription(RTCSessionDescription(type: sdp.type, sdp: mungedSDP), on: pc)
         Logger.webrtc.info("local \(type.rawValue.uppercased(), privacy: .public) directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
         Logger.webrtc.info("SDP \(type.rawValue, privacy: .public) created and set as local description (Opus munged)")
         return SessionDescription(type: type, sdp: mungedSDP)
     }
 
-    private func localDescription(from pc: RTCPeerConnection, constraints: RTCMediaConstraints, asOffer: Bool) async throws -> RTCSessionDescription {
-        try await withCheckedThrowingContinuation { continuation in
-            let handler: @Sendable (RTCSessionDescription?, (any Error)?) -> Void = { sdp, error in
-                if let error { continuation.resume(throwing: error); return }
-                guard let sdp else { continuation.resume(throwing: WebRTCError.failedToCreateSDP); return }
-                continuation.resume(returning: sdp)
-            }
-            if asOffer { pc.offer(for: constraints, completionHandler: handler) } else { pc.answer(for: constraints, completionHandler: handler) }
-        }
-    }
+    static func addTransportCC(_ sdp: String) -> String { WebRTCSdpRules.addTransportCC(sdp) }
 
-    /// Validates a remote SDP string before passing it to libwebrtc. A hostile peer
-    /// could send an arbitrarily large or malformed SDP that triggers parsing errors
-    /// or memory pressure inside libwebrtc. We guard against the most obvious attacks:
-    /// excessive length and missing mandatory first line.
-    private static func validateRemoteSDP(_ sdp: String) throws {
-        guard sdp.count <= 1_000_000 else {
-            Logger.webrtc.error("Remote SDP too large (\(sdp.count) bytes) — rejecting")
-            throw WebRTCError.failedToCreateSDP
-        }
-        guard sdp.hasPrefix("v=0") else {
-            Logger.webrtc.error("Remote SDP missing required v=0 line — rejecting")
-            throw WebRTCError.failedToCreateSDP
-        }
-    }
-
-    private func setRemoteDescription(_ sdp: RTCSessionDescription, on pc: RTCPeerConnection) async throws {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
-            pc.setRemoteDescription(sdp) { error in
-                if let error { cont.resume(throwing: error) }
-                else { cont.resume() }
-            }
-        }
-    }
-
-    private func selectFormat(for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
-        // Préférer un format <=720p qui supporte 30fps. Sans le filtre fps,
-        // l'iPhone Pro peut sélectionner un format slow-motion 720p@120/240fps
-        // (où minFrameRate=maxFrameRate=120) — `RTCCameraVideoCapturer.startCapture`
-        // est alors appelé en fps=120, ce qui produit `FigCaptureSourceRemote
-        // err=-17281` (kCMIOHardwareDeviceUnsupportedFormatError) sur certains
-        // devices et gaspille batterie/CPU sur tous.
-        // Ceiling derived from VideoConfig.hd720p30 so the camera picker and the
-        // encoding config stay in sync when the preset is updated.
-        let targetFPS = Float64(VideoConfig.hd720p30.maxFrameRate)
-        let maxW = Int32(VideoConfig.hd720p30.maxResolution.width)
-        let maxH = Int32(VideoConfig.hd720p30.maxResolution.height)
-        let supports30fps: (AVCaptureDevice.Format) -> Bool = { f in
-            f.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= targetFPS && targetFPS <= $0.maxFrameRate }
-        }
-
-        let supported = RTCCameraVideoCapturer.supportedFormats(for: device)
-        let sorted = supported.sorted { f1, f2 in
-            let d1 = CMVideoFormatDescriptionGetDimensions(f1.formatDescription)
-            let d2 = CMVideoFormatDescriptionGetDimensions(f2.formatDescription)
-            return d1.width * d1.height < d2.width * d2.height
-        }
-
-        if let format = sorted.last(where: { f in
-            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-            return d.width <= maxW && d.height <= maxH && supports30fps(f)
-        }) {
-            return format
-        }
-
-        if let format = sorted.last(where: { f in
-            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-            return d.width <= maxW && d.height <= maxH
-        }) {
-            return format
-        }
-
-        return sorted.first(where: supports30fps) ?? supported.last
-    }
-
-    static func addTransportCC(_ sdp: String) -> String {
-        let transportCCURI = "http://www.ietf.org/id/draft-holmer-rmcat-transport-wide-cc-extensions-01"
-        guard !sdp.contains(transportCCURI) else { return sdp }
-
-        var lines = sdp.components(separatedBy: "\r\n")
-        var usedExtmapIDs = Set<Int>()
-        for line in lines where line.hasPrefix("a=extmap:") {
-            let idStr = line.dropFirst("a=extmap:".count).split(separator: " ", maxSplits: 1).first ?? ""
-            let cleanID = idStr.split(separator: "/").first ?? idStr
-            if let id = Int(cleanID) { usedExtmapIDs.insert(id) }
-        }
-
-        var extID = QualityThresholds.extmapStartId
-        while usedExtmapIDs.contains(extID) { extID += 1 }
-        guard extID <= QualityThresholds.extmapMaxId else {
-            // All 1-byte IDs exhausted — IDs ≥15 require the 2-byte extmap
-            // form (RFC 5285 §4.2) which not all peers handle. Do not inject
-            // rather than risk an invalid SDP.
-            Logger.webrtc.fault("[WEBRTC] extmap ID exhausted (IDs \(QualityThresholds.extmapStartId)–\(QualityThresholds.extmapMaxId) all taken) — Transport-CC not injected into SDP")
-            return sdp
-        }
-        let extmapLine = "a=extmap:\(extID) \(transportCCURI)"
-
-        // Snapshot m-line indices before mutating `lines`, then insert from the
-        // last section backward — inserting at index i shifts every subsequent
-        // line by +1, which would desync a forward-walking loop's remaining
-        // (stale) indices once more than one m-section exists (e.g. audio+video).
-        // Walking in reverse means every remaining index still points at its
-        // original line, since only later positions have shifted.
-        let mLineIndices = lines.indices.filter { lines[$0].hasPrefix("m=audio ") || lines[$0].hasPrefix("m=video ") }
-        for i in mLineIndices.reversed() {
-            var insertIdx = i + 1
-            while insertIdx < lines.count && !lines[insertIdx].hasPrefix("m=") {
-                if lines[insertIdx].hasPrefix("a=extmap:") {
-                    insertIdx += 1
-                    continue
-                }
-                if lines[insertIdx].hasPrefix("a=") && !lines[insertIdx].hasPrefix("a=extmap:") { break }
-                insertIdx += 1
-            }
-            lines.insert(extmapLine, at: insertIdx)
-        }
-
-        return lines.joined(separator: "\r\n")
-    }
-
-    static func addVideoBitrateHints(_ sdp: String) -> String {
-        var lines = sdp.components(separatedBy: "\r\n")
-        var inVideoSection = false
-
-        for i in 0..<lines.count {
-            if lines[i].hasPrefix("m=video ") {
-                inVideoSection = true
-                continue
-            }
-            if lines[i].hasPrefix("m=") { inVideoSection = false }
-            guard inVideoSection && lines[i].hasPrefix("a=fmtp:") else { continue }
-            guard !lines[i].contains("x-google-max-bitrate") else { continue }
-            lines[i] += ";x-google-max-bitrate=\(QualityThresholds.sdpVideoMaxBitrateKbps);x-google-min-bitrate=\(QualityThresholds.sdpVideoMinBitrateKbps)"
-        }
-
-        return lines.joined(separator: "\r\n")
-    }
-
-    private func targetFrameRate(for format: AVCaptureDevice.Format) -> Int {
-        // Visons 30fps pour les appels vidéo (assez lisse, ~2x moins de CPU/batterie
-        // que 60fps). Si le format ne contient pas 30 dans une de ses ranges
-        // (ex: format slow-mo pure 120fps-only), fallback sur la valeur la plus
-        // proche de 30 atteignable — JAMAIS le maxFrameRate brut, qui pour un
-        // format 120fps-only ferait crasher `startCapture` avec
-        // `FigCaptureSourceRemote err=-17281`.
-        let target: Float64 = 30
-        let ranges = format.videoSupportedFrameRateRanges
-        if ranges.contains(where: { $0.minFrameRate <= target && target <= $0.maxFrameRate }) {
-            return Int(target)
-        }
-        let candidates = ranges.flatMap { range in
-            [max(range.minFrameRate, min(range.maxFrameRate, target)), range.minFrameRate, range.maxFrameRate]
-        }
-        let closest = candidates.min(by: { abs($0 - target) < abs($1 - target) }) ?? target
-        return Int(closest)
-    }
-}
-
-// MARK: - RTCPeerConnectionDelegate
-//
-// Toutes ces méthodes sont invoquées par WebRTC depuis son `signaling_thread`
-// (et `network_thread` pour ICE). Sous Swift 6 + default isolation = MainActor
-// du target Meeshy, l'@objc thunk généré par le compilateur vérifie l'executor
-// au runtime et trap (`_swift_task_checkIsolatedSwift` →
-// `dispatch_assert_queue_fail`) dès que WebRTC livre un callback hors du Main
-// — typiquement quand `peerConnection.add(audioTrack, …)` déclenche
-// `peerConnectionShouldNegotiate(_:)` synchrone depuis le signaling thread,
-// ce qui ferme l'app au lancement de l'appel.
-//
-// Fix : marquer chaque méthode `nonisolated` pour autoriser l'appel depuis
-// n'importe quel thread. Toute mutation de state qui touche le ViewModel
-// reste dispatchée vers Main via `DispatchQueue.main.async` (already in
-// place pour le delegate forwarding).
-
-extension P2PWebRTCClient: RTCPeerConnectionDelegate {
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
-        Logger.webrtc.info("Signaling state: \(stateChanged.rawValue)")
-    }
-
-    // P0-2 — PRIMARY remote-track path under Unified-Plan. `didStartReceivingOn`
-    // fires deterministically when a receiver's track goes live, exposing it via
-    // `transceiver.receiver.track`. The legacy `didAdd stream:` below is a
-    // stream-based callback that under unified-plan can deliver late or be missed
-    // (black/intermittent remote video). Both feed `deliverRemoteTrack`, whose
-    // `!==` guard makes a second delivery of the same track a no-op.
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
-        Logger.webrtc.info("[WEBRTC] didStartReceivingOn mediaType=\(transceiver.mediaType.rawValue)")
-        deliverRemoteTrack(transceiver.receiver.track, from: peerConnection)
-    }
-
-    // P0-2 (FIX 2026-06-06) — onTrack under Unified-Plan. Fires on
-    // setRemoteDescription when each remote receiver is created, BEFORE any RTP
-    // arrives — so the remote video track reaches the renderer immediately
-    // instead of the UI being stuck on "Connexion vidéo…". This is the most
-    // reliable remote-track signal: `didStartReceivingOn` only fires once RTP is
-    // actually flowing (never, if media is delayed/blocked) and `didAdd stream:`
-    // is a Plan-B legacy callback that libwebrtc may not emit under Unified-Plan.
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
-        Logger.webrtc.info("[WEBRTC] didAddReceiver kind=\(rtpReceiver.track?.kind ?? "nil", privacy: .public)")
-        deliverRemoteTrack(rtpReceiver.track, from: peerConnection)
-    }
-
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        deliverRemoteTrack(stream.videoTracks.first, from: peerConnection)
-        deliverRemoteTrack(stream.audioTracks.first, from: peerConnection)
-    }
-
-    /// Routes a freshly-received remote track to the delegate exactly once. Both
-    /// `didStartReceivingOn` (unified-plan, primary) and `didAdd stream:` (legacy
-    /// fallback) can fire for the same track — the `!==` guard prevents attaching
-    /// the same track to the renderer twice.
-    ///
-    /// `disconnect()` calls `peerConnection?.close()` then nils the property —
-    /// `.close()` synchronously queues these WebRTC-thread callbacks, which land
-    /// on the main queue AFTER `disconnect()` has already returned. If a new call
-    /// reuses this client (redial, or a fast VoIP-push-driven incoming call) and
-    /// calls `configure()` before the stale block runs, it would otherwise deliver
-    /// call A's track into call B's state. Comparing against the originating
-    /// `RTCPeerConnection` instance (captured at the delegate call site, not the
-    /// `self.peerConnection` snapshotted here) makes every stale callback a no-op.
-    nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?, from peerConnection: RTCPeerConnection) {
-        guard let track else { return }
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.peerConnection === peerConnection else { return }
-            if let videoTrack = track as? RTCVideoTrack {
-                guard self.remoteVideoTrack_ !== videoTrack else { return }
-                self.remoteVideoTrack_ = videoTrack
-                self.delegate?.webRTCClient(self, didReceiveRemoteVideoTrack: videoTrack)
-                Logger.webrtc.info("[WEBRTC] remote video track delivered")
-            } else if let audioTrack = track as? RTCAudioTrack {
-                guard self.remoteAudioTrack_ !== audioTrack else { return }
-                self.remoteAudioTrack_ = audioTrack
-                self.delegate?.webRTCClient(self, didReceiveRemoteAudioTrack: audioTrack)
-                Logger.webrtc.info("[WEBRTC] remote audio track delivered")
-            }
-        }
-    }
-
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
-        Logger.webrtc.info("Remote stream removed")
-    }
-
-    nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
-        Logger.webrtc.info("Negotiation needed")
-    }
-
-    // §3.2 — FSM AUTHORITY. `RTCPeerConnectionState` aggregates ICE *and* DTLS:
-    // it only reports `.connected` once the DTLS handshake completes and SRTP
-    // media keys exist. Driving the call FSM off this (rather than
-    // `RTCIceConnectionState`, which can read `.connected` while DTLS is still
-    // negotiating) is the reliable "connected" gate the redesign requires —
-    // transitioning the UI to connected before keys exist produced silent /
-    // one-way audio (bug a'). The ObjC selector is
-    // `peerConnection:didChangeConnectionState:`; Swift imports it as
-    // `peerConnection(_:didChange:)` disambiguated by the enum type.
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
-        let state: PeerConnectionState = switch newState {
-        case .new: .new
-        case .connecting: .connecting
-        case .connected: .connected
-        case .disconnected: .disconnected
-        case .failed: .failed
-        case .closed: .closed
-        @unknown default: .new
-        }
-        Logger.webrtc.info("peerConnectionState (authority): \(state.rawValue, privacy: .public)")
-        // Identity guard: see `deliverRemoteTrack` — a stale `.closed`/`.failed` from a
-        // just-torn-down connection must not drive the FSM of a call that has already
-        // moved on (e.g. attemptReconnection() firing on a healthy new call).
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.peerConnection === peerConnection else { return }
-            self.delegate?.webRTCClient(self, didChangeConnectionState: state)
-        }
-    }
-
-    // §3.2 — DIAGNOSTIC ONLY. ICE state is retained for observability and
-    // quality diagnostics but is NO LONGER the FSM authority: ICE can reach
-    // `.connected` before the DTLS handshake, so transitioning the call here
-    // raced media-key setup and caused one-way / silent audio. The authority
-    // moved to `peerConnection(_:didChange: RTCPeerConnectionState)` above.
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        Logger.webrtc.info("iceConnectionState (diagnostic): \(newState.rawValue)")
-    }
-
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
-        Logger.webrtc.info("ICE gathering state: \(newState.rawValue)")
-    }
-
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
-        let iceCandidate = IceCandidate(
-            sdpMid: candidate.sdpMid,
-            sdpMLineIndex: candidate.sdpMLineIndex,
-            candidate: candidate.sdp
-        )
-        let diagTyp: String = {
-            guard let r = candidate.sdp.range(of: "typ ") else { return "?" }
-            return String(candidate.sdp[r.upperBound...].split(separator: " ").first ?? "?")
-        }()
-        Logger.webrtc.info("ICE_OUT typ=\(diagTyp, privacy: .public) mid=\(candidate.sdpMid ?? "nil", privacy: .public)")
-        // Identity guard: see `deliverRemoteTrack` — without this, a candidate generated
-        // by a connection that's already being torn down gets tagged with the CURRENT
-        // call's callId/remoteUserId by CallManager and relayed into the new call's
-        // signaling, polluting its negotiation.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.peerConnection === peerConnection else { return }
-            self.delegate?.webRTCClient(self, didGenerateCandidate: iceCandidate)
-        }
-    }
-
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
-        Logger.webrtc.debug("Removed \(candidates.count) ICE candidates")
-    }
-
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
-        Logger.webrtc.info("Data channel opened: \(dataChannel.label)")
-        guard dataChannel.label == "transcription" else { return }
-        dataChannel.delegate = self
-        // Identity guard: see `deliverRemoteTrack` — a data channel opened by a torn-down
-        // connection must not overwrite the new call's transcriptionDataChannel.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, self.peerConnection === peerConnection else { return }
-            self.transcriptionDataChannel = dataChannel
-        }
-    }
-}
-
-// MARK: - RTCDataChannelDelegate
-//
-// Idem RTCPeerConnectionDelegate — les data channel callbacks arrivent du
-// signaling thread WebRTC, donc `nonisolated`.
-
-extension P2PWebRTCClient: RTCDataChannelDelegate {
-    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        let state = dataChannel.readyState
-        Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(state.rawValue)")
-        // Identity guard: see `deliverRemoteTrack` — a stale state notification from a
-        // torn-down call's data channel must not start/stop the keep-alive ping owned by
-        // the NEW call's transcriptionDataChannel.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, dataChannel === self.transcriptionDataChannel else { return }
-            if state == .open {
-                self.startDataChannelPing()
-            } else {
-                self.stopDataChannelPing()
-            }
-        }
-    }
-
-    nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        let data = buffer.data
-        // Identity guard: see `deliverRemoteTrack` — a stale in-band message (notably
-        // `{"type":"bye"}`, see `DataChannelInbound`) from a torn-down call's data channel
-        // must not be forwarded as if it belonged to the call now in progress: CallManager
-        // reads `currentCallId` (the NEW call's id) without validating the message's origin
-        // channel, so an unguarded stale "bye" would hang up the wrong, active call.
-        DispatchQueue.main.async { [weak self] in
-            guard let self, dataChannel === self.transcriptionDataChannel else { return }
-            self.delegate?.webRTCClient(self, didReceiveDataChannelMessage: data)
-        }
-    }
-}
-
-// MARK: - VideoDegradationPreference → libwebrtc
-
-private extension VideoDegradationPreference {
-    var rtcPreference: RTCDegradationPreference {
-        switch self {
-        case .maintainFramerate: return .maintainFramerate
-        case .maintainResolution: return .maintainResolution
-        }
-    }
-}
-
-#else
-
-// MARK: - Fallback (WebRTC framework not available)
-
-final class P2PWebRTCClient: WebRTCClientProviding {
-    weak var delegate: (any WebRTCClientDelegate)?
-    var localVideoTrack: Any? { nil }
-    var remoteVideoTrack: Any? { nil }
-
-    func configure(iceServers: [IceServer]) throws {
-        Logger.webrtc.warning("WebRTC framework not available - calls are disabled")
-        throw WebRTCError.notSupported
-    }
-
-    func updateIceServers(_ iceServers: [IceServer]) {}
-    func setNegotiationRole(isPolite: Bool) {}
-    func restartIce() {}
-
-    func createOffer() async throws -> SessionDescription { throw WebRTCError.notSupported }
-    func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { throw WebRTCError.notSupported }
-    func setRemoteAnswer(_ answer: SessionDescription) async throws { throw WebRTCError.notSupported }
-    func addIceCandidate(_ candidate: IceCandidate) async throws { throw WebRTCError.notSupported }
-    func startLocalMedia(type: CallMediaType) async throws { throw WebRTCError.notSupported }
-    func toggleAudio(_ enabled: Bool) {}
-    func toggleVideo(_ enabled: Bool) {}
-    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double, degradationPreference: VideoDegradationPreference) {}
-    func applyAudioEncoding(maxBitrateBps: Int) {}
-    var hasLocalVideoTrack: Bool { false }
-    func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
-    func disableLocalVideo() async -> Bool { false }
-    func switchCamera() async throws {}
-    func availableCameras() -> [CameraDeviceOption] { [] }
-    func switchToCamera(uniqueID: String) async throws {}
-    func getStats() async -> CallStats? { nil }
-    func createDataChannel(label: String) -> Bool { false }
-    func sendDataChannelMessage(_ data: Data) {}
-    func sendDTMF(digits: String) {}
-    func disconnect() {}
-    func disconnectAfterFlushingPendingSend() {}
-
-    let videoFilterPipeline = VideoFilterPipeline()
+    static func addVideoBitrateHints(_ sdp: String) -> String { WebRTCSdpRules.addVideoBitrateHints(sdp) }
 }
 
 #endif

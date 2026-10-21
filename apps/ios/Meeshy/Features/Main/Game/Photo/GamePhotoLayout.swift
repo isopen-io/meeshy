@@ -10,7 +10,7 @@ import MeeshyUI
 ///
 /// Deux formats : 9:16 pour la story, 1:1 pour le profil. Rien n'est écrit en
 /// dur par format hors de cette table : une troisième forme s'ajoute ici.
-nonisolated enum PhotoFormat: CaseIterable, Sendable {
+nonisolated enum PhotoFormat: String, CaseIterable, Sendable {
     case story
     case square
 
@@ -44,6 +44,9 @@ nonisolated struct PhotoLayout: Equatable, Sendable {
     let banner: CGRect?
     /// La place du carré QR du lien (#9554), en FIN de ligne du bandeau, au pixel entier ; `nil` sans bandeau.
     let qr: CGRect?
+    /// La plaque d'auteur (#10816) : sous la date en 9:16 ; en 1:1, dans la rangée des oiseaux avec un bandeau, au-dessus
+    /// de la Signature sans lui. À la proportion du cartouche (360 × 100).
+    let author: CGRect
 }
 
 nonisolated enum GamePhotoLayout {
@@ -79,6 +82,17 @@ nonisolated enum GamePhotoLayout {
 
     private static let margin: CGFloat = 0.05
 
+    /// Le cartouche de la plaque d'auteur (360 × 100, `GameAuthorPlateView`).
+    static let authorPlateRatio: CGFloat = 3.6
+
+    /// Sa largeur, en fraction de la largeur : en 1:1 elle tient ENTRE les oiseaux.
+    private static func authorWidth(_ format: PhotoFormat) -> CGFloat {
+        switch format {
+        case .story: 0.7
+        case .square: 0.44
+        }
+    }
+
     /// La carte se compose-t-elle de droite à gauche ? La langue dans laquelle l'app s'affiche décide — celle
     /// des phrases de la carte —, pas la région de l'appareil.
     static func readsRightToLeft(languages: [String] = Bundle.main.preferredLocalizations) -> Bool {
@@ -104,6 +118,10 @@ nonisolated enum GamePhotoLayout {
             GameReferralBannerMetrics(size: $0.size, rightToLeft: rightToLeft).qr.offsetBy(dx: $0.minX, dy: $0.minY)
         }
         let birdTop = (banner?.minY ?? height) - (banner == nil ? edge : edge / 2) - bird
+        let plateWidth = width * authorWidth(format)
+        let plateHeight = plateWidth / authorPlateRatio
+        let squarePlateY = banner == nil ? height - edge - signature - width * 0.01 - plateHeight : birdTop + (bird - plateHeight) / 2
+        let plateY = format == .story ? height * p.dateY + width * 0.05 : squarePlateY
         return PhotoLayout(
             width: width,
             height: height,
@@ -115,7 +133,8 @@ nonisolated enum GamePhotoLayout {
             meo: CGRect(x: width - edge - bird, y: birdTop, width: bird, height: bird),
             signature: CGRect(x: (width - signature) / 2, y: height - edge - signature, width: signature, height: signature),
             banner: banner,
-            qr: qr
+            qr: qr,
+            author: CGRect(x: (width - plateWidth) / 2, y: plateY, width: plateWidth, height: plateHeight)
         )
     }
 }

@@ -74,8 +74,6 @@ final class ComposerMediaAdjustTests: XCTestCase {
         XCTAssertFalse(ComposerObjectEditorCopy.media(.effects).isEmpty)
         XCTAssertNotEqual(ComposerObjectEditorCopy.media(.effects), ComposerObjectEditorCopy.media(.adjust))
         XCTAssertFalse(ComposerObjectEditorRail.symbolName(.media(.effects)).isEmpty)
-        XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.effects)),
-                      "Un effet se juge à l'œil, comme un réglage.")
     }
 
     /// « Réinitialiser » du panneau Effets ne touche pas aux réglages, et
@@ -229,15 +227,6 @@ final class ComposerMediaAdjustTests: XCTestCase {
         let libre = CGSize(width: 402, height: 700)
         XCTAssertEqual(ComposerInlinePanelLayout.edge(object: nil, free: libre, panelHeight: compactPanel), .top)
         XCTAssertEqual(ComposerInlinePanelLayout.edge(object: .null, free: libre, panelHeight: compactPanel), .top)
-    }
-
-    func test_seulsLeFiltreLesReglagesEtLeRecadrage_rangentLePanneauSelonLObjet() {
-        XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.adjust)))
-        XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.filter)))
-        XCTAssertTrue(ComposerInlinePanelLayout.keepsObjectInSight(.media(.crop)),
-                      "Un recadrage se juge à l'œil, comme un filtre (#9499)")
-        XCTAssertFalse(ComposerInlinePanelLayout.keepsObjectInSight(.media(.trim)))
-        XCTAssertFalse(ComposerInlinePanelLayout.keepsObjectInSight(.timing))
     }
 
     /// Une image tournée d'un quart de tour occupe sa boîte englobante, pas

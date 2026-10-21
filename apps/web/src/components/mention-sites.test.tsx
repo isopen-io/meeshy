@@ -9,6 +9,7 @@ import { resetFixtureCommentsForTests } from '@/lib/api/fixtures-comments';
 import { friendRequestsQueryKey, type FriendRequestsData } from '@/lib/api/friend-requests';
 import { appQueryClient } from '@/lib/api/query-client';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadMoodComposeCatalog } from '@/lib/i18n-mood-compose-catalog';
 import StatusComposeScreen from '@/routes/status-compose';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
@@ -34,6 +35,7 @@ beforeAll(async () => {
   ensureHappyDomRegistered();
   globals.IS_REACT_ACT_ENVIRONMENT = true;
   await loadInterfaceCatalog('fr');
+  await loadMoodComposeCatalog('fr');
 });
 
 afterAll(async () => {

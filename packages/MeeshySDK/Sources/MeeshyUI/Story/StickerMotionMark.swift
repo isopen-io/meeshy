@@ -55,11 +55,19 @@ public enum StickerMotionMark {
 ///
 /// 30 Hz, pas 120 : c'est une vignette de 104 points dans une grille qui défile,
 /// et le budget d'images se dépense sur la scène, pas ici.
+///
+/// **L'horloge se met en PAUSE** dès qu'elle ne montre plus rien de neuf (#9883) :
+/// un mouvement en un coup (`.pop`, `.tada`) bat jusqu'à sa dernière image puis
+/// se fige sur la pose de repos ; une vignette sortie de l'écran suspend la
+/// sienne. Avant, chaque vignette de la grille réveillait le fil principal à
+/// 30 Hz pour toujours, y compris celles qui ne bougeaient plus.
 public struct StickerMotionPreview: ViewModifier {
     private let animation: StickerAnimation?
     private let side: CGFloat
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var origine = Date()
+    @State private var isSettled = false
+    @State private var isOnScreen = false
 
     public init(animation: StickerAnimation?, side: CGFloat) {
         self.animation = animation
@@ -68,8 +76,8 @@ public struct StickerMotionPreview: ViewModifier {
 
     public func body(content: Content) -> some View {
         if let animation, !reduceMotion {
-            TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { contexte in
-                let pose = animation.pose(at: contexte.date.timeIntervalSince(origine))
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: isSettled || !isOnScreen)) { contexte in
+                let pose = animation.pose(at: elapsed(at: contexte.date, for: animation))
                 content
                     .rotationEffect(.degrees(pose.rotationDegrees))
                     .scaleEffect(pose.scale)
@@ -77,9 +85,24 @@ public struct StickerMotionPreview: ViewModifier {
                             y: CGFloat(pose.offsetY) * side)
                     .opacity(pose.opacity)
             }
+            .onAppear { isOnScreen = true }
+            .onDisappear { isOnScreen = false }
+            .task(id: animation) {
+                isSettled = false
+                guard let delay = animation.settlesAfter else { return }
+                do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+                isSettled = true
+            }
         } else {
             content
         }
+    }
+
+    /// Une horloge figée garde sa dernière image : une fois posé, le temps est
+    /// ramené à l'instant de repos pour que cette image soit la pose d'arrivée.
+    private func elapsed(at date: Date, for animation: StickerAnimation) -> TimeInterval {
+        if isSettled, let settle = animation.settlesAfter { return settle }
+        return date.timeIntervalSince(origine)
     }
 }
 

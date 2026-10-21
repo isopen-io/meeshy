@@ -9,6 +9,8 @@ final class MockGamePhotoNotebook: GamePhotoNotebooking {
 
     private(set) var entries: [NotebookEntry] = []
     var keepSucceeds = true
+    /// Ce que « Garder » rend ; `nil` : `keepSucceeds` décide (`.kept` ou `.unavailable`).
+    var keepOutcome: NotebookKeepOutcome?
     private(set) var postponed: [PhotoMoment] = []
     private(set) var kept: [(moment: PhotoMoment, photo: KeptPhoto)] = []
 
@@ -17,21 +19,22 @@ final class MockGamePhotoNotebook: GamePhotoNotebooking {
         guard !entries.contains(where: { $0.momentId == moment.id }) else { return true }
         entries.append(NotebookEntry(
             momentId: moment.id, emblem: moment.emblem, kicker: moment.kicker, title: moment.title,
-            status: .pending, createdAt: Date(), expiresAt: Date().addingTimeInterval(7 * 86_400),
-            mode: nil, storyFile: nil, squareFile: nil
+            status: .pending, createdAt: Date()
         ))
         return true
     }
 
-    func keep(_ moment: PhotoMoment, photo: KeptPhoto) async -> Bool {
-        guard keepSucceeds else { return false }
+    func keep(_ moment: PhotoMoment, photo: KeptPhoto) async -> NotebookKeepOutcome {
+        let outcome = keepOutcome ?? (keepSucceeds ? .kept : .unavailable)
+        guard outcome == .kept else { return outcome }
         kept.append((moment, photo))
         entries.removeAll { $0.momentId == moment.id }
         entries.append(NotebookEntry(
             momentId: moment.id, emblem: moment.emblem, kicker: moment.kicker, title: moment.title,
-            status: .kept, createdAt: Date(), expiresAt: nil, mode: photo.mode, storyFile: "s", squareFile: "q"
+            status: .kept, createdAt: Date(), mode: photo.mode, storyFile: "s",
+            sourceFile: photo.source == nil ? nil : "src", recipe: photo.recipe
         ))
-        return true
+        return .kept
     }
 
     func list() async -> [NotebookEntry] { entries }
@@ -42,4 +45,9 @@ final class MockGamePhotoNotebook: GamePhotoNotebooking {
     }
 
     func imageData(for entry: NotebookEntry, square: Bool) async -> Data? { nil }
+
+    func sourceData(for entry: NotebookEntry) async -> Data? { nil }
+
+    var bytes: Int64 = 0
+    func occupiedBytes() async -> Int64 { bytes }
 }

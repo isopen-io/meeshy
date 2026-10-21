@@ -412,6 +412,41 @@ describe('composeMessageLabel — les états du lot (#5936)', () => {
     expect(label).not.toContain('Bruno');
   });
 
+  /* LE MASQUE NE SE VOIT PAS À L'OREILLE (#10101) — la pastille « sans compte »
+     a quitté l'avis d'arrivée d'un invité, le masque suffit à l'œil ; le
+     libellé de la rangée la dit, lui, pour le lecteur d'écran. */
+  const joinNotice = (isAnonymous: boolean) =>
+    message({
+      messageType: 'system',
+      messageSource: 'system',
+      content: 'Emma a rejoint la conversation',
+      metadata: { kind: 'member-joined', participantId: 'p-emma', displayName: 'Emma', isAnonymous, viaShareLink: true },
+    });
+
+  test('avis d’arrivée d’un invité : « sans compte » se dit après la phrase', async () => {
+    await loadInterfaceCatalog('fr');
+    const label = composeMessageLabel({ language: 'fr',
+      message: joinNotice(true),
+      isMine: false,
+      servedText: 'Emma a rejoint la conversation',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).toBe('Emma a rejoint la conversation, sans compte');
+  });
+
+  test('avis d’arrivée d’un compte : la phrase seule', async () => {
+    await loadInterfaceCatalog('fr');
+    const label = composeMessageLabel({ language: 'fr',
+      message: joinNotice(false),
+      isMine: false,
+      servedText: 'Emma a rejoint la conversation',
+      delivery: null,
+      protection: 'standard',
+    });
+    expect(label).toBe('Emma a rejoint la conversation');
+  });
+
   test('sticker : un segment « sticker 🔥 » remplace le texte', () => {
     const label = composeMessageLabel({ language: 'fr',
       message: message({ content: '🔥', metadata: { sticker: { emoji: '🔥' } } }),

@@ -1,5 +1,6 @@
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import type { ContentTrackingLink } from '../TrackingLinkService';
+import { linkTrackingAuthorOf, type LinkSenderFacts } from './linkTrackingAuthor';
 
 /**
  * La seule méthode de `TrackingLinkService` que cette unité appelle, en
@@ -109,6 +110,12 @@ export async function processExplicitLinks(params: ExplicitLinkParams): Promise<
 export interface LinkTargetMessage {
   readonly id: string;
   readonly conversationId: string;
+  /**
+   * L'EXPÉDITEUR du message édité, tel que la lecture l'a chargé (#10286) :
+   * ses adresses ne sont suivies que s'il est un compte inscrit. Requis — un
+   * transport qui ne le passe pas ne compile pas, et `null` ne suit rien.
+   */
+  readonly sender: LinkSenderFacts | null | undefined;
 }
 
 /**
@@ -189,6 +196,13 @@ export async function reconcileEditedLinks(params: EditedLinkParams): Promise<Re
   // conclure que le message ne porte plus de lien effacerait le mapping d'un
   // texte qui le porte toujours.
   if (!linkService) return { processedContent: content, trackingLinks: [], reconciled: false };
+
+  // Un message d'invité anonyme (ou d'expéditeur indéterminé) ne porte aucun
+  // lien suivi (#10286) : texte tel qu'écrit, et carte ÉTABLIE vide — ce qui
+  // efface aussi celle qu'un message écrit avant la loi gardait en base.
+  if (!linkTrackingAuthorOf(message.sender).tracked) {
+    return { processedContent: content, trackingLinks: [], reconciled: true };
+  }
 
   let rewriteFailed = false;
   const processedContent = await processExplicitLinks({

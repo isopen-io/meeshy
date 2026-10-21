@@ -27,12 +27,14 @@ final class StickySectionStructureTests: XCTestCase {
 
     // MARK: - Source
 
+    /// L'UNITÉ de la liste : en-tête de section, rangs, chrome de défilement et modificateur d'inset
+    /// vivent dans `ConversationListView+*.swift`.
     private func listViewSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift")
+        try AppSourceGuard.unit("Meeshy/Features/Main/Views/ConversationListView.swift")
     }
 
     private func viewModelSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift")
+        try source(at: "Meeshy/Features/Main/ViewModels/ConversationListViewModel+Ordering.swift")
     }
 
     private func source(at relativePath: String) throws -> String {
@@ -97,20 +99,20 @@ final class StickySectionStructureTests: XCTestCase {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertTrue(
-            code.contains("private var stickyHeaderInset: CGFloat { LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.accessoryCollapsedHeight : 0 }"),
+            code.contains("static var stickyHeaderInset: CGFloat { LentilleFeatureFlag.isLentilleListEnabled ? CollapsibleHeaderMetrics.accessoryCollapsedHeight : 0 }"),
             "L'inset de tête doit valoir la hauteur de la barre REPLIÉE AVEC SON ACCESSOIRE (la trail compacte de stories — `accessoryCollapsedHeight`, 2026-08-21 : à `collapsedHeight` le sticker épinglé passait sous la trail) sous drapeau ON et " +
             "ZÉRO sous OFF, lue depuis `CollapsibleHeaderMetrics` — la métrique que le " +
             "header consomme lui-même, jamais un nombre recopié. Un inset inconditionnel " +
             "décalerait la liste de tout le monde, drapeau éteint compris."
         )
         XCTAssertTrue(
-            code.contains("private var scrollContentTopPadding: CGFloat { CollapsibleHeaderMetrics.expandedHeight - stickyHeaderInset }"),
+            code.contains("static var contentTopPadding: CGFloat { CollapsibleHeaderMetrics.expandedHeight - stickyHeaderInset }"),
             "Ce que l'inset prend à la région visible, le padding de contenu cesse de le " +
             "prendre au contenu : la somme reste `expandedHeight`, donc la position de repos " +
             "de la liste ne bouge pas d'un point entre ON et OFF."
         )
         XCTAssertTrue(
-            code.contains("topPadding: scrollContentTopPadding"),
+            code.contains("topPadding: ConversationListScrollChrome.contentTopPadding"),
             "Le `topPadding` passé à `MeeshyRefreshableScroll` doit être la part RESTANTE, " +
             "pas `expandedHeight` en dur — sinon la liste démarre une hauteur de barre trop " +
             "bas sous drapeau ON."
@@ -119,7 +121,7 @@ final class StickySectionStructureTests: XCTestCase {
         // drapeau OFF ⇒ le modificateur n'est PAS monté (zéro chaîne ajoutée),
         // drapeau ON ⇒ même `safeAreaInset` qu'avant, hauteur inchangée.
         XCTAssertTrue(
-            code.contains(".modifier(LentilleStickyHeaderInsetModifier( isEnabled: LentilleFeatureFlag.isLentilleListEnabled, height: stickyHeaderInset ))"),
+            code.contains(".modifier(LentilleStickyHeaderInsetModifier( isEnabled: LentilleFeatureFlag.isLentilleListEnabled, height: Self.stickyHeaderInset ))"),
             "L'inset se pose au SITE D'APPEL, sur `MeeshyRefreshableScroll`, via " +
             "`LentilleStickyHeaderInsetModifier` injecté du drapeau (R-a) : le ScrollView " +
             "interne hérite de la safe area réduite et sa ligne d'épinglage descend d'autant. " +
@@ -132,13 +134,13 @@ final class StickySectionStructureTests: XCTestCase {
             "conditionnelle (R-a)."
         )
         XCTAssertEqual(
-            occurrences(of: "private var stickyHeaderInset: CGFloat {", in: code), 1,
+            occurrences(of: "static var stickyHeaderInset: CGFloat {", in: code), 1,
             "UNE seule définition de `stickyHeaderInset` — un second site concurrent pourrait " +
             "diverger silencieusement de la formule gardée ci-dessus."
         )
         XCTAssertEqual(
-            occurrences(of: "private var scrollContentTopPadding: CGFloat {", in: code), 1,
-            "UNE seule définition de `scrollContentTopPadding` — même risque de divergence."
+            occurrences(of: "static var contentTopPadding: CGFloat {", in: code), 1,
+            "UNE seule définition de `contentTopPadding` — même risque de divergence."
         )
     }
 
@@ -184,10 +186,8 @@ final class StickySectionStructureTests: XCTestCase {
         let code = normalizedCode(try listViewSource())
 
         XCTAssertTrue(
-            code.contains(
-                "Section { sectionContent(for: group, passContext: passContext, " +
-                "trackedSectionId: trackedSectionId) } header: { sectionHeader(for: group) }"
-            ),
+            code.contains("Section { ConversationListSectionRows(")
+                && code.contains("} header: { ConversationListSectionHeader("),
             "Chaque groupe doit être une `Section` dont les RANGS sont le contenu et le " +
             "header le slot `header:` — la seule forme que `pinnedViews: [.sectionHeaders]` " +
             "sait épingler (contrat LWS-6 travail 1). Header rendu avant le contenu comme " +
@@ -200,13 +200,17 @@ final class StickySectionStructureTests: XCTestCase {
 
         // Le pliage garde le CONTENU (`sectionContent`), jamais le header.
         XCTAssertTrue(
-            code.contains("private func sectionContent( for group: (section: ConversationSection, conversations: [Conversation]), passContext: ConversationRowPassContext, trackedSectionId: String? ) -> some View { if isSectionContentVisible(group.section.id) {"),
+            code.contains("isVisible: isSectionContentVisible(group.section.id),")
+                && code.contains("struct ConversationListSectionRows<Row: View>: View {")
+                && code.contains("var body: some View { if isVisible {"),
             "La condition de pliage doit garder le CONTENU de la section et lui seul : " +
-            "`sectionContent` commence par `if isSectionContentVisible(...)`. Critère LWS-6 : " +
+            "`ConversationListSectionRows` commence par `if isVisible` (alimenté par " +
+            "`isSectionContentVisible(...)`). Critère LWS-6 : " +
             "« replier une catégorie masque ses rangs et CONSERVE son sticker »."
         )
         XCTAssertFalse(
-            code.contains("private func sectionHeader( for group: (section: ConversationSection, conversations: [Conversation]) ) -> some View { if isSectionContentVisible"),
+            code.contains("var body: some View { if isContentVisible")
+                || code.contains("var body: some View { if isSectionContentVisible"),
             "Le header ne doit JAMAIS être conditionné par le pliage — sinon replier une " +
             "catégorie ferait disparaître son sticker et l'utilisateur perdrait le moyen " +
             "de la déplier."
@@ -220,7 +224,7 @@ final class StickySectionStructureTests: XCTestCase {
 
         XCTAssertEqual(
             occurrences(of: "LentilleSticker(", in: code), 1,
-            "Un seul site de montage du sticker (drapeau ON) — `sectionHeaderLabel`."
+            "Un seul site de montage du sticker (drapeau ON) — `headerLabel`."
         )
         XCTAssertEqual(
             occurrences(of: "SectionHeaderView(", in: code), 1,
@@ -229,7 +233,7 @@ final class StickySectionStructureTests: XCTestCase {
         )
         XCTAssertTrue(
             code.contains("if LentilleFeatureFlag.isLentilleListEnabled { LentilleSticker("),
-            "Le mux de peau vit dans `sectionHeaderLabel` et NULLE PART ailleurs : " +
+            "Le mux de peau vit dans `headerLabel` et NULLE PART ailleurs : " +
             "sticker sous drapeau, `SectionHeaderView` sinon."
         )
     }

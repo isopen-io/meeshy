@@ -111,4 +111,25 @@ final class ImageEditorViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.cropBackdrop().cgImage)
         XCTAssertNotNil(sut.comparisonImage().cgImage)
     }
+
+    // MARK: - Render loop (#9873)
+
+    func test_update_rendersThePreviewOutsideTheCall_thenPublishesIt() async throws {
+        let sut = makeSUT()
+        let initial = sut.previewImage
+
+        sut.update { $0.filter = .mono }
+
+        XCTAssertTrue(sut.previewImage === initial, "a slider step never renders inside the gesture's call")
+        try await StoryVideoAdjustmentsRenderTests.attendre { sut.previewImage !== initial }
+    }
+
+    func test_loadFilterThumbnails_publishesOneThumbnailPerFilter_offTheCall() async throws {
+        let sut = makeSUT()
+
+        sut.loadFilterThumbnails()
+
+        XCTAssertTrue(sut.filterThumbnails.isEmpty, "the thumbnails render outside the call")
+        try await StoryVideoAdjustmentsRenderTests.attendre { sut.filterThumbnails.count == ImageFilter.allCases.count }
+    }
 }

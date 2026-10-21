@@ -49,6 +49,30 @@ final class LentilleScreenNotMountedTests: XCTestCase {
     /// délibéré, documenté, jamais un glissement.
     private static let graftSite = "ConversationListView.swift"
 
+    /// Le site de greffe est l'UNITÉ de la liste (`ConversationListView.swift` + `ConversationListView+*.swift`) :
+    /// le rail de stories et l'en-tête de section, qui montent la peau sous le drapeau, vivent dans leurs fichiers.
+    ///
+    /// Les compagnons qui existaient AVANT l'extraction (`+Overlays`, `+Rows`…) restent hors de la greffe :
+    /// ils n'ont jamais eu le droit de référencer la peau, et ce balayage continue de les surveiller.
+    private static let companionsOutsideTheGraft: Set<String> = [
+        "ConversationListView+Overlays.swift", "ConversationListView+Rows.swift",
+        "ConversationListView+ConfirmationAnchor.swift", "ConversationListView+PeerSignals.swift",
+        "ConversationListView+SectionRules.swift",
+        // Sortis de `+Overlays` : le menu contextuel, l'en-tête, la barre du bas et le glisser de chip
+        // n'ont jamais eu le droit de référencer la peau non plus.
+        "ConversationListView+ChipDrag.swift", "ConversationListView+HeaderOverlay.swift",
+        "ConversationListView+BottomBar.swift", "ConversationListView+MoveToSectionMenuItems.swift",
+    ]
+
+    private static var graftURLs: [URL] {
+        AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/\(graftSite)")
+            .filter { !companionsOutsideTheGraft.contains($0.lastPathComponent) }
+    }
+
+    private static var graftFileNames: Set<String> {
+        Set(graftURLs.map(\.lastPathComponent))
+    }
+
     /// Tout `.swift` sous `Meeshy/`, HORS `Features/Main/Lentille/` — découvert,
     /// jamais recopié.
     private func nonLentilleSwiftFiles() throws -> [URL] {
@@ -82,7 +106,7 @@ final class LentilleScreenNotMountedTests: XCTestCase {
     /// `LentilleFlatRow` — le composant principal de la peau Lentille —
     /// n'apparaît NULLE PART hors de `Lentille/` : aucun call site ne le monte.
     func test_lentilleFlatRow_isReferencedNowhereOutsideLentille() throws {
-        for url in try nonLentilleSwiftFiles() where url.lastPathComponent != Self.graftSite {
+        for url in try nonLentilleSwiftFiles() where !Self.graftFileNames.contains(url.lastPathComponent) {
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             let code = AppSourceGuard.stripComments(raw)
             XCTAssertFalse(
@@ -96,11 +120,11 @@ final class LentilleScreenNotMountedTests: XCTestCase {
     }
 
     /// Idem pour les composants de chrome de Lentille : `LentilleSticker`,
-    /// `SectionScrollPill`, `StoriesVivantsRail` — jamais appelés depuis le code
+    /// `SectionScrollPill` — jamais appelés depuis le code
     /// non-Lentille.
     func test_lentilleChromeComponents_areReferencedNowhereOutsideLentille() throws {
         let chromeComponents = ["LentilleSticker", "SectionScrollPill", "StoriesVivantsRail"]
-        for url in try nonLentilleSwiftFiles() where url.lastPathComponent != Self.graftSite {
+        for url in try nonLentilleSwiftFiles() where !Self.graftFileNames.contains(url.lastPathComponent) {
             guard let raw = try? String(contentsOf: url, encoding: .utf8) else { continue }
             let code = AppSourceGuard.stripComments(raw)
             for component in chromeComponents {
@@ -130,33 +154,34 @@ final class LentilleScreenNotMountedTests: XCTestCase {
     /// partagée avec la pilule de section pour que les deux crient le même mot —
     /// n'est pas un montage et n'a donc pas à vivre sous le drapeau.
     func test_conversationListView_allLentilleReferencesAreGuarded() throws {
-        let clvPath = Self.meeshyRoot
-            .appendingPathComponent("Features/Main/Views")
-            .appendingPathComponent(Self.graftSite)
-        guard let raw = try? String(contentsOf: clvPath, encoding: .utf8) else {
-            XCTFail("Impossible de lire \(clvPath.path)")
-            return
-        }
-        let code = AppSourceGuard.stripComments(raw)
-
-        let guardedRanges = Self.flagGuardedRanges(in: code)
-        XCTAssertFalse(
-            guardedRanges.isEmpty,
-            "Aucun bloc `LentilleFeatureFlag.isLentilleListEnabled` trouvé dans " +
-            "\(Self.graftSite) — le balayage ne voit plus le code, ou le drapeau a disparu."
-        )
-
+        // Chaque fichier de l'unité est balayé SEUL : la contenance d'accolades ne traverse pas un fichier.
+        var anyGuardedRange = false
         var offenders: [String] = []
-        for mount in ["LentilleFlatRow(", "LentilleSticker(", "StoriesVivantsRail(", "SectionScrollPillHost("] {
-            var searchStart = code.startIndex
-            while let found = code.range(of: mount, range: searchStart..<code.endIndex) {
-                let offset = code.distance(from: code.startIndex, to: found.lowerBound)
-                if !guardedRanges.contains(where: { $0.contains(offset) }) {
-                    offenders.append("\(mount) hors bloc (offset \(offset))")
+        for url in Self.graftURLs {
+            guard let raw = try? String(contentsOf: url, encoding: .utf8) else {
+                XCTFail("Impossible de lire \(url.path)")
+                return
+            }
+            let code = AppSourceGuard.stripComments(raw)
+            let guardedRanges = Self.flagGuardedRanges(in: code)
+            anyGuardedRange = anyGuardedRange || !guardedRanges.isEmpty
+
+            for mount in ["LentilleFlatRow(", "LentilleSticker(", "SectionScrollPillHost("] {
+                var searchStart = code.startIndex
+                while let found = code.range(of: mount, range: searchStart..<code.endIndex) {
+                    let offset = code.distance(from: code.startIndex, to: found.lowerBound)
+                    if !guardedRanges.contains(where: { $0.contains(offset) }) {
+                        offenders.append("\(mount) hors bloc (offset \(offset), \(url.lastPathComponent))")
+                    }
+                    searchStart = found.upperBound
                 }
-                searchStart = found.upperBound
             }
         }
+        XCTAssertTrue(
+            anyGuardedRange,
+            "Aucun bloc `LentilleFeatureFlag.isLentilleListEnabled` trouvé dans " +
+            "\(Self.graftSite) et ses extensions — le balayage ne voit plus le code, ou le drapeau a disparu."
+        )
 
         XCTAssertTrue(
             offenders.isEmpty,

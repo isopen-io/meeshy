@@ -235,4 +235,58 @@ final class ComposerSoundFileIntakeTests: XCTestCase {
         XCTAssertFalse(code.contains("allowedContentTypes:[.item],"),
                        "Un filtre figé est revenu : la porte du son laisserait choisir un PDF.")
     }
+
+    // MARK: - #10363 · Un fichier audio joint depuis Fichiers devient un son
+
+    /// **La loi d'aiguillage** (retour porteur 2026-10-12) : ce qui est de
+    /// l'AUDIO est un son, tout le reste — image, vidéo, document — un média.
+    func test_10363_unFichierAudio_estUnSon_uneImageOuUneVideo_unMedia() throws {
+        let aac = try XCTUnwrap(UTType(filenameExtension: "aac"))
+        for audio in [UTType.mp3, .mpeg4Audio, .wav, aac, .audio] {
+            XCTAssertEqual(ComposerImportedFileRoute.route(for: audio), .sound, "\(audio.identifier) est un son")
+        }
+        for media in [UTType.jpeg, .png, .heic, .mpeg4Movie, .quickTimeMovie, .pdf] {
+            XCTAssertEqual(ComposerImportedFileRoute.route(for: media), .media, "\(media.identifier) reste un média")
+        }
+        XCTAssertEqual(ComposerImportedFileRoute.route(for: nil), .media,
+                       "un type inconnu garde le chemin d'avant")
+    }
+
+    /// Une sélection mêlée se range par destination, dans l'ordre choisi ; le
+    /// type se lit à l'extension quand le fournisseur n'en déclare aucun.
+    func test_10363_uneSelectionMelee_seRangeParDestination_dansSonOrdre() {
+        let fichiers = ["chanson.mp3", "photo.jpg", "voix.m4a", "clip.mov", "prise.wav"]
+            .map { URL(fileURLWithPath: "/tmp/nexiste-pas-10363-\($0)") }
+        let rangs = ComposerImportedFileRoute.partition(fichiers)
+        XCTAssertEqual(rangs.sounds.map(\.pathExtension), ["mp3", "m4a", "wav"])
+        XCTAssertEqual(rangs.medias.map(\.pathExtension), ["jpg", "mov"])
+    }
+
+    /// **Le filtre de l'intention MÉDIA laisse choisir l'audio** : sans lui, la
+    /// porte média et la rangée du document ne rendraient jamais de son.
+    func test_10363_lImportateurDuMedia_laisseChoisirUnFichierAudio() throws {
+        let aac = try XCTUnwrap(UTType(filenameExtension: "aac"))
+        let filtre = ComposerFileImportIntent.media.contentTypes
+        for audio in [UTType.mp3, .mpeg4Audio, .wav, aac] {
+            XCTAssertTrue(filtre.contains { audio.conforms(to: $0) }, "\(audio.identifier) doit être choisissable")
+        }
+        XCTAssertTrue(filtre.contains { UTType.jpeg.conforms(to: $0) }, "les images restent choisissables")
+        XCTAssertTrue(filtre.contains { UTType.mpeg4Movie.conforms(to: $0) }, "les vidéos aussi")
+    }
+
+    /// **Le MÊME chemin que l'intention `.sound`, posé au premier plan** : le
+    /// résultat de l'importateur aiguille l'audio vers `ingestSoundFiles` avec
+    /// un placement imposé, et ne verse dans la liste média que le reste.
+    func test_10363_lImportateur_aiguilleLAudioVersLeCheminDuSon() throws {
+        let code = compact(try hostUnit())
+        XCTAssertTrue(code.contains("funcingestFileImporterResult("), "l'ingestion de l'importateur est introuvable")
+        XCTAssertTrue(code.contains("letroutes=ComposerImportedFileRoute.partition(urls)"))
+        XCTAssertTrue(code.contains("awaitingestSoundFiles(routes.sounds,placement:.foreground)"),
+                      "un fichier audio est un son POSÉ sur la scène, jamais un son de fond")
+        XCTAssertTrue(code.contains("forsourceURLinroutes.medias{"),
+                      "seuls les fichiers non audio entrent dans la liste média")
+        XCTAssertTrue(code.contains("funcingestSoundFiles(_urls:[URL],placement:ComposerAudioRole?=nil)async{"))
+        XCTAssertTrue(code.contains("switchplacement??chosenSoundPlacement{"),
+                      "le placement imposé l'emporte sur le choix mémorisé de la feuille son")
+    }
 }

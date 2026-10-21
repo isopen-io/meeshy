@@ -100,9 +100,9 @@ enum GameGuideEvents {
         return discoveries.filter { !seen.contains($0.key.rawValue) } + urgencies
     }
 
-    /// `badgeImpactBefore` : ce que la frappe ALLAIT éteindre, calculé sur la lecture d'AVANT le geste —
-    /// c'est lui qui dit « 11 actions pour le rallumer ». Absent (serveur sans points par axe), rien n'est annoncé.
-    static func transitions(from before: GameBlock, to after: GameBlock, badgeImpactBefore: MintBadgeImpact? = nil) -> [GuideEvent] {
+    /// Les étincelles (#10845) : la frappe n'éteint plus aucun badge — le moment « badge éteint », que la loi partagée
+    /// garde encore, n'est plus jamais annoncé.
+    static func transitions(from before: GameBlock, to after: GameBlock) -> [GuideEvent] {
         var events: [GuideEvent] = []
         let shownBefore = before.level.shown
         let shownAfter = after.level.shown
@@ -116,14 +116,10 @@ enum GameGuideEvents {
             events.append(.missionsUnlocked)
         }
         if before.mint.number == 1 && after.mint.number == 2 {
-            events.append(.firstMint(levelBefore: shownBefore.level, levelAfter: shownAfter.level,
-                                     tailwindUntilLevel: shownAfter.record))
+            events.append(.firstMint)
         }
         if after.mint.price > before.mint.price {
             events.append(.priceRises(nextPrice: after.mint.price))
-        }
-        if after.mint.number > before.mint.number, let impact = badgeImpactBefore, impact.lost > 0 {
-            events.append(.badgeExtinguished(missingActions: impact.regain))
         }
         if rankClimbed(from: before, to: after) {
             events.append(rankEvent(after))

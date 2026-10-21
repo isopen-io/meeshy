@@ -82,7 +82,7 @@ struct ComposerTopBar: View {
                     // une surface qui suit le thème, faux ici : le plateau du
                     // composer est sombre EN PERMANENCE. On y aurait peint du
                     // sombre sur du sombre dès que l'appareil quitte la nuit.
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .frame(width: ComposerControlMetrics.visualDiameter,
                            height: ComposerControlMetrics.visualDiameter)
                     .adaptiveLiquidGlass(in: Circle(), tint: plateauTint.opacity(0.55), interactive: true)
@@ -132,6 +132,60 @@ struct ComposerTopBar: View {
                 // changement de ce qu'il nomme dit le contraire de l'écran, et
                 // seul VoiceOver l'entend.
                 .accessibilityLabel(Text(ComposerSlideRailCopy.rail))
+        }
+    }
+}
+
+/// **Qui PEINT le visage d'un menu de la barre haute** (#10542).
+///
+/// Retour porteur 2026-10-13, iOS 17.5 : le `⋯` se lisait plus bas que la croix
+/// et le `(+)`, dans une rangée qui les centre pourtant tous les trois. La
+/// croix et le `(+)` sont des `Button`, mis en page par SwiftUI de bout en
+/// bout ; le libellé d'un `Menu` est peint par le système, qui n'en garantit
+/// pas la place là où la barre monte dans la zone sûre. Sans verre natif, le
+/// visage sort donc du `Menu` : une vue ordinaire de la rangée, comme ses
+/// voisins. iOS 26 garde le verre interactif sur le libellé.
+nonisolated enum ComposerTopBarMenuFace: Equatable, Sendable {
+    /// Le visage est le libellé du `Menu`.
+    case label
+    /// Le visage est peint HORS du `Menu`, qui ne garde qu'une cible vide.
+    case detached
+
+    static func resolve(nativeGlass: Bool) -> ComposerTopBarMenuFace {
+        nativeGlass ? .label : .detached
+    }
+
+    static var current: ComposerTopBarMenuFace {
+        if #available(iOS 26.0, *) { return resolve(nativeGlass: true) }
+        return resolve(nativeGlass: false)
+    }
+}
+
+/// **Un menu de la barre haute, au gabarit de ses voisins** (#10542) — le
+/// visage rond que l'hôte fournit, et les entrées qu'il ouvre. La cible vide du
+/// visage détaché a le diamètre des commandes (`ComposerControlMetrics`).
+struct ComposerTopBarMenu<Items: View, Face: View>: View {
+    let label: String
+    @ViewBuilder let items: () -> Items
+    @ViewBuilder let face: () -> Face
+
+    var body: some View {
+        switch ComposerTopBarMenuFace.current {
+        case .label:
+            Menu(content: items, label: face)
+                .accessibilityLabel(Text(label))
+        case .detached:
+            face()
+                .accessibilityHidden(true)
+                .overlay {
+                    Menu(content: items) {
+                        Color.clear
+                            .frame(width: ComposerControlMetrics.visualDiameter,
+                                   height: ComposerControlMetrics.visualDiameter)
+                            .contentShape(Circle())
+                    }
+                    .accessibilityLabel(Text(label))
+                }
         }
     }
 }

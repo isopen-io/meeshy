@@ -33,6 +33,8 @@ import os
 struct ConversationDependencies {
     let dbPool: any DatabaseWriter
     let persistence: MessagePersistenceActor
+    var collaborators: ConversationCollaborators? = nil
+    var transcriptionRetry: (any TranscriptionRetryScheduling)? = nil
 
     @MainActor
     static var live: ConversationDependencies {
@@ -87,24 +89,14 @@ extension ConversationViewModel {
 
     // MARK: - Consentement vocal
 
-    /// Pure, testable: maps a `hasConsent` fetch to "missing", fail-safe to false.
-    nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
-        do { return try await !fetchHasConsent() } catch { return false }
-    }
-
     private func loadVoiceConsentStatus() {
-        // Source primaire : les consentements que la passerelle a CONFIRMÉS
-        // (`PUT /me/consents` à l'octroi, `GET /me/consents` à chaque relecture
-        // des préférences — #6624). Repli : le statut REST voice-profile, pour
-        // un compte dont la relecture n'a pas encore eu lieu sur cet appareil.
-        if UserPreferencesManager.shared.voiceConsentGranted {
+        let gate = collaborators.voiceConsent
+        if gate.isKnownGranted {
             voiceConsentMissing = false
             return
         }
         Task { [weak self] in
-            let missing = await Self.resolveVoiceConsentMissing {
-                try await VoiceProfileService.shared.getConsentStatus().hasConsent
-            }
+            let missing = await gate.fetchMissing()
             self?.voiceConsentMissing = missing
         }
     }
@@ -125,9 +117,8 @@ extension ConversationViewModel {
         grant: (@MainActor () async throws -> Void)? = nil,
         toast: FeedbackToastSurfacing? = nil
     ) -> Task<Void, Never> {
-        let grant: @MainActor () async throws -> Void = grant ?? {
-            try await UserPreferencesManager.shared.grantVoiceAutoTranslationConsent()
-        }
+        let gate = collaborators.voiceConsent
+        let grant: @MainActor () async throws -> Void = grant ?? { try await gate.grant() }
         let toast: FeedbackToastSurfacing = toast ?? FeedbackToastManager.shared
         let consentMissingBeforeGrant = voiceConsentMissing
         voiceConsentMissing = false
@@ -170,8 +161,11 @@ extension ConversationViewModel {
     /// `.task` (one run per `.id(conversationId)` identity); the `hasStarted`
     /// guard makes re-entry (background→foreground re-task) a no-op.
     func start() {
+        // #10830 — le `.task` qui ramène l'écran réarme son rattrapage.
+        ConversationCatchUpGate.shared.arrive(self)
         guard !hasStarted else { return }
         hasStarted = true
+        ExplicitUnreadMarks.clear(conversationId) // rouvrir, c'est relire : la marque d'un « non lu » ne vaut plus
         // Declare this conversation as currently visible so the sync engine
         // forces its `unreadCount` to 0 on every server broadcast (the user
         // IS reading it) and excludes it from the cross-conversation
@@ -187,7 +181,9 @@ extension ConversationViewModel {
         // que le serveur disait 94 (recette 2026-09-21). La frontière n'est
         // plus posée que par une lecture COMPLÈTE (`sendReadReceipt`, lot qui
         // contient le message le plus récent) ou un geste explicite.
-        syncEngine.setCurrentlyOpenConversation(conversationId)
+        // Multi-fenêtre : une scène = une ouverture, équilibrée par la fermeture de `deinit`. Le moteur tient
+        // l'ENSEMBLE — deux fenêtres, deux conversations lues, aucune ne remplace l'autre.
+        syncEngine.openConversation(conversationId)
         // Open side-effects (socket room join + active-conversation publish to
         // the notification singletons). Lives here — NOT in the handler's init
         // — so the throwaway VMs SwiftUI allocates on every parent
@@ -334,7 +330,7 @@ extension ConversationViewModel {
     /// Call before any programmatic scroll. Resets after a short delay.
     func markProgrammaticScroll() {
         isProgrammaticScroll = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        CoalescingDeadline.shared.schedule(for: self, after: .milliseconds(500)) { [weak self] in
             self?.isProgrammaticScroll = false
         }
     }
@@ -365,45 +361,25 @@ extension ConversationViewModel {
                 guard changedId == targetId else { return }
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    let cached = await CacheCoordinator.shared.messages.load(for: targetId)
-                    switch cached {
-                    case .fresh(let data, _), .stale(let data, _):
-                        // Update delivery counters on existing own-message records via GRDB;
-                        // the store observation surfaces the changes to `messages` automatically.
-                        // Batché : 1 transaction + 1 refresh pour la rafale,
-                        // au lieu de N awaits → N notifications → N relectures.
-                        let persistence = self.messagePersistence
-                        let freshById = Dictionary(data.map { ($0.id, $0) },
-                                                   uniquingKeysWith: { _, last in last })
-                        let updates: [MessagePersistenceActor.DeliveryCounterUpdate] = self.messages
-                            .filter(\.isMe)
-                            .compactMap { existing in
-                                guard let fresh = freshById[existing.id],
-                                      fresh.deliveryStatus.isBetterThan(existing.deliveryStatus)
-                                else { return nil }
-                                return MessagePersistenceActor.DeliveryCounterUpdate(
-                                    localId: existing.id,
-                                    deliveredCount: fresh.deliveredCount,
-                                    readCount: fresh.readCount,
-                                    deliveredToAllAt: fresh.deliveredToAllAt,
-                                    readByAllAt: fresh.readByAllAt
-                                )
-                            }
-                        if !updates.isEmpty {
-                            try? await persistence.updateDeliveryCounters(updates)
-                        }
-                        // Surface any messages in the cache that aren't yet in GRDB —
-                        // never a dead ephemeral, never without its protection (#7552).
-                        let incoming = CachedThreadSurfacing.rows(
-                            data,
-                            present: Set(self.messages.map(\.id))
-                        )
-                        if !incoming.isEmpty {
-                            await self.messagePersistence.bufferIncoming(incoming)
-                            self.prefetchRecentMedia()
-                        }
-                    case .expired, .empty:
-                        break
+                    guard let data = await self.collaborators.cacheReader.cachedThread(id: targetId) else { return }
+                    // Update delivery counters on existing own-message records via GRDB;
+                    // the store observation surfaces the changes to `messages` automatically.
+                    // Batché : 1 transaction + 1 refresh pour la rafale,
+                    // au lieu de N awaits → N notifications → N relectures.
+                    let persistence = self.messagePersistence
+                    let updates = DeliveryCounterReconciliation.updates(own: self.messages, fresh: data)
+                    if !updates.isEmpty {
+                        try? await persistence.updateDeliveryCounters(updates)
+                    }
+                    // Surface any messages in the cache that aren't yet in GRDB —
+                    // never a dead ephemeral, never without its protection (#7552).
+                    let incoming = CachedThreadSurfacing.rows(
+                        data,
+                        present: Set(self.messages.map(\.id))
+                    )
+                    if !incoming.isEmpty {
+                        await self.messagePersistence.bufferIncoming(incoming)
+                        self.prefetchRecentMedia()
                     }
                 }
             }
@@ -416,19 +392,10 @@ extension ConversationViewModel {
     /// isn't cached yet, the fallback constants kick in.
     private func hydrateCurrentConversationFromCache() {
         let convId = conversationId
+        let reader = collaborators.cacheReader
         Task { [weak self] in
-            let cached = await CacheCoordinator.shared.conversations.load(for: "list")
-            guard let self else { return }
-            let list: [MeeshyConversation]
-            switch cached {
-            case .fresh(let data, _), .stale(let data, _):
-                list = data
-            case .expired, .empty:
-                return
-            }
-            if let match = list.first(where: { $0.id == convId }) {
-                self.currentConversation = match
-            }
+            guard let match = await reader.currentConversation(id: convId) else { return }
+            self?.currentConversation = match
         }
     }
 }

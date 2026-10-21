@@ -59,7 +59,8 @@ enum ConversationMediaHubRules {
     /// masqué « pour moi » — l'index persisté peut garder une copie que le fil
     /// a déjà retirée.
     static func admits(_ message: MeeshyMessage, now: Date, isHidden: (String) -> Bool) -> Bool {
-        guard message.deletedAt == nil, !message.holdsViewOnce, !isHidden(message.id) else { return false }
+        guard message.deletedAt == nil, !message.holdsViewOnce, !ReceivedSticker.isGalleryExcluded(message),
+              !isHidden(message.id) else { return false }
         if let expiresAt = message.expiresAt, expiresAt <= now { return false }
         return true
     }

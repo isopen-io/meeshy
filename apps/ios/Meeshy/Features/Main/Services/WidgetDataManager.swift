@@ -166,6 +166,13 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// horodatage REST reste la meilleure donnée disponible.
     private let presenceStateProvider: @MainActor (String) -> PresenceState?
 
+    /// Le compte au nom duquel le cliché de partage est déposé (#10947) — un
+    /// cliché sans propriétaire ne s'écrit pas.
+    private let shareDirectoryOwner: @MainActor () -> String?
+    /// Les personnes à qui écrire, depuis LEURS caches (amis acceptés, carnet
+    /// apparié) — la même lecture que l'écran de partage de l'app.
+    private let shareDirectoryPeople: @MainActor (String) async -> [ShareRecipient]
+
     private convenience init() {
         self.init(suiteName: UserPreferencesManager.appGroupSuiteName)
     }
@@ -180,12 +187,40 @@ final class WidgetDataManager: NotificationWidgetSink {
         },
         presenceState: @escaping @MainActor (String) -> PresenceState? = {
             PresenceManager.shared.knownPresenceState(for: $0)
+        },
+        shareDirectoryOwner: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id },
+        shareDirectoryPeople: @escaping @MainActor (String) async -> [ShareRecipient] = {
+            await LiveShareRecipientDirectory().cachedPeople(currentUserId: $0)
         }
     ) {
         self.preferredContentLanguagesProvider = preferredContentLanguages
         self.presenceStateProvider = presenceState
+        self.shareDirectoryOwner = shareDirectoryOwner
+        self.shareDirectoryPeople = shareDirectoryPeople
         self.suiteName = suiteName
         self.stagingDirectoriesOverride = stagingDirectories
+    }
+
+    /// Les dossiers App Group qui portent du contenu du compte connecté.
+    nonisolated static func accountStagingDirectories() -> [URL] {
+        [
+            SharePendingSendConsumer.directoryURL(),
+            SharePendingSendConsumer.mediaDirectoryURL(),
+            NSEPendingMessageConsumer.directoryURL(),
+            NSEPendingPostConsumer.directoryURL(),
+            ShareRelayHandoff.directoryURL(),
+            ShareComposeHandoffConsumer.directoryURL(),
+        ].compactMap { $0 }
+    }
+
+    /// Ce que l'app tient EN MÉMOIRE des fiches de l'extension — un relais servi,
+    /// un studio armé — part avec le compte sortant (#10978, #10986).
+    static func forgetHeldShares(
+        relay: ShareRelayConsumer = .shared,
+        compose: ShareComposeHandoffConsumer = .shared
+    ) {
+        relay.forget()
+        compose.forget()
     }
 
     /// appgroup-01 — wipe de logout (exigence `NotificationWidgetSink`).
@@ -201,18 +236,15 @@ final class WidgetDataManager: NotificationWidgetSink {
             let accountKeys = [
                 conversationsKey, snapshotsKey, favoritesKey, lastUpdatedKey,
                 unreadCountKey, WidgetActionFlusher.pendingMarkReadKey,
+                ShareDirectorySnapshot.defaultsKey,
             ]
             for key in accountKeys {
                 defaults.removeObject(forKey: key)
             }
             lastPublishedSnapshots = [:]
         }
-        let stagingDirs = stagingDirectoriesOverride ?? [
-            SharePendingSendConsumer.directoryURL(),
-            SharePendingSendConsumer.mediaDirectoryURL(),
-            NSEPendingMessageConsumer.directoryURL(),
-            NSEPendingPostConsumer.directoryURL(),
-        ].compactMap { $0 }
+        Self.forgetHeldShares()
+        let stagingDirs = stagingDirectoriesOverride ?? Self.accountStagingDirectories()
         for dir in stagingDirs {
             do {
                 try FileManager.default.removeItem(at: dir)
@@ -290,7 +322,26 @@ final class WidgetDataManager: NotificationWidgetSink {
         Task { [conversations] in
             let userCategoryNamesById = await Self.resolveUserCategoryNames()
             self.publishConversationSnapshots(conversations, categoryNamesById: userCategoryNamesById)
+            await self.publishShareDirectory(conversations)
         }
+    }
+
+    /// **Les destinataires de l'extension de partage** (#10947) — ce que l'app
+    /// sait déjà, déposé dans l'App Group pour que la feuille « Envoyer avec
+    /// Meeshy » s'ouvre sur une liste (cache d'abord) : les conversations de la
+    /// liste, dans son ordre, et les personnes de ses caches. Au nom du compte
+    /// connecté — l'extension n'en montre rien sous un autre compte.
+    func publishShareDirectory(_ conversations: [MeeshyConversation]) async {
+        guard let owner = shareDirectoryOwner(), !owner.isEmpty else { return }
+        let people = await shareDirectoryPeople(owner)
+        let snapshot = ShareDirectorySnapshot.make(
+            ownerUserId: owner,
+            savedAt: Date(),
+            conversations: conversations.filter(\.isActive).map { ShareRecipient(conversation: $0) },
+            people: people
+        )
+        guard let defaults = sharedDefaults, let data = snapshot.encoded() else { return }
+        writingToSharedContainer { defaults.set(data, forKey: ShareDirectorySnapshot.defaultsKey) }
     }
 
     /// `[sectionId: nom]` des catégories CRÉÉES PAR L'UTILISATEUR uniquement
@@ -433,11 +484,16 @@ final class WidgetDataManager: NotificationWidgetSink {
     /// portée de toute résolution ultérieure. Le publier brut montrait le
     /// dernier message dans la langue de l'EXPÉDITEUR pendant que la même
     /// conversation, ouverte dans l'app, affichait sa traduction.
+    ///
+    /// Et pour la même raison, un message qui disparaît n'y laisse que son
+    /// libellé de protection (#9622, `OutsidePreview`) : l'écran d'accueil n'a
+    /// aucune couche sécurisée, et garde le texte jusqu'au prochain
+    /// rafraîchissement — après la destruction du message.
     private func formatLastMessage(
         _ conv: MeeshyConversation,
         preferredLanguages: [String]
     ) -> String {
-        if let preview = conv.resolvedLastMessagePreview(preferredLanguages: preferredLanguages),
+        if let preview = OutsidePreview.lastMessage(of: conv, preferredLanguages: preferredLanguages),
            !preview.isEmpty {
             if let sender = conv.lastMessageSenderName, conv.type != .direct {
                 return "\(sender): \(preview)"
@@ -462,5 +518,5 @@ final class WidgetDataManager: NotificationWidgetSink {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let widgetData = Logger(subsystem: "me.meeshy.app", category: "widget-data")
+    nonisolated static let widgetData = MeeshyLog.logger(.widgetData)
 }

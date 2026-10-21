@@ -23,7 +23,10 @@ private enum StoryPlaybackHoldSource {
     static let views = "Meeshy/Features/Main/Views/"
     static func hold() throws -> String { try read(views + "StoryViewerView+PlaybackHold.swift") }
     static func viewer() throws -> String { try read(views + "StoryViewerView.swift") }
-    static func content() throws -> String { try read(views + "StoryViewerView+Content.swift") }
+    static func content() throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(views + "StoryViewerView+Content.swift"))
+    }
+    static func pipeline() throws -> String { try read(views + "StoryViewerView+PrefetchPipeline.swift") }
     static func canvas() throws -> String { try read(views + "StoryViewerView+Canvas.swift") }
     static func sidebar() throws -> String { try read(views + "StoryViewerView+Sidebar.swift") }
     static func header() throws -> String { try read(views + "StoryViewerView+Header.swift") }
@@ -132,7 +135,7 @@ final class StoryPlaybackHoldWiringTests: XCTestCase {
 
     /// La fin de la story passe par la règle, jamais directement à la suivante.
     func test_theTimerCompletion_goesThroughTheRule() throws {
-        let viewer = try StoryPlaybackHoldSource.viewer()
+        let viewer = try StoryPlaybackHoldSource.pipeline()
         XCTAssertTrue(viewer.contains("t.onCompletion = { [self] in\n            storyDidReachItsEnd()"))
         let end = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
                                                     from: "func storyDidReachItsEnd() {")
@@ -215,7 +218,7 @@ final class StoryPlaybackInterruptionTests: XCTestCase {
         XCTAssertTrue(try StoryPlaybackHoldSource.revealHost()
             .contains("GameMomentPresence.shared.update(isPresented: présent)"))
         XCTAssertTrue(try StoryPlaybackHoldSource.viewer()
-            .contains(".storyPlaybackInterruptions(callInterrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown)"))
+            .contains(".modifier(StoryPlaybackInterruptions(interrupting: $isCallInterrupting, gameMomentShown: $isGameMomentShown,"))
         let modifier = try StoryPlaybackHoldSource.block(try StoryPlaybackHoldSource.hold(),
                                                          from: "struct StoryPlaybackInterruptions: ViewModifier {")
         XCTAssertTrue(modifier.contains("PlaybackInterruption.shared.$isActive"))

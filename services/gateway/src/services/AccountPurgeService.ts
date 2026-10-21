@@ -5,6 +5,14 @@ import { hashPassword } from '../utils/password-hash';
 import { clearPendingTwoFactor } from './auth/pending-two-factor';
 import { eraseAddressBookOf } from './ContactDirectoryService';
 import { purgeGameData, type GamePurgeSummary } from './game/GamePurge';
+import { eraseSharedTranslationsOfAccount } from './messaging/sharedTranslationErasure';
+import { purgePackData, type PackFileStore, type PackPurgeSummary } from './packs/PackPrivacy';
+import {
+  eraseReadingTelemetryOf,
+  type ReadingTelemetryErasure,
+} from './social/readingTelemetryErasure';
+import { deleteShareLinksRevokingGuests } from '../socketio/deleteShareLinksRevokingGuests';
+import type { ShareLinkRevocationLive } from './cleanupExpiredData';
 
 const logger = enhancedLogger.child({ module: 'AccountPurgeService' });
 
@@ -16,7 +24,23 @@ export type AccountPurgeSummary = {
   readonly addressBookContactsDeleted: number;
   readonly contactJoinNoticesDeleted: number;
   readonly arrivalAnnouncementsDeleted: number;
+  /** Les traductions PARTAGÉES (#9899) que les participants du compte avaient scellées pour les autres. */
+  readonly sharedTranslationsDeleted: number;
   readonly game: GamePurgeSummary;
+  readonly packs: PackPurgeSummary;
+  /** Ce que le compte a vu, lu, ouvert, fait défiler ou capturé (#10499, O6). */
+  readonly readingTelemetry: ReadingTelemetryErasure;
+};
+
+export type AccountPurgeOptions = {
+  /** Le volume des téléversements vu par la purge des packs ; le disque réel par défaut. */
+  readonly packFiles?: PackFileStore;
+  /**
+   * Le vivant que la révocation des invités de ses liens éteint (sockets,
+   * appel, position) — résolu à l'appel. Sans lui, la révocation reste entière
+   * en base et dans les caches (#10492).
+   */
+  readonly shareLinkLive?: ShareLinkRevocationLive;
 };
 
 /**
@@ -25,7 +49,10 @@ export type AccountPurgeSummary = {
  * sessions, profil vocal, liens de partage créés par ce compte, notifications
  * qui lui étaient destinées, et son carnet d'adresses synchronisé (#8284 —
  * `eraseAddressBookOf`, qui retire aussi les annonces « X a rejoint Meeshy »
- * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus).
+ * faites à d'autres à son sujet : elles désignent un compte qui n'existe plus),
+ * et les traductions PARTAGÉES (#9899) que ses participants avaient scellées
+ * pour les autres membres (`eraseSharedTranslationsOfAccount`, par
+ * `sharedById` — le `Participant.id`, jamais le `User.id`).
  * Aucune ligne partagée avec un tiers — supprimables sans arbitrage sur ce
  * qu'un AUTRE participant continue de voir. Les notifications d'AUTRES comptes
  * nées de son activité (un message, une réaction) ne sont PAS visées ici :
@@ -48,26 +75,47 @@ export type AccountPurgeSummary = {
  *    `reclaimPostMediaBytes`) qu'un lot dédié doit réutiliser, jamais dupliquer
  *    (#5690, livré).
  *
+ * Les PACKS (#10151, LP3, suivi distinct de #9141 avec sa propre revue) :
+ * choix d'installation, bibliothèque de stickers et ses fichiers, propositions
+ * non publiées — le périmètre et ses raisons vivent dans
+ * `services/packs/PackPrivacy.ts`, seul accès RGPD aux tables de packs.
+ *
  * L'anonymisation de l'IDENTITÉ (`User.username`/`email`/`displayName`/…) est
  * livrée par `anonymizeUserIdentity`, ci-dessous — voir son doc-comment pour la
  * décision produit sur `Participant.displayName` (#5691, partagée avec #5689).
  */
 export async function purgeAccountIsolatedData(
-  prisma: Pick<
-    PrismaClient,
-    'userSession' | 'userVoiceModel' | 'conversationShareLink' | 'notification' | 'userContact' | 'contactJoinNotice'
-  > &
-    Parameters<typeof purgeGameData>[0],
+  prisma: PrismaClient,
   userId: string,
+  options: AccountPurgeOptions = {},
 ): Promise<AccountPurgeSummary> {
-  const [sessions, voiceProfile, shareLinks, notifications, addressBook, game] = await Promise.all([
-    prisma.userSession.deleteMany({ where: { userId } }),
-    prisma.userVoiceModel.deleteMany({ where: { userId } }),
-    prisma.conversationShareLink.deleteMany({ where: { createdBy: userId } }),
-    prisma.notification.deleteMany({ where: { userId } }),
-    eraseAddressBookOf(prisma, userId),
-    purgeGameData(prisma, userId),
-  ]);
+  const [sessions, voiceProfile, shareLinks, notifications, addressBook, sharedTranslations, game, packs, readingTelemetry] =
+    await Promise.all([
+      prisma.userSession.deleteMany({ where: { userId } }),
+      prisma.userVoiceModel.deleteMany({ where: { userId } }),
+      // #10492 — les invités de ses liens sont révoqués AVANT la suppression :
+      // la ligne emportait la marque d'une révocation différée, et ses invités
+      // restaient actifs. Un lien dont la révocation échoue reste, fermé et
+      // marqué pour le balayage horaire, et la panne propage.
+      deleteShareLinksRevokingGuests({
+        prisma,
+        io: options.shareLinkLive?.resolveIO?.() ?? null,
+        manager: options.shareLinkLive?.resolveManager?.() ?? null,
+        where: { createdBy: userId },
+      }),
+      prisma.notification.deleteMany({ where: { userId } }),
+      eraseAddressBookOf(prisma, userId),
+      // Une panne PROPAGE, comme celle de chaque suppression voisine : les deux
+      // appelants la journalisent. Aucune passe ne la rejoue aujourd'hui — la
+      // demande est déjà `GRACE_PERIOD_EXPIRED`, que l'élection horaire ne relit
+      // plus (rejeu jusqu'au succès : #10021) ; l'idempotence de la purge
+      // l'autorise, elle ne la déclenche pas. La taire ferait compter comme purgé
+      // un compte dont des contributions subsistent.
+      eraseSharedTranslationsOfAccount(prisma, userId),
+      purgeGameData(prisma, userId),
+      purgePackData(prisma, userId, { files: options.packFiles }),
+      eraseReadingTelemetryOf(prisma, userId),
+    ]);
 
   const summary: AccountPurgeSummary = {
     sessionsDeleted: sessions.count,
@@ -77,14 +125,22 @@ export async function purgeAccountIsolatedData(
     addressBookContactsDeleted: addressBook.contactsDeleted,
     contactJoinNoticesDeleted: addressBook.joinNoticesDeleted,
     arrivalAnnouncementsDeleted: addressBook.arrivalAnnouncementsDeleted,
+    sharedTranslationsDeleted: sharedTranslations,
     game,
+    packs,
+    readingTelemetry,
   };
 
   logger.info(
     `[AccountPurge] user=${userId} sessions=${summary.sessionsDeleted} voiceProfile=${summary.voiceProfileDeleted} ` +
       `shareLinks=${summary.shareLinksDeleted} notifications=${summary.notificationsDeleted} ` +
       `addressBook=${summary.addressBookContactsDeleted} joinNotices=${summary.contactJoinNoticesDeleted} ` +
-      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} gameDuos=${summary.game.duosDeleted}`
+      `arrivalAnnouncements=${summary.arrivalAnnouncementsDeleted} sharedTranslations=${summary.sharedTranslationsDeleted} ` +
+      `gameDuos=${summary.game.duosDeleted} ` +
+      `packChoices=${packs.choicesDeleted} stickers=${packs.libraryDeleted} packSubmissions=${packs.submissionsDeleted} ` +
+      `packsAnonymized=${packs.publishedAnonymized} packFiles=${packs.filesDeleted} packOwnerships=${packs.ownershipsDeleted} ` +
+      `impressions=${readingTelemetry.impressions} engagements=${readingTelemetry.engagements} ` +
+      `views=${readingTelemetry.views} contentEvents=${readingTelemetry.contentEvents}`
   );
 
   return summary;
@@ -98,8 +154,12 @@ export type AccountIdentityAnonymizeSummary = {
 /** Préfixe des valeurs de repli — jamais une constante seule (collision `@unique`). */
 const ANONYMIZED_MARKER = 'compte-supprime';
 
-function anonymizedUsername(userId: string): string {
-  return `${ANONYMIZED_MARKER}-${userId}`;
+/** Le préfixe du `username` d'un compte anonymisé — ce par quoi un rattrapage retrouve les comptes déjà purgés. */
+export const ANONYMIZED_USERNAME_PREFIX = `${ANONYMIZED_MARKER}-`;
+
+/** Le pseudo EXACT d'un compte anonymisé : préfixe + ses 24 hex, hors de portée de toute validation de pseudo (≤ 32). */
+export function anonymizedUsername(userId: string): string {
+  return `${ANONYMIZED_USERNAME_PREFIX}${userId}`;
 }
 
 function anonymizedEmail(userId: string): string {
@@ -158,6 +218,10 @@ export async function anonymizeUserIdentity(
       displayName: null,
       avatar: null,
       banner: null,
+      // #10632 — le décor de profil ÉQUIPÉ se voit des autres : il part avec l'avatar et la bannière.
+      equippedAvatarRing: null,
+      equippedBanner: null,
+      equippedBannerFrame: null,
       bio: '',
       birthDate: null,
       searchTokens: [],
@@ -177,6 +241,7 @@ export async function anonymizeUserIdentity(
       emailVerificationToken: null,
       emailVerificationCode: null,
       emailVerificationExpiry: null,
+      emailVerificationDeviceHash: null,
       phoneVerificationCode: null,
       phoneVerificationExpiry: null,
       lastLoginIp: null,

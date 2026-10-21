@@ -297,11 +297,11 @@ async function main() {
   });
 
   // --- 1. VERSION A : le lecteur est connecté, le worker contrôle la page ---
-  await page.goto(`${base}/`, { waitUntil: 'load' });
+  await page.goto(`${base}/chats`, { waitUntil: 'load' });
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 30_000 });
   check(
-    (await page.evaluate(() => window.location.pathname)) === '/',
-    'version A : un lecteur avec session reste sur « / » (jamais /login)',
+    (await page.evaluate(() => window.location.pathname)) === '/chats',
+    'version A : un lecteur avec session reste sur « /chats » (jamais /login)',
   );
   check(
     (await page.evaluate(() => document.documentElement.dataset.meeshyBuild ?? 'a')) === 'a',
@@ -383,8 +383,8 @@ async function main() {
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 30_000 });
 
     check(
-      (await page.evaluate(() => window.location.pathname)) === '/',
-      'après la mise à jour, le lecteur est TOUJOURS CONNECTÉ (« / », jamais /login)',
+      (await page.evaluate(() => window.location.pathname)) === '/chats',
+      'après la mise à jour, le lecteur est TOUJOURS CONNECTÉ (« /chats », jamais /login)',
     );
 
     const gardes = await page.evaluate(

@@ -40,6 +40,8 @@ export interface DisconnectRevokedSessionsParams {
   userId: string;
   reason: AuthSessionRevokedEventData['reason'];
   message?: string;
+  /** #10264 — la révocation vient de la suppression du compte : le nommer. */
+  accountDeleted?: boolean;
   onError?: (error: unknown) => void;
 }
 
@@ -91,13 +93,14 @@ export interface DisconnectRevokedSessionsParams {
 export async function disconnectRevokedSessions(
   params: DisconnectRevokedSessionsParams
 ): Promise<number> {
-  const { io, userId, reason, message, onError } = params;
+  const { io, userId, reason, message, accountDeleted, onError } = params;
   if (!io || !userId) return 0;
 
   const payload: AuthSessionRevokedEventData = {
     code: 'session_revoked',
     message: message ?? DEFAULT_REVOCATION_MESSAGES[reason],
     reason,
+    ...(accountDeleted ? { deletedAccountId: userId } : {}),
   };
 
   let sockets: RevokedSessionSocket[];

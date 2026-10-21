@@ -24,9 +24,12 @@ enum ConversationMediaRules {
     ///   quand le serveur l'exclut déjà de `view=media` ;
     /// - un message supprimé ou échu n'y entre plus — l'index persisté peut
     ///   en garder une copie que la fenêtre a déjà retirée ;
-    /// - un message masqué « pour moi » non plus.
+    /// - un message masqué « pour moi » non plus ;
+    /// - un STICKER n'est pas une photo à feuilleter : son image jointe ne sert
+    ///   qu'aux anciens clients (#10630).
     static func admits(_ message: MeeshyMessage, now: Date, isHidden: (String) -> Bool) -> Bool {
-        guard message.deletedAt == nil, !message.holdsViewOnce, !isHidden(message.id) else { return false }
+        guard message.deletedAt == nil, !message.holdsViewOnce, !ReceivedSticker.isGalleryExcluded(message),
+              !isHidden(message.id) else { return false }
         if let expiresAt = message.expiresAt, expiresAt <= now { return false }
         return message.attachments.contains(where: isVisual)
     }
@@ -38,7 +41,9 @@ enum ConversationMediaRules {
             senderAvatarURL: message.senderAvatarURL,
             senderColor: message.senderColor ?? "#999",
             sentAt: message.createdAt,
-            isMe: message.isMe
+            isMe: message.isMe,
+            senderUserId: message.viewingKey,
+            senderRing: message.senderRing
         )
     }
 

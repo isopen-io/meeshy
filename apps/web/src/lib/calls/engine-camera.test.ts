@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events/event-names';
 
+import { acquireCallMedia } from '@/lib/calls/call-media';
 import { DIRECT, flush, harness, PEER, track, type FakeLink, type FakeTrack } from '@/test-support/call-engine-harness';
 
 /**
@@ -259,5 +260,49 @@ describe('choisir sa caméra par son identifiant (#9094)', () => {
     expect(h.call()?.localStream?.getVideoTracks()[0]?.readyState).toBe('live');
     expect(h.notices.getState().notice).toEqual({ kind: 'camera-failed', failure: 'unavailable' });
     expect(h.remembered).toEqual([]);
+  });
+});
+
+/**
+ * #10876 — **UN APPEL VIDÉO OUVERT SANS CAMÉRA LE DIT** : la coque Android
+ * refuse la demande entière dès que la caméra l'est, l'appel repart en voix
+ * seule — juste, mais muet. Le mot de la caméra (« L'accès à la caméra est
+ * refusé », avec « Réglages » dans la coque, #10862) le dit dès l'ouverture,
+ * avec la raison réelle.
+ */
+describe('un appel vidéo ouvert sans caméra le dit (#10876)', () => {
+  const refused = (): Error => Object.assign(new Error('denied'), { name: 'NotAllowedError' });
+
+  test('la caméra refusée au départ ⇒ l’appel tient en voix seule, et le mot dit le refus', async () => {
+    const h = harness({ videoRefused: refused() });
+    await h.engine.start({ ...DIRECT, media: 'video' });
+    await flush();
+    expect(h.notices.getState().notice).toEqual({ kind: 'camera-failed', failure: 'permission' });
+    expect(h.call()?.cameraOn).toBe(false);
+    expect(h.call()?.phase.kind).not.toBe('ended');
+  });
+
+  test('un appel vocal ne dit rien de la caméra', async () => {
+    const h = harness({ videoRefused: refused() });
+    await h.engine.start(DIRECT);
+    await flush();
+    expect(h.notices.getState().notice).toBeNull();
+  });
+
+  test('acquireCallMedia rend la raison du repli en voix seule', async () => {
+    const failures: string[] = [];
+    const asked: MediaStreamConstraints[] = [];
+    const audioOnly = { getVideoTracks: () => [], getAudioTracks: () => [{ kind: 'audio' }] } as unknown as MediaStream;
+    const mediaDevices = {
+      getUserMedia: async (constraints?: MediaStreamConstraints) => {
+        asked.push(constraints ?? {});
+        if (constraints?.video) throw refused();
+        return audioOnly;
+      },
+    };
+    const result = await acquireCallMedia({ video: true, facing: 'user', mediaDevices, onCameraFailed: (failure) => failures.push(failure) });
+    expect(result).toBe(audioOnly);
+    expect(asked.map((c) => c.video === false)).toEqual([false, true]);
+    expect(failures).toEqual(['permission']);
   });
 });

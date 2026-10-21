@@ -3,6 +3,8 @@ import { TypingDots } from './typing-dots';
 import type { ListPaginationState } from '@/lib/lens/pagination';
 import type { ThreadLoadSignal } from '@/lib/view/thread-load-signal';
 import { lastMessageLine, scrollToBottomLabel, unreadHeadline } from '@/lib/view/thread-chrome';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LA PILULE DE JOUR COLLANTE — miroir `MessageDayStickyOverlay.swift` /
@@ -115,7 +117,11 @@ export function ScrollToBottomButton({
         </span>
       ) : rich ? (
         <span className="flex max-w-52 flex-col items-start gap-0.5 px-3 py-1.5 text-start" aria-hidden>
-          {showHeadline ? <span className="text-mini font-semibold">{unreadCount} messages non lus</span> : null}
+          {showHeadline ? (
+            <span className="text-mini font-semibold">
+              {translate(currentInterfaceLanguage(), 'thread.unread-separator.other', { count: String(unreadCount) })}
+            </span>
+          ) : null}
           <span className="truncate text-mini">{preview}</span>
         </span>
       ) : (
@@ -164,7 +170,7 @@ export function OlderLoadIndicator({
           style={{ color: 'var(--color-ios-ink-2)', border: '0.5px solid var(--color-edge)' }}
         >
           <TypingDots color="currentColor" />
-          <span className="sr-only">Chargement des messages plus anciens</span>
+          <span className="sr-only">{translate(currentInterfaceLanguage(), 'thread.older.loading')}</span>
         </span>
       ) : (
         /* UN REFUS OFFRE SON REJEU — un échec silencieux laisserait le haut
@@ -177,7 +183,8 @@ export function OlderLoadIndicator({
           className="glass-prominent glass-card rounded-chip inline-flex items-center gap-2 px-3 text-mini font-semibold"
           style={{ color: 'var(--color-ios-ink)', border: '0.5px solid var(--color-edge)', minHeight: 44 }}
         >
-          Historique indisponible <span aria-hidden>·</span> Réessayer
+          {translate(currentInterfaceLanguage(), 'thread.older.failed')} <span aria-hidden>·</span>{' '}
+          {translate(currentInterfaceLanguage(), 'common.retry')}
         </button>
       )}
     </div>

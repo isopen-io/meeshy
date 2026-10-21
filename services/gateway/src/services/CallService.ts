@@ -38,9 +38,12 @@ import type { CallHistoryItem } from './callHistory';
 import { listCallHistory } from './calls/callHistoryList';
 import { unrespondedParticipantUserIds } from './calls/unrespondedParticipants';
 import { assertDirectCalleeReachable } from './calls/callRingPolicy';
+import { assertCallableConversationType, assertViewerMayStartCall } from './calls/callStartAdmission';
 import { commitCallEnd } from './calls/endCallRetry';
 import { callEngagementCrediter } from './calls/callEngagementCredits';
 import { guardedTimeout } from '../utils/guarded-timer';
+import { KeyedMutex } from '../utils/keyed-mutex';
+import { accountParticipantIds, LIVE_CALL_PARTICIPATION } from './calls/liveCallParticipations';
 
 /** Floor a finite, non-negative byte counter; anything else → null. */
 const clampNonNegativeInt = (value?: number | null): number | null =>
@@ -147,6 +150,13 @@ type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
     };
   };
 }>;
+
+/** `rejoined` : l'utilisateur était déjà participant actif — le join n'a rien écrit (#11468). */
+type JoinCallResult = {
+  callSession: CallSessionWithParticipants;
+  iceServers: RTCIceServer[];
+  rejoined: boolean;
+};
 
 const callSessionInclude = {
   participants: {
@@ -1002,16 +1012,8 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CONVERSATION_CLOSED}: Conversation is closed`);
     }
 
-    // Validate conversation type (only DIRECT and GROUP support video calls)
-    if (conversation.type !== 'direct' && conversation.type !== 'group') {
-      logger.error('❌ Video calls not supported for this conversation type', {
-        conversationId,
-        type: conversation.type
-      });
-      throw new Error(
-        `${CALL_ERROR_CODES.VIDEO_CALLS_NOT_SUPPORTED}: Video calls are only supported for DIRECT and GROUP conversations`
-      );
-    }
+    // Loi `canStartCall` (#10207) : un type que personne ne peut appeler.
+    assertCallableConversationType(conversation.type);
 
     // Check if user is participant of conversation. `participantId` MUST be
     // checked explicitly before hitting Prisma: passing `id: undefined` in a
@@ -1045,6 +1047,8 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
     }
 
+    await assertViewerMayStartCall(this.prisma, { conversationType: conversation.type, membership });
+
     if (conversation.type === 'direct') {
       await assertDirectCalleeReachable(this.prisma, { conversationId, callerUserId: initiatorId });
     }
@@ -1058,12 +1062,11 @@ export class CallService {
     // device. Clearing the initiator's phantoms here guarantees a fresh start on
     // every call. We end the WHOLE stale session (all remaining participants
     // marked left + status ended) so it can never block the conversation either.
-    const initiatorStaleParticipations = await this.prisma.callParticipant.findMany({
+    const initiatorParticipantIds = await accountParticipantIds(this.prisma, initiatorId);
+    const initiatorStaleParticipations = initiatorParticipantIds.length === 0 ? [] : await this.prisma.callParticipant.findMany({
       where: {
-        // Audit C5 (2026-07-02) — `{leftAt: null}` alone misses Mongo docs
-        // whose leftAt field was never written (pre-C5 participants).
-        OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-        participant: { userId: initiatorId },
+        ...LIVE_CALL_PARTICIPATION,
+        participantId: { in: initiatorParticipantIds },
         callSession: {
           status: { in: ACTIVE_STATUSES },
           // P0 fix (2026-07-06) — never let this cross-conversation sweep
@@ -1301,12 +1304,18 @@ export class CallService {
    * - CVE-005: Returns dynamic TURN credentials via TURNCredentialService
    * - Returns updated CallSession with ICE servers
    */
-  async joinCall(data: JoinCallData): Promise<{
-    callSession: CallSessionWithParticipants;
-    iceServers: RTCIceServer[]
-  }> {
-    return this.joinCallAttempt(data, 0);
+  async joinCall(data: JoinCallData): Promise<JoinCallResult> {
+    return this.joinsInFlight.runExclusive(`${data.callId}:${data.userId}`, () => this.joinCallAttempt(data, 0));
   }
+
+  /**
+   * #11468 — les joins d'un MÊME utilisateur sur un MÊME appel passent un par
+   * un : un appelé à plusieurs appareils en envoie une rafale à la sonnerie, et
+   * chacun ouvrait sa transaction sur la même ligne `CallSession` (conflit
+   * d'écriture MongoDB, puis CALL_STATE_CONFLICT). Le suivant lit la ligne du
+   * précédent et rejoint sans écrire. Les autres utilisateurs ne s'attendent pas.
+   */
+  private readonly joinsInFlight = new KeyedMutex();
 
   /**
    * MongoDB can detect two transactions racing on the same CallSession
@@ -1343,10 +1352,7 @@ export class CallService {
    * where the cap check above will correctly reject it if the winner took
    * the last slot.
    */
-  private async joinCallAttempt(data: JoinCallData, attempt: number): Promise<{
-    callSession: CallSessionWithParticipants;
-    iceServers: RTCIceServer[]
-  }> {
+  private async joinCallAttempt(data: JoinCallData, attempt: number): Promise<JoinCallResult> {
     const { callId, userId, participantId, settings } = data;
 
     logger.info('📞 User joining call', { callId, userId });
@@ -1409,7 +1415,8 @@ export class CallService {
       const callSession = await this.getCallSession(callId);
       return {
         callSession,
-        iceServers
+        iceServers,
+        rejoined: true
       };
     }
 
@@ -1509,7 +1516,8 @@ export class CallService {
 
     return {
       callSession,
-      iceServers
+      iceServers,
+      rejoined: false
     };
   }
 

@@ -35,6 +35,9 @@ const setup = (profile: Record<string, unknown> = {}, member: Record<string, unk
   );
   seedUser(db, {}, READER);
   db.gloryLedger.rows.push({ id: 'g1', userId: MEMBER, delta: 3000, reason: 'level', requestId: 'level:1' });
+  // Les étapes du 10 (une Meesh) et du 20 (une mission) FAITES : le niveau 20 du membre est celui que son bloc sert (#10903).
+  db.meeshLedger.rows.push({ id: 'mint-1', userId: MEMBER, delta: 1, reason: 'mint', requestId: 'mint-0001' });
+  db.dailyMission.rows.push({ id: 'dm-1', userId: MEMBER, dayKey: '2026-10-01', slot: 0, completedAt: new Date('2026-10-01T10:00:00Z') });
   for (const key of ['t1', 't2', 't3']) db.gameTrophy.rows.push({ id: key, userId: MEMBER, key, awardedAt: new Date('2026-09-10T00:00:00Z') });
   if (Object.keys(profile).length > 0) db.gameProfile.rows.push({ id: 'p1', userId: MEMBER, ...profile });
   return { db, service: new GameStandingService(db.prisma) };
@@ -110,11 +113,15 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
   });
 
   it('le niveau s\'ouvre selon le rang : les champs d\'hier gardent 100 et Galaxie, la vérité dans ladder (#9688)', async () => {
-    const { db, service } = setup({}, { engagementScore: 100 * 640 * 640, levelRecord: 499 });
+    const { db, service } = setup({}, { engagementScore: 100 * 640 * 640, levelRecord: 499, longestStreakDays: 30 });
     befriend(db);
+    // Les dix étapes faites (#9706) : cinq Meeshes, dix missions, trente jours de Flamme, le rang Passeur.
+    for (let n = 2; n <= 5; n += 1) db.meeshLedger.rows.push({ id: `mint-${n}`, userId: MEMBER, delta: 1, reason: 'mint', requestId: `mint-000${n}` });
+    for (let n = 2; n <= 10; n += 1) db.dailyMission.rows.push({ id: `dm-${n}`, userId: MEMBER, dayKey: `2026-10-${String(n).padStart(2, '0')}`, slot: 0, completedAt: new Date('2026-10-02T10:00:00Z') });
+    db.gloryLedger.rows.push({ id: 'g-passeur', userId: MEMBER, delta: 32_000, reason: 'mission', requestId: 'mission:passeur' });
     expect((await standing(service, stranger)).standing).toMatchObject({ level: 100, tier: 'galaxie', ladder: { level: 499, tier: 'supernova' } });
 
-    db.gloryLedger.rows.push({ id: 'g3', userId: MEMBER, delta: 127_000, reason: 'mission', requestId: 'mission:a' });
+    db.gloryLedger.rows.push({ id: 'g3', userId: MEMBER, delta: 95_000, reason: 'mission', requestId: 'mission:a' });
     expect((await standing(service, stranger)).standing).toMatchObject({ level: 100, tier: 'galaxie', ladder: { level: 640, tier: 'amas' } });
   });
 
@@ -124,10 +131,18 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     expect((await standing(service, stranger)).standing).toMatchObject({ level: 20, tier: 'lumiere', ladder: { level: 20, tier: 'lumiere' } });
   });
 
-  it('le niveau d\'un membre attend l\'étape que son record n\'a pas franchie : la dizaine qui suit, moins un (#9706)', async () => {
-    const { db, service } = setup({}, { engagementScore: 100 * 35 * 35, levelRecord: 9 });
+  it('le niveau d\'un membre attend l\'étape qu\'il n\'a PAS faite, quel que soit son record (#9706, #10903)', async () => {
+    const { db, service } = setup({}, { engagementScore: 100 * 35 * 35, levelRecord: 39 });
+    db.meeshLedger.rows.length = 0;
     befriend(db);
     expect((await standing(service, stranger)).standing).toMatchObject({ level: 9, ladder: { level: 9 } });
+  });
+
+  it('une étape FAITE ouvre le niveau tout de suite, sans attendre que le record la grave — comme le bloc du membre (#10903)', async () => {
+    const { db, service } = setup({}, { engagementScore: 100 * 35 * 35, levelRecord: 9 });
+    befriend(db);
+    // Une Meesh, une mission, Écho : les étapes 10, 20 et 30 sont faites ; le niveau 35 est servi (40 attend la Flamme).
+    expect((await standing(service, stranger)).standing).toMatchObject({ level: 35, ladder: { level: 35 } });
   });
 
   it('Mythe se lit au rang, avec le numéro de sa place, pour un ami (#9636)', async () => {
@@ -147,11 +162,21 @@ describe('ce que les amis voient de plus : points et trophées (#9541)', () => {
     expect((await standing(service, stranger)).standing).toMatchObject({ rank: 'legende', division: 1, division5: 1, mythic: null });
   });
 
-  it('jamais la Gloire exacte, les jours de série, ni une date — même pour un ami', async () => {
+  it('jamais les jours de série ni une date — même pour un ami ; sa Gloire, oui (#10913)', async () => {
     const { db, service } = setup();
     befriend(db);
-    const wire = JSON.stringify(await standing(service, stranger));
-    for (const forbidden of ['"glory"', 'streak', 'Streak', 'lastActive', '2026-10', '"days"', '3000']) expect(wire).not.toContain(forbidden);
+    const served = await standing(service, stranger);
+    expect(served.standing?.glory).toBe(3000);
+    const wire = JSON.stringify(served);
+    for (const forbidden of ['streak', 'Streak', 'lastActive', '2026-10', '"days"']) expect(wire).not.toContain(forbidden);
+  });
+
+  it('la Gloire exacte ne part jamais vers un non-ami, même sur « tout le monde » (#10913)', async () => {
+    const { service } = setup({ rankVisibility: 'everyone' });
+    const served = await standing(service, stranger);
+    expect(served.visible).toBe(true);
+    const wire = JSON.stringify(served);
+    for (const forbidden of ['"glory"', '3000']) expect(wire).not.toContain(forbidden);
   });
 });
 

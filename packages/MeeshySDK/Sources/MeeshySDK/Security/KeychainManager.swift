@@ -23,7 +23,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     public static let shared = KeychainManager()
 
     private let service = "me.meeshy.app"
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "keychain")
+    private let logger = MeeshyLog.logger(.keychain, subsystem: .legacySDK)
 
     private init() {}
 

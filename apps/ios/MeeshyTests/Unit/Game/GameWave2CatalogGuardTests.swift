@@ -9,9 +9,13 @@ final class GameWave2CatalogGuardTests: XCTestCase {
     /// Les seules clés dont l'anglais est légitimement identique au français (noms de ligue, « Prestige », « Rare »…).
     private let sameInEnglish: Set<String> = [
         "game2.duration.minutes", "game2.duration.hours", "game2.banner.separator", "game2.banner.points",
-        "game2.profile.treasury", "game2.guide.moment.prestige.short", "game2.rarity.rare", "game2.prestige.title",
+        "game2.guide.moment.prestige.short", "game2.rarity.rare", "game2.prestige.title",
         "game2.trophy.plate.prestige", "game2.trophy.plate.league-month", "game2.league.name.jade",
         "game2.league.name.quartz", "game2.door.prestige",
+        // « S1 » : l'abréviation de la saison s'écrit pareil en anglais (#10846).
+        "game2.banner.season.short",
+        // « Alliance » : le nom du concept s'écrit pareil en anglais, comme sur le web (glossaire, #11179).
+        "game2.duo.title",
     ]
 
     private func entries() throws -> [String: [String: String]] {
@@ -58,6 +62,38 @@ final class GameWave2CatalogGuardTests: XCTestCase {
             for locale in locales {
                 XCTAssertEqual(count(perLocale[locale] ?? ""), expected, "\(key) : \(locale) n'a pas les mêmes substitutions que le français")
             }
+        }
+    }
+
+    /// La fiche d'un profil ne porte plus de carte de jeu (#10093, #10380) : le niveau et le rang vivent sur la bannière,
+    /// la bande de la carte de contact garde le niveau, le rang, le trésor et trois coupes — comme le web (#10097). Les
+    /// phrases de la carte retirée (« Mon jeu », « Vitrine de … », Gloire, Flamme, médailles, mois d'obtention) quittent
+    /// l'app ET le catalogue ; chaque clé `game2.profile.*` et `game2.showcase.awarded_month*` restante est lue par une source.
+    func test_theRetiredProfileCardPhrases_leaveTheAppAndTheCatalogue() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let enumerator = FileManager.default.enumerator(at: root.appendingPathComponent("Meeshy"), includingPropertiesForKeys: nil)
+        var corpus = ""
+        while let url = enumerator?.nextObject() as? URL {
+            guard url.pathExtension == "swift" else { continue }
+            corpus += (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        }
+        XCTAssertFalse(corpus.isEmpty, "les sources de l'app sont introuvables")
+        let table = try entries()
+        let retired = [
+            "game2.profile.title", "game2.profile.glory", "game2.profile.treasury", "game2.profile.flame",
+            "game2.profile.medals", "game2.profile.see_progress", "game2.profile.see_showcase", "game2.profile.visitor_title",
+            "game2.profile.no_trophy", "game2.profile.visitor_game_title",
+            "game2.showcase.awarded_month", "game2.showcase.awarded_month_count",
+        ]
+        for key in retired {
+            XCTAssertNil(table[key], "\(key) : la carte qui la lisait a quitté la fiche — la retirer du catalogue")
+            XCTAssertFalse(corpus.contains("\"\(key)\""), "\(key) : la carte qui la lisait a quitté la fiche — la retirer de l'app")
+        }
+        let watched = table.keys.filter { $0.hasPrefix("game2.profile.") || $0.hasPrefix("game2.showcase.awarded_month") }
+        XCTAssertFalse(watched.isEmpty, "la bande garde ses phrases (game2.profile.showcase, level, visitor_treasury)")
+        for key in watched.sorted() {
+            XCTAssertTrue(corpus.contains("\"\(key)\""), "\(key) : aucune source ne la lit — la retirer du catalogue")
         }
     }
 }

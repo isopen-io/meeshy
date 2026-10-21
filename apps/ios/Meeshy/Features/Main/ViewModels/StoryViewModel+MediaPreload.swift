@@ -140,6 +140,8 @@ extension StoryViewModel {
             }
         )
         guard !candidates.isEmpty else { return }
+        // Borné : une story expire en 24 h, une session longue n'a pas à se souvenir de chacune.
+        if attemptedReceiverCoverStoryIds.count > 1_000 { attemptedReceiverCoverStoryIds.removeAll() }
         attemptedReceiverCoverStoryIds.formUnion(candidates.map(\.id))
 
         Task(priority: .utility) { [weak self] in
@@ -184,13 +186,7 @@ extension StoryViewModel {
             }
 
             if storedAny {
-                // #4002 — le MÊME signal invalide la mémoire de couverture :
-                // `StoryCoverURLMemo` a pu mémoïser un `nil` que cette
-                // écriture vient de rendre faux. Posé ici, et pas ailleurs,
-                // parce que c'est le seul site qui SAIT qu'un fichier de
-                // couverture vient d'atterrir.
-                StoryCoverURLMemo.bumpGeneration()
-                self?.receiverCoverRenderTick += 1
+                self?.coverRenders.bump()
             }
         }
     }
@@ -256,6 +252,9 @@ extension StoryViewModel {
     private func claimUnprefetchedURLs(for story: StoryItem) -> [String] {
         let all = Self.mediaURLStrings(for: story)
         let fresh = all.filter { !prefetchedMediaURLs.contains($0) }
+        // Borné : passé ce seuil, la mémoire de session repart de zéro — au pire un média déjà en cache
+        // est re-sondé une fois, au lieu d'un ensemble qui grossit tant que l'app reste ouverte.
+        if prefetchedMediaURLs.count > 2_000 { prefetchedMediaURLs.removeAll() }
         prefetchedMediaURLs.formUnion(fresh)
         return fresh
     }
@@ -289,6 +288,21 @@ extension StoryViewModel {
     ///
     /// Retourne les stories retirées (vide si rien à faire — aucune écriture de
     /// cache n'est alors déclenchée).
+    /// La cadence du balayage d'expiration : une story vit 24 h, une minute de
+    /// retard sur sa disparition est invisible.
+    nonisolated static let expirySweepInterval: Duration = .seconds(60)
+
+    /// Balaie les stories mortes maintenant, puis à `expirySweepInterval`, tant
+    /// que la tâche appelante vit — le tray l'appelle depuis sa `.task`, que
+    /// SwiftUI annule quand il disparaît. `purgeDeadStories` sort sans rien
+    /// écrire quand rien n'est mort : le coût d'un tour est une passe sur le tray.
+    func sweepExpiredStoriesWhileVisible() async {
+        while !Task.isCancelled {
+            purgeDeadStories()
+            try? await Task.sleep(for: Self.expirySweepInterval)
+        }
+    }
+
     @discardableResult
     func purgeDeadStories(deletedIds: Set<String> = [], includingExpired: Bool = true) -> [StoryItem] {
         let currentUserId = AuthManager.shared.currentUser?.id

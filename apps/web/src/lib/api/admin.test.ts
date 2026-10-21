@@ -30,12 +30,13 @@ describe('decodeAdminPermissions — false par défaut, sans exception', () => {
     expect(decodeAdminPermissions({ canAccessAdmin: true }).canAccessAdmin).toBe(true);
   });
 
-  test('porte les DIX clés de la matrice servie', () => {
+  test('porte les ONZE clés de la matrice servie', () => {
     expect(Object.keys(decodeAdminPermissions({})).sort()).toEqual(
       [
         'canAccessAdmin',
         'canManageAgent',
         'canManageConversations',
+        'canManageGame',
         'canManageGroups',
         'canManageNotifications',
         'canManageTranslations',
@@ -66,5 +67,12 @@ describe('decodeAdminPermissions — false par défaut, sans exception', () => {
     expect(decodeAdminPermissions({ canManageAgent: true }).canManageAgent).toBe(true);
     expect(decodeAdminPermissions({ canManageAgent: 'true' }).canManageAgent).toBe(false);
     expect(decodeAdminPermissions({}).canManageAgent).toBe(false);
+  });
+
+  /** `canManageGame` : la garde des routes `/admin/game/*` (#10232) — BIGBOSS et ADMIN seuls la portent côté passerelle. */
+  test('lit `canManageGame`, la garde du calendrier des saisons', () => {
+    expect(decodeAdminPermissions({ canManageGame: true }).canManageGame).toBe(true);
+    expect(decodeAdminPermissions({ canManageGame: 'true' }).canManageGame).toBe(false);
+    expect(decodeAdminPermissions({}).canManageGame).toBe(false);
   });
 });

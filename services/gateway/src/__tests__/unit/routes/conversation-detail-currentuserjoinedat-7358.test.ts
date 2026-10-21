@@ -97,7 +97,9 @@ async function buildApp(prisma: any): Promise<FastifyInstance> {
   app.decorate('presenceChecker', undefined as never);
   const optionalAuth = async (req: any) => {
     req.authContext = {
+      type: 'user',
       isAuthenticated: true,
+      isAnonymous: false,
       userId: USER_ID,
       registeredUser: { id: USER_ID, role: 'USER' },
     };

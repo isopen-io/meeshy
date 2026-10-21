@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
 import { LiveAnnouncement } from '@/components/live-announcement';
-import { Glyph } from '@/components/glyph';
-import { GameProfileOwnSlot, GameProfileVisitorSlot } from '@/components/game-profile-slots';
+import { Glyph, GlyphSvg } from '@/components/glyph';
+import { FEED_GLYPHS } from '@/components/glyphs-feed';
+import { GameBannerOwnSlot, GameBannerVisitorSlot } from '@/components/game-profile-slots';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { ReportSheet } from '@/components/report-sheet';
 import { apiDeps } from '@/lib/api/deps';
@@ -18,8 +19,11 @@ import { useOnline } from '@/lib/net/online';
 import { profileFailureOf } from '@/lib/profile/failure';
 import { userProfileTabs } from '@/lib/profile/tabs';
 import { useParams } from '@/lib/router';
+import { openSendSheet } from '@/lib/send/send-sheet-store';
+import { profileSendRequest } from '@/lib/view/profile-share';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { Link, href, navigate } from '@/routes/route-table';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { ProfileCall } from '@/routes/user-profile-call';
 import { ProfileConversationsSection } from '@/routes/user-profile-conversations';
 import { useProfileController } from '@/routes/user-profile-controller';
@@ -31,7 +35,7 @@ import {
   ProfileSelfSection,
   ProfileStatsSection,
 } from '@/routes/user-profile-sections';
-import { ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
+import { ProfileBodySkeleton, ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/routes/user-profile-states';
 
 /**
  * **LE PROFIL PUBLIC DE QUELQU'UN** (#7032, complété par #7083) — `/u/$username`,
@@ -44,9 +48,12 @@ import { ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/r
  * ses compteurs PUBLICS disent. L'audience est quelqu'un qui vient de lire une
  * `@mention` dans un message et touche le nom.
  *
- * **UN ALLER-RETOUR POUR L’IDENTITÉ, LES COMPTEURS, LA RELATION ET LA PRÉSENCE** —
- * `?expand=stats,relation,presence` (`lib/api/public-profile.ts`). La liste des
- * publications en DÉPEND : `authorId` est un `User.id`, jamais un pseudo
+ * **L’IDENTITÉ D’UN CÔTÉ, LES COMPTEURS DE L’AUTRE, DANS LE MÊME TOUR** —
+ * `?expand=relation,presence` et `?expand=stats` (`lib/api/public-profile.ts`),
+ * deux lectures parallèles de la même adresse : la fiche ne paie plus le seul
+ * calcul coûteux de la route avant de se peindre (plus de 9 s de squelette
+ * observées dans la coque Android). La liste des publications DÉPEND de la
+ * fiche : `authorId` est un `User.id`, jamais un pseudo
  * (`PostFeedService.ts:869`), et elle est donc gardée par `enabled` plutôt que
  * lancée sur un identifiant fabriqué depuis l'adresse.
  *
@@ -66,20 +73,33 @@ import { ProfileFailureNotice, ProfileOfflineBanner, ProfileSkeleton } from '@/r
  * absence.
  */
 
-function ProfileHeaderBar({ title }: { readonly title: string }) {
+function ProfileHeaderBar({ title, onSend }: { readonly title: string; readonly onSend?: () => void }) {
   return (
     <header className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
       <Link
         to="list"
-        aria-label="Retour aux conversations"
+        aria-label={translate(currentInterfaceLanguage(), 'thread.state.backToList')}
         className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
         style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
       >
         <Glyph name="caretLeft" size={20} className="rtl:-scale-x-100" />
       </Link>
-      <h1 className="truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+      <h1 className="min-w-0 flex-1 truncate text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
         {title}
       </h1>
+      {onSend === undefined ? null : (
+        /* « ENVOYER LE PROFIL » (D15, #10949) — la même porte que tout partage : l'écran de partage unique. */
+        <button
+          type="button"
+          data-profile-send=""
+          onClick={onSend}
+          aria-label={translate(currentInterfaceLanguage(), 'userProfile.sendProfile')}
+          className="grid size-11 shrink-0 place-items-center rounded-chip focus-visible:outline-2 focus-visible:outline-offset-2"
+          style={{ color: 'var(--color-ios-brand)', outlineColor: 'var(--color-ios-brand)' }}
+        >
+          <GlyphSvg glyph={FEED_GLYPHS.shareNetwork} size={22} />
+        </button>
+      )}
     </header>
   );
 }
@@ -114,9 +134,14 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const {
     view,
     person,
+    seed,
+    subjectId,
+    stats,
+    statsLoading,
     name,
     accent,
     presence,
+    mood,
     relation,
     actions,
     signedIn,
@@ -139,7 +164,9 @@ export function UserProfileView({ username }: { readonly username: string }) {
   const session = useStore(sessionStore, (state) => state.session);
   const rowViewerId = resolveViewer({ source: apiDeps.source, session }).id ?? '';
   const showsContent = relation.kind !== 'blocked';
-  const isSelf = view.data?.isSelf === true;
+  /* Avant la fiche servie, « soi » se lit sur l'identifiant que le cache
+     portait : jamais une question « partagées avec moi-même » au serveur. */
+  const isSelf = view.data === undefined ? subjectId !== '' && subjectId === rowViewerId : view.data.isSelf === true;
 
   /**
    * **LES ONGLETS DE `UserProfileSheet`** (#6330) — Publications,
@@ -159,11 +186,17 @@ export function UserProfileView({ username }: { readonly username: string }) {
    * elle prend un `User.id`, ne part ni sans session, ni sur sa propre fiche,
    * ni sur un compte bloqué. Elle part dès l'ouverture, pas au premier tap sur
    * l'onglet : l'onglet s'ouvre alors sur des lignes, pas sur un squelette.
+   *
+   * **ET DÈS QUE L'IDENTIFIANT EST CONNU, PAS DÈS QUE LA FICHE EST SERVIE**
+   * (profil lent dans la coque Android) — `subjectId` vient du cache des
+   * conversations quand la personne y figure : la lecture part alors dans le
+   * même tour que la fiche, au lieu de s'enchaîner derrière elle. Une fiche
+   * servie bloquée la coupe toujours (`showsContent`).
    */
   const shared = useQuery(
     {
-      ...sharedConversationsQueryOptions({ ...apiDeps, userId: person?.id ?? '' }),
-      enabled: person !== undefined && showsContent && signedIn && !isSelf,
+      ...sharedConversationsQueryOptions({ ...apiDeps, userId: subjectId }),
+      enabled: subjectId !== '' && showsContent && signedIn && !isSelf,
     },
     appQueryClient,
   );
@@ -182,7 +215,12 @@ export function UserProfileView({ username }: { readonly username: string }) {
        `relative` PORTE la pastille d'annonce, posée `absolute` au bas de son
        hôte, exactement comme sur « Découvrir ». */
     <div data-user-profile={person?.username ?? ''} className="relative flex h-dvh flex-col overflow-hidden pt-safe">
-      <ProfileHeaderBar title={person === undefined ? translate(language, 'userProfile.title') : name} />
+      <ProfileHeaderBar
+        title={person === undefined && seed === null ? translate(language, 'userProfile.title') : name}
+        {...(person === undefined || !signedIn || relation.kind === 'blocked'
+          ? {}
+          : { onSend: () => openSendSheet(profileSendRequest({ id: person.id, username: person.username, name, avatar: person.avatar ?? null })) })}
+      />
       <main id="contenu" className="scrollbar-none flex flex-1 flex-col overflow-y-auto px-4 pb-safe">
         {person !== undefined ? (
           <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
@@ -192,24 +230,27 @@ export function UserProfileView({ username }: { readonly username: string }) {
               name={name}
               accent={accent}
               presence={presence}
+              mood={mood}
+              game={
+                /* LE JEU SUR LA BANNIÈRE (#10092) — niveau et rang ; sur celle d'un autre, ce que SA visibilité autorise, rien sinon. */
+                relation.kind === 'blocked' ? null : isSelf ? (
+                  <GameBannerOwnSlot enabled={signedIn} />
+                ) : signedIn ? (
+                  <GameBannerVisitorSlot userId={person.id} enabled />
+                ) : null
+              }
             />
             {relation.kind === 'blocked' ? (
               <ProfileBlockedCard language={language} name={name} online={online} busy={busy} onAction={onAction} />
             ) : (
               <>
-                {/* LE JEU (#9481) — sur SA fiche, tout ; sur celle d'un autre, ce que SA visibilité autorise (la vitrine), rien sinon. */}
-                {isSelf ? (
-                  <GameProfileOwnSlot enabled={signedIn} />
-                ) : signedIn ? (
-                  <GameProfileVisitorSlot userId={person.id} name={name} enabled />
-                ) : null}
                 <ProfileTabs language={language} tabs={offered} active={tab} onChange={selectTab} idBase={tabBase} accent={accent} />
                 <ProfileTabPanel idBase={tabBase} tab={tab}>
                   {tab === 'posts' ? (
                     <ProfilePostsPanel
                       language={language}
                       authorId={person.id}
-                      stats={view.data?.stats ?? null}
+                      stats={stats}
                       online={online}
                       gestures={gestures}
                       announce={onPostsAnnounce}
@@ -243,20 +284,25 @@ export function UserProfileView({ username }: { readonly username: string }) {
                           onSignIn={onSignIn}
                         />
                       )}
-                      {isSelf || !signedIn ? null : (
+                      {isSelf || !signedIn || !callsAvailable() ? null : (
                         <ProfileCall language={language} person={callPerson} online={online} onFailed={onCallFailed} />
                       )}
                       <ProfileStatsSection
                         language={language}
-                        stats={view.data?.stats ?? null}
+                        stats={stats}
                         createdAt={person.createdAt}
-                        loading={view.isFetching}
+                        loading={statsLoading}
                       />
                     </>
                   )}
                 </ProfileTabPanel>
               </>
             )}
+          </div>
+        ) : seed !== null ? (
+          <div className="mx-auto grid w-full max-w-xl gap-6 pb-12 pt-2">
+            <ProfileHero profile={seed} name={name} accent={accent} presence={null} />
+            <ProfileBodySkeleton language={language} />
           </div>
         ) : view.isError ? (
           <ProfileFailureNotice language={language} failure={profileFailureOf(view.error, online)} onRetry={() => void view.refetch()} />

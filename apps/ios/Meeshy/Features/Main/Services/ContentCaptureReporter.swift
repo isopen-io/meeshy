@@ -155,6 +155,9 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     private let isScreenCaptured: @MainActor () -> Bool
     private let now: @MainActor () -> Date
     private let newCaptureId: @MainActor () -> String
+    /// #10508 — le second abonné : la capture d'un contenu SOCIAL (fil,
+    /// réels, détail, story, profil). Il réutilise ces observateurs-ci.
+    private let social: @MainActor () -> SocialCaptureObserving?
 
     private var sources: [WeakSource] = []
     private var observers: [NSObjectProtocol] = []
@@ -169,13 +172,15 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
             DeviceLayout.anyScreenIsCaptured
         },
         now: @escaping @MainActor () -> Date = { Date() },
-        newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() }
+        newCaptureId: @escaping @MainActor () -> String = { ContentCaptureReport.newCaptureId() },
+        social: @escaping @MainActor () -> SocialCaptureObserving? = { SocialCaptureReporter.shared }
     ) {
         self.declarer = declarer
         self.isConversationCovered = isConversationCovered
         self.isScreenCaptured = isScreenCaptured
         self.now = now
         self.newCaptureId = newCaptureId
+        self.social = social
     }
 
     /// Installé UNE fois au lancement. Un enregistrement déjà en cours à
@@ -216,6 +221,10 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
         visibleSources().flatMap { $0.visibleCaptureCandidates() }
     }
 
+    /// Une conversation montre ses messages : la capture est l'affaire de
+    /// #9617, pas des événements sociaux.
+    var showsConversationContent: Bool { !visibleSources().isEmpty }
+
     private func visibleSources() -> [ContentCaptureSource] {
         sources.removeAll { $0.value == nil }
         let covered = isConversationCovered()
@@ -223,10 +232,12 @@ final class ContentCaptureReporter: ContentCaptureReporterProviding {
     }
 
     func screenshotTaken() {
+        social()?.screenshotTaken()
         declare(tracker.screenshot(visible: visibleCandidates(), captureId: newCaptureId()))
     }
 
     func screenCaptureChanged(isCaptured: Bool) {
+        social()?.screenCaptureChanged(isCaptured: isCaptured)
         if isCaptured {
             guard !tracker.isRecording else { return }
             declare(tracker.recordingStarted(visible: visibleCandidates(), captureId: newCaptureId(), at: now()))
@@ -290,7 +301,7 @@ final class OutboxContentCaptureDeclarer: ContentCaptureDeclaring {
     nonisolated deinit {}
 
     private let readSettleDelay: Duration
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "content-capture")
+    private let logger = MeeshyLog.logger(.contentCapture)
 
     init(readSettleDelay: Duration = .milliseconds(1500)) {
         self.readSettleDelay = readSettleDelay

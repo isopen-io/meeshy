@@ -206,11 +206,11 @@ final class TestClock: @unchecked Sendable {
     var now: CFTimeInterval = 100
 }
 
-final class InlineVisionExecutor: CallVisionExecuting, @unchecked Sendable {
+nonisolated final class InlineVisionExecutor: CallVisionExecuting, @unchecked Sendable {
     nonisolated func execute(_ work: @escaping @Sendable () -> Void) { work() }
 }
 
-final class ManualVisionExecutor: CallVisionExecuting, @unchecked Sendable {
+nonisolated final class ManualVisionExecutor: CallVisionExecuting, @unchecked Sendable {
     private var pending: [@Sendable () -> Void] = []
 
     var pendingCount: Int { pending.count }
@@ -225,7 +225,7 @@ final class ManualVisionExecutor: CallVisionExecuting, @unchecked Sendable {
     }
 }
 
-final class CountingSegmenter: CallPersonSegmentationProviding, @unchecked Sendable {
+nonisolated final class CountingSegmenter: CallPersonSegmentationProviding, @unchecked Sendable {
     private let maskValue: UInt8
     private(set) var qualities: [CallSegmentationQuality] = []
     var calls: Int { qualities.count }
@@ -240,7 +240,7 @@ final class CountingSegmenter: CallPersonSegmentationProviding, @unchecked Senda
     }
 }
 
-final class SlowFaceRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
+nonisolated final class SlowFaceRenderer: CallFaceEffectsRendererProviding, @unchecked Sendable {
     private let delay: TimeInterval
 
     init(delay: TimeInterval) {

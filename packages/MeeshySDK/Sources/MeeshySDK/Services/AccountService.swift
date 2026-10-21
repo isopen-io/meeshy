@@ -14,7 +14,7 @@ public protocol AccountServiceProviding: Sendable {
     func deletionStatus() async throws -> AccountDeletionStatus
 }
 
-public final class AccountService: AccountServiceProviding, @unchecked Sendable {
+public final class AccountService: AccountServiceProviding, Sendable {
     public static let shared = AccountService()
     private let api: APIClientProviding
 

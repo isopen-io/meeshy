@@ -342,9 +342,19 @@ public struct MeeshyScenePlayer: View {
         }
     }
 
+    /// Le tour de boucle remet aussi la position PUBLIÉE à zéro (#10555) : la
+    /// dernière émission du tour est sa fin, et la suivante n'arrive qu'une
+    /// fois le contenu du nouveau tour prêt — la barre de l'hôte restait
+    /// pleine entre les deux. Appelé depuis le tick du canvas, jamais pendant
+    /// une mise à jour de vue.
     private var loopHandler: (@Sendable () -> Void)? {
         guard config.loops else { return nil }
-        return { MainActor.assumeIsolated { loopPass += 1 } }
+        return {
+            MainActor.assumeIsolated {
+                loopPass += 1
+                playbackRelay?(0)
+            }
+        }
     }
 
     /// Les cinq champs repris du porteur sont EXACTEMENT ceux que l'hôte
@@ -353,17 +363,41 @@ public struct MeeshyScenePlayer: View {
     /// dans le Prisme du lecteur. Le reste du `StoryItem` (compteurs, visibilité,
     /// vues) ne descend jamais jusqu'au canvas — le recopier serait un leurre.
     private var storyItem: StoryItem {
-        StoryItem(id: Self.hostIdentity(carrierId: Self.identityRoot(carrierId: carrier?.id,
-                                                                     document: document,
-                                                                     sceneIndex: sceneIndex),
-                                        sceneId: document.scenes[safe: sceneIndex]?.id
-                                                 ?? "\(sceneIndex)",
-                                        loopPass: loopPass),
+        Self.renderedItem(id: Self.hostIdentity(carrierId: Self.identityRoot(carrierId: carrier?.id,
+                                                                             document: document,
+                                                                             sceneIndex: sceneIndex),
+                                                sceneId: document.scenes[safe: sceneIndex]?.id
+                                                         ?? "\(sceneIndex)",
+                                                loopPass: loopPass),
+                          document: document,
+                          sceneIndex: sceneIndex,
+                          carrier: carrier)
+    }
+
+    static func renderedItem(id: String,
+                             document: CanvasV3,
+                             sceneIndex: Int,
+                             carrier: StoryItem?) -> StoryItem {
+        StoryItem(id: id,
                   content: carrier?.content,
                   media: carrier?.media ?? [],
                   storyEffects: StoryEffects(rendering: document, sceneIndex: sceneIndex),
                   createdAt: carrier?.createdAt ?? Date(timeIntervalSince1970: 0),
                   translations: carrier?.translations)
+    }
+
+    /// **La durée du tour que le player joue (#10555)** : celle de la slide
+    /// même que l'hôte monte, dans le Prisme du lecteur. La barre d'un hôte
+    /// qui la recalculait de son côté — depuis d'autres effets, ou sans les
+    /// langues du lecteur — divisait la position du player par une autre
+    /// durée que la sienne.
+    public static func playedDuration(document: CanvasV3,
+                                      sceneIndex: Int = 0,
+                                      carrier: StoryItem? = nil,
+                                      preferredContentLanguages: [String] = []) -> TimeInterval {
+        renderedItem(id: carrier?.id ?? "", document: document, sceneIndex: sceneIndex, carrier: carrier)
+            .toRenderableSlide(preferredLanguages: preferredContentLanguages)
+            .computedTotalDuration()
     }
 }
 

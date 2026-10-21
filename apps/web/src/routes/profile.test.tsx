@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import type { MyProfile } from '@/lib/api/profile';
+import { registerMoodPeekHost } from '@/lib/view/mood-peek';
 
 import {
   ContactSection,
@@ -149,6 +150,62 @@ describe('la bannière et l’avatar', () => {
     expect(html).toContain('src="blob:aperçu-local"');
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('Annuler l’envoi');
+  });
+});
+
+/**
+ * **MON PROFIL MONTRE MON HUMEUR** (#10530, suite de #10528) — la même
+ * pastille que sur la fiche d'un autre, et elle se touche : sa cible est posée
+ * à côté du bouton de la photo, jamais dedans.
+ */
+describe('mon humeur sur ma photo', () => {
+  const hero = (props: { readonly mood?: string; readonly editing?: boolean; readonly pendingAvatar?: string } = {}) =>
+    renderToStaticMarkup(
+      <ProfileHero
+        language="fr"
+        profile={profileOf({ avatar: 'https://static.test/a.webp' })}
+        editing={props.editing ?? false}
+        pending={props.pendingAvatar === undefined ? {} : { avatar: props.pendingAvatar }}
+        onPick={noop}
+        onCancelUpload={noop}
+        moodAuthorId="u-ada"
+        {...(props.mood === undefined ? {} : { mood: props.mood })}
+      />,
+    );
+
+  test('sans humeur servie, aucune pastille', () => {
+    expect(hero()).not.toContain('data-mood');
+  });
+
+  test('avec une humeur, la pastille est là et elle respire', () => {
+    const html = hero({ mood: '🎉' });
+
+    expect(html).toContain('data-mood="🎉"');
+    expect(html).toContain('mood-breathe');
+  });
+
+  test('elle se touche, sur une cible posée hors du bouton de la photo', () => {
+    const release = registerMoodPeekHost();
+    const html = hero({ mood: '🎉' });
+    release();
+    const photo = html.slice(html.indexOf('data-profile-open-image="avatar"'));
+    const button = photo.slice(0, photo.indexOf('</button>'));
+
+    expect(html).toMatch(/data-mood-peek="u-ada"[^>]*aria-label="Humeur de Ada L\."/);
+    expect(button).toContain('data-mood="🎉"');
+    expect(button).not.toContain('data-mood-peek');
+  });
+
+  /** En édition, le coin de la photo porte le contrôle qui la REMPLACE : la
+   * pastille s'efface, elle ne se dispute pas la place. */
+  test('en édition ou pendant un envoi, la pastille s’efface', () => {
+    const release = registerMoodPeekHost();
+    const editing = hero({ mood: '🎉', editing: true });
+    const sending = hero({ mood: '🎉', pendingAvatar: 'blob:aperçu-local' });
+    release();
+
+    expect(editing).not.toContain('data-mood');
+    expect(sending).not.toContain('data-mood');
   });
 });
 

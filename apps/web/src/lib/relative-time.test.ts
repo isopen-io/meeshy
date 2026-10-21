@@ -57,13 +57,45 @@ describe("l'heure relative courte", () => {
    * (miroir `Locale.current`), jamais un `fr-FR` en dur : à 100 jours, l'ordre
    * anglais place le mois avant le jour.
    */
-  test('la locale pilote la date absolue, jamais les libellés d’unité', () => {
+  test('la locale pilote la date absolue', () => {
     const target = ago(100 * 86_400);
     const en = shortRelativeTime(target, NOW, 'en-US');
     const fr = shortRelativeTime(target, NOW, 'fr-FR');
     expect(en).not.toBe(fr);
-    // Les libellés d'unité restent français quelle que soit la locale.
-    expect(shortRelativeTime(ago(150), NOW, 'en-US')).toBe('2 min');
+  });
+
+  /**
+   * UNE SEULE LANGUE D'INTERFACE (#10822) — les unités suivent la langue
+   * d'interface, avec les valeurs d'iOS (`time.short.*`,
+   * `apps/ios/Meeshy/Localizable.xcstrings`) : interface `en` ⇒ plus aucun
+   * mot français (« maintenant », « j », « sem », « mois »).
+   */
+  test('interface en : les unités parlent anglais, comme iOS', () => {
+    const en = (seconds: number): string => shortRelativeTime(ago(seconds), NOW, 'en');
+    expect(en(10)).toBe('now');
+    expect(en(45)).toBe('45s');
+    expect(en(150)).toBe('2 min');
+    expect(en(7_200)).toBe('2h');
+    expect(en(3 * 86_400)).toBe('3d');
+    expect(en(21 * 86_400)).toBe('3w');
+    expect(en(75 * 86_400)).toBe('2mo');
+    expect(shortRelativeTime(ago(3 * 86_400), NOW, 'en-US')).toBe('3d');
+  });
+
+  test('les sept langues ont leurs unités, celles d’iOS', () => {
+    const days = (locale: string): string => shortRelativeTime(ago(3 * 86_400), NOW, locale);
+    const months = (locale: string): string => shortRelativeTime(ago(75 * 86_400), NOW, locale);
+    expect(days('fr')).toBe('3j');
+    expect(days('es')).toBe('3d');
+    expect(days('pt')).toBe('3d');
+    expect(days('pt-BR')).toBe('3d');
+    expect(days('de')).toBe('3 T.');
+    expect(days('it')).toBe('3g');
+    expect(days('ar')).toBe('3 ي');
+    expect(months('it')).toBe('2 mesi');
+    expect(months('de')).toBe('2 Mon.');
+    expect(shortRelativeTime(ago(10), NOW, 'es')).toBe('ahora');
+    expect(shortRelativeTime(ago(10), NOW, 'ar')).toBe('الآن');
   });
 
   test('classifyRelativeTime range les secondes dans le bon panier', () => {

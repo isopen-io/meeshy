@@ -3,13 +3,12 @@ import { useStore } from 'zustand/react';
 
 import type { ContentTrackingLink } from '@meeshy/shared/types/post';
 
-import { apiConfig } from '@/lib/api/config';
+import { publicWebOrigin } from '@/lib/links/public-origin';
 import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { cardJoinAccount } from '@/lib/links/card-join-account';
 import { conversationLinksIn, type ConversationLinkTarget } from '@/lib/links/conversation-link';
-import { webOriginOf } from '@/lib/links/web-origin';
 import { isAppPath } from '@/routes/app-paths';
 
 import { ConversationLinkCard } from './conversation-link-card';
@@ -28,7 +27,7 @@ import { ConversationLinkCard } from './conversation-link-card';
 /** Les origines de l'environnement — aucune hors navigateur (rendu serveur
  * des témoins, prérendu) : les hôtes Meeshy connus restent reconnus. */
 const pageOrigins = (): readonly string[] =>
-  typeof window === 'undefined' ? [] : [webOriginOf(apiConfig.base, window.location.origin), window.location.origin];
+  typeof window === 'undefined' ? [] : [publicWebOrigin(window.location.origin), window.location.origin];
 
 export function ConversationLinkCards({
   text,

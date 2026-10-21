@@ -21,6 +21,7 @@ jest.mock('../../../utils/logger-enhanced', () => ({
 
 import { AttachmentReactionHandler } from '../../../socketio/handlers/AttachmentReactionHandler';
 import type { AttachmentReactionHandlerDependencies } from '../../../socketio/handlers/AttachmentReactionHandler';
+import { PARTICIPATION_VIVANTE } from '../../../routes/conversations/utils/access-control';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -386,7 +387,7 @@ describe('AttachmentReactionHandler', () => {
       // Security: identity is verified against the DB, scoped to the conversation.
       expect(prisma.participant.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
-          where: { id: 'anon-participant-id', conversationId: VALID_CONV_ID, isActive: true },
+          where: { id: 'anon-participant-id', conversationId: VALID_CONV_ID, ...PARTICIPATION_VIVANTE },
         })
       );
       expect(service.addAttachmentReaction).toHaveBeenCalledWith(

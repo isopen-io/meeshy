@@ -138,20 +138,12 @@ describe('POST /tracking-links — reuse is scoped to the caller (#9184)', () =>
     expect(store.rows).toHaveLength(1);
   });
 
-  it('gives an anonymous caller a link of its own, never a registered user\'s', async () => {
-    const alice = await createLink(app, { as: 'alice', originalUrl: 'https://meeshy.me' });
+  it('refuses a caller without an account instead of minting it a link (#10291)', async () => {
+    await createLink(app, { as: 'alice', originalUrl: 'https://meeshy.me' });
     const visitor = await createLink(app, { originalUrl: 'https://meeshy.me' });
 
-    expect(visitor.statusCode).toBe(201);
-    expect(visitor.json().data.trackingLink.token).not.toBe(alice.json().data.trackingLink.token);
-    expect(visitor.json().data.trackingLink.createdBy).toBeUndefined();
-  });
-
-  it('gives each anonymous caller a link of its own, never another visitor\'s', async () => {
-    const first = await createLink(app, { originalUrl: 'https://meeshy.me' });
-    const second = await createLink(app, { originalUrl: 'https://meeshy.me' });
-
-    expect(second.statusCode).toBe(201);
-    expect(second.json().data.trackingLink.token).not.toBe(first.json().data.trackingLink.token);
+    expect(visitor.statusCode).toBe(401);
+    expect(JSON.stringify(visitor.json())).not.toContain('alice');
+    expect(store.rows.map((row) => row.createdBy)).toEqual(['alice']);
   });
 });

@@ -65,6 +65,8 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
     let displayName: String?
     let avatar: String?
     let isOnline: Bool
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
 }
 
 // MARK: - Ce qu'un volet de recherche rend
@@ -92,6 +94,13 @@ nonisolated struct GlobalSearchLeg<Item: Sendable>: Sendable {
     static func failed(_ reason: String) -> GlobalSearchLeg<Item> {
         GlobalSearchLeg(items: [], failure: reason)
     }
+}
+
+/// La jambe « personnes » et l'identifiant que la passerelle a servi pour
+/// cette recherche (#10505) — `nil` quand elle n'en a pas servi.
+nonisolated struct GlobalSearchPeopleLeg: Sendable {
+    let leg: GlobalSearchLeg<GlobalSearchUserResult>
+    let searchId: String?
 }
 
 // MARK: - ViewModel
@@ -164,6 +173,7 @@ final class GlobalSearchViewModel: ObservableObject {
     private let searchService: MessageSearchService
     private let messageSocket: MessageSocketProviding
     private let socialSocket: SocialSocketProviding
+    private let socialEvents: SocialEventsV2Reporting
 
     // MARK: - Private
 
@@ -214,7 +224,8 @@ final class GlobalSearchViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         searchService: MessageSearchService? = nil,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
-        socialSocket: SocialSocketProviding = SocialSocketManager.shared
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared,
+        socialEvents: SocialEventsV2Reporting? = nil
     ) {
         self.api = api
         self.userService = userService
@@ -224,12 +235,13 @@ final class GlobalSearchViewModel: ObservableObject {
         )
         self.messageSocket = messageSocket
         self.socialSocket = socialSocket
+        self.socialEvents = socialEvents ?? SocialEventsV2Reporter.shared
         loadRecentSearches()
         setupDebounce()
         setupSocketInvalidation()
     }
 
-    deinit {
+    nonisolated deinit {
         // `searchTask` is `nonisolated(unsafe)` so the implicitly
         // non-isolated `deinit` can reach it without a Swift 6 isolation
         // warning. Cancel any in-flight search so we don't leak network
@@ -329,11 +341,12 @@ final class GlobalSearchViewModel: ObservableObject {
         guard !Task.isCancelled else { return }
 
         conversationResults = convs.items
-        userResults = users.items
+        userResults = users.leg.items
         messageResults = msgs.items
         resultsQuery = query
+        noteSearchSubmitted(query: query, peopleCount: users.leg.items.count, servedSearchId: users.searchId)
 
-        let failure = convs.failure ?? users.failure ?? msgs.failure
+        let failure = convs.failure ?? users.leg.failure ?? msgs.failure
         remoteFailure = failure
 
         if NetworkMonitor.shared.isOffline {
@@ -352,10 +365,36 @@ final class GlobalSearchViewModel: ObservableObject {
     /// Rejoue la dernière requête lancée. C'est ce que fait le bouton
     /// « Réessayer » des états hors-ligne et d'erreur — un contrôle qui
     /// n'aurait pas d'effet ne serait pas un contrôle.
+    /// #10505 — une recherche de personnes : l'identifiant que la passerelle a
+    /// SERVI avec la page (`meta.searchId`) relie la soumission au résultat
+    /// touché. Elle n'ouvre que son propre scellé : sans identifiant servi
+    /// (ancien serveur, recherche distante en panne), les événements partent
+    /// sans — on n'en fabrique pas. Le texte ne part pas.
+    private(set) var searchId: String?
+
+    private func noteSearchSubmitted(query: String, peopleCount: Int, servedSearchId: String?) {
+        searchId = servedSearchId
+        guard let event = DiscoveryTelemetry.searchSubmitted(searchId: servedSearchId, query: query, peopleCount: peopleCount) else { return }
+        socialEvents.emit(event)
+    }
+
+    func noteUserResultTapped(_ userId: String, position: Int) {
+        socialEvents.emit(DiscoveryTelemetry.profileResultTapped(searchId: searchId, userId: userId, position: position))
+    }
+
     func retryLastSearch() async {
         let trimmed = lastQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 2 else { return }
-        await performSearch(query: lastQuery)
+        // Le réessai passe par LA tâche de recherche, comme une frappe : une
+        // frappe qui suit l'annule, et lui ne peut plus revenir après elle pour
+        // remettre les résultats de l'ancienne requête.
+        let query = lastQuery
+        searchTask?.cancel()
+        let task = Task<Void, Never> { [weak self] in
+            await self?.performSearch(query: query)
+        }
+        searchTask = task
+        await task.value
     }
 
     // MARK: - Search Conversations (FTS5-first, network fallback)
@@ -398,7 +437,7 @@ final class GlobalSearchViewModel: ObservableObject {
         case .expired, .empty:
             cached = []
         }
-        let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
+        let byId = Dictionary(cached.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         let preferred = preferredContentLanguages
 
         return ids.compactMap { id -> GlobalSearchConversationResult? in
@@ -412,8 +451,10 @@ final class GlobalSearchViewModel: ObservableObject {
                 // Même résolution que `ThemedConversationRow` — la ligne de
                 // résultat de recherche est une ligne de conversation, elle doit
                 // rendre le MÊME texte que la liste. Rend l'aperçu original
-                // quand aucune langue du prisme n'est servie (règle #1).
-                lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
+                // quand aucune langue du prisme n'est servie (règle #1). Un
+                // message qui disparaît n'y laisse que son libellé : hors du
+                // fil, aucune couche sécurisée ne le garde (#9622).
+                lastMessagePreview: OutsidePreview.lastMessage(of: conv, preferredLanguages: preferred),
                 lastMessageAt: conv.lastMessageAt,
                 unreadCount: conv.userState.unreadCount,
                 conversation: conv
@@ -442,7 +483,7 @@ final class GlobalSearchViewModel: ObservableObject {
                     // (jumeau de `GET /conversations`) : les rendre bruts ici
                     // laisserait la recherche dans la langue de l'expéditeur
                     // alors que la liste, elle, traduit.
-                    lastMessagePreview: conv.resolvedLastMessagePreview(preferredLanguages: preferred),
+                    lastMessagePreview: OutsidePreview.lastMessage(of: conv, preferredLanguages: preferred),
                     lastMessageAt: conv.lastMessageAt,
                     unreadCount: conv.userState.unreadCount,
                     conversation: conv
@@ -474,12 +515,15 @@ final class GlobalSearchViewModel: ObservableObject {
 
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
     /// `@Published` state. See note on `searchConversations`.
-    private func searchUsers(query: String) async -> GlobalSearchLeg<GlobalSearchUserResult> {
+    private func searchUsers(query: String) async -> GlobalSearchPeopleLeg {
         let localResults = await searchLocalUsers(query: query)
         let remote = await fetchRemoteUserResults(query: query)
-        return GlobalSearchLeg(
-            items: mergeUniqueUserResults(local: localResults, remote: remote.items),
-            failure: remote.failure
+        return GlobalSearchPeopleLeg(
+            leg: GlobalSearchLeg(
+                items: mergeUniqueUserResults(local: localResults, remote: remote.leg.items),
+                failure: remote.leg.failure
+            ),
+            searchId: remote.searchId
         )
     }
 
@@ -510,25 +554,28 @@ final class GlobalSearchViewModel: ObservableObject {
                 username: user.username,
                 displayName: user.displayName,
                 avatar: user.avatar,
-                isOnline: user.isOnline ?? false
+                isOnline: user.isOnline ?? false,
+                ring: user.profileDecor?.avatarRing
             )
         }
     }
 
-    private func fetchRemoteUserResults(query: String) async -> GlobalSearchLeg<GlobalSearchUserResult> {
+    private func fetchRemoteUserResults(query: String) async -> GlobalSearchPeopleLeg {
         do {
-            let results = try await userService.searchUsers(query: query, limit: 20, offset: 0)
-            return .served(results.map { user in
+            let page = try await userService.searchPeople(query: query, limit: 20, offset: 0)
+            let items = page.users.map { user in
                 GlobalSearchUserResult(
                     id: user.id,
                     username: user.username,
                     displayName: user.displayName,
                     avatar: user.avatar,
-                    isOnline: user.isOnline ?? false
+                    isOnline: user.isOnline ?? false,
+                    ring: user.avatarRing
                 )
-            })
+            }
+            return GlobalSearchPeopleLeg(leg: .served(items), searchId: page.searchId)
         } catch {
-            return .failed(Self.remoteFailureMessage)
+            return GlobalSearchPeopleLeg(leg: .failed(Self.remoteFailureMessage), searchId: nil)
         }
     }
 
@@ -548,6 +595,17 @@ final class GlobalSearchViewModel: ObservableObject {
     }
 
     // MARK: - Search Messages (FTS5-first, network fallback)
+
+    /// **Un message qui disparaît ne sort pas de sa conversation par la
+    /// recherche** (#9619, loi de sortie #9572). Une vue unique, une flamme à
+    /// durée ou après lecture — sur le message OU sur l'une de ses pièces —
+    /// n'apparaît dans aucun résultat : la rangée le montrerait en clair, hors
+    /// de toute couche sécurisée, et le seul fait qu'il RÉPONDE à la requête
+    /// dirait déjà un mot de son texte. Les deux volets (index local, réseau)
+    /// passent par ici, avant toute mise en cache.
+    nonisolated static func appearsInSearch(_ message: MeeshyMessage) -> Bool {
+        message.contentExitLaw.nature == .ordinary
+    }
 
     /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
     /// `@Published` state. See note on `searchConversations`.
@@ -613,11 +671,13 @@ final class GlobalSearchViewModel: ObservableObject {
         let conversationsById: [String: MeeshyConversation]
         switch cachedConvs {
         case .fresh(let v, _), .stale(let v, _):
-            conversationsById = Dictionary(uniqueKeysWithValues: v.map { ($0.id, $0) })
+            conversationsById = Dictionary(v.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         case .expired, .empty:
             conversationsById = [:]
         }
-        return records.map { record in
+        let readerId = authManager.currentUser?.id ?? ""
+        return records.compactMap { record -> GlobalSearchMessageResult? in
+            guard Self.appearsInSearch(record.toMessage(currentUserId: readerId)) else { return nil }
             let conv = conversationsById[record.conversationId]
             return GlobalSearchMessageResult(
                 id: record.localId,
@@ -707,7 +767,9 @@ final class GlobalSearchViewModel: ObservableObject {
                     URLQueryItem(name: "limit", value: "5"),
                 ]
             )
-            return .served(response.data.map { apiMsg in
+            let readerId = authManager.currentUser?.id ?? ""
+            return .served(response.data.compactMap { apiMsg -> GlobalSearchMessageResult? in
+                guard Self.appearsInSearch(apiMsg.toMessage(currentUserId: readerId)) else { return nil }
                 let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
                 return GlobalSearchMessageResult(
                     id: apiMsg.id,

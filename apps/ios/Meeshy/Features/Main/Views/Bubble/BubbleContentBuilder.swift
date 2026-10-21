@@ -7,12 +7,30 @@ extension BubbleContent {
     /// vidéo, carte de conversation) — résolus une seule fois. Partagé par la
     /// bulle et la Rivière (#8139) : deux résolutions de la carte finiraient
     /// par diverger au premier format de lien ajouté.
+    ///
+    /// `authorIsAnonymous` (#10286) — un invité sans compte n'émet AUCUN lien :
+    /// ni aperçu, ni carte de conversation, ni lecteur intégré, ni lien suivi ;
+    /// son adresse se lit telle qu'écrite.
     static func text(
         raw: String,
         trackedLinks: [String: String],
         isEmojiOnly: Bool = false,
-        emojiFontSize: CGFloat? = nil
+        emojiFontSize: CGFloat? = nil,
+        authorIsAnonymous: Bool = false
     ) -> Text {
+        if authorIsAnonymous {
+            return Text(
+                raw: raw,
+                isEmojiOnly: isEmojiOnly,
+                emojiFontSize: emojiFontSize,
+                firstLinkURL: nil,
+                embeddedVideo: nil,
+                trackedLinks: [:],
+                embedTrackedURL: nil,
+                conversationCardTarget: nil,
+                linksAreInert: true
+            )
+        }
         // Précalcul unique du lien (NSDataDetector) — réutilisé par
         // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
         let firstLinkURL = LinkPreviewFetcher.firstURL(in: raw)
@@ -152,13 +170,16 @@ extension BubbleContent {
         }
 
         // --- Text + emoji ---
-        let activeLang = activeDisplayLangCode
-            ?? preferredTranslation?.targetLanguage
-            ?? preferredAudioLangCode
-            ?? message.originalLanguage
+        let activeLang = Self.activeLanguage(
+            of: message, preferredTranslation: preferredTranslation,
+            activeDisplayLangCode: activeDisplayLangCode, preferredAudioLangCode: preferredAudioLangCode
+        )
         // #9617 — l'avis de capture se compose CHEZ LE LECTEUR (langue
         // d'interface, fuseau) ; son `content` n'est que le repli français.
-        let effective = Self.captureNoticeText(for: message) ?? Self.resolveEffectiveContent(
+        // #7759 — la ligne d'arrivées de Meeshy Global, de même.
+        let effective = Self.captureNoticeText(for: message)
+            ?? Self.arrivalsNoticeText(for: message)
+            ?? Self.resolveEffectiveContent(
             message: message,
             translations: translations,
             preferredTranslation: preferredTranslation,
@@ -174,24 +195,14 @@ extension BubbleContent {
         // emoji-only. `BubbleStandardLayout` branches on `content.reply` —
         // no reply → free-floating large emoji (no bubble); reply → emoji
         // hosted in the bubble above the quoted-reply card, large & centered.
-        let emojiResult: EmojiDetector.EmojiOnlyResult = {
-            // `message.location` compte comme une pièce jointe pour cette
-            // détection : un emoji accompagné d'un lieu doit rendre la bulle
-            // (qui héberge LocationMessageView), pas l'emoji libre hors bulle —
-            // même sémantique qu'avec l'ancienne pièce jointe `.location`.
-            guard !message.content.isEmpty,
-                  message.attachments.isEmpty,
-                  message.location == nil else {
-                return .notEmojiOnly
-            }
-            return EmojiDetector.analyze(message.content)
-        }()
+        let emojiResult = Self.emojiOnlyResult(of: message)
         let isEmojiOnly = emojiResult != .notEmojiOnly
         self.text = effective.isEmpty ? nil : Self.text(
             raw: effective,
             trackedLinks: message.trackedLinkMap,
             isEmojiOnly: isEmojiOnly,
-            emojiFontSize: emojiResult.fontSize
+            emojiFontSize: emojiResult.fontSize,
+            authorIsAnonymous: message.senderIsAnonymous || !message.senderHasAccount
         )
 
         // --- Translation panel ---
@@ -248,7 +259,7 @@ extension BubbleContent {
         // gabarit) et `message.sticker`. Le PNG est rattaché au sticker et
         // RETIRÉ de la grille visuelle : sans cette exclusion, la bulle
         // rendrait le sticker natif ET, dessous, son propre repli en photo.
-        // Un sticker non rendable vaut absent (`ifRenderable`) et laisse la
+        // Un sticker sans rien à peindre vaut absent et laisse la
         // pièce jointe à la grille — mieux vaut la photo qu'un vide.
         let sticker = Self.resolveSticker(message.sticker, attachments: message.attachments)
         self.sticker = sticker
@@ -270,7 +281,7 @@ extension BubbleContent {
         // mixing two-or-more categories falls into `.mixed` which carries audio
         // alongside visual/nonMedia so legacy "image + audio + file" rendering
         // is preserved. `audio` carries ALL audio tracks of the message: one
-        // renders as the existing widget, several as `AudioCarouselView`.
+        // renders as the existing widget, several as `AudioStackView`.
         switch (visual.isEmpty, audio.isEmpty, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
@@ -357,7 +368,8 @@ extension BubbleContent {
 
     /// Le sticker que la bulle dessine, avec le PNG qui l'accompagne — `nil`
     /// quand le message n'en porte pas, ou en porte un NON rendable (ni
-    /// gabarit ni emoji : rien à peindre, `MessageSticker.ifRenderable`).
+    /// gabarit ni emoji ni image jointe : rien à peindre). Un `stickerId` de
+    /// bibliothèque seul se dessine par son PNG (#10655).
     ///
     /// Le PNG est la PREMIÈRE pièce jointe image : le composer n'en envoie
     /// qu'une, et un lecteur qui en verrait deux n'aurait aucun moyen de dire
@@ -367,7 +379,7 @@ extension BubbleContent {
         _ sticker: MessageSticker?,
         attachments: [MeeshyMessageAttachment]
     ) -> Sticker? {
-        guard let sticker = sticker?.ifRenderable else { return nil }
+        guard let sticker = sticker?.ifWireWorthy else { return nil }
         let picture = attachments.first(where: { $0.type == .image }).map {
             Sticker.Picture(
                 attachmentId: $0.id,
@@ -377,12 +389,16 @@ extension BubbleContent {
                 thumbnailColor: $0.thumbnailColor
             )
         }
+        // #10655 — un sticker de bibliothèque envoyé du web ne porte que son `stickerId` :
+        // il se dessine par son image jointe. Sans image, ni gabarit ni emoji : rien à peindre.
+        guard sticker.isRenderable || picture != nil else { return nil }
         return Sticker(
             templateId: sticker.templateId,
             slots: sticker.slots,
             animation: sticker.animation,
             emoji: sticker.emoji,
-            picture: picture
+            picture: picture,
+            libraryStickerId: sticker.stickerId
         )
     }
 
@@ -398,6 +414,48 @@ extension BubbleContent {
     ) -> String? {
         guard message.messageSource == .system, let notice = message.captureNotice else { return nil }
         return CaptureNoticeText.compose(notice, language: language, timeZone: timeZone)
+    }
+
+    /// **La ligne d'arrivées de Meeshy Global** (#7759) dans la langue
+    /// d'interface du lecteur, avec les clés `system.members.arrived.*` que la
+    /// ligne de liste dit déjà. `nil` pour tout autre message — et pour une
+    /// ligne dont la métadonnée ne se lit pas, qui retombe sur son `content`.
+    static func arrivalsNoticeText(for message: Message, strings: ConversationPreviewStrings? = nil) -> String? {
+        guard message.messageSource == .system, let notice = message.arrivalsNotice else { return nil }
+        return notice.text(strings ?? ConversationPreviewCatalog.strings())
+    }
+
+    /// La langue que la bulle AFFICHE : le drapeau basculé par le lecteur
+    /// d'abord, puis la traduction préférée, la piste audio préférée, l'original.
+    static func activeLanguage(
+        of message: Message,
+        preferredTranslation: MessageTranslation?,
+        activeDisplayLangCode: String?,
+        preferredAudioLangCode: String? = nil
+    ) -> String {
+        activeDisplayLangCode
+            ?? preferredTranslation?.targetLanguage
+            ?? preferredAudioLangCode
+            ?? message.originalLanguage
+    }
+
+    /// **Le texte que la bulle AFFICHE** (#11233) — le site unique que « Copier »
+    /// lit, pour copier ce que le lecteur a sous les yeux : la langue du drapeau
+    /// qu'il a basculé, jamais la seule traduction préférée.
+    static func displayedText(
+        of message: Message,
+        translations: [MessageTranslation],
+        preferredTranslation: MessageTranslation?,
+        activeDisplayLangCode: String?
+    ) -> String {
+        resolveEffectiveContent(
+            message: message,
+            translations: translations,
+            preferredTranslation: preferredTranslation,
+            activeLangCode: activeLanguage(
+                of: message, preferredTranslation: preferredTranslation, activeDisplayLangCode: activeDisplayLangCode
+            )
+        )
     }
 
     static func resolveEffectiveContent(
@@ -503,5 +561,18 @@ extension BubbleContent {
                     includesMe: entry.data.includesMe
                 )
             }
+    }
+
+    /// Le verdict « emoji seul » d'un message, site UNIQUE : la bulle, Focal,
+    /// Script et la Rivière (#10637) lisent la même taille, aucune ne la recalcule.
+    /// Un lieu ou une pièce jointe compte comme un contenu : la bulle qui
+    /// l'héberge reste une bulle.
+    static func emojiOnlyResult(of message: MeeshyMessage) -> EmojiDetector.EmojiOnlyResult {
+        guard !message.content.isEmpty,
+              message.attachments.isEmpty,
+              message.location == nil else {
+            return .notEmojiOnly
+        }
+        return EmojiDetector.analyze(message.content)
     }
 }

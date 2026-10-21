@@ -33,9 +33,18 @@ import {
   writeRefusalCode
 } from './conversationWriteAdmission';
 import { sharedSendReservations, type SendReservationStore } from './newcomerSendReservations';
-import { resolveParticipantRights, attachmentSendRightForMimeType, NEW_MEMBER_PERMISSIONS } from '../participantRights';
+import { resolveParticipantRights, NEW_MEMBER_PERMISSIONS } from '../participantRights';
+import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
+import { ANONYMOUS_SENDER_NAME_SELECT } from './anonymousSenderNameSelect';
+import {
+  attachmentSendRefusal,
+  carriesAttachments,
+  loadCarriedAttachmentMimeTypes,
+  loadGuestAttachmentKinds
+} from './attachmentKindAdmission';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { getCachedParticipant, cacheParticipant } from '../../utils/participant-lookup-cache';
+import { PARTICIPATION_VIVANTE } from '../../routes/conversations/utils/access-control';
 import { normalizeLanguageCode } from '@meeshy/shared/utils/language-normalize';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
 import { announceConversationLanguageChange } from '../message-translation/conversationLanguageChanges';
@@ -135,17 +144,17 @@ export class MessagingService {
           let p = await this.prisma.participant.findUnique({
             where: { id: participantId },
             select: {
-              id: true, conversationId: true, isActive: true,
-              permissions: true, anonymousSession: { select: { rights: true } }
+              id: true, conversationId: true, isActive: true, bannedAt: true,
+              permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
             }
           });
           if (!p || p.conversationId !== conversationId) {
             logger.error('DEPRECATED: userId passed as participantId — caller must pass Participant.id', { participantId, conversationId });
             p = await this.prisma.participant.findFirst({
-              where: { userId: participantId, conversationId, isActive: true },
+              where: { userId: participantId, conversationId, ...PARTICIPATION_VIVANTE },
               select: {
-                id: true, conversationId: true, isActive: true,
-                permissions: true, anonymousSession: { select: { rights: true } }
+                id: true, conversationId: true, isActive: true, bannedAt: true,
+                permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
               }
             });
           }
@@ -160,7 +169,11 @@ export class MessagingService {
         { ...corr, conversationId }
       );
 
-      if (!participant || !participant.isActive) {
+      // #10440 — la participation VIVANTE (`PARTICIPATION_VIVANTE`) : active
+      // ET non bannie. Une ligne active et bannie — la forme que
+      // `restore-for-me` produisait avant #10436 — n'écrit pas, même si une
+      // autre écriture la rallumait un jour sans lire `bannedAt`.
+      if (!participant || !participant.isActive || participant.bannedAt) {
         return this.createErrorResponse(
           'Permissions insuffisantes pour envoyer des messages'
         );
@@ -185,6 +198,7 @@ export class MessagingService {
                 select: {
                   id: true, displayName: true, avatar: true, type: true,
                   nickname: true, userId: true,
+                  ...ANONYMOUS_SENDER_NAME_SELECT,
                   user: {
                     select: {
                       id: true, username: true, displayName: true,
@@ -303,20 +317,33 @@ export class MessagingService {
       //      dépend du TYPE de chaque pièce (`attachmentSendRightForMimeType`,
       //      même table que `senderRights` ci-dessus) — d'où la lecture
       //      supplémentaire, minimale (id + mimeType uniquement).
-      if (senderRights && request.attachmentIds && request.attachmentIds.length > 0) {
-        const attachments = await this.prisma.messageAttachment.findMany({
-          where: { id: { in: [...request.attachmentIds] } },
-          select: { mimeType: true }
+      //
+      //      #10001 — un INVITÉ dont le lien liste ses familles (World Wide)
+      //      relève d'un autre régime : la famille de chaque pièce, jamais
+      //      l'instantané du join (`attachmentKindAdmission.ts`).
+      //
+      //      #10051 — un TRANSFERT ou une DIFFUSION recopie les pièces de sa
+      //      source avec l'invité pour auteur : pour un invité, elles passent
+      //      la même garde que les pièces rattachées. Un compte n'est pas
+      //      concerné (la règle de #5151 ne visait que le rattachement).
+      const guestShareLinkId = participant.anonymousSession?.shareLinkId;
+      const carried = guestShareLinkId
+        ? request
+        : { attachmentIds: request.attachmentIds };
+      if ((senderRights || guestShareLinkId) && carriesAttachments(carried)) {
+        const mimeTypes = await loadCarriedAttachmentMimeTypes(this.prisma, carried);
+        const guestKinds = guestShareLinkId
+          ? await loadGuestAttachmentKinds(this.prisma, { shareLinkId: guestShareLinkId, conversationId })
+          : null;
+        const refusal = attachmentSendRefusal({
+          mimeTypes,
+          guestKinds,
+          senderRights,
+          hostOverride: participant.anonymousSession?.rights
         });
-        const deniedRight = attachments
-          .map(a => attachmentSendRightForMimeType(a.mimeType))
-          .find(right => senderRights![right] === false);
-        if (deniedRight) {
-          logger.info('participant attachment right denied', { ...corr, conversationId, right: deniedRight });
-          return this.createErrorResponse(
-            'Vous n\'êtes pas autorisé à envoyer ce type de pièce jointe',
-            'ATTACHMENT_RIGHT_NOT_PERMITTED'
-          );
+        if (refusal) {
+          logger.info('participant attachment refused', { ...corr, conversationId, code: refusal.code });
+          return this.createErrorResponse(refusal.message, refusal.code);
         }
       }
 
@@ -424,11 +451,15 @@ export class MessagingService {
         senderParticipantId: participant.id,
         forwardedFromConversationId: request.forwardedFromConversationId,
         at: new Date(),
-        bodyOnlyFromSource: this.bodyOnlyFromSource(request)
+        bodyOnlyFromSource: this.bodyOnlyFromSource(request),
+        forwardedAttachmentIds: request.forwardedAttachmentIds,
+        bringsOwnPieces: this.bringsOwnPieces(request)
       });
+      // #9598 — le motif voyage en `code`, stable ; la phrase reste pour les
+      // anciens clients.
       if (isForwardRefused(forwardAdmission)) {
         logger.info('forward refused', { ...corr, reason: forwardAdmission.reason });
-        return this.createErrorResponse(describeForwardRefusal(forwardAdmission));
+        return this.createErrorResponse(describeForwardRefusal(forwardAdmission), forwardAdmission.reason);
       }
 
       // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`
@@ -633,9 +664,14 @@ export class MessagingService {
    */
   private bodyOnlyFromSource(request: MessageRequest): boolean {
     if (!request.forwardedFromId) return false;
+    return !request.content?.trim() && !this.bringsOwnPieces(request);
+  }
+
+  /** #10987 — ce que le client renvoie lui-même d'une source que la passerelle ne recopie pas. */
+  private bringsOwnPieces(request: MessageRequest): boolean {
     const hasOwnAttachments =
       (request.attachments?.length ?? 0) > 0 || (request.attachmentIds?.length ?? 0) > 0;
-    return !request.content?.trim() && !hasOwnAttachments && !request.encryptedPayload;
+    return hasOwnAttachments || Boolean(request.encryptedPayload);
   }
 
   /**
@@ -717,6 +753,9 @@ export class MessagingService {
       success: true,
       data: {
         ...message,
+        // #10120 — l'auteur tel que la liste le sert : un invité y porte son
+        // nom donné, son pseudo en handle, jamais son profil de session.
+        ...(senderObj ? { sender: servedMessageSender(senderObj) } : {}),
         senderId: resolvedSenderId,
         senderParticipantId: message.senderId,
         timestamp: message.createdAt
@@ -764,8 +803,9 @@ export class MessagingService {
     id: string;
     conversationId: string;
     isActive: boolean;
+    bannedAt: Date | null;
     permissions: ParticipantPermissions;
-    anonymousSession: { rights: AnonymousRightsOverride | null } | null;
+    anonymousSession: { rights: AnonymousRightsOverride | null; shareLinkId: string } | null;
   } | null> {
     try {
       const user = await this.prisma.user.findUnique({
@@ -773,6 +813,17 @@ export class MessagingService {
         select: { id: true, username: true, displayName: true, firstName: true, lastName: true, avatar: true, ...RECIPIENT_LANG_SELECT }
       });
       if (!user) return null;
+
+      // #10443 — le pont ne sert qu'un utilisateur SANS ligne `Participant`
+      // dans cette conversation. Le repli par userId qui l'appelle exige une
+      // participation VIVANTE : un banni, ou un membre parti, y échoue, et un
+      // `ConversationMember` hérité encore actif lui recréait une
+      // participation active — seul l'index unique la refusait, s'il est posé.
+      const existing = await this.prisma.participant.findFirst({
+        where: { userId, conversationId },
+        select: { id: true }
+      });
+      if (existing) return null;
 
       // Check legacy ConversationMember collection via raw query
       const members = await (this.prisma as any).$runCommandRaw({
@@ -832,8 +883,8 @@ export class MessagingService {
           deletedForMe: null
         },
         select: {
-          id: true, conversationId: true, isActive: true,
-          permissions: true, anonymousSession: { select: { rights: true } }
+          id: true, conversationId: true, isActive: true, bannedAt: true,
+          permissions: true, anonymousSession: { select: { rights: true, shareLinkId: true } }
         }
       });
 

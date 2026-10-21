@@ -39,6 +39,10 @@ public final class StoryGlassBackdropLayer: CALayer {
 
     private var sigma: Float = 24
     private var backdropTexture: MTLTexture?
+    /// Ce que la lecture a déjà donné à cette couche (#9864) : la génération de
+    /// capture et le cadre découpés. `nil` dès qu'un autre chemin (édition,
+    /// export) pose la texture — la lecture la re-nourrit alors.
+    private(set) var feedStamp: StoryGlassFeedStamp?
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
@@ -64,6 +68,12 @@ public final class StoryGlassBackdropLayer: CALayer {
 
     @MainActor
     public func setBackdropTexture(_ texture: MTLTexture?) {
+        setBackdropTexture(texture, stamp: nil)
+    }
+
+    @MainActor
+    func setBackdropTexture(_ texture: MTLTexture?, stamp: StoryGlassFeedStamp?) {
+        self.feedStamp = stamp
         self.backdropTexture = texture
         if texture != nil {
             // Strip the CAFilter fallback once we have a real backdrop.
@@ -126,7 +136,8 @@ public final class StoryGlassBackdropLayer: CALayer {
         )
         descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
         descriptor.storageMode = .shared
-        guard let output = context.metalDevice.makeTexture(descriptor: descriptor) else { return }
+        guard let gpu = context.gpu,
+              let output = gpu.device.makeTexture(descriptor: descriptor) else { return }
 
         // Synchronous apply — caller (StoryCanvasUIView render tick) already
         // dispatches once per frame, so blocking here just serializes work on

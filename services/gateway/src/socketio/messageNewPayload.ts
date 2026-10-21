@@ -1,9 +1,11 @@
 import type { Message } from '@meeshy/shared/types/index';
 import { hasPerReaderEphemeralDeadline } from '@meeshy/shared/utils/ephemeral-countdown';
+import { servedMessageSender } from '@meeshy/shared/utils/participant-helpers';
 import { resolveWireSenderId } from './messageEditedPayload';
 import { stickerFromMetadata } from '../services/stickers/messageSticker';
 import { servedQuotedMessage } from '../services/messaging/servedQuotedMessage';
 import { attachmentReplyToFromMetadata } from '../services/messaging/attachmentReplySnapshot';
+import { authorProfileDecor, type AuthorAccount } from '../services/appearance/authorProfileDecor';
 
 /**
  * Source UNIQUE de la charge utile `message:new`.
@@ -86,8 +88,10 @@ export type MessageNewPayloadInputs = {
  * contrat `SocketIOMessage`, et l'émission REST cesserait d'être vérifiée.
  */
 function buildSenderPayload(message: Message) {
-  const participant = message.sender;
-  if (!participant) return undefined;
+  if (!message.sender) return undefined;
+  // #10120 — un invité y porte le nom DONNÉ, son pseudo `ano_…` en handle :
+  // la forme de la liste des messages, et rien du profil de session.
+  const participant = servedMessageSender(message.sender);
   const user = participant.user;
   return {
     id: participant.id,
@@ -96,9 +100,11 @@ function buildSenderPayload(message: Message) {
     type: participant.type,
     userId: participant.userId,
     username: user?.username
-      ?? (participant.type === 'anonymous' ? participant.displayName : undefined),
+      ?? (participant.type === 'anonymous' ? participant.username ?? participant.displayName : undefined),
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
+    // #10713 — le contour équipé de l'auteur, résolu au registre ; clé absente sans lui.
+    ...authorProfileDecor(user as AuthorAccount),
   };
 }
 

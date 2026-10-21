@@ -26,11 +26,16 @@ public struct MessageCardPart: Equatable, Sendable {
     public let text: String
     /// Le pseudo de l'auteur, quand on le connaît — « pseudo au lieu du nom affiché » (#8692).
     public let handle: String?
+    /// Le texte découpé en ENTRÉES de fil, chacune à son niveau d'imbrication
+    /// (#10915) — vide : un texte simple. `text` reste le texte entier (les
+    /// entrées mises bout à bout) : il décide, lui, de ce que la carte montre.
+    public let thread: [MessageCardThreadLine]
 
-    public init(author: String, text: String, handle: String? = nil) {
+    public init(author: String, text: String, handle: String? = nil, thread: [MessageCardThreadLine] = []) {
         self.author = author
         self.text = text
         self.handle = MessageCardText.nonBlank(handle.map { String($0.drop(while: { $0 == "@" })) })
+        self.thread = thread
     }
 }
 
@@ -138,7 +143,7 @@ public struct MessageCardDotOp: Equatable, Sendable {
 }
 
 /// Un média peint dans un cadre — l'image, ou la première image d'une vidéo,
-/// recadrée pour REMPLIR le cadre. Le peintre la trouve par `mediaID`.
+/// recadrée pour REMPLIR le cadre (`fit == .cover`) ou inscrite en entier (`.contain`). Le peintre la trouve par `mediaID`.
 public struct MessageCardMediaOp: Equatable, Sendable {
     public let mediaID: String
     public let kind: MessageCardMediaKind
@@ -149,6 +154,9 @@ public struct MessageCardMediaOp: Equatable, Sendable {
     public let radius: Double
     /// La couleur d'attente, quand les pixels ne sont pas (encore) là.
     public let placeholder: MessageCardColor
+    /// `cover` remplit le cadre (une photo) ; `contain` y inscrit l'image en
+    /// entier, sans arrondi (un sticker, #10915).
+    public var fit: MessageCardMediaFit = .cover
 }
 
 public enum MessageCardGlyph: String, Sendable {

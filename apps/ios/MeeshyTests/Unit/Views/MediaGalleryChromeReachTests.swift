@@ -77,7 +77,7 @@ final class MediaGalleryChromeReachTests: XCTestCase {
     }
 
     private static var menuLabel: String {
-        String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main)
+        FullscreenMoreMenuLabel.text
     }
 
     /// L'empreinte d'un aplat, ENCODÉE par le SDK plutôt qu'écrite à la main : sa
@@ -179,7 +179,9 @@ final class MediaGalleryChromeReachTests: XCTestCase {
                 allAttachments: attachments,
                 startAttachmentId: first.id,
                 accentColor: "6366F1",
-                sceneContext: sceneContext
+                sceneContext: sceneContext,
+                // Le témoin mesure le chrome, que le toucher pose (#10930).
+                entryPresentation: .carded
             )
             // **Le portillon de sortie que l'HÔTE pose** (#9573, b2e57f0932) :
             // il est FERMÉ par défaut, et le ⋯ n'est rendu que s'il laisse

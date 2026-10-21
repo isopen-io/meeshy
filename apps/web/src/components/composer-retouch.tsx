@@ -38,7 +38,7 @@ export default function ComposerRetouch({
   readonly onCancel: () => void;
   readonly render?: StudioRetouchDeps;
 }) {
-  useBackDismiss(onCancel, { escape: true });
+  useBackDismiss(onCancel, { escape: true, held: true });
   const touched = pieces[focus];
   const files = pieces.map((piece) => piece.file);
   const handBack = (replaced: readonly { readonly index: number; readonly file: File }[]) =>
@@ -81,7 +81,7 @@ export function ComposerCapture({
   readonly render?: StudioRetouchDeps;
   readonly camera?: CameraEngine;
 }) {
-  useBackDismiss(onCancel, { escape: true });
+  useBackDismiss(onCancel, { escape: true, held: true });
 
   return (
     <div data-composer-capture role="dialog" aria-modal="true" className="fixed inset-0 z-50">

@@ -4,7 +4,7 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-private let autoSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-autosave")
+private let autoSaveLog = MeeshyLog.logger(.mediaAutosave)
 
 // MARK: - La règle : quelles pièces reçues rejoignent l'album
 
@@ -18,10 +18,18 @@ private let autoSaveLog = Logger(subsystem: "me.meeshy.app", category: "media-au
 /// protection de la PIÈCE (`ComposableAttachment.isProtected`, la garde des
 /// menus). Le flou n'est qu'un masque de rendu : enregistrer la pièce la
 /// sortirait EN CLAIR.
+///
+/// **Seuls les messages reçus pendant l'installation en cours** (#10370, directive
+/// porteur 2026-10-12) : après une réinstallation, la synchronisation ramène tout
+/// l'historique, et ses médias étaient déjà dans la photothèque — ou l'utilisateur
+/// ne les y voulait pas. Un message dont la date SERVEUR précède le début de
+/// l'installation n'y entre que par un « Enregistrer » exprès.
 enum ReceivedMediaAutoSavePolicy {
 
-    static func eligibleMedia(in message: Message) -> [MessageAttachment] {
+    static func eligibleMedia(in message: Message,
+                              receivedSince installationStartedAt: Date = .distantPast) -> [MessageAttachment] {
         guard !message.isMe,
+              message.createdAt >= installationStartedAt,
               message.deletedAt == nil,
               !message.isEncrypted,
               message.exitOffer.offers(.save) else { return [] }
@@ -138,10 +146,12 @@ struct PhotoAlbumReceivedMediaWriter: ReceivedMediaAlbumWriting {
                                        remoteURLString: attachment.fileUrl, attachmentId: attachment.id)
         do {
             let file = try await AttachmentMediaSaveResolver().resolveLocalFile(for: request)
-            let saved = request.kind == .video
-                ? await PhotoLibraryManager.shared.saveVideo(at: file)
-                : await PhotoLibraryManager.shared.saveImageFile(at: file)
-            return saved ? .saved : .failed
+            // Dédoublonnée par l'empreinte du contenu (#10370) : un média déjà dans
+            // l'album n'y entre pas une seconde fois, et c'est un succès.
+            let outcome = request.kind == .video
+                ? await PhotoLibraryManager.shared.addVideo(at: file, alias: attachment.id)
+                : await PhotoLibraryManager.shared.addImageFile(at: file, alias: attachment.id)
+            return outcome.isInAlbum ? .saved : .failed
         } catch {
             return .failed
         }
@@ -169,6 +179,7 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
     private let registry: AutoSavedAttachmentRegistering
     private let writer: ReceivedMediaAlbumWriting
     private let downloadAllowed: @MainActor (AttachmentKind) -> Bool
+    private let installation: AppInstallationDateProviding
     private var socketSubscription: AnyCancellable?
     /// Armé avec la SESSION (`RealtimeRelays.arm`) : hors session — un témoin,
     /// un aperçu — rien ne part vers la photothèque.
@@ -178,16 +189,21 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
          setting: ReceivedMediaAutoSaveSetting = ReceivedMediaAutoSaveUserSetting.shared,
          registry: AutoSavedAttachmentRegistering = AutoSavedAttachmentRegistry.shared,
          writer: ReceivedMediaAlbumWriting = PhotoAlbumReceivedMediaWriter(),
-         downloadAllowed: @escaping @MainActor (AttachmentKind) -> Bool = ReceivedMediaAutoSaver.networkPolicyAllows) {
+         downloadAllowed: @escaping @MainActor (AttachmentKind) -> Bool = ReceivedMediaAutoSaver.networkPolicyAllows,
+         installation: AppInstallationDateProviding = AppInstallationClock.shared) {
         self.isActive = isActive
         self.setting = setting
         self.registry = registry
         self.writer = writer
         self.downloadAllowed = downloadAllowed
+        self.installation = installation
     }
 
     /// Écoute les messages reçus par le socket — une fois, au démarrage.
     func startListening(currentUserId: @escaping @MainActor () -> String?) {
+        // L'instant d'installation est posé AVANT la première réception : la
+        // synchronisation qui suit une réinstallation le trouve déjà là.
+        _ = installation.installationStartedAt
         isActive = true
         guard socketSubscription == nil else { return }
         socketSubscription = MessageSocketManager.shared.messageReceived
@@ -202,7 +218,9 @@ final class ReceivedMediaAutoSaver: ReceivedMediaAutoSaving {
 
     func consider(_ messages: [Message]) {
         guard isActive, setting.isEnabled else { return }
-        for attachment in messages.flatMap(ReceivedMediaAutoSavePolicy.eligibleMedia) {
+        let since = installation.installationStartedAt
+        let eligible = messages.flatMap { ReceivedMediaAutoSavePolicy.eligibleMedia(in: $0, receivedSince: since) }
+        for attachment in eligible {
             guard downloadAllowed(ReceivedMediaAutoSavePolicy.kind(of: attachment)),
                   registry.claim(attachment.id) else { continue }
             let writer = writer

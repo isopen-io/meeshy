@@ -101,6 +101,7 @@ const NONE: AdminPermissions = {
   canManageNotifications: false,
   canManageTranslations: false,
   canManageAgent: false,
+  canManageGame: false,
 };
 
 const ALL: AdminPermissions = {
@@ -114,11 +115,12 @@ const ALL: AdminPermissions = {
   canManageNotifications: true,
   canManageTranslations: true,
   canManageAgent: true,
+  canManageGame: true,
 };
 
 /**
  * La matrice SERVIE par rôle — le miroir de `servedUserPermissions`
- * (`services/gateway/src/services/admin/served-permissions.ts`) sur les dix clés.
+ * (`services/gateway/src/services/admin/served-permissions.ts`) sur les onze clés.
  * BIGBOSS les porte toutes ; les autres rôles, celles que la matrice centrale
  * leur accorde (ADMIN n'a pas `canViewAuditLogs`, MODERATOR n'a pas le rang…).
  */
@@ -133,7 +135,7 @@ const BY_ROLE: Readonly<Record<string, AdminPermissions>> = {
 
 /**
  * Une identité de lecteur PRÊTE pour `appQueryClient.setQueryData(
- * ADMIN_PERMISSIONS_QUERY_KEY, …)` : le rôle et les DIX clés de la matrice.
+ * ADMIN_PERMISSIONS_QUERY_KEY, …)` : le rôle et les ONZE clés de la matrice.
  * `permissions` surcharge clé par clé — le cas d'un témoin qui retire UNE
  * capacité pour voir un bloc se masquer.
  */

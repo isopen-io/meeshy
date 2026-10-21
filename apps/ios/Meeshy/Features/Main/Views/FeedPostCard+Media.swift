@@ -64,7 +64,8 @@ extension FeedPostCard {
                     preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                 ),
                 accentColor: accentColor,
-                onOpen: { openFullscreen($0) }
+                onOpen: { openFullscreen($0) },
+                scrollTarget: SocialTarget(kind: .post, id: post.id)
             )
         }
     }

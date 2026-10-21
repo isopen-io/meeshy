@@ -169,4 +169,31 @@ final class AudioTrackLanguageResolverTests: XCTestCase {
         XCTAssertEqual(served.url, "https://cdn/orig-ko.m4a")
         XCTAssertNil(served.language)
     }
+
+    // MARK: - #10691 — la langue d'origine est celle de SA transcription
+
+    func test_originLanguage_prefersTheTranscriptionOfTheTrack() {
+        XCTAssertEqual(AudioTrackLanguageResolver.originLanguage(transcriptionLanguage: "en", messageOriginal: "fr"), "en")
+    }
+
+    func test_originLanguage_fallsBackToTheMessage_whenTranscriptionUnknownOrBlank() {
+        XCTAssertEqual(AudioTrackLanguageResolver.originLanguage(transcriptionLanguage: nil, messageOriginal: "fr"), "fr")
+        XCTAssertEqual(AudioTrackLanguageResolver.originLanguage(transcriptionLanguage: "  ", messageOriginal: "fr"), "fr")
+    }
+
+    /// Témoin de rang (leçon 261) : prisme ['fr','en'], message étiqueté fr, piste
+    /// transcrite en anglais avec une traduction audio fr ⇒ la piste joue le fr.
+    /// Résolue depuis le message (fr = rang 1 = original), elle restait en anglais.
+    func test_secondTrackTranscribedInEnglish_inFrenchLabelledMessage_playsItsFrenchTranslation() {
+        let viaMessage = AudioTrackLanguageResolver.resolve(
+            originalLanguage: "fr", preferredLanguages: ["fr", "en"], availableLanguages: ["fr"]
+        )
+        XCTAssertNil(viaMessage, "le défaut : la piste anglaise était prise pour déjà française")
+
+        let viaTrack = AudioTrackLanguageResolver.resolve(
+            originalLanguage: AudioTrackLanguageResolver.originLanguage(transcriptionLanguage: "en", messageOriginal: "fr"),
+            preferredLanguages: ["fr", "en"], availableLanguages: ["fr"]
+        )
+        XCTAssertEqual(viaTrack, "fr")
+    }
 }

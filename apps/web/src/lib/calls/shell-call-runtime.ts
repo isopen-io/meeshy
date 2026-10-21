@@ -1,6 +1,4 @@
-import { sessionStore } from '@/lib/api/session';
 import { appelNatif, appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
-import { watchDeliveryReceiptCredential } from '@/lib/notifications/delivery-receipt-credential';
 
 import { shellPipStore } from './call-pip';
 import { callStore } from './call-store';
@@ -31,14 +29,6 @@ export function startShellCall(coque: CoqueNative | undefined = coqueCourante())
     accept: () => void import('./call-actions').then(({ callActions }) => callActions.accept()),
     toggleMic: () => void import('./call-actions').then(({ callActions }) => callActions.toggleMic()),
     hangup: () => void import('./call-actions').then(({ callActions }) => callActions.hangup()),
-    watchCredential: (write) =>
-      watchDeliveryReceiptCredential({
-        sessionStore,
-        write: (value) => {
-          write(value);
-          return Promise.resolve();
-        },
-      }),
     now: () => Date.now(),
   });
 }

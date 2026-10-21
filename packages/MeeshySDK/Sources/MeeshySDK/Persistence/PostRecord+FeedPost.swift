@@ -44,10 +44,15 @@ public extension PostRecord {
         feedPost.bookmarkCount = bookmarkCount
         feedPost.shareCount = shareCount
         feedPost.viewCount = viewCount
+        feedPost.impressionCount = impressionCount ?? 0
+        feedPost.postOpenCount = postOpenCount ?? 0
+        feedPost.playCount = playCount ?? 0
+        feedPost.qualifiedViewCount = qualifiedViewCount ?? 0
         feedPost.audioUrl = audioUrl
         feedPost.location = location
         feedPost.visibility = visibility
         feedPost.visibilityUserIds = visibilityUserIds
+        feedPost.authorRing = authorRing
         return feedPost
     }
 }

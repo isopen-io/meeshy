@@ -22,6 +22,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { CallService } from '../services/CallService';
 import { logger } from '../utils/logger';
 import { resolveInvitedGuestParticipantId } from '../services/calls/callInvitation';
+import { participantKeyWhere } from './departed-member-participant-where';
 
 /** Ce que ces résolveurs empruntent à l'instance — résolu à l'APPEL, jamais capturé. */
 export type CallParticipantResolverDeps = {
@@ -31,7 +32,9 @@ export type CallParticipantResolverDeps = {
 
 export async function resolveParticipantId(deps: CallParticipantResolverDeps, userId: string, conversationId: string): Promise<string | null> {
   const participant = await deps.prisma.participant.findFirst({
-    where: { userId, conversationId, isActive: true },
+    // #10473 — la clé d'un invité de lien est son `Participant.id`, son
+    // `userId` est nul : la colonne se choisit sur la clé.
+    where: { ...participantKeyWhere(userId), conversationId, isActive: true },
     select: { id: true }
   });
   return participant?.id ?? null;

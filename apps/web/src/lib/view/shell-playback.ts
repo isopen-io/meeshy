@@ -1,5 +1,7 @@
 import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native-shell';
 
+import { nowPlayingTagsOf, type NowPlayingTags } from './now-playing';
+
 /**
  * **UN VOCAL TENU HORS DE L'ÉCRAN** (#9257) — Chrome Android tient la lecture
  * d'un `<audio>` en arrière-plan, iOS a son mode d'arrière-plan `audio`. Dans
@@ -29,13 +31,39 @@ import { appelNatifMethode, coqueCourante, type CoqueNative } from '@/lib/native
  *
  * Un navigateur, ou une coque construite avant le plugin, reçoit une prise
  * sans effet ; un refus de la coque ne remonte jamais à la lecture.
+ *
+ * La carte de lecture DIT ce qui joue et SE PILOTE (#10624), comme la carte
+ * Now Playing d'iOS : la page remet à la coque les faits du vocal (auteur,
+ * conversation, date, avatar — `now-playing.ts`), sa durée, sa position et sa
+ * vitesse (`update`), aux SEULES ruptures — lecture, pause, saut, vitesse,
+ * durée connue —, jamais à chaque `timeupdate` : la coque extrapole la
+ * position. La page reste le SEUL moteur : aucun lecteur natif ne relit le
+ * fichier. La barre glissée et les ±15 s de la notification reviennent en
+ * position visée (`seekRequested`), que la page pose sur l'audio qui joue.
+ * Une coque construite avant `nowPlaying` garde sa carte générique.
  */
+export type NowPlayingState = NowPlayingTags & {
+  /** L'id de la pièce, sinon l'adresse du fichier : la coque n'applique une image qu'à la piste qui l'a demandée. */
+  readonly key: string;
+  readonly durationMs: number;
+  readonly positionMs: number;
+  readonly rate: number;
+  readonly playing: boolean;
+  /** En lecture mais en attente du réseau : la coque fige sa barre au lieu de courir devant le son. */
+  readonly buffering: boolean;
+  /** Une file déclarée (#10627) arme suivant / précédent ; sans elle, la coque ne les offre pas. */
+  readonly canNext: boolean;
+  readonly canPrevious: boolean;
+};
+
 export type PlaybackHold = {
   readonly hold: () => void;
   readonly release: () => void;
   readonly park: () => void;
+  readonly update: (state: NowPlayingState) => void;
   readonly onPauseRequested: (listener: () => void) => () => void;
   readonly onPlayRequested: (listener: () => void) => () => void;
+  readonly onSeekRequested: (listener: (positionMs: number) => void) => () => void;
 };
 
 const PLUGIN = 'MeeshyPlayback';
@@ -60,6 +88,30 @@ function ecoute(coque: CoqueNative | undefined, evenement: string): PlaybackHold
   };
 }
 
+function ecouteSauts(coque: CoqueNative | undefined): PlaybackHold['onSeekRequested'] {
+  const declare = coque?.PluginHeaders?.some((header) => header.name === PLUGIN) === true;
+  const addListener = coque?.addListener;
+  if (!declare || typeof addListener !== 'function') return () => () => {};
+  return (listener) => {
+    const handle = addListener(PLUGIN, 'seekRequested', (donnees) => {
+      const positionMs = (donnees as { readonly positionMs?: unknown } | null)?.positionMs;
+      if (typeof positionMs === 'number' && Number.isFinite(positionMs)) listener(positionMs);
+    });
+    return () => {
+      void handle.remove().catch(() => {});
+    };
+  };
+}
+
+function description(coque: CoqueNative | undefined): PlaybackHold['update'] {
+  const appel = appelNatifMethode(coque, PLUGIN, 'nowPlaying');
+  if (appel === null) return () => {};
+  return (state) => {
+    const remis = Object.fromEntries(Object.entries(state).filter(([, valeur]) => valeur !== null));
+    appel(remis).catch(() => {});
+  };
+}
+
 export function shellPlaybackHold(coque: CoqueNative | undefined = coqueCourante()): PlaybackHold {
   const release = geste(coque, 'releasePlayback');
   const garable = appelNatifMethode(coque, PLUGIN, 'parkPlayback') !== null;
@@ -67,14 +119,45 @@ export function shellPlaybackHold(coque: CoqueNative | undefined = coqueCourante
     hold: geste(coque, 'holdPlayback'),
     release,
     park: garable ? geste(coque, 'parkPlayback') : release,
+    update: description(coque),
     onPauseRequested: ecoute(coque, 'pauseRequested'),
     onPlayRequested: ecoute(coque, 'playRequested'),
+    onSeekRequested: ecouteSauts(coque),
   };
 }
 
 type MediaEvents = Pick<Document, 'addEventListener' | 'removeEventListener'>;
 
 const STOPS = ['pause', 'ended', 'error', 'emptied'] as const;
+
+/** Les ruptures qui changent ce que la carte montre sans changer qui joue — regroupées : un doigt qui parcourt l'onde ne remet qu'un état. */
+const RUPTURES = ['seeked', 'ratechange', 'durationchange', 'waiting'] as const;
+
+export type NowPlayingOptions = {
+  readonly tagsOf?: (attachmentId: string | undefined) => NowPlayingTags | null;
+  readonly settleMs?: number;
+};
+
+const HAVE_FUTURE_DATA = 3;
+
+const SANS_ETIQUETTES: NowPlayingTags = { sender: null, conversation: null, sentAtMs: null, artworkUrl: null, protected: false };
+
+const millisecondes = (secondes: number): number => (Number.isFinite(secondes) && secondes > 0 ? Math.round(secondes * 1000) : 0);
+
+function etatDe(audio: HTMLAudioElement, tagsOf: NonNullable<NowPlayingOptions['tagsOf']>): NowPlayingState {
+  const attachmentId = audio.dataset.npAttachment;
+  return {
+    key: attachmentId ?? (audio.currentSrc || audio.src),
+    ...(tagsOf(attachmentId) ?? SANS_ETIQUETTES),
+    durationMs: millisecondes(audio.duration),
+    positionMs: millisecondes(audio.currentTime),
+    rate: audio.playbackRate,
+    playing: !audio.paused && !audio.ended,
+    buffering: !audio.paused && !audio.ended && audio.readyState < HAVE_FUTURE_DATA,
+    canNext: false,
+    canPrevious: false,
+  };
+}
 
 /**
  * Les événements d'un média ne remontent pas : l'écoute se fait en CAPTURE,
@@ -85,23 +168,41 @@ const STOPS = ['pause', 'ended', 'error', 'emptied'] as const;
  * jamais une lecture : Chrome Android ne lui ouvre aucune notification média,
  * et la coque tient déjà l'appel par son propre service (#9455).
  */
-export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): () => void {
+export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold, options: NowPlayingOptions = {}): () => void {
+  const { tagsOf = nowPlayingTagsOf, settleMs = 200 } = options;
   const playing = new Set<HTMLAudioElement>();
   const parking = new Set<HTMLAudioElement>();
   const parked = new Set<HTMLAudioElement>();
+  let current: HTMLAudioElement | null = null;
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  const cancelPending = (): void => {
+    if (pending !== null) clearTimeout(pending);
+    pending = null;
+  };
+  const remettre = (audio: HTMLAudioElement): void => {
+    cancelPending();
+    hold.update(etatDe(audio, tagsOf));
+  };
   const audioOf = (event: Event): HTMLAudioElement | null =>
     event.target instanceof HTMLAudioElement && event.target.srcObject == null ? event.target : null;
   const settle = (): void => {
     if (playing.size > 0) return;
-    if (parked.size > 0) hold.park();
-    else hold.release();
+    if (parked.size > 0) {
+      hold.park();
+      return;
+    }
+    cancelPending();
+    current = null;
+    hold.release();
   };
   const take = (audio: HTMLAudioElement): void => {
     if (audio.muted || playing.has(audio)) return;
     parked.clear();
     parking.clear();
     playing.add(audio);
+    current = audio;
     if (playing.size === 1) hold.hold();
+    remettre(audio);
   };
   const drop = (audio: HTMLAudioElement, type: string): void => {
     const parks = type === 'pause' && parking.delete(audio);
@@ -114,11 +215,21 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   };
   const onPlaying = (event: Event): void => {
     const audio = audioOf(event);
-    if (audio !== null) take(audio);
+    if (audio === null) return;
+    if (audio === current && playing.has(audio)) remettre(audio);
+    else take(audio);
   };
   const onStop = (event: Event): void => {
     const audio = audioOf(event);
-    if (audio !== null) drop(audio, event.type);
+    if (audio === null) return;
+    if (audio === current && event.type === 'pause') remettre(audio);
+    drop(audio, event.type);
+  };
+  const onRupture = (event: Event): void => {
+    const audio = audioOf(event);
+    if (audio === null || audio !== current) return;
+    cancelPending();
+    pending = setTimeout(() => remettre(audio), settleMs);
   };
   const onVolume = (event: Event): void => {
     const audio = audioOf(event);
@@ -140,6 +251,10 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   target.addEventListener('playing', onPlaying, true);
   target.addEventListener('volumechange', onVolume, true);
   for (const type of STOPS) target.addEventListener(type, onStop, true);
+  for (const type of RUPTURES) target.addEventListener(type, onRupture, true);
+  const stopSeekRequests = hold.onSeekRequested((positionMs) => {
+    if (current !== null) current.currentTime = Math.max(0, positionMs) / 1000;
+  });
   const stopPauseRequests = hold.onPauseRequested(() => {
     for (const audio of [...playing]) parking.add(audio);
     for (const audio of [...playing]) audio.pause();
@@ -148,9 +263,13 @@ export function holdWhileAudioPlays(target: MediaEvents, hold: PlaybackHold): ()
   return () => {
     stopPauseRequests();
     stopPlayRequests();
+    stopSeekRequests();
+    cancelPending();
+    current = null;
     target.removeEventListener('playing', onPlaying, true);
     target.removeEventListener('volumechange', onVolume, true);
     for (const type of STOPS) target.removeEventListener(type, onStop, true);
+    for (const type of RUPTURES) target.removeEventListener(type, onRupture, true);
     if (playing.size > 0 || parked.size > 0) hold.release();
     playing.clear();
     parking.clear();

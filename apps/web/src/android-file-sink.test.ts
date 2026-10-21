@@ -40,3 +40,15 @@ describe('le partage d’un fichier écrit par le récepteur (#9553)', () => {
     expect(plugin).toContain('FileSinkRules.insideSink(');
   });
 });
+
+describe('le démarrage de la coque n’efface rien sur le thread principal (#10547)', () => {
+  test('`load()` met les restes à la corbeille d’un renommage, puis la vide en arrière-plan', () => {
+    const plugin = lire('MeeshyFileSinkPlugin.java');
+    const load = plugin.slice(plugin.indexOf('public void load()'), plugin.indexOf('@PluginMethod'));
+    expect(load).toContain('.renameTo(');
+    expect(load).toContain('new Thread(');
+    expect(load).toContain('FileSinkRules.emptyTrash(');
+    expect(load).not.toContain('.delete()');
+  });
+});
+

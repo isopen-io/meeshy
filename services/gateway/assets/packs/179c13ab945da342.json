@@ -1,0 +1,119 @@
+{
+ "domain": "wallpaper",
+ "designs": [
+  {
+   "key": "horizon",
+   "style": "illustration",
+   "palettes": {
+    "light": {
+     "base": "#FBF6EF",
+     "ink": "#8A5A3B",
+     "soft": "#F1E4D2"
+    },
+    "dark": {
+     "base": "#140F0B",
+     "ink": "#E0B48C",
+     "soft": "#21180F"
+    }
+   },
+   "scene": {
+    "viewBox": [
+     0,
+     0,
+     100,
+     60
+    ],
+    "anchor": "bottom",
+    "paths": [
+     {
+      "d": "M60 30 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0 Z",
+      "role": "accent",
+      "opacity": 0.8
+     },
+     {
+      "d": "M0 60 L0 40 C18 33 38 36 58 43 C74 48 90 40 100 35 L100 60 Z",
+      "role": "soft",
+      "opacity": 0.9
+     },
+     {
+      "d": "M0 60 L0 47 C16 41 34 44 52 50 C70 55 88 48 100 44 L100 60 Z",
+      "role": "ink",
+      "opacity": 0.18
+     },
+     {
+      "d": "M0 60 L0 54 C20 50 40 53 62 57 C80 59 92 55 100 53 L100 60 Z",
+      "role": "accent",
+      "opacity": 0.22
+     },
+     {
+      "d": "M0 40 C18 33 38 36 58 43 C74 48 90 40 100 35",
+      "role": "ink",
+      "opacity": 0.5,
+      "width": 0.35
+     },
+     {
+      "d": "M0 47 C16 41 34 44 52 50 C70 55 88 48 100 44",
+      "role": "ink",
+      "opacity": 0.4,
+      "width": 0.35
+     }
+    ]
+   },
+   "fit": "fill"
+  },
+  {
+   "key": "baobab",
+   "style": "illustration",
+   "palettes": {
+    "light": {
+     "base": "#F8F2EC",
+     "ink": "#3E2C22",
+     "soft": "#EBDCCD"
+    },
+    "dark": {
+     "base": "#100C0A",
+     "ink": "#E3C9AE",
+     "soft": "#1C1511"
+    }
+   },
+   "scene": {
+    "viewBox": [
+     0,
+     0,
+     100,
+     80
+    ],
+    "anchor": "bottom-end",
+    "paths": [
+     {
+      "d": "M0 80 L0 72 C25 68 55 70 100 70 L100 80 Z",
+      "role": "soft",
+      "opacity": 0.9
+     },
+     {
+      "d": "M72 72 C74 66 73 58 71 52 C70 48 66 46 62 44 L58 40 L64 41 L68 38 L72 42 L78 38 L80 42 L86 40 L84 45 C80 47 78 49 78 53 C77 59 78 66 80 72 Z",
+      "role": "ink",
+      "opacity": 0.5
+     },
+     {
+      "d": "M58 40 C54 36 58 31 64 32 C66 28 72 27 74 31 C78 28 85 30 85 35 C90 35 92 40 86 41 C80 40 64 41 58 40 Z",
+      "role": "ink",
+      "opacity": 0.5
+     },
+     {
+      "d": "M0 72 L100 72",
+      "role": "ink",
+      "opacity": 0.4,
+      "width": 0.4
+     },
+     {
+      "d": "M22 14 A9 9 0 1 0 30 28 A7 7 0 1 1 22 14 Z",
+      "role": "accent",
+      "opacity": 0.7
+     }
+    ]
+   },
+   "fit": "fill"
+  }
+ ]
+}

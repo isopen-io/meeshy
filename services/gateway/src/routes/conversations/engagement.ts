@@ -16,6 +16,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ConversationEngagementSnapshot } from '@meeshy/shared/types/engagement-scale';
 import {
   conversationListResponseSchema,
+  conversationMinimalSchema,
   conversationResponseSchema,
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
@@ -80,6 +81,7 @@ export const conversationDetailWithEngagementResponseSchema = {
       properties: {
         ...conversationResponseSchema.properties?.data?.properties,
         viewerEngagement: conversationEngagementSnapshotSchema,
+        userPreferences: conversationMinimalSchema.properties.userPreferences,
       },
     },
   },

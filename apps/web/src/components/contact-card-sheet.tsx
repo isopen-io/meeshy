@@ -6,15 +6,13 @@ import { contactInitials, vcardFieldRows, type ContactAction, type VCardFieldRow
 import { translate } from '@/lib/i18n-catalog';
 import { copyPlainText } from '@/lib/view/copy-text';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { LONG_PRESS_MS } from '@/lib/view/long-press';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
 
 import { ContactAccountRow } from './contact-card-account';
 import { Glyph, GlyphSvg } from './glyph';
 import { THREAD_MENU_GLYPHS } from './glyphs-thread-menu';
-
-/** Durée d'un appui long — celle du menu du message (`use-long-press`). */
-const LONG_PRESS_MS = 500;
 
 export type ClipboardWriter = (text: string) => Promise<void>;
 
@@ -37,6 +35,9 @@ const systemClipboard: ClipboardWriter = async (text) => {
  * `<dialog>` + `showModal()` : piège de focus, Échap et inertie de l'arrière
  * sans une ligne de gestion de touches ; le retour matériel Android ferme la
  * fiche, pas l'écran (`useBackDismiss`).
+ *
+ * Sur un téléphone, la fiche monte du bas ; sur un ordinateur (≥ 768 px,
+ * #10070), elle se centre, bornée, sur le voile.
  */
 export function ContactCardSheet({
   card,
@@ -103,7 +104,7 @@ export function ContactCardSheet({
     >
       <div className="message-menu-backdrop" aria-hidden="true" onClick={close} data-contact-backdrop="" />
       <div
-        className="flex h-full items-end justify-center p-4"
+        className="flex h-full items-end justify-center p-4 md:items-center"
         style={{ position: 'relative', zIndex: 41, pointerEvents: 'none' }}
       >
         <section

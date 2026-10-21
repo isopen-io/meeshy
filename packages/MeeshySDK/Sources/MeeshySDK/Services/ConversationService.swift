@@ -106,7 +106,7 @@ public protocol ConversationServiceProviding: Sendable {
     func unbanParticipant(conversationId: String, key: String) async throws
 }
 
-public final class ConversationService: ConversationServiceProviding, @unchecked Sendable {
+public final class ConversationService: ConversationServiceProviding, Sendable {
     public static let shared = ConversationService()
     private let api: APIClientProviding
 
@@ -373,7 +373,7 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         struct RoleBody: Encodable { let role: String }
         let _: APIResponse<[String: String]> = try await api.patch(
             ConversationsEndpoint.byIdParticipantsByUserIdRole(id: conversationId, userId: userId),
-            body: RoleBody(role: role)
+            body: RoleBody(role: role.lowercased())
         )
     }
 

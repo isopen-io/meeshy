@@ -5,12 +5,15 @@ import MeeshyUI
 /// LA FICHE D'UN CONCEPT (#9564) — le deuxième niveau du jeu (`GameNavigationMap`). Un gabarit UNIQUE pour les
 /// quinze concepts :
 ///
-///  1. le héros — l'emblème en grand, la valeur, la jauge vers l'étape suivante ; ou, quand le concept a sa PIÈCE
-///     de jeu (anneau du niveau, frappe des Meeshes, détail de ligue, Élans), cette pièce À SA PLACE — jamais les
-///     deux (amendement n° 4) ;
-///  2. « C'est quoi ? » — les deux phrases de la carte, à quoi ça sert (`why`) et comment ça marche (`how`) ;
-///  3. « Où j'en suis » — toutes les données du concept, en lignes libellé → valeur ;
-///  4. « Comment en gagner » — les deux conseils qui développent la carte (`tip1`, `tip2`) ;
+///  1. la tête — l'emblème en grand, la valeur, une ligne, la jauge vers l'étape suivante ; ou TA LUMIÈRE (la tête des
+///     Étincelles, #11180) ; ou, quand le concept a sa PIÈCE de jeu (anneau du niveau, l'Héritage et sa frappe,
+///     détail de la joute, Élans), cette pièce À SA PLACE — jamais les deux (amendement n° 4) ;
+///  2. « C'est quoi ? » — ce que c'est (`what`), puis les deux phrases de la carte, à quoi ça sert (`why`) et comment
+///     ça marche (`how`) ;
+///  3. « Où j'en suis » — ce que la tête ne dit pas déjà, et rien d'autre : un fait ne paraît qu'une fois par écran
+///     (`ProgressionConceptFiche`, #11180) ; la section disparaît quand elle n'a rien à ajouter ;
+///  4. « Comment en gagner » — les deux conseils qui développent la carte (`tip1`, `tip2`) ; puis « Comment m'en
+///     servir » — l'usage du concept, en clair (`use`, #10540) ;
 ///  5. « À toi de jouer » — les GESTES du concept (frapper, ouvrir le coffre, changer une mission, protéger ou
 ///     rallumer la Flamme…) : ils vivent ICI, plus sur la première page ;
 ///  6. « Aller plus loin » — les sous-pages (classement de la ligue, parcours de saison, règles…).
@@ -26,7 +29,7 @@ struct ProgressionConceptPage: View {
     let section: ProgressionConceptSection?
 
     @StateObject private var viewModel: ProgressionViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reveal: ProgressionRevealRequest?
@@ -89,7 +92,8 @@ struct ProgressionConceptPage: View {
                         progress: progress,
                         isDark: colorScheme == .dark,
                         onOpenLink: { open($0) },
-                        onReveal: { reveal = $0 }
+                        onReveal: { reveal = $0 },
+                        onOpenConcept: { router.push(.progressionConcept($0)) }
                     )
                 } else if viewModel.showsSkeleton {
                     ProgressionSkeleton()
@@ -131,6 +135,8 @@ struct ProgressionConceptContent: View {
     let isDark: Bool
     let onOpenLink: (ProgressionConceptLink) -> Void
     let onReveal: (ProgressionRevealRequest) -> Void
+    /// Ouvre la fiche d'un autre concept (la fiche des Étincelles mène à l'Héritage, où vivent le prix et le manque).
+    var onOpenConcept: (ProgressionConcept) -> Void = { _ in }
 
     /// « Jeu masqué » (#9481) : la fiche se lit alors comme devant un serveur sans jeu.
     @ObservedObject private var prefs = GameDevicePrefsStore.current()
@@ -154,24 +160,42 @@ struct ProgressionConceptContent: View {
     }
 
     private var ficheBody: some View {
-        VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
-            hero
+        let fiche = ProgressionConceptFiche.make(concept, progress: progress, game: game)
+        return VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
+            hero(fiche)
             ForEach(offers) { offer in
                 GamePhotoOfferView(moment: offer, onStart: { photos.start($0) }, onLater: { photos.later($0) })
             }
             section(ConceptText.ficheWhat) {
+                sentence(ConceptText.what(concept))
                 sentence(ConceptText.why(concept), strong: true)
                 sentence(ConceptText.how(concept))
             }
-            let facts = ProgressionConceptModel.facts(concept, progress: progress, game: game)
-            if !facts.isEmpty {
+            if fiche.hasWhere {
                 section(ConceptText.ficheWhere) {
-                    ProgressionConceptFacts(facts: facts, concept: concept)
+                    if let state = fiche.state {
+                        sentence(state.text, strong: true)
+                            .modifier(GameFactsTag(state.facts))
+                            .accessibilityIdentifier("progression.concept.state")
+                    }
+                    if !fiche.facts.isEmpty {
+                        ProgressionConceptFacts(facts: fiche.facts, concept: concept)
+                    }
                 }
             }
             section(ConceptText.ficheEarn) {
                 sentence(ConceptText.tip1(concept))
                 sentence(ConceptText.tip2(concept))
+            }
+            section(ConceptText.ficheUse) {
+                sentence(ConceptText.use(concept))
+            }
+            // Le prix et le manque de la prochaine Meesh vivent à l'Héritage : la fiche des Étincelles y MÈNE (#11180).
+            if case .sparks = fiche.head {
+                ProgressionConceptRow(
+                    title: GameFicheCopy.toHeritage, symbol: "chevron.forward.circle",
+                    identifier: "progression.concept.link.heritage", action: { onOpenConcept(.meesh) }
+                )
             }
             if ProgressionConceptGestures.exist(for: concept, progress: progress, game: game), !hasPiece {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xl) {
@@ -208,23 +232,29 @@ struct ProgressionConceptContent: View {
     private var gestures: some View {
         ProgressionConceptGestures(
             concept: concept, viewModel: viewModel, progress: progress, game: game, isDark: isDark,
-            onOpenLink: onOpenLink, onReveal: onReveal
+            onOpenLink: onOpenLink, onReveal: onReveal,
+            // La fin de mission se photographie (#10816) : le déroulé de la fiche, celui des propositions.
+            onPhotoMission: prefs.prefs.offersPhotos ? { [photos] mission in
+                photos.start(GamePhotoMoments.mission(id: mission.id, templateKey: mission.templateKey, target: mission.target))
+            } : nil
         )
     }
 
     @ViewBuilder
-    private var hero: some View {
-        if hasPiece {
-            // UNE pièce, UN héros : l'anneau du niveau, la frappe, le détail de ligue ou les Élans REMPLACENT le
-            // héros générique au lieu de s'y ajouter. Elle porte la section « À toi de jouer » qu'une entrée vise.
-            // Aucun identifiant sur l'enveloppe : il recouvrirait celui de la pièce (« game.hero », la frappe…).
+    private func hero(_ fiche: ProgressionConceptFiche) -> some View {
+        switch fiche.head {
+        case .piece:
+            // UNE pièce, UN héros : l'anneau du niveau, l'Héritage et sa frappe, le détail de la joute ou les Élans
+            // REMPLACENT le héros générique au lieu de s'y ajouter. Elle porte la section « À toi de jouer » qu'une
+            // entrée vise. Aucun identifiant sur l'enveloppe : il recouvrirait celui de la pièce (« game.hero »…).
             VStack(alignment: .leading, spacing: MeeshySpacing.xl) { gestures }
                 .id(ProgressionConceptSection.act)
-        } else {
+        case .sparks(let model):
+            GameSparksHeadView(model: model)
+        case .generic:
             ProgressionConceptHero(
-                concept: concept,
-                value: ProgressionConceptModel.value(concept, progress: progress, game: game),
-                gauge: ProgressionConceptModel.gauge(concept, progress: progress, game: game),
+                card: ProgressionConceptModel.card(concept, progress: progress, game: game),
+                line: fiche.heroLine,
                 game: game
             )
             .gameElement(GameElementDetails.hero(of: concept, progress: progress, game: game), identifier: "progression.concept.hero")
@@ -250,7 +280,7 @@ struct ProgressionConceptContent: View {
     private func sentence(_ text: String, strong: Bool = false) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: strong ? .semibold : .regular))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -279,36 +309,47 @@ extension ProgressionConceptLink {
 
 // MARK: - Le héros générique
 
-/// Le héros d'une fiche : l'emblème en grand, le nom, la valeur, et la jauge vers l'étape suivante quand elle existe.
+/// Le héros d'une fiche : l'emblème en grand, la valeur en grand, la ligne de la carte en petit, et la jauge vers
+/// l'étape suivante quand elle existe. « Où j'en suis » ne redit ni la valeur ni la ligne (`ProgressionConceptFiche`).
 struct ProgressionConceptHero: View {
-    let concept: ProgressionConcept
-    let value: String
-    let gauge: Double?
+    let card: ProgressionConceptCard
+    /// La ligne sous la valeur ; `nil` quand les gestes de la fiche la disent déjà.
+    let line: ProgressionFactText?
     let game: GameBlock?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     var body: some View {
-        card.accessibilityElement(children: .combine)
+        content.accessibilityElement(children: .combine)
     }
 
-    private var card: some View {
-        ProgressionCard(tint: concept.tint) {
+    private var content: some View {
+        ProgressionCard(tint: card.concept.tint) {
             HStack(alignment: .center, spacing: MeeshySpacing.lg) {
-                ProgressionConceptEmblem(concept: concept, game: game, size: 80)
+                ProgressionConceptEmblem(concept: card.concept, game: game, size: 80)
+                    .modifier(GameFactsTag(card.emblem?.fact))
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-                    Text(ConceptText.name(concept))
+                    Text(card.name)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .textCase(.uppercase)
-                        .foregroundColor(theme.textMuted)
-                    Text(value)
+                        .foregroundStyle(theme.textMuted)
+                    Text(card.value)
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
-                        .modifier(GameValueRoll(value: value))
-                    if let gauge {
-                        ProgressionBar(progress: gauge, tint: concept.tint, label: ConceptText.name(concept))
+                        .modifier(GameValueRoll(value: card.value))
+                        .modifier(GameFactsTag(card.valueFact))
+                    if let line {
+                        Text(line.text)
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                            .foregroundStyle(theme.textMuted)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .modifier(GameFactsTag(line.facts))
+                    }
+                    if let gauge = card.gauge {
+                        ProgressionBar(progress: gauge, tint: card.concept.tint, label: card.name)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -330,6 +371,10 @@ struct ProgressionConceptGestures: View {
     let isDark: Bool
     let onOpenLink: (ProgressionConceptLink) -> Void
     let onReveal: (ProgressionRevealRequest) -> Void
+    var onPhotoMission: ((GameBlock.Mission) -> Void)?
+
+    /// La tête de l'Héritage retenue pendant la cérémonie de la frappe (#11482).
+    @State private var heritageHold: GameHeritageHold?
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -353,6 +398,26 @@ struct ProgressionConceptGestures: View {
         }
     }
 
+    /// L'HÉRITAGE (#11180) : ce que tu gardes en tête, puis LE cadre de frappe — le SEUL du jeu (#9537). La tête garde ce
+    /// qu'elle montrait au toucher jusqu'à la fin de la cérémonie (#11482).
+    @ViewBuilder
+    private func heritage(_ game: GameBlock) -> some View {
+        let served = GameHeritageHeadModel.served(progress: progress, game: game)
+        GameHeritageHeadView(model: GameHeritageHold.shown(served: served, hold: heritageHold, settled: viewModel.mintSettlement))
+            // Le contenant se touche : ce que les Meeshes gardées remplissent, et le suivant.
+            .gameElement(GameElementDetails.treasuryTier(game.treasury), identifier: "game.fiche.heritage")
+        GameMintPreviewView(
+            game: game, online: viewModel.isOnline,
+            minting: viewModel.isMinting, error: viewModel.mintError,
+            celebration: viewModel.celebration, settlement: viewModel.mintSettlement,
+            onMint: {
+                heritageHold = GameHeritageHold(before: served, settled: viewModel.mintSettlement)
+                Task { await viewModel.mint() }
+            },
+            onCeremonyEnded: { heritageHold = heritageHold?.ended() }
+        )
+    }
+
     var body: some View {
         switch concept {
         case .level:
@@ -369,14 +434,7 @@ struct ProgressionConceptGestures: View {
             }
         case .meesh:
             if let game {
-                // LE héro de frappe — le SEUL du jeu (#9537).
-                GameMintPreviewView(
-                    game: game, badgesLost: viewModel.mintBadgeImpact?.lost, online: viewModel.isOnline,
-                    minting: viewModel.isMinting, error: viewModel.mintError,
-                    celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
-                )
-                // Le palier du trésor : ce que les Meeshes gardées remplissent.
-                GameElementTile(detail: GameElementDetails.treasuryTier(game.treasury))
+                heritage(game)
             } else if let meesh = progress.meesh {
                 ProgressionMeeshDetail(
                     meesh: meesh,
@@ -391,8 +449,8 @@ struct ProgressionConceptGestures: View {
             if let game {
                 // La forme de la Flamme et les gels : deux éléments qui se touchent, au-dessus de leurs gestes.
                 HStack(alignment: .top, spacing: MeeshySpacing.md) {
-                    GameElementTile(detail: GameElementDetails.flameForm(game.flame))
-                    GameElementTile(detail: GameElementDetails.freeze(game.flame))
+                    GameElementTile(detail: GameElementDetails.flameForm(game.flame), facts: [.flameForm])
+                    GameElementTile(detail: GameElementDetails.freeze(game.flame), facts: [.freezes])
                 }
                 GameFlamePanelView(
                     game: game, online: viewModel.isOnline, buyingFreeze: viewModel.pending.freeze,
@@ -409,7 +467,8 @@ struct ProgressionConceptGestures: View {
                     game: game, online: viewModel.isOnline, pendingRerollId: viewModel.pending.rerollMissionId,
                     chestOpening: viewModel.pending.chest, errors: viewModel.gameErrors,
                     onReroll: { id in Task { await viewModel.reroll(missionId: id) } },
-                    onClaim: { Task { await viewModel.claimChest() } }
+                    onClaim: { Task { await viewModel.claimChest() } },
+                    onPhotoMission: onPhotoMission
                 )
             }
         case .league:
@@ -433,6 +492,8 @@ struct ProgressionConceptGestures: View {
 /// Sert les éléments qu'aucune vue du jeu ne dessinait à part (la forme de la Flamme, les gels, le palier du trésor).
 struct GameElementTile: View {
     let detail: GameElementDetail
+    /// Les faits que la tuile montre (#11180) : la fiche ne les redit pas ailleurs.
+    var facts: [ProgressionFactID] = []
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -443,12 +504,12 @@ struct GameElementTile: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(detail.name)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(detail.statusLine)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .modifier(GameValueRoll(value: detail.statusLine))
@@ -459,5 +520,6 @@ struct GameElementTile: View {
         }
         .accessibilityElement(children: .combine)
         .gameElement(detail)
+        .modifier(GameFactsTag(facts))
     }
 }

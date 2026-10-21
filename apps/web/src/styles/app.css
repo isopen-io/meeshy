@@ -32,6 +32,7 @@
 @import './admin.css';
 @import './glass.css';
 @import './ui.css';
+@import './press-feedback.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
@@ -344,6 +345,30 @@
   padding-bottom: max(var(--safe-bottom), 8px);
 }
 
+/*
+ * L'ÉCRAN D'APPLICATION TIENT AU-DESSUS DU CLAVIER (#10005).
+ *
+ * Safari et Chrome iOS ignorent `interactive-widget=resizes-content`
+ * (`index.html`) : le clavier RECOUVRE la page, `100dvh` garde sa hauteur, et
+ * le composeur du fil passe sous le clavier pendant que Safari fait glisser
+ * l'en-tête hors de l'écran. `installKeyboardViewport`
+ * (`lib/view/keyboard-viewport.ts`) mesure le clavier au `visualViewport` et
+ * pose `--keyboard-inset` sur `<html>` ; `h-app` le retire de la racine. Chrome
+ * Android et les coques réduisent la vue elles-mêmes : la variable y reste
+ * absente, `h-app` vaut `h-dvh`.
+ *
+ * Clavier ouvert, plus d'indicateur home sous le composeur : sans la règle
+ * ci-dessous, `pb-safe` laissait 34 px entre le composeur et le clavier d'un
+ * iPhone. La coque Android pose déjà zéro dans ce cas (`SystemBars`).
+ */
+@utility h-app {
+  height: calc(100dvh - var(--keyboard-inset, 0px));
+}
+
+:root[data-keyboard='open'] {
+  --safe-bottom: 0px;
+}
+
 @utility offscreen {
   position: absolute;
   width: 1px;
@@ -547,19 +572,18 @@
  * revient. `cubic-bezier(0.22, 1.2, 0.36, 1)` en est la lecture CSS — le
  * troisieme point passe au-dessus de 1, c'est lui qui porte le depassement.
  *
- * La grille `0fr -> 1fr` anime la HAUTEUR sans qu'aucune valeur fixe ne soit
- * devinee : le contenu reste mesure par lui-meme, et rien ne se coupe quand la
- * taille de police change (Dynamic Type, zoom navigateur).
- *
- * `prefers-reduced-motion` la coupe : une animation qui EXPLIQUE ne doit pas
- * etre une animation qu'on subit. */
+ * Le bloc a sa hauteur reelle des le premier rendu (Dynamic Type, zoom) ; seule
+ * son ENTREE se joue, en `opacity` et `transform` (#11314), sans mise en page
+ * par image. `prefers-reduced-motion` la coupe. */
+@keyframes signupSpringIn { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+
 .signup-spring {
-  transition: grid-template-rows 320ms cubic-bezier(0.22, 1.2, 0.36, 1);
+  animation: signupSpringIn 320ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .signup-spring {
-    transition: none;
+    animation: none;
   }
 }
 
@@ -847,4 +871,15 @@
 
 :root[dir='rtl'] [data-admin-shell] .text-start {
   text-align: left;
+}
+
+/* L'APERÇU D'UNE CONVERSATION, AU BUREAU (#10070) — sur un téléphone le panneau
+   part sous l'encoche (`--safe-top` + 6 px, posé en style inline par
+   `conversation-preview-sheet.tsx`) ; dès 768 px il ne prend plus que 85 % de
+   la hauteur, centré : la variable remplace le haut, la classe `md:bottom-[7.5dvh]`
+   le bas. */
+@media (min-width: 768px) {
+  [data-conversation-preview] {
+    --preview-top: 7.5dvh;
+  }
 }

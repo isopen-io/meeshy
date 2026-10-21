@@ -248,7 +248,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
             "Meeshy/Features/Main/Views/MessageListViewController.swift",
             "Meeshy/Features/Main/Views/MessageListViewController+FocalScene.swift",
         ]
-        .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+        .map { try AppSourceGuard.text(at: root.appendingPathComponent($0)) }
         .joined(separator: "\n")
     }
 
@@ -256,7 +256,7 @@ final class FocalScrollPerspectiveTests: XCTestCase {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .appendingPathComponent(relativePath)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
     }
 

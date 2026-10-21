@@ -96,6 +96,8 @@ describe('decodeAdminPostRow — champ par champ, sans étalement', () => {
       isPinned: true,
       deletedAt: null,
       expiresAt: null,
+      moderationHiddenAt: null,
+      moderationPriorVisibility: null,
       likeCount: 12,
       commentCount: 3,
       viewCount: 240,

@@ -11,6 +11,7 @@ import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore } from '@/lib/api/session';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { useDeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { galleryAutoSaveEnabled, setGalleryAutoSaveEnabled } from '@/lib/gallery/auto-save';
 import { browserGalleryStorage } from '@/lib/gallery/auto-save-runtime';
 import { currentGallerySaver } from '@/lib/gallery/gallery-saver';
@@ -34,6 +35,8 @@ import {
   DataSection,
   LogoutButton,
   NotificationsSection,
+  PACKS_PANEL,
+  PacksSection,
   SECURITY_PANEL,
   SECURITY_PANEL_PARAM,
   PrivacySection,
@@ -81,6 +84,18 @@ const SettingsSecurity = lazy(() =>
   }),
 );
 
+/**
+ * LE VOLET DES PACKS (#10149) — la Boutique des stickers et celle des cadres
+ * du jeu, chargées à la demande AVEC leurs libellés.
+ */
+const SettingsPacks = lazy(() =>
+  import('@/routes/settings-packs').then(async (module) => {
+    const language = currentInterfaceLanguage();
+    await module.prepareSettingsPacks(language);
+    return { default: () => <module.SettingsPacksScreen language={language} /> };
+  }),
+);
+
 const THEME_MODE: Readonly<Record<ThemePreference, ThemeMode>> = { system: 'auto', light: 'light', dark: 'dark' };
 
 const actionDeps = (): PreferenceActionDeps => ({
@@ -120,14 +135,21 @@ function useGalleryToggle(): GalleryToggle | undefined {
  * chunk à la liste que l'entrée précharge pour cet écran (première peinture,
  * mesurée le 2026-10-08).
  */
-const securityPanelOpen = (): boolean =>
-  typeof location === 'object' && new URLSearchParams(location.search).get(SECURITY_PANEL_PARAM) === SECURITY_PANEL;
+const panelOf = (): string | null => (typeof location === 'object' ? new URLSearchParams(location.search).get(SECURITY_PANEL_PARAM) : null);
 
 export default function SettingsScreen() {
-  if (securityPanelOpen()) {
+  const panel = panelOf();
+  if (panel === SECURITY_PANEL) {
     return (
       <Suspense fallback={null}>
         <SettingsSecurity />
+      </Suspense>
+    );
+  }
+  if (panel === PACKS_PANEL) {
+    return (
+      <Suspense fallback={null}>
+        <SettingsPacks />
       </Suspense>
     );
   }
@@ -162,6 +184,7 @@ function SettingsHome() {
   const [loggingOut, setLoggingOut] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const gallery = useGalleryToggle();
+  const deviceTranslation = useDeviceTranslationSetting();
 
   useEffect(() => {
     if (notice === null) return undefined;
@@ -231,7 +254,8 @@ function SettingsHome() {
             onToggle={toggle}
             onRetry={() => void query.refetch()}
           />
-          <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} />
+          <DataSection language={language} {...(gallery === undefined ? {} : { gallery })} deviceTranslation={deviceTranslation} />
+          <PacksSection language={language} />
           <ToolsSection language={language} showAdmin={peutAdministrer} />
           <AboutSection language={language} version={__APP_VERSION__} />
           {sessionUser === null ? null : <SwitchAccountButton language={language} onPress={() => setSwitchingAccount(true)} />}

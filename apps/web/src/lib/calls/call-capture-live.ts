@@ -1,6 +1,8 @@
+import { recordingMimeOf } from '@/lib/media/recording-codec';
 import { browserPhotoEnv, developPhoto, PHOTO_MIME, type PhotoEnv } from '@/lib/media/photo-develop';
 
 import { captureStamp, type CaptureFile } from './call-capture-save';
+import { startFrameClock } from './frame-clock';
 
 /**
  * **FILMER, OU PRENDRE, CE QUE L'APPEL MONTRE** (#8625) — le geste sur le
@@ -20,15 +22,10 @@ import { captureStamp, type CaptureFile } from './call-capture-save';
 
 export type ClipFormat = { readonly mimeType: string; readonly extension: 'mp4' | 'webm' };
 
-const FORMATS: readonly ClipFormat[] = [
-  { mimeType: 'video/mp4;codecs=avc1,mp4a.40.2', extension: 'mp4' },
-  { mimeType: 'video/mp4', extension: 'mp4' },
-  { mimeType: 'video/webm;codecs=vp9,opus', extension: 'webm' },
-  { mimeType: 'video/webm;codecs=vp8,opus', extension: 'webm' },
-  { mimeType: 'video/webm', extension: 'webm' },
-];
-
-export const pickClipFormat = (supported: (mimeType: string) => boolean): ClipFormat | null => FORMATS.find((format) => supported(format.mimeType)) ?? null;
+export const pickClipFormat = (supported: (mimeType: string) => boolean): ClipFormat | null => {
+  const mimeType = recordingMimeOf('video', supported);
+  return mimeType === undefined ? null : { mimeType, extension: mimeType.startsWith('video/mp4') ? 'mp4' : 'webm' };
+};
 
 export const clipFileName = ({ at, style, extension }: { readonly at: Date; readonly style: string; readonly extension: string }): string => `meeshy-appel-${style}-${captureStamp(at)}.${extension}`;
 
@@ -141,11 +138,11 @@ export function filmedTrack(video: HTMLVideoElement, fps: number): { readonly tr
   const surface = canvasFor(video);
   const track = surface?.canvas.captureStream?.(fps).getVideoTracks()[0];
   if (surface === null || track === undefined) return null;
-  const timer = setInterval(() => paintVideo(surface.context, video), 1000 / fps);
+  const clock = startFrameClock({ fps, tick: () => paintVideo(surface.context, video), driver: () => video });
   return {
     track,
     release: () => {
-      clearInterval(timer);
+      clock.stop();
       track.stop();
     },
   };

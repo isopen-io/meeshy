@@ -38,6 +38,7 @@ const frMediaViewer = {
   'media.sound.library': 'Son de la bibliothèque',
   'media.sound.mute': 'Couper le son de fond',
   'media.sound.unmute': 'Réactiver le son de fond',
+  'media.audio.track_of': 'Vocal {index} sur {total}',
 } as const;
 
 export default frMediaViewer;

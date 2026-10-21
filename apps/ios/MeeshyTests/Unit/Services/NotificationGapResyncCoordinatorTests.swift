@@ -164,7 +164,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         // le retrait NOMME la fonction retirée, et une garde par sous-chaîne
         // lue sur la source brute rougit sur sa propre explication.
         let source = AppSourceGuard.stripComments(
-            try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+            try meeshyAppSource()
         )
 
         XCTAssertFalse(
@@ -184,7 +184,7 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         // sur un appel mis en commentaire — c'est-à-dire sur une intention,
         // jamais sur un effet.
         let source = AppSourceGuard.stripComments(
-            try String(contentsOf: meeshyAppSourceURL(), encoding: .utf8)
+            try meeshyAppSource()
         )
 
         XCTAssertTrue(
@@ -193,12 +193,16 @@ final class NotificationGapResyncCoordinatorTests: XCTestCase {
         )
     }
 
-    private func meeshyAppSourceURL() -> URL {
-        URL(fileURLWithPath: #filePath)
+    /// `MeeshyApp.swift` et `MeeshyApp+Lifecycle.swift`, où vivent les crochets
+    /// d'arrière-plan et de retour depuis qu'ils ont quitté la fenêtre principale.
+    private func meeshyAppSource() throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()  // …/MeeshyTests/Unit/Services
             .deletingLastPathComponent()  // …/MeeshyTests/Unit
             .deletingLastPathComponent()  // …/MeeshyTests
             .deletingLastPathComponent()  // …/apps/ios
-            .appendingPathComponent("Meeshy/MeeshyApp.swift")
+        return try ["Meeshy/MeeshyApp.swift", "Meeshy/MeeshyApp+Lifecycle.swift"]
+            .map { try String(contentsOf: root.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 }

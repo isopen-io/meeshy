@@ -1,6 +1,5 @@
-/** @jsxImportSource preact */
 import { describe, expect, test } from 'bun:test';
-import { render } from 'preact-render-to-string';
+import { renderToStaticMarkup as render } from 'react-dom/server';
 
 import { PAGE_ABOUT } from './about';
 import { PAGE_CONTACT } from './contact';
@@ -14,26 +13,53 @@ import { meeViewFiles } from './mee-views';
 import { InstitutionalPage } from './page';
 
 /**
- * LES PAGES INSTITUTIONNELLES SERVENT LE LOGO ET LA SIGNATURE (#5606).
+ * LES PAGES STATIQUES PORTENT L'EN-TÊTE ET LE PIED DE LA LANDING (#10071).
  *
- * `InstitutionalPage` est le rendu partagé des sept pages — un seul test
- * suffit à prouver « au moins un écran » (§ critère de fin, ligne 2) ; les
- * quatre autres contenus (`contact.ts`, `partners.ts`, `privacy.ts`,
- * `terms.ts`) traversent exactement le même composant.
+ * `InstitutionalPage` est le rendu partagé des sept pages : un témoin suffit
+ * pour toutes. Ce qu'un lecteur arrivé par un moteur de recherche sur
+ * « Confidentialité » doit pouvoir faire sans revenir en arrière : se
+ * connecter, changer de langue, rejoindre l'aide — et plus « Entrer sans
+ * compte » : l'entrée anonyme ne passe plus que par le QR de la landing (#10784).
  */
-describe('InstitutionalPage — en-tête (logo) et pied (signature)', () => {
+describe('InstitutionalPage — l’en-tête et le pied de meeshy.me (#10071)', () => {
   const html = render(<InstitutionalPage page={PAGE_ABOUT} version="3.1.0" />);
 
-  test('l’en-tête sert le logo — décoratif, le mot « Meeshy » adjacent porte le nom', () => {
-    // `preact-render-to-string` sérialise un `alt=""` en attribut nu `alt`
-    // (sans `=""`) — le témoin lit donc le TAG entier plutôt que de chercher
-    // une sous-chaîne dont la forme dépend du moteur de rendu.
-    expect(html).toContain('<img src="/brand/logo.png" width="40" height="40" alt/>');
+  test('l’en-tête est celui de la landing : la marque, la navigation, se connecter, sans porte d’entrée anonyme (#10784)', () => {
+    expect(html).toContain('class="ld-header"');
+    expect(html).toContain('<img src="/brand/logo.png" alt="" width="36" height="36"/>');
+    expect(html).toContain('<span class="ld-wordmark">Meeshy</span>');
+    expect(html).toMatch(/<a href="\/login"[^>]*>Se connecter<\/a>/);
+    expect(html).not.toContain('Entrer sans compte');
+    expect(html).not.toContain('#rejoindre');
+    expect(html).toContain('href="/#world"');
+    expect(html).toContain('href="/#comment"');
+    expect(html).not.toContain('Retour à l’accueil');
+  });
+
+  test('le sélecteur de langue mène, SANS script, à la landing de la langue choisie', () => {
+    expect(html).toContain('<details class="ld-language-menu">');
+    for (const [code, path] of [['en', '/en'], ['ar', '/ar'], ['fr', '/']] as const) {
+      expect(html).toMatch(new RegExp(`<a href="${path}" hrefLang="${code}" lang="${code}"`));
+    }
+    expect(html).not.toContain('<script');
+  });
+
+  test('le pied est celui de la landing, et mène à TOUTES les pages statiques', () => {
+    expect(html).toContain('class="ld-footer"');
+    for (const page of ['about', 'contact', 'partners', 'help', 'faq', 'privacy', 'terms', 'download']) {
+      expect(html).toContain(`href="/${page}"`);
+    }
+  });
+
+  test('le lien d’évitement mène toujours au contenu', () => {
+    expect(html).toContain('href="#contenu"');
+    expect(html).toContain('id="contenu"');
   });
 
   test('le pied porte la signature de marque', () => {
     expect(html).toContain('Meeshy 3.1.0');
-    expect(html).toContain('Services CEO');
+    expect(html).toContain('>by services.ceo<');
+    expect(html).toContain('href="https://services.ceo"');
   });
 });
 

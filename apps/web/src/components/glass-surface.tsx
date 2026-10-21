@@ -53,9 +53,10 @@ export function GlassSurface({
  *
  * Directive porteur. Elle reste un CONTRÔLE : 44 pt de cible et une étiquette
  * lisible au lecteur d'écran — le verre change la matière, jamais le contrat
- * d'accessibilité.
+ * d'accessibilité. L'étiquette vient de l'hôte, dans la langue d'interface
+ * (#10823) : aucun libellé par défaut, donc aucun français figé.
  */
-export function GlassBack({ children, label = 'Retour' }: { children: React.ReactNode; label?: string }) {
+export function GlassBack({ children, label }: { children: React.ReactNode; label: string }) {
   return (
     <span
       className="glass grid size-11 shrink-0 place-items-center rounded-full"

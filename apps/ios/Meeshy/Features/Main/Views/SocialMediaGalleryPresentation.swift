@@ -124,7 +124,9 @@ private struct SocialMediaGalleryLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .fullScreenCover(isPresented: $isPresented, onDismiss: promote) { galerie }
+            .fullScreenCover(isPresented: $isPresented, onDismiss: promote) {
+                galerie.closesForConversationOpening(.mediaGallery)
+            }
             // **La porte vit sur un HÔTE À ELLE** — SwiftUI ne présente qu'UNE
             // modale par vue, et celle du dessus occupe déjà la place de cet
             // hôte. Un `Color.clear` en arrière-plan lui en donne une autre ;

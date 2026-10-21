@@ -5,12 +5,13 @@ import MeeshySDK
 // MARK: - Ce qu'un visiteur sans compte a ouvert (#9171)
 
 /// Les contenus qu'un lien universel ouvre SANS session (#9171, jumeau iOS de
-/// #9149) : une publication ou un réel PUBLICS, que la passerelle sert sans
-/// jeton (`GET /posts/:postId`). Le reste des liens de contenu attend la
-/// connexion, comme avant.
+/// #9149) : une publication, un réel ou une story (#10317) PUBLICS, que la
+/// passerelle sert sans jeton (`GET /posts/:postId`). Le reste des liens de
+/// contenu attend la connexion, comme avant.
 enum VisitorContentKind: Equatable, Sendable {
     case post
     case reel
+    case story
 }
 
 /// Le contenu à montrer à un visiteur, et le jeton du `/l/<jeton>` qui l'a
@@ -22,13 +23,15 @@ struct VisitorContentRequest: Equatable, Identifiable, Sendable {
 
     var id: String { "\(postId)|\(via ?? "")" }
 
-    /// `nil` pour tout lien qui n'est ni une publication ni un réel.
+    /// `nil` pour tout lien qui n'est ni une publication, ni un réel, ni une story.
     init?(link: DeepLink, via: String?) {
         switch link {
         case .postDetail(let postId):
             self.init(postId: postId, kind: .post, via: via)
         case .reel(let postId):
             self.init(postId: postId, kind: .reel, via: via)
+        case .storyDetail(let postId):
+            self.init(postId: postId, kind: .story, via: via)
         default:
             return nil
         }
@@ -56,6 +59,43 @@ enum VisitorContentState: Sendable {
     var isServed: Bool {
         if case .served = self { return true }
         return false
+    }
+}
+
+/// Ce que l'écran visiteur montre SOUS la carte (#10317, jumeau iOS de #10314).
+///
+/// Un contenu refusé ou en panne ne laisse jamais une page claire et vide : le
+/// noir de média neutre du lecteur de réels, et rien d'autre.
+enum VisitorContentSurface: Equatable, Sendable {
+    case loading
+    case reader
+    case neutralBackdrop
+
+    init(state: VisitorContentState) {
+        switch state {
+        case .pending: self = .loading
+        case .served: self = .reader
+        case .refused, .failed: self = .neutralBackdrop
+        }
+    }
+}
+
+/// Les gestes de la carte d'invitation, dans leur ordre d'affichage. Un refus
+/// n'a rien à réessayer ; une panne garde « Réessayer » ; seul un contenu servi
+/// se laisse regarder sans compte.
+enum VisitorInvitationAction: Equatable, Sendable {
+    case retry
+    case signUp
+    case signIn
+    case keepWatching
+
+    static func actions(for state: VisitorContentState) -> [VisitorInvitationAction] {
+        switch state {
+        case .pending: return []
+        case .served: return [.signUp, .signIn, .keepWatching]
+        case .refused: return [.signUp, .signIn]
+        case .failed: return [.retry, .signUp, .signIn]
+        }
     }
 }
 

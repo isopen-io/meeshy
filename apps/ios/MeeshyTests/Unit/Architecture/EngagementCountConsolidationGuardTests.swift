@@ -79,7 +79,8 @@ final class EngagementCountConsolidationGuardTests: XCTestCase {
     /// Cinq surfaces SwiftUI (240i) + les deux cellules UIKit (source depuis le
     /// début) = 7 hôtes.
     private static let consolidatedHosts = [
-        "FeedPostCard.swift",
+        // La rangée d'actions a quitté `FeedPostCard.swift` pour son propre type.
+        "FeedPostActionsBar.swift",
         "ReelFeedCard.swift",
         // #6578 — `CommentRowView` et son compteur de réponses ont quitté
         // `FeedCommentsSheet.swift` : l'hôte consolidé est désormais leur fichier.

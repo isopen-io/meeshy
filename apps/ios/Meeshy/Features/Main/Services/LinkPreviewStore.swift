@@ -85,12 +85,25 @@ final class LinkPreviewStore: ObservableObject {
         }
         let metadata = await fetcher.metadata(for: urlString)
         if let metadata {
-            cache[urlString] = metadata
+            cache = Self.bounded(cache.merging([urlString: metadata]) { _, new in new }, limit: Self.maxEntries)
             persist()
         } else {
-            negativeCache[urlString] = Date()
+            let now = Date()
+            // Les échecs expirés partent à chaque nouvel échec : sans ce ménage, l'ensemble ne faisait que grossir.
+            negativeCache = negativeCache.filter { now.timeIntervalSince($0.value) < negativeCacheDuration }
+            negativeCache[urlString] = now
         }
         return metadata
+    }
+
+    /// Plafond des aperçus gardés : chaque lien distinct s'ajoutait, et chaque ajout ré-encodait tout le fichier.
+    static let maxEntries = 500
+
+    /// Les `limit` aperçus les plus récents (`fetchedAt`).
+    nonisolated static func bounded(_ entries: [String: LinkMetadata], limit: Int) -> [String: LinkMetadata] {
+        guard entries.count > limit else { return entries }
+        let kept = entries.sorted { $0.value.fetchedAt > $1.value.fetchedAt }.prefix(limit)
+        return Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
     }
 
     func clearAll() {
@@ -141,12 +154,12 @@ final class LinkPreviewStore: ObservableObject {
             return [:]
         }
         let cutoff = Date().addingTimeInterval(-maxAge)
-        return decoded.filter { _, metadata in metadata.fetchedAt >= cutoff }
+        return bounded(decoded.filter { _, metadata in metadata.fetchedAt >= cutoff }, limit: maxEntries)
     }
 }
 
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let linkPreview = Logger(subsystem: "me.meeshy.app", category: "link-preview")
+    nonisolated static let linkPreview = MeeshyLog.logger(.linkPreview)
 }

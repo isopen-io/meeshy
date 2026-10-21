@@ -72,6 +72,18 @@ public enum MeeshyMotion {
     public nonisolated static func shouldReduce(system: Bool, userForced: Bool) -> Bool {
         system || userForced
     }
+
+    public nonisolated static func animation(_ animation: Animation?, reduce: Bool) -> Animation? {
+        reduce ? nil : animation
+    }
+}
+
+public func meeshyWithAnimation<Result>(
+    _ animation: Animation? = .default,
+    reduceMotion: Bool,
+    _ body: () throws -> Result
+) rethrows -> Result {
+    try withAnimation(MeeshyMotion.animation(animation, reduce: reduceMotion), body)
 }
 
 /// App-level Reduce Motion override, injected at the root from
@@ -98,7 +110,7 @@ private struct MeeshyAnimationModifier<V: Equatable>: ViewModifier {
 
     func body(content: Content) -> some View {
         let reduce = MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
-        return content.animation(reduce ? nil : animation, value: value)
+        return content.animation(MeeshyMotion.animation(animation, reduce: reduce), value: value)
     }
 }
 
@@ -122,6 +134,18 @@ public extension View {
     func meeshyTapTarget(_ minSize: CGFloat = MeeshyControlSize.tapTarget) -> some View {
         frame(minWidth: minSize, minHeight: minSize)
             .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Tap target geometry
+
+public nonisolated enum MeeshyTapTarget {
+    public static func inset(forVisualSide side: CGFloat) -> CGFloat {
+        max(0, (MeeshyControlSize.tapTarget - side) / 2)
+    }
+
+    public static func overlaps(visualA: CGFloat, visualB: CGFloat, gap: CGFloat) -> Bool {
+        gap < inset(forVisualSide: visualA) + inset(forVisualSide: visualB)
     }
 }
 

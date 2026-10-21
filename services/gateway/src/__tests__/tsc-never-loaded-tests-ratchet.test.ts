@@ -1,15 +1,22 @@
 /**
  * Le CLIQUET **A** de #6160 — les erreurs de typecheck des fichiers de test
- * que ts-jest ne TYPECHECK qu'à la demande (au moment où une suite les
- * charge) ne peuvent que diminuer.
+ * ne peuvent que diminuer.
  *
- * #6160 a mesuré trois couches, pas deux :
+ * #6160 avait mesuré trois couches (ts-jest typechequait alors, à la demande,
+ * les seuls fichiers qu'une suite charge) ; depuis #10203 :
  *
  * | couche | ce qu'elle couvre |
  * |---|---|
  * | `tsc --noEmit` (`tsconfig.json`) | exclut tous les tests |
- * | ts-jest (`tsconfig.test.json`) | les tests, mais seulement les fichiers qu'une EXÉCUTION charge, et sourd à quatre codes (`diagnostics.ignoreCodes`) |
- * | personne | les fichiers de test qu'aucune exécution ne charge |
+ * | ts-jest (`tsconfig.jest.json`) | **plus rien** depuis #10203 : il transpile en modules isolés, sans types |
+ * | ce cliquet (`tsconfig.test.json`) | TOUS les fichiers de test, chargés ou non, hors quatre codes muets |
+ *
+ * #10203 a retiré le typecheck de ts-jest (la suite tombe de 584 s à 268 s) :
+ * ce cliquet est désormais le SEUL gate de types des fichiers de test — un
+ * `@ts-expect-error` devenu inutile (TS2578), un nom introuvable (TS2304), un
+ * nombre d'arguments faux (TS2554) n'y rougissent plus au chargement de la
+ * suite, ils rougissent ICI. D'où un plafond SERRÉ sur la mesure : toute
+ * marge laissée au-dessus est une erreur de type que plus rien ne verrait.
  *
  * Gate **C** (`jest-suite-count-ratchet.test.ts`) garde le nombre de suites
  * COLLECTÉES. Gate **A** garde une propriété différente et complémentaire :
@@ -31,11 +38,12 @@
  *
  * Mesuré le 2026-09-13, HEAD `a0be0e79`, via
  * `tsc -p tsconfig.test.json --noEmit --pretty false`, en ne gardant que les
- * lignes d'erreur dont le code n'est PAS l'un des quatre muets : **92**.
+ * lignes d'erreur dont le code n'est PAS l'un des quatre muets : **92** ;
+ * remesuré le 2026-10-11 (#10203), HEAD `08f0dccf2e` : **76**.
  *
  * ## Ce que ce cliquet ne fait pas
  *
- * Il ne dit pas que les 92 erreurs restantes sont fausses — la plupart
+ * Il ne dit pas que les 76 erreurs restantes sont fausses — la plupart
  * signalent une suite dont le sujet a bougé (#6160, leçon 588 : « cette
  * suite garde-t-elle encore quelque chose, ou son sujet a-t-il déménagé ? »)
  * et qui doit être rejugée fichier par fichier, pas mécaniquement. Ce
@@ -59,7 +67,7 @@ const CODES_MUETS = new Set(['TS2322', 'TS2339', 'TS2345', 'TS2740']);
  * nombre en soldant une suite est encouragé et attendu ; le remonter ne
  * l'est jamais.
  */
-const PLAFOND_ERREURS_NON_MUETTES = 92;
+const PLAFOND_ERREURS_NON_MUETTES = 76;
 
 const typecheckDesTests = (): string => {
   try {

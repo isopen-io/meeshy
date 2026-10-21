@@ -27,8 +27,16 @@ extension AuthManager {
     /// au compte SUPPLÉMENTAIRE (`offersKeepSignedIn`). Elle part au serveur
     /// (`rememberDevice`) et reste attachée au compte : un compte non gardé
     /// est fermé quand on le quitte.
+    ///
+    /// #10463 — refusée pendant un changement de compte, qui seul pose la
+    /// session entrante ; une session rendue pendant qu'il s'engage est
+    /// refermée côté passerelle.
     @discardableResult
     public func login(username: String, password: String, keepSignedIn: Bool) async -> LoginOutcome {
+        guard !isSwitchingAccount else {
+            errorMessage = AccountSwitchUnderway().errorDescription
+            return .failed
+        }
         isLoading = true
         errorMessage = nil
         requires2FA = false
@@ -50,7 +58,8 @@ extension AuthManager {
             guard let token = data.token, let user = data.user else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
-            applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+            try installClosingRefused(EmailProvenSession(
+                token: token, sessionToken: data.sessionToken, user: user, origin: .login))
             return .authenticated
         } catch let error as MeeshyError {
             errorMessage = error.errorDescription
@@ -100,9 +109,17 @@ extension AuthManager {
 
     /// Passe au compte `userId` SANS mot de passe s'il est gardé. Rend `false`
     /// sans rien toucher sinon : l'appelant présente alors la connexion.
+    ///
+    /// #10463 — refuse pendant un autre changement de compte, et ne pose rien
+    /// sur une session que la sortie n'a pas démontée (même loi que
+    /// `switchToProvenAccount`).
     @discardableResult
     public func switchAccount(to userId: String) async -> Bool {
         guard userId != activeUserId else { return true }
+        // #10482 — le compte touché pendant le retrait du compte actif est
+        // ouvert une fois le retrait fini, jamais démonté par lui.
+        guard await awaitActiveAccountRetirementEnd() else { return false }
+        guard !isSwitchingAccount else { return false }
         guard hasPreservedSession(for: userId) else { return false }
         isSwitchingAccount = true
         defer { isSwitchingAccount = false }
@@ -113,14 +130,37 @@ extension AuthManager {
         // compte quitté restait monté. Une image à l'état « sorti » (écran
         // neutre, `isSwitchingAccount`) laisse chaque observateur la voir.
         try? await Task.sleep(for: .milliseconds(150))
+        guard !isAuthenticated else { return false }
         // #8674 — le cache du compte qui revient est rendu AVANT que la session
         // ne s'ouvre : le premier écran le lit, jamais un cache vide.
         await CacheAccountBinder.shared.bind(accountKey(for: userId)).value
-        guard restoreStoredSession(for: userId) else {
+        // Une session s'est posée pendant la liaison du cache : c'est un REFUS,
+        // pas un trousseau vide. Elle reste ouverte, le cache lui revient.
+        if Self.refusesSessionReplacement(
+            currentlyAuthenticated: isAuthenticated, currentActiveUserId: activeUserId, newUserId: userId
+        ) {
+            await CacheAccountBinder.shared.bind(accountKey(for: activeUserId)).value
+            return false
+        }
+        // Le trousseau du compte demandé s'est vidé pendant la bascule.
+        guard installStoredSession(for: userId) else {
             CacheAccountBinder.shared.bind(nil)
             activeUserId = nil
             isAuthenticated = false
             return false
+        }
+        return true
+    }
+
+    /// Attend la fin d'un changement de compte (#10463). `false` si la tâche
+    /// appelante est annulée pendant l'attente : rien ne doit alors suivre.
+    func awaitAccountSwitchEnd() async -> Bool {
+        while isSwitchingAccount {
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return false
+            }
         }
         return true
     }
@@ -142,6 +182,12 @@ extension AuthManager {
     /// trousseau ; tout le reste part dans les deux cas. Ne bascule PAS
     /// `isAuthenticated` : c'est à l'appelant de le faire, en dernier.
     func leaveActiveSession(endingIt: Bool) async {
+        // #10463 — EN ENTRANT : le compte quitté reste actif pendant les
+        // attentes ci-dessous, et un rafraîchissement qui reviendrait là
+        // rouvrirait ses sockets. Aucun ne commence, aucun en vol ne se pose.
+        sessionGeneration &+= 1
+        activeSessionExits += 1
+        defer { activeSessionExits -= 1 }
         // U3 — drop any in-flight optimistic profile guard so it can't leak onto
         // the next user's profile after a re-login.
         pendingOptimisticProfile = nil
@@ -154,6 +200,9 @@ extension AuthManager {
         // COURANTE : sans purge, un PATCH /users/me du compte A s'appliquerait
         // au profil du compte B.
         await SettingsActionQueue.shared.clearAll()
+        // #10710 — l'instantané de la vitrine porte le solde et les achats du
+        // compte sortant, sans scoping userId : le suivant ne l'hérite pas.
+        PackShopSnapshotStore.shared.clearAll()
         guard let userId = activeUserId else {
             // sync-04 — les watermarks de delta-sync sont per-user en
             // UserDefaults globaux : sans reset, le compte suivant hérite du
@@ -232,9 +281,26 @@ extension AuthManager {
 
     // MARK: - Reprise d'une session gardée
 
-    /// Rend `userId` actif depuis ses jetons du trousseau — le démarrage à
-    /// froid comme le changement de compte. `false` si le trousseau n'a rien.
+    /// Rend `userId` actif depuis ses jetons du trousseau. `false` si le
+    /// trousseau n'a rien, ou si la reprise est refusée (#10463) : pendant un
+    /// changement de compte, qui seul pose la session entrante, ou par-dessus
+    /// la session ouverte d'un AUTRE compte (`refusesSessionReplacement`).
     func restoreStoredSession(for userId: String) -> Bool {
+        guard !isSwitchingAccount else { return false }
+        return installStoredSession(for: userId)
+    }
+
+    /// La reprise elle-même — appelée directement par le seul changement de
+    /// compte, qui tient `isSwitchingAccount` et a démonté la session sortante.
+    func installStoredSession(for userId: String) -> Bool {
+        guard !Self.refusesSessionReplacement(
+            currentlyAuthenticated: isAuthenticated,
+            currentActiveUserId: activeUserId,
+            newUserId: userId
+        ) else {
+            Logger.auth.error("Refused to restore another user's session over the open session")
+            return false
+        }
         guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else { return false }
         activeUserId = userId
         let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
@@ -282,17 +348,18 @@ extension AuthManager {
 
         // Background revalidation (stale-while-revalidate for the profile).
         // Auth failures surface a re-auth state; the saved account is kept.
+        let generation = sessionGeneration
         Task { [weak self] in
             guard let self else { return }
             do {
                 let user = try await self.authService.me()
-                guard self.activeUserId == userId else { return }
-                self.updateUserAfterRevalidation(user, userId: userId)
+                guard self.activeUserId == userId, self.sessionGeneration == generation,
+                      !self.isLeavingActiveSession else { return }
+                self.updateUserAfterRevalidation(user, userId: userId, generation: generation)
             } catch let error as MeeshyError {
                 switch error {
                 case .auth:
-                    guard self.activeUserId == userId else { return }
-                    self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId, generation: generation)
                 case .network, .server, .message, .media, .forbidden, .rejected, .unknown:
                     break
                 }

@@ -47,14 +47,20 @@ final class ConversationStickerSendGuardTests: XCTestCase {
 
         let range = try XCTUnwrap(composer.range(of: "onRequestStickerPicker:"),
                                   "la conversation doit câbler `onRequestStickerPicker` sur son UniversalComposerBar")
-        let tail = composer[range.upperBound...].prefix(60).trimmingCharacters(in: .whitespacesAndNewlines)
+        let tail = composer[range.upperBound...].prefix(120).trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertFalse(tail.hasPrefix("nil"), "câblé à `nil`, la tuile serait absente")
-        XCTAssertTrue(tail.hasPrefix("{"), "la porte doit ouvrir quelque chose : une fermeture, pas une valeur")
+        // Depuis #10006, la porte passe par `guestDoor(offerte) { … }` : un invité
+        // restreint ne voit la tuile que si son lien sert les médias visuels.
+        let fermeture = tail.hasPrefix("guestDoor(")
+            ? tail.drop(while: { $0 != ")" }).dropFirst().trimmingCharacters(in: .whitespaces)
+            : tail
+        XCTAssertTrue(fermeture.hasPrefix("{"), "la porte doit ouvrir quelque chose : une fermeture, pas une valeur")
 
         // **La palette est la feuille unique du produit** (#9189) : ses
         // injecteurs vivent dans `MeeshyStickerSheet`, une fois, et
         // `StickerSheetHasOneMountSiteTests` les compte.
-        XCTAssertTrue(composer.contains("MeeshyStickerSheet("),
+        let layers = try appSource("Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift")
+        XCTAssertTrue(layers.contains("MeeshyStickerSheet("),
                       "la porte n'a d'effet que si la palette est PRÉSENTÉE")
         let feuille = try appSource("Meeshy/Features/Main/Components/MeeshyStickerSheet.swift")
         for injecteur in [".storyPasteProvided()", ".storyStickerLibraryProvided()", ".stickerNearbyPlacesProvided()"] {

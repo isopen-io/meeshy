@@ -23,16 +23,16 @@
  * `AuthMiddleware` ET via `app.inject()` sur une vraie requête REST (jamais
  * un double du handler — la garde exercée est la production, pas une copie).
  *
- * ## Sens de l'échec — trois états, jamais deux
+ * ## Sens de l'échec — #10328 : une session INTROUVABLE est refusée
  *
- * `UserSession` n'est JAMAIS supprimée physiquement dans ce dépôt (seul
- * `isValid` bascule — `SessionService.invalidateSession`) : une ligne
- * ABSENTE n'est donc PAS une preuve de révocation. `sessionLiveness` rend
- * `'live' | 'gone' | 'unknown'`, et seul `'gone'` (la ligne EXISTE et porte
- * `isValid: false`) refuse ; une ligne introuvable ou une lecture en échec
- * admettent (fail-OPEN sur l'absence de preuve) — sans quoi le premier appel
- * REST suivant un login tout juste fait, lu depuis un secondaire en retard
- * de réplication, déconnecterait un utilisateur qui vient de s'authentifier.
+ * Jusqu'à #10328, une ligne absente admettait (fail-OPEN), au motif d'un
+ * secondaire en retard de réplication. Le motif ne tient pas : la passerelle
+ * lit le PRIMAIRE (aucune `readPreference` dans `DATABASE_URL`, jeu de
+ * réplicas à un membre), et chaque site d'émission crée la session AVANT de
+ * signer le jeton qui la nomme. Une ligne absente est donc une session
+ * purgée (`retention-sweep`) ou jamais émise : refusée, comme une session
+ * révoquée ou échue. Une lecture qui LÈVE ne prouve rien dans aucun sens :
+ * 503 `AUTH_UNAVAILABLE`, jamais un 401 qui déconnecterait le client.
  *
  * @jest-environment node
  */
@@ -77,6 +77,22 @@ const JWT_SECRET = 'test-secret-session-revocation-4264';
 const USER_ID = '507f1f77bcf86cd799439011';
 const LIVE_SESSION_ID = '507f1f77bcf86cd799439021';
 const REVOKED_SESSION_ID = '507f1f77bcf86cd799439022';
+const UNKNOWN_SESSION_ID = '507f1f77bcf86cd799439023';
+const EXPIRED_SESSION_ID = '507f1f77bcf86cd799439024';
+
+const IN_ONE_DAY = () => new Date(Date.now() + 24 * 60 * 60 * 1000);
+const ONE_DAY_AGO = () => new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+function liveSession() {
+  return { isValid: true, expiresAt: IN_ONE_DAY() };
+}
+
+function sessionRowFor(id: string) {
+  if (id === LIVE_SESSION_ID) return liveSession();
+  if (id === REVOKED_SESSION_ID) return { isValid: false, expiresAt: IN_ONE_DAY() };
+  if (id === EXPIRED_SESSION_ID) return { isValid: true, expiresAt: ONE_DAY_AGO() };
+  return null;
+}
 
 function createTestUser(overrides: Record<string, unknown> = {}) {
   return {
@@ -108,7 +124,7 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
       findUnique: overrides.userFindUnique ?? jest.fn().mockResolvedValue(createTestUser()),
     },
     userSession: {
-      findFirst: overrides.sessionFindFirst ?? jest.fn().mockResolvedValue(null),
+      findFirst: overrides.sessionFindFirst ?? jest.fn().mockResolvedValue(liveSession()),
       update: overrides.sessionUpdate ?? jest.fn().mockResolvedValue({}),
     },
     participant: {
@@ -141,7 +157,7 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
   });
 
   it('admet un JWT dont la session nommée est LIVE (isValid: true), et lit par IDENTITÉ (pas de filtre isValid dans le where)', async () => {
-    const sessionFindFirst = jest.fn().mockResolvedValue({ isValid: true });
+    const sessionFindFirst = jest.fn().mockResolvedValue(liveSession());
     const prisma = createMockPrisma({ sessionFindFirst });
     const middleware = new AuthMiddleware(prisma as never);
     const token = signJwt({ sid: LIVE_SESSION_ID });
@@ -154,12 +170,12 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
     // qui permet de distinguer `gone` (prouvé) de `unknown` (rien trouvé).
     expect(sessionFindFirst).toHaveBeenCalledWith({
       where: { id: LIVE_SESSION_ID, userId: USER_ID },
-      select: { isValid: true },
+      select: { isValid: true, expiresAt: true, adoptedExpiresAt: true },
     });
   });
 
   it('refuse un JWT dont la session nommée est GONE (isValid: false — révoquée)', async () => {
-    const sessionFindFirst = jest.fn().mockResolvedValue({ isValid: false });
+    const sessionFindFirst = jest.fn().mockResolvedValue({ isValid: false, expiresAt: IN_ONE_DAY() });
     const prisma = createMockPrisma({ sessionFindFirst });
     const middleware = new AuthMiddleware(prisma as never);
     const token = signJwt({ sid: REVOKED_SESSION_ID });
@@ -170,7 +186,7 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
   });
 
   it("n'interroge jamais l'utilisateur quand la session nommée est révoquée — court-circuit avant le cache auth:user (l'effet, pas seulement le refus)", async () => {
-    const sessionFindFirst = jest.fn().mockResolvedValue({ isValid: false });
+    const sessionFindFirst = jest.fn().mockResolvedValue({ isValid: false, expiresAt: IN_ONE_DAY() });
     const userFindUnique = jest.fn().mockResolvedValue(createTestUser());
     const prisma = createMockPrisma({ sessionFindFirst, userFindUnique });
     const middleware = new AuthMiddleware(prisma as never);
@@ -181,26 +197,45 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
     expect(userFindUnique).not.toHaveBeenCalled();
   });
 
-  it('admet quand la session nommée est introuvable — unknown, jamais confondu avec gone (réplica en retard sur un login tout juste fait)', async () => {
+  it('refuse quand la session nommée est INTROUVABLE (#10328) — purgée ou jamais émise, jamais admise', async () => {
     const sessionFindFirst = jest.fn().mockResolvedValue(null);
-    const prisma = createMockPrisma({ sessionFindFirst });
+    const userFindUnique = jest.fn().mockResolvedValue(createTestUser());
+    const prisma = createMockPrisma({ sessionFindFirst, userFindUnique });
     const middleware = new AuthMiddleware(prisma as never);
-    const token = signJwt({ sid: 'session-not-yet-replicated' });
+    const token = signJwt({ sid: UNKNOWN_SESSION_ID });
 
-    const ctx = await middleware.createAuthContext(`Bearer ${token}`);
-
-    expect(ctx.isAuthenticated).toBe(true);
+    await expect(middleware.createAuthContext(`Bearer ${token}`)).rejects.toThrow('Invalid JWT token');
+    expect(userFindUnique).not.toHaveBeenCalled();
   });
 
-  it("admet quand la lecture de session lève — fail-OPEN sur l'ABSENCE de preuve, jamais sur la preuve elle-même", async () => {
+  it("refuse quand la session nommée est ÉCHUE (#10328) — valide en base mais au-delà de son expiresAt, avant le passage du balayage", async () => {
+    const sessionFindFirst = jest.fn().mockResolvedValue({ isValid: true, expiresAt: ONE_DAY_AGO() });
+    const prisma = createMockPrisma({ sessionFindFirst });
+    const middleware = new AuthMiddleware(prisma as never);
+    const token = signJwt({ sid: EXPIRED_SESSION_ID });
+
+    await expect(middleware.createAuthContext(`Bearer ${token}`)).rejects.toThrow('Invalid JWT token');
+  });
+
+  it("refuse un sid qui n'est pas un identifiant de session — sans interroger la base (#10328)", async () => {
+    const sessionFindFirst = jest.fn().mockResolvedValue(liveSession());
+    const prisma = createMockPrisma({ sessionFindFirst });
+    const middleware = new AuthMiddleware(prisma as never);
+    const token = signJwt({ sid: 'pas-un-objectid' });
+
+    await expect(middleware.createAuthContext(`Bearer ${token}`)).rejects.toThrow('Invalid JWT token');
+    expect(sessionFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("n'admet PAS quand la lecture de session lève — ni admis, ni déconnecté : AUTH_UNAVAILABLE (#10328)", async () => {
     const sessionFindFirst = jest.fn().mockRejectedValue(new Error('Mongo timeout'));
     const prisma = createMockPrisma({ sessionFindFirst });
     const middleware = new AuthMiddleware(prisma as never);
     const token = signJwt({ sid: LIVE_SESSION_ID });
 
-    const ctx = await middleware.createAuthContext(`Bearer ${token}`);
-
-    expect(ctx.isAuthenticated).toBe(true);
+    await expect(middleware.createAuthContext(`Bearer ${token}`)).rejects.toMatchObject({
+      name: 'SessionLookupUnavailableError',
+    });
   });
 
   // ─── Le témoin qui compte (critère 5 de #4264, reproduit pour le REST) ───
@@ -208,9 +243,7 @@ describe('AuthMiddleware — #4264 critère 4 : session nommée (sid) vivante', 
     it('la session révoquée est refusée ; la session vivante du MÊME compte passe', async () => {
       const sessionFindFirst = jest.fn().mockImplementation(
         ({ where }: { where: { id: string; userId: string } }) => {
-          if (where.id === LIVE_SESSION_ID) return Promise.resolve({ isValid: true });
-          if (where.id === REVOKED_SESSION_ID) return Promise.resolve({ isValid: false });
-          return Promise.resolve(null);
+          return Promise.resolve(sessionRowFor(where.id));
         }
       );
       const prisma = createMockPrisma({ sessionFindFirst });
@@ -342,11 +375,7 @@ describe('createUnifiedAuthMiddleware — #4264 critère 4 sur une VRAIE requêt
 
   it('401 quand le jeton REST nomme une session RÉVOQUÉE ; 200 pour la session vivante du même compte', async () => {
     const app = await buildProbe(({ where }: { where: { id: string } }) =>
-      Promise.resolve(
-        where.id === LIVE_SESSION_ID ? { isValid: true } :
-        where.id === REVOKED_SESSION_ID ? { isValid: false } :
-        null
-      )
+      Promise.resolve(sessionRowFor(where.id))
     );
 
     const revoked = await app.inject({
@@ -368,7 +397,7 @@ describe('createUnifiedAuthMiddleware — #4264 critère 4 sur une VRAIE requêt
   });
 
   it('le refus REST ne fuit pas le motif précis — le client ne lit que le message générique existant (AUTH_FAILED)', async () => {
-    const app = await buildProbe(() => Promise.resolve({ isValid: false }));
+    const app = await buildProbe(() => Promise.resolve({ isValid: false, expiresAt: IN_ONE_DAY() }));
 
     const res = await app.inject({
       method: 'GET',
@@ -381,5 +410,94 @@ describe('createUnifiedAuthMiddleware — #4264 critère 4 sur une VRAIE requêt
     expect(res.json()).toEqual(
       expect.objectContaining({ error: 'Invalid JWT token', code: 'AUTH_FAILED' })
     );
+  });
+
+  it('#10328 — session INCONNUE ⇒ 401, session ÉCHUE ⇒ 401, session RÉVOQUÉE ⇒ 401, session VALIDE ⇒ 200, sur la même route', async () => {
+    const app = await buildProbe(({ where }: { where: { id: string } }) =>
+      Promise.resolve(sessionRowFor(where.id))
+    );
+    const probe = (sid: string) => app.inject({
+      method: 'GET',
+      url: '/probe',
+      headers: { authorization: `Bearer ${signJwt({ sid })}` },
+    });
+
+    const unknown = await probe(UNKNOWN_SESSION_ID);
+    const expired = await probe(EXPIRED_SESSION_ID);
+    const revoked = await probe(REVOKED_SESSION_ID);
+    const live = await probe(LIVE_SESSION_ID);
+    await app.close();
+
+    expect([unknown.statusCode, expired.statusCode, revoked.statusCode, live.statusCode]).toEqual([401, 401, 401, 200]);
+    expect(unknown.json()).toEqual(expect.objectContaining({ error: 'Invalid JWT token', code: 'AUTH_FAILED' }));
+  });
+
+  it("#10328 — une lecture de session qui lève rend 503 AUTH_UNAVAILABLE, jamais un 401 qui ferait déconnecter le client", async () => {
+    const app = await buildProbe(() => Promise.reject(new Error('Mongo timeout')));
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/probe',
+      headers: { authorization: `Bearer ${signJwt({ sid: LIVE_SESSION_ID })}` },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual(expect.objectContaining({ success: false, code: 'AUTH_UNAVAILABLE' }));
+  });
+
+  it("#10328 — sur une route à authentification FACULTATIVE, une session inconnue retombe en visiteur, jamais en inscrit", async () => {
+    const prisma = createMockPrisma({ sessionFindFirst: jest.fn().mockResolvedValue(null) });
+    const app = Fastify({ logger: false });
+    app.get(
+      '/optional',
+      { preValidation: [createUnifiedAuthMiddleware(prisma as never, { requireAuth: false, allowAnonymous: true })] },
+      async (request, reply) => reply.send({
+        authenticated: (request as unknown as { authContext: { isAuthenticated: boolean } }).authContext.isAuthenticated,
+      })
+    );
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/optional',
+      headers: { authorization: `Bearer ${signJwt({ sid: UNKNOWN_SESSION_ID })}` },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ authenticated: false });
+  });
+
+  it("#10328 — sur une route FACULTATIVE, une lecture de session qui lève retombe en visiteur (200), jamais en inscrit", async () => {
+    const prisma = createMockPrisma({ sessionFindFirst: jest.fn().mockRejectedValue(new Error('Mongo timeout')) });
+    const app = Fastify({ logger: false });
+    app.get(
+      '/optional',
+      { preValidation: [createUnifiedAuthMiddleware(prisma as never, { requireAuth: false, allowAnonymous: true })] },
+      async (request, reply) => reply.send({
+        authenticated: (request as unknown as { authContext: { isAuthenticated: boolean } }).authContext.isAuthenticated,
+      })
+    );
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'GET',
+      url: '/optional',
+      headers: { authorization: `Bearer ${signJwt({ sid: LIVE_SESSION_ID })}` },
+    });
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ authenticated: false });
+  });
+
+  it("#10328 — un jeton dont le userId n'est pas un identifiant de compte est refusé sans lecture de session", async () => {
+    const sessionFindFirst = jest.fn().mockResolvedValue(liveSession());
+    const middleware = new AuthMiddleware(createMockPrisma({ sessionFindFirst }) as never);
+    const token = signJwt({ userId: 'pas-un-objectid', sid: LIVE_SESSION_ID });
+
+    await expect(middleware.createAuthContext(`Bearer ${token}`)).rejects.toThrow('Invalid JWT token');
+    expect(sessionFindFirst).not.toHaveBeenCalled();
   });
 });

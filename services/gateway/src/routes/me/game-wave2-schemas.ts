@@ -102,6 +102,7 @@ export const userShowcaseResponse = envelope(
     visible: { type: 'boolean' },
     items: { type: 'array', items: strict({ key: { type: 'string' }, awardedMonth: { type: 'string' }, count: { type: 'number' } }) },
     order: { type: 'array', items: { type: 'string' } },
+    constellation: strict({ stars: { type: 'number' } }),
   }),
 );
 
@@ -121,7 +122,9 @@ export const userGameProfileResponse = envelope(
           level: { type: 'number' },
           tier: { type: 'string' },
           // #9688 : le niveau et le palier ouverts par le rang ; `level` / `tier` gardent l'ancienne loi (≤ 100, dix paliers).
-          ladder: strict({ level: { type: 'number' }, tier: { type: 'string' } }),
+          ladder: strict({ level: { type: 'number' }, tier: { type: 'string' }, levelMaxLifetime: { type: 'number' } }),
+          // #10846 : le niveau max à vie (suit le réglage du rang). Additif.
+          levelMaxLifetime: { type: 'number' },
           prestige: { type: 'number' },
           flame: nullableString,
           rank: { type: 'string' },
@@ -132,6 +135,11 @@ export const userGameProfileResponse = envelope(
           // Servis aux AMIS seulement (#9541) : absents pour tout autre lecteur — optionnels, jamais requis.
           points: { type: 'number' },
           trophyCount: { type: 'number' },
+          // #10846 : les étincelles en poche et accumulées à vie — la même visibilité que `points` (soi et les amis).
+          sparks: { type: 'number' },
+          sparksLifetime: { type: 'number' },
+          // #10913 : la Gloire totale — la même visibilité que `points`.
+          glory: { type: 'number' },
         }),
       ],
     },

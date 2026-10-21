@@ -53,6 +53,7 @@ async function buildApp(prismaOverrides: Record<string, any> = {}): Promise<Fast
       groupBy: jest.fn<any>().mockResolvedValue([]),
     },
     participant: {
+      findMany: jest.fn<any>(async () => [{ id: "p1" }]),
       count: jest.fn<any>().mockResolvedValue(0),
     },
     friendRequest: {
@@ -100,7 +101,7 @@ describe('GET /users/:userId/stats — achievements unlocked when counts exceed 
         count:   jest.fn<any>().mockResolvedValue(1500),
         groupBy: jest.fn<any>().mockResolvedValue([{ originalLanguage: 'fr' }, { originalLanguage: 'en' }]),
       },
-      participant: { count: jest.fn<any>().mockResolvedValue(15) },
+      participant: { findMany: jest.fn<any>(async () => [{ id: "p1" }]), count: jest.fn<any>().mockResolvedValue(15) },
       friendRequest: { count: jest.fn<any>().mockResolvedValue(60) },
       $runCommandRaw: jest.fn<any>().mockResolvedValue({ n: 150 }),
     });
@@ -172,7 +173,7 @@ describe('GET /users/:userId/stats — totalConversations excludes left/banned/r
   it('filters participant.count by isActive: true', async () => {
     const participantCount = jest.fn<any>().mockResolvedValue(5);
     const app = await buildApp({
-      participant: { count: participantCount },
+      participant: { findMany: jest.fn<any>(async () => [{ id: "p1" }]), count: participantCount },
     });
     const res = await app.inject({ method: 'GET', url: `/users/${TARGET_USER_ID}/stats` });
     expect(res.statusCode).toBe(200);
@@ -211,7 +212,10 @@ describe('GET /users/:userId/stats — le comptage des traductions', () => {
     const appels = count.mock.calls.map(([args]: [any]) => args?.where ?? {});
     const traductions = appels.filter((w: any) => w.translations !== undefined);
     expect(traductions).toHaveLength(1);
-    expect(traductions[0].sender).toEqual({ userId: TARGET_USER_ID });
+    // Par `senderId` — les identités du compte lues d'abord — et plus jamais
+    // par la relation `sender`, que MongoDB paie d'un `$lookup` par message.
+    expect(traductions[0].sender).toBeUndefined();
+    expect(traductions[0].senderId).toEqual({ in: ['p1'] });
     await app.close();
   });
 });

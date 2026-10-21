@@ -14,30 +14,39 @@
  * Le format et sa validation vivent dans `packages/shared/types/sticker-pack.ts`,
  * la loi dans `services/stickers/StickerPacks.ts` ; cette route n'en fait que la
  * traduction HTTP. Réservée aux comptes INSCRITS.
+ *
+ * Depuis LP0 (#10148), la boutique, les installés, le détail et l'installation
+ * sont produits par la fabrique commune à tous les domaines de packs
+ * (`registerPackRoutes`, `./pack-routes.ts`) ; seules les propositions et la
+ * modération restent propres aux stickers. Formes, codes, chemins, en-têtes et
+ * schémas sont identiques à l'octet (`sticker-packs-frozen-responses.test.ts`).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { STICKER_LIMITS } from '@meeshy/shared/types/sticker-definition';
-import { STICKER_PACK_LIMITS, STICKER_PACK_SLUG_PATTERN } from '@meeshy/shared/types/sticker-pack';
-import type { UserRoleEnum } from '@meeshy/shared/types';
+import { STICKER_PACK_LIMITS } from '@meeshy/shared/types/sticker-pack';
 
-import { isRegisteredUser, type UnifiedAuthRequest } from '../middleware/auth';
 import { requirePermission } from '../middleware/authorize';
-import { permissionsService } from '../services/admin/permissions.service';
-import { StickerPacks, type StickerPackViewer } from '../services/stickers/StickerPacks';
-import { logError } from '../utils/logger';
+import { StickerPacks } from '../services/stickers/StickerPacks';
 import {
   sendBadRequest,
   sendConflict,
-  sendForbidden,
-  sendInternalError,
   sendNotFound,
   sendPayloadTooLarge,
   sendSuccess,
   sendUnsupportedMediaType,
 } from '../utils/response.js';
 import { diskStickerFileStore } from './me/stickers';
+import {
+  PACK_ERRORS as ERRORS,
+  packEnvelope as envelope,
+  packInstallationBroadcaster,
+  packRouteGuard,
+  packSlugParamsJsonSchema as slugParamsJsonSchema,
+  registerPackRoutes,
+  type PackSlugRequest as SlugRequest,
+} from './pack-routes';
 
 export const STICKER_PACK_ERROR_CODES = {
   INVALID: 'STICKER_PACK_INVALID',
@@ -110,8 +119,6 @@ const detailJsonSchema = {
   properties: { ...summaryProperties, items: { type: 'array', items: itemJsonSchema }, reviewNote: { type: 'string', nullable: true } },
 } as const;
 
-const envelope = (data: object) => ({ type: 'object', properties: { success: { type: 'boolean' }, data } }) as const;
-const ERRORS = { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 500: errorResponseSchema } as const;
 
 const invalidPackJsonSchema = {
   type: 'object',
@@ -124,27 +131,13 @@ const invalidPackJsonSchema = {
   },
 } as const;
 
-const slugParamsJsonSchema = {
-  type: 'object',
-  required: ['slug'],
-  properties: { slug: { type: 'string', pattern: STICKER_PACK_SLUG_PATTERN.source, maxLength: STICKER_PACK_LIMITS.maxSlugLength } },
-} as const;
 
 const reviewBodySchema = z.object({
   decision: z.enum(['approve', 'reject']),
   note: z.string().max(STICKER_PACK_LIMITS.maxReviewNoteLength).optional(),
 });
 
-type SlugRequest = FastifyRequest<{ Params: { slug: string } }>;
-
 export type StickerPacksRoutesOptions = { readonly packs?: StickerPacks };
-
-function viewerOf(request: FastifyRequest): StickerPackViewer | null {
-  const authContext = (request as UnifiedAuthRequest).authContext;
-  if (!authContext || !isRegisteredUser(authContext) || !authContext.registeredUser) return null;
-  const role = (authContext.registeredUser.role ?? 'USER') as UserRoleEnum;
-  return { userId: authContext.registeredUser.id, canModerate: permissionsService.hasPermission(role, 'canModerateContent') };
-}
 
 type Submission = { readonly manifest: unknown; readonly assets: ReadonlyMap<string, Buffer> } | 'too-large' | 'no-manifest';
 
@@ -173,57 +166,50 @@ async function readSubmission(request: FastifyRequest): Promise<Submission> {
 export async function stickerPacksRoutes(fastify: FastifyInstance, options: StickerPacksRoutesOptions = {}) {
   const packs =
     options.packs ??
-    new StickerPacks({ prisma: fastify.prisma, files: diskStickerFileStore(process.env.UPLOAD_PATH || '/app/uploads') });
+    new StickerPacks({
+      prisma: fastify.prisma,
+      files: diskStickerFileStore(process.env.UPLOAD_PATH || '/app/uploads'),
+      broadcast: packInstallationBroadcaster(fastify),
+    });
   const requireModerator = requirePermission('canModerateContent');
 
-  const guarded = <R extends FastifyRequest>(label: string, handle: (request: R, reply: FastifyReply, viewer: StickerPackViewer) => Promise<unknown>) =>
-    async (request: R, reply: FastifyReply) => {
-      const viewer = viewerOf(request);
-      if (!viewer) return sendForbidden(reply, 'Registered user required', { code: 'REGISTERED_USER_REQUIRED' });
-      try {
-        return await handle(request, reply, viewer);
-      } catch (error) {
-        if ((error as { code?: unknown }).code === 'FST_REQ_FILE_TOO_LARGE' || (error as { code?: unknown }).code === 'FST_FILES_LIMIT') {
-          return sendPayloadTooLarge(reply, 'Sticker pack too large', { code: STICKER_PACK_ERROR_CODES.TOO_LARGE });
-        }
-        logError(fastify.log, label, error);
-        return sendInternalError(reply, 'Error handling sticker packs');
+  const guarded = packRouteGuard(fastify, {
+    internalErrorMessage: 'Error handling sticker packs',
+    onError: (error: unknown, reply: FastifyReply) => {
+      const code = (error as { code?: unknown }).code;
+      if (code === 'FST_REQ_FILE_TOO_LARGE' || code === 'FST_FILES_LIMIT') {
+        return sendPayloadTooLarge(reply, 'Sticker pack too large', { code: STICKER_PACK_ERROR_CODES.TOO_LARGE });
       }
-    };
+      return undefined;
+    },
+  });
 
-  fastify.get(
-    '/',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
+  registerPackRoutes(fastify, {
+    catalog: packs.catalog,
+    guard: guarded,
+    basePath: '/sticker-packs',
+    tags: ['stickers'],
+    summaryJsonSchema,
+    detailJsonSchema,
+    notFound: { message: 'Sticker pack not found', code: STICKER_PACK_ERROR_CODES.NOT_FOUND },
+    notRemovable: { message: 'This pack is included and cannot be removed', code: 'PACK_NOT_REMOVABLE' },
+    texts: {
+      list: {
         description: 'La boutique des packs de stickers (#9141) : les packs intégrés (Mee, Meo, Mee & Meo) puis les packs publiés, avec leur état d’installation.',
-        tags: ['stickers'],
         summary: 'List sticker packs',
-        response: { 200: envelope({ type: 'array', items: summaryJsonSchema }), ...ERRORS },
       },
-    },
-    guarded('[GET /sticker-packs]', async (_request, reply, viewer) => {
-      reply.header('Cache-Control', 'private, no-cache');
-      return sendSuccess(reply, await packs.catalogue(viewer.userId));
-    }),
-  );
-
-  fastify.get(
-    '/installed',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
+      installed: {
         description: 'Les packs installés par l’appelant et leurs stickers (#9141) — un onglet par pack dans la feuille de stickers. Un pack intégré n’a pas de stickers servis : le client les dessine.',
-        tags: ['stickers'],
         summary: 'List my installed sticker packs',
-        response: { 200: envelope({ type: 'array', items: detailJsonSchema }), ...ERRORS },
       },
+      detail: {
+        description: 'Un pack de stickers et ses stickers (#9141). Un pack non publié n’est servi qu’à son auteur et aux modérateurs.',
+        summary: 'Get a sticker pack',
+      },
+      install: { description: 'Installe un pack de stickers publié (#9141).', summary: 'Install a sticker pack' },
+      uninstall: { description: 'Retire un pack de stickers — intégré compris (#9141).', summary: 'Uninstall a sticker pack' },
     },
-    guarded('[GET /sticker-packs/installed]', async (_request, reply, viewer) => {
-      reply.header('Cache-Control', 'private, no-cache');
-      return sendSuccess(reply, await packs.installed(viewer.userId));
-    }),
-  );
+  });
 
   fastify.get(
     '/submissions',
@@ -301,46 +287,6 @@ export async function stickerPacksRoutes(fastify: FastifyInstance, options: Stic
     },
     guarded('[GET /sticker-packs/pending]', async (_request, reply, viewer) => sendSuccess(reply, await packs.pending(viewer.userId))),
   );
-
-  fastify.get(
-    '/:slug',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
-        description: 'Un pack de stickers et ses stickers (#9141). Un pack non publié n’est servi qu’à son auteur et aux modérateurs.',
-        tags: ['stickers'],
-        summary: 'Get a sticker pack',
-        params: slugParamsJsonSchema,
-        response: { 200: envelope(detailJsonSchema), ...ERRORS },
-      },
-    },
-    guarded('[GET /sticker-packs/:slug]', async (request: SlugRequest, reply, viewer) => {
-      const pack = await packs.detail(request.params.slug, viewer);
-      if (!pack) return sendNotFound(reply, 'Sticker pack not found', { code: STICKER_PACK_ERROR_CODES.NOT_FOUND });
-      return sendSuccess(reply, pack);
-    }),
-  );
-
-  const install = (installed: boolean) =>
-    guarded(`[${installed ? 'PUT' : 'DELETE'} /sticker-packs/:slug/install]`, async (request: SlugRequest, reply, viewer) => {
-      const pack = await packs.setInstalled(viewer.userId, request.params.slug, installed);
-      if (!pack) return sendNotFound(reply, 'Sticker pack not found', { code: STICKER_PACK_ERROR_CODES.NOT_FOUND });
-      return sendSuccess(reply, pack);
-    });
-
-  const installSchema = (installed: boolean) => ({
-    onRequest: [fastify.authenticate],
-    schema: {
-      description: installed ? 'Installe un pack de stickers publié (#9141).' : 'Retire un pack de stickers — intégré compris (#9141).',
-      tags: ['stickers'],
-      summary: installed ? 'Install a sticker pack' : 'Uninstall a sticker pack',
-      params: slugParamsJsonSchema,
-      response: { 200: envelope(summaryJsonSchema), ...ERRORS },
-    },
-  });
-
-  fastify.put<{ Params: { slug: string } }>('/:slug/install', installSchema(true), install(true));
-  fastify.delete<{ Params: { slug: string } }>('/:slug/install', installSchema(false), install(false));
 
   fastify.post(
     '/:slug/review',

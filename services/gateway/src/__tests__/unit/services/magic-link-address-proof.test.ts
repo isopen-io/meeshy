@@ -77,6 +77,7 @@ const monter = (ligne: Record<string, unknown>) => {
         user: ligne,
       })),
       update: jest.fn(async () => ({ id: 'mlt-1' })),
+      updateMany: jest.fn(async () => ({ count: 1 })),
     },
     emailVerificationWatch: { updateMany: jest.fn(async () => ({ count: 0 })) },
     securityEvent: { create: jest.fn(async () => ({ id: 'ev-1' })) },
@@ -95,7 +96,7 @@ describe('un compte à l’adresse NON prouvée ouvre le lien', () => {
   it('l’adresse est prouvée : `emailVerifiedAt` écrit, cache d’auth vidé', async () => {
     const { service, prisma, cache } = monter(compte());
 
-    const result = await service.validateMagicLink({ token: 'raw-token', requestContext });
+    const result = await service.validateMagicLink({ token: 'raw-token', requestContext, confirmed: true });
 
     expect(result.success).toBe(true);
     expect(prisma.user.updateMany).toHaveBeenCalledWith(
@@ -107,7 +108,7 @@ describe('un compte à l’adresse NON prouvée ouvre le lien', () => {
   it('même passé le délai de grâce (`blocked`) : la session s’ouvre et la phase est `done`', async () => {
     const { service } = monter(compte());
 
-    const result = await service.validateMagicLink({ token: 'raw-token', requestContext });
+    const result = await service.validateMagicLink({ token: 'raw-token', requestContext, confirmed: true });
 
     expect(result.token).toBe('jwt-token-abc');
     expect(result.user.emailVerifiedAt).toEqual(J40);
@@ -117,7 +118,7 @@ describe('un compte à l’adresse NON prouvée ouvre le lien', () => {
   it('un compte à second facteur prouve aussi son adresse — le lien a été ouvert depuis la boîte', async () => {
     const { service, prisma } = monter(compte({ twoFactorEnabledAt: CREATED }));
 
-    const result = await service.validateMagicLink({ token: 'raw-token', requestContext });
+    const result = await service.validateMagicLink({ token: 'raw-token', requestContext, confirmed: true });
 
     expect(result.requires2FA).toBe(true);
     expect(prisma.user.updateMany).toHaveBeenCalled();
@@ -128,7 +129,7 @@ describe('une adresse déjà prouvée', () => {
   it('n’est pas réécrite', async () => {
     const { service, prisma } = monter(compte({ emailVerifiedAt: CREATED }));
 
-    const result = await service.validateMagicLink({ token: 'raw-token', requestContext });
+    const result = await service.validateMagicLink({ token: 'raw-token', requestContext, confirmed: true });
 
     expect(result.success).toBe(true);
     expect(prisma.user.updateMany).not.toHaveBeenCalled();

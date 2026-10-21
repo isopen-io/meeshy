@@ -6,7 +6,7 @@ import os
 // `nonisolated` : `os.Logger` est un type valeur thread-safe (doc Apple) et ce
 // journal est écrit depuis des helpers `nonisolated` — sans le marqueur il
 // hériterait de l'isolation MainActor par défaut du module.
-private nonisolated let contactSyncLogger = Logger(subsystem: "me.meeshy.app", category: "contact-sync")
+private nonisolated let contactSyncLogger = MeeshyLog.logger(.contactSync)
 
 // MARK: - Device Contact
 

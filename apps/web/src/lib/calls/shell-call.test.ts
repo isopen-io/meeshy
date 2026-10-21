@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { DeliveryReceiptCredential } from '@/lib/notifications/delivery-receipt-credential';
 
 import { createCallStore, type ActiveCall, type CallMedia, type CallPhase } from './call-store';
 import {
@@ -108,8 +107,8 @@ describe('shellCallCommands — ce que la coque fait à chaque changement du mag
   test('couper le micro pendant l’appel le dit à la fenêtre flottante de la coque (#8144)', () => {
     const live = snap({ kind: 'connected' }, 'video');
     const muted = shellCallSnapshot({ ...call({ kind: 'connected' }, 'video'), micMuted: true });
-    expect(shellCallCommands(live, muted)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: true } }]);
-    expect(shellCallCommands(muted, live)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: false } }]);
+    expect(shellCallCommands(live, muted)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: true, floats: false } }]);
+    expect(shellCallCommands(muted, live)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: false, floats: false } }]);
   });
 
   test('un appel qui démarre micro coupé le dit dès le service', () => {
@@ -130,12 +129,25 @@ describe('shellCallCommands — ce que la coque fait à chaque changement du mag
     const portrait = shellCallSnapshot({ ...call({ kind: 'connected' }, 'video'), members: { 'u-a': peer }, remoteStreams: { 'u-a': sized(720, 1280) } });
     const landscape = shellCallSnapshot({ ...call({ kind: 'connected' }, 'video'), members: { 'u-a': peer }, remoteStreams: { 'u-a': sized(1280, 720) } });
     expect(shellCallCommands(live, portrait)).toEqual([
-      { method: 'setPictureInPictureControls', options: { micMuted: false, aspectWidth: 720, aspectHeight: 1280 } },
+      { method: 'setPictureInPictureControls', options: { micMuted: false, floats: true, aspectWidth: 720, aspectHeight: 1280 } },
     ]);
     expect(shellCallCommands(portrait, landscape)).toEqual([
-      { method: 'setPictureInPictureControls', options: { micMuted: false, aspectWidth: 1280, aspectHeight: 720 } },
+      { method: 'setPictureInPictureControls', options: { micMuted: false, floats: true, aspectWidth: 1280, aspectHeight: 720 } },
     ]);
     expect(shellCallCommands(portrait, portrait)).toEqual([]);
+  });
+
+  test('un appel VOCAL où l’autre filme flotte comme sur le web, sans demander la caméra au service (#11346)', () => {
+    const peer = { userId: 'u-a', name: 'Awa', avatar: null, micMuted: false, cameraOn: true, screenSharing: false, weakNetwork: false, capturing: false, link: 'connected' as const };
+    const sized = ({ getVideoTracks: () => [{ readyState: 'live', getSettings: () => ({ width: 720, height: 1280 }) }] }) as unknown as MediaStream;
+    const voice = snap({ kind: 'connected' });
+    const filmed = shellCallSnapshot({ ...call({ kind: 'connected' }), members: { 'u-a': peer }, remoteStreams: { 'u-a': sized } });
+    expect(filmed.video).toBe(false);
+    expect(filmed.floats).toBe(true);
+    expect(shellCallCommands(voice, filmed)).toEqual([
+      { method: 'setPictureInPictureControls', options: { micMuted: false, floats: true, aspectWidth: 720, aspectHeight: 1280 } },
+    ]);
+    expect(shellCallCommands(filmed, voice)).toEqual([{ method: 'setPictureInPictureControls', options: { micMuted: false, floats: false } }]);
   });
 
   test('aucun changement → aucune commande', () => {
@@ -147,7 +159,6 @@ function harness(options: { readonly failing?: boolean } = {}) {
   const store = createCallStore();
   const sent: Array<{ readonly method: string; readonly options: object }> = [];
   const events: Array<(data: unknown) => void> = [];
-  const credentialWriters: Array<(value: DeliveryReceiptCredential) => void> = [];
   const accepted: number[] = [];
   const floating: Array<(data: unknown) => void> = [];
   const pictureInPicture: boolean[] = [];
@@ -168,10 +179,6 @@ function harness(options: { readonly failing?: boolean } = {}) {
     pictureInPicture: (active) => void pictureInPicture.push(active),
     store,
     accept: () => void accepted.push(1),
-    watchCredential: (write) => {
-      credentialWriters.push(write);
-      return () => undefined;
-    },
     now: () => 1_000,
   };
   const stop = bindShellCall(env);
@@ -185,7 +192,6 @@ function harness(options: { readonly failing?: boolean } = {}) {
     press: (data: unknown) => windowButtons.forEach((listener) => listener(data)),
     gestures,
     pictureInPicture,
-    writeCredential: (value: DeliveryReceiptCredential) => credentialWriters.forEach((write) => write(value)),
   };
 }
 
@@ -226,17 +232,6 @@ describe('bindShellCall — la page branchée au plugin natif', () => {
     expect(h.sent).toContainEqual({ method: 'dismissIncomingCall', options: { callId: 'call-1' } });
   });
 
-  test('le credential du refus sans socket suit la session : posé au login, retiré à la déconnexion', () => {
-    const h = harness();
-    h.writeCredential({ apiBase: 'https://gate.meeshy.me', credential: { kind: 'registered', token: 'jwt' } });
-    h.writeCredential({ apiBase: 'https://gate.meeshy.me', credential: { kind: 'anonymous', sessionToken: 's1' } });
-    h.writeCredential({ apiBase: 'https://gate.meeshy.me', credential: null });
-    expect(h.sent).toEqual([
-      { method: 'setCredential', options: { apiBase: 'https://gate.meeshy.me', kind: 'registered', token: 'jwt' } },
-      { method: 'setCredential', options: { apiBase: 'https://gate.meeshy.me', kind: 'anonymous', token: 's1' } },
-      { method: 'clearCredential', options: {} },
-    ]);
-  });
 
   test('un plugin qui rejette ne casse pas l’abonnement', async () => {
     const h = harness({ failing: true });

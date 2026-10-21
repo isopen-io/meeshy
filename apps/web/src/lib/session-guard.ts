@@ -1,6 +1,6 @@
 import { ADMIN_ROUTE_KEYS, type AdminFicheRouteKey, type AdminListRouteKey } from './admin/admin-routes';
 import type { SessionState } from './api/session';
-import { safeReturnPath } from './view/magic-link';
+import { clampReturnPath } from './view/magic-link';
 
 /**
  * LA GARDE DE ROUTE (#5555, E6) — pure. Elle décide, elle ne navigue pas :
@@ -48,7 +48,9 @@ export type RouteKey =
    * en squelette sans fin devant un visiteur.
    */
   | 'progressionLigue'
+  | 'progressionLigueSemaine'
   | 'progressionSaison'
+  | 'progressionSaisonNumero'
   | 'progressionVitrine'
   | 'progressionAtlas'
   | 'progressionPrestige'
@@ -268,6 +270,7 @@ export type RouteKey =
   | 'trackingLink'
   | 'trackingLinkExpired'
   | 'accountDeletion'
+  | 'revokeSessions'
   | 'verifyEmailChange'
   | 'settingsNotifications';
 
@@ -324,7 +327,9 @@ const PRIVATE_ROUTES: ReadonlySet<string> = new Set<RouteKey>([
   'progression',
   /* LES PAGES DE LA VAGUE 2 DU JEU (#9384 à #9389) — voir la raison écrite sur `RouteKey`. */
   'progressionLigue',
+  'progressionLigueSemaine',
   'progressionSaison',
+  'progressionSaisonNumero',
   'progressionVitrine',
   'progressionAtlas',
   'progressionPrestige',
@@ -456,7 +461,7 @@ export function resolveRouteAccess(input: {
  * de même origine — y compris le refus des blancs et caractères de contrôle
  * que le parseur d'URL efface (#6743 : `/\t/evil.com` devient `//evil.com`,
  * et `history.replaceState` LÈVE sur une autre origine, faisant tomber
- * `SessionGate`, `main.tsx`) — est celle de `safeReturnPath`
+ * `SessionGate`, `main.tsx`) — est celle de `clampReturnPath`
  * (`view/magic-link.ts`, le retour d'un lien magique) : UNE SEULE garde,
  * réemployée, jamais recopiée. Deux clampages d'une même valeur hostile
  * divergeraient au premier correctif.
@@ -465,8 +470,22 @@ export function resolveRouteAccess(input: {
  * transmettre (le lien « Créer un compte » ne porte pas un `next=/` inventé).
  */
 export function safeNextPath(raw: string | null): string | null {
-  if (raw === null || raw === '') return null;
-  return safeReturnPath(raw) === raw ? raw : null;
+  return clampReturnPath(raw);
+}
+
+/**
+ * `/` ÉTAIT LA LISTE jusqu'à #10002 ; c'est désormais la landing publique. Un
+ * `next` ou un `returnUrl` qui la vise encore (un lien d'e-mail parti avant la
+ * bascule) demandait la liste : une session qui s'ouvre ne finit jamais sur la
+ * landing (décision porteur du 2026-10-10 : « après connexion : `/chats` »).
+ */
+const LEGACY_LIST_PATH = '/';
+
+/** `next` s'il est sûr ET qu'il n'est pas la landing — sinon `null`, l'appelant
+ * rendant sa destination par défaut (la liste, l'accueil post-inscription). */
+export function sessionNextPath(raw: string | null): string | null {
+  const safe = safeNextPath(raw);
+  return safe === LEGACY_LIST_PATH ? null : safe;
 }
 
 /**
@@ -481,5 +500,5 @@ export function safeNextPath(raw: string | null): string | null {
  * l'écran) le recouvrirait par `/`.
  */
 export function landingAfterSession(next: string | null, home: string): string {
-  return safeNextPath(next) ?? home;
+  return sessionNextPath(next) ?? home;
 }

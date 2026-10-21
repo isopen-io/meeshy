@@ -80,7 +80,7 @@ describe('AdminSectionScreen — la garde de tout écran de section', () => {
       </AdminSectionScreen>,
       BIGBOSS,
     );
-    expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/');
+    expect(host.querySelector('[data-admin-back]')?.getAttribute('href')).toBe('/chats');
     expect(host.querySelector('[data-admin-back-label]')?.textContent).toBe('Retour à l\'application');
   });
 

@@ -1,0 +1,192 @@
+[
+ {
+  "file": "nord-ambassadeur-5.jpg",
+  "rank": "Ambassadeur",
+  "division": 5,
+  "option": "V",
+  "name": "Le Premier Fjord",
+  "story": "Le premier soir au Nord : un rideau d'aurore se lève derrière le blason, au-dessus d'un fjord gelé dont l'eau noire le reflète ; les parois enneigées et leurs sapins encadrent la photo, que borde une tresse d'or de style de Borre clouée aux angles de bossettes nouées - anneau et losange entrelacés, gemme d'aurore au cœur (entrelacs viking, créations originales).",
+  "layout": "pied : Mee (coucou) et Meo (salut) sur la rive gelée",
+  "message": null
+ },
+ {
+  "file": "nord-ambassadeur-4.jpg",
+  "rank": "Ambassadeur",
+  "division": 4,
+  "option": "IV",
+  "name": "La Pierre runique",
+  "story": "La photo est gravée dans une pierre levée sous la lune : un serpent d'or porte une inscription runique tout autour et se mord la queue, comme les serpents des pierres runiques d'Uppland (création originale), sur un lit d'ocre rouge - ces pierres étaient peintes à l'origine ; la neige coiffe la pierre, le lichen orangé la mouchette, et Huginn et Muninn, les corbeaux d'Odin, veillent perchés sur ses épaules.",
+  "layout": "cotes : Mee (wow) et Meo (bravo) se penchent hors de la pierre",
+  "message": null
+ },
+ {
+  "file": "nord-ambassadeur-3.jpg",
+  "rank": "Ambassadeur",
+  "division": 3,
+  "option": "III",
+  "name": "Le Portail de la stavkirke",
+  "story": "On entre dans la photo par le portail d'une église en bois debout : toit d'écailles sous la neige, rives sculptées d'une tresse d'or, deux têtes de dragon dressées au faîte comme sur les pignons des stavkirker, et sur les montants des serpents entrelacés à la manière d'Urnes (création originale), entre deux lanternes allumées et la silhouette d'autres églises sous l'aurore.",
+  "layout": "perches : Mee (sourire) et Meo (cool) sur le toit enneigé",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "nord-ambassadeur-2.jpg",
+  "rank": "Ambassadeur",
+  "division": 2,
+  "option": "II",
+  "name": "Le Drakkar au kente",
+  "story": "La photo devient la voile d'un drakkar qui file sous l'aurore, tête de dragon d'or à la proue et girouette viking au mât. L'Afrique est montée à bord : la voile est bordée de kente tissé (or, vert, rouge, noir) et, entre les boucliers peints, trois boucliers portent les symboles adinkra Dwennimmen (force et humilité), Nsoromma (l'enfant des cieux) et Adinkrahene, cerclés de cauris.",
+  "layout": "perches : Mee (fête) et Meo (cool) sur la vergue",
+  "message": "Le voyage continue"
+ },
+ {
+  "file": "nord-ambassadeur-1.jpg",
+  "rank": "Ambassadeur",
+  "division": 1,
+  "option": "I",
+  "name": "Yggdrasil d'or",
+  "story": "Le frêne-monde Yggdrasil devient le cadre : son tronc d'or se fend autour de la photo, ses racines boivent au puits lumineux d'Urd, sa couronne de feuilles d'aurore porte le blason sous une couronne boréale et les pommes d'or d'Idunn ; Huginn et Muninn, les corbeaux d'Odin, y sont perchés, sous une ligne de runes du futhark ancien.",
+  "layout": "pied : Mee (bravo) et Meo (trophée) sur les racines",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "nord-orateur-a.jpg",
+  "rank": "Orateur",
+  "division": null,
+  "option": "A",
+  "name": "Le Cor de Heimdall",
+  "story": "Le blason sonne au fond du Gjallarhorn, le cor de Heimdall que l'on entend dans les neuf mondes : sa corne d'ivoire cerclée d'or rouge descend le long de la photo, son pavillon gravé de runes rayonne en ondes d'or et en rayons qui traversent le ciel violet du Nord.",
+  "layout": "ruban : Mee (danse) et Meo (sérénade) chantent au pied de la photo",
+  "message": "Que tout le Nord l'entende"
+ },
+ {
+  "file": "nord-orateur-b.jpg",
+  "rank": "Orateur",
+  "division": null,
+  "option": "B",
+  "name": "La Case-obus sous l'aurore",
+  "story": "L'Afrique est venue au Nord : la photo s'ouvre par la porte d'une case-obus des Musgum (Cameroun, Tchad), dôme de terre en ogive dont les reliefs en chevrons - les marches qui servent à y grimper - sont poudrés de neige, la porte cerclée de cauris. Au-dessus, l'aurore se resserre en couronne sur son faîte et rayonne comme une voix, entre les sapins et les montagnes du fjord.",
+  "layout": "cotes : Mee (bisou volé) et Meo (yo) au seuil de la case",
+  "message": "D'un continent à l'autre"
+ },
+ {
+  "file": "nord-orateur-c.jpg",
+  "rank": "Orateur",
+  "division": null,
+  "option": "C",
+  "name": "Le Soleil de minuit",
+  "story": "Au cœur de l'été boréal, le soleil ne se couche pas : il rase les montagnes, embrase le fjord d'un chemin d'or et lance ses rayons derrière le blason. Au-dessus, deux cornes à boire cerclées d'or rouge s'entrechoquent - « skål ! » - et deux piliers de bois sombre, tressés d'or rouge à la manière de Borre et cloutés de bossettes nouées, bordent la photo.",
+  "layout": "pied : Mee (fête) et Meo (champagne) trinquent aux coins de la photo",
+  "message": "Skål, les amis !"
+ },
+ {
+  "file": "nord-oracle-a.jpg",
+  "rank": "Oracle",
+  "division": null,
+  "option": "A",
+  "name": "Le Flocon-monde",
+  "story": "Le ciel boréal s'ouvre - l'étoile polaire, le Grand Chariot, Cassiopée, une lune en croissant - et un flocon dendritique géant s'y déploie derrière le blason. Deux boucliers ronds deviennent des oculaires : l'un montre la maille hexagonale des molécules d'eau qui donne au flocon ses six branches, l'autre un cristal de neige, au-dessus d'une crête de glace.",
+  "layout": "selfie : Meo (selfie) dans la photo",
+  "message": null
+ },
+ {
+  "file": "nord-oracle-b.jpg",
+  "rank": "Oracle",
+  "division": null,
+  "option": "B",
+  "name": "La Roue du ciel",
+  "story": "Une pose longue sous le ciel du Nord : toutes les étoiles tournent autour de l'étoile polaire, et c'est le blason qui en tient la place, cerclé d'une roue de runes et d'une rosace de glace. Aux bords de la photo, des cristaux de neige en plaquettes hexagonales révèlent l'infime ; sur la colline, deux pierres levées gravées regardent tourner le ciel.",
+  "layout": "pied : Mee (amoureuse) et Meo (love) dans la neige",
+  "message": "Sous la même étoile"
+ },
+ {
+  "file": "nord-oracle-c.jpg",
+  "rank": "Oracle",
+  "division": null,
+  "option": "C",
+  "name": "La Graine du frêne",
+  "story": "La couronne d'Yggdrasil est tracée en constellation autour du blason, sous la Voie lactée et une lune en croissant ; ses samares - les graines ailées du frêne - tournoient le long de la photo. Deux oculaires d'argent montrent ce que l'arbre cache : un grain de pollen de frêne et sa paroi réticulée, et une cellule vivante avec son noyau.",
+  "layout": "perches : Mee (montée au ciel) et Meo (feu d'artifice) dans les étoiles",
+  "message": null
+ },
+ {
+  "file": "nord-legende-5.jpg",
+  "rank": "Légende",
+  "division": 5,
+  "option": "V",
+  "name": "Le Bifröst",
+  "story": "L'aurore devient le Bifröst, le pont arc-en-ciel qui mène à Asgard : des milliers de brins de lumière teints du spectre, rouges dehors, violets dedans, enjambent la photo jusqu'à la citadelle d'or, entre nébuleuses et galaxie spirale. À son pied, l'infime : un prisme de glace décompose un rayon d'étoile, un photon ondule le long du pont, et sous l'inscription le spectre de la lumière montre ses raies d'absorption.",
+  "layout": "pied : Mee (sourire) et Meo (yo) au pied du pont",
+  "message": null
+ },
+ {
+  "file": "nord-legende-4.jpg",
+  "rank": "Légende",
+  "division": 4,
+  "option": "IV",
+  "name": "Les Branches-galaxies",
+  "story": "Yggdrasil s'allume comme un arbre de lumière : au bout de ses branches éclosent des galaxies spirales de toutes les couleurs, tandis que ses racines, sous l'inscription, deviennent des neurones aux synapses étincelantes - la même ramure de l'arbre, du cerveau et du cosmos.",
+  "layout": "ruban : Mee (lettre) et Meo (salut) au bord de l'inscription",
+  "message": "Nos racines, nos étoiles"
+ },
+ {
+  "file": "nord-legende-3.jpg",
+  "rank": "Légende",
+  "division": 3,
+  "option": "III",
+  "name": "Pensée et Mémoire",
+  "story": "Huginn (la Pensée) et Muninn (la Mémoire), les corbeaux d'Odin, traversent la Voie lactée, découpés dans l'étoffe des nébuleuses. Pensée tient un neurone, Mémoire une double hélice d'ADN : ce que l'on pense et ce que l'on transmet, porté jusqu'aux étoiles, entre une supernova et une galaxie lointaine.",
+  "layout": "pied : Mee (courage) et Meo (muscles) au pied de la photo",
+  "message": null
+ },
+ {
+  "file": "nord-legende-2.jpg",
+  "rank": "Légende",
+  "division": 2,
+  "option": "II",
+  "name": "Skíðblaðnir",
+  "story": "Skíðblaðnir, le navire des dieux qui trouve toujours le vent et se replie dans une poche, vogue sur la Voie lactée, coque taillée dans une nébuleuse, mât et vergue d'argent, proue de dragon, sous l'aurore, entre un amas d'étoiles et une galaxie spirale ; en haut, le même navire tient tout entier dans une bulle. Ses boucliers sont des atomes, et de chaque côté de la photo flottent des orbitales électroniques : le plus grand et le plus petit sur le même navire.",
+  "layout": "pied : Mee (jackpot) et Meo (champagne) à la proue et à la poupe",
+  "message": "Cap sur les étoiles"
+ },
+ {
+  "file": "nord-legende-1.jpg",
+  "rank": "Légende",
+  "division": 1,
+  "option": "I",
+  "name": "Le Puits de Mímir",
+  "story": "Odin donna un œil pour boire au puits de Mímir, source de toute sagesse : la photo est au fond du puits, cerclée de runes, et le cosmos s'y engouffre en spirale. Au-dessus, l'œil d'Odin est une nébuleuse planétaire ; autour, un trou noir, un amas de galaxies, une supernova - et l'infime : franges d'interférence, atome, orbitale, paquets d'ondes et flocons fractals.",
+  "layout": "pied : Mee (wow) et Meo (trophée) sur la margelle",
+  "message": "Plus loin, ensemble"
+ },
+ {
+  "file": "nord-mythe-a.jpg",
+  "rank": "Mythe",
+  "division": null,
+  "option": "A",
+  "name": "Fenrir dévore le soleil",
+  "story": "Le loup Fenrir, fait de nébuleuse et tracé en constellation, ouvre la gueule sur le soleil devenu trou noir, disque d'accrétion et anneau de lumière : le blason brille entre ses crocs. Autour de son cou vibre Gleipnir, le lien plus fin que la soie, devenu corde quantique. D'un côté l'immense - toile cosmique, amas de galaxies, quasar - ; de l'autre l'infime - noyau atomique, traces de particules, mousse quantique, cordes.",
+  "layout": "pied : Mee (bisou volé) et Meo (roi) sous la gueule du loup",
+  "message": null
+ },
+ {
+  "file": "nord-mythe-b.jpg",
+  "rank": "Mythe",
+  "division": null,
+  "option": "B",
+  "name": "L'Arbre des univers",
+  "story": "Yggdrasil est devenu la toile cosmique : ses branches de lumière prismatique sont des filaments de matière, des amas d'étoiles naissent à leurs nœuds, et les mondes y pendent comme des univers-bulles : à gauche l'immense - galaxie, trou noir et son disque, amas de galaxies, quasar -, à droite l'infime - atome, noyau, traces de particules, cordes dans la mousse quantique. Au faîte, un quasar crache ses jets au-dessus du blason.",
+  "layout": "selfie : Mee et Meo (selfie à deux) dans la photo",
+  "message": "Ensemble, partout"
+ },
+ {
+  "file": "nord-mythe-c.jpg",
+  "rank": "Mythe",
+  "division": null,
+  "option": "C",
+  "name": "Jörmungandr, l'uroboros",
+  "story": "Jörmungandr, le serpent-monde qui encercle Midgard en se mordant la queue, fait le tour de la photo : sur ses écailles, quatorze médaillons gradués vont du quark (10⁻¹⁸ m) au quasar (10²⁶ m) - noyau, atome, molécule d'eau, ADN, cellule, nous, montagne, Terre, Soleil, galaxie, amas, toile cosmique. Là où la tête mord la queue, le plus grand rejoint le plus petit : l'uroboros cosmique.",
+  "layout": "pied : Mee (danse) et Meo (feu d'artifice) de part et d'autre de l'inscription",
+  "message": "De l'atome aux étoiles"
+ }
+]

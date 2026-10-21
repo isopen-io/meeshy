@@ -361,12 +361,12 @@ struct ComposerToolPanelHost: View {
         // Bundle localisé hissé hors de la closure de label `PhotosPicker`
         // (inférée `@Sendable`) en constante Sendable — voir
         // `ConversationSettingsView.visualSection`.
-        let addMediaLabel = String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module)
+        let addMediaLabel = String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Vidéo", bundle: .module)
         return VStack(spacing: MeeshySpacing.smPlus) {
             // Add buttons
             HStack(spacing: MeeshySpacing.sm) {
                 if viewModel.canAddMedia {
-                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current) {
                         MediaPillLabel(icon: "photo.on.rectangle.angled", text: addMediaLabel, destructive: false)
                     }
                 }
@@ -447,7 +447,7 @@ struct ComposerToolPanelHost: View {
         .photosPicker(
             isPresented: $autoOpenMediaPicker,
             selection: $fgMediaItem,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .onAppear {
             let isEmpty = (viewModel.currentEffects.mediaObjects?.isEmpty ?? true)

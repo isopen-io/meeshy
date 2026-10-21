@@ -92,5 +92,5 @@ actor PendingStatusQueue {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let pendingStatus = Logger(subsystem: "me.meeshy.app", category: "pending-status")
+    nonisolated static let pendingStatus = MeeshyLog.logger(.pendingStatus)
 }

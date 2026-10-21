@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -58,10 +59,41 @@ public class MeeshyNotificationSettingsPlugin extends Plugin {
         }
     }
 
+    /**
+     * #10858 — l'identite de l'appareil qui enregistre son jeton FCM : la
+     * passerelle ne garde qu'un jeton actif par (compte, appareil, type).
+     * ANDROID_ID est propre a la cle de signature de l'app et a l'utilisateur,
+     * et survit a une reinstallation ; ce n'est pas l'identifiant publicitaire.
+     */
+    @PluginMethod
+    public void deviceIdentity(PluginCall call) {
+        JSObject result = new JSObject();
+        String androidId = Settings.Secure.getString(getContext().getContentResolver(), Settings.Secure.ANDROID_ID);
+        if (androidId != null && !androidId.isEmpty()) {
+            result.put("deviceId", androidId);
+        }
+        result.put("deviceName", Build.MODEL);
+        call.resolve(result);
+    }
+
     @PluginMethod
     public void fcmStatus(PluginCall call) {
         JSObject result = new JSObject();
         result.put("configured", !FirebaseApp.getApps(getContext()).isEmpty());
+        call.resolve(result);
+    }
+
+    /**
+     * #10938 — ce que la coque a note app fermee (banniere recue, affichee),
+     * vide vers la file v2 de la page au demarrage
+     * (`drainShellNotificationTelemetry`).
+     */
+    @PluginMethod
+    public void drainNotificationEvents(PluginCall call) {
+        JSArray events = new JSArray();
+        for (String line : NotificationFunnelStore.drain(getContext())) events.put(line);
+        JSObject result = new JSObject();
+        result.put("events", events);
         call.resolve(result);
     }
 }

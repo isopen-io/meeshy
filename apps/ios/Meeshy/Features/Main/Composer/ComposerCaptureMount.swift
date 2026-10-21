@@ -58,28 +58,36 @@ struct ComposerCaptureMount<Content: View>: View {
                 GeometryReader { marges in
                     GeometryReader { proxy in
                         if let ancre, session.stage != .off {
-                            if let aspect = session.editAspect {
-                                // **La retouche pose sa scène sur le sol** (#9567) :
-                                // cette couche ignore les marges système, la règle
-                                // les lui rend pour tomber sous les crochets.
+                            // **UNE image, à la même place de l'arbre, en capture
+                            // comme en retouche** (#10342) : deux branches
+                            // démontaient l'aperçu à chaque entrée et sortie de
+                            // retouche, et le nouveau rattachait sa couche à la
+                            // session depuis le fil principal pendant qu'elle
+                            // redémarrait — l'écran attendait des secondes.
+                            let aspect = session.editAspect
+                            // **La retouche pose sa scène sur le sol** (#9567) ;
+                            // **le sol en BLANC brillant** (#8653) quand l'écran est
+                            // le flash, autour de la SCÈNE seulement (#8671).
+                            if aspect != nil {
                                 Color.black
-                                image(rect: ComposerEditScene.rect(
-                                    aspect: aspect,
+                            } else if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
+                                Color(white: session.floorWhite)
+                            }
+                            image(rect: aspect.map { proportions in
+                                // Cette couche ignore les marges système, la règle
+                                // les lui rend pour tomber sous les crochets.
+                                ComposerEditScene.rect(
+                                    aspect: proportions,
                                     in: ComposerEditScene.area(container: proxy.size, top: marges.safeAreaInsets.top,
                                                                bottom: marges.safeAreaInsets.bottom,
-                                                               panels: session.editPanels)), taille)
-                            } else {
-                                // **Le sol en BLANC brillant** (#8653) : l'écran est
-                                // le flash, autour de la SCÈNE seulement — son
-                                // intensité suit le curseur (#8671).
-                                if ComposerCapturePlacement.showsFloor(size: taille, screenFlash: screenFlash) {
-                                    Color(white: session.floorWhite)
-                                }
-                                image(rect: rect(card: proxy[ancre], in: proxy.size, taille), taille)
-                                // En plein écran, l'écran ne blanchit qu'à la prise.
-                                if ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
-                                    Color(white: session.floorWhite).allowsHitTesting(false)
-                                }
+                                                               panels: session.editPanels,
+                                                               framed: session.editFramesScene,
+                                                               playback: session.offersEditPlayback))
+                            } ?? rect(card: proxy[ancre], in: proxy.size, taille), taille)
+                            // En plein écran, l'écran ne blanchit qu'à la prise.
+                            if aspect == nil,
+                               ComposerCapturePlacement.showsBurst(bursting: session.screenFlashBurst, size: taille) {
+                                Color(white: session.floorWhite).allowsHitTesting(false)
                             }
                         }
                     }
@@ -87,6 +95,7 @@ struct ComposerCaptureMount<Content: View>: View {
                     .animation(Self.growth, value: taille)
                     .animation(Self.growth, value: session.editAspect)
                     .animation(Self.growth, value: session.editPanels)
+                    .animation(Self.growth, value: session.editFramesScene)
                 }
             }
             .overlayPreferenceValue(ComposerSceneCameraFrameKey.self) { ancre in

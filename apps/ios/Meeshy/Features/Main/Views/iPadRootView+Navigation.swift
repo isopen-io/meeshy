@@ -2,6 +2,15 @@ import SwiftUI
 import MeeshySDK
 import os
 
+// MARK: - Sélection de la colonne de détail
+
+/// Règle pure : la colonne de détail se referme quand la conversation qu'elle montre quitte la liste.
+nonisolated enum iPadSelectionRule {
+    static func closesDetail(activeConversationId: String?, removedId: String) -> Bool {
+        activeConversationId == removedId
+    }
+}
+
 // MARK: - iPad Root View Navigation Helpers
 
 extension iPadRootView {
@@ -11,9 +20,13 @@ extension iPadRootView {
         // invoked through navigateToStoryReply, the context was just set and must
         // survive until ConversationView consumes it. ConversationView clears it
         // in .onAppear (see rightColumn).
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            activeConversation = conversation
-            rightPanelRoute = nil
+        // Story, réel ou plein écran en cours : le routeur les referme d'abord
+        // (#10539) — le site unique, partagé avec l'iPhone.
+        router.clearPresentedSurfaces { _ in
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                activeConversation = conversation
+                rightPanelRoute = nil
+            }
         }
     }
 
@@ -92,7 +105,26 @@ extension iPadRootView {
 
     func handleDeepLink(_ deepLink: DeepLink?) {
         guard let deepLink = deepLinkRouter.consumePendingDeepLink() else { return }
+        // Story, réel, composer ou feuille en cours : refermés d'ABORD, comme
+        // pour un tap de notification (#10543). Seules les conversations le
+        // faisaient ; un lien vers un post, un tag, une communauté ou un profil
+        // s'ouvrait SOUS la couverture, et le tap semblait sans effet.
+        router.clearPresentedSurfaces { _ in showDeepLink(deepLink) }
+    }
+
+    private func showDeepLink(_ deepLink: DeepLink) {
         switch deepLink {
+        case .callRequest(let conversationId, let isVideo):
+            // Le lien d'appel ne compose pas : il DEMANDE (feuille de
+            // confirmation). Mise à jour forcée et barrière d'âge passent avant.
+            let upgradeGate = self.upgradeGate
+            let gatesOpen: @MainActor () -> Bool = {
+                !upgradeGate.isBlocked && !AgeGateController.shared.isShowing
+            }
+            Task { @MainActor in
+                await CallLinkConfirmationController.shared.request(
+                    conversationId: conversationId, isVideo: isVideo, gatesOpen: gatesOpen)
+            }
         case .trackedLink(let token):
             // `/l/<token>` resolved async by targetType (re-sets pendingDeepLink).
             deepLinkRouter.resolveTrackedLink(token)
@@ -144,7 +176,9 @@ extension iPadRootView {
         case .community(let id):
             rightPanelRoute = .communityDetail(id)
         case .unreadConversations:
-            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce.
+            // Widgets « Non lus » (#7811) : la liste sur le filtre de la puce. Le panneau ouvert la cachait —
+            // l'iPhone revient à la racine, l'iPad referme le panneau.
+            rightPanelRoute = nil
             conversationViewModel.selectedFilters = ConversationListEntry.unreadFilters
         case .recentConversation:
             // App Shortcut « Open Recent Conversation » et widget (#7811).
@@ -155,6 +189,11 @@ extension iPadRootView {
             // Cible EXTERNAL d'un `/l/<token>` : elle s'ouvre, elle ne se
             // rejoint pas. Même geste que `RootView`.
             UIApplication.shared.open(url)
+        case .game(let link):
+            // Même porte que l'iPhone (#9947) : la chaîne du Jeu, dans le panneau.
+            router.openGame(at: GameNavigationMap.entry(for: link))
+        case .packShop(let domain, let pack):
+            router.openPackShop(domain: domain, pack: pack)
         case .unresolvedTrackedLink:
             FeedbackToastManager.shared.showError(
                 String(localized: "deepLink.tracked.unresolved",
@@ -228,8 +267,12 @@ extension iPadRootView {
         } else if routeName.hasPrefix("storyDetail:") {
             let postId = String(routeName.dropFirst("storyDetail:".count))
             if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
+                // Le coordinateur, comme l'iPhone : la requête porte son uid. Le couple @State de l'ancien
+                // chemin pouvait présenter le lecteur avant que l'uid ne soit posé — « Story introuvable ».
+                storyViewerCoordinator.present(StoryViewerRequest(
+                    id: storyViewModel.storyGroups[groupIdx].id,
+                    postId: postId
+                ))
             } else {
                 rightPanelRoute = .postDetail(postId)
             }
@@ -252,231 +295,62 @@ extension iPadRootView {
         router.navigateToStoryReply(context, conversationList: conversationViewModel)
     }
 
-    // MARK: - Handle Notification Tap
+    // MARK: - Notification taps — UN aiguillage, comme l'iPhone
+    //
+    // Les trois sources de tap (liste, bannière en direct, push) passent par le MÊME contexte que l'iPhone
+    // (`RootView.NotificationNavContext`) et le MÊME aiguillage ci-dessous. Trois gestionnaires recopiés
+    // divergeaient : un repli présent sur iPhone manquait à l'un ou l'autre côté iPad, une ancienne demande d'ami
+    // était muette dans la bannière, une notification de message sans conversation l'était dans la liste
+    // (audits de parité du 2026-10-14). Seules les ACTIONS diffèrent de l'iPhone — colonne droite, panneau —,
+    // jamais la décision.
 
     func handleNotificationTap(_ notification: APINotification) {
-        let data = notification.data
-        switch notification.notificationType {
-        case .newMessage, .legacyNewMessage, .messageReply,
-             .messageReaction, .reaction, .legacyMessageReaction,
-             .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
-             .legacyStoryReply, .reply,
-             .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = data?.conversationId else { return }
-            // Parité iPhone/push : scroll + flash sur le message exact.
-            navigateToConversationById(
-                conversationId,
-                highlightMessageId: notification.context?.messageId
-            )
-
-        // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
-        // (`createPostMentionNotificationsBatch` / `createCommentMentionNotificationsBatch`
-        // portent un `postId` et AUCUN `conversationId`) — même repli que
-        // `RootView.navigateFromNotification` (iPhone). Sans lui, référencer
-        // quelqu'un dans un post/story/réel/statut ouvrait un tap MUET sur iPad.
-        case .userMentioned, .mention, .legacyMention:
-            if let conversationId = data?.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(
-                    conversationId,
-                    highlightMessageId: notification.context?.messageId
-                )
-            } else if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId {
-                routeSocialNotification(
-                    postId: postId,
-                    postType: notification.metadata?.postType,
-                    contentType: notification.metadata?.contentType,
-                    type: notification.notificationType,
-                    commentId: notification.context?.commentId ?? notification.metadata?.commentId,
-                    parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
-                    storyContext: StoryNotificationContext.from(notification)
-                )
-            }
-
-        case .friendRequest, .contactRequest, .legacyFriendRequest,
-             .friendAccepted, .contactAccepted, .legacyFriendAccepted,
-             .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
-            if let senderId = notification.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(userId: senderId, username: notification.senderName ?? senderId)
-            }
-
-        case .communityInvite, .communityJoined, .communityLeft, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
-             .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
-             .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
-            if let conversationId = data?.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        // ===== SOCIAL CONTENT =====
-        // Single decision point, shared with iPhone via
-        // `NotificationContentRouter` — see `routeSocialNotification`.
-        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
-             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
-             .storyReaction, .statusReaction,
-             .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .friendNewStory, .friendNewMood:
-            if let postId = notification.context?.postId ?? data?.postId ?? notification.metadata?.postId {
-                routeSocialNotification(
-                    postId: postId,
-                    postType: notification.metadata?.postType,
-                    contentType: notification.metadata?.contentType,
-                    type: notification.notificationType,
-                    commentId: notification.context?.commentId ?? notification.metadata?.commentId,
-                    parentCommentId: notification.context?.parentCommentId ?? notification.metadata?.parentCommentId,
-                    storyContext: StoryNotificationContext.from(notification)
-                )
-            }
-
-        case .missedCall, .callDeclined, .legacyCallMissed,
-             .incomingCall, .incomingCallAlert, .callEnded, .legacyCallIncoming:
-            if let conversationId = data?.conversationId {
-                navigateToConversationById(conversationId)
-            }
-
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
-            // Le palier se CÉLÈBRE d'abord (#5809) — même geste, même effet que
-            // sur iPhone. La racine iPad n'a pas de `NotificationNavContext` :
-            // elle dérive le palier de la notification qu'elle tient déjà.
-            router.pendingEngagementReveal = EngagementReveal.from(
-                type: notification.notificationType, metadata: notification.metadata)
-            router.openGame(at: GameNavigationMap.entry(for: notification.notificationType) ?? .progression)
-
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
-            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme, sur son chemin
-            // complet (#9564) — même geste que sur iPhone.
-            router.openGame(at: GameNavigationMap.entry(for: notification.notificationType) ?? .progression)
-
-        case .legacyAffiliateSignup:
-            rightPanelRoute = .affiliate
-
-        case .securityAlert, .loginNewDevice, .legacySystemAlert,
-             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
-            // Pas d'entité cible : ouvrir le panneau notifications plutôt
-            // qu'un tap muet.
-            rightPanelRoute = .notifications
-        }
+        navigateFromNotification(RootView.NotificationNavContext(from: notification))
     }
-
-    // MARK: - Handle Socket Notification Tap
 
     func handleSocketNotificationTap(_ event: SocketNotificationEvent) {
-        switch event.notificationType {
-        case .newMessage, .messageReply, .messageReaction, .reaction,
-             .missedCall,
-             .newConversation, .newConversationDirect, .newConversationGroup, .addedToConversation, .memberJoined:
-            if let conversationId = event.conversationId {
-                // Parité iPhone/push : scroll + flash sur le message exact.
-                navigateToConversationById(
-                    conversationId,
-                    highlightMessageId: event.messageId
-                )
-            }
-
-        case .friendRequest, .contactRequest, .friendAccepted, .contactAccepted, .contactJoined, .contactRecentlyActive:
-            if let senderId = event.senderId {
-                router.deepLinkProfileUser = ProfileSheetUser(
-                    userId: senderId,
-                    username: event.senderUsername ?? senderId
-                )
-            }
-
-        // ===== SOCIAL CONTENT =====
-        case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
-             .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
-             .storyReaction, .statusReaction,
-             .storyNewComment, .friendStoryComment, .storyThreadReply,
-             .friendNewStory, .friendNewMood:
-            if let postId = event.postId {
-                routeSocialNotification(
-                    postId: postId,
-                    postType: event.postType,
-                    contentType: event.metadata?.contentType,
-                    type: event.notificationType,
-                    commentId: event.commentId,
-                    parentCommentId: event.parentCommentId,
-                    storyContext: makeStoryContext(from: event)
-                )
-            }
-
-        case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
-            // Célébration (#5809) — le chemin SOCKET porte sa métadonnée.
-            router.pendingEngagementReveal = EngagementReveal.from(
-                type: event.notificationType, metadata: event.metadata)
-            router.openGame(at: GameNavigationMap.entry(for: event.notificationType) ?? .progression)
-
-        case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
-            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme, sur son chemin
-            // complet (#9564) — même geste que sur iPhone.
-            router.openGame(at: GameNavigationMap.entry(for: event.notificationType) ?? .progression)
-
-        case .legacyAffiliateSignup:
-            rightPanelRoute = .affiliate
-
-        case .securityAlert, .loginNewDevice, .legacySystemAlert,
-             .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
-             .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
-            rightPanelRoute = .notifications
-
-        default:
-            // Parité avec le chemin push : ~30 types (familles legacy message,
-            // communauté, appels…) tombaient ici en tap MUET. Toute entité
-            // conversationnelle → conversation (avec highlight), sinon entité
-            // sociale → surface post/story/reel.
-            if let conversationId = event.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId, highlightMessageId: event.messageId)
-            } else if let postId = event.postId, !postId.isEmpty {
-                routeSocialNotification(
-                    postId: postId,
-                    postType: event.postType,
-                    contentType: event.metadata?.contentType,
-                    type: event.notificationType,
-                    commentId: event.commentId,
-                    parentCommentId: event.parentCommentId,
-                    storyContext: makeStoryContext(from: event)
-                )
-            }
-        }
+        navigateFromNotification(RootView.NotificationNavContext(from: event))
     }
 
-    // MARK: - Handle Push Notification Tap
-
     func handlePushNotificationTap(_ payload: NotificationPayload) {
-        let type = MeeshyNotificationType(rawValue: payload.type ?? "") ?? .system
+        navigateFromNotification(RootView.NotificationNavContext(from: payload))
+    }
 
-        switch type {
+    private func openSocialContent(_ ctx: RootView.NotificationNavContext, postId: String) {
+        routeSocialNotification(
+            postId: postId,
+            postType: ctx.postType,
+            contentType: ctx.contentType,
+            type: ctx.type,
+            commentId: ctx.commentId,
+            parentCommentId: ctx.parentCommentId,
+            storyContext: ctx.storyContext
+        )
+    }
+
+    func navigateFromNotification(_ ctx: RootView.NotificationNavContext) {
+        switch ctx.type {
         case .newMessage, .legacyNewMessage, .messageReply, .reply, .legacyStoryReply,
              .messageReaction, .reaction, .legacyMessageReaction,
+             .userMentioned, .mention, .legacyMention,
              .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted,
              .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
-            guard let conversationId = payload.conversationId, !conversationId.isEmpty else { return }
-            navigateToConversationById(conversationId, highlightMessageId: payload.messageId)
-
-        // Une mention vit SOIT dans une conversation SOIT dans un post/commentaire
-        // — même repli que `RootView.navigateFromNotification` (iPhone). C'est le
-        // chemin le PLUS emprunté (tap sur la bannière push) : sans ce repli, une
-        // référence dans un post/story/réel/statut était un tap MUET sur iPad.
-        case .userMentioned, .mention, .legacyMention:
-            if let conversationId = payload.conversationId, !conversationId.isEmpty {
-                navigateToConversationById(conversationId, highlightMessageId: payload.messageId)
-            } else if let postId = payload.postId, !postId.isEmpty {
-                routeSocialNotification(
-                    postId: postId,
-                    postType: payload.postType,
-                    contentType: payload.contentType,
-                    type: type,
-                    commentId: payload.commentId,
-                    parentCommentId: payload.parentCommentId,
-                    storyContext: makeStoryContext(from: payload)
-                )
+            guard let conversationId = ctx.conversationId, !conversationId.isEmpty else {
+                // Une mention vit SOIT dans une conversation SOIT dans un post ou un commentaire : jamais un tap muet.
+                if let postId = ctx.postId, !postId.isEmpty {
+                    openSocialContent(ctx, postId: postId)
+                }
+                return
             }
+            navigateToConversationById(conversationId, highlightMessageId: ctx.messageId)
 
         case .friendRequest, .contactRequest, .legacyFriendRequest,
              .friendAccepted, .contactAccepted, .legacyFriendAccepted,
              .contactJoined, .contactRecentlyActive, .legacyStatusUpdate:
-            if let senderId = payload.senderId {
+            if let senderId = ctx.senderId {
                 router.deepLinkProfileUser = ProfileSheetUser(
                     userId: senderId,
-                    username: payload.senderUsername ?? senderId
+                    username: ctx.senderUsername ?? senderId
                 )
             }
 
@@ -484,67 +358,58 @@ extension iPadRootView {
              .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
              .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
-            if let conversationId = payload.conversationId, !conversationId.isEmpty {
+            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
 
         case .missedCall, .callDeclined, .legacyCallMissed,
              .incomingCall, .callEnded, .legacyCallIncoming:
-            if let conversationId = payload.conversationId, !conversationId.isEmpty {
+            if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
 
-        // Guideline 5 (MIIT) — China-region incoming-call push, same
-        // rationale/wiring as RootView.navigateFromNotification: no CallKit,
-        // no PushKit VoIP registration there, so this tap is the only way to
-        // engage the call. A plain deep-link would neither negotiate WebRTC
-        // nor show an answer UI.
+        // Guideline 5 (MIIT) — appel entrant de la région Chine : sans CallKit ni PushKit VoIP, ce tap est le seul
+        // moyen de décrocher. Même flux que l'iPhone ; sans callId, la conversation.
         case .incomingCallAlert:
-            guard let callId = payload.callId, !callId.isEmpty else {
-                if let conversationId = payload.conversationId, !conversationId.isEmpty {
+            guard let callId = ctx.callId, !callId.isEmpty else {
+                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                     navigateToConversationById(conversationId)
                 }
                 return
             }
-            CallManager.shared.handleIncomingCallNotification(
+            CallManager.shared.handleIncomingCallAlertTap(
                 callId: callId,
-                fromUserId: payload.callerUserId ?? "",
-                fromUsername: payload.callerName ?? payload.senderUsername ?? "",
-                isVideo: payload.isVideoCall,
-                iceServers: VoIPPushManager.parseIceServers(payload.iceServersJSON),
-                conversationId: payload.conversationId
+                fromUserId: ctx.callerUserId ?? "",
+                fromUsername: ctx.callerName ?? ctx.senderUsername ?? "",
+                isVideo: ctx.isVideoCall,
+                iceServers: VoIPPushManager.parseIceServers(ctx.iceServersJSON),
+                conversationId: ctx.conversationId
             )
 
-        // ===== SOCIAL CONTENT =====
+        // ===== SOCIAL CONTENT — la surface vient de `NotificationContentRouter` (`routeSocialNotification`) =====
         case .postLike, .legacyPostLike, .postRepost, .friendNewPost,
              .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction,
-             .storyReaction, .statusReaction,
+             .storyReaction, .statusReaction, .contentRemoved,
              .storyNewComment, .friendStoryComment, .storyThreadReply,
              .friendNewStory, .friendNewMood:
-            if let postId = payload.postId, !postId.isEmpty {
-                routeSocialNotification(
-                    postId: postId,
-                    postType: payload.postType,
-                    contentType: payload.contentType,
-                    type: type,
-                    commentId: payload.commentId,
-                    parentCommentId: payload.parentCommentId,
-                    storyContext: makeStoryContext(from: payload)
-                )
+            guard let postId = ctx.postId, !postId.isEmpty else {
+                // Certaines anciennes notifications sociales ne portent que la conversation : jamais un tap muet.
+                if let conversationId = ctx.conversationId, !conversationId.isEmpty {
+                    navigateToConversationById(conversationId)
+                }
+                return
             }
+            openSocialContent(ctx, postId: postId)
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .levelUp, .badgeEarned:
-            // Célébration (#5809) : la charge APNs ne porte pas de
-            // `NotificationMetadata` typée. On n'invente donc AUCUN palier —
-            // le tap ouvre la fiche du palier, comme sur iPhone (#9564). Parité
-            // exacte avec `NotificationNavContext.init(from: NotificationPayload)`,
-            // qui pose `reveal = nil` pour la même raison.
-            router.openGame(at: GameNavigationMap.entry(for: type) ?? .progression)
+            // Le palier se CÉLÈBRE d'abord (#5809) — `nil` quand la charge ne dit pas lequel (push) — puis la fiche
+            // de son concept s'ouvre sur son chemin complet (#9564).
+            router.pendingEngagementReveal = ctx.reveal
+            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
 
         case .gameDuoInvited, .gameDuoAccepted, .gameLeagueResult, .gameSeasonStep, .gameMissionWindow:
-            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme, sur son chemin
-            // complet (#9564) — même geste que sur iPhone.
-            router.openGame(at: GameNavigationMap.entry(for: type) ?? .progression)
+            // Une notification du jeu (#9490, #9539) ouvre l'écran que la carte de navigation nomme (#9564).
+            router.openGame(at: GameNavigationMap.entry(for: ctx.type) ?? .progression)
 
         case .legacyAffiliateSignup:
             rightPanelRoute = .affiliate
@@ -552,8 +417,7 @@ extension iPadRootView {
         case .securityAlert, .loginNewDevice, .legacySystemAlert,
              .passwordChanged, .twoFactorEnabled, .twoFactorDisabled,
              .system, .maintenance, .updateAvailable, .voiceCloneReady, .reportResolved:
-            // Pas d'entité cible : ouvrir le panneau notifications plutôt
-            // qu'un tap muet.
+            // Pas d'entité cible : le panneau des notifications plutôt qu'un tap muet.
             rightPanelRoute = .notifications
         }
     }
@@ -575,6 +439,23 @@ extension iPadRootView {
             return
         }
         Task {
+            // Le cache d'abord, comme `RootView` : un push touché à froid — la liste pas encore chargée — ou
+            // hors ligne ouvre le fil de la session précédente au lieu de buter sur le réseau.
+            let cachedList = await CacheCoordinator.shared.conversations.load(for: "list")
+            let cachedConversations: [MeeshyConversation]? = {
+                switch cachedList {
+                case .fresh(let list, _), .stale(let list, _): return list
+                case .expired, .empty: return nil
+                }
+            }()
+            if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
+                if let messageId = highlightMessageId {
+                    router.pendingHighlightMessageId = messageId
+                    router.pendingHighlightConversationId = conversationId
+                }
+                openConversation(cached)
+                return
+            }
             // Phase: navigate-from-notification timing race. Same retry-once
             // pattern as `RootView.navigateToConversationById` — a push for
             // a freshly-created conversation can land before the gateway
@@ -667,21 +548,34 @@ extension iPadRootView {
         parentCommentId: String?,
         storyContext: StoryNotificationContext
     ) {
+        DetailOpenSources.shared.markOpenedFromNotification(postId)
         let surface = NotificationContentRouter.surface(
             postType: postType,
             contentType: contentType,
             notificationType: type,
             storyLifecycleHint: StoryService.shared.cachedPost(id: postId)?.expiresAt != nil
         )
+        // Story, réel ou feuille en cours : le routeur les referme d'abord, par
+        // le site des conversations (#10543) — la cible ne s'ouvre plus dessous.
+        router.clearPresentedSurfaces { _ in
+            showSocialSurface(surface, postId: postId, type: type, commentId: commentId,
+                              parentCommentId: parentCommentId, storyContext: storyContext)
+        }
+    }
 
+    private func showSocialSurface(
+        _ surface: NotificationContentSurface,
+        postId: String,
+        type: MeeshyNotificationType,
+        commentId: String?,
+        parentCommentId: String?,
+        storyContext: StoryNotificationContext
+    ) {
         switch surface {
         case .story:
-            router.push(.storyNotificationTarget(
-                storyId: postId,
-                intent: NotificationContentRouter.intent(for: type),
-                context: storyContext,
-                commentId: commentId,
-                parentCommentId: parentCommentId
+            router.push(NotificationContentRouter.ephemeralRoute(
+                postId: postId, notificationType: type, context: storyContext,
+                commentId: commentId, parentCommentId: parentCommentId
             ))
         case .reel:
             openReel(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
@@ -701,49 +595,14 @@ extension iPadRootView {
     /// post déjà chargé et avec sa cible commentaire.
     func openReel(postId: String, commentId: String? = nil, parentCommentId: String? = nil) {
         Task { @MainActor in
-            await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
-                rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
-                                              commentId: commentId, parentCommentId: parentCommentId)
-            }
+            await revealReel(postId: postId, commentId: commentId, parentCommentId: parentCommentId)
         }
     }
 
-    // Push payloads + socket events don't carry the typed metadata that
-    // `StoryNotificationContext.from(APINotification)` consumes, so we
-    // reproduce the fallback chain inline. Matches the iPhone
-    // implementation in `RootView.NotificationNavContext.makeStoryContext`.
-
-    func makeStoryContext(from event: SocketNotificationEvent) -> StoryNotificationContext {
-        let trigger: StoryNotificationContext.Trigger
-        switch event.notificationType {
-        case .storyReaction, .statusReaction:
-            trigger = .reaction(emoji: event.metadata?.emoji ?? "❤️")
-        default:
-            trigger = .comment(preview: event.metadata?.commentPreview ?? "")
+    func revealReel(postId: String, commentId: String?, parentCommentId: String?) async {
+        await ReelDoor.live.open(postId: postId, commentId: commentId, parentCommentId: parentCommentId) { post in
+            rightPanelRoute = .postDetail(postId, post, showComments: commentId != nil,
+                                          commentId: commentId, parentCommentId: parentCommentId)
         }
-        return StoryNotificationContext(
-            actorAvatar: event.actor?.avatar,
-            actorDisplayName: event.actor?.displayName ?? event.actor?.username ?? "",
-            trigger: trigger,
-            occurredAt: Date()
-        )
-    }
-
-    func makeStoryContext(from payload: NotificationPayload) -> StoryNotificationContext {
-        let trigger: StoryNotificationContext.Trigger = {
-            switch payload.type ?? "" {
-            case MeeshyNotificationType.storyReaction.rawValue,
-                 MeeshyNotificationType.statusReaction.rawValue:
-                return .reaction(emoji: "❤️")
-            default:
-                return .comment(preview: "")
-            }
-        }()
-        return StoryNotificationContext(
-            actorAvatar: payload.senderAvatar,
-            actorDisplayName: payload.senderDisplayName ?? payload.senderUsername ?? "",
-            trigger: trigger,
-            occurredAt: Date()
-        )
     }
 }

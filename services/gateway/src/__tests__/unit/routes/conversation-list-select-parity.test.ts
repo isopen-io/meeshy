@@ -131,6 +131,18 @@ describe('GET /conversations — la requête charge ce que le schéma promet', (
   });
 
   /**
+   * #10720 — le mode de chiffrement d'une conversation est OPTIONNEL : seul le
+   * serveur le sait. Absent de la liste, un client ne peut ni dire « chiffrée »
+   * ni « non chiffrée » sans l'inventer — iOS l'inventait (« e2ee » pour toute
+   * directe), et la fiche affichait « Chiffrement actif » sur une conversation
+   * en clair.
+   */
+  it('sert le mode de chiffrement que la fiche relit (#10720)', () => {
+    expect(clefsDuSelect.has('encryptionMode')).toBe(true);
+    expect(Object.keys(conversationMinimalSchema.properties)).toContain('encryptionMode');
+  });
+
+  /**
    * L'exception doit rester une exception. Si `memberCount` réapparaissait dans
    * le `select`, la ligne de liste servirait de nouveau la colonne dénormalisée
    * — badge de groupe absent, accent de couleur divergent entre la liste et le

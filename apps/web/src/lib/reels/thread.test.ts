@@ -15,6 +15,7 @@ import {
   reelDisplayOf,
   reelVisitorState,
   shouldLoadMoreReels,
+  withoutHiddenReels,
 } from './thread';
 
 /**
@@ -124,6 +125,26 @@ describe('holdReelThread — une relecture ne déplace pas le réel regardé', (
     const composed = [reel('b'), reel('a')];
     expect(holdReelThread({ heldIds: [], activeId: '', composed })).toBe(composed);
     expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'zz', composed })).toBe(composed);
+  });
+
+  test('une graine lue APRÈS la page de réels prend la tête : rien n’était regardé sous le squelette', () => {
+    const composed = [reel('graine'), reel('a'), reel('b')];
+    expect(holdReelThread({ heldIds: ['a', 'b'], activeId: 'a', composed, entryId: 'graine' })).toBe(composed);
+  });
+
+  test('une graine déjà tenue ne lève pas la tenue : le réel regardé garde sa place', () => {
+    const held = holdReelThread({
+      heldIds: ['graine', 'a', 'b'],
+      activeId: 'a',
+      composed: [reel('b'), reel('graine'), reel('a')],
+      entryId: 'graine',
+    });
+    expect(ids(held)).toEqual(['graine', 'a', 'b']);
+  });
+
+  test('une graine que la composition ne porte pas (refusée, supprimée) ne lève pas la tenue', () => {
+    const held = holdReelThread({ heldIds: ['a', 'b'], activeId: 'b', composed: [reel('b'), reel('a')], entryId: 'graine' });
+    expect(ids(held)).toEqual(['a', 'b']);
   });
 
   test('un ordre inchangé rend la composition elle-même', () => {
@@ -263,5 +284,18 @@ describe('reelVisitorState', () => {
 
   test('`/reels` sans identifiant invite à rejoindre, jamais « contenu indisponible »', () => {
     expect(reelVisitorState({ count: 0, hasSeed: false, seedRefused: false })).toBe('invite');
+  });
+});
+
+describe('withoutHiddenReels — un réel retiré quitte la pile sur-le-champ (#11156)', () => {
+  const reel = (id: string): FeedPost => ({ id, type: 'POST', createdAt: '2026-09-13T11:55:00.000Z' });
+
+  test('le réel caché disparaît, l’ordre des autres est gardé', () => {
+    expect(withoutHiddenReels([reel('a'), reel('b'), reel('c')], new Set(['b'])).map((post) => post.id)).toEqual(['a', 'c']);
+  });
+
+  test('rien de caché : la MÊME pile, sans recomposition', () => {
+    const thread = [reel('a')];
+    expect(withoutHiddenReels(thread, new Set())).toBe(thread);
   });
 });

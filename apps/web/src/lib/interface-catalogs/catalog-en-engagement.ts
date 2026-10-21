@@ -4,15 +4,15 @@
  * catalogue `catalog-en.ts`, qu'il RÉPAND.
  */
 const enEngagement = {
-  'engagement.pill.streak.one': '{count}-day streak',
-  'engagement.pill.streak.other': '{count}-day streak',
-  'engagement.pill.points.one': '{total} point, {today} today',
-  'engagement.pill.points.other': '{total} points, {today} today',
-  'engagement.pill.total.one': '{total} point earned in this conversation',
-  'engagement.pill.total.other': '{total} points earned in this conversation',
+  'engagement.pill.streak.one': '{count} day',
+  'engagement.pill.streak.other': '{count} days',
+  'engagement.pill.points.one': '{total} spark, {today} today',
+  'engagement.pill.points.other': '{total} sparks, {today} today',
+  'engagement.pill.total.one': '{total} spark earned in this conversation',
+  'engagement.pill.total.other': '{total} sparks earned in this conversation',
   'engagement.pill.join': '{streak}, {points}',
-  'engagement.post.points.one': 'This post earned you {count} point',
-  'engagement.post.points.other': 'This post earned you {count} points',
+  'engagement.post.points.one': 'This post made {count} spark fly for you',
+  'engagement.post.points.other': 'This post made {count} sparks fly for you',
 } as const;
 
 export default enEngagement;

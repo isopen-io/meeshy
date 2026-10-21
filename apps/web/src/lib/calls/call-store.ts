@@ -71,6 +71,8 @@ export type ActiveCall = {
   /** Le nom de ce qu'on appelle : le pair en direct, le groupe sinon. */
   readonly title: string;
   readonly avatar: string | null;
+  /** LA CLÉ DE PRÉSENCE DU PAIR d'un appel direct (#10956) — son compte, que la carte vivante indexe ; `null` pour un groupe ou un pair inconnu. */
+  readonly peerKey?: string | null;
   /** Qui appelle, pour l'écran entrant d'un groupe (« Alice appelle… »). */
   readonly callerName: string | null;
   /** Qui a lancé l'appel — son admin tant qu'il y est (#8438) ; `null` tant qu'on ne le sait pas. */
@@ -108,6 +110,8 @@ export type WaitingCall = {
   readonly media: CallMedia;
   readonly callerName: string;
   readonly callerAvatar: string | null;
+  /** Le compte de qui appelle (#10956) : sa présence servie se peint sur la bannière. */
+  readonly callerKey?: string | null;
   readonly isGroup: boolean;
   readonly title: string;
 };

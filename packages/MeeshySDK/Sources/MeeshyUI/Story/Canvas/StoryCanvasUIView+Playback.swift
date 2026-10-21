@@ -238,7 +238,7 @@ extension StoryCanvasUIView {
         // l'audio des vidéos qui bouclent ET des clips audio soit audible même
         // silent-switch ON. Idempotent / call-aware via la source unique.
         if AVAudioSession.sharedInstance().category != .playback {
-            MediaSessionCoordinator.shared.activatePlaybackSync(options: [.mixWithOthers, .duckOthers])
+            MediaSessionCoordinator.shared.activateContentPlayback(.audible)
         }
         if playsVideoInEditMode {
             // Fond : `isPlaybackActive` joue le player (qui boucle déjà via son
@@ -270,14 +270,14 @@ extension StoryCanvasUIView {
         playheadTickClock = PlayheadTickClock()
         // Proxy weak partagé : le link ne retient pas le canvas — un canvas
         // jamais fenêtré (setMode avant attach puis jeté) reste libérable.
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let cadence = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: cadence) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.displayLinkTick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link
         // Autorise (ou ré-autorise après pause) la lecture du player vidéo de
@@ -337,6 +337,36 @@ extension StoryCanvasUIView {
         if playheadTickClock.isDriftCheckDue(now: link.timestamp) {
             correctVideoDriftIfNeeded()
         }
+        applyPlaybackCadence(to: link)
+    }
+
+    /// Le palier du lien de lecture pour la slide à l'instant courant (#9864).
+    /// La loi est `StoryPlaybackCadence` ; la vue ne fournit que ce qu'elle
+    /// seule sait : le genre du fond, l'audio planifiable, et si un hôte
+    /// dessine sa barre depuis `onPlaybackTime`.
+    func playbackCadenceTier() -> StoryPlaybackCadenceTier {
+        let backgroundIsVideo: Bool = {
+            if case .video = backgroundLayer.kind { return true }
+            return false
+        }()
+        return StoryPlaybackCadence.tier(slide: slide,
+                                         elapsed: currentTime.seconds,
+                                         totalDuration: effectiveSlideTotalDuration,
+                                         backgroundIsVideo: backgroundIsVideo,
+                                         hasSchedulableAudio: slideHasSchedulableAudio,
+                                         relaysPlaybackClock: onPlaybackTime != nil)
+    }
+
+    /// Ré-évaluée à chaque tick : une ouverture qui se termine, une fermeture
+    /// qui approche, un audio qui se planifie ou un hôte qui s'abonne changent
+    /// le palier sans repasser par `startPlayback`. N'écrit que sur changement.
+    func applyPlaybackCadence(to link: CADisplayLink) {
+        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
+        let current = link.preferredFrameRateRange
+        guard current.minimum != range.minimum
+                || current.maximum != range.maximum
+                || current.preferred != range.preferred else { return }
+        link.preferredFrameRateRange = range
     }
 
     /// Les vidéos ne se calaient sur la timeline qu'au démarrage et à la
@@ -650,15 +680,16 @@ extension StoryCanvasUIView {
     }
 
     func startEditDisplayLinkIfNeeded() {
-        guard mode == .edit, editDisplayLink == nil else { return }
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        guard EditClockArming.shouldArm(isEditing: mode == .edit,
+                                        isInteractive: isUserInteractionEnabled),
+              editDisplayLink == nil else { return }
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .gesture) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.editTick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
         editDisplayLink = link
         // Fresh grace window every time the link is (re)armed — opening the
@@ -728,6 +759,10 @@ extension StoryCanvasUIView {
     /// never wait out any part of the idle delay to feel responsive again.
     func noteEditInteraction() {
         lastEditInteractionAt = CACurrentMediaTime()
+        // Un son que quelqu'un d'autre a coupé (une écoute dans une feuille,
+        // un lecteur voisin) reprend à la phase de la scène dès qu'on y
+        // revient — seul le propriétaire du son le peut (#10362).
+        resumeEditAudioIfSilenced()
         guard isEditClockThrottled else { return }
         resumeEditClockFromIdle()
     }
@@ -753,13 +788,18 @@ extension StoryCanvasUIView {
     /// pause — players stay attached, the mixer's schedule stays intact — so
     /// `resumeEditModeMediaFromIdle()` can restart in place with no reload
     /// and no audible restart-from-zero.
+    ///
+    /// Le son n'est PAS suspendu (`EditIdleSuspension`, #10362) : la boucle
+    /// audio de la scène joue tant qu'on compose, touche ou pas.
     func suspendEditModeMediaForIdle() {
         guard mode == .edit else { return }
-        if playsVideoInEditMode {
+        let suspended = EditIdleSuspension.suspended(playsVideo: playsVideoInEditMode,
+                                                     playsAudio: playsAudioInEditMode)
+        if suspended.contains(.video) {
             backgroundLayer.isPlaybackActive = false
             forEachAVPlayer { $0.pause() }
         }
-        if playsAudioInEditMode {
+        if suspended.contains(.audio) {
             audioMixer.pause()
         }
     }
@@ -808,7 +848,7 @@ extension StoryCanvasUIView {
                                                   geometry: geometry,
                                                   time: currentTime,
                                                   mode: mode,
-                                                  languages: readerContext.preferredLanguages)
+                                                  languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
         // Re-feed the already-attached text layers in place — no rebuildLayers().
         // `setBackdropTexture` is a no-op on a non-glass text layer (its glass
         // backdrop sublayer is nil), so the filter is the crop work, which the

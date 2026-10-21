@@ -28,7 +28,12 @@ export const STORY_READER_COTES = 9;
 export function storyReaderCurveFailures({ root }) {
   const failures = [];
   const read = (path) => readFileSync(`${root}${path}`, 'utf8');
-  const canvas = read('apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift');
+  // Le cadrage a quitté l'hôte pour son type, `StoryReaderCanvasLayout` (#10988) :
+  // l'hôte n'en garde qu'une délégation. Le gate lit les deux, le type en tête.
+  const canvas = [
+    'apps/ios/Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift',
+    'apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift',
+  ].map(read).join('\n');
   const sceneShape = read('packages/MeeshySDK/Sources/MeeshySDK/Story/SceneShape.swift');
   const sceneFloor = read('packages/MeeshySDK/Sources/MeeshyUI/Story/ScenePlayer/SceneFloorView.swift');
   const letterboxSwift = read('packages/MeeshySDK/Sources/MeeshySDK/Story/StoryLetterboxFill.swift');
@@ -48,7 +53,11 @@ export function storyReaderCurveFailures({ root }) {
 
   // `readerCanvasFraming` — les trois marges du plateau, dans l'appel
   // `StoryCanvasFraming.resolve(.init(…))` qu'il pose.
-  const plateauStart = canvas.indexOf('var readerCanvasFraming');
+  // Les marges vivent dans `readerFraming(reserve:)` depuis que le cadrage a
+  // deux lectures — au repos et composeur soulevé (#10544) ; l'ancien nom
+  // reste lu, pour qu'un retour à une seule propriété ne casse pas le gate.
+  const plateauAnchors = ['func framing(reserve:', 'func readerFraming(', 'var readerCanvasFraming'].map((anchor) => canvas.indexOf(anchor));
+  const plateauStart = plateauAnchors.find((at) => at >= 0) ?? -1;
   const plateau = plateauStart < 0 ? '' : canvas.slice(plateauStart, plateauStart + 2400);
   check('plateau — en-tête (headerInset: topInset + …)', first(/headerInset:\s*topInset\s*\+\s*([0-9.]+)/, plateau), constant('READER_HEADER_INSET', framing));
   check('plateau — bas (bottomInset)', first(/bottomInset:\s*([0-9.]+)/, plateau), constant('READER_BOTTOM_INSET', framing));

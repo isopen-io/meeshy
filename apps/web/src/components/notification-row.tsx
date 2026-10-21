@@ -1,10 +1,12 @@
-import { memo, type CSSProperties, type ReactNode } from 'react';
+import { memo, type CSSProperties, type MouseEvent, type ReactNode } from 'react';
 
 import { attachmentSrc } from '@/lib/api/media-url';
 import { callActions } from '@/lib/calls/call-actions';
 import { translate } from '@/lib/i18n-catalog';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import { openNotificationTarget } from '@/lib/notifications/open-target';
+import { callsAvailable } from '@/lib/calls/calls-availability';
 import { notificationCallBack, type NotificationCallBack } from '@/lib/notifications/call-back';
 import { notificationAccent } from '@/lib/notifications/categories';
 import type { NotificationRecord } from '@/lib/notifications/record';
@@ -20,7 +22,7 @@ import { shortRelativeTime } from '@/lib/relative-time';
 import { initialsOf } from '@/lib/view/conversation';
 import { Link } from '@/routes/route-table';
 
-import { Avatar } from './avatar';
+import { PeerAvatar } from './peer-avatar';
 import { Signature } from './game/signature';
 import { Glyph, GlyphSvg, type GlyphShape } from './glyph';
 import { GLYPHS } from './glyphs';
@@ -86,14 +88,33 @@ export type SurfaceProps = {
   readonly draggable?: boolean;
 };
 
-export function TargetLink({ target, ...surface }: SurfaceProps & { readonly target: NotificationTarget }) {
+/**
+ * LA DESTINATION D'UNE NOTIFICATION S'OUVRE PAR `openNotificationTarget`
+ * (#10539) : le lien garde son adresse (clic du milieu, lecteur d'écran), le
+ * clic simple referme d'abord toute couche ouverte.
+ */
+export function TargetLink({ target, onClick, ...rest }: SurfaceProps & { readonly target: NotificationTarget }) {
+  const surface = {
+    ...rest,
+    onClick: (event: MouseEvent<HTMLAnchorElement>) => {
+      onClick();
+      event.preventDefault();
+      openNotificationTarget(event.currentTarget.getAttribute('href') ?? '/');
+    },
+  };
   switch (target.route) {
     case 'thread':
       return <Link to="thread" params={target.params} {...surface} />;
     case 'story':
-      return <Link to="story" params={target.params} {...surface} />;
+      /* `?from=notification` (#10483) — la vue de la story porte la provenance `notification`. */
+      return <Link to="story" params={target.params} search={{ from: 'notification' }} {...surface} />;
     case 'post':
-      return <Link to="post" params={target.params} {...surface} />;
+      /* `?from=notification` (#10483) — le détail compte son impression en
+         `notification`, pas en `detail`. */
+      return <Link to="post" params={target.params} search={{ from: 'notification' }} {...surface} />;
+    case 'mood':
+      /* LA PAGE DE L'HUMEUR (#10813) — plein écran, réponse en privé. */
+      return <Link to="mood" params={target.params} {...surface} />;
     case 'discover':
       /* L'onglet « Demandes » voyage en `search` : la destination le PORTE
          (#7173), la ligne ne le reconstruit pas. */
@@ -136,7 +157,6 @@ export const CONTENT_GLYPHS: Readonly<Record<Extract<RowFooter, { kind: 'content
   story: NOTIFICATIONS_GLYPHS.circleDashed,
   reel: PROGRESSION_GLYPHS.filmStrip,
   mood: GLYPHS.smiley,
-  status: GLYPHS.smiley,
   post: PROGRESSION_GLYPHS.article,
 };
 
@@ -308,7 +328,7 @@ function NotificationRowView({
   const presentation = notificationRowPresentation(notification, { language, now });
   const target = notificationTarget(notification);
   const avatar = notification.actor?.avatar ?? null;
-  const callBack = notificationCallBack(notification);
+  const callBack = callsAvailable() ? notificationCallBack(notification) : null;
   const actions = onQuickAction === undefined ? [] : notificationQuickActions(notification, { isFriend });
 
   const surface: SurfaceProps = {
@@ -323,11 +343,14 @@ function NotificationRowView({
             <MilestoneMedallion glyph={milestoneGlyph(presentation.leading.glyph)} accent={accent} />
           ) : presentation.leading.kind === 'game' ? (
             <GameMedallion accent={accent} />
+          ) : presentation.leading.kind === 'removed' ? (
+            <MilestoneMedallion glyph={NOTIFICATIONS_GLYPHS.trash} accent={accent} />
           ) : (
             /* Les initiales d'une PERSONNE viennent de son nom, jamais du titre :
                « Marie est sur Meeshy ! » y lisait « ME » (#8143). Le titre ne
                sert qu'aux notifications sans acteur (annonces système). */
-            <Avatar
+            <PeerAvatar
+              presenceKey={notification.actor?.id}
               initials={initialsOf(notification.actor?.displayName ?? presentation.title)}
               color={accent}
               size={44}

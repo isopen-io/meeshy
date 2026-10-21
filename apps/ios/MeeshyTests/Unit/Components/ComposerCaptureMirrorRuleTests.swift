@@ -30,7 +30,7 @@ final class ComposerCaptureMirrorRuleTests: XCTestCase {
     }
 
     func test_camera_orientsEveryConnection_atEachInput() throws {
-        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift")
+        let camera = try Self.code("Meeshy/Features/Main/Components/CameraModel.swift") + Self.code("Meeshy/Features/Main/Components/CameraInputInstaller.swift")
         XCTAssertTrue(camera.contains("ComposerCaptureMirrorRule.mirrors("))
         XCTAssertTrue(camera.contains("automaticallyAdjustsVideoMirroring = false"))
         XCTAssertTrue(camera.contains("videoRotationAngle = ComposerCaptureMirrorRule.portraitAngle"))

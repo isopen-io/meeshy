@@ -52,17 +52,17 @@ describe('où j’en suis', () => {
   });
 
   test('l’anneau de niveau est lu en toutes lettres', () => {
-    expect(page).toMatch(/role="img"[^>]*aria-label="Niveau 1[0-9], palier Lueur, deuxième palier"/);
+    expect(page).toMatch(/role="img"[^>]*aria-label="Niveau 1[0-9], ta lumière en Lueur, deuxième état"/);
   });
 
   test('ce qui manque avant le niveau suivant', () => {
-    expect(text(page)).toMatch(/Encore .* avant le niveau/);
+    expect(text(page)).toMatch(/étincelles jusqu’au niveau \d/);
   });
 
   test('le rang : blason, nom et division, Gloire, ancre « game-rank »', () => {
     expect(page).toContain('id="game-rank"');
     expect(page).toContain('Murmure IV');
-    expect(page).toContain('Gloire 620');
+    expect(page).toContain('620 de gloire');
     expect(page).toContain('data-game-rank="murmure"');
   });
 
@@ -93,9 +93,11 @@ describe('où j’en suis', () => {
     expect(page).toMatch(/data-game-hero-watermark=""[^>]*aria-hidden="true"|aria-hidden="true"[^>]*data-game-hero-watermark=""/);
   });
 
-  test('sous le record : le record et le Vent arrière se disent', () => {
-    expect(text(html({ score: 23, levelRecord: 14 }))).toContain('Record : niveau 14');
-    expect(html()).not.toContain('Record :');
+  test('quand le Vent arrière souffle, la puce le dit — le record se lit une seule fois, dans la paire (#10896)', () => {
+    const below = text(html({ score: 23, levelRecord: 14 }));
+    expect(below).toContain('Vent arrière ×1,25');
+    expect(below.match(/Ta plus haute lumière : niveau 14/g)).toHaveLength(1);
+    expect(text(html())).not.toContain('Vent arrière');
   });
 
   test('le niveau 100 n’est plus un sommet : la marche continue (#9688)', () => {
@@ -106,13 +108,13 @@ describe('où j’en suis', () => {
   test('au plafond du rang : le niveau 499 dit que le rang Ambassadeur ouvre la suite', () => {
     const page = text(html({ ...ALL_LEVEL_STEPS, score: 100 * 640 * 640, debitablePoints: 100 * 640 * 640, levelRecord: 499 }));
     expect(page).toContain('Niveau 499');
-    expect(page).toContain('Plafond atteint : le rang Ambassadeur ouvre la suite.');
+    expect(page).toContain('Ta lumière attend ton rang : Ambassadeur l’ouvre plus loin.');
   });
 
   test('au plafond d’Ambassadeur : le niveau 1000 attend Oracle', () => {
     const page = text(html({ ...ALL_LEVEL_STEPS, score: 100 * 1001 * 1001, debitablePoints: 0, glory: 130_000, levelRecord: 1000 }));
     expect(page).toMatch(/Niveau 1\s?000 · Singularité/);
-    expect(page).toContain('le rang Oracle ouvre la suite');
+    expect(page).toContain('Oracle l’ouvre plus loin');
   });
 
   test('Galaxie se teinte au prisme, pas d’un jeton absent', () => {
@@ -124,20 +126,20 @@ describe('les étapes des niveaux (#9706)', () => {
   test('la prochaine étape se dit sous la marche, à faire, et se touche', () => {
     const page = html({ missionsDone: 0 });
     expect(page).toContain('data-game-level-step="todo"');
-    expect(text(page)).toContain('Étape du niveau 20 : accomplir une mission du jour');
+    expect(text(page)).toContain('Épreuve du niveau 20 : réaliser un rêve');
     expect(page).toContain('data-detail="levelstep:20"');
   });
 
   test('une étape déjà faite se coche', () => {
     const page = html({ missionsDone: 1 });
     expect(page).toContain('data-game-level-step="done"');
-    expect(text(html({ score: 100 * 25 * 25, levelRecord: 25 }))).toContain('Étape du niveau 30 : atteindre le rang Écho');
+    expect(text(html({ score: 100 * 25 * 25, levelRecord: 25 }))).toContain('Épreuve du niveau 30 : atteindre le rang Écho');
   });
 
   test('les points sont là, l’étape manque : le niveau attend, et la ligne dit pourquoi au lieu de « encore 0 point »', () => {
     const page = html({ score: 100 * 15 * 15, mintedLifetime: 0, levelRecord: 9 });
     expect(page).toContain('data-game-level-held=""');
-    expect(text(page)).toContain('Tes points ouvrent déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
+    expect(text(page)).toContain('Ta lumière ouvre déjà la suite : frapper ta première Meesh pour passer le niveau 10.');
     expect(text(page)).not.toContain('Encore 0');
   });
 
@@ -164,8 +166,10 @@ describe('comment gagner — dérivé du barème', () => {
 
   test('chaque puce dit son nom et ses points, tirés du barème', () => {
     const body = text(page);
-    for (const rule of earnRules()) expect(body.replace(/\s/g, '')).toContain(`+${rule.points}`);
-    expect(body).toContain('Contenu jusqu’à +1 000');
+    for (const rule of earnRules()) expect(body.replace(/\s/g, '')).toContain(`jusqu’à${rule.points}`);
+    /* Le « + » était inutile devant un plafond (porteur, #10540) : « jusqu’à 1 000 », pas « jusqu’à +1 000 ». */
+    expect(body).not.toMatch(/jusqu’à\s*\+/);
+    expect(body).toContain('Contenu jusqu’à 1 000');
     expect(ENGAGEMENT_FAMILY_TOP_POINTS.content).toBe(1000);
   });
 
@@ -174,7 +178,7 @@ describe('comment gagner — dérivé du barème', () => {
     const markup = html({}, { rules });
     const chips = [...markup.matchAll(/data-game-earn-chip="([a-z]+)"/g)].map((m) => m[1]);
     expect(chips[0]).toBe('comment');
-    expect(text(markup)).toContain('+5 000');
+    expect(text(markup)).toContain('Commentaires jusqu’à 5 000');
   });
 
   /* Les puces menaient au carnet des règles ; depuis #9563 (amendement n° 2) chaque famille se touche et ouvre SES précisions. */
@@ -186,7 +190,7 @@ describe('comment gagner — dérivé du barème', () => {
   });
 
   test('chaque puce se lit en entier et mesure 44 points', () => {
-    expect(text(page)).toContain('Contenu jusqu’à +1 000');
+    expect(text(page)).toContain('Contenu jusqu’à 1 000');
     expect(page).toMatch(/data-game-earn-chip="content"[^>]*min-height:44px/);
   });
 });
@@ -228,10 +232,64 @@ describe('les étoiles de Prestige sur l’anneau du héros (#9389)', () => {
   test('autant d’étoiles que de Prestiges, et l’anneau les dit aux lecteurs d’écran', () => {
     const markup = html({ prestige: 2 });
     expect((markup.match(/data-game-prestige-star/g) ?? []).length).toBe(2);
-    expect(markup).toContain('Étoiles : 2 sur 5');
+    expect(markup).toContain('Renaissances : 2 sur 5');
   });
 
   test('sans Prestige : aucune étoile', () => {
     expect(html()).not.toContain('data-game-prestige-star');
+  });
+});
+
+/**
+ * LA PAIRE POCHE / TOTAL ET NIVEAU / MAX (porteur 2026-10-16) — sur la page Progression, TOUJOURS affichée : les
+ * étincelles en poche en grand avec le total à vie dessous ; le niveau actuel avec le niveau max à vie dessous, même
+ * quand le max égale le niveau.
+ */
+describe('la paire poche / total et niveau / max', () => {
+  const sparks = { pocket: 976, cycle: 40_000, lifetime: 41_250, debt: 0 } as const;
+
+  test('les étincelles CONVERTIBLES en grand, le cumul du cycle rapporté au total à vie en petit dessous (porteur 2026-10-17)', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 });
+    expect(shown).toMatch(/data-game-sparks="976"/);
+    expect(text(shown)).toMatch(/976 étincelles\s*dans ta lumière/);
+    expect(text(shown)).not.toContain('En poche');
+    expect(shown).toMatch(/data-game-sparks-lifetime="41250"/);
+    expect(text(shown)).toMatch(/40\s?000 cet Âge · 41\s?250 en tout/);
+    expect(shown.indexOf('data-game-sparks=')).toBeLessThan(shown.indexOf('data-game-sparks-lifetime='));
+  });
+
+  test('sans Prestige, le cycle égale le total à vie : un seul nombre cumulé', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks: { ...sparks, cycle: 41_250 }, levelMaxLifetime: 52 });
+    expect(text(shown)).toMatch(/41\s?250 reçues depuis toujours/);
+    expect(text(shown)).not.toContain(' / ');
+  });
+
+  test('le niveau actuel, le record de niveau dessous (#10899)', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 });
+    expect(shown).toMatch(/data-game-level-max="52"/);
+    expect(text(shown)).toContain('Ta plus haute lumière : niveau 52');
+    expect(shown.indexOf('data-game-level-now=')).toBeLessThan(shown.indexOf('data-game-level-max='));
+  });
+
+  test('TOUJOURS affichée : le niveau max est dit même quand il égale le niveau', () => {
+    const shown = html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 20, levelRecord: 20 });
+    expect(shown).toMatch(/data-game-level-max="/);
+  });
+
+  test('devant un serveur antérieur : la poche est l\'ancien score, le total à vie n\'est pas inventé, le niveau max est lu sur le record', () => {
+    const shown = html();
+    expect(shown).toMatch(/data-game-sparks="/);
+    expect(shown).not.toContain('data-game-sparks-lifetime');
+    expect(shown).toMatch(/data-game-level-max="/);
+  });
+
+  test('une dette se dit, avec le sens : elle se déduit des prochains gains', () => {
+    const shown = html({ score: 0, debitablePoints: 0, sparks: { ...sparks, debt: 120 }, levelMaxLifetime: 52 });
+    expect(shown).toMatch(/data-game-sparks-debt="120"/);
+    expect(text(shown)).toContain('Une ombre sur 120 étincelles');
+  });
+
+  test('sans dette, aucune ligne de dette', () => {
+    expect(html({ score: 0, debitablePoints: 976, sparks, levelMaxLifetime: 52 })).not.toContain('data-game-sparks-debt');
   });
 });

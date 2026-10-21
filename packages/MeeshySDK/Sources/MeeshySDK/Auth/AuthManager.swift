@@ -2,80 +2,6 @@ import Foundation
 import Combine
 import os
 
-// MARK: - Profile Snapshot
-
-/// Immutable capture of the three profile-editable fields, returned by
-/// `AuthManaging.applyLocalProfileChanges` and consumed by
-/// `restoreLocalProfileSnapshot` for optimistic-rollback flows.
-public struct ProfileSnapshot: Sendable, Equatable, Codable {
-    public let displayName: String?
-    public let bio: String?
-    public let avatarUrl: String?
-
-    public init(displayName: String?, bio: String?, avatarUrl: String?) {
-        self.displayName = displayName
-        self.bio = bio
-        self.avatarUrl = avatarUrl
-    }
-}
-
-// MARK: - Protocol
-
-@MainActor
-public protocol AuthManaging: AnyObject {
-    var isAuthenticated: Bool { get }
-    var currentUser: MeeshyUser? { get }
-    var isLoading: Bool { get }
-    var errorMessage: String? { get }
-    var savedAccounts: [SavedAccount] { get }
-    var authToken: String? { get }
-    var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> { get }
-    var requires2FA: Bool { get }
-    var twoFactorToken: String? { get }
-    func completeLoginWith2FA(code: String) async
-    @discardableResult
-    func login(username: String, password: String) async -> LoginOutcome
-    func register(request: RegisterRequest) async
-    func requestMagicLink(email: String) async -> Bool
-    func validateMagicLink(token: String) async
-    func requestPasswordReset(email: String) async -> Bool
-    /// P1 — quiesce-then-purge : disconnect sockets, reset les services SDK
-    /// (BlockService, UserPreferences, PushNotification, Notification*, etc.),
-    /// wipe le SessionSnapshot puis le keychain, et enfin bascule
-    /// `isAuthenticated = false` en dernier pour que le router voie un état
-    /// cohérent. Voir `docs/superpowers/specs/2026-05-26-user-session-migration-design.md`.
-    func logout() async
-    func checkExistingSession() async
-    func handleUnauthorized()
-    @discardableResult
-    func refreshSession(force: Bool) async throws -> String
-    func removeSavedAccount(userId: String)
-
-    /// Applies up to three profile field changes locally, without any
-    /// network call. `nil` for a field means "leave unchanged". Returns
-    /// a snapshot of the pre-mutation values for later rollback.
-    /// Publishes via `currentUser` so all subscribers refresh in the
-    /// same run-loop tick.
-    @discardableResult
-    func applyLocalProfileChanges(
-        displayName: String?,
-        bio: String?,
-        avatarUrl: String?
-    ) -> ProfileSnapshot
-
-    /// Restores the three profile fields from a snapshot. Used by
-    /// EditProfileViewModel when `OfflineQueue.outcomeStream` emits
-    /// `.exhausted` for the corresponding `updateProfile` row.
-    func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot)
-
-    /// Reflects a confirmed `voicePublic` change onto `currentUser` (in-memory
-    /// publish + keychain persist) after a successful `PATCH /users/me`. Without
-    /// it, a screen that re-derives its toggle from `currentUser.voicePublic`
-    /// (e.g. VoiceProfileManageViewModel.loadProfile) would restore the stale
-    /// value on reopen.
-    func applyLocalVoicePublicChange(_ isPublic: Bool)
-}
-
 // MARK: - Implementation
 
 @MainActor
@@ -91,7 +17,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     @Published public var isAuthenticated = false
 
-    /// **La session a-t-elle été REGARDÉE ?** (#5968)
+    /// **La session a-t-elle été REGARDÉE ?**
     ///
     /// `isAuthenticated` naît `false` et `checkExistingSession()` est async :
     /// entre le lancement et sa conclusion, `false` ne veut pas dire « pas de
@@ -99,9 +25,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// rejouant sa valeur courante à tout nouvel abonné, un consommateur qui
     /// s'abonne tôt reçoit ce `false`-là et le prend pour un verdict.
     ///
-    /// Ce que ça a coûté : `DependencyContainer` s'abonne à la CONSTRUCTION de
-    /// l'`App` et purgeait la base locale — 25 messages et 7 lignes d'outbox
-    /// mesurés — à chaque démarrage à froid, session parfaitement valide.
+    /// Sans ce fait, `DependencyContainer` — qui s'abonne à la CONSTRUCTION de
+    /// l'`App` — purgerait la base locale à chaque démarrage à froid, session
+    /// parfaitement valide.
     ///
     /// Passe à `true` UNE fois, à la fin de `checkExistingSession()`, quelle
     /// que soit l'issue : c'est un fait sur la LECTURE, pas sur son résultat.
@@ -110,7 +36,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     ///
     /// Sans elle, l'app n'a que `isAuthenticated`, qui vaut `true` de la même
     /// façon après une connexion et après une inscription. Deux moments qui
-    /// n'autorisent pourtant pas la même chose : #5218 diffère la demande de
+    /// n'autorisent pourtant pas la même chose : l'inscription diffère la demande de
     /// permission de notification quand le compte VIENT D'ÊTRE CRÉÉ, pour ne
     /// pas poser une alerte système devant quelqu'un qui n'a encore rien
     /// envoyé.
@@ -122,15 +48,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
     @Published public var twoFactorToken: String?
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
-    /// #8286 — une bascule entre deux comptes gardés est en cours : la session
+    /// Une bascule entre deux comptes gardés est en cours : la session
     /// sortante est quittée, l'entrante pas encore reprise. La racine y montre
     /// un écran neutre plutôt que la connexion.
     @Published public internal(set) var isSwitchingAccount = false
-    /// #9612 — la fermeture que le serveur vient de prononcer, à EXPLIQUER
+    /// Le verrou de bascule est tenu par le retrait du compte ACTIF.
+    var isRetiringActiveAccount = false
+    /// La fermeture que le serveur vient de prononcer, à EXPLIQUER
     /// avant la reconnexion (« fermée par l'équipe Meeshy », « depuis un autre
     /// appareil »…). `nil` dès que l'utilisateur l'a lue.
     @Published public private(set) var sessionRevocationNotice: SessionRevocationNotice?
-    /// #8286 — le choix « Rester connecté sur cet appareil » d'une connexion
+    /// Le choix « Rester connecté sur cet appareil » d'une connexion
     /// en cours, consommé par la session qu'elle ouvre (second facteur compris).
     var pendingKeepSignedIn: Bool?
 
@@ -175,7 +103,28 @@ public final class AuthManager: ObservableObject, AuthManaging {
     internal var authService: AuthServiceProviding = AuthService.shared
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
-    private var tokenRefreshTask: Task<String, Error>?
+    var tokenRefreshTask: Task<String, Error>?
+    /// Sa session, et les jetons remplacés de la session ouverte (`+RequestOwnership`).
+    var tokenRefreshOwner: SessionOwner?
+    var retiredSessionTokens: (owner: SessionOwner, tokens: [String])?
+
+    /// La génération de la session ouverte. `leaveActiveSession` la
+    /// change EN ENTRANT : un rafraîchissement lancé sous une autre génération
+    /// ne pose rien, même si le compte qu'il rafraîchit est encore actif
+    /// pendant les attentes de la sortie.
+    var sessionGeneration: UInt64 = 0
+    /// Les sorties de session EN COURS. Un compteur, pas un drapeau :
+    /// deux sorties qui se chevauchent (déconnexion pendant une bascule) ne se
+    /// lèvent pas l'une l'autre en finissant.
+    var activeSessionExits = 0
+    /// Une sortie est en cours : aucun rafraîchissement ne commence, et aucun
+    /// refus ne démonte le compte qu'elle retire déjà.
+    var isLeavingActiveSession: Bool { activeSessionExits > 0 }
+    #if DEBUG
+    /// Les fermetures de sessions prouvées refusées, lancées sans être
+    /// attendues : retenues pour que les témoins les attendent.
+    var refusedSessionClosuresForTesting: [Task<Void, Never>] = []
+    #endif
 
     /// Throttle gate for `refreshCurrentUserProfile()` — foreground transitions
     /// can fire in quick succession (Control Center, app-switcher peek); this
@@ -185,7 +134,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     #if DEBUG
     /// Tâche d'arrière-plan lancée par `handleUnauthorized()`, retenue pour que
     /// les tests puissent l'attendre. Voir `cancelPendingTokenRefreshForTesting`.
-    private var unauthorizedRefreshTask: Task<Void, Never>?
+    var unauthorizedRefreshTask: Task<Void, Never>?
     #endif
 
     // Legacy global keys kept only for one-time migration
@@ -208,26 +157,31 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Namespaced keys
 
-    func tokenKey(for userId: String) -> String { "meeshy_token_\(userId)" }
-    func userKey(for userId: String) -> String { "meeshy_user_\(userId)" }
-    func sessionTokenKey(for userId: String) -> String { "meeshy_session_token_\(userId)" }
+    func tokenKey(for userId: String) -> String { AuthStorageKeys.token(for: userId) }
+    func userKey(for userId: String) -> String { AuthStorageKeys.user(for: userId) }
+    func sessionTokenKey(for userId: String) -> String { AuthStorageKeys.sessionToken(for: userId) }
 
     /// Le jeton de SESSION du compte actif, ou `nil`.
     ///
-    /// Il voyage déjà en en-tête `X-Session-Token` sur les appels REST ; il
-    /// manquait au handshake Socket.IO, si bien qu'un socket inscrit
-    /// s'authentifiait au JWT SEUL et que le serveur n'avait aucun moyen de
-    /// dire quel socket appartient à quelle session. Révoquer une session
-    /// passait la ligne à `isValid: false` et l'appareil continuait de tout
-    /// recevoir indéfiniment (#4213).
+    /// Il voyage en en-tête `X-Session-Token` sur les appels REST, et dans le
+    /// handshake Socket.IO : sans lui, un socket inscrit s'authentifierait au
+    /// JWT SEUL et le serveur n'aurait aucun moyen de dire quel socket
+    /// appartient à quelle session. Révoquer une session passe la ligne à
+    /// `isValid: false` ; sans ce jeton l'appareil continuerait de tout
+    /// recevoir indéfiniment.
     public var currentSessionToken: String? {
         guard let userId = activeUserId else { return nil }
         return keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
     }
-    func tokenDateUDKey(for userId: String) -> String { "meeshy_token_date_\(userId)" }
-    func pendingProfileKey(for userId: String) -> String { "meeshy_pending_profile_\(userId)" }
+    func tokenDateUDKey(for userId: String) -> String { AuthStorageKeys.tokenDate(for: userId) }
+    func pendingProfileKey(for userId: String) -> String { AuthStorageKeys.pendingProfile(for: userId) }
 
     // MARK: - Active user
+
+    /// Le compte actif tel que le trousseau le garde, lisible AVANT la restauration de session. Une action
+    /// de notification (réponse rapide, commentaire) peut s'exécuter app tuée, avant `checkExistingSession` :
+    /// `currentUser` est encore vide, et le texte tapé sur l'écran verrouillé partirait à la poubelle.
+    public var persistedActiveUserId: String? { activeUserId }
 
     var activeUserId: String? {
         get { keychain.load(forKey: activeUserIdUDKey, account: nil) }
@@ -281,48 +235,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Self.isTokenExpired(authToken, now: Date())
     }
 
-    /// D2 — pure decoder so tests can probe every branch without driving
-    /// the singleton's Keychain/UserDefaults state. Returns `true` for
-    /// every malformed input (safe default) and logs the reason so a
-    /// silent-logout report can be traced.
+    /// D2 — pure decoder (`AuthJWTExpiry`): `true` for every malformed input.
     nonisolated public static func isTokenExpired(_ token: String?, now: Date) -> Bool {
-        guard let token else { return true }
-        let parts = token.split(separator: ".")
-        guard parts.count == 3 else {
-            Logger.auth.warning("JWT structurally invalid (parts=\(parts.count)); treating as expired")
-            return true
-        }
-        var base64 = String(parts[1])
-            .replacingOccurrences(of: "-", with: "+")
-            .replacingOccurrences(of: "_", with: "/")
-        while base64.count % 4 != 0 { base64.append("=") }
-        guard let data = Data(base64Encoded: base64) else {
-            Logger.auth.warning("JWT payload base64 decode failed; treating as expired")
-            return true
-        }
-        let json: [String: Any]
-        do {
-            guard let decoded = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-                Logger.auth.warning("JWT payload not a JSON object; treating as expired")
-                return true
-            }
-            json = decoded
-        } catch {
-            Logger.auth.warning("JWT payload JSON deserialization failed: \(error.localizedDescription, privacy: .public); treating as expired")
-            return true
-        }
-        guard let exp = json["exp"] as? TimeInterval else {
-            Logger.auth.warning("JWT payload missing `exp` claim; treating as expired")
-            return true
-        }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < now
+        AuthJWTExpiry.isExpired(token, now: now)
     }
 
     // MARK: - Login
 
+    /// Refusée pendant un changement de compte ; la session qu'elle
+    /// ne peut pas poser est refermée côté passerelle.
     public func completeLoginWith2FA(code: String) async {
         guard let twoFactorToken = twoFactorToken else {
             errorMessage = "Session 2FA expirée ou invalide"
+            return
+        }
+        guard !isSwitchingAccount else {
+            errorMessage = AccountSwitchUnderway().errorDescription
             return
         }
         isLoading = true
@@ -333,7 +261,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
             if let token = data.token, let user = data.user {
                 self.requires2FA = false
                 self.twoFactorToken = nil
-                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .login)
+                try installClosingRefused(EmailProvenSession(
+                    token: token, sessionToken: data.sessionToken, user: user, origin: .login))
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -371,7 +300,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// jumelle, pour qu'un écran branché sur l'un ou l'autre voie le même
     /// `AuthManager`.
     ///
-    /// #8055 — rend `.verificationRequired` quand le compte, créé SANS numéro,
+    /// Rend `.verificationRequired` quand le compte, créé SANS numéro,
     /// attend la preuve de son adresse : aucune session n'est appliquée, et
     /// l'écran présente la saisie du code (le mot de passe est déjà sur le
     /// compte). `.authenticated` quand la session est appliquée.
@@ -379,7 +308,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func registerThrowing(request: RegisterRequest) async throws -> RegistrationOutcome {
         switch try await registerHoldingSession(request: request) {
         case .session(let proven, _):
-            openSession(proven)
+            try installClosingRefused(proven)
             return .authenticated
         case .verificationRequired(let pending):
             return .verificationRequired(pending)
@@ -387,18 +316,23 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     public func register(request: RegisterRequest) async {
+        guard !isSwitchingAccount else {
+            errorMessage = AccountSwitchUnderway().errorDescription
+            return
+        }
         isLoading = true
         errorMessage = nil
 
         do {
             let data = try await authService.register(request: request)
-            // #8055 — compte créé sans numéro : aucune session, rien d'une panne.
+            // Compte créé sans numéro : aucune session, rien d'une panne.
             if data.pendingEmailVerification(typedIdentifier: request.email) != nil {
                 isLoading = false
                 return
             }
             if let token = data.token, let user = data.user {
-                applySession(token: token, sessionToken: data.sessionToken, user: user, origin: .registration)
+                try installClosingRefused(EmailProvenSession(
+                    token: token, sessionToken: data.sessionToken, user: user, origin: .registration))
             } else {
                 throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
             }
@@ -451,7 +385,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Déconnexion, en choisissant si le compte est OUBLIÉ.
     ///
-    /// `forgettingAccount: false` est la « Déconnexion » des réglages (#8286) :
+    /// `forgettingAccount: false` est la « Déconnexion » des réglages :
     /// la session finit — serveur, jeton, jeton de session, profil et caches
     /// par compte — mais le compte RESTE listé. Y revenir redemande le mot de
     /// passe (ou un lien magique) : une `SavedAccount` ne porte que l'identité.
@@ -462,7 +396,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// consommateur est l'écran de réglages, qui tient le type concret en
     /// `@EnvironmentObject`, et l'ajouter au protocole casserait les mocks de
     /// tous ses autres conformants sans servir personne.
+    ///
+    /// Pendant un changement de compte, la session sortante est déjà
+    /// démontée et l'entrante pas encore posée : la déconnexion attend qu'il
+    /// rende la main, puis ferme ce qui est ouvert.
     public func logout(forgettingAccount: Bool) async {
+        guard await awaitAccountSwitchEnd() else { return }
         let outgoing = activeUserId
         await leaveActiveSession(endingIt: true)
         guard let userId = outgoing else {
@@ -479,30 +418,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
         isAuthenticated = false
     }
 
-    /// D5 — best-effort server logout with bounded retries. Returns once
-    /// the server has acked OR after 3 attempts (10s total) have failed.
-    /// The local logout state is already gone by the time this runs, so
-    /// failures are tolerated — the worst case is the gateway sees the
-    /// next request, fails token verification, and lazily kills the
-    /// session.
     func performServerLogoutWithRetries(token: String) async {
-        let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
-        for delay in delays {
-            if delay > 0 {
-                do {
-                    try await Task.sleep(for: .seconds(delay))
-                } catch {
-                    return // Task cancelled
-                }
-            }
-            do {
-                try await authService.logoutThrowing(token: token)
-                return
-            } catch {
-                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
-            }
-        }
-        Logger.auth.error("Server logout exhausted retries — session may linger on gateway")
+        await AuthServerLogout.run(token: token, using: authService)
     }
 
     // MARK: - Remove Saved Account
@@ -514,7 +431,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
-        // #8674 — retiré de l'appareil : son cache part, qu'il soit vivant ou
+        // Retiré de l'appareil : son cache part, qu'il soit vivant ou
         // mis de côté.
         guard activeUserId == userId else {
             if let key = accountKey(for: userId) { CacheAccountBinder.shared.forget(key) }
@@ -537,6 +454,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // état neuf doit être porté par TOUTES les portes du type. Le `defer`
         // les couvre par construction — on ne peut pas en oublier une.
         defer { hasResolvedStoredSession = true }
+        // Un changement de compte en cours tient la session : la
+        // reprise ci-dessous effacerait l'état qu'il est en train de poser.
+        guard !isSwitchingAccount else { return }
         loadSavedAccounts()
         migrateFromLegacyKeysIfNeeded()
 
@@ -559,20 +479,25 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// dead account (`isActive == false`) or an auth failure surfaces
     /// re-authentication, any other error is transient and leaves the
     /// session untouched.
+    ///
+    /// La réponse ne vaut que pour la session qui l'a demandée : une
+    /// sortie commencée, ou une autre session posée entre-temps, l'écarte.
     public func refreshCurrentUserProfile() async {
         guard isAuthenticated, let userId = activeUserId else { return }
         if let lastProfileRefreshAt, Date().timeIntervalSince(lastProfileRefreshAt) < 60 {
             return
         }
         lastProfileRefreshAt = Date()
+        let generation = sessionGeneration
 
         do {
             let user = try await authService.me()
-            updateUserAfterRevalidation(user, userId: userId)
+            guard !isLeavingActiveSession, sessionGeneration == generation, activeUserId == userId else { return }
+            updateUserAfterRevalidation(user, userId: userId, generation: generation)
         } catch let error as MeeshyError {
             switch error {
             case .auth:
-                requireReauthentication(userId: userId)
+                requireReauthentication(userId: userId, generation: generation)
             case .network, .server, .message, .media, .forbidden, .rejected, .unknown:
                 // Transient — keep session, retry on next foreground / launch.
                 break
@@ -593,9 +518,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
         // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
         // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
+        // Pour la session de CE 401 : si un autre compte (ou une autre
+        // session) s'est ouvert avant que la tâche ne s'exécute, rien ne part.
+        let owner = activeUserId.map { SessionOwner(userId: $0, generation: sessionGeneration) }
         let backgroundRefresh = Task { [weak self] in
+            guard let self, let owner, let userId = self.activeUserId,
+                  SessionOwner(userId: userId, generation: self.sessionGeneration) == owner else { return }
             do {
-                _ = try await self?.refreshSession(force: true)
+                _ = try await self.refreshSession(force: true)
             } catch {
                 Logger.auth.error("Background session refresh after 401 failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -625,13 +555,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
     ///
     /// Sans session active, rien à révoquer : on sort.
     ///
-    /// Le motif (#9612) est gardé pour l'avis que la racine montre avant la
+    /// Le motif est gardé pour l'avis que la racine montre avant la
     /// reconnexion ; il ne change rien au chemin de fermeture.
     public func handleSessionRevoked(reason: SessionRevocationReason = .unknown) {
-        guard let userId = activeUserId else { return }
+        guard let userId = activeUserId, !AccountDeletedSignal.isAwaitingRetirement(userId) else { return }
         Logger.auth.warning("Session revoked by server (\(reason.rawValue, privacy: .public)) — requiring re-authentication")
         sessionRevocationNotice = SessionRevocationNotice(reason: reason)
-        requireReauthentication(userId: userId)
+        requireReauthentication(userId: userId, generation: sessionGeneration)
     }
 
     /// L'utilisateur a lu l'avis de fermeture.
@@ -654,16 +584,55 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentlyAuthenticated && currentActiveUserId == newUserId
     }
 
+    /// La loi de `applySession` : une session ouverte n'accepte que
+    /// son propre utilisateur (rotation). Un compte actif INCONNU (`nil`) sous
+    /// une session ouverte n'est pas une permission : il refuse aussi.
+    ///
+    /// La loi n'a AUCUNE dérogation. Changer de compte, c'est d'abord
+    /// DÉMONTER la session ouverte ; ce qui la pose ensuite passe ici comme une
+    /// première connexion. Un drapeau « changement de compte » laisserait passer
+    /// l'autre utilisateur précisément quand le démontage n'a pas eu lieu.
+    nonisolated static func refusesSessionReplacement(
+        currentlyAuthenticated: Bool,
+        currentActiveUserId: String?,
+        newUserId: String
+    ) -> Bool {
+        guard currentlyAuthenticated else { return false }
+        return currentActiveUserId != newUserId
+    }
+
+    /// Un rafraîchissement ne s'applique qu'au compte qui l'a
+    /// demandé, s'il est TOUJOURS le compte actif.
+    nonisolated static func appliesRefreshedSession(refreshedUserId: String, currentActiveUserId: String?) -> Bool {
+        currentActiveUserId == refreshedUserId
+    }
+
     /// `origin` par défaut à `.restored` : un renouvellement de jeton (la
     /// rotation, plus bas) est bien une session REPRISE, et les suites qui
     /// posent une session à la main n'ont pas d'origine à déclarer.
+    ///
+    /// Refuse d'installer un AUTRE utilisateur par-dessus une session
+    /// ouverte : poser une session sans démonter la précédente laisserait ses
+    /// sockets, ses files et ses caches servir le compte entrant. Passer à un
+    /// autre compte quitte d'abord la session sortante (`switchToProvenAccount`,
+    /// `switchAccount(to:)`). Le refus précède toute écriture.
     internal func applySession(
         token: String,
         sessionToken: String?,
         user: MeeshyUser,
         origin: SessionOrigin = .restored
-    ) {
+    ) throws {
         let userId = user.id
+        if Self.refusesSessionReplacement(
+            currentlyAuthenticated: isAuthenticated,
+            currentActiveUserId: activeUserId,
+            newUserId: userId
+        ) {
+            Logger.auth.error("Refused to install another user's session over the open session")
+            throw SessionReplacementRefused(activeUserId: activeUserId, incomingUserId: userId)
+        }
+        // Un compte compte sous son identité : la clé visiteur s'efface.
+        VisitorReaderKey(keychain: keychain).purge()
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
         // sockets need to be torn down and reconnected with the new JWT.
@@ -704,7 +673,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         activeUserId = userId
         APIClient.shared.authToken = token
-        // Le jeton de session suit le JWT (#4213) : le transport le lit depuis
+        // Le jeton de session suit le JWT : le transport le lit depuis
         // un contexte non isolé, et sans lui aucune révocation ne peut viser
         // ce socket-ci plutôt qu'un autre.
         APIClient.shared.registeredSessionToken = currentSessionToken
@@ -723,7 +692,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // deux dans la même passe, et la lire après ferait décider le bascule
         // sur l'origine de la session PRÉCÉDENTE.
         sessionOrigin = origin
-        // #8674 — le cache devient celui de ce compte (rendu s'il en avait un
+        // Le cache devient celui de ce compte (rendu s'il en avait un
         // de côté). Sans effet sur une rotation de jeton.
         if !isTokenRotation { CacheAccountBinder.shared.bind(accountKey(for: userId)) }
         isAuthenticated = true
@@ -747,96 +716,32 @@ public final class AuthManager: ObservableObject, AuthManaging {
         Task { await BlockService.shared.refreshCache() }
     }
 
-    /// Soft re-auth signal: the server told us the session is genuinely
-    /// invalid (revoked, expired beyond the sliding window, account
-    /// disabled). We clear the active token + sessionToken so the API
-    /// client stops sending dead credentials and flip `isAuthenticated`
-    /// to false so the UI can prompt for re-login. The saved account is
-    /// preserved — the user just needs to enter their password again.
-    func requireReauthentication(userId: String) {
-        // startup-03 — signal AVANT tout flip pour que le hook outbox
-        // (DependencyContainer) distingue une session invalidée par le
-        // serveur d'un logout volontaire (qui n'émet jamais ce signal).
-        sessionInvalidated.send(())
-        keychain.delete(forKey: tokenKey(for: userId), account: nil)
-        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
-        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
-        // #8674 — session révoquée : le cache du compte part, rien n'en est
-        // mis de côté (ses jetons viennent d'être effacés).
-        CacheAccountBinder.shared.bind(nil)
-        activeUserId = nil
-        currentUser = nil
-        // sync-04 — ce chemin ne passe PAS par logout() mais son flip
-        // isAuthenticated purge quand même les caches (container + app) :
-        // sans ce reset, la ré-auth du MÊME compte hérite d'un checkpoint
-        // pointant après des données purgées = delta partiel servi comme frais.
-        ConversationSyncEngine.shared.resetSyncCheckpoints()
-        isAuthenticated = false
-        APIClient.shared.authToken = nil
-        APIClient.shared.registeredSessionToken = nil
-    }
+    private var profileStore: AuthProfileKeychainStore { AuthProfileKeychainStore(keychain: keychain) }
 
     private func saveUserToKeychain(_ user: MeeshyUser, userId: String) {
-        let sanitized = user.droppingDataURIImages()
-        do {
-            let encoded = try JSONEncoder().encode(sanitized)
-            guard let jsonString = String(data: encoded, encoding: .utf8) else {
-                Logger.auth.error("Failed to convert sanitized user data to UTF8 string for userId \(userId, privacy: .public)")
-                return
-            }
-            try keychain.save(jsonString, forKey: userKey(for: userId), account: nil)
-        } catch {
-            Logger.auth.error("Failed to save user to keychain for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        profileStore.saveUser(user, userId: userId)
     }
 
-    /// U3-cont'd — `pendingOptimisticProfile` guards a revalidation/refresh
-    /// response from clobbering an in-flight optimistic edit, but was
-    /// in-memory only: a kill+relaunch while the `updateProfile` outbox row
-    /// was still unconfirmed dropped the guard, so the next cold start's
-    /// `/auth/me` revalidation clobbered the correctly keychain-hydrated
-    /// optimistic profile with the stale pre-edit server value (no version/
-    /// timestamp compare recovers from that). Persisting the guard itself —
-    /// not just the optimistic user — closes that window: `checkExistingSession`
-    /// reloads it before the revalidation Task can run.
     private func savePendingProfileToKeychain(_ snapshot: ProfileSnapshot, userId: String) {
-        do {
-            let encoded = try JSONEncoder().encode(snapshot)
-            guard let jsonString = String(data: encoded, encoding: .utf8) else {
-                Logger.auth.error("Failed to convert pending profile guard to UTF8 string for userId \(userId, privacy: .public)")
-                return
-            }
-            try keychain.save(jsonString, forKey: pendingProfileKey(for: userId), account: nil)
-        } catch {
-            Logger.auth.error("Failed to persist pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-        }
+        profileStore.savePendingProfile(snapshot, userId: userId)
     }
 
     func loadPendingProfileFromKeychain(userId: String) -> ProfileSnapshot? {
-        guard let jsonString = keychain.load(forKey: pendingProfileKey(for: userId), account: nil),
-              let data = jsonString.data(using: .utf8) else { return nil }
-        do {
-            return try JSONDecoder().decode(ProfileSnapshot.self, from: data)
-        } catch {
-            // Snapshot écrit par une version antérieure de `ProfileSnapshot` :
-            // traité comme « aucun profil en attente ».
-            Logger.auth.error("Failed to decode pending profile guard for userId \(userId, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            return nil
-        }
+        profileStore.loadPendingProfile(userId: userId)
     }
 
     private func clearPendingProfileFromKeychain(userId: String) {
-        keychain.delete(forKey: pendingProfileKey(for: userId), account: nil)
+        profileStore.clearPendingProfile(userId: userId)
     }
 
-    func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String) {
+    func updateUserAfterRevalidation(_ user: MeeshyUser, userId: String, generation: UInt64) {
         // Server-side deactivation (admin disable, account deletion, etc.)
         // arrives as `isActive: false` on a 200 /auth/me response. The token
         // is still cryptographically valid but the account is dead — surface
         // a re-auth screen so the user knows and so the app stops issuing
         // calls on a zombie session.
         if user.isActive == false {
-            requireReauthentication(userId: userId)
+            requireReauthentication(userId: userId, generation: generation)
             return
         }
         // U3 — the revalidated /auth/me user doesn't port voicePublic (self-only
@@ -858,16 +763,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     @discardableResult
     public func refreshSession(force: Bool = false) async throws -> String {
-        if let task = tokenRefreshTask {
-            return try await task.value
-        }
-
         guard let userId = activeUserId else {
             throw MeeshyError.auth(.sessionExpired)
         }
+        let owner = SessionOwner(userId: userId, generation: sessionGeneration)
+        // Seule la MÊME session rejoint le rafraîchissement en vol.
+        // Celui d'une session quittée s'abandonnera de lui-même ; le rejoindre
+        // ferait hériter son abandon au compte qui vient de s'ouvrir.
+        if let task = tokenRefreshTask, tokenRefreshOwner == owner {
+            return try await awaitRefresh(task, for: owner)
+        }
 
-        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
-            requireReauthentication(userId: userId)
+        guard let token = sessionTokenInUse(for: userId) else {
+            requireReauthentication(userId: userId, generation: sessionGeneration)
             throw MeeshyError.auth(.sessionExpired)
         }
         let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
@@ -877,6 +785,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return token
         }
 
+        // Pendant la sortie, le compte quitté est encore actif : un
+        // rafraîchissement lancé maintenant rouvrirait ses sockets.
+        guard !isLeavingActiveSession else { throw CancellationError() }
+        let generation = sessionGeneration
+
         let task = Task<String, Error> { [weak self] in
             guard let self = self else { throw CancellationError() }
             do {
@@ -884,15 +797,33 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 guard let newToken = data.token, let newUser = data.user else {
                     throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
                 }
-                self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
+                // Le compte rafraîchi a pu être QUITTÉ pendant l'appel
+                // (changement de compte, déconnexion) : sa session rafraîchie
+                // est abandonnée, jamais réinstallée. Pas une `MeeshyError` :
+                // les jetons d'un compte gardé au sélecteur restent intacts.
+                // Ni quand une sortie a COMMENCÉ pendant l'appel : le
+                // compte y est encore actif tant qu'elle attend.
+                guard Self.appliesRefreshedSession(refreshedUserId: userId, currentActiveUserId: self.activeUserId),
+                      self.sessionGeneration == generation else {
+                    Logger.auth.info("Refreshed session abandoned: its account is no longer the active one")
+                    throw CancellationError()
+                }
+                // Le jeton remplacé reste reconnu comme de CETTE
+                // session : son 401 tardif se rejouera sans rien rafraîchir.
+                self.retire(token, from: owner)
+                try self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
                 return newToken
             } catch let error as MeeshyError {
-                // Un compte de moins de 13 ans (#9929) ne se rafraîchit plus :
+                // Le refus d'une session qu'on a quittée ne ferme pas
+                // celle qui l'a remplacée, et n'est pas rendu comme un refus :
+                // l'appelant (`APIClient`) le traduirait en session expirée.
+                guard self.sessionGeneration == generation else { throw CancellationError() }
+                // Un compte de moins de 13 ans ne se rafraîchit pas :
                 // ses jetons partent, sans quoi chaque requête rejouerait le refus.
                 if case .auth = error {
-                    self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId, generation: generation)
                 } else if AgeGateSignal.isAgeRefusal(error) {
-                    self.requireReauthentication(userId: userId)
+                    self.requireReauthentication(userId: userId, generation: generation)
                 }
                 throw error
             } catch {
@@ -901,72 +832,36 @@ public final class AuthManager: ObservableObject, AuthManaging {
         }
 
         tokenRefreshTask = task
+        tokenRefreshOwner = owner
 
+        // Ne libère que SA tâche : une autre session a pu en poser
+        // une depuis, et l'effacer la ferait rafraîchir deux fois.
         defer {
-            tokenRefreshTask = nil
+            if tokenRefreshTask == task {
+                tokenRefreshTask = nil
+                tokenRefreshOwner = nil
+            }
         }
 
-        return try await task.value
+        return try await awaitRefresh(task, for: owner)
     }
 
     // MARK: - Migration from legacy global keys (one-time, at first launch)
 
     private func migrateFromLegacyKeysIfNeeded() {
-        // 1. Migrate activeUserId from UserDefaults to Keychain
-        if let legacyActiveId = userDefaults.string(forKey: activeUserIdUDKey) {
-            if keychain.load(forKey: activeUserIdUDKey, account: nil) == nil {
-                do {
-                    try keychain.save(legacyActiveId, forKey: activeUserIdUDKey, account: nil)
-                } catch {
-                    Logger.auth.error("Legacy migration failed for activeUserId: \(error.localizedDescription, privacy: .public)")
-                }
+        LegacyAuthKeyMigration(
+            keychain: keychain,
+            userDefaults: userDefaults,
+            activeUserIdKey: activeUserIdUDKey,
+            savedAccountsKey: savedAccountsUDKey,
+            legacyTokenKey: legacyTokenKey,
+            legacyUserKey: legacyUserKey,
+            currentActiveUserId: { [unowned self] in self.activeUserId },
+            adopt: { [unowned self] user in
+                self.activeUserId = user.id
+                self.upsertSavedAccount(from: user)
             }
-            userDefaults.removeObject(forKey: activeUserIdUDKey)
-        }
-
-        // 2. Migrate savedAccounts from UserDefaults to Keychain
-        if let legacyData = userDefaults.data(forKey: savedAccountsUDKey),
-           let legacyJson = String(data: legacyData, encoding: .utf8) {
-            if keychain.load(forKey: savedAccountsUDKey, account: nil) == nil {
-                do {
-                    try keychain.save(legacyJson, forKey: savedAccountsUDKey, account: nil)
-                } catch {
-                    Logger.auth.error("Legacy migration failed for savedAccounts: \(error.localizedDescription, privacy: .public)")
-                }
-            }
-            userDefaults.removeObject(forKey: savedAccountsUDKey)
-        }
-
-        // 3. First migrate any UserDefaults → Keychain entries
-        // (Uses the default keychain implementation's migration helper if available)
-        if let manager = keychain as? KeychainManager {
-            manager.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
-        }
-
-        // 4. Only migrate if no active user is set yet
-        guard activeUserId == nil,
-              let token = keychain.load(forKey: legacyTokenKey, account: nil),
-              let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
-              let userData = userJSON.data(using: .utf8) else {
-            return
-        }
-
-        do {
-            let user = try JSONDecoder().decode(MeeshyUser.self, from: userData)
-            let userId = user.id
-            try keychain.save(token, forKey: tokenKey(for: userId), account: nil)
-            try keychain.save(userJSON, forKey: userKey(for: userId), account: nil)
-            // Use now as tokenSavedAt (we don't know the original date — within 1 year is safe)
-            let now = String(Date().timeIntervalSince1970)
-            try keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
-            activeUserId = userId
-            upsertSavedAccount(from: user)
-        } catch {
-            Logger.auth.error("Legacy user migration failed: \(error.localizedDescription, privacy: .public)")
-        }
-
-        keychain.delete(forKey: legacyTokenKey, account: nil)
-        keychain.delete(forKey: legacyUserKey, account: nil)
+        ).run()
     }
 
     // MARK: - Local Profile Mutation (optimistic)
@@ -1057,42 +952,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     #if DEBUG
-    /// Test-only seam: cancels and clears any in-flight `tokenRefreshTask`.
-    /// `handleUnauthorized()` fires a detached, fire-and-forget `Task` on
-    /// every 401 (e.g. from unrelated background activity — E2EE bundle
-    /// upload, story prefetch — hitting the stubbed `authService` while a
-    /// test runs) that sets `tokenRefreshTask` and isn't awaited by that
-    /// test. `refreshSession(force:)`'s `if let task = tokenRefreshTask {
-    /// return try await task.value }` serialization guard then makes the
-    /// NEXT test's own `refreshSession` call transparently await that
-    /// unrelated leftover task instead of evaluating its own state —
-    /// surfacing as a flaky, order-dependent failure in whichever test
-    /// happens to run right after one that triggered a 401. Call from
-    /// `setUp()` for hermetic test isolation.
-    ///
-    /// **Annuler ne suffit pas, il faut attendre.** `Task.cancel()` est
-    /// coopératif : une tâche déjà entrée dans `authService.refreshToken(…)`
-    /// va jusqu'au bout de son appel. Elle atterrit alors sur le stub du test
-    /// SUIVANT — installé entre-temps par son `setUp()` — et en incrémente le
-    /// compteur d'appels. Le test suivant voit un appel qu'il n'a pas fait.
-    ///
-    /// En attendant la valeur de la tâche, cette fonction garantit qu'aucun
-    /// appel de la tâche annulée ne peut plus survenir après son retour.
-    /// `try?` avale le `CancellationError` attendu, qui est ici le cas normal.
-    func cancelPendingTokenRefreshForTesting() async {
-        // L'ordre compte. La tâche d'arrière-plan de `handleUnauthorized()` est
-        // celle qui APPELLE `refreshSession` : tant qu'elle n'a pas démarré,
-        // `tokenRefreshTask` est encore `nil`. La vider d'abord ne servirait à
-        // rien — c'est l'autre qui la remplirait ensuite, contre le stub du
-        // test suivant.
-        let background = unauthorizedRefreshTask
-        unauthorizedRefreshTask = nil
-        await background?.value
-
-        let pending = tokenRefreshTask
-        tokenRefreshTask = nil
-        pending?.cancel()
-        _ = try? await pending?.value
+    /// Lève le délai d'une minute de `refreshCurrentUserProfile` : un
+    /// témoin qui le subirait passerait sans avoir rien demandé.
+    func resetProfileRefreshThrottleForTesting() {
+        lastProfileRefreshAt = nil
     }
     #endif
 }

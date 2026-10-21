@@ -40,7 +40,7 @@ enum NearbyDiscoverySection: String, CaseIterable, Sendable {
 // MARK: - Qui peut voir Discover
 
 /// Le staff de la plateforme, et lui seul : modérateurs, admins, bigboss.
-/// Même famille que `ConversationView.isCurrentUserAdminOrMod`, mais le rôle
+/// Même famille que l'ancien `ConversationView.isCurrentUserAdminOrMod` (retiré, #11214), mais le rôle
 /// de CONVERSATION n'y entre pas — Discover est une vue de plateforme.
 ///
 /// `nonisolated` sur le TYPE : la cible app compile sous
@@ -165,7 +165,7 @@ protocol NearbyPostCaching: Sendable {
 /// L'implémentation réelle : le magasin de feed déjà en place, sous une clé
 /// préfixée `nearby:` pour ne jamais écraser « main-feed » ni « bookmarks ».
 struct NearbyFeedPostCache: NearbyPostCaching {
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "nearby-cache")
+    private static let log = MeeshyLog.logger(.nearbyCache)
 
     func load(key: String) async -> CacheResult<[FeedPost]> {
         await CacheCoordinator.shared.feed.load(for: key)
@@ -417,7 +417,7 @@ final class NearbyDiscoveryViewModel: ObservableObject {
     private var pendingForceRefresh: Bool?
     private var cancellables = Set<AnyCancellable>()
 
-    private static let log = Logger(subsystem: "me.meeshy.app", category: "nearby")
+    private static let log = MeeshyLog.logger(.nearby)
 
     init(
         initialCoordinate: CLLocationCoordinate2D? = nil,
@@ -639,20 +639,39 @@ final class NearbyDiscoveryViewModel: ObservableObject {
             return
         }
         isLoading = true
-        defer { isLoading = false }
+        let radius = radiusKm
         do {
             let page = try await service.nearby(
                 latitude: coordinate.latitude,
                 longitude: coordinate.longitude,
-                radiusKm: radiusKm,
+                radiusKm: radius,
                 cursor: offset,
                 limit: Self.pageLimit
             )
-            append(page: page.data)
-            nextOffset = NearbyDiscoveryPage.nextOffset(from: page.pagination?.nextCursor)
+            // Recentré ou rayon changé pendant l'attente : cette page suivait une
+            // AUTRE recherche. L'ajouter montrait les posts de l'ancien centre
+            // sous le nouveau, et son décalage faisait sauter les premiers
+            // résultats du nouveau.
+            if Self.sameSearch(coordinate, radius, as: center, radiusKm) {
+                append(page: page.data)
+                nextOffset = NearbyDiscoveryPage.nextOffset(from: page.pagination?.nextCursor)
+            }
         } catch {
-            apply(failure: error)
+            if Self.sameSearch(coordinate, radius, as: center, radiusKm) { apply(failure: error) }
         }
+        isLoading = false
+        // Le rechargement demandé PENDANT la page (`recenter`, `setRadius`) était
+        // mis en file par `load()`, que seul `load()` vidait : il ne partait jamais.
+        if let queued = pendingForceRefresh {
+            pendingForceRefresh = nil
+            await load(forceRefresh: queued)
+        }
+    }
+
+    private static func sameSearch(_ coordinate: CLLocationCoordinate2D, _ radius: Double,
+                                   as current: CLLocationCoordinate2D?, _ currentRadius: Double) -> Bool {
+        guard let current else { return false }
+        return current.latitude == coordinate.latitude && current.longitude == coordinate.longitude && radius == currentRadius
     }
 
     // MARK: - Résolution du point de départ

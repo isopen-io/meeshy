@@ -60,7 +60,7 @@ struct GameHeroEarn: View {
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                 .foregroundColor(theme.textPrimary)
-            Text(String(localized: "game.hero.earn.chip", defaultValue: "jusqu’à +\(GameCopy.formatCount(item.weight))", bundle: .main))
+            Text(String(localized: "game.hero.earn.chip", defaultValue: "jusqu’à \(GameCopy.formatCount(item.weight))", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
         }

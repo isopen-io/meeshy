@@ -3,6 +3,7 @@
  * des écrans. Tout dessin est décoratif (`aria-hidden`) : l'hôte porte le texte.
  */
 export { AtlasStamp, stampTone } from './atlas-stamp';
+export { AuthorPlate } from './author-plate';
 export { Chest, type ChestState } from './chest';
 export { ConceptMark } from './concept-emblem';
 export { Flame } from './flame';

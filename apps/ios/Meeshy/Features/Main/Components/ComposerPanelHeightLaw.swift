@@ -1,4 +1,5 @@
 import CoreGraphics
+import SwiftUI
 
 /// Hauteur du panneau (+) du composeur — source unique, testée dans
 /// `ComposerPanelHeightLawTests` (#8869).
@@ -28,6 +29,12 @@ nonisolated enum ComposerPanelHeightLaw {
     /// conversation. Sur un écran court (paysage) ce plafond l'emporte.
     static let composerChromeReserve: CGFloat = 180
 
+    /// Le plancher de la grille des médias récents : sa largeur, pas l'appareil. Une colonne de largeur iPhone
+    /// (Slide Over, Split View étroit, petite fenêtre Stage Manager) garde le plancher d'iPhone.
+    static func recentMediaFloor(horizontalSizeClass: UserInterfaceSizeClass?) -> CGFloat {
+        horizontalSizeClass == .regular ? 460 : 324
+    }
+
     /// Hauteur libérée par un clavier, lue sur sa trame de FIN.
     ///
     /// `nil` quand la trame n'est pas une mesure : rectangle dégénéré, ou
@@ -39,6 +46,16 @@ nonisolated enum ComposerPanelHeightLaw {
         guard endFrame.minY < windowHeight else { return 0 }
         guard endFrame.maxY >= windowHeight - 1 else { return nil }
         return min(endFrame.height, windowHeight - endFrame.minY)
+    }
+
+    /// Hauteur qui SOULÈVE ce qui est posé sur le clavier (#10544).
+    ///
+    /// Une trame dégénérée n'annonce rien : la hauteur en cours est gardée —
+    /// la lire comme « plus de clavier » reposait le composeur sous un clavier
+    /// encore levé. Un clavier flottant ou sous la fenêtre ne soulève rien.
+    static func liftHeight(endFrame: CGRect, windowHeight: CGFloat, current: CGFloat) -> CGFloat {
+        guard endFrame.width > 0, endFrame.height > 0 else { return current }
+        return keyboardHeight(endFrame: endFrame, windowHeight: windowHeight) ?? 0
     }
 
     /// Plafond du panneau pour une fenêtre donnée.

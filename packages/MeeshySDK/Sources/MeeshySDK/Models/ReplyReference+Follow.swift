@@ -36,6 +36,7 @@ public extension ReplyReference {
         )
         sealed.quotedMessageDeletedAt = date
         sealed.quotedExpiresAt = expired ? date : quotedExpiresAt.flatMap { $0 <= date ? $0 : nil }
+        sealed.authorIsAnonymous = authorIsAnonymous
         return sealed
     }
 
@@ -74,6 +75,7 @@ public extension ReplyReference {
         copy.quotedExitNature = quotedExitNature
         copy.quotedAudioTracks = quotedAudioTracks
         copy.quotedPieceCount = quotedPieceCount
+        copy.authorIsAnonymous = authorIsAnonymous
         return copy
     }
 

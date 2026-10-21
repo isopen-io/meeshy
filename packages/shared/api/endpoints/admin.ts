@@ -141,6 +141,9 @@ export const broadcastsByIdSend = (id: string): string => `/api/v1/admin/broadca
 /** POST /api/v1/admin/broadcasts/:id/send-inapp */
 export const broadcastsByIdSendInapp = (id: string): string => `/api/v1/admin/broadcasts/${encodeURIComponent(id)}/send-inapp`;
 
+/** POST /api/v1/admin/comments/:commentId/remove */
+export const commentsByCommentIdRemove = (commentId: string): string => `/api/v1/admin/comments/${encodeURIComponent(commentId)}/remove`;
+
 /** GET /api/v1/admin/communities */
 export const communities = '/api/v1/admin/communities';
 
@@ -176,6 +179,30 @@ export const dashboardInvalidateCache = '/api/v1/admin/dashboard/invalidate-cach
 
 /** GET · PUT /api/v1/admin/engagement-scale */
 export const engagementScale = '/api/v1/admin/engagement-scale';
+
+/** GET /api/v1/admin/game/seasons */
+export const gameSeasons = '/api/v1/admin/game/seasons';
+
+/** GET /api/v1/admin/game/seasons/app-events */
+export const gameSeasonsAppEvents = '/api/v1/admin/game/seasons/app-events';
+
+/** GET /api/v1/admin/game/seasons/app-events.yaml */
+export const gameSeasonsAppEventsYaml = '/api/v1/admin/game/seasons/app-events.yaml';
+
+/** PUT /api/v1/admin/game/seasons/:number */
+export const gameSeasonsByNumber = (number: string): string => `/api/v1/admin/game/seasons/${encodeURIComponent(number)}`;
+
+/** POST /api/v1/admin/game/seasons/:number/proposals */
+export const gameSeasonsByNumberProposals = (number: string): string => `/api/v1/admin/game/seasons/${encodeURIComponent(number)}/proposals`;
+
+/** GET /api/v1/admin/game/seasons/proposals */
+export const gameSeasonsProposals = '/api/v1/admin/game/seasons/proposals';
+
+/** POST /api/v1/admin/game/seasons/proposals/:id/approve */
+export const gameSeasonsProposalsByIdApprove = (id: string): string => `/api/v1/admin/game/seasons/proposals/${encodeURIComponent(id)}/approve`;
+
+/** POST /api/v1/admin/game/seasons/proposals/:id/reject */
+export const gameSeasonsProposalsByIdReject = (id: string): string => `/api/v1/admin/game/seasons/proposals/${encodeURIComponent(id)}/reject`;
 
 /** GET /api/v1/admin/invitations */
 export const invitations = '/api/v1/admin/invitations';
@@ -216,11 +243,29 @@ export const messagesTrends = '/api/v1/admin/messages/trends';
 /** GET /api/v1/admin/monitoring */
 export const monitoring = '/api/v1/admin/monitoring';
 
+/** POST /api/v1/admin/ops/:operation */
+export const opsByOperation = (operation: string): string => `/api/v1/admin/ops/${encodeURIComponent(operation)}`;
+
+/** GET /api/v1/admin/ops/containers */
+export const opsContainers = '/api/v1/admin/ops/containers';
+
+/** GET /api/v1/admin/ops/host-metrics */
+export const opsHostMetrics = '/api/v1/admin/ops/host-metrics';
+
+/** GET /api/v1/admin/ops/status */
+export const opsStatus = '/api/v1/admin/ops/status';
+
 /** GET /api/v1/admin/posts */
 export const posts = '/api/v1/admin/posts';
 
 /** GET · DELETE /api/v1/admin/posts/:postId */
 export const postsByPostId = (postId: string): string => `/api/v1/admin/posts/${encodeURIComponent(postId)}`;
+
+/** POST /api/v1/admin/posts/:postId/gestures */
+export const postsByPostIdGestures = (postId: string): string => `/api/v1/admin/posts/${encodeURIComponent(postId)}/gestures`;
+
+/** POST /api/v1/admin/posts/gestures */
+export const postsGestures = '/api/v1/admin/posts/gestures';
 
 /** GET /api/v1/admin/posts/stats */
 export const postsStats = '/api/v1/admin/posts/stats';
@@ -236,6 +281,9 @@ export const reportsById = (id: string): string => `/api/v1/admin/reports/${enco
 
 /** POST /api/v1/admin/reports/:id/assign */
 export const reportsByIdAssign = (id: string): string => `/api/v1/admin/reports/${encodeURIComponent(id)}/assign`;
+
+/** POST /api/v1/admin/reports/:reportId/act */
+export const reportsByReportIdAct = (reportId: string): string => `/api/v1/admin/reports/${encodeURIComponent(reportId)}/act`;
 
 /** GET /api/v1/admin/reports/entity/:type/:id */
 export const reportsEntityByTypeById = (type: string, id: string): string => `/api/v1/admin/reports/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
@@ -320,6 +368,12 @@ export const usersByUserIdProfileImageCandidates = (userId: string): string => `
 
 /** PUT /api/v1/admin/users/:userId/profile-images/:kind */
 export const usersByUserIdProfileImagesByKind = (userId: string, kind: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/profile-images/${encodeURIComponent(kind)}`;
+
+/** GET /api/v1/admin/users/:userId/publications */
+export const usersByUserIdPublications = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/publications`;
+
+/** POST /api/v1/admin/users/:userId/publications/moderation */
+export const usersByUserIdPublicationsModeration = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/publications/moderation`;
 
 /** GET /api/v1/admin/users/:userId/reported-messages */
 export const usersByUserIdReportedMessages = (userId: string): string => `/api/v1/admin/users/${encodeURIComponent(userId)}/reported-messages`;

@@ -73,7 +73,7 @@ private struct GameTreasuryTile: View {
 
     var body: some View {
         GameTile(
-            title: String(localized: "game.gauge.treasury", defaultValue: "Trésor", bundle: .main),
+            title: String(localized: "game.gauge.treasury", defaultValue: "Héritage", bundle: .main),
             anchor: .treasury,
             drawing: {
                 MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
@@ -82,13 +82,9 @@ private struct GameTreasuryTile: View {
             lines: {
                 headline(GameCopy.meeshes(treasury.held))
                 caption(treasury.tier.map(GameCopy.treasuryName)
-                    ?? String(localized: "game.treasury.hint", defaultValue: "Garde tes Meeshes : elles remplissent ton trésor", bundle: .main))
+                    ?? String(localized: "game.treasury.hint", defaultValue: "Garde tes Meeshes : elles forment ton Héritage", bundle: .main))
                 if let next = treasury.next {
-                    caption(String(
-                        localized: "game.treasury.next",
-                        defaultValue: "Encore \(GameCopy.formatCount(next.missing)) pour \(GameCopy.treasuryName(next.key))",
-                        bundle: .main
-                    ))
+                    caption(GameCopy.treasuryNext(missing: GameCopy.formatCount(next.missing), tier: GameCopy.treasuryName(next.key)))
                 }
             }
         )
@@ -118,7 +114,7 @@ private struct GameFlameTile: View {
                 caption(flame.form.map {
                     String(
                         localized: "game.flame.form_line",
-                        defaultValue: "\(GameCopy.flameFormName($0)) · +\(GameCopy.formatCount(flame.bonusPercent)) % sur les missions",
+                        defaultValue: "\(GameCopy.flameFormName($0)) · +\(GameCopy.formatCount(flame.bonusPercent)) % sur tes rêves",
                         bundle: .main
                     )
                 } ?? String(localized: "game.flame.out_line", defaultValue: "Flamme éteinte", bundle: .main))

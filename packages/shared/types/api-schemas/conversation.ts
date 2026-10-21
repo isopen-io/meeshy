@@ -11,7 +11,7 @@
 
 import { messageMinimalSchema } from './message.js';
 import { activeCallSchema, lastReactionSchema } from './conversation-preview.js';
-import { userMinimalSchema } from './user.js';
+import { participantProfileDecorSchema, userMinimalSchema } from './user.js';
 
 // =============================================================================
 // CONVERSATION SCHEMAS
@@ -34,6 +34,7 @@ export const conversationParticipantSchema = {
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Profile banner URL' },
+    profileDecor: participantProfileDecorSchema,
     role: {
       type: 'string',
       enum: ['USER', 'ADMIN', 'MODERATOR', 'BIGBOSS', 'AUDIT', 'ANALYST'],
@@ -393,6 +394,7 @@ export const conversationParticipantMinimalSchema = {
     displayName: { type: 'string', nullable: true, description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     banner: { type: 'string', nullable: true, description: 'Profile banner URL (flattened top-level for DM surfacing)' },
+    profileDecor: participantProfileDecorSchema,
     role: { type: 'string', description: 'Member role' },
     language: { type: 'string', nullable: true, description: 'Preferred language' },
     nickname: { type: 'string', nullable: true, description: 'Nickname in conversation' },
@@ -627,6 +629,16 @@ export const conversationMinimalSchema = {
       nullable: true,
       description: 'Auto-translation enabled (disabled for E2EE conversations)'
     },
+    // #10720 — le chiffrement de bout en bout est OPTIONNEL, par conversation :
+    // seul le serveur sait si une ligne l'est. Absent du fil, un client le
+    // devinait (iOS posait « e2ee » sur toute directe) et la fiche affichait
+    // « Chiffrement actif » sur une conversation en clair.
+    encryptionMode: {
+      type: 'string',
+      enum: ['server', 'e2ee', 'hybrid'],
+      nullable: true,
+      description: 'Encryption mode (null = not encrypted)'
+    },
     userPreferences: {
       type: 'array',
       items: {
@@ -638,7 +650,8 @@ export const conversationMinimalSchema = {
           tags: { type: 'array', items: { type: 'string' }, description: 'User-defined tags' },
           categoryId: { type: 'string', nullable: true, description: 'Category ID for organization' },
           customName: { type: 'string', nullable: true, description: 'User-defined custom conversation name (drives DM display name)' },
-          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' }
+          reaction: { type: 'string', nullable: true, description: 'User reaction/emoji for conversation' },
+          appearance: { type: 'object', nullable: true, additionalProperties: true, description: 'Personal conversation background and accent (ConversationAppearance); the reader only' }
         }
       },
       description: 'User preferences for this conversation'

@@ -298,7 +298,7 @@ final class AffiliateViewModel: ObservableObject {
     @Published var tokens: [AffiliateToken] = []
     @Published var isLoading = false
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "affiliate")
+    private static let logger = MeeshyLog.logger(.affiliate)
 
     func load() async {
         let cached = await CacheCoordinator.shared.affiliateTokens.load(for: "list")
@@ -318,7 +318,7 @@ final class AffiliateViewModel: ObservableObject {
     private func refreshFromAPI() async {
         do {
             tokens = try await AffiliateService.shared.listTokens()
-            try? await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
+            await bestEffort("affiliateView.affiliateTokens.save", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list") }
         } catch {
             AffiliateViewModel.logger.error("affiliate tokens refresh failed: \(error.localizedDescription)")
         }
@@ -328,13 +328,13 @@ final class AffiliateViewModel: ObservableObject {
     func deleteToken(_ token: AffiliateToken) async {
         let snapshot = tokens
         tokens.removeAll { $0.id == token.id }
-        try? await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
+        await bestEffort("affiliateView.affiliateTokens.save.2", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list") }
         HapticFeedback.success()
         do {
             try await AffiliateService.shared.deleteToken(id: token.id)
         } catch {
             tokens = snapshot
-            try? await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list")
+            await bestEffort("affiliateView.affiliateTokens.save.3", category: .cache) { try await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list") }
             HapticFeedback.error()
         }
     }

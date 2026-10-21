@@ -87,6 +87,14 @@ nonisolated enum MediaStageVeil {
         presentation.showsPlateau && !overlays.isOpen
     }
 
+    /// **On entre en plein écran, sans chrome** (#10930, porteur 2026-10-18) :
+    /// le toucher le pose par-dessus. **Sauf sous VoiceOver** : son toucher
+    /// désigne au lieu d'agir, et un écran sans croix ni libellé n'y aurait
+    /// aucune sortie annoncée — le chrome y est donc là dès l'entrée.
+    static func entryPresentation(voiceOverRunning: Bool) -> StagePresentation {
+        voiceOverRunning ? .carded : .full(pausedOnEntry: false)
+    }
+
     /// **La pastille « en pause » se tait sous le voile, elle aussi** (#8601).
     ///
     /// Elle vit dans sa propre couche, au-dessus du plateau, et c'est ce qui
@@ -108,10 +116,17 @@ nonisolated enum MediaStageVeil {
     /// s'éprouve :
     /// `geometryPresentation(p, overlays: x) == geometryPresentation(p, overlays: .closed)`
     /// pour tout `p` et tout `x`.
+    ///
+    /// **Et le chrome lui-même ne la change plus** (directive porteur
+    /// 2026-10-18, #10930 : « la vidéo est toujours en plein écran et doit fit
+    /// le viewport »). Le plateau est une SUPERPOSITION : le toucher qui le
+    /// montre pose les contrôles par-dessus le média, il ne le rétrécit pas.
+    /// Le solveur reçoit donc le plein cadre dans les deux états ; seule la
+    /// porte de la pause (`pausedOnEntry`) traverse la projection.
     static func geometryPresentation(_ presentation: StagePresentation,
                                      overlays: Overlays) -> StagePresentation {
         _ = overlays
-        return presentation
+        return .full(pausedOnEntry: presentation.pausedOnEntry)
     }
 
     /// **La marge basse de la rangée d'émojis : la gouttière du plateau, et rien

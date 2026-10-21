@@ -16,8 +16,10 @@ import type { OutboxState } from '@/lib/send/outbox-store';
 import { offerInAppBanner } from '@/lib/notifications/in-app-banner';
 import { decodeRealtimeNotification } from '@/lib/notifications/record';
 
+import { deletedAccountOf, deletedAccountOfRevocation, ownDeletedAccount } from './account-deleted';
 import { attachmentStatusDetailsQueryKey } from './attachments';
-import { CONVERSATIONS_QUERY_KEY } from './conversations';
+import { guestAccessEndOfSocketError, type GuestAccessEnd } from './guest-access-end';
+import { CONVERSATION_CATEGORIES_QUERY_KEY, CONVERSATIONS_QUERY_KEY } from './conversations';
 import { messagesQueryKey } from './messages';
 import { applyAttachmentReactionUpdate, isAttachmentReactionUpdate } from './realtime-attachment-reactions';
 import { applyCitedPostWithdrawn, isCitedPostWithdrawnEvent } from './realtime-cited-post';
@@ -27,6 +29,8 @@ import {
   isMessageDeletedEvent,
   isMessageEditedEvent,
 } from './realtime-message-mutations';
+import { applyMessageHiddenForMe, isMessageHiddenForMeEvent } from './realtime-message-hidden';
+import { applyMessagePinnedEvent, applyMessageUnpinnedEvent, isMessagePinnedEvent, isMessageUnpinnedEvent } from './realtime-message-pin';
 import { applyMessageReactionUpdate, isMessageReactionUpdate } from './realtime-message-reactions';
 import {
   applyMediaCaptionTranslation,
@@ -71,6 +75,7 @@ import {
   isReadStatusUpdated,
   isSocketMessage,
 } from './realtime-apply';
+import { applyTranscriptionReady, isTranscriptionReady } from './realtime-transcription-ready';
 import {
   applyMessageCountdownStarted,
   applyMessageExpired,
@@ -78,7 +83,7 @@ import {
   isMessageExpiredEvent,
   noteEphemeralDelivery,
 } from './realtime-ephemeral';
-import { catchUpThreadMessage } from './realtime-thread-catch-up';
+import { catchUpFirstAuthentication, catchUpThreadMessage, createUnknownRowCatchUp } from './realtime-thread-catch-up';
 import { STARRED_MESSAGES_QUERY_ROOT, applyStarredEvent } from './starred-messages-cache';
 import { STORY_TRAY_QUERY_KEY } from './stories';
 import { TYPING_SAFETY_TIMEOUT_MS, type TypingStoreApi } from './typing-store';
@@ -195,6 +200,14 @@ export type RealtimeDeps = {
    * `auth:token-expired`/`auth:session-revoked` en sont l'équivalent socket
    * (§ 1.1/3.1 de la spécification : pas de rafraîchissement ce lot, D-26). */
   readonly onClearSession: (reason?: AuthSessionRevokedEventData['reason']) => void;
+  /** `error { code: SHARE_LINK_EXPIRED }` (#10442) — l'accès de l'invité est
+   * fini : la connexion se ferme d'elle-même et ne se rouvre plus. */
+  readonly onGuestAccessEnded?: (reason: GuestAccessEnd) => void;
+  /** Le compte NOMMÉ supprimé (#10237) : `error { code: ACCOUNT_DELETED, accountId }`
+   * ou `auth:session-revoked { deletedAccountId }` — jamais le compte actif. */
+  readonly onAccountDeleted?: (accountId: string) => void;
+  /** Le compte de la session qui a OUVERT la connexion — seul nommable (audit #10237) ; `null` pour un invité. */
+  readonly account?: string | null;
   /** Horloge INJECTABLE (motif `perform-send.ts`) — jamais `Date.now()` lu
    * directement, pour que le témoin d'expiration soit déterministe. */
   readonly now?: () => number;
@@ -227,6 +240,13 @@ export type RealtimeConnection = {
   destroy(): void;
 };
 
+const CATEGORY_EVENTS = [
+  SERVER_EVENTS.CATEGORY_CREATED,
+  SERVER_EVENTS.CATEGORY_UPDATED,
+  SERVER_EVENTS.CATEGORY_DELETED,
+  SERVER_EVENTS.CATEGORIES_REORDERED,
+] as const;
+
 function defaultWindow(): RealtimeDeps['windowTarget'] {
   return typeof window === 'undefined' ? undefined : window;
 }
@@ -236,6 +256,8 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const scheduleTimeout = deps.scheduleTimeout ?? ((fn, ms) => setTimeout(fn, ms));
   const clearTimeoutFn = deps.clearTimeoutFn ?? ((handle) => clearTimeout(handle as ReturnType<typeof setTimeout>));
   const windowTarget = deps.windowTarget ?? defaultWindow();
+  /* Une conversation hors de la liste en cache la fait relire (#10573). */
+  const unknownRows = createUnknownRowCatchUp({ queryClient: deps.queryClient, scheduleTimeout, clearTimeoutFn });
 
   const socket = deps.socketFactory({
     base: deps.base,
@@ -312,6 +334,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageNew = (payload: unknown): void => {
     if (!isSocketMessage(payload)) return;
     applyMessageNew(deps.queryClient, deps.outbox, payload);
+    unknownRows.note(payload.conversationId);
     /* LE DÉCOMPTE PART D'ICI, PAS DU PREMIER PIXEL (#7454) — le fil peut être
        fermé quand l'éphémère arrive ; c'est cet instant-là qui fait foi. */
     noteEphemeralDelivery(payload, now());
@@ -347,6 +370,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onUnreadUpdated = (payload: unknown): void => {
     if (!isConversationUnreadUpdated(payload)) return;
     applyConversationUnreadUpdated(deps.queryClient, deps.conversationStore, payload);
+    unknownRows.note(payload.conversationId);
   };
 
   /** `conversation:updated` (revue-correction #5793, défaut 1) — la
@@ -355,6 +379,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onConversationUpdated = (payload: unknown): void => {
     if (!isConversationUpdated(payload)) return;
     applyConversationUpdated(deps.queryClient, payload);
+    unknownRows.note(payload.conversationId);
     /* LE FIL OUVERT RATTRAPE UN `message:new` PERDU (#9291) — cet évènement
        voyage par la room PERSONNELLE ; `message:new`, par celle de la
        conversation. Mes propres envois sont exclus : leur écho voyage par ma
@@ -390,6 +415,12 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onAttachmentUpdated = (payload: unknown): void => {
     if (!isAttachmentUpdated(payload)) return;
     applyMessageAttachmentUpdated(deps.queryClient, payload);
+  };
+
+  /** `audio:transcription-ready` (#10742) — la transcription demandée rejoint la bonne pièce sans rechargement. */
+  const onTranscriptionReady = (payload: unknown): void => {
+    if (!isTranscriptionReady(payload)) return;
+    applyTranscriptionReady(deps.queryClient, payload);
   };
 
   /**
@@ -433,6 +464,20 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   const onMessageDeleted = (payload: unknown): void => {
     if (!isMessageDeletedEvent(payload)) return;
     applyMessageDeleted(deps.queryClient, payload);
+  };
+
+  /** `message:pinned` / `message:unpinned` (#7558) — l'épingle posée ailleurs se voit sans rechargement. Règle : `realtime-message-pin.ts`. */
+  const onMessagePinned = (payload: unknown): void => {
+    if (isMessagePinnedEvent(payload)) applyMessagePinnedEvent(deps.queryClient, payload);
+  };
+
+  const onMessageUnpinned = (payload: unknown): void => {
+    if (isMessageUnpinnedEvent(payload)) applyMessageUnpinnedEvent(deps.queryClient, payload);
+  };
+
+  /** `message:hidden-for-me` (#10587) — masqué pour moi sur un autre appareil : la rangée quitte le fil. Règle : `realtime-message-hidden.ts`. */
+  const onMessageHiddenForMe = (payload: unknown): void => {
+    if (isMessageHiddenForMeEvent(payload)) applyMessageHiddenForMe(deps.queryClient, payload, deps.viewerId());
   };
 
   /** `message:cited-post-withdrawn` (#7969) — la story citée est retirée : la carte passe « Story indisponible ». Règle : `realtime-cited-post.ts`. */
@@ -820,6 +865,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     void deps.queryClient.invalidateQueries({ queryKey: PUBLIC_PROFILE_QUERY_PREFIX });
   };
 
+  /** `category:*` (#10103) — une catégorie changée sur un autre appareil repeint les sections de la liste. */
+  const onCategoriesChanged = (): void => {
+    void deps.queryClient.invalidateQueries({ queryKey: CONVERSATION_CATEGORIES_QUERY_KEY });
+  };
+
   /** `user:updated` (#8889, #8890) — la photo et le nom d'un pair repeints dans chaque copie du cache ; la loi vit dans `my-portrait.ts`. */
   const onUserUpdated = (payload: unknown): void => {
     const update = profileRepaintOfUserUpdated(payload);
@@ -855,7 +905,21 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * DEUX motifs ferment la session, aucun ne tente de rafraîchir (D-26). */
   const onTokenExpired = (_payload: AuthTokenExpiredEventData): void => deps.onClearSession();
   /* Le MOTIF voyage (#9613) : l'écran de connexion dit pourquoi la session s'est fermée. */
-  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => deps.onClearSession(payload?.reason);
+  const onSessionRevoked = (payload: AuthSessionRevokedEventData): void => {
+    deps.onClearSession(payload?.reason);
+    const deleted = ownDeletedAccount(deletedAccountOfRevocation(payload), deps.account);
+    if (deleted !== null) deps.onAccountDeleted?.(deleted);
+  };
+  let guestAccessEnded = false;
+  const onServerError = (payload: unknown): void => {
+    const deleted = ownDeletedAccount(deletedAccountOf(payload), deps.account);
+    if (deleted !== null) deps.onAccountDeleted?.(deleted);
+    const reason = guestAccessEndOfSocketError(payload);
+    if (reason === null) return;
+    guestAccessEnded = true;
+    socket.disconnect();
+    deps.onGuestAccessEnded?.(reason);
+  };
 
   /**
    * LE REJEU DE LA COUPURE (revue-correction #5793) — la passerelle émet
@@ -869,9 +933,10 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * point de contrôle (`ConversationSyncEngine+Socket.swift:12-25`) ; ici, le
    * rejeu est une INVALIDATION TanStack — `GET /sync` est un lot séparé.
    *
-   * La PREMIÈRE authentification ne rejoue rien : il n'y a pas de trou à
-   * combler au démarrage, et invalider y doublerait la requête que l'écran
-   * vient d'émettre.
+   * La PREMIÈRE authentification ne relit que la liste et le fil DÉJÀ servis
+   * (#10573) : le socket se branche après la première peinture, et ce qui est
+   * parti entre la lecture REST et l'entrée dans les rooms était perdu. Une
+   * requête encore en vol n'est jamais doublée (`catchUpFirstAuthentication`).
    *
    * SAUF LES SALLES DE PUBLICATION (#7395), rejointes à CHAQUE
    * authentification, la première comprise : un écran ouvert avant que la
@@ -884,6 +949,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     publicationRooms.rejoin();
     if (!authenticatedOnce) {
       authenticatedOnce = true;
+      catchUpFirstAuthentication(deps.queryClient);
       return;
     }
     /* UNE invalidation couvre les TROIS familles : TanStack compare les clés
@@ -931,6 +997,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+  socket.on<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -938,6 +1005,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
+  socket.on<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
   socket.on<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
   socket.on<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -979,9 +1049,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
   socket.on<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+  for (const event of CATEGORY_EVENTS) socket.on<unknown>(event, onCategoriesChanged);
   socket.on<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
   socket.on<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
   socket.on<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
+  socket.on<unknown>(SERVER_EVENTS.ERROR, onServerError);
 
   /** `online` ⇒ `connect()` IMMÉDIAT si déconnecté (§ 1.1 de la
    * spécification) — `socket.io-client` gère déjà la gigue/le plafond de la
@@ -989,7 +1061,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
    * d'un backoff qui pouvait culminer à 16 s pendant que le réseau vient de
    * revenir. */
   const onOnline = (): void => {
-    if (!socket.connected) socket.connect();
+    if (!socket.connected && !guestAccessEnded) socket.connect();
   };
   windowTarget?.addEventListener('online', onOnline);
 
@@ -1003,6 +1075,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
     },
     destroy: () => {
       publicationRooms.detach();
+      unknownRows.dispose();
       for (const handle of typingTimers.values()) clearTimeoutFn(handle);
       typingTimers.clear();
       windowTarget?.removeEventListener('online', onOnline);
@@ -1015,6 +1088,7 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.CONVERSATION_NEW, onConversationNew);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_TRANSLATION, onMessageTranslation);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED, onAttachmentUpdated);
+      socket.off<unknown>(SERVER_EVENTS.TRANSCRIPTION_READY, onTranscriptionReady);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_STATUS_UPDATED, onAttachmentStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_ADDED, onAttachmentReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.ATTACHMENT_REACTION_REMOVED, onAttachmentReactionChanged);
@@ -1022,6 +1096,9 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.REACTION_REMOVED, onMessageReactionChanged);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_EDITED, onMessageEdited);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_DELETED, onMessageDeleted);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_PINNED, onMessagePinned);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_UNPINNED, onMessageUnpinned);
+      socket.off<unknown>(SERVER_EVENTS.MESSAGE_HIDDEN_FOR_ME, onMessageHiddenForMe);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CITED_POST_WITHDRAWN, onCitedPostWithdrawn);
       socket.off<unknown>(SERVER_EVENTS.READ_STATUS_UPDATED, onReadStatusUpdated);
       socket.off<unknown>(SERVER_EVENTS.MESSAGE_CONSUMED, onMessageConsumed);
@@ -1063,9 +1140,11 @@ export function createRealtimeConnection(session: RealtimeSessionInfo, deps: Rea
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_CANCELLED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_ACCEPTED, onFriendshipChanged);
       socket.off<unknown>(SERVER_EVENTS.FRIEND_REQUEST_REJECTED, onFriendshipChanged);
+      for (const event of CATEGORY_EVENTS) socket.off<unknown>(event, onCategoriesChanged);
       socket.off<unknown>(SERVER_EVENTS.USER_UPDATED, onUserUpdated);
       socket.off<AuthTokenExpiredEventData>(SERVER_EVENTS.AUTH_TOKEN_EXPIRED, onTokenExpired);
       socket.off<AuthSessionRevokedEventData>(SERVER_EVENTS.AUTH_SESSION_REVOKED, onSessionRevoked);
+      socket.off<unknown>(SERVER_EVENTS.ERROR, onServerError);
       socket.disconnect();
     },
   };

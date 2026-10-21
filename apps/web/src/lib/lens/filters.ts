@@ -1,75 +1,129 @@
 import { sortConversations } from '@meeshy/shared/utils/conversation-sections';
 
 import { effectiveFlagsOf, effectiveUnreadOf, type ConversationOverride } from '@/lib/conversation-store';
-import { isGroup, titleOf } from '@/lib/view/conversation';
+import { titleOf } from '@/lib/view/conversation';
 import { listRankField } from '@/lib/api/list-preview';
+import { reactionOf } from '@/lib/api/preferences';
 import type { Conversation } from '@/lib/api/types';
+import { rowMenuText, type RowMenuCatalogKey } from '@/lib/i18n-row-menu-catalog';
+import type { InterfaceLanguage } from '@/lib/interface-language';
 
 /**
- * LES FILTRES DE LA LISTE (#5559 §5.5) — remplacent le tableau littéral de
- * `routes/conversations.tsx` (`['Tous', 'Non lus', …]`), qui déclarait
- * « Épinglés » sans jamais l'appliquer : un contrôle qui s'active sans
- * filtrer est un échec à demi (§ critère de fin de l'issue).
+ * LES FILTRES DE LA LISTE (#5559 §5.5, composés depuis #10598).
  *
- * LOI iOS DE RÉFÉRENCE : `ConversationListViewModel.filterConversations`
- * (`:583-637`). Le point qui gouverne tout ce fichier : **une conversation
- * ARCHIVÉE change de CORPUS** (`:598-601`, « sans ce gate, une archivée
- * reparaîtrait dans "Non lus" ») — elle est EXCLUE de `all`/`unread`/
- * `groups`/`directs`/`pinned`, et n'apparaît QUE sous `archived`. La
- * recherche matche le nom AFFICHÉ (`titleOf`, qui porte déjà `customName`
- * depuis #5559 §5-view), jamais un champ brut.
+ * LOI iOS DE RÉFÉRENCE : `ConversationFilterComposition.swift` et
+ * `ConversationListViewModel.filterConversations` (`:576-626`). La sélection
+ * est un ENSEMBLE, et sa lecture suit la nature de chaque filtre :
+ *
+ * - les TYPES (Personnel · Privée · Ouvertes · Globales · Channels) se
+ *   combinent par un OU — une conversation n'est jamais de deux types, un ET
+ *   rendrait l'écran vide ;
+ * - les ÉTATS (Non lus · Favoris · Épinglés) se combinent par un ET, et se
+ *   CROISENT avec les types ;
+ * - « Tous » est l'absence de filtre : le choisir efface les autres, en
+ *   choisir un autre l'efface, et une sélection vidée y revient ;
+ * - « Archivées » CHANGE DE CORPUS (`:598-601`, « sans ce gate, une archivée
+ *   reparaîtrait dans "Non lus" ») : hors de lui, une archivée n'apparaît
+ *   nulle part ; avec lui, elle se compose avec types et états.
+ *
+ * « Épinglés » n'existe pas sur iOS, qui range les épinglées dans une SECTION ;
+ * le web le garde comme état, à sa place dans l'ordre d'iOS avant les archives.
+ * La recherche matche le nom AFFICHÉ (`titleOf`, qui porte `customName`).
  */
-export type ListFilter = 'all' | 'unread' | 'groups' | 'directs' | 'pinned' | 'archived';
+export type ListFilter =
+  | 'all'
+  | 'unread'
+  | 'personal'
+  | 'private'
+  | 'open'
+  | 'global'
+  | 'channels'
+  | 'favorites'
+  | 'pinned'
+  | 'archived';
 
-/** La PROSE reste en français (D-13) — ce sont les libellés des chips. */
-export const FILTER_LABELS: Record<ListFilter, string> = {
-  all: 'Tous',
-  unread: 'Non lus',
-  groups: 'Groupes',
-  directs: 'Directs',
-  pinned: 'Épinglés',
-  archived: 'Archivées',
+/** La sélection, rangée dans l'ordre des puces — jamais vide (`NEUTRAL_SELECTION`). */
+export type ListSelection = readonly ListFilter[];
+
+/** L'ordre des puces : `MeeshyConversationFilter.allCases`, plus « Épinglés ». */
+export const LIST_FILTERS: readonly ListFilter[] = ['all', 'unread', 'personal', 'private', 'open', 'global', 'channels', 'favorites', 'pinned', 'archived'];
+
+export const NEUTRAL_SELECTION: ListSelection = ['all'];
+
+type TypeFilter = 'personal' | 'private' | 'open' | 'global' | 'channels';
+type StateFilter = 'unread' | 'favorites' | 'pinned';
+
+/** Les libellés des puces, dans la langue d'interface — mots d'iOS (`conversation.filter.*`). */
+const FILTER_LABEL_KEYS: Readonly<Record<ListFilter, RowMenuCatalogKey>> = {
+  all: 'listFilter.all',
+  unread: 'listFilter.unread',
+  personal: 'listFilter.personal',
+  private: 'listFilter.private',
+  open: 'listFilter.open',
+  global: 'listFilter.global',
+  channels: 'listFilter.channels',
+  favorites: 'listFilter.favorites',
+  pinned: 'listFilter.pinned',
+  archived: 'listFilter.archived',
 };
 
-export const LIST_FILTERS: readonly ListFilter[] = ['all', 'unread', 'groups', 'directs', 'pinned', 'archived'];
+export const filterLabel = (filter: ListFilter, language: InterfaceLanguage): string => rowMenuText(language, FILTER_LABEL_KEYS[filter]);
+
+const isNeutral = (selection: ListSelection): boolean => selection.length === 0 || selection.includes('all');
+
+/** Un appui sur `filter` : il s'ajoute s'il manque, il PART s'il est là. */
+export function toggleFilter(filter: ListFilter, selection: ListSelection): ListSelection {
+  if (filter === 'all') return NEUTRAL_SELECTION;
+  const current = isNeutral(selection) ? [] : selection;
+  const next = current.includes(filter) ? current.filter((f) => f !== filter) : [...current, filter];
+  return next.length === 0 ? NEUTRAL_SELECTION : LIST_FILTERS.filter((f) => next.includes(f));
+}
+
+/** Ce que l'état vide nomme : les libellés de la sélection, dans l'ordre des puces. */
+export const selectionLabel = (selection: ListSelection, language: InterfaceLanguage): string =>
+  (isNeutral(selection) ? NEUTRAL_SELECTION : selection).map((f) => filterLabel(f, language)).join(' · ');
 
 type Overrides = Readonly<Record<string, ConversationOverride>>;
 
+const TYPE_MATCH: Readonly<Record<TypeFilter, (c: Conversation) => boolean>> = {
+  personal: (c) => c.type === 'direct',
+  private: (c) => c.type === 'group',
+  open: (c) => c.type === 'public',
+  global: (c) => c.type === 'global',
+  channels: (c) => c.isAnnouncementChannel === true,
+};
+
+const STATE_MATCH: Readonly<Record<StateFilter, (c: Conversation, overrides: Overrides) => boolean>> = {
+  unread: (c, overrides) => effectiveUnreadOf(c, overrides) > 0,
+  /* `.favoris` d'iOS (`ConversationListViewModel.swift:617`) : un emoji posé. */
+  favorites: (c) => reactionOf(c) !== undefined,
+  pinned: (c, overrides) => effectiveFlagsOf(c, overrides).isPinned,
+};
+
+const isTypeFilter = (f: ListFilter): f is TypeFilter => f in TYPE_MATCH;
+const isStateFilter = (f: ListFilter): f is StateFilter => f in STATE_MATCH;
+
 export function applyFilter(params: {
   readonly conversations: readonly Conversation[];
-  readonly filter: ListFilter;
+  readonly selection: ListSelection;
   readonly search: string;
   readonly viewerId: string;
   readonly overrides: Overrides;
 }): readonly Conversation[] {
-  const { conversations, filter, search, viewerId, overrides } = params;
+  const { conversations, selection, search, viewerId, overrides } = params;
   const query = search.trim().toLowerCase();
+  const active = isNeutral(selection) ? [] : selection;
+  const wantsArchived = active.includes('archived');
+  const types = active.filter(isTypeFilter);
+  const states = active.filter(isStateFilter);
 
-  const searched =
-    query.length === 0
-      ? conversations
-      : conversations.filter((c) => titleOf(c, viewerId).toLowerCase().includes(query));
-
-  if (filter === 'archived') {
-    return searched.filter((c) => effectiveFlagsOf(c, overrides).isArchived);
-  }
-
-  // Précédence iOS `:598-601` : une conversation archivée n'apparaît QUE sous
-  // l'onglet `archived`, jamais mélangée aux autres corpus.
-  const nonArchived = searched.filter((c) => !effectiveFlagsOf(c, overrides).isArchived);
-
-  switch (filter) {
-    case 'all':
-      return nonArchived;
-    case 'unread':
-      return nonArchived.filter((c) => effectiveUnreadOf(c, overrides) > 0);
-    case 'groups':
-      return nonArchived.filter((c) => isGroup(c));
-    case 'directs':
-      return nonArchived.filter((c) => !isGroup(c));
-    case 'pinned':
-      return nonArchived.filter((c) => effectiveFlagsOf(c, overrides).isPinned);
-  }
+  return conversations.filter(
+    (c) =>
+      effectiveFlagsOf(c, overrides).isArchived === wantsArchived &&
+      (types.length === 0 || types.some((t) => TYPE_MATCH[t](c))) &&
+      states.every((s) => STATE_MATCH[s](c, overrides)) &&
+      (query.length === 0 || titleOf(c, viewerId).toLowerCase().includes(query)),
+  );
 }
 
 /**

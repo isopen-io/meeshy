@@ -12,7 +12,7 @@ import { spokenLanguageName } from '@/lib/view/language-name';
 import { electAudio } from '@/lib/view/media';
 import { formatMediaTime, keyboardSeekTarget, PLAYBACK_SPEEDS, SEEK_STEP_SECONDS, seekFraction, speedLabel } from '@/lib/view/media-transport';
 import { waveformOf } from '@/lib/view/message';
-import { karaokeSegments, karaokeTone, segmentSeekTarget, type KaraokeTone } from '@/lib/view/transcript-karaoke';
+import { karaokeSegments, karaokeTone, rovingSegmentIndex, segmentSeekTarget, type KaraokeTone } from '@/lib/view/transcript-karaoke';
 import { useKaraokeIndex } from '@/lib/view/use-karaoke';
 import { useAudioOnDemand } from '@/lib/view/use-audio-on-demand';
 import { useMediaPlayback } from '@/lib/view/use-media-playback';
@@ -54,7 +54,11 @@ export type ViewerAudioPageProps = {
    * en se fermant et le confie au mini-lecteur. `null` : rien ne joue.
    */
   readonly onCarryRef?: (carry: CarryProvider | null) => void;
+  /** La page ACTIVE dit si elle joue : la visionneuse efface son chrome pendant l'écoute. */
+  readonly onPlayingChange?: (playing: boolean) => void;
   readonly deps?: ConversationsDeps;
+  /** « Transcrire » a un effet pour ce vocal (#10700) — absent ⇒ offert. */
+  readonly transcribable?: boolean;
 };
 
 const WAVE_BARS = 48;
@@ -67,7 +71,7 @@ const KARAOKE_STYLE: Readonly<Record<KaraokeTone, CSSProperties>> = {
   idle: { opacity: 0.85 },
   upcoming: { opacity: 0.55 },
   past: { opacity: 0.85 },
-  active: { opacity: 1, fontWeight: 700, color: 'var(--accent)' },
+  active: { opacity: 1, fontWeight: 700, color: 'var(--accent, var(--color-ios-brand))' },
 };
 
 const contain = (event: SyntheticEvent): void => event.stopPropagation();
@@ -84,7 +88,7 @@ const discStyle = (size: number, filled: boolean): CSSProperties => ({
 
 const pillStyle = (selected: boolean): CSSProperties => ({
   minHeight: 44,
-  backgroundColor: selected ? 'color-mix(in srgb, var(--accent) 70%, transparent)' : 'color-mix(in srgb, var(--color-on-media) 10%, transparent)',
+  backgroundColor: selected ? 'color-mix(in srgb, var(--accent, var(--color-ios-brand)) 70%, transparent)' : 'color-mix(in srgb, var(--color-on-media) 10%, transparent)',
   opacity: selected ? 1 : 0.8,
 });
 
@@ -99,10 +103,12 @@ export default function ViewerAudioPage({
   pageCount,
   onToggleRef,
   onCarryRef,
+  onPlayingChange,
   deps,
+  transcribable = true,
 }: ViewerAudioPageProps) {
   const [explored, setExplored] = useState<string | undefined>(displayLanguage);
-  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, ...(deps !== undefined ? { deps } : {}) });
+  const onDemand = useAudioOnDemand({ attachment: received, fallbackLanguage, readerLanguages: languages, transcribable, ...(deps !== undefined ? { deps } : {}) });
   const attachment = onDemand.served;
   const { versions } = onDemand;
   const [offering, setOffering] = useState(false);
@@ -127,6 +133,13 @@ export default function ViewerAudioPage({
   });
   const { status, progress, position, duration, toggle, bind, seek, rate, setRate } = playback;
   const isPlaying = status === 'playing';
+
+  useEffect(() => {
+    if (!isActive) return undefined;
+    onPlayingChange?.(isPlaying);
+    return () => onPlayingChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive, isPlaying]);
 
   const statusRef = useRef(status);
   statusRef.current = status;
@@ -198,6 +211,28 @@ export default function ViewerAudioPage({
     [hasTranscript, attachment.transcription, attachment.translations, described.text, described.language, track.language, totalSeconds],
   );
   const activeSegment = useKaraokeIndex(audioElement, segments, isPlaying);
+  const [rovingIndex, setRovingIndex] = useState<number | null>(null);
+  const segmentCount = segments?.length ?? 0;
+  const tabStop = Math.min(Math.max(0, segmentCount - 1), rovingIndex ?? activeSegment ?? 0);
+  const onTranscriptKey = (event: ReactKeyboardEvent<HTMLParagraphElement>): void => {
+    if (segments === undefined) return;
+    const words = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-karaoke]')];
+    const focused = words.indexOf(event.target as HTMLElement);
+    const from = focused === -1 ? tabStop : focused;
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      event.stopPropagation();
+      const target = segmentSeekTarget(segments, from);
+      if (target !== null) seek(target);
+      return;
+    }
+    const next = rovingSegmentIndex({ key: event.key, index: from, count: segments.length, rtl: getComputedStyle(event.currentTarget).direction === 'rtl' });
+    if (next === null) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setRovingIndex(next);
+    words[next]?.focus();
+  };
   const waves = useMemo(() => waveformOf(attachment, WAVE_BARS), [attachment]);
 
   const seekAt = (event: ReactPointerEvent<HTMLElement>): void => {
@@ -245,6 +280,7 @@ export default function ViewerAudioPage({
         key={track.url}
         ref={bindAudio}
         preload="metadata"
+        data-np-attachment={attachment.id}
         data-viewer-audio-track={track.language}
         className="hidden"
         {...(track.url === '' ? {} : { src: attachmentSrc(track.url) })}
@@ -282,7 +318,7 @@ export default function ViewerAudioPage({
               className="flex-1 rounded-full"
               style={{
                 height: `${Math.max(10, height * 4)}%`,
-                backgroundColor: index / waves.length < fraction ? 'var(--accent)' : 'var(--color-on-media)',
+                backgroundColor: index / waves.length < fraction ? 'var(--accent, var(--color-ios-brand))' : 'var(--color-on-media)',
                 opacity: index / waves.length < fraction ? 1 : 0.35,
               }}
             />
@@ -349,7 +385,7 @@ export default function ViewerAudioPage({
             }}
           >
             <span className="absolute inset-x-0 rounded-full" style={{ top: 10, height: 4, backgroundColor: 'color-mix(in srgb, var(--color-on-media) 25%, transparent)' }} />
-            <span className="absolute start-0 rounded-full" style={{ top: 10, height: 4, width: `${fraction * 100}%`, backgroundColor: 'var(--accent)' }} />
+            <span className="absolute start-0 rounded-full" style={{ top: 10, height: 4, width: `${fraction * 100}%`, backgroundColor: 'var(--accent, var(--color-ios-brand))' }} />
             <span
               className="absolute rounded-full bg-on-media"
               style={{ top: 4, width: 16, height: 16, insetInlineStart: `calc(${fraction * 100}% - 8px)` }}
@@ -382,6 +418,7 @@ export default function ViewerAudioPage({
             className="overflow-y-auto text-body"
             style={{ maxHeight: TRANSCRIPT_MAX_PX }}
             onClick={contain}
+            onKeyDown={onTranscriptKey}
             {...(described.language !== '' ? { lang: described.language } : {})}
           >
             {segments === undefined
@@ -390,6 +427,8 @@ export default function ViewerAudioPage({
                   <Fragment key={`${segment.startMs}-${index}`}>
                     <span
                       data-karaoke={karaokeTone(index, activeSegment)}
+                      tabIndex={index === tabStop ? 0 : -1}
+                      onFocus={() => setRovingIndex(index)}
                       className="cursor-pointer"
                       style={KARAOKE_STYLE[karaokeTone(index, activeSegment)]}
                       onClick={() => {
@@ -408,7 +447,7 @@ export default function ViewerAudioPage({
             <p data-viewer-audio-transcript-empty className="text-center text-mini opacity-60">
               {translate(language, 'media.audio.transcript_empty')}
             </p>
-            <TranscribeAction language={language} busy={onDemand.transcribing} onTranscribe={onDemand.transcribe} />
+            {onDemand.canTranscribe ? <TranscribeAction language={language} busy={onDemand.transcribing} onTranscribe={onDemand.transcribe} /> : null}
           </div>
         )}
 

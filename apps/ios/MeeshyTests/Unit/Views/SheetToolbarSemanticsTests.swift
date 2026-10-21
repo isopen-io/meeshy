@@ -54,6 +54,7 @@ final class SheetToolbarSemanticsTests: XCTestCase {
         "Meeshy/Features/Main/Composer/MeeshyComposerHost+Pickers.swift",
         "Meeshy/Features/Main/Composer/MeeshyComposerHost+Socle.swift",
         "Meeshy/Features/Main/Composer/ComposerMoodSurface.swift",
+        "Meeshy/Features/Main/Composer/MoodComposerDoor.swift",
     ]
 
     /// **La raison d'origine, portée sur la surface qui a remplacé l'écran.**
@@ -184,6 +185,7 @@ final class SheetToolbarSemanticsTests: XCTestCase {
         // AudioPostComposerView.swift porte DEUX feuilles custom — le composer
         // audio ET son sélecteur de langue — donc DEUX sorties sémantiques.
         let audio = try readSource("Meeshy/Features/Main/Views/AudioPostComposerView.swift")
+            + (try readSource("Meeshy/Features/Main/Views/AudioLanguagePickerView.swift"))
         XCTAssertTrue(audio.contains("struct AudioPostComposerView"), "AudioPostComposerView introuvable ou vide")
         XCTAssertTrue(audio.contains("struct AudioLanguagePickerView"), "AudioLanguagePickerView introuvable ou vide")
         XCTAssertEqual(

@@ -286,17 +286,3 @@ struct ProgressionMeeshDetail: View {
         .accessibilityElement(children: .combine)
     }
 }
-
-private extension View {
-    /// Le sous-menu reste un POPOVER sur iPhone plutôt que de devenir une
-    /// feuille pleine hauteur — l'adaptation compacte n'existe qu'à partir
-    /// d'iOS 16.4, et l'app sert iOS 16.0.
-    @ViewBuilder
-    func presentationCompactAdaptationPopoverIfAvailable() -> some View {
-        if #available(iOS 16.4, *) {
-            presentationCompactAdaptation(.popover)
-        } else {
-            self
-        }
-    }
-}

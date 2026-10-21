@@ -68,7 +68,7 @@ extension CallManager {
             // Date(); this synthesized busy-path report ends right now, so do the same.
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = (callId: callId, fromUserId: callerUserId, fromUsername: callerName, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
+            pendingIncomingCall = IncomingCall(callId: callId, fromUserId: callerUserId, fromUsername: callerName, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             Logger.calls.info("VoIP push while busy — ended secondary call, showing banner")
             HapticFeedback.medium()
@@ -97,6 +97,7 @@ extension CallManager {
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
         displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
+        startIncomingRingTimeout()
         activeCallUUID = uuid
 
         callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
@@ -365,18 +366,53 @@ extension CallManager {
     // MARK: - Incoming Call (Socket)
 
 
+    /// Le TAP sur l'alerte d'appel entrant (push sans VoIP : région Chine,
+    /// appareil sans jeton VoIP, app sur Mac). Contrairement au socket et au
+    /// VoIP, ce chemin n'avait aucune garde « même appel » ni « appel encore
+    /// vivant » :
+    /// - l'appel X qui sonne déjà, tapé dans le bandeau, partait dans la
+    ///   branche « occupé » : bandeau d'appel en attente par-dessus SA propre
+    ///   sonnerie, « Refuser » rejetait l'appel qui sonnait ;
+    /// - une alerte périmée touchée dans le centre de notifications faisait
+    ///   sonner ~75 s un appel terminé et rejoindre une salle morte.
+    func handleIncomingCallAlertTap(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
+        guard Self.alertTapStartsRinging(
+            callId: callId, currentCallId: currentCallId, callState: callState,
+            pendingCallId: pendingIncomingCall?.callId
+        ) else {
+            Logger.calls.info("Incoming-call alert tapped for callId \(callId) already ringing/waiting — no duplicate UI")
+            return
+        }
+        handleIncomingCallNotification(
+            callId: callId, fromUserId: fromUserId, fromUsername: fromUsername,
+            isVideo: isVideo, iceServers: iceServers, conversationId: conversationId
+        )
+        guard currentCallId == callId, case .ringing = callState, let uuid = activeCallUUID else { return }
+        Task { [weak self] in await self?.checkVoIPCallFreshness(uuid: uuid, callId: callId) }
+    }
+
+    /// Le tap d'alerte n'ouvre une sonnerie que pour un appel ni déjà en cours,
+    /// ni déjà en attente.
+    nonisolated static func alertTapStartsRinging(
+        callId: String, currentCallId: String?, callState: CallState, pendingCallId: String?
+    ) -> Bool {
+        if currentCallId == callId, callState.isActive { return false }
+        if pendingCallId == callId { return false }
+        return true
+    }
+
     func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil, conversationId: String? = nil) {
         resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             rejectSupersededPendingCall(replacingWithCallId: callId)
-            pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo, iceServers: iceServers, conversationId: conversationId)
+            pendingIncomingCall = IncomingCall(callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, kind: CallKind(isVideo: isVideo), iceServers: iceServers, conversationId: conversationId)
             showCallWaitingBanner = true
             HapticFeedback.medium()
             return
         }
 
-        analyticsCallInitiatedDate = Date()
+        analytics.callInitiatedDate = Date()
         currentCallId = callId
         remoteUserId = fromUserId
         remoteUsername = fromUsername
@@ -387,6 +423,7 @@ extension CallManager {
         // Force displayMode = .fullScreen (cf. startCall pour le rationale).
         displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
+        startIncomingRingTimeout()
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -482,5 +519,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

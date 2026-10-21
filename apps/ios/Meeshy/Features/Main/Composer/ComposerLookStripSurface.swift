@@ -233,14 +233,22 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
         destination.isFlipped = true
         destination.colorSpace = ComposerLiveLookRule.colorSpace
         let toile = ComposerLookPainter.thumbnailCanvas
+        let effectBase = Self.reducedInGraph(frame)
+        let fige = source is ComposerStillSource
         tiles.forEach { tile in
             let cle = ComposerLookSceneKey(look: tile.look, canvas: toile, date: date, person: person)
             let scene = tile.look.frame == ComposerPhotoFrame.none
                 ? nil : scenes.scene(for: cle) { [weak self] in self?.view?.setNeedsDisplay() }
             let look = tile.look.frame != ComposerPhotoFrame.none && scene == nil
-                ? ComposerPhotoLook(filter: tile.look.filter) : tile.look
-            let peinte = ComposerLookPainter.paint(petit, look: look, framing: framing, scene: scene, canvas: toile,
-                                                   declared: source.declaredSpace)
+                ? tile.look.withoutFrame : tile.look
+            // Un effet cherche le visage sur une sonde : il se peint depuis la
+            // trame réduite PAR LE GRAPHE, lisible tout de suite — la réduction
+            // en texture n'est écrite qu'à la fin du passage (#10311).
+            // Une photo figée garde SON image : sonde et visage se calculent une fois.
+            let base = look.effect == .none ? petit : (fige ? frame : effectBase)
+            let peinte = ComposerLookPainter.paint(base, look: look, framing: framing, scene: scene, canvas: toile,
+                                                   declared: source.declaredSpace,
+                                                   still: fige)
             let place = slot(of: tile)
             let cible = ComposerLookStripGeometry.pixelRect(
                 CGRect(x: CGFloat(place) * cell.width, y: 0, width: cell.width, height: cell.height),
@@ -310,12 +318,19 @@ final class ComposerLookStripRenderer: NSObject, MTKViewDelegate {
     /// passage du dessin : ni second rendu, ni attente sur le fil principal. Le
     /// grand côté garde 2 × 288 px — deux fois la toile d'une case, de quoi
     /// recadrer sans flou.
+    /// La trame réduite comme `reduced`, mais par le seul graphe : aucune texture.
+    static func reducedInGraph(_ frame: CIImage) -> CIImage {
+        let plusGrand = max(frame.extent.width, frame.extent.height)
+        guard plusGrand > 0, !frame.extent.isInfinite else { return frame }
+        let echelle = min(1, 2 * ComposerLookPainter.thumbnailCanvas.height / plusGrand)
+        return frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX, y: -frame.extent.minY)
+            .concatenating(CGAffineTransform(scaleX: echelle, y: echelle)))
+    }
+
     private func reduced(_ frame: CIImage, buffer: MTLCommandBuffer) -> CIImage? {
         let plusGrand = max(frame.extent.width, frame.extent.height)
         guard plusGrand > 0, !frame.extent.isInfinite else { return nil }
-        let echelle = min(1, 2 * ComposerLookPainter.thumbnailCanvas.height / plusGrand)
-        let petit = frame.transformed(by: CGAffineTransform(translationX: -frame.extent.minX, y: -frame.extent.minY)
-            .concatenating(CGAffineTransform(scaleX: echelle, y: echelle)))
+        let petit = Self.reducedInGraph(frame)
         let largeur = Int(petit.extent.width.rounded()), hauteur = Int(petit.extent.height.rounded())
         guard largeur > 0, hauteur > 0, let texture = reductionTarget(width: largeur, height: hauteur) else { return nil }
         let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: buffer)

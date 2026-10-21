@@ -36,6 +36,23 @@ final class NotificationRowPresentationTests: XCTestCase {
         XCTAssertFalse(NotificationRowText.repeats("Salut", "Les amateurs"))
     }
 
+    func test_repeats_groupNameEndingTheTitle_matches() {
+        XCTAssertTrue(NotificationRowText.repeats("Les Amis", "Awa a rejoint Les Amis"))
+    }
+
+    func test_rowPresentation_memberJoined_groupFooterRepeatingTheTitleEnd_isDropped() throws {
+        let notification = try decode(#"""
+        {"id":"n14","userId":"me","type":"member_joined","priority":"normal",
+         "title":"Awa a rejoint Les Amis",
+         "content":"a rejoint Les Amis",
+         "actor":{"id":"a1","username":"awa","displayName":"Awa","avatar":null},
+         "context":{"conversationId":"c1","conversationTitle":"Les Amis","conversationType":"group"},
+        \#(state)}
+        """#)
+
+        XCTAssertNil(notification.rowPresentation(copy: catalog).footer)
+    }
+
     func test_distinct_dropsTheLaterRepetition_keepsItsPlace() {
         XCTAssertEqual(NotificationRowText.distinct(["A b", "a  B", nil, "c"]), ["A b", nil, nil, "c"])
     }
@@ -226,6 +243,57 @@ final class NotificationRowPresentationTests: XCTestCase {
         XCTAssertEqual(row.title, "Première voix")
         XCTAssertEqual(row.body, "Un premier message ou commentaire vocal")
         XCTAssertEqual(row.leading, .milestone(symbol: "trophy.fill"))
+    }
+
+    // MARK: - Palier composé par le serveur (#10298)
+
+    func test_rowPresentation_badgeWithTierRank_showsTheServedTitleAndFeat_keepsTheAxisIcon() throws {
+        let notification = try decode(#"""
+        {"id":"n12","userId":"me","type":"badge_earned","priority":"normal",
+         "title":"🏆 Palier 6 atteint",
+         "content":"Messages texte : 1 000 — bravo, vous êtes au palier 6 !",
+         "metadata":{"axisKey":"content.text_message","threshold":1000,"tierRank":6,"value":1000},
+        \#(state)}
+        """#)
+
+        let row = notification.rowPresentation(copy: catalog)
+
+        XCTAssertEqual(notification.metadata?.tierRank, 6)
+        XCTAssertEqual(notification.metadata?.value, 1000)
+        XCTAssertEqual(row.leading, .milestone(symbol: "text.bubble.fill"))
+        XCTAssertEqual(row.title, "🏆 Palier 6 atteint")
+        XCTAssertEqual(row.body, "Messages texte : 1 000 — bravo, vous êtes au palier 6 !")
+    }
+
+    func test_rowPresentation_levelWithTierRank_showsTheServedTitleAndFeat() throws {
+        let notification = try decode(#"""
+        {"id":"n13","userId":"me","type":"level_up","priority":"normal",
+         "title":"⭐ Palier 3 atteint",
+         "content":"Score d'engagement : 500 — bravo, vous êtes au palier 3 !",
+         "metadata":{"threshold":500,"level":3,"tierRank":3,"value":500},
+        \#(state)}
+        """#)
+
+        let row = notification.rowPresentation(copy: catalog)
+
+        XCTAssertEqual(row.leading, .milestone(symbol: "star.fill"))
+        XCTAssertEqual(row.title, "⭐ Palier 3 atteint")
+        XCTAssertEqual(row.body, "Score d'engagement : 500 — bravo, vous êtes au palier 3 !")
+    }
+
+    func test_rowPresentation_badgeWithoutTierRank_keepsTheAppComposition() throws {
+        let notification = try decode(#"""
+        {"id":"n15","userId":"me","type":"badge_earned","priority":"normal",
+         "title":"Badge débloqué",
+         "content":"🏅 Badge débloqué : Messages texte · palier 10",
+         "metadata":{"axisKey":"content.text_message","threshold":10},
+        \#(state)}
+        """#)
+
+        let row = notification.rowPresentation(copy: catalog)
+
+        XCTAssertEqual(row.title, "Messages texte")
+        XCTAssertEqual(row.body, "Badge débloqué · palier 10")
     }
 
     // MARK: - Gestes du badge « Invités venus »

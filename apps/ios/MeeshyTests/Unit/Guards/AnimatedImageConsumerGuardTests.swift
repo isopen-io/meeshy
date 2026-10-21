@@ -82,15 +82,15 @@ final class AnimatedImageConsumerGuardTests: XCTestCase {
 
     /// **Un sticker animé ne change pas le comportement de la bulle.**
     ///
-    /// `AnimatedImageView` est une vue UIKit hébergée : sans
+    /// `AnimatedImageView` et `LottieView` (#10639) sont des vues UIKit hébergées : sans
     /// `.allowsHitTesting(false)`, elle avale le toucher, et l'appui long d'une
     /// bulle (menu, réaction, réponse) ne part plus — sur un Mee ou un GIF
     /// seulement, alors que le gabarit et l'emoji voisins le gardent
     /// (retour porteur 2026-10-01).
     func test_everyAnimatedImageHost_letsTheBubbleGesturesThrough() throws {
-        for host in ["Media/AnimatedCachedImage.swift", "Story/MeeStickerFilmView.swift"] {
+        for (host, view) in [("Media/AnimatedCachedImage.swift", "AnimatedImageView("), ("Story/MeeStickerFilmView.swift", "LottieView(")] {
             let source = try sdkSource(host)
-            XCTAssertTrue(source.contains("AnimatedImageView("), "\(host) ne monte plus la vue animée : témoin à revoir.")
+            XCTAssertTrue(source.contains(view), "\(host) ne monte plus la vue animée : témoin à revoir.")
             XCTAssertTrue(source.contains(".allowsHitTesting(false)"),
                           "\(host) doit rendre la vue animée transparente aux touchers — sinon l'appui long de la bulle ne part plus.")
         }

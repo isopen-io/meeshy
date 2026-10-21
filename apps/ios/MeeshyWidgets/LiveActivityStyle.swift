@@ -23,18 +23,26 @@ enum LiveActivityStyle {
     }
 }
 
-/// L'avatar d'une activité : les initiales sur la couleur de la personne, ou
-/// un glyphe quand le nom n'en donne pas.
+/// L'avatar d'une activité : la photo du conteneur App Group quand l'app l'y a
+/// déposée, sinon les initiales sur la couleur de la personne, ou un glyphe
+/// quand le nom n'en donne pas.
 struct LiveActivityAvatar: View {
     let initials: String
     let accentHex: String
     let fallbackSymbol: String
     let size: CGFloat
+    var image: CGImage?
 
     var body: some View {
         ZStack {
             Circle().fill(LiveActivityStyle.color(hex: accentHex).gradient)
-            if initials.isEmpty {
+            if let image {
+                Image(decorative: image, scale: 3)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size, height: size)
+                    .clipShape(Circle())
+            } else if initials.isEmpty {
                 Image(systemName: fallbackSymbol)
                     .font(.system(size: size * 0.42, weight: .semibold))
             } else {

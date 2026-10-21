@@ -48,6 +48,9 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
     // l'atteindre. Symptôme : les avis d'arrivée rendus comme des paroles,
     // avec le texte de repli du gateway en guise de bulle.
     let kindAndSource = a.messageSource == b.messageSource && a.messageType == b.messageType
+        // #9191 — la langue d'origine décide de la descente du Prisme dans la
+        // bulle : une correction servie qui ne changerait qu'elle doit s'écrire.
+        && a.originalLanguage == b.originalLanguage
     // **L'HORLOGE d'un éphémère fait partie de ce qui change** (#7508). Ses
     // deux porteurs arrivent par des chemins différents — la DURÉE par
     // `message:new`, l'ÉCHÉANCE servie par REST — donc la revalidation qui
@@ -62,6 +65,8 @@ func upsertMutatedFieldsEqual(_ a: MessageRecord, _ b: MessageRecord) -> Bool {
         && a.locationJson == b.locationJson
         && a.stickerJson == b.stickerJson
         && a.trackedLinksJson == b.trackedLinksJson
+        && a.senderIsAnonymous == b.senderIsAnonymous && a.senderHasAccount == b.senderHasAccount
+        && a.senderRingJson == b.senderRingJson
         && ephemeralClock
         && a.viewOnceOpenedAt == b.viewOnceOpenedAt
     return contentAndState && attachmentsAndReactions && encryptionAndDelivery

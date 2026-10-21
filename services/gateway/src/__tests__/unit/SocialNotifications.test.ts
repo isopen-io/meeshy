@@ -476,15 +476,15 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.type).toBe('post_repost');
       expect(createArg.data.priority).toBe('normal');
       // Le corps montre la CIBLE, pas le geste : la phrase d'action
-      // (« a partagé ») est portée par le titre et la bannière depuis
+      // (« a republié ») est portée par le titre et la bannière depuis
       // `targetPreviewBody` — l'y répéter dupliquait corps et sous-titre. Sans
       // extrait ni média, le corps nomme l'entité partagée.
       expect(createArg.data.content).toContain('publication');
-      expect(createArg.data.content).not.toContain('partagé');
+      expect(createArg.data.content).not.toContain('republié');
       // Complément : leur `not.toContain` prouve que le corps ne porte plus la
       // phrase, pas qu'elle existe encore. Sans cette ligne, la retirer de
       // PARTOUT garderait ce témoin vert. On asserte donc les deux extrémités.
-      expect(createArg.data.title).toContain('partagé');
+      expect(createArg.data.title).toContain('republié');
     });
 
     it('montre l\'extrait du contenu partagé dans le corps quand il y en a un', async () => {

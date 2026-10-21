@@ -52,8 +52,8 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.count': '{n} appels lancés',
     'call.start.size': 'Appel à {n} participants',
     'referral.complete.count': '{n} filleuls arrivés',
-    'link.click.count': '{n} clics sur vos liens',
-    'streak.hold.count': 'Série de {n} jours',
+    'link.click.count': '{n} clics sur tes liens',
+    'streak.hold.count': 'Flamme de {n} jours',
     'meesh.mint.count': '{n} Meeshes frappées',
   },
   en: {
@@ -77,7 +77,7 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.size': 'Call with {n} participants',
     'referral.complete.count': '{n} referrals landed',
     'link.click.count': '{n} clicks on your links',
-    'streak.hold.count': '{n}-day streak',
+    'streak.hold.count': '{n}-day Flame',
     'meesh.mint.count': '{n} Meeshes minted',
   },
   es: {
@@ -101,7 +101,7 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.size': 'Llamada con {n} participantes',
     'referral.complete.count': '{n} referidos llegados',
     'link.click.count': '{n} clics en tus enlaces',
-    'streak.hold.count': 'Racha de {n} días',
+    'streak.hold.count': 'Llama de {n} días',
     'meesh.mint.count': '{n} Meeshes acuñadas',
   },
   pt: {
@@ -125,7 +125,7 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.size': 'Chamada com {n} participantes',
     'referral.complete.count': '{n} indicados chegados',
     'link.click.count': '{n} cliques nos seus links',
-    'streak.hold.count': 'Sequência de {n} dias',
+    'streak.hold.count': 'Chama de {n} dias',
     'meesh.mint.count': '{n} Meeshes cunhadas',
   },
   de: {
@@ -148,8 +148,8 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.count': '{n} Anrufe gestartet',
     'call.start.size': 'Anruf mit {n} Teilnehmenden',
     'referral.complete.count': '{n} Empfehlungen angekommen',
-    'link.click.count': '{n} Klicks auf Ihre Links',
-    'streak.hold.count': '{n}-Tage-Serie',
+    'link.click.count': '{n} Klicks auf deine Links',
+    'streak.hold.count': '{n}-Tage-Flamme',
     'meesh.mint.count': '{n} Meeshes geprägt',
   },
   it: {
@@ -173,7 +173,7 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.size': 'Chiamata con {n} partecipanti',
     'referral.complete.count': '{n} invitati arrivati',
     'link.click.count': '{n} clic sui tuoi link',
-    'streak.hold.count': 'Serie di {n} giorni',
+    'streak.hold.count': 'Fiamma di {n} giorni',
     'meesh.mint.count': '{n} Meesh coniate',
   },
   ar: {
@@ -197,7 +197,7 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.size': 'مكالمة مع {n} مشاركًا',
     'referral.complete.count': 'وصول {n} مدعو',
     'link.click.count': '{n} نقرة على روابطك',
-    'streak.hold.count': 'سلسلة {n} يومًا',
+    'streak.hold.count': 'لهب {n} يومًا',
     'meesh.mint.count': 'سك {n} ميش',
   },
   'zh-Hans': {
@@ -221,7 +221,7 @@ export const ACHIEVEMENT_LABELS: Record<NotificationLanguage, FamilyLabels> = {
     'call.start.size': '{n} 人参与的通话',
     'referral.complete.count': '{n} 位受邀者加入',
     'link.click.count': '链接被点击 {n} 次',
-    'streak.hold.count': '{n} 天连续记录',
+    'streak.hold.count': '火焰燃烧 {n} 天',
     'meesh.mint.count': '铸造 {n} 枚 Meesh',
   },
 };
@@ -259,8 +259,8 @@ export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, Family
     'call.join.count': '{n} appel rejoint',
     'call.start.count': '{n} appel lancé',
     'referral.complete.count': '{n} filleul arrivé',
-    'link.click.count': '{n} clic sur vos liens',
-    'streak.hold.count': 'Série de {n} jour',
+    'link.click.count': '{n} clic sur tes liens',
+    'streak.hold.count': 'Flamme de {n} jour',
     'meesh.mint.count': '{n} Meesh frappée',
   },
   en: {
@@ -280,7 +280,7 @@ export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, Family
     'call.start.count': '{n} call started',
     'referral.complete.count': '{n} referral landed',
     'link.click.count': '{n} click on your links',
-    'streak.hold.count': '{n}-day streak',
+    'streak.hold.count': '{n}-day Flame',
     'meesh.mint.count': '{n} Meesh minted',
   },
   es: {
@@ -300,7 +300,7 @@ export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, Family
     'call.start.count': '{n} llamada iniciada',
     'referral.complete.count': '{n} referido llegado',
     'link.click.count': '{n} clic en tus enlaces',
-    'streak.hold.count': 'Racha de {n} día',
+    'streak.hold.count': 'Llama de {n} día',
     'meesh.mint.count': '{n} Meesh acuñada',
   },
   pt: {
@@ -320,7 +320,7 @@ export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, Family
     'call.start.count': '{n} chamada iniciada',
     'referral.complete.count': '{n} indicado chegado',
     'link.click.count': '{n} clique nos seus links',
-    'streak.hold.count': 'Sequência de {n} dia',
+    'streak.hold.count': 'Chama de {n} dia',
     'meesh.mint.count': '{n} Meesh cunhada',
   },
   de: {
@@ -339,8 +339,8 @@ export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, Family
     'call.join.count': '{n} Anruf beigetreten',
     'call.start.count': '{n} Anruf gestartet',
     'referral.complete.count': '{n} Empfehlung angekommen',
-    'link.click.count': '{n} Klick auf Ihre Links',
-    'streak.hold.count': '{n}-Tag-Serie',
+    'link.click.count': '{n} Klick auf deine Links',
+    'streak.hold.count': '{n}-Tag-Flamme',
     'meesh.mint.count': '{n} Meesh geprägt',
   },
   it: {
@@ -360,7 +360,7 @@ export const ACHIEVEMENT_LABELS_ONE: Partial<Record<NotificationLanguage, Family
     'call.start.count': '{n} chiamata avviata',
     'referral.complete.count': '{n} invitato arrivato',
     'link.click.count': '{n} clic sui tuoi link',
-    'streak.hold.count': 'Serie di {n} giorno',
+    'streak.hold.count': 'Fiamma di {n} giorno',
     'meesh.mint.count': '{n} Meesh coniata',
   },
 };
@@ -376,6 +376,11 @@ const NUMBER_LOCALES: Record<NotificationLanguage, string> = {
   ar: 'ar-EG',
   'zh-Hans': 'zh-Hans-CN',
 };
+
+/** Un nombre formaté à la locale du LECTEUR — « 1 000 », « 1,000 », « ١٬٠٠٠ ». */
+export function formatNotificationNumber(language: string | null | undefined, value: number): string {
+  return new Intl.NumberFormat(NUMBER_LOCALES[normalizeNotificationLanguage(language)]).format(value);
+}
 
 /**
  * Le libellé d'un succès, dans la langue du LECTEUR.

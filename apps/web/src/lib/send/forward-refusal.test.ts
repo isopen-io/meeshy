@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, test } from 'bun:test';
 
+import { FORWARD_REFUSAL_CODES } from '@meeshy/shared/types/forward-refusal';
+
 import { SERVER_FORWARD_REFUSALS, sendRefusalOf } from './forward-refusal';
 
 /**
@@ -24,6 +26,15 @@ describe('sendRefusalOf', () => {
     expect(sendRefusalOf({ message: 'x', code: 'forward-source-unavailable' })).toBe('unavailable');
   });
 
+  test('les deux codes neufs du partage unique (D7, #9914)', () => {
+    expect(sendRefusalOf({ message: 'x', code: 'encrypted-source-not-server-copyable' })).toBe('encrypted');
+    expect(sendRefusalOf({ message: 'x', code: 'forwarded-attachment-not-in-source' })).toBe('not-in-source');
+  });
+
+  test('chaque code partagé a son motif : aucun refus de transfert ne se dit « refusé » sans raison', () => {
+    Object.values(FORWARD_REFUSAL_CODES).forEach((code) => expect(sendRefusalOf({ message: 'x', code })).not.toBeNull());
+  });
+
   test('un média protégé refusé à la publication', () => {
     expect(sendRefusalOf({ message: 'This media is protected and cannot be published', code: 'PROTECTED_MEDIA' })).toBe('protected-media');
   });
@@ -32,11 +43,12 @@ describe('sendRefusalOf', () => {
     expect(sendRefusalOf({ message: 'You are not a participant of this conversation' })).toBeNull();
   });
 
-  test('les phrases reconnues sont CELLES que la passerelle écrit', () => {
+  test('les phrases reconnues sont CELLES que la passerelle écrit, et les motifs ses codes partagés (#9598)', () => {
     const gateway = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../../../services/gateway/src/services/messaging/forwardAdmission.ts'), 'utf8');
+    const codes: readonly string[] = Object.values(FORWARD_REFUSAL_CODES);
     SERVER_FORWARD_REFUSALS.forEach(({ sentence, reason }) => {
       expect(gateway).toContain(`'${sentence}'`);
-      expect(gateway).toContain(`'${reason}'`);
+      expect(codes).toContain(reason);
     });
   });
 });

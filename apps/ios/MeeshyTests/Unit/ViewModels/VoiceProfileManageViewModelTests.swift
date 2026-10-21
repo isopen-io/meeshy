@@ -186,4 +186,36 @@ final class VoiceProfileManageViewModelTests: XCTestCase {
 
         XCTAssertNotNil(sut.error)
     }
+
+    /// OFF → ON (lent, échoue) → OFF → ON. L'échec tardif du premier ramenait
+    /// le réglage à OFF alors que le serveur avait reçu ON en dernier.
+    func test_toggleCloning_aStaleFailureLandingLast_doesNotRollBackTheLatestChoice() async {
+        let (sut, service) = makeSUT()
+        let release = AsyncStream<Void>.makeStream()
+        let started = AsyncStream<Void>.makeStream()
+        let calls = CallCounter()
+        service.toggleVoiceCloningGate = { _ in
+            guard calls.next() == 1 else { return }
+            started.continuation.yield()
+            for await _ in release.stream { break }
+        }
+        service.toggleVoiceCloningResult = .failure(URLError(.timedOut))
+        let slow = Task { await sut.toggleCloning(enabled: true) }
+        for await _ in started.stream { break }
+
+        service.toggleVoiceCloningResult = .success(())
+        await sut.toggleCloning(enabled: false)
+        await sut.toggleCloning(enabled: true)
+
+        release.continuation.yield()
+        await slow.value
+
+        XCTAssertTrue(sut.isCloningEnabled)
+    }
+}
+
+private final class CallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func next() -> Int { lock.lock(); defer { lock.unlock() }; count += 1; return count }
 }

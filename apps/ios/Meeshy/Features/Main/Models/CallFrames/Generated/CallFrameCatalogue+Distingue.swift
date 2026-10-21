@@ -23,7 +23,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#1B2A41", fill: nil),
                 title: CallFrameTitle(source: .names, font: .elegant, color: "#1B2A41", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#7A6A4F", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.monogramme.comite",
@@ -42,7 +43,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#1B2A41", fill: nil),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#1B2A41", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#7A6A4F", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.monogramme.groupe",
@@ -61,7 +63,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .list, font: .italic, color: "#1B2A41", fill: nil),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#1B2A41", place: .top, size: .l, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#7A6A4F", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.bibliotheque.duo",
@@ -83,7 +86,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .classic, color: "#F5F0E6", fill: "#1F3B2DE6"),
                 title: CallFrameTitle(source: .names, font: .classic, color: "#F5F0E6", place: .top, size: .l, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .brand, font: .italic, color: "#C9BFA5", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.bibliotheque.comite",
@@ -105,7 +109,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .classic, color: "#F5F0E6", fill: "#1F3B2DE6"),
                 title: CallFrameTitle(source: .group, font: .classic, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .brand, font: .italic, color: "#C9BFA5", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.bibliotheque.groupe",
@@ -127,7 +132,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .classic, color: "#F5F0E6", fill: "#1F3B2DE6"),
                 title: CallFrameTitle(source: .group, font: .classic, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .brand, font: .italic, color: "#C9BFA5", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.cercle.duo",
@@ -148,7 +154,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .classic, color: "#1B1210", fill: "#C9B48AEE"),
                 title: CallFrameTitle(source: .names, font: .elegant, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#C9B48A", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.cercle.comite",
@@ -169,7 +176,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .classic, color: "#1B1210", fill: "#C9B48AEE"),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.cercle.groupe",
@@ -190,7 +198,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .plate, font: .classic, color: "#1B1210", fill: "#C9B48AEE"),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.cercle.tablee",
@@ -211,7 +220,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .plate, font: .classic, color: "#1B1210", fill: "#C9B48AEE"),
                 title: CallFrameTitle(source: .group, font: .elegant, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "distingue.correspondance.duo",
@@ -230,7 +240,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .caption, font: .italic, color: "#1B2A41", fill: nil),
                 title: CallFrameTitle(source: .date, font: .italic, color: "#F5F0E6", place: .top, size: .m, effect: nil, letterCase: nil),
                 subtitle: CallFrameTitle(source: .names, font: .classic, color: "#C9BFA5", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

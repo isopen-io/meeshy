@@ -28,6 +28,9 @@ struct CommentRowView: View, Equatable {
     /// courant est l'auteur — le parent décide de l'éligibilité. `nil` ⇒ l'item
     /// « Supprimer » n'apparaît pas dans le menu « … ».
     var onDeleteComment: (() -> Void)? = nil
+    /// #11151 — retire le commentaire d'un AUTRE (modération) : fourni par le
+    /// parent quand la loi l'autorise, reçoit le motif.
+    var onRemoveComment: ((String) -> Void)? = nil
     /// Édite ce commentaire (contenu + effets). Fourni UNIQUEMENT quand
     /// l'utilisateur courant est l'auteur — même règle que la suppression.
     var onEditComment: (() -> Void)? = nil
@@ -53,6 +56,26 @@ struct CommentRowView: View, Equatable {
     /// Le post commenté — « Imager » le met en tête de la carte (#9686).
     var post: FeedPost? = nil
 
+    /// Le menu « … » — le MÊME que celui d'un commentaire de story (#8709) :
+    /// Copier, Imager (l'arbre de réponses compris), Modifier, Signaler,
+    /// Supprimer, Retirer (#11151), selon `CommentMenuPolicy`.
+    private var moreMenu: some View {
+        CommentMoreMenu(
+            comment: comment,
+            servedText: effectiveCommentContent,
+            showOriginal: showOriginal,
+            accentColor: accentColor,
+            root: threadRoot,
+            loadedReplies: threadReplies,
+            post: post,
+            onEdit: onEditComment,
+            onDelete: onDeleteComment,
+            onRemove: onRemoveComment,
+            glyphSize: isReply ? 12 : 14,
+            glyphColor: theme.textMuted
+        )
+    }
+
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.comment.id == rhs.comment.id &&
         lhs.isLiked == rhs.isLiked &&
@@ -62,6 +85,7 @@ struct CommentRowView: View, Equatable {
         // Re-render si l'éligibilité à la suppression change (ex: changement de
         // compte avec la feuille ouverte) — sinon l'item « Supprimer » reste figé.
         (lhs.onDeleteComment == nil) == (rhs.onDeleteComment == nil) &&
+        (lhs.onRemoveComment == nil) == (rhs.onRemoveComment == nil) &&
         (lhs.onEditComment == nil) == (rhs.onEditComment == nil) &&
         lhs.comment.effectFlags == rhs.comment.effectFlags &&
         lhs.comment.replies == rhs.comment.replies &&
@@ -121,6 +145,7 @@ struct CommentRowView: View, Equatable {
                 storyState: storyState,
                 moodEmoji: moodEmoji,
                 presenceState: presenceState,
+                ring: comment.authorRing,
                 onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                 contextMenuItems: [
                     AvatarContextMenuItem(label: String(localized: "feed.comments.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
@@ -358,22 +383,7 @@ struct CommentRowView: View, Equatable {
 
                     Spacer()
 
-                    // Le menu « … » — le MÊME que celui d'un commentaire de story
-                    // (#8709) : Copier, Imager (l'arbre de réponses compris),
-                    // Modifier, Signaler, Supprimer, selon `CommentMenuPolicy`.
-                    CommentMoreMenu(
-                        comment: comment,
-                        servedText: effectiveCommentContent,
-                        showOriginal: showOriginal,
-                        accentColor: accentColor,
-                        root: threadRoot,
-                        loadedReplies: threadReplies,
-                        post: post,
-                        onEdit: onEditComment,
-                        onDelete: onDeleteComment,
-                        glyphSize: isReply ? 12 : 14,
-                        glyphColor: theme.textMuted
-                    )
+                    moreMenu
                 }
                 .padding(.top, isReply ? 2 : 4)
             }
@@ -418,7 +428,7 @@ struct CommentRowView: View, Equatable {
                 address: item.place.address,
                 accentColor: accentColor,
                 senderName: comment.author
-            )
+            ).closesForConversationOpening(.place)
         }
         .withStatusBubble()
     }

@@ -115,4 +115,54 @@ final class ConversationAudioInterruptionTests: XCTestCase {
 
         XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
     }
+
+    // MARK: - #11040 — la décision de l'utilisateur, et le retour sans signal
+
+    func test_userRelaunchDuringInterruption_leavesNothingToResume() async {
+        let (sut, engine) = makeSUT()
+        engine.isPlaying = true
+        await drainMainQueue()
+        sut.handleSessionEvent(.interruptionBegan)
+        await drainMainQueue()
+
+        sut.togglePlayPause()
+        sut.handleSessionEvent(.interruptionEndedShouldResume)
+
+        XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
+    }
+
+    func test_returnToForeground_onceTheOtherSoundStopped_resumes() async {
+        let (sut, engine) = makeSUT()
+        sut.otherAudioIsPlaying = { false }
+        engine.isPlaying = true
+        await drainMainQueue()
+        sut.handleSessionEvent(.interruptionBegan)
+        await drainMainQueue()
+
+        sut.handleReturnToForeground()
+
+        XCTAssertEqual(engine.resumeFromInterruptionCallCount, 1)
+    }
+
+    func test_returnToForeground_whileTheOtherSoundStillPlays_waits() async {
+        let (sut, engine) = makeSUT()
+        sut.otherAudioIsPlaying = { true }
+        engine.isPlaying = true
+        await drainMainQueue()
+        sut.handleSessionEvent(.interruptionBegan)
+        await drainMainQueue()
+
+        sut.handleReturnToForeground()
+
+        XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
+    }
+
+    func test_returnToForeground_withoutInterruption_resumesNothing() async {
+        let (sut, engine) = makeSUT()
+        sut.otherAudioIsPlaying = { false }
+
+        sut.handleReturnToForeground()
+
+        XCTAssertEqual(engine.resumeFromInterruptionCallCount, 0)
+    }
 }

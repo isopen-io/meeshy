@@ -16,6 +16,9 @@ public protocol MessageServiceProviding: Sendable {
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
+    /// #11151 — le retrait du message d'un AUTRE porte son motif. Requirement
+    /// séparée avec défaut : un double qui ne la surcharge pas reste conforme.
+    func delete(conversationId: String, messageId: String, reason: String?) async throws
     func pin(conversationId: String, messageId: String) async throws
     func unpin(conversationId: String, messageId: String) async throws
     func consumeViewOnce(conversationId: String, messageId: String) async throws -> ConsumeViewOnceResponse
@@ -24,6 +27,11 @@ public protocol MessageServiceProviding: Sendable {
 }
 
 public extension MessageServiceProviding {
+    func delete(conversationId: String, messageId: String, reason: String?) async throws {
+        guard reason == nil else { throw APIError.serverError(501, "delete(reason:) not implemented by \(Self.self)") }
+        try await delete(conversationId: conversationId, messageId: messageId)
+    }
+
     /// L'appel de #8100 — l'index VISUEL, sans recherche.
     func listMedia(conversationId: String, before: String?, limit: Int, languages: [String]?) async throws -> MessagesAPIResponse {
         try await listMedia(
@@ -45,7 +53,29 @@ public struct ConsumeAfterReadResponse: Decodable, Sendable {
     public let consumed: [String]
 }
 
-public final class MessageService: MessageServiceProviding, AfterReadConsuming, @unchecked Sendable {
+/// #11221 — « Supprimer pour moi » vaut PARTOUT : le masquage PERSONNEL d'un
+/// message (`DELETE /messages/:id/delete-for-me`), que la passerelle diffuse
+/// aux autres appareils du lecteur (`message:hidden-for-me`). Protocole à
+/// part, comme `AfterReadConsuming` : les faux de `MessageServiceProviding`
+/// n'ont pas à connaître un geste qu'un seul site déclenche.
+public protocol PersonalMessageHiding: Sendable {
+    func hideForMe(messageId: String) async throws
+    /// Une SÉLECTION en UNE requête (`DELETE /messages/bulk/delete-for-me`,
+    /// 100 ids au plus) : un seul événement part aux autres appareils.
+    func hideForMe(messageIds: [String]) async throws
+}
+
+/// La réponse de `bulk/delete-for-me` : le compte que la passerelle a
+/// effectivement retiré de la vue du lecteur.
+public struct PersonalHidingAcknowledgement: Decodable, Sendable {
+    public let deletedCount: Int?
+
+    public init(deletedCount: Int?) {
+        self.deletedCount = deletedCount
+    }
+}
+
+public final class MessageService: MessageServiceProviding, AfterReadConsuming, PersonalMessageHiding, Sendable {
     public static let shared = MessageService()
     private let api: APIClientProviding
 
@@ -199,7 +229,22 @@ public final class MessageService: MessageServiceProviding, AfterReadConsuming, 
     }
 
     public func delete(conversationId: String, messageId: String) async throws {
-        let _: APIResponse<[String: Bool]> = try await api.delete(ConversationsEndpoint.byIdMessagesByMessageId(id: conversationId, messageId: messageId))
+        try await delete(conversationId: conversationId, messageId: messageId, reason: nil)
+    }
+
+    public func delete(conversationId: String, messageId: String, reason: String?) async throws {
+        try await api.deleteRemovingContent(ConversationsEndpoint.byIdMessagesByMessageId(id: conversationId, messageId: messageId), reason: reason)
+    }
+
+    public func hideForMe(messageId: String) async throws {
+        let _: APIResponse<[String: Bool]> = try await api.delete(MessagesEndpoint.byMessageIdDeleteForMe(messageId: messageId))
+    }
+
+    public func hideForMe(messageIds: [String]) async throws {
+        struct Body: Encodable { let messageIds: [String] }
+        let _: APIResponse<PersonalHidingAcknowledgement> = try await api.delete(
+            MessagesEndpoint.bulkDeleteForMe, body: Body(messageIds: messageIds)
+        )
     }
 
     public func pin(conversationId: String, messageId: String) async throws {

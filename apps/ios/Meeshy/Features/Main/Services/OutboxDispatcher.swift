@@ -27,10 +27,31 @@ struct OutboxDispatcher: OutboxDispatching {
         return d
     }()
 
+    let messageService: any MessageServiceProviding
+    let persistence: @Sendable @concurrent () async -> MessagePersistenceActor
+
+    init(
+        messageService: any MessageServiceProviding = MessageService.shared,
+        persistence: @escaping @Sendable @concurrent () async -> MessagePersistenceActor = { await DependencyContainer.shared.messagePersistence }
+    ) {
+        self.messageService = messageService
+        self.persistence = persistence
+    }
+
+    /// #10502 — une mutation ENVOYÉE qui est une interaction avec un contenu
+    /// (réaction, repost, commentaire, blocage) s'émet en événement v2, daté
+    /// de son enfilement. Un échec ne s'émet pas : le rejeu le fera.
     func dispatch(_ record: OutboxRecord) async throws {
+        try await route(record)
+        if let event = SocialInteractionEvents.event(forDelivered: record) {
+            SocialEventsV2Hub.shared.emit(event)
+        }
+    }
+
+    private func route(_ record: OutboxRecord) async throws {
         switch record.kind {
         case .sendMessage:
-            try await dispatchSendMessage(record)
+            try await dispatchSendMessageRecordingFailure(record)
 
         case .editMessage:
             try await dispatchEditMessage(record)
@@ -292,18 +313,29 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `X-Client-Mutation-Id` header (no server-side dedup to feed).
     /// A 404 means the conversation was deleted while the row was pending
     /// — swallow as success so the flusher removes the row.
-    /// R6 — `POST /posts/:id/view`, même contrat que le chemin direct
-    /// historique (`StoryService.markViewed`) : le gateway renvoie
-    /// `{ viewed: true }` (Bool) et un P2002 (déjà vu) est un no-op serveur.
-    /// Une story supprimée/expirée (404) rend le « vu » obsolète — succès.
+    /// R6 — la vue d'une story, rejouée par la porte unique
+    /// `POST /social/events` (#10483) : elle y porte l'entrée du lecteur
+    /// (provenance, origine d'un listing), que l'alias historique
+    /// `POST /posts/:id/view` refuserait (`additionalProperties: false`). Mêmes
+    /// effets côté passerelle (l'alias délègue au même cœur). Une story
+    /// supprimée/expirée n'est plus un 404 mais un événement `rejected` : la
+    /// ligne sort de la file dans les deux cas.
+    /// #10500 — la vue rejouée par la file garde l'identité de sa ligne
+    /// (`clientMutationId`) et l'heure de sa mise en file : une ligne
+    /// renvoyée après une réponse perdue n'est pas recomptée.
+    nonisolated static func storyView(_ payload: MarkStoryViewedPayload, queuedAt: Date) -> StampedSocialEvent {
+        StampedSocialEvent(
+            event: .view(postId: payload.storyId, durationMs: nil, surface: .story, entry: payload.entry),
+            stamp: SocialEventStamp(eventId: SocialEventStamp.stableEventId(from: payload.clientMutationId), occurredAt: queuedAt)
+        )
+    }
+
     private func dispatchMarkStoryViewed(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkStoryViewedPayload.self)
         do {
-            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
-                PostsEndpoint.byPostIdView(postId: payload.storyId),
-                method: "POST",
-                body: nil,
-                queryItems: nil
+            _ = try await PostService.shared.recordSocialEvents(
+                [Self.storyView(payload, queuedAt: record.createdAt)],
+                credential: .account
             )
             logger.info("markStoryViewed dispatched story=\(payload.storyId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
         } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {

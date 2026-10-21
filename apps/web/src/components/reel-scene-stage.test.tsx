@@ -68,7 +68,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  window.HTMLElement.prototype.getBoundingClientRect = originalRect;
+  // Rendre le prototype tel qu'il était (la mesure d'origine vit sur Element.prototype) : pas de propriété PROPRE laissée derrière.
+  Reflect.deleteProperty(window.HTMLElement.prototype, 'getBoundingClientRect');
+  if (window.HTMLElement.prototype.getBoundingClientRect !== originalRect) window.HTMLElement.prototype.getBoundingClientRect = originalRect;
   act(() => {
     root.unmount();
   });

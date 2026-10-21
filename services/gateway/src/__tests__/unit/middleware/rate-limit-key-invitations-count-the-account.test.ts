@@ -105,7 +105,7 @@ function prismaDouble() {
       findFirst: jest.fn(async () => null),
       update: jest.fn(async () => ({})),
     },
-    userSession: { findFirst: jest.fn(async () => ({ isValid: true })) },
+    userSession: { findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })) },
     // #3691 — la route crée désormais un AffiliateToken dédié (usage unique)
     // par invitation, et la ligne EmailInvitation qui le référence.
     affiliateToken: {
@@ -123,7 +123,7 @@ function prismaDouble() {
 
 function jeton(compte: string): string {
   return jwt.sign(
-    { userId: compte, username: `u-${compte.slice(-4)}`, sid: `sess-${compte.slice(-4)}` },
+    { userId: compte, username: `u-${compte.slice(-4)}`, sid: compte },
     process.env.JWT_SECRET as string,
     { expiresIn: '1h' }
   );

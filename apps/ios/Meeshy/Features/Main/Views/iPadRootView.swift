@@ -24,14 +24,13 @@ import MeeshyUI
 
 struct iPadRootView: View {
     @StateObject var theme = ThemeManager.shared
-    @StateObject var toastManager = FeedbackToastManager.shared
-    @StateObject var storyViewModel = StoryViewModel()
-    @StateObject var statusViewModel = StatusViewModel()
+    @ObservedObject var storyViewModel: StoryViewModel
+    @ObservedObject var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
     // évite le re-render de iPadRootView à chaque churn du VM (presence,
     // reloadFromCache). Exposé via la propriété calculée `conversationViewModel`,
     // consommée telle quelle par les extensions (+Sheets, +Navigation).
-    @StateObject var conversationVMOwner = ConversationListVMOwner()
+    let conversationVMOwner: ConversationListVMOwner
     var conversationViewModel: ConversationListViewModel { conversationVMOwner.viewModel }
     @StateObject var router = Router()
     /// Hoisted at the iPad root so deep-stack screens (e.g.
@@ -68,7 +67,7 @@ struct iPadRootView: View {
     /// sur quatre (`+Navigation`, `+Overlays`, `+Panels`). `RootView` tient en
     /// un seul, d'où sa déclaration plus fermée — recopier son modificateur
     /// ici ne compile pas.
-    @StateObject var notifications = RootNotificationSource()
+    @ObservedObject var notifications: RootNotificationSource
     /// Ne publie que `launch` — une ouverture/fermeture de lecteur de réels,
     /// pas un flux. L'observer ne rejoue donc pas le churn que `CallManager`
     /// imposait ici (cf. watchdog 0x8BADF00D juste au-dessus).
@@ -83,13 +82,11 @@ struct iPadRootView: View {
     @StateObject var gameTrail = GamePanelTrailStore()
     /// Mood à republier depuis la bulle (hôte racine) — composer pré-rempli.
     @State private var republishStatusEntry: StatusEntry?
-    @State var showStoryViewerFromConv = false
-    @State var selectedStoryUserIdFromConv: String?
     @State var showSharePicker = false
     @State var showNewConversation = false
     @State private var isScrollingDown = false
     @State private var feedIsVisible = true
-    @State private var leftColumnRatio: CGFloat = 0.38
+    @SceneStorage("meeshy.ipad.leftColumnRatio") private var leftColumnRatio: Double = ColumnWidthLaw.defaultRatio
 
     /// Choix d'identité en attente sur un lien de partage — jumeau de
     /// `RootView`. Les deux vues partagent la RÉSOLUTION
@@ -112,10 +109,22 @@ struct iPadRootView: View {
     /// G6 : l'iPad a sa racine PROPRE. Sans cette observation-là, un iPad prend
     /// des 426 bruts en pleine publication et ne voit JAMAIS l'écran de mise à
     /// jour — les deux racines ne partagent pas une ligne.
-    @StateObject private var upgradeGate = UpgradeGateController()
+    @ObservedObject var upgradeGate: UpgradeGateController
+
+    init(scope: RootScopeModels) {
+        _storyViewModel = ObservedObject(wrappedValue: scope.story)
+        _statusViewModel = ObservedObject(wrappedValue: scope.status)
+        conversationVMOwner = scope.conversations
+        _notifications = ObservedObject(wrappedValue: scope.notifications)
+        _upgradeGate = ObservedObject(wrappedValue: scope.upgradeGate)
+    }
 
     private var isConversationOpen: Bool {
         activeConversation != nil
+    }
+
+    private var visibleConversationId: String? {
+        iPadRightColumn.visibleConversationId(conversation: activeConversation, panelRoute: rightPanelRoute)
     }
 
     var body: some View {
@@ -125,9 +134,9 @@ struct iPadRootView: View {
             GeometryReader { geometry in
                 HStack(spacing: 0) {
                     leftColumn
-                        .frame(width: geometry.size.width * leftColumnRatio)
+                        .frame(width: ColumnWidthLaw.width(ratio: leftColumnRatio, windowWidth: geometry.size.width))
 
-                    iPadResizableHandle(ratio: $leftColumnRatio, screenWidth: geometry.size.width)
+                    iPadResizableHandle(ratio: $leftColumnRatio, windowWidth: geometry.size.width)
 
                     rightColumn
                         .frame(maxWidth: .infinity)
@@ -177,7 +186,12 @@ struct iPadRootView: View {
             onRevealFeed: closePanels,
             onAppear: installRouterCallbacks,
             onDisappear: uninstallRouterCallbacks,
-            onStart: startRootServices
+            onStart: startRootServices,
+            navigationStack: RootNavigationHandoff.stack(conversation: activeConversation, panelRoute: rightPanelRoute)
+                + (rightPanelRoute.map { gameTrail.trail.routes(over: $0) } ?? []),
+            onRestoreNavigation: restoreNavigation,
+            sceneTitle: rightPanelRoute?.displayTitle ?? activeConversation?.name
+                ?? String(localized: "route.title.conversations", defaultValue: "Conversations", bundle: .main)
         ))
         .modifier(RootIntentRoutingLayer(
             router: router,
@@ -191,6 +205,12 @@ struct iPadRootView: View {
             onSendMessageToUser: handleSendMessageToUser,
             onPushNavigateToRoute: handlePushNavigateToRoute
         ))
+        // La conversation ouverte quitte la liste (masquée, supprimée, quittée, retirée) : la colonne de
+        // détail se referme, comme l'iPhone revient à la liste — jamais un fil mort où l'on écrit encore.
+        .onReceive(conversationViewModel.conversationLeavesDetail) { removedId in
+            guard iPadSelectionRule.closesDetail(activeConversationId: activeConversation?.id, removedId: removedId) else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { activeConversation = nil }
+        }
         // `initial: true` covers the cold-launch race where a Universal Link
         // sets `pendingDeepLink` from AppDelegate.continue:userActivity: BEFORE
         // this view mounts. `consumePendingDeepLink` returns nil for the typical
@@ -217,18 +237,18 @@ struct iPadRootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             reelsPresenter: reelsPresenter,
             storyZoomNamespace: storyZoomNamespace,
-            showStoryViewerFromConv: $showStoryViewerFromConv,
-            selectedStoryUserIdFromConv: selectedStoryUserIdFromConv,
             activeConversationId: activeConversation?.id,
+            visibleConversationId: visibleConversationId,
             rightPanelRoute: rightPanelRoute,
             onStoryReply: handleStoryReply,
             onSyncPillTap: handleSyncPillTap,
-            activeConversationIdForBanner: { activeConversation?.id ?? sheetTargets.notificationPreview?.id },
+            activeConversationIdForBanner: { visibleConversationId ?? sheetTargets.notificationPreview?.id },
             onMiniPlayerTap: {
                 guard let target = MiniPlayerTapPolicy.target(
                     context: ConversationAudioCoordinator.shared.activeContext) else { return }
                 navigateToConversationById(target.conversationId, highlightMessageId: target.highlightMessageId)
-            }
+            },
+            onRetryReel: { await revealReel(postId: $0, commentId: $1, parentCommentId: $2) }
         ))
         // C4b — la rupture, posée PAR-DESSUS les feuilles : elle les recouvre,
         // elle ne passe pas derrière. Binding CONSTANT — le contrôleur n'expose
@@ -274,6 +294,14 @@ struct iPadRootView: View {
                 }
             }
         }
+    }
+
+    /// Reprend la pile de la racine iPhone : son dernier fil dans la colonne, puis les routes qui le recouvraient,
+    /// rejouées par le même chemin qu'une ouverture — une page du jeu s'empile sur Progression, comme toujours.
+    private func restoreNavigation(_ routes: [Route]) {
+        let placement = RootNavigationHandoff.tabletPlacement(of: routes)
+        activeConversation = placement.conversation
+        placement.panelRoutes.forEach { _ = router.onRouteRequested?($0) }
     }
 
     private func uninstallRouterCallbacks() {
@@ -349,7 +377,7 @@ struct iPadRootView: View {
         async let versionFloor: Void = upgradeGate.checkFloor()
         async let storiesLoad: Void = storyViewModel.loadStories()
         async let statusesLoad: Void = statusViewModel.loadStatuses()
-        async let conversationsLoad: Void = conversationViewModel.loadConversations()
+        async let conversationsLoad: Void = ConversationListVMOwner.loadAtLaunch(conversationViewModel)
         async let unreadRefresh: Void = notifications.manager.refreshUnreadCount()
         _ = await (storiesLoad, statusesLoad, conversationsLoad, unreadRefresh, versionFloor)
     }
@@ -369,7 +397,8 @@ struct iPadRootView: View {
 
     @ViewBuilder
     private var rightColumn: some View {
-        if let conversation = activeConversation {
+        switch iPadRightColumn.resolve(conversation: activeConversation, panelRoute: rightPanelRoute) {
+        case .conversation(let conversation):
             ConversationView(
                 conversation: conversation,
                 replyContext: router.pendingReplyContext,
@@ -386,7 +415,7 @@ struct iPadRootView: View {
                 router.pendingReplyContext = nil
                 router.pendingForcedReadingMode = nil
             }
-        } else if let route = rightPanelRoute {
+        case .panel(let route):
             // Vue NOMINALE (#5837) : `NavigationStack` + toolbar + destination
             // entraient sinon dans le type de ce `body` — la branche la plus
             // profonde de la colonne droite.
@@ -395,13 +424,13 @@ struct iPadRootView: View {
                 rightPanelRoute: $rightPanelRoute,
                 gamePath: Binding(
                     get: { gameTrail.trail.path(over: route) },
-                    set: { gameTrail.trail = GamePanelTrail(root: route, path: $0) }
+                    set: { gameTrail.trail = GamePanelTrail(root: route, path: $0, previous: gameTrail.trail) }
                 ),
                 notificationManager: notifications.manager,
                 onOpenConversation: openConversation,
                 onNotificationTap: handleNotificationTap
             )
-        } else {
+        case .conversationList:
             iPadConversationList(showFeedButton: false)
         }
     }
@@ -416,11 +445,9 @@ struct iPadRootView: View {
             feedIsVisible: $feedIsVisible,
             onSelect: { conversation in openConversation(conversation) },
             onStoryViewRequest: { userId, _ in
-                // Chemin coordinator (`fullScreenCover(item:)`) : la requête
-                // porte son uid, contrairement au couple @State legacy
-                // (`selectedStoryUserIdFromConv` + `isPresented`) dont la
-                // course de commit présentait le viewer avec un uid vide —
-                // l'écran « Story introuvable » du tray de la colonne conv.
+                // Chemin coordinator : la requête porte son uid (l'ancien couple
+                // @State uid + `isPresented` présentait le lecteur avec un uid
+                // vide — « Story introuvable »). Couvercle unique : #11197.
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
                 )

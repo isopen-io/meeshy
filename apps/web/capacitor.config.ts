@@ -110,6 +110,16 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * doc-comment de `scripts/shell-start-path-hook.mjs` et `decisions.md` § D-27
  * « Complément 2026-09-12 (#6027) ».
  */
+/**
+ * #10005 — `insetsHandling: 'css'` (le defaut, ecrit pour etre lu) injecte les
+ * encoches reelles sous les WebView qui les taisent. L'indice
+ * `initialViewportFitValueHint` est lu par `SystemBars.java` (Capacitor 8,
+ * `getConfig().getString("initialViewportFitValueHint")`). Depuis `@capacitor/cli`
+ * 8.5.3, le type le declare (`"auto" | "contain" | "cover"`) : la valeur est
+ * donc un litteral, comme `insetsHandling`.
+ */
+const SYSTEM_BARS = { insetsHandling: 'css' as const, initialViewportFitValueHint: 'cover' as const };
+
 export function resolveCapacitorConfig(env: Readonly<Record<string, string | undefined>>): CapacitorConfig {
   const startPath = env.MEESHY_SHELL_START_PATH;
 
@@ -169,11 +179,18 @@ export function resolveCapacitorConfig(env: Readonly<Record<string, string | und
       // Le fond de la WebView pendant le chargement : sans lui, un flash blanc
       // precede l'application en schema sombre, sur l'appareil lent qui est
       // precisement la cible.
-      backgroundColor: '#0b0c14',
+      backgroundColor: '#09090b',
     },
     ios: {
-      backgroundColor: '#0b0c14',
+      backgroundColor: '#09090b',
       contentInset: 'never',
+    },
+    plugins: {
+      // #10005 — la coque Android est bord a bord : `SystemBars` (Capacitor 8)
+      // ne sait qu'apres la premiere page que `index.html` declare
+      // `viewport-fit=cover`, et rembourre la fenetre jusque-la. L'indice le
+      // lui dit des le lancement : aucun saut de mise en page au demarrage.
+      SystemBars: SYSTEM_BARS,
     },
     server,
   };

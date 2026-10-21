@@ -1,0 +1,6576 @@
+{
+  "generated": "GÉNÉRÉ par `bun run import:glory-frames` depuis l’export du générateur — ne pas éditer.",
+  "schema": 1,
+  "collection": "savane",
+  "atmosphere": "afrique",
+  "frames": [
+    {
+      "id": "savane.ambassadeur-5",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "016694c090dcae9f.webp",
+        "bytes": 16410,
+        "sha256": "016694c090dcae9f552ebd3e0704bdc21aaf9b2c20bc947e90c7ab9feec1b002"
+      },
+      "i18n": {
+        "name": "game.frame.savane.ambassadeur-5.name",
+        "story": "game.frame.savane.ambassadeur-5.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 5
+      },
+      "option": "V",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              128,
+              528,
+              824,
+              948
+            ],
+            "mask": {
+              "src": "f3a02fd90d1e7461.webp",
+              "bytes": 2364,
+              "sha256": "f3a02fd90d1e7461fe84f4cfa8eccd128b68ee3e2cb5a8685ff62d2e61a1d50e",
+              "box": [
+                128,
+                528,
+                824,
+                948
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "1d66b9c9e7e01ff4.webp",
+              "bytes": 106646,
+              "sha256": "1d66b9c9e7e01ff4d3851d9fd6d55ef5a0690132ac526c606eac817b5e722897",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "ca697dab5abbdba4.webp",
+              "bytes": 6964,
+              "sha256": "ca697dab5abbdba4996ea0454e381bb73b4deac3411012141f710cfc09cdd4db",
+              "box": [
+                128,
+                528,
+                824,
+                948
+              ]
+            },
+            "grade": [
+              {
+                "src": "ec307b724a195da8.webp",
+                "bytes": 76572,
+                "sha256": "ec307b724a195da8cee98826ef719f22952ba442caa0b7f9e643a56952abd845",
+                "box": [
+                  128,
+                  528,
+                  824,
+                  948
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "131d978b07219ace.webp",
+                "bytes": 22492,
+                "sha256": "131d978b07219acef8c409ddc1493898fc1fb8a7afb2400cb3a5875b734cf415",
+                "box": [
+                  128,
+                  528,
+                  824,
+                  948
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "plain": {
+                "src": "3f189719d1b93973.webp",
+                "bytes": 10868,
+                "sha256": "3f189719d1b939733b2c5686748aa2b46ec63acaacc80cf5c37bf26d447f84fa",
+                "box": [
+                  73,
+                  1541,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              448,
+              114,
+              184,
+              290
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1626,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1600,
+                636,
+                34
+              ],
+              "contrast": 9.55,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1710,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                211,
+                1632,
+                658,
+                108
+              ],
+              "contrast": 9.86,
+              "sample": "Ambassadeur V"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1758,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1732,
+                228,
+                34
+              ],
+              "contrast": 8.67,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-coucou",
+                  "box": [
+                    6,
+                    202,
+                    180,
+                    180
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-salut",
+                  "box": [
+                    894,
+                    202,
+                    180,
+                    180
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.ambassadeur-4",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "fac583416478c513.webp",
+        "bytes": 15160,
+        "sha256": "fac583416478c5134708d75f7cb9faa1840f0ffbf0fa80ae18029ee6bbf31e89"
+      },
+      "i18n": {
+        "name": "game.frame.savane.ambassadeur-4.name",
+        "story": "game.frame.savane.ambassadeur-4.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 4
+      },
+      "option": "IV",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              184,
+              544,
+              712,
+              924
+            ],
+            "mask": {
+              "src": "f7b6b9c3be028b59.webp",
+              "bytes": 782,
+              "sha256": "f7b6b9c3be028b591753237b75cb96d13fc23404a452c910505010ce2343c392",
+              "box": [
+                184,
+                544,
+                712,
+                924
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "9e5cfba1ead295d1.webp",
+              "bytes": 80792,
+              "sha256": "9e5cfba1ead295d10107a18f4635bd85ba8dece149395858dcb63fcaa371afe9",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "4d7deb01d2480040.webp",
+              "bytes": 4662,
+              "sha256": "4d7deb01d2480040b47aacd78799115a7534d14b555adadbc9b417b5e28f301b",
+              "box": [
+                184,
+                544,
+                712,
+                924
+              ]
+            },
+            "grade": [
+              {
+                "src": "54183d74b58f3efa.webp",
+                "bytes": 34350,
+                "sha256": "54183d74b58f3efa8f41207d285aafedf010b2d9443e315f16b7a1ce55d48058",
+                "box": [
+                  184,
+                  544,
+                  712,
+                  924
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "1239e2fce2e8cb23.webp",
+                "bytes": 23678,
+                "sha256": "1239e2fce2e8cb23009c4d9bfcec2a8868dad6f8fecbad85586dc3a40baeee89",
+                "box": [
+                  184,
+                  544,
+                  712,
+                  924
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "5045952b94ddd13d.webp",
+                "bytes": 11244,
+                "sha256": "5045952b94ddd13d1a414a24912baa35956f7f0d07598ae72b93e61be049d4bc",
+                "box": [
+                  73,
+                  1549,
+                  934,
+                  354
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              441,
+              154,
+              198,
+              312
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1634,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1608,
+                636,
+                34
+              ],
+              "contrast": 8.99,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1718,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                196,
+                1640,
+                688,
+                108
+              ],
+              "contrast": 9.65,
+              "sample": "Ambassadeur IV"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1784,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                382,
+                1730,
+                321,
+                70
+              ],
+              "contrast": 17.45,
+              "sample": "Ubuntu, toujours"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1822,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1798,
+                214,
+                30
+              ],
+              "contrast": 8.67,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-sourire",
+                  "box": [
+                    24,
+                    336,
+                    184,
+                    184
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-yo",
+                  "box": [
+                    872,
+                    336,
+                    184,
+                    184
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.ambassadeur-3",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "28401a15cf70a233.webp",
+        "bytes": 17170,
+        "sha256": "28401a15cf70a23376f904b93f430452d57013ca16e7738a598f49e6e10f57c9"
+      },
+      "i18n": {
+        "name": "game.frame.savane.ambassadeur-3.name",
+        "story": "game.frame.savane.ambassadeur-3.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 3
+      },
+      "option": "III",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              203,
+              680,
+              674,
+              797
+            ],
+            "mask": {
+              "src": "8d51836129c00736.webp",
+              "bytes": 128,
+              "sha256": "8d51836129c007361b7e61175a84a9d10c88021d38f9a8d170beb0a9026fcf3c",
+              "box": [
+                203,
+                680,
+                674,
+                797
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "9eeb2dffe5f9b16e.webp",
+              "bytes": 131458,
+              "sha256": "9eeb2dffe5f9b16eef367111a09eade6fc852fad4c52223c7829db43601bbab6",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "9bf209e4a9087266.webp",
+              "bytes": 2774,
+              "sha256": "9bf209e4a9087266227c2dde6de7d4611fda623f0b5193c378174eceb1cacdbd",
+              "box": [
+                203,
+                680,
+                674,
+                797
+              ]
+            },
+            "grade": [
+              {
+                "src": "b25d92da920c0c2d.webp",
+                "bytes": 109050,
+                "sha256": "b25d92da920c0c2d6ae4949ffaea801fb5961aceab8aed478708003ac2e89a60",
+                "box": [
+                  203,
+                  680,
+                  674,
+                  797
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "a817ceea2af0b99a.webp",
+                "bytes": 7288,
+                "sha256": "a817ceea2af0b99a0d76268a2717a51e2fa05185373e48818c1deb70f8f6c2f4",
+                "box": [
+                  203,
+                  680,
+                  674,
+                  797
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "5045952b94ddd13d.webp",
+                "bytes": 11244,
+                "sha256": "5045952b94ddd13d1a414a24912baa35956f7f0d07598ae72b93e61be049d4bc",
+                "box": [
+                  73,
+                  1533,
+                  934,
+                  354
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              452,
+              247,
+              176,
+              277
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1618,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1592,
+                636,
+                34
+              ],
+              "contrast": 8.99,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1702,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                194,
+                1624,
+                690,
+                108
+              ],
+              "contrast": 9.65,
+              "sample": "Ambassadeur III"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1768,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                364,
+                1714,
+                355,
+                70
+              ],
+              "contrast": 17.45,
+              "sample": "Le voyage continue"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1806,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1782,
+                214,
+                30
+              ],
+              "contrast": 8.68,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    4,
+                    452,
+                    176,
+                    176
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    900,
+                    452,
+                    176,
+                    176
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.ambassadeur-2",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "1b9eb43f8b53d5c6.webp",
+        "bytes": 20308,
+        "sha256": "1b9eb43f8b53d5c66c4c70a1ee86f60ae63e975d6dd89c59da82582654eaaa78"
+      },
+      "i18n": {
+        "name": "game.frame.savane.ambassadeur-2.name",
+        "story": "game.frame.savane.ambassadeur-2.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 2
+      },
+      "option": "II",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              177,
+              508,
+              726,
+              972
+            ],
+            "mask": {
+              "src": "f4f072745df91b12.webp",
+              "bytes": 116,
+              "sha256": "f4f072745df91b12fb80e8ef8e949023398521a9bf606d87c2147c24831af8e2",
+              "box": [
+                177,
+                508,
+                726,
+                972
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "front:over-birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "9e14d861812f2a6e.webp",
+              "bytes": 90076,
+              "sha256": "9e14d861812f2a6eadc86be8a9e32a40e4556de6cf40a5f5f01f5925a0dfccf6",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "ec25584e1d584a27.webp",
+              "bytes": 3664,
+              "sha256": "ec25584e1d584a27ae93b440cb3eb159eeefbcf4d1548b05802b3e654c0a4103",
+              "box": [
+                177,
+                508,
+                726,
+                972
+              ]
+            },
+            "grade": [
+              {
+                "src": "d4d90644bc49789a.webp",
+                "bytes": 63016,
+                "sha256": "d4d90644bc49789af2c042aab0cc22904be3977ae9d87ede50f32d74e3672cc1",
+                "box": [
+                  177,
+                  508,
+                  726,
+                  972
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "785eb4cf1432a6eb.webp",
+                "bytes": 11458,
+                "sha256": "785eb4cf1432a6eb0e73fff6c0f507f6face1a79d5a8e338c31d96a4198befdb",
+                "box": [
+                  177,
+                  508,
+                  726,
+                  972
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "over-birds": {
+                "src": "e5174940a3858a1e.webp",
+                "bytes": 17814,
+                "sha256": "e5174940a3858a1ef249a7937a4f71ffc4d355bcc4aa37257304c36472087e1a",
+                "box": [
+                  0,
+                  1552,
+                  1080,
+                  352
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "4ceea9996e5463d7.webp",
+                "bytes": 22178,
+                "sha256": "4ceea9996e5463d74747d8626032d4adbc7a6ab54a19f0d8ed684995fe0427b3",
+                "box": [
+                  73,
+                  1553,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              444,
+              150,
+              192,
+              302
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1638,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1612,
+                636,
+                34
+              ],
+              "contrast": 9.57,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                209,
+                1644,
+                659,
+                108
+              ],
+              "contrast": 9.8,
+              "sample": "Ambassadeur II"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1770,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1744,
+                228,
+                34
+              ],
+              "contrast": 8.6,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-bravo",
+                  "box": [
+                    8,
+                    72,
+                    200,
+                    200
+                  ],
+                  "rotate": -8,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-bravo",
+                  "box": [
+                    872,
+                    72,
+                    200,
+                    200
+                  ],
+                  "rotate": 8,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.ambassadeur-1",
+      "usage": {
+        "kind": "rank",
+        "rank": "ambassadeur"
+      },
+      "thumb": {
+        "src": "c76ebcbecee620d0.webp",
+        "bytes": 22870,
+        "sha256": "c76ebcbecee620d0b6ebf125802b8332b3ad731fbdcb7a719f0e72373e688b9e"
+      },
+      "i18n": {
+        "name": "game.frame.savane.ambassadeur-1.name",
+        "story": "game.frame.savane.ambassadeur-1.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "ambassadeur",
+        "division": 1
+      },
+      "option": "I",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              198,
+              538,
+              684,
+              924
+            ],
+            "mask": {
+              "src": "075fa76820459f79.webp",
+              "bytes": 70,
+              "sha256": "075fa76820459f7923ecc3880aaa206a472bbe61b2ef276108c2506a7e7add28",
+              "box": [
+                198,
+                538,
+                684,
+                924
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "22c3cfcc2457954d.webp",
+              "bytes": 119980,
+              "sha256": "22c3cfcc2457954d80e2c3b59c08bcbf24a26e5d484b21ceb485e72a553b21e7",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "a3a46807e6ae11e2.webp",
+              "bytes": 2864,
+              "sha256": "a3a46807e6ae11e2215c89f8022ec340f54e74650e51a2dc22b39256803a1b85",
+              "box": [
+                198,
+                538,
+                684,
+                924
+              ]
+            },
+            "grade": [
+              {
+                "src": "16c6df717cd40e3e.webp",
+                "bytes": 48764,
+                "sha256": "16c6df717cd40e3e7d1b761b49da56c00fed2830d261a2fdfb23913c01e120fc",
+                "box": [
+                  198,
+                  538,
+                  684,
+                  924
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "01dd83aed2613051.webp",
+                "bytes": 2806,
+                "sha256": "01dd83aed261305162a1af739a8e2559f9bf025b856fd789b5a521748b37e4d7",
+                "box": [
+                  198,
+                  538,
+                  684,
+                  924
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "fcd1ef3f5ca2334d.webp",
+                "bytes": 21192,
+                "sha256": "fcd1ef3f5ca2334d1ddd52dd153ca15d0126b250d4a1ec43ef1160ee1a99014f",
+                "box": [
+                  73,
+                  1529,
+                  934,
+                  354
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              177,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1614,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1588,
+                636,
+                34
+              ],
+              "contrast": 7.17,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1698,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                225,
+                1620,
+                628,
+                108
+              ],
+              "contrast": 7.86,
+              "sample": "Ambassadeur I"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1764,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                391,
+                1710,
+                301,
+                70
+              ],
+              "contrast": 14.14,
+              "sample": "Merci la famille"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1802,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1778,
+                214,
+                30
+              ],
+              "contrast": 7.24,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "ruban",
+            "layouts": {
+              "ruban": {
+                "mee": {
+                  "sticker": "mee-fete",
+                  "box": [
+                    14,
+                    1378,
+                    220,
+                    220
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-champagne",
+                  "box": [
+                    846,
+                    1378,
+                    220,
+                    220
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.orateur-a",
+      "usage": {
+        "kind": "rank",
+        "rank": "orateur"
+      },
+      "thumb": {
+        "src": "83710987af0b8595.webp",
+        "bytes": 15970,
+        "sha256": "83710987af0b8595bfe0b9bdfb93aa2921607d9c879245fefd49906913c376af"
+      },
+      "i18n": {
+        "name": "game.frame.savane.orateur-a.name",
+        "story": "game.frame.savane.orateur-a.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "orateur",
+        "division": null
+      },
+      "option": "A",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              160,
+              604,
+              760,
+              880
+            ],
+            "mask": {
+              "src": "c7b26823429fc48b.webp",
+              "bytes": 180,
+              "sha256": "c7b26823429fc48bd98cdd29d4749603d97c3587a7f97c04f56aef853c2dc26d",
+              "box": [
+                160,
+                604,
+                760,
+                880
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "5a646319bcadce46.webp",
+              "bytes": 92404,
+              "sha256": "5a646319bcadce4635db9bd784e1b3716f2926646ad83cd51655198c9df9e74a",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "295892dda6e276d1.webp",
+              "bytes": 3260,
+              "sha256": "295892dda6e276d1b3788ea5e88c96c058a418595b13b2db20f189f140c863fb",
+              "box": [
+                160,
+                604,
+                760,
+                880
+              ]
+            },
+            "grade": [
+              {
+                "src": "3f6a9f5628cd3b63.webp",
+                "bytes": 57456,
+                "sha256": "3f6a9f5628cd3b6314fa834b6b22cfb5f4cfeb8d4a163f4183b987e8e80e3781",
+                "box": [
+                  160,
+                  604,
+                  760,
+                  880
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "58109f6c040a20ac.webp",
+                "bytes": 7800,
+                "sha256": "58109f6c040a20ac9dcdc55afaf2f361f3eef340bdd02d4162b121d3d2c204ea",
+                "box": [
+                  160,
+                  604,
+                  760,
+                  880
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "7eeae5718a0ab0c2.webp",
+                "bytes": 14932,
+                "sha256": "7eeae5718a0ab0c240c618909e0aba81d03001edcb4b05334bb7b670abb5642b",
+                "box": [
+                  73,
+                  1499,
+                  934,
+                  408
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              444,
+              138,
+              192,
+              258
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1638,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E0952BFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1612,
+                636,
+                34
+              ],
+              "contrast": 7.47,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFE6B0FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFE6B0FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E0952BFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                353,
+                1644,
+                377,
+                108
+              ],
+              "contrast": 7.61,
+              "sample": "Orateur"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1788,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                369,
+                1734,
+                343,
+                70
+              ],
+              "contrast": 17.61,
+              "sample": "Ma voix porte loin"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1826,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E0952BFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1802,
+                214,
+                30
+              ],
+              "contrast": 6.83,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "perches",
+            "layouts": {
+              "perches": {
+                "mee": {
+                  "sticker": "mee-courage",
+                  "box": [
+                    40,
+                    200,
+                    184,
+                    184
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    856,
+                    216,
+                    184,
+                    184
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.orateur-b",
+      "usage": {
+        "kind": "rank",
+        "rank": "orateur"
+      },
+      "thumb": {
+        "src": "43d62c9a2815dcaf.webp",
+        "bytes": 14476,
+        "sha256": "43d62c9a2815dcafddf58af002ae29aa4ac5412844d39449de9940817c17311c"
+      },
+      "i18n": {
+        "name": "game.frame.savane.orateur-b.name",
+        "story": "game.frame.savane.orateur-b.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "orateur",
+        "division": null
+      },
+      "option": "B",
+      "motifs": [
+        "afrique"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              168,
+              544,
+              744,
+              940
+            ],
+            "mask": {
+              "src": "c8dc961ad1cc227a.webp",
+              "bytes": 136,
+              "sha256": "c8dc961ad1cc227a44ef6f361a955587e620cc29e2b45456b459545c807ee68c",
+              "box": [
+                168,
+                544,
+                744,
+                940
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "e76503354569c115.webp",
+              "bytes": 88920,
+              "sha256": "e76503354569c115b2d823c0c761dbb1ffcb05c8243d9c275d9865dd09587b8b",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "8e82abe91d0e54be.webp",
+              "bytes": 3358,
+              "sha256": "8e82abe91d0e54be96575afc462f049c61a040b73e6624adf120807c0448480d",
+              "box": [
+                168,
+                544,
+                744,
+                940
+              ]
+            },
+            "grade": [
+              {
+                "src": "3ff0a3e2b13e9e0a.webp",
+                "bytes": 140,
+                "sha256": "3ff0a3e2b13e9e0a182a504dc2bf33b7c9ce374c034a32a494397aa98d693c94",
+                "box": [
+                  171,
+                  544,
+                  738,
+                  5
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "daaf56f799b3ea53.webp",
+                "bytes": 109704,
+                "sha256": "daaf56f799b3ea538f2464a5bc34469acdfd2039916aec680e0e8f9c516c5f93",
+                "box": [
+                  168,
+                  544,
+                  744,
+                  940
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "3aae5c1023219046.webp",
+                "bytes": 8032,
+                "sha256": "3aae5c1023219046db85df433f24d2b95fbb7fcca9ae7e2efa9049575049edf5",
+                "box": [
+                  168,
+                  544,
+                  744,
+                  940
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "plain": {
+                "src": "6d8d1c4f7c2157b1.webp",
+                "bytes": 10764,
+                "sha256": "6d8d1c4f7c2157b188a9b63567a90c355b2dcef4e889e544ceed2d29a63181b3",
+                "box": [
+                  73,
+                  1557,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              446,
+              176,
+              188,
+              253
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1642,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E0952BFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1616,
+                636,
+                34
+              ],
+              "contrast": 6.77,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1726,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFE6B0FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFE6B0FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E0952BFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                353,
+                1648,
+                377,
+                108
+              ],
+              "contrast": 7.23,
+              "sample": "Orateur"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1774,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E0952BFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1748,
+                228,
+                34
+              ],
+              "contrast": 6.58,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "cotes",
+            "layouts": {
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-lettre",
+                  "box": [
+                    -10,
+                    1134,
+                    172,
+                    172
+                  ],
+                  "rotate": -5,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-serenade",
+                  "box": [
+                    918,
+                    1146,
+                    172,
+                    172
+                  ],
+                  "rotate": 5,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.orateur-c",
+      "usage": {
+        "kind": "rank",
+        "rank": "orateur"
+      },
+      "thumb": {
+        "src": "a31f9c566db4dfea.webp",
+        "bytes": 18044,
+        "sha256": "a31f9c566db4dfea663ea7afacd7e45f885f2cf7ffd483f489bf32c018804228"
+      },
+      "i18n": {
+        "name": "game.frame.savane.orateur-c.name",
+        "story": "game.frame.savane.orateur-c.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "orateur",
+        "division": null
+      },
+      "option": "C",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              144,
+              604,
+              792,
+              880
+            ],
+            "mask": {
+              "src": "286198b354ce259a.webp",
+              "bytes": 366,
+              "sha256": "286198b354ce259a5b0c3f99d902c67aecb6f3a09f41793c225d93b4ae92aa76",
+              "box": [
+                144,
+                604,
+                792,
+                880
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "4a30ad8b6915a449.webp",
+              "bytes": 99420,
+              "sha256": "4a30ad8b6915a449b6531bac3e399ab5855618270f28fa57cae1e0f2f5ea4e1f",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "ac6bca0e98e2b084.webp",
+              "bytes": 4040,
+              "sha256": "ac6bca0e98e2b084f92ee5d1db5d3b9f4de597132c6eddd03c8916f3e848559c",
+              "box": [
+                144,
+                604,
+                792,
+                880
+              ]
+            },
+            "grade": [
+              {
+                "src": "827995ed9ac28fda.webp",
+                "bytes": 63024,
+                "sha256": "827995ed9ac28fdaf921e6fbfc36dad7d4417cad862cb7d80eb97653f691484b",
+                "box": [
+                  144,
+                  604,
+                  792,
+                  880
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "37154f80439ae35d.webp",
+                "bytes": 12060,
+                "sha256": "37154f80439ae35d3996b47d4168d914d2e7760986c10670fc837850e0b7e4bb",
+                "box": [
+                  144,
+                  604,
+                  792,
+                  880
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "7eeae5718a0ab0c2.webp",
+                "bytes": 14932,
+                "sha256": "7eeae5718a0ab0c240c618909e0aba81d03001edcb4b05334bb7b670abb5642b",
+                "box": [
+                  73,
+                  1499,
+                  934,
+                  408
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              444,
+              150,
+              192,
+              258
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1638,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E0952BFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1612,
+                636,
+                34
+              ],
+              "contrast": 7.11,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFE6B0FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFE6B0FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E0952BFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                353,
+                1644,
+                377,
+                108
+              ],
+              "contrast": 7.34,
+              "sample": "Orateur"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1788,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                352,
+                1734,
+                380,
+                70
+              ],
+              "contrast": 17.19,
+              "sample": "On l'a fait ensemble"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1826,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E0952BFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1802,
+                214,
+                30
+              ],
+              "contrast": 6.72,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-danse",
+                  "box": [
+                    50,
+                    1286,
+                    276,
+                    276
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    752,
+                    1272,
+                    280,
+                    280
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.oracle-a",
+      "usage": {
+        "kind": "rank",
+        "rank": "oracle"
+      },
+      "thumb": {
+        "src": "607572540936060f.webp",
+        "bytes": 14018,
+        "sha256": "607572540936060f5855361a3744f7105bb34c7751e6455b31542a2b7450fd5d"
+      },
+      "i18n": {
+        "name": "game.frame.savane.oracle-a.name",
+        "story": "game.frame.savane.oracle-a.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "oracle",
+        "division": null
+      },
+      "option": "A",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              127,
+              483,
+              826,
+              946
+            ],
+            "mask": {
+              "src": "4ca782f07078901d.webp",
+              "bytes": 1420,
+              "sha256": "4ca782f07078901d9df4c4822c9a0e157b94d2c48f2cbae63357b91265c25fbf",
+              "box": [
+                127,
+                483,
+                826,
+                946
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "a1f297025b373f6c.webp",
+              "bytes": 66922,
+              "sha256": "a1f297025b373f6c7baab8a6ebc1f1b777510428ba1d86767ba4505c27b00fd7",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "b3299ee5e6e22377.webp",
+              "bytes": 5682,
+              "sha256": "b3299ee5e6e22377a5b33588d04e2de610c8341f4fd656bfbc651442db753d23",
+              "box": [
+                127,
+                483,
+                826,
+                946
+              ]
+            },
+            "grade": [
+              {
+                "src": "1f014e4eb24ccbb4.webp",
+                "bytes": 151416,
+                "sha256": "1f014e4eb24ccbb4293751d655359475593df74297254df276a4245394801ec1",
+                "box": [
+                  127,
+                  483,
+                  826,
+                  946
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "4eb7d15837f41acc.webp",
+                "bytes": 22092,
+                "sha256": "4eb7d15837f41acc9c9efe5761f1c320ca7d1f3c2e85d59a64fab776baaf9e84",
+                "box": [
+                  127,
+                  483,
+                  826,
+                  946
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "526fb3681a56547e.webp",
+                "bytes": 9816,
+                "sha256": "526fb3681a56547e4a74b54b5aab71cfa1fda49fd2cc8150d3f17c369ba7b415",
+                "box": [
+                  73,
+                  1573,
+                  934,
+                  347
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              444,
+              130,
+              192,
+              258
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1658,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#C9D2DEFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1632,
+                636,
+                34
+              ],
+              "contrast": 12.24,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1742,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#C9D2DEFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                381,
+                1664,
+                318,
+                108
+              ],
+              "contrast": 12.72,
+              "sample": "Oracle"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1808,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                333,
+                1754,
+                419,
+                70
+              ],
+              "contrast": 17.89,
+              "sample": "Sous les mêmes étoiles"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1846,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#C9D2DEFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1822,
+                214,
+                30
+              ],
+              "contrast": 10.92,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "libre",
+            "layouts": {
+              "libre": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    744,
+                    332,
+                    192,
+                    192
+                  ],
+                  "rotate": 8,
+                  "flip": true,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-love",
+                  "box": [
+                    24,
+                    1280,
+                    240,
+                    240
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.oracle-b",
+      "usage": {
+        "kind": "rank",
+        "rank": "oracle"
+      },
+      "thumb": {
+        "src": "49b09209004b12bd.webp",
+        "bytes": 14720,
+        "sha256": "49b09209004b12bd9b01e7d4e44723e9de973283219923fa27065957e3f83c3c"
+      },
+      "i18n": {
+        "name": "game.frame.savane.oracle-b.name",
+        "story": "game.frame.savane.oracle-b.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "oracle",
+        "division": null
+      },
+      "option": "B",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              127,
+              496,
+              826,
+              977
+            ],
+            "mask": {
+              "src": "6aaa58b7819d88d4.webp",
+              "bytes": 2170,
+              "sha256": "6aaa58b7819d88d4e62633bc6a2edc378fc421c5ea2c7db44eec1ee1acd907ee",
+              "box": [
+                127,
+                496,
+                826,
+                977
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "bfb77400018ec5a8.webp",
+              "bytes": 67522,
+              "sha256": "bfb77400018ec5a8b7a9e33a195af1a699dbf02ac6598c51b3796afce812492e",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "2617e47c3673fbdf.webp",
+              "bytes": 6902,
+              "sha256": "2617e47c3673fbdf51fcacd83040644811930f977c7aef8fd57d7ea08d53fd14",
+              "box": [
+                127,
+                496,
+                826,
+                977
+              ]
+            },
+            "grade": [
+              {
+                "src": "94c49969b45ded21.webp",
+                "bytes": 114734,
+                "sha256": "94c49969b45ded216b397f51a89bb69070efba27e9dd4b795519b5e9273f40b9",
+                "box": [
+                  127,
+                  496,
+                  826,
+                  977
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "2ac97792a545fd67.webp",
+                "bytes": 44254,
+                "sha256": "2ac97792a545fd674148d00bbd815835a00c32edfa44dab7f8ff04466888a118",
+                "box": [
+                  127,
+                  496,
+                  826,
+                  977
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "plain": {
+                "src": "22b3979c59d27990.webp",
+                "bytes": 9724,
+                "sha256": "22b3979c59d27990556296397f047c9892ae064ee585068b1a7d3273f4af88be",
+                "box": [
+                  73,
+                  1557,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              444,
+              126,
+              192,
+              258
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1642,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#C9D2DEFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1616,
+                636,
+                34
+              ],
+              "contrast": 12.16,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1726,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#C9D2DEFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                381,
+                1648,
+                318,
+                108
+              ],
+              "contrast": 12.7,
+              "sample": "Oracle"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1774,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#C9D2DEFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1748,
+                228,
+                34
+              ],
+              "contrast": 10.87,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "libre",
+            "layouts": {
+              "libre": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    20,
+                    1084,
+                    216,
+                    216
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-feu-artifice",
+                  "box": [
+                    808,
+                    408,
+                    192,
+                    192
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.oracle-c",
+      "usage": {
+        "kind": "rank",
+        "rank": "oracle"
+      },
+      "thumb": {
+        "src": "fbf2681fec8b4f13.webp",
+        "bytes": 14756,
+        "sha256": "fbf2681fec8b4f132ea2dd42a192ad56e9bcf9c57078bc2c8e5710dddcc25e15"
+      },
+      "i18n": {
+        "name": "game.frame.savane.oracle-c.name",
+        "story": "game.frame.savane.oracle-c.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "oracle",
+        "division": null
+      },
+      "option": "C",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              143,
+              539,
+              794,
+              930
+            ],
+            "mask": {
+              "src": "ae1d8c8aa5a959c5.webp",
+              "bytes": 1732,
+              "sha256": "ae1d8c8aa5a959c5fe845ff5b84d70156f20ca7030468da0155ef866f7b4a553",
+              "box": [
+                143,
+                539,
+                794,
+                930
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "31926bf4749d82d3.webp",
+              "bytes": 72514,
+              "sha256": "31926bf4749d82d3445e032b8472ed844ea2054284e0ded7bb6e3b1916c9771f",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "f7df39671c1e0aa2.webp",
+              "bytes": 6238,
+              "sha256": "f7df39671c1e0aa21f74285e818a72bc7a3abab162073017bd6ea667ea6939cb",
+              "box": [
+                143,
+                539,
+                794,
+                930
+              ]
+            },
+            "grade": [
+              {
+                "src": "be2b437e57c0696e.webp",
+                "bytes": 104914,
+                "sha256": "be2b437e57c0696e2b0ee2da71adf9cb315455cbe69777661c23994b1f387875",
+                "box": [
+                  143,
+                  539,
+                  794,
+                  930
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "c712de42f862eafe.webp",
+                "bytes": 32220,
+                "sha256": "c712de42f862eafe7b9c1df585b36780234963e610004128c8635688c701e40f",
+                "box": [
+                  143,
+                  539,
+                  794,
+                  930
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "ceac63d0ff8c9d15.webp",
+                "bytes": 10218,
+                "sha256": "ceac63d0ff8c9d15839f4dd2639793584ad239bf96368277985db0aa26e144ec",
+                "box": [
+                  73,
+                  1553,
+                  934,
+                  354
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              165,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1638,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#C9D2DEFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1612,
+                636,
+                34
+              ],
+              "contrast": 12.39,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#C9D2DEFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                381,
+                1644,
+                318,
+                108
+              ],
+              "contrast": 12.62,
+              "sample": "Oracle"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1788,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                294,
+                1734,
+                497,
+                70
+              ],
+              "contrast": 17.83,
+              "sample": "Plus haut que les baobabs"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1826,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#C9D2DEFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1802,
+                214,
+                30
+              ],
+              "contrast": 11.28,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "duo",
+            "layouts": {
+              "duo": {
+                "pair": {
+                  "sticker": "duo-coucou",
+                  "box": [
+                    42,
+                    1202,
+                    420,
+                    420
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.legende-5",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "32f320332788219c.webp",
+        "bytes": 15020,
+        "sha256": "32f320332788219c5aef76238637b5b461ced155b2ef0b3c96bd5edc65db23b2"
+      },
+      "i18n": {
+        "name": "game.frame.savane.legende-5.name",
+        "story": "game.frame.savane.legende-5.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 5
+      },
+      "option": "V",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              135,
+              503,
+              810,
+              902
+            ],
+            "mask": {
+              "src": "90beb8fff9ca55ae.webp",
+              "bytes": 328,
+              "sha256": "90beb8fff9ca55aefb5403a289bbfd5aa5c31052e994ea0cc17c33424d818c1c",
+              "box": [
+                135,
+                503,
+                810,
+                902
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "9a13d5fa7fa7c127.webp",
+              "bytes": 74932,
+              "sha256": "9a13d5fa7fa7c1277a80c6069c424076ed33ba11eea02a1f6a7b19e9b2e8b982",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "80d294fbed2f3352.webp",
+              "bytes": 3442,
+              "sha256": "80d294fbed2f33525462894e9130aeb18fd6cff39ca4b9b5a7c96a3796a4bfbd",
+              "box": [
+                135,
+                503,
+                810,
+                902
+              ]
+            },
+            "grade": [
+              {
+                "src": "972d92a504a78b75.webp",
+                "bytes": 79154,
+                "sha256": "972d92a504a78b75c1d21d418315271bdf76579ce08683fe769177cef5a806c5",
+                "box": [
+                  135,
+                  503,
+                  810,
+                  902
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "cac168ca10d34097.webp",
+                "bytes": 19022,
+                "sha256": "cac168ca10d34097c8259e0f4fe2f71a190aeeec1dfe1216ba07fec6eb4227f8",
+                "box": [
+                  135,
+                  503,
+                  810,
+                  902
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "plain": {
+                "src": "e2a1207b1b41efe8.webp",
+                "bytes": 10934,
+                "sha256": "e2a1207b1b41efe803bc195f66be2df673cd83aca3bcf89d4aee38c890979f13",
+                "box": [
+                  73,
+                  1573,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              441,
+              130,
+              198,
+              312
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1658,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1632,
+                636,
+                34
+              ],
+              "contrast": 10.08,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1742,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                318,
+                1664,
+                446,
+                108
+              ],
+              "contrast": 10.15,
+              "sample": "Légende V"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1790,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1764,
+                228,
+                34
+              ],
+              "contrast": 9.12,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "duo",
+            "layouts": {
+              "duo": {
+                "pair": {
+                  "sticker": "duo-main-dans-la-main",
+                  "box": [
+                    420,
+                    1368,
+                    240,
+                    240
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.legende-4",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "ae2ff1c0da4bb7fb.webp",
+        "bytes": 18846,
+        "sha256": "ae2ff1c0da4bb7fb1f8638740d01e0aa90990f44c39fb55643f55e2c18c9e101"
+      },
+      "i18n": {
+        "name": "game.frame.savane.legende-4.name",
+        "story": "game.frame.savane.legende-4.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 4
+      },
+      "option": "IV",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              127,
+              515,
+              826,
+              930
+            ],
+            "mask": {
+              "src": "586c973b48b4f793.webp",
+              "bytes": 972,
+              "sha256": "586c973b48b4f7933afebe573acf3a9da719785d2a3aeff767f3567d8f7086d3",
+              "box": [
+                127,
+                515,
+                826,
+                930
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "front:under-birds",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "9c10cc6b32420348.webp",
+              "bytes": 80512,
+              "sha256": "9c10cc6b32420348969896f21568a95b4328d8ceab78de215a26ce779be576da",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "a31b3e7f0fb5726d.webp",
+              "bytes": 5030,
+              "sha256": "a31b3e7f0fb5726dbb83aba924f8cb068370e74d860b73b087d6f6bc8250c12d",
+              "box": [
+                127,
+                515,
+                826,
+                930
+              ]
+            },
+            "grade": [
+              {
+                "src": "f6a53fd639908821.webp",
+                "bytes": 115036,
+                "sha256": "f6a53fd639908821640b3f9f7cf1b0319c83a0b7ea0527616e18700f819561b4",
+                "box": [
+                  127,
+                  515,
+                  826,
+                  930
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "22a8a097b20f0c27.webp",
+                "bytes": 33918,
+                "sha256": "22a8a097b20f0c27dd91a52c30e9013979bf404ae3ae4820fd484640725a7e52",
+                "box": [
+                  127,
+                  515,
+                  826,
+                  930
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "under-birds": {
+                "src": "2dbe90db78aac068.webp",
+                "bytes": 16244,
+                "sha256": "2dbe90db78aac06880ce40702669b5e606388d4ee7c8c1f2bf4ff254d9e05fce",
+                "box": [
+                  233,
+                  25,
+                  615,
+                  454
+                ]
+              }
+            },
+            "plate": {
+              "plain": {
+                "src": "6bf769debdca9c68.webp",
+                "bytes": 10842,
+                "sha256": "6bf769debdca9c68645baca233bcefb952e1b1da4acc26b253205f8e056aa6d3",
+                "box": [
+                  73,
+                  1541,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              145,
+              180,
+              283
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1626,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1600,
+                636,
+                34
+              ],
+              "contrast": 10.27,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1710,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                303,
+                1632,
+                476,
+                108
+              ],
+              "contrast": 10.31,
+              "sample": "Légende IV"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1758,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1732,
+                228,
+                34
+              ],
+              "contrast": 9.2,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "pied",
+            "layouts": {
+              "pied": {
+                "mee": {
+                  "sticker": "mee-amoureuse",
+                  "box": [
+                    46,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": -6,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    734,
+                    1250,
+                    300,
+                    300
+                  ],
+                  "rotate": 6,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.legende-3",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "beabd54b2a3cec2f.webp",
+        "bytes": 20360,
+        "sha256": "beabd54b2a3cec2f5c065cb88becfac1dbd2bb2de92656535f610a84de57bb7c"
+      },
+      "i18n": {
+        "name": "game.frame.savane.legende-3.name",
+        "story": "game.frame.savane.legende-3.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 3
+      },
+      "option": "III",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              136,
+              480,
+              808,
+              1000
+            ],
+            "mask": {
+              "src": "f11c90ff8b2f188f.webp",
+              "bytes": 2088,
+              "sha256": "f11c90ff8b2f188f28068a446c778ffcf1028d2bd17fe64519af6ca696f85c3b",
+              "box": [
+                136,
+                480,
+                808,
+                1000
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "d76387b1e211654e.webp",
+              "bytes": 114198,
+              "sha256": "d76387b1e211654e928ad22b6e7135e2420e38ad6e39acee1e75ef0161021c4f",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "3077a07fd62c9abd.webp",
+              "bytes": 7064,
+              "sha256": "3077a07fd62c9abd7df2aaec0aa0a087cabdb84b7396bad3fab66a1acdfeb340",
+              "box": [
+                136,
+                480,
+                808,
+                1000
+              ]
+            },
+            "grade": [
+              {
+                "src": "7d30c287d555ecbe.webp",
+                "bytes": 58802,
+                "sha256": "7d30c287d555ecbe8c174ed485d2055c77669d98e10bd6e9e606584f047e206d",
+                "box": [
+                  136,
+                  480,
+                  808,
+                  1000
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "c152648e5b49f91b.webp",
+                "bytes": 64204,
+                "sha256": "c152648e5b49f91bad098afffe5bee69fdaed1c7b240c88c1970dd066bb57f12",
+                "box": [
+                  136,
+                  480,
+                  808,
+                  1000
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "bcb65eeea63f40fa.webp",
+                "bytes": 11060,
+                "sha256": "bcb65eeea63f40fa469ab25f5ca255b54d3259bdc9efd781b9feadbc7c8745fc",
+                "box": [
+                  73,
+                  1545,
+                  934,
+                  354
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              444,
+              142,
+              192,
+              302
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1630,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1604,
+                636,
+                34
+              ],
+              "contrast": 10.25,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                301,
+                1636,
+                478,
+                108
+              ],
+              "contrast": 10.25,
+              "sample": "Légende III"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1780,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                383,
+                1726,
+                317,
+                70
+              ],
+              "contrast": 17.83,
+              "sample": "Pour toi, maman"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1818,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1794,
+                214,
+                30
+              ],
+              "contrast": 9.23,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "cotes",
+            "layouts": {
+              "cotes": {
+                "mee": {
+                  "sticker": "mee-jackpot",
+                  "box": [
+                    -22,
+                    822,
+                    236,
+                    236
+                  ],
+                  "rotate": 14,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-muscles",
+                  "box": [
+                    866,
+                    882,
+                    236,
+                    236
+                  ],
+                  "rotate": 346,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.legende-2",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "efde961307cf8af5.webp",
+        "bytes": 18010,
+        "sha256": "efde961307cf8af5985225217d6212fd295399fb1c43b0307829960f4025a397"
+      },
+      "i18n": {
+        "name": "game.frame.savane.legende-2.name",
+        "story": "game.frame.savane.legende-2.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 2
+      },
+      "option": "II",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              148,
+              508,
+              784,
+              932
+            ],
+            "mask": {
+              "src": "3a46b2e45d84dbf9.webp",
+              "bytes": 366,
+              "sha256": "3a46b2e45d84dbf91f857e496d1782c34e3552bf64e66434ebe2e6dcaf68fa3c",
+              "box": [
+                148,
+                508,
+                784,
+                932
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "e1bfdcccdd009625.webp",
+              "bytes": 84294,
+              "sha256": "e1bfdcccdd009625e510150d89a84c4a76ea3d3c96d3e3ea0c07e471056c9349",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "d3260f34b568651a.webp",
+              "bytes": 3828,
+              "sha256": "d3260f34b568651ab6351c052ef47dbf8519d13ab95d004e7f847e60b36db14e",
+              "box": [
+                148,
+                508,
+                784,
+                932
+              ]
+            },
+            "grade": [
+              {
+                "src": "c9f2957df499a7b1.webp",
+                "bytes": 68816,
+                "sha256": "c9f2957df499a7b18bbe081ad84d5ff6f0e0b7692eb258ef93ee76d991ed128d",
+                "box": [
+                  148,
+                  508,
+                  784,
+                  932
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "6fd654ae4719ce37.webp",
+                "bytes": 17482,
+                "sha256": "6fd654ae4719ce37a6cacc17c9f5f5e170fc26d2bb27763e3ad0a2203baec5ff",
+                "box": [
+                  148,
+                  508,
+                  784,
+                  932
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "plain": {
+                "src": "d5cdf51c9c20e773.webp",
+                "bytes": 10872,
+                "sha256": "d5cdf51c9c20e773caf0f92d4351bcd0d1ecd33cf322c220992076a7a16b8dec",
+                "box": [
+                  73,
+                  1545,
+                  934,
+                  306
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              456,
+              216,
+              168,
+              264
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1630,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1604,
+                636,
+                34
+              ],
+              "contrast": 10.25,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                317,
+                1636,
+                446,
+                108
+              ],
+              "contrast": 10.3,
+              "sample": "Légende II"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1762,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1736,
+                228,
+                34
+              ],
+              "contrast": 9.23,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "ruban",
+            "layouts": {
+              "ruban": {
+                "mee": {
+                  "sticker": "mee-bisou-vole",
+                  "box": [
+                    30,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-cool",
+                  "box": [
+                    814,
+                    1402,
+                    236,
+                    236
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.legende-1",
+      "usage": {
+        "kind": "rank",
+        "rank": "legende"
+      },
+      "thumb": {
+        "src": "8f7cc67982f7cc33.webp",
+        "bytes": 21152,
+        "sha256": "8f7cc67982f7cc333a2801e1ba9820122468184732b28bfb51cb3513f12e60e5"
+      },
+      "i18n": {
+        "name": "game.frame.savane.legende-1.name",
+        "story": "game.frame.savane.legende-1.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "legende",
+        "division": 1
+      },
+      "option": "I",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              145,
+              513,
+              790,
+              926
+            ],
+            "mask": {
+              "src": "99b237eda68980f6.webp",
+              "bytes": 560,
+              "sha256": "99b237eda68980f637f5c52150bcb1e6087a73f6cdaba82f33bfff0b0bd26c8d",
+              "box": [
+                145,
+                513,
+                790,
+                926
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "front:under-birds",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "71ca70c8b3efda60.webp",
+              "bytes": 111036,
+              "sha256": "71ca70c8b3efda6057714b19f478b0c0f9609d774d04bd05d10ac9fada85e18d",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "42aa008ed63a9395.webp",
+              "bytes": 4560,
+              "sha256": "42aa008ed63a9395463ca6f93bfe689d7d0c6fcba02f7bd3c0403d496de27fc5",
+              "box": [
+                145,
+                513,
+                790,
+                926
+              ]
+            },
+            "grade": [
+              {
+                "src": "e6e468c76a2a6af4.webp",
+                "bytes": 76024,
+                "sha256": "e6e468c76a2a6af4aaf283f293dc6270f26261090e20997a677dda9ad85bca3c",
+                "box": [
+                  145,
+                  513,
+                  790,
+                  926
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "6d931483306e7d96.webp",
+                "bytes": 18264,
+                "sha256": "6d931483306e7d9678be73b32bc0c23a6af8f11b07e01b21a553797c6869f0da",
+                "box": [
+                  145,
+                  513,
+                  790,
+                  926
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {
+              "under-birds": {
+                "src": "77132857d7cb898d.webp",
+                "bytes": 17224,
+                "sha256": "77132857d7cb898de46f284fc221c3400e06f270013badcb7649ece10756234e",
+                "box": [
+                  206,
+                  177,
+                  679,
+                  205
+                ]
+              }
+            },
+            "plate": {
+              "message": {
+                "src": "bcb65eeea63f40fa.webp",
+                "bytes": 11060,
+                "sha256": "bcb65eeea63f40fa469ab25f5ca255b54d3259bdc9efd781b9feadbc7c8745fc",
+                "box": [
+                  73,
+                  1545,
+                  934,
+                  354
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              441,
+              138,
+              198,
+              312
+            ]
+          },
+          "text": {
+            "kicker": {
+              "x": 540,
+              "baseline": 1630,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1604,
+                636,
+                34
+              ],
+              "contrast": 10.3,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFF4C2FF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#E8B53CFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                332,
+                1636,
+                416,
+                108
+              ],
+              "contrast": 10.3,
+              "sample": "Légende I"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1780,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFF4DCFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                341,
+                1726,
+                403,
+                70
+              ],
+              "contrast": 17.91,
+              "sample": "Écrit dans les étoiles"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1818,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#E8B53CFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1794,
+                214,
+                30
+              ],
+              "contrast": 9.23,
+              "sample": "10 octobre 2026"
+            }
+          },
+          "birds": {
+            "default": "selfie",
+            "layouts": {
+              "selfie": {
+                "pair": {
+                  "sticker": "duo-meo-selfie",
+                  "box": [
+                    612,
+                    1132,
+                    392,
+                    392
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.mythe-a",
+      "usage": {
+        "kind": "rank",
+        "rank": "mythe"
+      },
+      "thumb": {
+        "src": "0f453a1a36136920.webp",
+        "bytes": 18860,
+        "sha256": "0f453a1a3613692077b1c8568feec109183307aedf2a7d92e7a0411f04a3d332"
+      },
+      "i18n": {
+        "name": "game.frame.savane.mythe-a.name",
+        "story": "game.frame.savane.mythe-a.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "mythe",
+        "division": null
+      },
+      "option": "A",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              188,
+              552,
+              704,
+              900
+            ],
+            "mask": {
+              "src": "af692f739ded8d49.webp",
+              "bytes": 224,
+              "sha256": "af692f739ded8d498314c83bebf231534c80e68618eeb8321ad1950ce9b3dc5d",
+              "box": [
+                188,
+                552,
+                704,
+                900
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "plate",
+            "birds",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "f7a9266be0d34ed7.webp",
+              "bytes": 99190,
+              "sha256": "f7a9266be0d34ed7dee73b9277893d1a294bd670eb782e412fc18aac4c6ccc32",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "1d8e7c2cda2955ab.webp",
+              "bytes": 3492,
+              "sha256": "1d8e7c2cda2955aba95d4f63a9e3dc4373cad416ea07f0a95cbc089f094a2128",
+              "box": [
+                188,
+                552,
+                704,
+                900
+              ]
+            },
+            "grade": [
+              {
+                "src": "faafa14accd6a005.webp",
+                "bytes": 43194,
+                "sha256": "faafa14accd6a0059bed0a96c6d5666da873cbe8e7de21936022d146de7c9202",
+                "box": [
+                  188,
+                  552,
+                  704,
+                  900
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "b5c9945e3164f129.webp",
+                "bytes": 8782,
+                "sha256": "b5c9945e3164f129f84d91ae34bb82eec12d9ade488af323845f9a600d1b895c",
+                "box": [
+                  188,
+                  552,
+                  704,
+                  900
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "plain": {
+                "src": "fddb303ef16d6ea0.webp",
+                "bytes": 10792,
+                "sha256": "fddb303ef16d6ea057393f275cf1d8177ed9a005b541b360e08c43963c3033c8",
+                "box": [
+                  73,
+                  1544,
+                  934,
+                  307
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              450,
+              101,
+              180,
+              242
+            ]
+          },
+          "text": {
+            "decor.1": {
+              "x": 92,
+              "baseline": 592,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 19,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#E8E0FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.85,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                60,
+                572,
+                64,
+                26
+              ],
+              "contrast": 10.98,
+              "sample": "10²⁶ m"
+            },
+            "decor.2": {
+              "x": 992,
+              "baseline": 592,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 19,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#E8E0FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.85,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                958,
+                572,
+                68,
+                26
+              ],
+              "contrast": 1.45,
+              "sample": "10⁻³⁵ m"
+            },
+            "kicker": {
+              "x": 540,
+              "baseline": 1630,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1604,
+                636,
+                34
+              ],
+              "contrast": 13,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#B9A7FFFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                281,
+                1636,
+                517,
+                108
+              ],
+              "contrast": 9.36,
+              "sample": "Mythe nº 42"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1762,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 25,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                426,
+                1736,
+                228,
+                34
+              ],
+              "contrast": 11.73,
+              "sample": "10 octobre 2026"
+            },
+            "plate.1": {
+              "x": 540,
+              "baseline": 1582,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 28,
+                "tracking": 3
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                448,
+                1554,
+                184,
+                38
+              ],
+              "contrast": 16.27,
+              "sample": "Nº 42 / 100"
+            }
+          },
+          "birds": {
+            "default": "ruban",
+            "layouts": {
+              "ruban": {
+                "mee": {
+                  "sticker": "mee-montee-au-ciel",
+                  "box": [
+                    20,
+                    1392,
+                    208,
+                    208
+                  ],
+                  "rotate": -4,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-roi",
+                  "box": [
+                    852,
+                    1392,
+                    208,
+                    208
+                  ],
+                  "rotate": 4,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.mythe-b",
+      "usage": {
+        "kind": "rank",
+        "rank": "mythe"
+      },
+      "thumb": {
+        "src": "479be970c0dda966.webp",
+        "bytes": 19946,
+        "sha256": "479be970c0dda96647aafaa559a8acd77a49fb346d2590d56e609fb6b3aecfb2"
+      },
+      "i18n": {
+        "name": "game.frame.savane.mythe-b.name",
+        "story": "game.frame.savane.mythe-b.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "mythe",
+        "division": null
+      },
+      "option": "B",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              156,
+              556,
+              768,
+              896
+            ],
+            "mask": {
+              "src": "eddc204e3fab0f32.webp",
+              "bytes": 1152,
+              "sha256": "eddc204e3fab0f32413701d60e622d30d9fc9e59bde49433df117193501a9a26",
+              "box": [
+                156,
+                556,
+                768,
+                896
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "f767642c783f2a51.webp",
+              "bytes": 106418,
+              "sha256": "f767642c783f2a51c81ea2ab7cd5135d326407ff2956b830022c1d6527a577da",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "0bd66091a40478f0.webp",
+              "bytes": 4416,
+              "sha256": "0bd66091a40478f081da560bbb67e0e6a2a24eb6a822adc42a560bda06f8edab",
+              "box": [
+                156,
+                556,
+                768,
+                896
+              ]
+            },
+            "grade": [
+              {
+                "src": "1ebce03ac10d33a0.webp",
+                "bytes": 55764,
+                "sha256": "1ebce03ac10d33a0a4e59f68afb8ee5de6b8d2ecca9a7b74ce2a5c6f2b650001",
+                "box": [
+                  156,
+                  556,
+                  768,
+                  896
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "8884b2f0582e03ff.webp",
+                "bytes": 38474,
+                "sha256": "8884b2f0582e03ff11dab4bebd23bd5c78ceb1dfaac7af4b938378d0a574a62a",
+                "box": [
+                  156,
+                  556,
+                  768,
+                  896
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "90038789bf1c5d3d.webp",
+                "bytes": 10914,
+                "sha256": "90038789bf1c5d3dcdc76009ac39f6b1cbda02f7513f806bb74c5803b6ce453c",
+                "box": [
+                  73,
+                  1544,
+                  934,
+                  355
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              456,
+              200,
+              168,
+              225
+            ]
+          },
+          "text": {
+            "decor.1": {
+              "x": 80,
+              "baseline": 584,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 19,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#E8E0FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.85,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                48,
+                564,
+                64,
+                26
+              ],
+              "contrast": 4.92,
+              "sample": "10²⁶ m"
+            },
+            "decor.2": {
+              "x": 1000,
+              "baseline": 600,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 19,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#E8E0FFFF"
+              },
+              "stroke": null,
+              "opacity": 0.85,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                967,
+                580,
+                66,
+                26
+              ],
+              "contrast": 11.08,
+              "sample": "10⁻¹⁸ m"
+            },
+            "kicker": {
+              "x": 540,
+              "baseline": 1630,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1604,
+                636,
+                34
+              ],
+              "contrast": 12.19,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1714,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#B9A7FFFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                281,
+                1636,
+                517,
+                108
+              ],
+              "contrast": 8.79,
+              "sample": "Mythe nº 42"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1780,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                324,
+                1726,
+                437,
+                70
+              ],
+              "contrast": 20.6,
+              "sample": "On ira jusqu'aux étoiles"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1818,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1794,
+                214,
+                30
+              ],
+              "contrast": 11.73,
+              "sample": "10 octobre 2026"
+            },
+            "plate.1": {
+              "x": 540,
+              "baseline": 1582,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 28,
+                "tracking": 3
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                448,
+                1554,
+                184,
+                38
+              ],
+              "contrast": 16.27,
+              "sample": "Nº 42 / 100"
+            }
+          },
+          "birds": {
+            "default": "libre",
+            "layouts": {
+              "libre": {
+                "mee": {
+                  "sticker": "mee-wow",
+                  "box": [
+                    -4,
+                    780,
+                    224,
+                    224
+                  ],
+                  "rotate": 12,
+                  "flip": false,
+                  "opacity": 1
+                },
+                "meo": {
+                  "sticker": "meo-trophee",
+                  "box": [
+                    888,
+                    1352,
+                    192,
+                    192
+                  ],
+                  "rotate": 352,
+                  "flip": true,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    },
+    {
+      "id": "savane.mythe-c",
+      "usage": {
+        "kind": "rank",
+        "rank": "mythe"
+      },
+      "thumb": {
+        "src": "0f93fef03a40678d.webp",
+        "bytes": 18966,
+        "sha256": "0f93fef03a40678d03b826b7ebd4232c7bb92161174eae052274646e35533727"
+      },
+      "i18n": {
+        "name": "game.frame.savane.mythe-c.name",
+        "story": "game.frame.savane.mythe-c.story"
+      },
+      "collection": "savane",
+      "appliesTo": {
+        "family": "rank",
+        "rank": "mythe",
+        "division": null
+      },
+      "option": "C",
+      "motifs": [
+        "afrique",
+        "cosmos"
+      ],
+      "hidden": false,
+      "formats": {
+        "story": {
+          "size": [
+            1080,
+            1920
+          ],
+          "window": {
+            "box": [
+              164,
+              500,
+              752,
+              944
+            ],
+            "mask": {
+              "src": "1ac9cc96e47ee855.webp",
+              "bytes": 1796,
+              "sha256": "1ac9cc96e47ee855fcbba01a014190a0d198dea3f1cbcaca09517fbf18afb106",
+              "box": [
+                164,
+                500,
+                752,
+                944
+              ]
+            },
+            "veilMaxAlpha": 0
+          },
+          "stack": [
+            "photo",
+            "grade:0",
+            "grade:1",
+            "grade:2",
+            "decor",
+            "crest",
+            "birds",
+            "plate",
+            "text",
+            "banner"
+          ],
+          "layers": {
+            "decor": {
+              "src": "63de0df120536824.webp",
+              "bytes": 112756,
+              "sha256": "63de0df120536824519a195ee83fa7d9ef64939331272da4c4611298f21d818e",
+              "box": [
+                0,
+                0,
+                1080,
+                1920
+              ]
+            },
+            "windowFill": {
+              "src": "20817bbd027e6bd0.webp",
+              "bytes": 5756,
+              "sha256": "20817bbd027e6bd0522a32820ec6fca0115a611d413fd73002546a0807779a21",
+              "box": [
+                164,
+                500,
+                752,
+                944
+              ]
+            },
+            "grade": [
+              {
+                "src": "1d39996ed86e3f9a.webp",
+                "bytes": 528,
+                "sha256": "1d39996ed86e3f9aeb6a60a4432649bd0e8cb78a95b729ca5355c45dbbfd3655",
+                "box": [
+                  301,
+                  560,
+                  478,
+                  48
+                ],
+                "blend": "normal"
+              },
+              {
+                "src": "2810e0c091d61a8a.webp",
+                "bytes": 38956,
+                "sha256": "2810e0c091d61a8a636e12532e836cd0360d542e1a56f6d3f55d9aa4cfe793f7",
+                "box": [
+                  164,
+                  500,
+                  752,
+                  944
+                ],
+                "blend": "screen"
+              },
+              {
+                "src": "0d0747a56994fabc.webp",
+                "bytes": 43290,
+                "sha256": "0d0747a56994fabcdc446964e6337eecf55aaef8c481af344d0b249a0df8286d",
+                "box": [
+                  164,
+                  500,
+                  752,
+                  944
+                ],
+                "blend": "normal"
+              }
+            ],
+            "front": {},
+            "plate": {
+              "message": {
+                "src": "97c7b4ca549f889f.webp",
+                "bytes": 10886,
+                "sha256": "97c7b4ca549f889fb28fc13ceb0359f2ee902c05fc7381a3f1ac092b1b9290c7",
+                "box": [
+                  73,
+                  1552,
+                  934,
+                  355
+                ]
+              }
+            }
+          },
+          "crest": {
+            "box": [
+              448,
+              122,
+              184,
+              248
+            ]
+          },
+          "text": {
+            "decor.1": {
+              "x": 817.4,
+              "baseline": 577.6,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                738,
+                559,
+                159,
+                25
+              ],
+              "contrast": 1.42,
+              "sample": "TOILE COSMIQUE"
+            },
+            "decor.2": {
+              "x": 817.4,
+              "baseline": 599.6,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                789,
+                581,
+                57,
+                25
+              ],
+              "contrast": 6.3,
+              "sample": "10²⁵ m"
+            },
+            "decor.3": {
+              "x": 964.2,
+              "baseline": 794,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                925,
+                776,
+                79,
+                24
+              ],
+              "contrast": 9.26,
+              "sample": "GALAXIE"
+            },
+            "decor.4": {
+              "x": 964.2,
+              "baseline": 816,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                935,
+                798,
+                58,
+                24
+              ],
+              "contrast": 6.22,
+              "sample": "10²¹ m"
+            },
+            "decor.5": {
+              "x": 996,
+              "baseline": 1070.4,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                964,
+                1052,
+                64,
+                25
+              ],
+              "contrast": 6.57,
+              "sample": "ÉTOILE"
+            },
+            "decor.6": {
+              "x": 996,
+              "baseline": 1092.4,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                971,
+                1074,
+                50,
+                25
+              ],
+              "contrast": 5.73,
+              "sample": "10⁹ m"
+            },
+            "decor.7": {
+              "x": 948.8,
+              "baseline": 1342,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                919,
+                1324,
+                60,
+                24
+              ],
+              "contrast": 7.4,
+              "sample": "TERRE"
+            },
+            "decor.8": {
+              "x": 948.8,
+              "baseline": 1364,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                924,
+                1346,
+                49,
+                24
+              ],
+              "contrast": 5.57,
+              "sample": "10⁷ m"
+            },
+            "decor.9": {
+              "x": 131.2,
+              "baseline": 1342,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                91,
+                1324,
+                81,
+                24
+              ],
+              "contrast": 8.66,
+              "sample": "CELLULE"
+            },
+            "decor.10": {
+              "x": 131.2,
+              "baseline": 1364,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                105,
+                1346,
+                53,
+                24
+              ],
+              "contrast": 6.55,
+              "sample": "10⁻⁵ m"
+            },
+            "decor.11": {
+              "x": 84,
+              "baseline": 1070.4,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                64,
+                1052,
+                40,
+                25
+              ],
+              "contrast": 6.2,
+              "sample": "ADN"
+            },
+            "decor.12": {
+              "x": 84,
+              "baseline": 1092.4,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                57,
+                1074,
+                54,
+                25
+              ],
+              "contrast": 4.9,
+              "sample": "10⁻⁹ m"
+            },
+            "decor.13": {
+              "x": 115.8,
+              "baseline": 794,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                83,
+                776,
+                65,
+                24
+              ],
+              "contrast": 8.24,
+              "sample": "ATOME"
+            },
+            "decor.14": {
+              "x": 115.8,
+              "baseline": 816,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                86,
+                798,
+                60,
+                24
+              ],
+              "contrast": 4.22,
+              "sample": "10⁻¹⁰ m"
+            },
+            "decor.15": {
+              "x": 262.6,
+              "baseline": 577.6,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.95,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                224,
+                559,
+                77,
+                25
+              ],
+              "contrast": 9.96,
+              "sample": "QUARKS"
+            },
+            "decor.16": {
+              "x": 262.6,
+              "baseline": 599.6,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 700,
+                "style": "normal",
+                "size": 17,
+                "tracking": 1.2
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.9,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                233,
+                581,
+                60,
+                25
+              ],
+              "contrast": 7.56,
+              "sample": "10⁻¹⁸ m"
+            },
+            "kicker": {
+              "x": 540,
+              "baseline": 1638,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 800,
+                "style": "normal",
+                "size": 24,
+                "tracking": 6
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                222,
+                1612,
+                636,
+                34
+              ],
+              "contrast": 12.6,
+              "sample": "NOUVEAU RANG · AFRIQUE ÉTERNELLE"
+            },
+            "title": {
+              "x": 540,
+              "baseline": 1722,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 80,
+                "tracking": 0
+              },
+              "fill": {
+                "linear": {
+                  "x1": 0,
+                  "y1": 0,
+                  "x2": 0,
+                  "y2": 1,
+                  "stops": [
+                    {
+                      "offset": 0,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 0.55,
+                      "color": "#FFFFFFFF"
+                    },
+                    {
+                      "offset": 1,
+                      "color": "#B9A7FFFF"
+                    }
+                  ]
+                }
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": [
+                [
+                  {
+                    "op": "feDropShadow",
+                    "dx": "0",
+                    "dy": "2",
+                    "stdDeviation": "2",
+                    "flood-color": "#000000",
+                    "flood-opacity": "0.75"
+                  }
+                ]
+              ],
+              "path": null,
+              "bbox": [
+                281,
+                1644,
+                517,
+                108
+              ],
+              "contrast": 9.27,
+              "sample": "Mythe nº 42"
+            },
+            "message": {
+              "x": 540,
+              "baseline": 1788,
+              "anchor": "middle",
+              "font": {
+                "family": "Caveat",
+                "weight": 700,
+                "style": "normal",
+                "size": 56,
+                "tracking": 0
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                362,
+                1734,
+                357,
+                70
+              ],
+              "contrast": 20.56,
+              "sample": "Ensemble, plus loin"
+            },
+            "date": {
+              "x": 540,
+              "baseline": 1826,
+              "anchor": "middle",
+              "font": {
+                "family": "Manrope",
+                "weight": 600,
+                "style": "normal",
+                "size": 23,
+                "tracking": 2.4
+              },
+              "fill": {
+                "solid": "#D8CCFFFF"
+              },
+              "stroke": null,
+              "opacity": 0.92,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                433,
+                1802,
+                214,
+                30
+              ],
+              "contrast": 11.71,
+              "sample": "10 octobre 2026"
+            },
+            "plate.1": {
+              "x": 540,
+              "baseline": 1590,
+              "anchor": "middle",
+              "font": {
+                "family": "Cinzel",
+                "weight": 700,
+                "style": "normal",
+                "size": 28,
+                "tracking": 3
+              },
+              "fill": {
+                "solid": "#FFFFFFFF"
+              },
+              "stroke": null,
+              "opacity": 1,
+              "effects": [],
+              "filter": null,
+              "path": null,
+              "bbox": [
+                448,
+                1562,
+                184,
+                38
+              ],
+              "contrast": 16.27,
+              "sample": "Nº 42 / 100"
+            }
+          },
+          "birds": {
+            "default": "duo",
+            "layouts": {
+              "duo": {
+                "pair": {
+                  "sticker": "duo-mee-trinquer",
+                  "box": [
+                    390,
+                    1326,
+                    300,
+                    300
+                  ],
+                  "rotate": 0,
+                  "flip": false,
+                  "opacity": 1
+                }
+              }
+            }
+          },
+          "banner": {
+            "box": [
+              0,
+              1720,
+              1080,
+              200
+            ]
+          }
+        },
+        "square": null
+      }
+    }
+  ]
+}

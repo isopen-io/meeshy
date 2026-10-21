@@ -12,7 +12,7 @@ public protocol VoiceProfileServiceProviding: Sendable {
     func deleteSample(sampleId: String) async throws
 }
 
-public final class VoiceProfileService: VoiceProfileServiceProviding, @unchecked Sendable {
+public final class VoiceProfileService: VoiceProfileServiceProviding, Sendable {
     public static let shared = VoiceProfileService()
     private let api: APIClientProviding
 

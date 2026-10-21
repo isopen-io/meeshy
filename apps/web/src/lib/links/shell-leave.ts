@@ -12,6 +12,8 @@ export type ShellLeaveHost = {
   readonly history: () => HistoryView;
   readonly back: () => void;
   readonly home: () => void;
+  readonly inside: (target: string) => string | null;
+  readonly go: (path: string) => void;
 };
 
 /**
@@ -24,9 +26,19 @@ export type ShellLeaveHost = {
  * l'annuler avant que la coque ne l'ait remise. Même règle de sortie que les
  * Réels (`reelsExitOf`) : une entrée Meeshy derrière soi ⇒ on y revient ;
  * sinon (ouverture par App Link) ⇒ la liste.
+ *
+ * Une cible qui est un ÉCRAN de Meeshy (#10329) ne part pas : sur le web,
+ * `location.replace` reste sur l'origine de l'app ; dans la coque, l'hôte
+ * meeshy.me n'est pas `localhost`, et la cible partirait au Custom Tab. Le
+ * routeur y navigue, sans écoute de retour.
  */
 export function shellLeave(host: ShellLeaveHost): (target: string) => void {
   return (target) => {
+    const path = host.inside(target);
+    if (path !== null) {
+      host.go(path);
+      return;
+    }
     const onVisibility = () => {
       if (host.document.visibilityState !== 'visible') return;
       host.document.removeEventListener('visibilitychange', onVisibility);

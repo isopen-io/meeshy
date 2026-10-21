@@ -476,6 +476,12 @@ nonisolated struct CallFrameDesign: Equatable, Sendable, Identifiable {
 
     func isOffered(on surface: CallFrameSurface) -> Bool { surfaces.contains(surface) }
 
+    /// L'usage que la loi partagée projette des surfaces déclarées (#10146, #10195) : `live` ⇒ l'appel
+    /// ET la capture, `capture` seul ⇒ la capture photo et vidéo, jamais l'appel.
+    var usage: FrameUsage {
+        FrameUsageLaw.captureFrameUsage(surfaces.compactMap { CaptureFrameSurface(rawValue: $0.rawValue) })
+    }
+
     func serves(people count: Int) -> Bool { people.contains(count) }
 }
 

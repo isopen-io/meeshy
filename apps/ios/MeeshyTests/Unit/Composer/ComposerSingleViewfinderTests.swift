@@ -58,7 +58,7 @@ final class ComposerSingleViewfinderTests: XCTestCase {
             "Meeshy/Features/Main/Composer/MeeshyComposerHost+DocumentSurface.swift",
             "Meeshy/Features/Main/Composer/ComposerViewfinder+Provider.swift",
             "Meeshy/Features/Main/Views/FeedComposerSheet.swift",
-            "Meeshy/Features/Main/Views/ConversationView+Composer.swift",
+            "Meeshy/Features/Main/Views/ConversationLayers/ConversationComposerLayers.swift",
         ] {
             XCTAssertGreaterThan(AppSourceGuard.occurrences(ofIdentifier: "ComposerViewfinder", in: try code(porte)), 0,
                                  "\(porte) n'ouvre pas le viseur du composeur")
@@ -168,7 +168,7 @@ final class ComposerPhotoLookTests: XCTestCase {
 
     func test_leViseur_neRemetQuUneFois() throws {
         let viseur = try Self.code("Meeshy/Features/Main/Composer/ComposerViewfinder.swift")
-        XCTAssertTrue(viseur.contains("guard !delivered else { return }"), "deux validations rapprochées posaient deux pièces")
+        XCTAssertTrue(viseur.contains("guard life.settle() else { return }"), "deux validations rapprochées posaient deux pièces")
     }
 
     // MARK: - Les couleurs de la prise (#9327)

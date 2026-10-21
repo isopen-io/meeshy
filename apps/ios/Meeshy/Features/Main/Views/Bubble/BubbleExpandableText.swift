@@ -81,6 +81,8 @@ struct BubbleExpandableText: View, Equatable {
     /// `[rawURL: token]` outbound-link tracking map → raw URLs link to
     /// `/l/<token>`. Empty by default (no rewrite) for non-message callers.
     var trackedLinks: [String: String] = [:]
+    /// L'auteur n'a pas de compte (#10286) : ses adresses restent du texte brut.
+    var linksAreInert: Bool = false
     /// Taille de rendu du texte. `15` = la cote de bulle historique ; la
     /// rangée plate passe la sienne (`FocalMetrics.Text.size`).
     /// `MessageTextRenderer.render` produit une `AttributedString` dont
@@ -91,10 +93,14 @@ struct BubbleExpandableText: View, Equatable {
     /// (`longMessageExpansion`) ; à défaut, un état local — un hôte qui ne
     /// sait rien du dépliage garde un texte qui se déplie et se replie.
     var expansion: LongMessageExpansion? = nil
+    /// Mode Script, message arc-en-ciel : chaque lettre d'une couleur graînée par l'id du message
+    /// (`RainbowLetters`). `nil` : l'encre ordinaire.
+    var rainbowSeed: String? = nil
 
     @SwiftUI.State private var localExpanded = false
     @Environment(\.longMessageExpansion) private var hostExpansion
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.bubbleSkin) private var skin
 
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.content == rhs.content &&
@@ -106,8 +112,10 @@ struct BubbleExpandableText: View, Equatable {
         lhs.linkTint == rhs.linkTint &&
         lhs.isDark == rhs.isDark &&
         lhs.trackedLinks == rhs.trackedLinks &&
+        lhs.linksAreInert == rhs.linksAreInert &&
         lhs.fontSize == rhs.fontSize &&
-        lhs.expansion == rhs.expansion
+        lhs.expansion == rhs.expansion &&
+        lhs.rainbowSeed == rhs.rainbowSeed
     }
 
     private var resolvedExpansion: LongMessageExpansion? { expansion ?? hostExpansion }
@@ -118,10 +126,10 @@ struct BubbleExpandableText: View, Equatable {
 
     var body: some View {
         let state = state
-        let textColor = isMe ? Color.white : MeeshyColors.textPrimary(isDark: isDark)
+        let textColor = isMe ? skin.ink : MeeshyColors.textPrimary(isDark: isDark)
 
         VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
-            MessageTextRenderer.render(state.displayedText, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks)
+            renderedText(state.displayedText, textColor: textColor)
                 .fixedSize(horizontal: false, vertical: true)
                 .tint(linkTint)
                 // Pas de `.textSelection(.enabled)` : le long-press doit ouvrir
@@ -132,6 +140,14 @@ struct BubbleExpandableText: View, Equatable {
                 toggleLabel(isExpanded: state.isExpanded, textColor: textColor)
             }
         }
+    }
+
+    private func renderedText(_ text: String, textColor: Color) -> Text {
+        guard let rainbowSeed, !text.isEmpty else {
+            return MessageTextRenderer.render(text, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks, linksAreInert: linksAreInert)
+        }
+        let attributed = MessageTextRenderer.attributed(text, fontSize: fontSize, color: textColor, mentionColor: mentionTint, hashtagColor: hashtagTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightTerm, trackedLinks: trackedLinks.isEmpty ? nil : trackedLinks, linksAreInert: linksAreInert)
+        return Text(RainbowLetters.painting(attributed, baseColor: textColor, seed: rainbowSeed, isDark: isDark))
     }
 
     /// « Lire la suite » / « Réduire », aligné en bas à droite.

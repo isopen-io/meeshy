@@ -154,8 +154,9 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
       appId: 'me.meeshy.app',
       appName: 'Meeshy',
       webDir: 'dist',
-      android: { backgroundColor: '#0b0c14' },
-      ios: { backgroundColor: '#0b0c14', contentInset: 'never' },
+      android: { backgroundColor: '#09090b' },
+      ios: { backgroundColor: '#09090b', contentInset: 'never' },
+      plugins: { SystemBars: { insetsHandling: 'css', initialViewportFitValueHint: 'cover' } },
       server: { androidScheme: 'https' },
     });
   });

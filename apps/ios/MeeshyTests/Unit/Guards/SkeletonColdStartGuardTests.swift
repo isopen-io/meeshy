@@ -34,8 +34,9 @@ final class SkeletonColdStartGuardTests: XCTestCase {
     /// `SkeletonStoryThumb`) : c'est le conteneur que l'écran monte, donc c'est
     /// lui qu'on épingle.
     private static let matrix: [(screen: String, skeleton: String)] = [
-        ("Features/Main/Views/ConversationListView.swift", "SkeletonConversationRow"),
-        ("Features/Main/Views/ConversationView.swift",     "SkeletonMessageBubble"),
+        ("Features/Main/Views/ConversationListView+EmptyState.swift", "SkeletonConversationRow"),
+        // `ConversationView` monte `ConversationMessageSkeleton` (cohésion) : c'est lui qui empile les bulles.
+        ("Features/Main/Views/ConversationView+Skeleton.swift", "SkeletonMessageBubble"),
         ("Features/Main/Views/FeedView.swift",             "SkeletonFeedList"),
         ("Features/Main/Views/StoryTrayView.swift",        "SkeletonStoryTrayRow"),
         ("Features/Main/Views/ProfileView.swift",          "SkeletonProfileHeader"),
@@ -82,12 +83,14 @@ final class SkeletonColdStartGuardTests: XCTestCase {
     // MARK: - Bornes
 
     /// Sans elle, la règle passerait au vert en lisant des fichiers vides — le
-    /// mode de panne payé au 256i et rejoué au 257i.
+    /// mode de panne payé au 256i et rejoué au 257i. Le plancher est à 1 000 :
+    /// la cohésion a fait de `ConversationView+Skeleton.swift` un fichier d'un
+    /// seul type (environ 1 200 caractères), entier et non tronqué.
     func test_lesCinqEcransSontBienLusEtNonVides() throws {
         for (screen, _) in Self.matrix {
             let source = try text(atRelativePath: screen)
             XCTAssertGreaterThan(
-                source.count, 2_000,
+                source.count, 1_000,
                 "\(screen) lu vide ou tronqué — la règle ne mesurerait rien"
             )
         }

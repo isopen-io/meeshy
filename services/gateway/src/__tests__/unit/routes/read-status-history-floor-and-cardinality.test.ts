@@ -53,7 +53,7 @@ jest.mock('../../../middleware/auth', () => ({
     if (!request.headers['authorization']) {
       return reply.code(401).send({ success: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } });
     }
-    request.authContext = { userId: USER_ID, type: 'registered', hasFullAccess: true };
+    request.authContext = { userId: USER_ID, type: 'user', isAuthenticated: true, isAnonymous: false, hasFullAccess: true, registeredUser: { id: USER_ID, role: 'USER' } };
   }
 }));
 

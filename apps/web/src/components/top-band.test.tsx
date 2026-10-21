@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { act } from 'react';
 
@@ -7,6 +7,7 @@ import { ENGAGEMENT_PROGRESS_QUERY_KEY, loadEngagementProgress } from '@/lib/api
 import { httpTransport } from '@/lib/api/client';
 import { appQueryClient } from '@/lib/api/query-client';
 import { callStore } from '@/lib/calls/call-store';
+import { dropCarriedAudio } from '@/lib/view/audio-carry';
 import { gamePrefs } from '@/lib/game/preferences';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
 import { playerBannerVisitStore } from '@/lib/view/player-banner-visit';
@@ -32,8 +33,12 @@ beforeAll(async () => {
   if (!cached.ok) throw new Error('progression de démonstration attendue');
   appQueryClient.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, cached.data);
 });
+beforeEach(() => {
+  dropCarriedAudio();
+});
 afterEach(() => {
   unmountAll();
+  dropCarriedAudio();
   reportCallResumeShown(false);
   callStore.setState({ call: null, waiting: null });
   gamePrefs.set({ hidden: false });
@@ -144,6 +149,40 @@ describe('quand la bannière n’a pas de place', () => {
   test('sans session, aucune bannière', async () => {
     const host = await mount(<TopBand routeKey="list" signedIn={false} />);
     expect(band(host)?.getAttribute('data-top-band')).toBe('');
+  });
+
+  test('la bannière arrive : sa place est réservée dans la même passe, jamais une tâche où elle recouvre l’en-tête', async () => {
+    const measured = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+    HTMLElement.prototype.getBoundingClientRect = function rect(this: HTMLElement): DOMRect {
+      const height = this.matches('[data-top-bars]') && this.querySelector('[data-player-banner]') !== null ? 58 : 0;
+      return { x: 0, y: 8, width: 390, height, top: 8, left: 0, right: 390, bottom: 8 + height, toJSON: () => ({}) } as DOMRect;
+    };
+    try {
+      const insets: number[] = [];
+      const whileShown: number[] = [];
+      const host = await mount(<TopBand routeKey="list" signedIn onInset={(pixels) => insets.push(pixels)} />);
+      const column = band(host);
+      if (column === null) throw new Error('bandeau attendu');
+      const read = (): void => {
+        if (column.querySelector('[data-player-banner]') !== null) whileShown.push(insets.at(-1) ?? 0);
+      };
+      read();
+      const witness = new MutationObserver(read);
+      witness.observe(column, { childList: true, subtree: true });
+      expect(await waitForBanner(host)).not.toBeNull();
+      await settle();
+      witness.disconnect();
+      expect(whileShown.length).toBeGreaterThan(0);
+      expect(whileShown.every((pixels) => pixels === 70)).toBe(true);
+    } finally {
+      if (measured === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
+      else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', measured);
+    }
+  });
+
+  test('la mesure bouchonnée de la passe précédente ne survit pas au témoin : le prototype partagé par tout le process retrouve sa mesure d’origine', () => {
+    expect(Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect')).toBeUndefined();
+    expect(document.createElement('div').getBoundingClientRect().width).toBe(0);
   });
 
   test('hors des hubs (le fil), aucune bannière ni réserve', async () => {

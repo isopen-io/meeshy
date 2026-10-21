@@ -19,6 +19,10 @@ const de = {
   'viewerEngagement.empty.subtitle': 'Personen, die diesen Beitrag ansehen, erscheinen hier.',
   'viewerEngagement.forbidden': 'Du hast keinen Zugriff auf die Liste, wer diesen Beitrag angesehen hat.',
   'viewerEngagement.unavailable': 'Die Aktivitätsdetails sind vorübergehend nicht verfügbar.',
+  'viewerEngagement.visitors.one': 'und {count} Besucher ohne Konto',
+  'viewerEngagement.visitors.other': 'und {count} Besucher ohne Konto',
+  'viewerEngagement.visitors.only.one': '{count} Besucher ohne Konto',
+  'viewerEngagement.visitors.only.other': '{count} Besucher ohne Konto',
 } satisfies ViewerEngagementCatalog;
 
 export default de;

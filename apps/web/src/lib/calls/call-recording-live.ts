@@ -2,7 +2,8 @@ import { apiDeps } from '@/lib/api/deps';
 import { sessionStore } from '@/lib/api/session';
 import { resolveViewer } from '@/lib/api/viewer';
 
-import { createCallRecording, createCallRecordingStore } from './call-recording';
+import { createCallRecording } from './call-recording';
+import { callRecordingStore } from './call-recording-store';
 import { callStore } from './call-store';
 import { currentCallTransport } from './call-transport';
 
@@ -12,8 +13,6 @@ import { currentCallTransport } from './call-transport';
  * lit. Ce qui capte n'est chargé que chez l'enregistreur, au démarrage
  * accordé par la passerelle (`budgets.json` › `call_recording_runtime`).
  */
-export const callRecordingStore = createCallRecordingStore();
-
 export const callRecording = createCallRecording({
   store: callRecordingStore,
   calls: callStore,

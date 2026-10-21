@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from src.benchmark.__main__ import main
-from src.benchmark.engines import NllbTranslator, OpenAICompatibleTranslator
+from src.benchmark.engines import DeviceEngineTranslator, NllbTranslator, OpenAICompatibleTranslator
 from src.benchmark.gate import find_regressions
 from src.benchmark.golden import GoldenPair, GoldenSetError, flores_pairs, load_golden
 from src.benchmark.latency import summarize_latencies
@@ -346,6 +346,43 @@ class TestEngines:
         )
 
         assert "(ewo)" in prompts[0]
+
+    def test_openai_compatible_engine_drops_a_reasoning_block(self):
+        def post(url, payload):
+            return {"choices": [{"message": {"content": "<think>\nbref\n</think>\n\nHabari za jioni"}}]}
+
+        result = OpenAICompatibleTranslator(base_url="http://h", model="m", post=post).translate(
+            "Good evening", "en", "sw"
+        )
+
+        assert result == "Habari za jioni"
+
+    def test_device_engine_posts_the_pair_to_the_client_engine_server(self):
+        requests = []
+
+        def post(url, payload):
+            requests.append((url, payload))
+            return {"text": "Bonsoir"}
+
+        engine = DeviceEngineTranslator(base_url="http://localhost:8790/", name="nllb-q8", post=post)
+
+        assert engine.translate("Good evening", "en", "fr") == "Bonsoir"
+        assert requests == [
+            (
+                "http://localhost:8790/translate",
+                {"text": "Good evening", "source": "en", "target": "fr"},
+            )
+        ]
+        assert engine.name == "device:nllb-q8"
+
+    def test_device_engine_reports_a_refusal_as_a_failure(self):
+        def post(url, payload):
+            return {"error": "NLLB n'a pas de code pour ewo"}
+
+        engine = DeviceEngineTranslator(base_url="http://h", name="nllb-q8", post=post)
+
+        with pytest.raises(RuntimeError, match="ewo"):
+            engine.translate("Mbolo", "ewo", "fr")
 
     def test_nllb_engine_forces_the_target_code_and_decodes_greedily(self):
         generate_calls = []

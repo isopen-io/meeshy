@@ -44,9 +44,18 @@ public struct ConversationPreviewAttachment: Sendable, Hashable, Decodable {
 
 /// Le sticker hissé de `metadata.sticker` : sa PRÉSENCE fait du message un
 /// sticker, quel que soit son `messageType`.
-public struct ConversationPreviewSticker: Sendable, Hashable, Decodable {
+public struct ConversationPreviewSticker: Sendable, Hashable, Codable {
     public let templateId: String?
     public let emoji: String?
+
+    private enum CodingKeys: String, CodingKey { case templateId, emoji }
+
+    /// Tolérant par champ : la PRÉSENCE de l'objet suffit à faire un sticker (`{stickerId}` seul compris).
+    public init(from decoder: Decoder) throws {
+        let c = try? decoder.container(keyedBy: CodingKeys.self)
+        templateId = (try? c?.decodeIfPresent(String.self, forKey: .templateId)) ?? nil
+        emoji = (try? c?.decodeIfPresent(String.self, forKey: .emoji)) ?? nil
+    }
 
     public init(templateId: String? = nil, emoji: String? = nil) {
         self.templateId = templateId

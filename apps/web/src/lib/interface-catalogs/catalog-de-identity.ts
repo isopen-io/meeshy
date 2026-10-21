@@ -10,6 +10,9 @@
 const deIdentity = {
   'a11y.avatar.profile': 'Profil von {name} ansehen',
   'a11y.avatar.story': 'Story von {name} ansehen',
+  'a11y.avatar.conversation': 'Unterhaltung {name} ansehen',
+  'a11y.avatar.mood': '{name}, Stimmung {mood}',
+  'mood.peek.title': 'Stimmung von {name}',
   'avatar.menu.label': 'Aktionen für {name}',
   'avatar.menu.view_profile': 'Profil ansehen',
   'userProfile.peek.openPage': 'Vollständiges Profil öffnen',
@@ -39,6 +42,7 @@ const deIdentity = {
   'conversation.details.share.failed': 'Der Link konnte nicht erstellt werden – versuche es gleich noch einmal.',
   'conversation.details.share.unavailable': 'Teilen ist hier nicht möglich – kopiere den Link: {url}',
   'thread.header.active_members': 'Aktivste Mitglieder',
+  'thread.header.share': 'Unterhaltung teilen',
 };
 
 export default deIdentity;

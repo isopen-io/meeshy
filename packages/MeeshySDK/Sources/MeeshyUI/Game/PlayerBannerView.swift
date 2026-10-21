@@ -22,7 +22,7 @@ import MeeshySDK
 //
 // Accessibilité : UN seul élément (`accessibilityLabel`, la phrase localisée de l'hôte — « Niveau 34, Éclat, 78 %
 // vers le 35, 12 Meeshes, Conteur III, ligue Jade 4e, Flamme 23 jours ») ; ses dessins sont ignorés. Hauteur
-// d'au moins 56 pt. Dynamic Type : au-delà de XXL, la jauge passe SOUS l'anneau et les pièces se rangent en grille.
+// d'au moins 48 pt (#11125). Dynamic Type : au-delà de XXL, la jauge passe SOUS l'anneau et les pièces se rangent en grille.
 
 public struct PlayerBannerView: View {
 
@@ -38,13 +38,33 @@ public struct PlayerBannerView: View {
         public let place: String?
         /// « 23 » (les jours de la Flamme).
         public let flameDays: String?
+        /// « 4 » (les trophées).
+        public let trophies: String?
+        /// « 1/3 » (la mission du jour).
+        public let mission: String?
+        /// « S1 » (la saison).
+        public let season: String?
+        /// « Conteur III » (#11125).
+        public let rank: String?
+        /// « encore 1 200 vers Conteur II », ou « Gloire 990 000 » au sommet.
+        public let gloryMissing: String?
+        /// La phrase de lecteur d'écran de CHAQUE pièce quand elles sont des boutons (`onSelect`).
+        public let pieceLabels: [GamePlayerBanner.Piece: String]
 
-        public init(points: String, missing: String? = nil, meeshes: String? = nil, place: String? = nil, flameDays: String? = nil) {
+        public init(points: String, missing: String? = nil, meeshes: String? = nil, place: String? = nil, flameDays: String? = nil,
+                    trophies: String? = nil, mission: String? = nil, season: String? = nil, rank: String? = nil,
+                    gloryMissing: String? = nil, pieceLabels: [GamePlayerBanner.Piece: String] = [:]) {
+            self.rank = rank
+            self.gloryMissing = gloryMissing
             self.points = points
             self.missing = missing
             self.meeshes = meeshes
             self.place = place
             self.flameDays = flameDays
+            self.trophies = trophies
+            self.mission = mission
+            self.season = season
+            self.pieceLabels = pieceLabels
         }
     }
 
@@ -75,10 +95,25 @@ public struct PlayerBannerView: View {
     private let sheen: Double
     private let backdrop: String?
     private let accessibilityLabel: String?
+    /// Quand l'hôte le pose, CHAQUE pièce est son propre bouton vers sa fiche (#10846) : un élément de lecteur
+    /// d'écran par pièce, une cible d'au moins 44 pt, et le bandeau s'élargit en hauteur plutôt que de les serrer.
+    private let onSelect: ((GamePlayerBanner.Piece) -> Void)?
+
+    /// La cible tactile minimale d'une pièce.
+    public static let pieceTarget: CGFloat = 44
+
+    /// Le MILIEU du bandeau (#11125, décision porteur 2026-10-20) : la Flamme et les Meeshes en haut, la mission et
+    /// la ligue dessous, entre les étincelles (à gauche) et la Gloire (à droite). Deux lignes de 24 pt — compromis
+    /// demandé par le porteur pour que le bandeau tienne en 48 pt, ces pièces sortent de la cible de 44.
+    public static let middlePieces: [GamePlayerBanner.Piece] = [.flame, .meesh, .mission, .league]
+    public static let cornerTarget: CGFloat = 24
+    /// Ce que la rangée compacte montre ; trophées et saison n'y tiennent pas et restent à la disposition empilée.
+    public static let compactPieces: [GamePlayerBanner.Piece] = [.level, .sparks, .flame, .meesh, .mission, .league, .rank]
 
     @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ScaledMetric(relativeTo: .body) private var ringSide: CGFloat = 52
+    @ScaledMetric(relativeTo: .body) private var compactRingSide: CGFloat = 40
 
     /// - Parameters:
     ///   - model: ce qui existe du joueur (`GamePlayerBanner`).
@@ -90,7 +125,8 @@ public struct PlayerBannerView: View {
     ///     `nil` ou vide ⇒ l'aplat seul.
     ///   - accessibilityLabel: `nil` ⇒ décorative ; l'hôte dit la phrase complète.
     public init(model: GamePlayerBanner, texts: Texts, palette: Palette, sheen: Double = 0, backdrop: String? = nil,
-                accessibilityLabel: String? = nil) {
+                accessibilityLabel: String? = nil, onSelect: ((GamePlayerBanner.Piece) -> Void)? = nil) {
+        self.onSelect = onSelect
         self.model = model
         self.texts = texts
         self.palette = palette
@@ -99,8 +135,8 @@ public struct PlayerBannerView: View {
         self.accessibilityLabel = accessibilityLabel
     }
 
-    /// La hauteur minimale : le plus grand des deux, 56 pt et l'anneau — jamais moins qu'une cible de 44 pt.
-    public static let minimumHeight: CGFloat = 56
+    /// La hauteur minimale : 48 pt (#11125, comme le web) — une pièce de 44 pt et sa marge.
+    public static let minimumHeight: CGFloat = 48
 
     /// La couleur du petit texte (« encore 70 ») : le ton discret sur l'aplat seul, l'ENCRE dès qu'une bannière de
     /// profil passe dessous — une image, même translucide, lui prend le contraste que l'aplat lui garantissait.
@@ -118,14 +154,18 @@ public struct PlayerBannerView: View {
         // disposition se choisit sur la taille du texte, et la ligne tient sur 320 pt en laissant ses textes
         // se réduire.
         Group {
-            if stacked {
+            if onSelect != nil && !stacked {
+                compactRow
+            } else if onSelect != nil {
+                selectableLayout
+            } else if stacked {
                 stackedLayout
             } else {
                 singleRow
             }
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, onSelect != nil && !stacked ? 2 : 6)
         .frame(maxWidth: .infinity, minHeight: Self.minimumHeight, alignment: .leading)
         .background(alignment: .topTrailing) {
             palette.surface
@@ -142,7 +182,167 @@ public struct PlayerBannerView: View {
         .overlay(alignment: .bottom) {
             Rectangle().fill(palette.ink.opacity(0.08)).frame(height: 0.5)
         }
-        .modifier(BannerAccessibility(label: accessibilityLabel))
+        .modifier(BannerAccessibility(label: onSelect == nil ? accessibilityLabel : nil, contains: onSelect != nil))
+    }
+
+    // MARK: Le bandeau compact (#11125)
+
+    /// UNE rangée : à gauche l'anneau et la jauge des étincelles, au milieu la Flamme, les Meeshes, la mission et la
+    /// ligue, à droite le rang et sa jauge de Gloire. Aucune pièce ne passe sous les jauges.
+    private var compactRow: some View {
+        HStack(spacing: 6) {
+            if model.showsLevel { select(.level) { ring(side: compactRingSide) } }
+            if model.showsScore {
+                select(.sparks) { if model.showsLevel { gauge } else { scoreOnly } }
+                    .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
+            } else {
+                Spacer(minLength: 0)
+            }
+            middle
+            if let rank = model.rank {
+                select(.rank) { gloryGauge(rank) }
+                    .frame(minWidth: 56, maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var middle: some View {
+        let shown = model.pieces.filter(Self.middlePieces.contains)
+        if !shown.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(spacing: 4) {
+                    ForEach(shown.filter { $0 == .flame || $0 == .meesh }, id: \.self) { middlePiece($0) }
+                }
+                HStack(spacing: 4) {
+                    ForEach(shown.filter { $0 == .mission || $0 == .league }, id: \.self) { middlePiece($0) }
+                }
+            }
+            .fixedSize()
+        }
+    }
+
+    @ViewBuilder
+    private func middlePiece(_ kind: GamePlayerBanner.Piece) -> some View {
+        select(kind, target: Self.cornerTarget) {
+            switch kind {
+            case .flame:
+                if let form = model.flame?.form { piece(text: texts.flameDays) { FlameView(form: form, flickers: false).frame(width: 18, height: 18) } }
+            case .meesh:
+                piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 18, height: 18) }
+            case .mission:
+                piece(text: texts.mission) { symbol("target", side: 16) }
+            case .league:
+                if let league = model.league { piece(text: texts.place) { LeagueGemView(league: league.league).frame(width: 18, height: 18) } }
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    /// Le rang au-dessus de sa jauge de Gloire, ce qui manque au rang suivant dessous — la jumelle de la jauge des étincelles.
+    private func gloryGauge(_ rank: GamePlayerBanner.Rank) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil).frame(height: 18)
+                if let name = texts.rank {
+                    Text(name)
+                        .font(.system(.footnote, design: .rounded).weight(.bold))
+                        .foregroundColor(palette.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            GaugeBar(progress: rank.progress, tint: AnyShapeStyle(MeeshyColors.indigo500), rail: palette.ink.opacity(0.12), animated: !reduceMotion)
+                .frame(height: 6)
+            if let missing = texts.gloryMissing {
+                Text(missing)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundColor(Self.detailColor(palette: palette, overBackdrop: hasBackdrop))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+            }
+        }
+        .frame(minWidth: 44, maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: Les pièces-boutons (#10846)
+
+    /// Au-delà de XXL : l'anneau et la jauge en haut — chacun son bouton —, puis les autres pièces qui passent à la
+    /// ligne ; aucune cible ne descend sous 44 pt, le bandeau prend la hauteur qu'il faut.
+    private var selectableLayout: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if model.showsLevel || model.showsScore {
+                HStack(spacing: 10) {
+                    if model.showsLevel { select(.level) { ring(side: ringWidth) } }
+                    if model.showsScore {
+                        select(.sparks) { if model.showsLevel { gauge } else { scoreOnly } }
+                    }
+                }
+            }
+            let rest = model.pieces.filter { $0 != .level && $0 != .sparks }
+            if !rest.isEmpty {
+                FlowLayout(spacing: 8) {
+                    ForEach(rest, id: \.self) { kind in
+                        select(kind) { pieceContent(kind) }
+                    }
+                }
+            }
+        }
+    }
+
+    /// `minWidth` : une pièce de la rangée compacte garde 44 pt de haut mais peut s'étroitiser jusqu'à son dessin.
+    private func select<Content: View>(_ piece: GamePlayerBanner.Piece, target: CGFloat = PlayerBannerView.pieceTarget,
+                                       minWidth: CGFloat? = nil, @ViewBuilder content: () -> Content) -> some View {
+        Button {
+            onSelect?(piece)
+        } label: {
+            content()
+                .frame(minWidth: minWidth ?? target, minHeight: target)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(texts.pieceLabels[piece] ?? "")
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("game.player_banner.\(piece.rawValue)")
+    }
+
+    @ViewBuilder
+    private func pieceContent(_ kind: GamePlayerBanner.Piece) -> some View {
+        switch kind {
+        case .meesh:
+            piece(text: texts.meeshes) { MeeshCoinView(face: .obverse, edition: .silver, figures: nil).frame(width: 22, height: 22) }
+        case .rank:
+            if let rank = model.rank {
+                RankBlasonView(rank: rank.rank, division5: rank.division, mythic: rank.mythic, figures: nil).frame(width: 34)
+            }
+        case .league:
+            if let league = model.league {
+                piece(text: texts.place) { LeagueGemView(league: league.league).frame(width: 22, height: 22) }
+            }
+        case .flame:
+            if let form = model.flame?.form {
+                piece(text: texts.flameDays) { FlameView(form: form, flickers: false).frame(width: 22, height: 22) }
+            }
+        case .trophies:
+            piece(text: texts.trophies) { symbol("trophy.fill") }
+        case .mission:
+            piece(text: texts.mission) { symbol("target") }
+        case .season:
+            piece(text: texts.season) { symbol("calendar") }
+        case .level, .sparks:
+            EmptyView()
+        }
+    }
+
+    private func symbol(_ name: String, side: CGFloat = 22) -> some View {
+        Image(systemName: name)
+            .font(.system(size: side * 16 / 22, weight: .semibold))
+            .foregroundColor(palette.ink)
+            .frame(width: side, height: side)
+            .accessibilityHidden(true)
     }
 
     // MARK: La bannière de profil, en translucide
@@ -166,7 +366,7 @@ public struct PlayerBannerView: View {
     private var singleRow: some View {
         HStack(spacing: 10) {
             if model.showsLevel {
-                ring
+                ring(side: ringWidth)
                 gauge
                 pieces
             } else if model.showsScore {
@@ -185,7 +385,7 @@ public struct PlayerBannerView: View {
         VStack(alignment: .leading, spacing: 6) {
             if model.showsLevel {
                 HStack(alignment: .center, spacing: 10) {
-                    ring
+                    ring(side: ringWidth)
                     Spacer(minLength: 0)
                 }
                 gauge
@@ -202,20 +402,20 @@ public struct PlayerBannerView: View {
 
     // MARK: L'anneau
 
-    private var ring: some View {
+    private func ring(side: CGFloat) -> some View {
         LevelRingView(
             level: model.level, progress: model.progress, tier: model.tier, prestige: model.prestige,
             trackColor: palette.ink.opacity(0.12), inkColor: palette.ink, mutedColor: palette.muted,
             discColor: palette.disc
         )
         .gameSpecularSheen(progress: reduceMotion ? 0 : sheen)
-        .frame(width: ringWidth, height: ringHeight)
+        .frame(width: side, height: ringHeight(side: side))
     }
 
     private var ringWidth: CGFloat { min(ringSide, 76) }
 
     /// Les étoiles de Prestige se posent SOUS l'anneau : la boîte de l'anneau grandit d'autant (56 × 66 au lieu de 56 × 56).
-    private var ringHeight: CGFloat { model.prestige > 0 ? ringWidth * 66 / 56 : ringWidth }
+    private func ringHeight(side: CGFloat) -> CGFloat { model.prestige > 0 ? side * 66 / 56 : side }
 
     // MARK: La jauge
 
@@ -243,7 +443,7 @@ public struct PlayerBannerView: View {
                     .monospacedDigit()
                     .foregroundColor(Self.detailColor(palette: palette, overBackdrop: hasBackdrop))
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.65)
             }
         }
         .frame(minWidth: 44, maxWidth: .infinity, alignment: .leading)
@@ -320,10 +520,14 @@ private struct GaugeBar: View {
 /// Sans phrase, la brique est décorative.
 private struct BannerAccessibility: ViewModifier {
     let label: String?
+    /// Les pièces sont des boutons : le bandeau CONTIENT leurs éléments, il n'en est pas un.
+    var contains = false
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if let label {
+        if contains {
+            content.accessibilityElement(children: .contain)
+        } else if let label {
             content.accessibilityElement(children: .ignore).accessibilityLabel(label)
         } else {
             content.accessibilityHidden(true)

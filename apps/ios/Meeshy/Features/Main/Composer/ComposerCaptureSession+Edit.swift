@@ -22,6 +22,7 @@ extension ComposerCaptureSession {
         framing = .identity
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.photo)
+        editChromeShown = true
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.photo)
         camera.pauseRunning()
@@ -49,7 +50,9 @@ extension ComposerCaptureSession {
         loopedTrim = trim
         openFamily = nil
         activeEditTools = ComposerEditTools.initial(.video(hasAudio: lecteur.hasAudio))
+        editChromeShown = true
         takeSound = ComposerTakeSound()
+        editPaused = false
         editAspect = ComposerEditScene.clampedAspect(canvasAspect)
         phase = .editing(.video(url))
         camera.pauseRunning()
@@ -127,7 +130,7 @@ extension ComposerCaptureSession {
     /// La vidéo part avec le look, le cadrage et la découpe qu'on voyait en la
     /// retouchant, lue dans l'espace où la boucle la lisait. Sans effet, sans
     /// cadrage ni découpe, le rendu EST le brut : il ne part en galerie que s'il
-    /// n'y est pas déjà (`CaptureSavePolicy.writesUntouchedTake`). **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
+    /// n'y est pas déjà — seul le brut d'une prise par le cadre y va (#10284). **Un rendu qui échoue ne remet RIEN** : le brut porte ce que la
     /// découpe et le cadrage ont retiré, et le remettre à sa place enverrait à
     /// l'hôte un passage que l'auteur a coupé. La retouche reste ouverte, comme
     /// pour une photo dont le cadre ne se peint pas — la prise n'est pas perdue.
@@ -139,6 +142,7 @@ extension ComposerCaptureSession {
         let galerie = gallery
         let politique = savePolicy()
         let enregistre = politique.savesRenderOnFinish(alreadySaved: takeSaveState != .idle)
+        let brutEnGalerie = editRawSave
         isRenderingLook = true
         Task { @MainActor in
             guard isStillEditing(source) else { return }
@@ -151,7 +155,8 @@ extension ComposerCaptureSession {
             }
             let neuve = rendue == url ? nil : rendue
             if enregistre, isStillEditing(source) {
-                _ = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+                _ = await Self.writeVideo(rendue, original: url, originalInLibrary: await brutEnGalerie?.value ?? false,
+                                          gallery: galerie)
             }
             guard isStillEditing(source) else {
                 if let neuve {
@@ -236,21 +241,67 @@ extension ComposerCaptureSession {
         framing = .identity
         editAspect = nil
         activeEditTools = []
+        editChromeShown = false
         takeSound = ComposerTakeSound()
+        editPaused = false
         trimScrubbing = false
-        takeSaveState = .idle
+        takeSave = Self.noTakeSave
+        editRawSave = nil
     }
 
-    // MARK: - ⬇︎ Enregistrer dans Photos (#9684)
+    // MARK: - ⬇︎ Enregistrer dans Photos (#9684, #10284)
+
+    /// Aucune prise en retouche : rien n'est dans Photos.
+    static let noTakeSave = CaptureSaveLaw.beginTake(.outside(frameId: nil, format: ""))
+
+    /// Le FORMAT de ce qu'on enregistrerait : les proportions de la scène
+    /// retouchée (#10296) — un recadrage au carré est une autre image.
+    var captureFormat: String {
+        String(format: "%.3f", Double(editAspect ?? canvasAspect))
+    }
+
+    /// L'état d'enregistrement vu de la version COURANTE (cadre, format) — la loi partagée décide.
+    var currentTakeSave: TakeSaveState {
+        CaptureSaveLaw.applyFormatChange(CaptureSaveLaw.applyFrameChange(takeSave, frameId: look.captureFrameId),
+                                         format: captureFormat)
+    }
+
+    /// **Le bouton suit la loi** (#10284) : visible tant que la prise n'est pas
+    /// dans Photos avec ce cadre ; une roue pendant l'écriture ; sinon il s'en va.
+    var takeSaveState: ComposerTakeSaveState {
+        guard !CaptureSaveLaw.saveButtonVisible(currentTakeSave) else { return .idle }
+        return takeWrite == nil ? .saved : .saving
+    }
 
     /// **La flèche ⬇︎** : la prise retouchée rejoint Photos telle qu'on la voit —
     /// effet, cadre, cadrage et découpe ; l'original s'il n'y a rien de tout
-    /// cela. UNE fois par prise : ensuite la flèche devient ✓. On reste en
-    /// retouche ; un refus de Photos se dit et laisse la flèche disponible.
+    /// cela. Une fois par version : la flèche s'en va, et revient si le cadre
+    /// (#10284) ou le format (#10296) change. On reste en retouche ; un refus de Photos se dit et
+    /// rend la flèche.
     func saveTakeToPhotos() {
-        guard phase.isEditing, !isRenderingLook, takeSaveState.offersSave, let source = editSource else { return }
+        guard phase.isEditing, !isRenderingLook, takeSaveState.offersSave, editSource != nil else { return }
+        let courante = currentTakeSave
+        takeSave = CaptureSaveLaw.applySaved(courante)
+        writeTake(version: courante.currentVersion, awaitingRaw: nil, toast: false)
+    }
+
+    /// **La prise par le cadre** (#10284) : la retouche vient de s'ouvrir, et la
+    /// prise part déjà vers Photos avec son cadre (`CaptureSaveLaw.beginTake`).
+    /// Le brut refusé (le refus s'est dit une fois) ne fait rien tenter d'autre.
+    func saveFrameTake(awaitingRaw brut: Task<Bool, Never>?) {
+        guard phase.isEditing, editSource != nil else { return }
+        takeSave = CaptureSaveLaw.beginTake(.frame(frameId: look.captureFrameId, format: captureFormat))
+        editRawSave = brut
+        writeTake(version: takeSave.currentVersion, awaitingRaw: brut, toast: true)
+    }
+
+    /// L'écriture vers Photos de ce qu'on voit. Les écritures s'ENCHAÎNENT :
+    /// jamais deux rendus pleine définition à la fois, et la retouche abandonnée
+    /// attend la dernière avant de jeter son fichier.
+    private func writeTake(version: SavedVersion, awaitingRaw brut: Task<Bool, Never>?, toast: Bool) {
+        guard let source = editSource else { return }
         let galerie = gallery
-        let politique = savePolicy()
+        let brutEnGalerie = editRawSave
         let ecriture: @MainActor () async -> Bool?
         switch phase {
         case .capturing:
@@ -265,7 +316,9 @@ extension ComposerCaptureSession {
             let exporter = videoRender(url)
             ecriture = {
                 guard let rendue = await exporter() else { return nil }
-                let enregistree = await Self.writeVideo(rendue, original: url, policy: politique, gallery: galerie)
+                let enregistree = await Self.writeVideo(rendue, original: url,
+                                                        originalInLibrary: await brutEnGalerie?.value ?? false,
+                                                        gallery: galerie)
                 if rendue != url {
                     FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré par la flèche",
                                                           logger: .media)
@@ -273,29 +326,36 @@ extension ComposerCaptureSession {
                 return enregistree
             }
         }
-        takeSaveState = .saving
-        let tache = Task { @MainActor in await ecriture() }
+        let precedente = takeWrite
+        let tache = Task { @MainActor () -> Bool? in
+            _ = await precedente?.value
+            guard await brut?.value ?? true else { return false }
+            return await ecriture()
+        }
         takeWrite = tache
         Task { @MainActor [weak self] in
             let verdict = await tache.value
-            self?.takeWriteEnded(tache, verdict: verdict, source: source)
+            self?.takeWriteEnded(tache, verdict: verdict, source: source, version: version, toast: toast)
         }
     }
 
     /// **Le verdict se dit toujours** : sur la flèche si la retouche est encore là,
     /// par un bandeau sinon — jamais un échec silencieux. Un refus de Photos s'est
     /// déjà dit (`reportPhotoLibraryRefusal`) ; un rendu impossible se dit ici.
-    private func takeWriteEnded(_ tache: Task<Bool?, Never>, verdict: Bool?, source: any ComposerFrameSourcing) {
+    /// Un échec rend la version DE CETTE ÉCRITURE à enregistrer (`applySaveFailed`) ;
+    /// la prise par le cadre, qu'aucun bouton n'a demandée, se dit par un bandeau.
+    private func takeWriteEnded(_ tache: Task<Bool?, Never>, verdict: Bool?, source: any ComposerFrameSourcing,
+                                version: SavedVersion, toast: Bool) {
         if takeWrite == tache { takeWrite = nil }
         let enregistree = verdict == true
-        if isStillEditing(source) { takeSaveState = enregistree ? .saved : .idle }
+        if !enregistree, isStillEditing(source) { takeSave = CaptureSaveLaw.applySaveFailed(takeSave, version: version) }
         guard enregistree else {
             HapticFeedback.error()
             if verdict == nil { FeedbackToastManager.shared.showError(ComposerCaptureCopy.saveToPhotosFailed) }
             return
         }
         HapticFeedback.success()
-        guard isStillEditing(source) else {
+        guard isStillEditing(source), !toast else {
             return FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
         UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.savedToPhotos)
@@ -314,7 +374,7 @@ extension ComposerCaptureSession {
 
     /// Ce qui s'ouvre sous la scène de retouche, de haut en bas.
     var editPanels: [ComposerEditPanel] {
-        guard phase.isEditing else { return [] }
+        guard phase.isEditing, editChromeShown else { return [] }
         return ComposerEditTools.panels(familyOpen: openFamily != nil, active: activeEditTools)
     }
 
@@ -325,6 +385,7 @@ extension ComposerCaptureSession {
 
     /// Les outils dont la surface est à l'écran — ce que le rail allume.
     var shownEditTools: Set<ComposerEditTool> {
+        guard editChromeShown else { return [] }
         let familleOuverte = openFamily != nil
         return activeEditTools.filter {
             ComposerEditTools.isShown($0, active: activeEditTools, familyOpen: familleOuverte)
@@ -336,7 +397,29 @@ extension ComposerCaptureSession {
 
     /// Les équerres autour de l'image : Crop actif.
     var showsCropBrackets: Bool {
-        phase.isEditing && ComposerEditTools.showsBrackets(active: activeEditTools)
+        phase.isEditing && editChromeShown && ComposerEditTools.showsBrackets(active: activeEditTools)
+    }
+
+    /// **La prise se réduit-elle ?** Au recadrage montré, et seulement là (#10930).
+    var editFramesScene: Bool {
+        phase.isEditing && ComposerEditTools.framesScene(active: activeEditTools, chromeShown: editChromeShown)
+    }
+
+    /// **Le glissé vers le haut pose le chrome par-dessus la prise** (#10930) :
+    /// les outils comme on les a laissés.
+    func revealEditChrome() {
+        guard phase.isEditing, !isRenderingLook, !editChromeShown else { return }
+        editChromeShown = true
+        HapticFeedback.light()
+    }
+
+    /// Le glissé vers le bas rend tout l'écran à la prise ; la bande ouverte se
+    /// replie avec le reste.
+    func hideEditChrome() {
+        guard phase.isEditing, !isRenderingLook, editChromeShown else { return }
+        editChromeShown = false
+        openFamily = nil
+        HapticFeedback.light()
     }
 
     /// **Toucher un outil ne touche que lui** (#9754) : montré, il se retire ;
@@ -399,6 +482,10 @@ extension ComposerCaptureSession {
         loopedTrim = range
         trimScrubbing = false
         lecteur.setRange(range)
+        // **Après un rognage, la tête revient au début de la plage gardée**
+        // (#10356) — explicitement, plus par effet de bord de la boucle
+        // reconstruite. En pause, elle y reste en pause.
+        resumeLoop(lecteur, at: range.lowerBound)
     }
 
     /// **La frame EXACTE sous la règle** (#9754) : pendant qu'une poignée bouge,
@@ -415,6 +502,52 @@ extension ComposerCaptureSession {
     func seekPlayhead(to time: TimeInterval) {
         guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
         lecteur.seek(to: ComposerTrimRule.playhead(time, in: trim))
+    }
+
+    // MARK: - La lecture (#10356)
+
+    /// Lecture et pause ne s'offrent qu'à une vidéo en retouche.
+    var offersEditPlayback: Bool {
+        guard case .editing(.video) = phase else { return false }
+        return loopPlayer != nil
+    }
+
+    /// **Pause : la vidéo s'arrête où elle est. Lecture : elle repart de la
+    /// tête.** Pendant le rendu de « Terminé », plus rien ne bouge.
+    func toggleEditPlayback() {
+        guard offersEditPlayback, !isRenderingLook, let lecteur = loopPlayer else { return }
+        editPaused.toggle()
+        if editPaused {
+            lecteur.pause()
+        } else {
+            lecteur.play()
+        }
+        HapticFeedback.light()
+    }
+
+    /// **La tête suit le doigt** : l'aperçu montre l'image exacte de son
+    /// instant, borné à la plage gardée — la boucle se suspend le temps du geste.
+    func scrubPlayhead(to time: TimeInterval) {
+        guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
+        lecteur.scrub(to: ComposerTrimRule.playhead(time, in: trim))
+    }
+
+    /// **Lâchée, la tête se pose** dans la plage gardée, et la boucle repart de
+    /// là — sauf si l'auteur avait mis en pause : elle y reste arrêtée.
+    func endPlayheadScrub(at time: TimeInterval) {
+        guard !isRenderingLook, let trim, let lecteur = loopPlayer else { return }
+        loopedTrim = trim
+        trimScrubbing = false
+        lecteur.setRange(trim)
+        resumeLoop(lecteur, at: ComposerTrimRule.playhead(time, in: trim))
+    }
+
+    /// La boucle reconstruite repart toujours : la tête se pose, et la pause de
+    /// l'auteur est rendue.
+    private func resumeLoop(_ lecteur: any ComposerLoopPlayerProviding, at position: TimeInterval) {
+        lecteur.seek(to: position)
+        guard editPaused else { return }
+        lecteur.pause()
     }
 
     /// L'étendue de la source éditée ; `nil` hors édition. Une vidéo la connaît

@@ -56,7 +56,7 @@ final class ConversationViewHeaderButtonsClusterTests: XCTestCase {
         //    DECLARATION (not just call sites) was required to stop a Swift
         //    metadata-decoder stack overflow at first render (see
         //    ConversationFirstRenderWarmup.swift doc comment).
-        guard let range = unit.range(of: "private var headerButtonsCluster: AnyView {") else {
+        guard let range = unit.range(of: "var headerButtonsCluster: some View {") else {
             XCTFail("ConversationView must define headerButtonsCluster")
             return
         }
@@ -68,14 +68,14 @@ final class ConversationViewHeaderButtonsClusterTests: XCTestCase {
             "ConversationHeaderActionsCluster (l'assemblage a quitté l'hôte le 2026-09-13)."
         )
         XCTAssertTrue(
-            host.contains("headerCallButtons") && host.contains("expandedHeaderSearchButton"),
+            host.contains("headerCallButtons") && host.contains("headerSearchSlot"),
             "headerButtonsCluster must pass both the call button and the search button."
         )
 
         // 2) Le TYPE NOMINAL porte l'invariant de spacing — la règle que ce
         //    témoin existe pour tenir (« les boutons n'ont pas besoin d'être si
         //    loin l'un de l'autre », porteur 2026-07-11).
-        guard let clusterRange = unit.range(of: "struct ConversationHeaderActionsCluster: View {") else {
+        guard let clusterRange = unit.range(of: "struct ConversationHeaderActionsCluster<Call: View, Search: View, ReadingMode: View>: View {") else {
             XCTFail("ConversationHeaderActionsCluster doit exister — l'unité ne le voit pas.")
             return
         }
@@ -101,7 +101,16 @@ final class ConversationViewHeaderButtonsClusterTests: XCTestCase {
         // Comments stripped: the AnyView-erasure doc comments mention
         // "headerButtonsCluster" by name several times and would otherwise
         // inflate this count (feedback_source_guard_tests_must_strip_comments).
-        let view = AppSourceGuard.stripComments(try source())
+        // Depuis #10300, le site d'appel PLIÉ vit dans `ConversationView+Header.swift`
+        // (`expandedHeaderMidContent`, sorti du fichier hôte hors budget) : le
+        // compte se fait sur les deux fichiers de l'en-tête.
+        let header = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/ConversationView+Header.swift")
+        let view = AppSourceGuard.stripComments(try source() + "\n" + String(contentsOf: header, encoding: .utf8))
         let occurrences = view.components(separatedBy: "headerButtonsCluster").count - 1
         // 1 declaration + 1 call site (collapsed-header state only —
         // the options-expanded band carries no action buttons since 2026-08-18).

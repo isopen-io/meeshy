@@ -131,7 +131,7 @@ public actor UserCategoryStore {
 
     public func hydrate() async throws {
         let fresh = try await service.listCategories()
-        categoriesById = Dictionary(uniqueKeysWithValues: fresh.map { ($0.id, $0) })
+        categoriesById = Dictionary(fresh.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         publish()
     }
 
@@ -139,7 +139,7 @@ public actor UserCategoryStore {
     /// hitting the network. The caller is expected to follow up with a
     /// background `hydrate()` for the stale-while-revalidate path.
     public func hydrateFromSnapshot(_ snapshot: [ConversationCategory]) {
-        categoriesById = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })
+        categoriesById = Dictionary(snapshot.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         publish()
     }
 

@@ -2,7 +2,8 @@ import { segmentText, type TextSegment } from '@meeshy/shared/utils/text-segment
 
 import type { Attachment, Message } from '@/lib/api/types';
 
-import { placeOf, type SharedPlace } from './message-body';
+import { placeOf, stickerOf, type SharedPlace } from './message-body';
+import { linkRenderingOf } from './sender-links';
 
 /**
  * **L'INDEX D'UNE CONVERSATION, GENRE PAR GENRE (#8103)** — la loi PURE de
@@ -97,7 +98,8 @@ function urlsOf(segments: readonly TextSegment[]): readonly string[] {
   });
 }
 
-const isHidden = (message: Message): boolean => message.isViewOnce === true;
+/** Un STICKER n'est ni une photo ni un média à feuilleter : son image jointe ne sert qu'aux anciens clients. */
+const isHidden = (message: Message): boolean => message.isViewOnce === true || stickerOf(message) !== null;
 
 function attachmentItems(message: Message, kind: AttachmentKind): readonly MediaHubItem[] {
   return (message.attachments ?? [])
@@ -107,7 +109,7 @@ function attachmentItems(message: Message, kind: AttachmentKind): readonly Media
 
 function linkItems(message: Message, kind: 'link' | 'conversation'): readonly MediaHubItem[] {
   const content = message.content ?? '';
-  if (content === '') return [];
+  if (content === '' || linkRenderingOf(message) === 'plain') return [];
   const unique = [...new Set(urlsOf(segmentText(content)))];
   return unique.flatMap((href) => {
     const host = hostOf(href);

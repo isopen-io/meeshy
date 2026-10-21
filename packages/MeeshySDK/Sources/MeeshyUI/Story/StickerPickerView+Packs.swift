@@ -86,19 +86,14 @@ extension StickerPickerView {
                         HapticFeedback.medium()
                         pick(pack, item)
                     } label: {
-                        CachedAsyncImage(url: item.fileUrl,
-                                         targetSize: CGSize(width: Self.meeCellSide, height: Self.meeCellSide),
-                                         showsStatusOverlays: false,
-                                         autoLoad: true) {
-                            Text(item.emoji).font(.system(size: 40))
-                        }
-                        .scaledToFit()
-                        .frame(width: Self.meeCellSide, height: Self.meeCellSide)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
+                        packCellArtwork(item)
+                            .frame(width: Self.meeCellSide, height: Self.meeCellSide)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel(item.title)
+                    .accessibilityIdentifier(StickerAccessibilityID.pack(pack.slug, item: item.id))
                 }
             }
         } header: {
@@ -109,6 +104,33 @@ extension StickerPickerView {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+
+    /// **La vignette d'un sticker de pack — ANIMÉE s'il est cinématique**
+    /// (#9210). Le film passe par `AnimatedCachedImage`, décodé hors du fil
+    /// principal et borné à la case ; la première image reste son repli, donc
+    /// la case n'est jamais vide le temps du décodage. L'état décodé vit dans
+    /// la case : il part avec elle au défilement et à la fermeture de la feuille.
+    @ViewBuilder
+    private func packCellArtwork(_ item: StickerPackItem) -> some View {
+        if item.isAnimated {
+            AnimatedCachedImage(urlString: MeeshyConfig.resolveMediaURL(item.fileUrl)?.absoluteString ?? item.fileUrl,
+                                pointSize: Self.meeCellSide) {
+                packCellStill(item)
+            }
+        } else {
+            packCellStill(item)
+        }
+    }
+
+    private func packCellStill(_ item: StickerPackItem) -> some View {
+        CachedAsyncImage(url: item.fileUrl,
+                         targetSize: CGSize(width: Self.meeCellSide, height: Self.meeCellSide),
+                         showsStatusOverlays: false,
+                         autoLoad: true) {
+            Text(item.emoji).font(.system(size: 40))
+        }
+        .scaledToFit()
     }
 
     // MARK: - La Boutique

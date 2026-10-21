@@ -61,18 +61,23 @@ const AUTHOR_P = '507f1f77bcf86cd799439144';
 const CAPTURER_P = '507f1f77bcf86cd799439155';
 const CAPTURED_ID = '507f1f77bcf86cd799439201';
 const NOTICE_ID = '507f1f77bcf86cd799439202';
+// Les ÉCHÉANCES sont relatives à l'instant du témoin : écrites en dur (une semaine après l'audit), elles
+// sont passées le 2026-10-15 à 10 h UTC — le message capturé était alors déjà expiré, la suppression ne
+// prenait plus le chemin témoigné et l'échéance de l'avis restait `undefined`.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEK_MS = 7 * DAY_MS;
 const SENT_AT = new Date('2026-10-08T10:00:00.000Z');
 const READER_FLOOR = new Date('2026-10-08T10:02:00.000Z');
 
 const CAPTURED: MongoDocument = {
   id: CAPTURED_ID, conversationId: CONV, senderId: AUTHOR_P, createdAt: SENT_AT, deletedAt: null,
-  messageSource: 'user', messageType: 'text', expiresAt: new Date('2026-10-15T10:00:00.000Z'), metadata: null,
+  messageSource: 'user', messageType: 'text', expiresAt: new Date(Date.now() + WEEK_MS), metadata: null,
 };
 const NOTICE: MongoDocument = {
   id: NOTICE_ID, conversationId: CONV, senderId: CAPTURER_P, createdAt: new Date('2026-10-08T10:05:00.000Z'),
   updatedAt: new Date('2026-10-08T10:05:00.000Z'), deletedAt: null, messageSource: 'system', messageType: 'system',
   content: 'Alice a capturé l’éphémère du 08/10/2026 à 12:00',
-  expiresAt: new Date('2026-10-16T10:00:00.000Z'),
+  expiresAt: new Date(Date.now() + WEEK_MS + DAY_MS),
   metadata: { kind: 'content-capture', capturedMessageId: CAPTURED_ID, sentAt: SENT_AT.toISOString() },
 };
 

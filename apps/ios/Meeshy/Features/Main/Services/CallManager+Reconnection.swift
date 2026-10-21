@@ -32,7 +32,7 @@ extension CallManager {
         // restart n'est possible (pas de remote description) et la bascule
         // d'état faisait rendre l'écran connecté (00:00 figé) pendant que
         // l'appelé sonnait encore.
-        guard CallReliabilityPolicy.reconnectingAllowed(from: callState) else {
+        guard CallReliabilityPolicy.reconnectingAllowed(from: callState, awaitingRemoteOffer: isAwaitingRemoteOffer) else {
             Logger.calls.warning("attemptReconnection ignoré en état \(String(describing: self.callState)) — réservé aux appels en négociation/établis (FSM §3.2)")
             return
         }
@@ -55,7 +55,7 @@ extension CallManager {
         }
 
         reconnectAttempt += 1
-        analyticsTotalReconnects += 1
+        analytics.totalReconnects += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
             if callUsesCallKit, let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
@@ -252,5 +252,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

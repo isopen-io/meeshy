@@ -97,14 +97,14 @@ describe('/login?next= — la session qui s’ouvre ramène à `next`', () => {
   test('sans `next` : la liste, comme avant', () => {
     mount(null);
     signIn();
-    expect(here()).toBe('/');
+    expect(here()).toBe('/chats');
   });
 
   for (const hostile of ['//evil.com', 'https://evil.com/chat/x', '/\\evil.com']) {
     test(`\`next=${hostile}\` ne sort pas du domaine : la liste`, () => {
       mount(hostile);
       signIn();
-      expect(here()).toBe('/');
+      expect(here()).toBe('/chats');
     });
   }
 });

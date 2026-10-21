@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { SPARKS_USER_SELECT, levelSparksOf, sparksOf } from '../game/SparksFacts';
 import { isDeclaredMinor, judgeDeclaredBirthDate } from '@meeshy/shared/utils/age';
 import { GLOBAL_CONVERSATION_TYPE, viewerWriteRestrictionOf } from '@meeshy/shared/utils/global-minor-restriction';
 import {
@@ -136,7 +137,7 @@ const USER_STATE_SELECT = {
   blockedUserIds: true,
   onboardingCompletedAt: true,
   onboardingSteps: true,
-  engagementScore: true,
+  ...SPARKS_USER_SELECT,
   ...ACTIVATION_SELECT,
 } as const;
 
@@ -156,6 +157,10 @@ const CANDIDATE_SELECT = {
 type UserStateRow = {
   id: string;
   engagementScore: number | null;
+  sparksSincePrestige?: bigint | number | null;
+  sparksEarnedLifetime?: bigint | number | null;
+  levelRecord?: number | null;
+  levelMaxLifetime?: number | null;
   createdAt: Date;
   birthDate: Date | null;
   systemLanguage: string;
@@ -259,7 +264,7 @@ export class OnboardingService {
         ? this.suggestions({ user, ageClass, globalConversationId, now })
         : Promise.resolve([]),
       this.prisma.friendRequest.count({ where: { senderId: user.id, status: 'pending' } }),
-      this.stepRewards(user.id, user.engagementScore ?? 0, storyDefaultVisibility, now),
+      this.stepRewards(user.id, levelSparksOf(sparksOf(user)), storyDefaultVisibility, now),
     ]);
     return {
       eligible: window === 'open',

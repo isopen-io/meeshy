@@ -91,6 +91,7 @@ public struct StickerSheetTabBar: View {
             .buttonStyle(.plain)
             .id(entree.id)
             .accessibilityLabel(entree.title)
+            .accessibilityIdentifier(StickerAccessibilityID.tab(entree.id))
             .accessibilityAddTraits(entree.page == selection ? [.isButton, .isSelected] : .isButton)
         }
     }

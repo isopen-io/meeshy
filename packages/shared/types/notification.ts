@@ -175,6 +175,8 @@ export enum NotificationTypeEnum {
   GAME_SEASON_STEP = 'game_season_step',
   /** La mission personnelle du jour commence : sa plage horaire est dans le texte (#9539). */
   GAME_MISSION_WINDOW = 'game_mission_window',
+  /** Des étapes du jeu franchies app fermée peuvent rejoindre le carnet : une notification groupée, dans le plafond (#10175). */
+  GAME_PHOTO_MOMENT = 'game_photo_moment',
 
   // ===== PAYMENT/SUBSCRIPTION =====
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',
@@ -615,6 +617,24 @@ export interface ContactRecentlyActiveNotificationMetadata extends BaseNotificat
   readonly userId: string;
 }
 
+/** Le contenu qu'un retrait par la modération a visé (#11149). */
+export type RemovedContentType = 'message' | 'post' | 'reel' | 'story' | 'comment';
+
+/**
+ * Metadata de `content_removed` (#11149) — adressée à l'AUTEUR seul. Le motif
+ * voyage ; ni le contenu retiré ni l'identité de celui qui l'a retiré.
+ */
+export interface ContentRemovedNotificationMetadata extends BaseNotificationMetadata {
+  readonly contentType: RemovedContentType;
+  readonly contentId: string;
+  readonly conversationId?: string;
+  readonly conversationTitle?: string;
+  readonly postId?: string;
+  readonly reason?: string;
+  /** La publication n'est pas retirée mais passée en PRIVÉ par la modération (#11158) : seul l'auteur la voit encore. */
+  readonly madePrivate?: true;
+}
+
 /**
  * Metadata des notifications du JEU (#9490). `gameSection` dit où le toucher mène dans la
  * Progression ; rien d'autre ne voyage que ce que le destinataire sait déjà de LUI : jamais
@@ -676,6 +696,7 @@ export type NotificationMetadata =
   | LoginNewDeviceNotificationMetadata
   | ContactJoinedNotificationMetadata
   | ContactRecentlyActiveNotificationMetadata
+  | ContentRemovedNotificationMetadata
   | GameDuoNotificationMetadata
   | GameLeagueResultNotificationMetadata
   | GameSeasonStepNotificationMetadata

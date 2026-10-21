@@ -79,6 +79,10 @@ struct MediaSaveFlowModifier: ViewModifier {
                 case .saved(let destination):
                     HapticFeedback.success()
                     FeedbackToastManager.shared.showSuccess(savedMessage(for: destination))
+                case .alreadyInPhotoLibrary:
+                    HapticFeedback.light()
+                    FeedbackToastManager.shared.showSuccess(
+                        NSLocalizedString("media.save.alreadyInPhotos", value: "Déjà dans la photothèque", comment: ""))
                 case .failed(let message):
                     HapticFeedback.error()
                     FeedbackToastManager.shared.showError(message)

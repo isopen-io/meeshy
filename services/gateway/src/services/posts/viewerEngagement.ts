@@ -11,6 +11,7 @@ import { NOT_DELETED } from './softDelete';
 import { filterConsumablePostIds, type PostConsumptionPrisma } from '../../routes/posts/postConsumptionGate';
 import { getBlockedUserIdsAmong } from '../../utils/blocking';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { errorIdentity } from '../../utils/error-identity';
 
 const logger = enhancedLogger.child({ module: 'viewerEngagement' });
 
@@ -126,7 +127,63 @@ export type ViewerInteractionsPage = {
   readonly total: number;
   readonly hasMore: boolean;
   readonly engagement?: PostViewersPage['engagement'];
+  /** Les vues de lecteurs SANS compte (#10483) — un agrégat, jamais une ligne nommée. */
+  readonly anonymousViewCount?: number;
+} & ViewerListUniques;
+
+/**
+ * Les vues UNIQUES par jeton (#10483, règle du porteur 2026-10-13) —
+ * enregistrées et servies, pas encore affichées par les clients.
+ */
+export type ViewerListUniques = {
+  readonly uniqueViewCount?: number;
+  readonly anonymousUniqueViewCount?: number;
+  /**
+   * Les compteurs AUTORITATIFS relus dans la même lecture que la liste (#11065) :
+   * l'en-tête de la feuille les affiche, jamais l'instantané reçu à l'ouverture,
+   * qui peut être plus vieux que la liste qu'il surmonte.
+   */
+  readonly viewCount?: number;
+  readonly impressionCount?: number;
 };
+
+/**
+ * Ce que la porte lit du contenu — et, dans la MÊME lecture, le nombre de
+ * visiteurs sans compte que la liste annonce (« et N visiteurs », #10483) :
+ * il ne sort qu'à qui la porte ouvre la liste.
+ */
+const VIEWER_LIST_POST_SELECT = {
+  id: true, authorId: true, type: true, anonymousViewCount: true, uniqueViewCount: true, anonymousUniqueViewCount: true,
+  viewCount: true, impressionCount: true,
+} as const;
+
+/**
+ * Les agrégats d'une liste de vues tels qu'ils partent sur le fil — les champs
+ * absents restent absents (un ancien serveur n'en sert aucun).
+ */
+export const viewerListCounts = (
+  result: { readonly anonymousViewCount?: number } & ViewerListUniques,
+): { readonly anonymousViewCount?: number } & ViewerListUniques =>
+  Object.fromEntries(
+    (['anonymousViewCount', 'uniqueViewCount', 'anonymousUniqueViewCount', 'viewCount', 'impressionCount'] as const)
+      .filter((key) => result[key] !== undefined)
+      .map((key) => [key, result[key]]),
+  );
+
+const anonymousViewsOf = (post: { readonly anonymousViewCount?: number | null }): number =>
+  post.anonymousViewCount ?? 0;
+
+const uniquesOf = (post: {
+  readonly uniqueViewCount?: number | null;
+  readonly anonymousUniqueViewCount?: number | null;
+  readonly viewCount?: number | null;
+  readonly impressionCount?: number | null;
+}): Required<ViewerListUniques> => ({
+  uniqueViewCount: post.uniqueViewCount ?? 0,
+  anonymousUniqueViewCount: post.anonymousUniqueViewCount ?? 0,
+  viewCount: post.viewCount ?? 0,
+  impressionCount: post.impressionCount ?? 0,
+});
 
 /**
  * Comment la liste s'ouvre à ce lecteur :
@@ -192,7 +249,7 @@ async function openViewerList(
     logger.error('[viewerEngagement] trace d’audit non écrite — lecture administrateur refusée', {
       postId: post.id,
       adminId: reader.id,
-      error,
+      error: errorIdentity(error),
     });
     throw new Error('AUDIT_UNAVAILABLE');
   }
@@ -299,7 +356,7 @@ async function visibleRestrictedReposts(
       .filter((repost) => visible.has(repost.id))
       .reduce<Counts>((acc, repost) => new Map(acc).set(repost.authorId, (acc.get(repost.authorId) ?? 0) + 1), new Map());
   } catch (error: unknown) {
-    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error });
+    logger.warn('[viewerEngagement] republications restreintes non conclues — non comptées', { postId, error: errorIdentity(error) });
     return new Map();
   }
 }
@@ -449,7 +506,7 @@ export async function readViewerEngagementPage(
     gates,
     activityDisclosureFloor(post.type, disclosedSince),
   ).catch((error: unknown) => {
-    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error });
+    logger.warn('[viewerEngagement] lecture des engagements refusée faute de conclure', { postId: post.id, error: errorIdentity(error) });
     return null;
   });
 
@@ -487,11 +544,12 @@ export async function readViewerInteractions(
 ): Promise<ViewerInteractionsPage | null> {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
-    select: { id: true, authorId: true, type: true },
+    select: VIEWER_LIST_POST_SELECT,
   });
   if (!post) return null;
   await openViewerList(prisma, post, reader, 'interactions', { limit, offset });
-  return readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
+  const page = await readViewerEngagementPage(prisma, post, limit, offset, gates, disclosedSince);
+  return { ...page, anonymousViewCount: anonymousViewsOf(post), ...uniquesOf(post) };
 }
 
 /**
@@ -511,7 +569,7 @@ export async function readPostViews(
 ) {
   const post = await prisma.post.findFirst({
     where: { id: postId, deletedAt: NOT_DELETED },
-    select: { id: true, authorId: true, type: true },
+    select: VIEWER_LIST_POST_SELECT,
   });
   if (!post) return null;
   await openViewerList(prisma, post, reader, 'views', { limit, offset });
@@ -527,5 +585,5 @@ export async function readPostViews(
     }),
     prisma.postView.count({ where }),
   ]);
-  return { items, total, hasMore: offset + limit < total };
+  return { items, total, hasMore: offset + limit < total, anonymousViewCount: anonymousViewsOf(post), ...uniquesOf(post) };
 }

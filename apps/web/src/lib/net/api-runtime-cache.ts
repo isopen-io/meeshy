@@ -119,8 +119,17 @@
  * liste ne se lit qu'en ligne, et son cache vit en mémoire
  * (`api/account-security.ts`).
  */
+/**
+ * ## LA FICHE D'UN PARTICIPANT DE WORLD WIDE EN SORT (#10102)
+ *
+ * `GET /world/participants/:participantId` porte le pays, le navigateur, le
+ * système et l'appareil d'une personne, servis en `private, no-store` à
+ * l'équipe et tracés au journal d'audit. Workbox ne lit pas `Cache-Control` :
+ * sans cette exclusion, le seau `api` gardait la fiche sept jours sur le poste
+ * du modérateur. Son cache vit en mémoire (`api/world-participant-card.ts`).
+ */
 export const API_RESPONSE_CACHE_PATTERN =
-  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))/;
+  /^https?:\/\/[^/]+\/api\/(?!v1\/admin(?:[/?#]|$))(?!(?:v1\/)?attachments\/)(?!(?:v1\/)?static\/)(?!v1\/auth\/sessions(?:[/?#]|$))(?!v1\/world\/participants(?:[/?#]|$))/;
 
 /**
  * LA ROUTE DE FLUX DES MÉDIAS — le COMPLÉMENT du motif ci-dessus sur `/api/`.

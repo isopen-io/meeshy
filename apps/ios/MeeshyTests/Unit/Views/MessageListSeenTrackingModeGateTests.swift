@@ -272,7 +272,7 @@ final class MessageListSeenTrackingModeGateTests: XCTestCase {
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
             .appendingPathComponent("Meeshy/Features/Main/Views/MessageListViewController.swift")
-        let raw = try String(contentsOf: url, encoding: .utf8)
+        let raw = try AppSourceGuard.text(at: url)
         return AppSourceGuard.stripComments(raw)
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }

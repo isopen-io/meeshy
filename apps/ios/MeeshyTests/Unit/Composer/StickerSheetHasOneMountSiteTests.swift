@@ -73,7 +73,7 @@ final class StickerSheetHasOneMountSiteTests: XCTestCase {
     /// **La moitié qui empêche de « réussir » en ne montant plus rien** : les
     /// deux destinations utilisent le composant.
     func test_laConversationEtLaScene_utilisentLeComposant() throws {
-        XCTAssertTrue(try source("ConversationView+Composer.swift").contains("MeeshyStickerSheet("),
+        XCTAssertTrue(try source("ConversationComposerLayers.swift").contains("MeeshyStickerSheet("),
                       "la conversation présente la feuille unique")
         XCTAssertTrue(try source("MeeshyComposerHost+Pickers.swift").contains("MeeshyStickerSheet("),
                       "la scène d'un post, d'un réel ou d'une story présente la feuille unique")

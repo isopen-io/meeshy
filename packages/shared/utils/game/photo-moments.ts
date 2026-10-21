@@ -50,3 +50,15 @@ export function photoMomentId(emblem: PhotoMomentEmblemV2): string {
       return `prestige:${emblem.number}`;
   }
 }
+
+/**
+ * LA RÉALISATION DU JOUR (D6, #10173) — un moment par jour de jeu, réalisé par un geste (l'ouverture du Coffre
+ * du jour). Son identité porte la journée : `day:<AAAA-MM-JJ>` ; une clé illisible n'a pas d'identité.
+ */
+const DAY_KEY = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+export const photoDayMomentId = (dayKey: string): string | null => (DAY_KEY.test(dayKey) ? `day:${dayKey}` : null);
+
+/** La journée d'une identité `day:<AAAA-MM-JJ>`, `null` pour toute autre identité. */
+export const photoDayOfMomentId = (momentId: string): string | null =>
+  momentId.startsWith('day:') && DAY_KEY.test(momentId.slice(4)) ? momentId.slice(4) : null;

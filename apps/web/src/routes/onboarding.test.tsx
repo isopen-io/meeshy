@@ -66,7 +66,7 @@ describe('la reprise — la première étape manquante, « Passer tout » dès l
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     await click(action(host, 'skipAll'));
     expect(patches).toEqual([{ finish: true }]);
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 
   test('aucun texte de perte ni de compte à rebours sur aucune carte', async () => {
@@ -86,7 +86,7 @@ describe('le serveur arbitre à CHAQUE relecture, pas seulement sur le cache', (
     expect(card(host)).toBe('languages');
     expect(visits).toEqual([]);
     await arrive();
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 
   test('cache sans « global », serveur qui le pré-coche (salut envoyé depuis iOS) : aucun second « Envoyer »', async () => {
@@ -118,7 +118,7 @@ describe('le serveur arbitre à CHAQUE relecture, pas seulement sur le cache', (
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
     await click(action(host, 'skipAll'));
     await arrive();
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 });
 
@@ -127,7 +127,7 @@ describe('carte 1 — les langues', () => {
     signIn();
     const { deps, saves, patches } = harness();
     const host = await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
-    expect(host.querySelector('[data-onb-gauge]')?.getAttribute('aria-label')).toBe('0 / 10 pts pour ton niveau 1');
+    expect(host.querySelector('[data-onb-gauge]')?.getAttribute('aria-label')).toBe('0 / 10 étincelles pour ton niveau 1');
     await click(action(host, 'languages.confirm'));
     expect(saves).toEqual([]);
     expect(patches).toEqual([{ step: 'languages', outcome: 'done' }]);
@@ -164,7 +164,7 @@ describe('carte 2 — le salut part VRAIMENT dans Meeshy Global', () => {
     expect(greetings[0]?.content).toContain('Maya');
     expect(host.querySelector('[data-onb-sent]')).not.toBeNull();
     expect(host.querySelector('[data-onb-flight]')?.textContent).toBe('+14');
-    expect(host.querySelector('[data-onb-announce]')?.textContent).toBe('Tu gagnes 14 points.');
+    expect(host.querySelector('[data-onb-announce]')?.textContent).toBe('Tu fais jaillir 14 étincelles.');
     expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('0');
     await landed();
     expect(host.querySelector('[data-onb-pill]')?.textContent).toBe('14');
@@ -345,7 +345,7 @@ describe('le récapitulatif — deux sorties, toujours la possibilité de s’ar
     await click(action(host, 'friends.later'));
     await click(action(host, 'recap.done'));
     expect(first.patches.at(-1)).toEqual({ finish: true });
-    expect(first.visits.at(-1)).toEqual({ path: '/', replace: true });
+    expect(first.visits.at(-1)).toEqual({ path: '/chats', replace: true });
 
     const second = harness();
     const again = await mount(<OnboardingJourney deps={second.deps} search={new URLSearchParams('step=friends')} clearSearch={() => undefined} />);
@@ -379,6 +379,6 @@ describe('accessibilité et langue', () => {
     signIn();
     const { deps, visits } = harness({ state: served({ eligible: false, completedAt: '2026-09-24T10:00:00.000Z' }) });
     await mount(<OnboardingJourney deps={deps} search={new URLSearchParams()} clearSearch={() => undefined} />);
-    expect(visits).toEqual([{ path: '/', replace: true }]);
+    expect(visits).toEqual([{ path: '/chats', replace: true }]);
   });
 });

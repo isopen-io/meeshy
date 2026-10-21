@@ -5,6 +5,10 @@
       "id": "jovial.fete",
       "mood": "jovial",
       "name": "Fête",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "arch",
@@ -221,6 +225,10 @@
       "id": "jovial.fanfare",
       "mood": "jovial",
       "name": "Fanfare",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "orbit",
@@ -407,6 +415,10 @@
       "id": "jovial.ballons",
       "mood": "jovial",
       "name": "Ballons",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "scatter",
@@ -566,6 +578,10 @@
       "id": "jovial.grimaces",
       "mood": "jovial",
       "name": "Grimaces",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "split",

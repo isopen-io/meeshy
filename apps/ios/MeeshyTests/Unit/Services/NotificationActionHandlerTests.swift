@@ -1128,7 +1128,7 @@ final class NotificationActionHandlerTests: XCTestCase {
     /// constructible), jamais à `UNNotification` lui-même.
     /// `@unchecked Sendable` : même patron que `SpyBannerCenter`, la synchronisation
     /// est portée par le lock, pas par le compilateur.
-    private final class MockUNUserNotificationCenter: UNUserNotificationCenterProviding, @unchecked Sendable {
+    nonisolated private final class MockUNUserNotificationCenter: UNUserNotificationCenterProviding, @unchecked Sendable {
         private let lock = NSLock()
         private var storedDelivered: [DeliveredBanner]
         private var storedReads = 0
@@ -1232,13 +1232,13 @@ final class NotificationActionHandlerTests: XCTestCase {
         XCTAssertTrue(branch.lowerBound < sync.lowerBound, "la révocation se traite avant la sync")
         let tail = code[branch.upperBound...].prefix(700)
         XCTAssertTrue(tail.contains("revokeDeliveredBanners(notificationIds:"))
-        XCTAssertTrue(tail.contains("APIClient.shared.authToken = AuthManager.shared.authToken"),
+        XCTAssertTrue(tail.contains("primeAPITokenFromSession()"),
                       "un cold-launch en arrière-plan ne passe jamais par checkExistingSession — sans cette amorce, le GET /notifications/unread-count échoue en 401")
         XCTAssertTrue(tail.contains("NotificationToastManager.shared.applyServerRevocation(notificationIds:"),
                       "le cache et le compteur/badge de la cloche doivent être mis à jour, pas seulement la bannière")
         XCTAssertTrue(tail.contains("completionHandler(.noData)"))
 
-        let authIdx = tail.range(of: "APIClient.shared.authToken = AuthManager.shared.authToken")!.lowerBound
+        let authIdx = tail.range(of: "primeAPITokenFromSession()")!.lowerBound
         let revocationIdx = tail.range(of: "applyServerRevocation(notificationIds:")!.lowerBound
         let completionIdx = tail.range(of: "completionHandler(.noData)")!.lowerBound
         XCTAssertTrue(authIdx < revocationIdx, "le jeton doit être amorcé AVANT tout appel réseau")

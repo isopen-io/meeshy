@@ -5,7 +5,7 @@ import { conversationStore } from '@/lib/conversation-store';
 import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { notePublicationParticipation } from '@/lib/view/publication-participation';
-import type { RowActionId } from '@/lib/view/row-actions';
+import type { RowFlagActionId } from '@/lib/view/row-actions';
 
 import { cachedCardSeed } from './card-caches';
 import { ApiError, currentOwnerCredential } from './client';
@@ -211,8 +211,8 @@ export function repostAction(postId: string, intent?: RepostIntent): Promise<Rep
 /** LES GESTES DU MENU « ⋯ » (#7533) — mêmes références de module stables,
  * sur l'instance partagée du cache : la suppression retire la carte de
  * CHAQUE caisse qui la peint (`removeCardPost`). */
-export function deletePostAction(postId: string): Promise<PostActionOutcome> {
-  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient } });
+export function deletePostAction(postId: string, reason?: string): Promise<PostActionOutcome> {
+  return deletePost({ postId, deps: { ...apiDeps, queryClient: appQueryClient }, ...(reason === undefined ? {} : { reason }) });
 }
 
 export function pinPostAction(postId: string): Promise<PostActionOutcome> {
@@ -411,7 +411,7 @@ export function useThreadData(id: string) {
  * `LensRow` (`memo`) exige (`conversations.tsx:31-40`). Liée aux instances
  * PARTAGÉES du magasin optimiste et du client de requêtes.
  */
-export function rowAction(conversationId: string, action: RowActionId): void {
+export function rowAction(conversationId: string, action: RowFlagActionId): void {
   void performRowAction({
     conversationId,
     action,

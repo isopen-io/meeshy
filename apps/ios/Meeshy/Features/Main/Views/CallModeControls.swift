@@ -423,7 +423,8 @@ struct CallMontageFrameStage: View {
         if let design = liveDesign {
             ZStack {
                 Color.black
-                CallLiveFrameSurface(design: design, people: people, texts: texts, sources: sources)
+                CallLiveFrameSurface(design: design, people: people, texts: texts, sources: sources,
+                                     chromeInsets: (CallView.chromeTopInset, CallView.chromeBottomInset))
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)

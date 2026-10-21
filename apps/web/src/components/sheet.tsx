@@ -29,10 +29,11 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
  * cette coquille porte le comportement modal, l'en-tête et le champ de
  * recherche — c'est-à-dire exactement ce qui serait recopié de travers.
  *
- * LE CHAMP DE RECHERCHE EST OPTIONNEL (#5814, § 5 étape 4) — les feuilles
- * « Détails du message » et « Ajouter une réaction » n'ont rien à filtrer :
- * une recherche sur cinq lignes ou vingt emojis fixes n'a aucun effet, et un
- * contrôle sans effet est le défaut que la loi 4 du dépôt interdit. Les
+ * LE CHAMP DE RECHERCHE EST OPTIONNEL (#5814, § 5 étape 4) — la feuille
+ * « Détails du message » n'a rien à filtrer : une recherche sur cinq lignes
+ * n'a aucun effet, et un contrôle sans effet est le défaut que la loi 4 du
+ * dépôt interdit. (« Ajouter une réaction » cherche depuis #10531 : elle
+ * porte tous les emojis.) Les
  * quatre props de recherche vont ENSEMBLE (aucune n'a de sens seule) —
  * absentes, le bandeau de recherche ne se monte pas du tout.
  */
@@ -83,6 +84,11 @@ export function Sheet({
    * PLEIN ÉCRAN ou MODALE CENTRÉE (#8289).
    *
    * `'fullscreen'` (défaut) — les choix longs, qu'on parcourt et qu'on filtre.
+   * Plein écran sur un TÉLÉPHONE seulement : à partir de 768 px (#10070), c'est
+   * une fenêtre centrée de 40 rem sur 85 % de la hauteur, posée sur le voile —
+   * sur un ordinateur, plus aucune modale ne prend tout l'écran. Sa hauteur est
+   * FIXÉE, pas seulement plafonnée : un corps `'div'` (le fil virtualisé) garde
+   * un cadre mesurable. Un clic sur le voile la ferme, comme la feuille basse.
    * `'centered'` — un FORMULAIRE court (photo, mot de passe, bannissement) :
    * largeur bornée à 36 rem avec une gouttière d'1 rem de chaque côté, hauteur
    * bornée à 90 % de l'écran, centré par les marges automatiques du
@@ -163,8 +169,13 @@ export function Sheet({
   const cadre = basse
     ? 'mx-auto mb-0 mt-auto w-full max-w-full rounded-t-card sm:m-auto sm:w-[min(32rem,calc(100%-2rem))] sm:rounded-card max-h-[min(88dvh,calc(100%-1rem))]'
     : `m-auto ${largeur} max-h-[min(90dvh,calc(100%-2rem))] rounded-card`;
-  /* Un toucher sur le VOILE ferme la feuille basse : le voile est le `<dialog>` lui-même, hors de son contenu. */
-  const onBackdrop = basse
+  /* Plein écran sur un téléphone, fenêtre centrée bornée dès 768 px (#10070). */
+  const pleinEcran =
+    'm-0 p-0 w-full max-w-full h-full max-h-full backdrop:bg-veil md:m-auto md:w-[min(40rem,calc(100%-4rem))] md:h-[min(85dvh,calc(100%-4rem))] md:rounded-card md:overflow-hidden';
+  /* Un toucher sur le VOILE ferme la feuille basse — et la feuille plein écran, qui n'a de voile visible que sur un
+     ordinateur : sur un téléphone son contenu couvre tout le `<dialog>`, aucun clic ne l'atteint. Le voile est le
+     `<dialog>` lui-même, hors de son contenu. */
+  const onBackdrop = basse || !centree
     ? (event: MouseEvent<HTMLDialogElement>) => {
         if (event.target === event.currentTarget) ref.current?.close();
       }
@@ -178,30 +189,16 @@ export function Sheet({
       data-sheet-presentation={presentation}
       {...dialogData}
       {...(onBackdrop === undefined ? {} : { onClick: onBackdrop })}
-      className={centree ? `${cadre} overflow-hidden p-0 backdrop:bg-veil` : undefined}
-      style={
-        centree
-          ? {
-              border: 0,
-              backgroundColor: 'var(--color-ios-surface)',
-              color: 'var(--color-ios-ink)',
-              boxShadow: '0 24px 64px color-mix(in srgb, var(--color-media-backdrop) 28%, transparent)',
-            }
-          : {
-              margin: 0,
-              padding: 0,
-              border: 0,
-              width: '100%',
-              maxWidth: '100%',
-              height: '100%',
-              maxHeight: '100%',
-              backgroundColor: 'var(--color-ios-surface)',
-              color: 'var(--color-ios-ink)',
-            }
-      }
+      className={centree ? `${cadre} overflow-hidden p-0 backdrop:bg-veil` : pleinEcran}
+      style={{
+        border: 0,
+        backgroundColor: 'var(--color-ios-surface)',
+        color: 'var(--color-ios-ink)',
+        boxShadow: '0 24px 64px color-mix(in srgb, var(--color-media-backdrop) 28%, transparent)',
+      }}
     >
       <div className={centree ? 'flex max-h-[min(90dvh,calc(100dvh-2rem))] flex-col' : 'flex h-full flex-col'}>
-        <div className={`flex shrink-0 items-center gap-3 px-4 pb-2 ${centree ? 'pt-2' : 'pt-safe'}`}>
+        <div className={`flex shrink-0 items-center gap-3 px-4 pb-2 ${centree ? 'pt-2' : 'pt-safe md:pt-2'}`}>
           <button
             type="button"
             onClick={() => ref.current?.close()}
@@ -212,7 +209,7 @@ export function Sheet({
           >
             <Glyph name="x" size={20} />
           </button>
-          <h2 id={titleId} className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+          <h2 id={titleId} data-sheet-title="" className="flex-1 text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
             {title}
           </h2>
           {accessory}
@@ -246,9 +243,9 @@ export function Sheet({
             qu'il soit — sans `min-h-0`, un enfant de flex refuse de rétrécir
             sous son contenu et le bas du formulaire serait rogné. */}
         {bodyAs === 'ul' ? (
-          <ul className={`min-h-0 flex-1 overflow-y-auto ${centree ? 'pb-2' : 'pb-safe'}`}>{children}</ul>
+          <ul className={`min-h-0 flex-1 overflow-y-auto ${centree ? 'pb-2' : 'pb-safe md:pb-2'}`}>{children}</ul>
         ) : (
-          <div className={`flex min-h-0 flex-1 flex-col ${centree ? `overflow-y-auto overflow-x-clip overscroll-x-none ${basse ? 'pb-safe' : 'pb-2'}` : 'pb-safe'}`}>{children}</div>
+          <div className={`flex min-h-0 flex-1 flex-col ${centree ? `overflow-y-auto overflow-x-clip overscroll-x-none ${basse ? 'pb-safe' : 'pb-2'}` : 'pb-safe md:pb-2'}`}>{children}</div>
         )}
       </div>
     </dialog>

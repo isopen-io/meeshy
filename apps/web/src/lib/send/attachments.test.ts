@@ -362,3 +362,33 @@ describe('replacePendingAttachment', () => {
     expect(replacePendingAttachment(list, 'inconnue', new File(['r'], 'r.jpg', { type: 'image/jpeg' }))).toBe(list);
   });
 });
+
+/**
+ * L'INVITÉ D'UN LIEN RESTREINT PAR FAMILLE (#10003, planche « Attach ») — ses
+ * familles priment sur ses droits instantanés : World Wide ferme la porte des
+ * fichiers (`allowAnonymousFiles: false`) et ouvre pourtant le `.txt`. Le refus
+ * NOMME le fichier et ce qui passe, dans la langue de l'interface.
+ */
+describe('acceptPendingFiles — un invité restreint à .txt et audio', () => {
+  const closedRights = { ...DEFAULT_USER_PERMISSIONS, canSendFiles: false, canSendImages: false };
+  const guest = { kinds: ['text', 'audio'] as const, language: 'fr' as const };
+  const typed = (name: string, type: string): File => new File(['x'], name, { type });
+
+  test('un .txt passe, même quand le droit instantané des fichiers est fermé', () => {
+    const outcome = acceptPendingFiles({ current: [], files: [typed('notes.txt', 'text/plain')], rights: closedRights, guest });
+    expect(outcome.list).toHaveLength(1);
+    expect(outcome.refusal).toBeUndefined();
+  });
+
+  test('un PDF est écarté, et la phrase dit ce qui passe', () => {
+    const outcome = acceptPendingFiles({ current: [], files: [typed('guide.pdf', 'application/pdf')], guest });
+    expect(outcome.list).toHaveLength(0);
+    expect(outcome.refusal).toBe('« guide.pdf » n’est pas accepté ici : seuls les fichiers texte (.txt) et audio passent.');
+  });
+
+  test('un refus dans la sélection n’ajoute rien d’autre', () => {
+    const outcome = acceptPendingFiles({ current: [], files: [typed('voix.mp3', 'audio/mpeg'), typed('plage.jpg', 'image/jpeg')], guest });
+    expect(outcome.list).toHaveLength(0);
+    expect(outcome.refusal).toContain('plage.jpg');
+  });
+});

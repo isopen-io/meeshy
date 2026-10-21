@@ -9,6 +9,7 @@ import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendInternalError, sendError } from '../../utils/response';
 import { validatePagination } from '../../utils/pagination';
+import { RANKING_SOURCE_OF_SCOPE, newFeedRequestId, rankedListingPage, withRankingSource, type RankedScope } from '../../services/social/listingContext';
 import { getCacheStore } from '../../services/CacheStore';
 import { wireReaderFromRequest, type WireReader } from '../../services/posts/storyEffectsV3';
 import { viewerFromRequest } from '../users/presence-gate';
@@ -124,6 +125,8 @@ type CursorPaginationAvecForme = CursorPaginationMeta & {
 type MetaAvecTombstonesGeneralises = ResponseMeta & {
   readonly deletedIds: string[];
   readonly deletedIdsTruncated: boolean;
+  /** Identifiant opaque de la page (#10501), recopié par l'impression du client. */
+  readonly feedRequestId: string;
 };
 
 /** Résultat commun aux huit lecteurs `charger*` — la forme que `PostFeedService`
@@ -145,7 +148,7 @@ type ScopedFeedResult = {
  * la route neuve n'a aucune compatibilité à préserver et n'a pas de raison
  * de reconduire cet oubli.
  */
-function envoyerFeedUnifie(reply: FastifyReply, resultat: ScopedFeedResult, limit: number): void {
+function envoyerFeedUnifie(reply: FastifyReply, resultat: ScopedFeedResult, limit: number, scope: RankedScope): void {
   reply.header('Cache-Control', 'private, no-cache');
   const pagination: CursorPaginationAvecForme = {
     limit,
@@ -156,8 +159,9 @@ function envoyerFeedUnifie(reply: FastifyReply, resultat: ScopedFeedResult, limi
   const meta: MetaAvecTombstonesGeneralises = {
     deletedIds: resultat.deletedIds ?? [],
     deletedIdsTruncated: resultat.deletedIdsTruncated ?? false,
+    feedRequestId: newFeedRequestId(),
   };
-  sendSuccess(reply, resultat.items, { pagination, meta });
+  sendSuccess(reply, withRankingSource(resultat.items, RANKING_SOURCE_OF_SCOPE[scope]), { pagination, meta });
 }
 
 /** Même tolérance que l'alias historique de `/posts/feed/stories` (G1) :
@@ -784,11 +788,11 @@ export function registerFeedRoutes(
       // `PostFeedService` lui-même — inchangé, cf. son `buildVisibilityFilter`.
       if (q.scope === 'author') {
         const resultat = await chargerAuthor(q.authorId, registeredUserId, { cursor: q.cursor, limit: q.limit }, reader);
-        return envoyerFeedUnifie(reply, resultat, q.limit);
+        return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
       }
       if (q.scope === 'community') {
         const resultat = await chargerCommunity(q.communityId, registeredUserId, { cursor: q.cursor, limit: q.limit }, reader);
-        return envoyerFeedUnifie(reply, resultat, q.limit);
+        return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
       }
 
       // Les neuf scopes restants exigent un compte enregistré — même garde
@@ -806,7 +810,7 @@ export function registerFeedRoutes(
       switch (q.scope) {
         case 'home': {
           const resultat = await chargerHome(viewerId, { cursor: q.cursor, limit: q.limit }, reader);
-          return envoyerFeedUnifie(reply, resultat, q.limit);
+          return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
         }
         case 'stories': {
           const resultat = await chargerStories(
@@ -820,15 +824,15 @@ export function registerFeedRoutes(
             viewerRole,
             reader,
           );
-          return envoyerFeedUnifie(reply, resultat, q.limit);
+          return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
         }
         case 'stories.mine': {
           const resultat = await chargerStoriesMine(viewerId, { cursor: q.cursor, limit: q.limit }, viewerRole, reader);
-          return envoyerFeedUnifie(reply, resultat, q.limit);
+          return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
         }
         case 'reels': {
           const resultat = await chargerReels(viewerId, { cursor: q.cursor, limit: q.limit, seed: q.seed }, reader);
-          return envoyerFeedUnifie(reply, resultat, q.limit);
+          return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
         }
         case 'statuses': {
           const resultat = await chargerStatuses(
@@ -837,19 +841,22 @@ export function registerFeedRoutes(
             q.audience === 'public' ? 'public' : undefined,
             reader,
           );
-          return envoyerFeedUnifie(reply, resultat, q.limit);
+          return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
         }
         case 'bookmarks': {
           const resultat = await chargerBookmarks(viewerId, { cursor: q.cursor, limit: q.limit }, reader);
-          return envoyerFeedUnifie(reply, resultat, q.limit);
+          return envoyerFeedUnifie(reply, resultat, q.limit, q.scope);
         }
         // #4346 — les trois scopes ci-dessous NE PASSENT PAS par
         // `envoyerFeedUnifie` : leur réponse doit rester IDENTIQUE, clé à
         // clé, à celle de leur route historique (témoin de parité, § tête de
-        // fichier) — l'enveloppe `form`/`meta` casserait cette parité.
+        // fichier) — l'enveloppe `form`/tombstones casserait cette parité.
+        // Le contexte de listing (#10501) passe par `rankedListingPage`, que
+        // les routes historiques appellent aussi.
         case 'hashtag': {
           const resultat = await chargerPostsParHashtag(prisma, q.tag, viewerId, { cursor: q.cursor, limit: q.limit }, reader);
-          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+          const page = rankedListingPage(resultat, 'hashtag');
+          return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
         }
         case 'sound': {
           // Même garde de forme que l'alias historique (`OBJECT_ID.test`,
@@ -858,7 +865,8 @@ export function registerFeedRoutes(
             return sendBadRequest(reply, 'Invalid sound id', { code: 'VALIDATION_ERROR' });
           }
           const resultat = await chargerPostsParSon(prisma, q.soundId, { cursor: q.cursor, limit: q.limit });
-          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+          const page = rankedListingPage(resultat, 'sound');
+          return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
         }
         case 'nearby': {
           // Plafond de débit INDÉPENDANT de celui de `GET /posts/nearby`
@@ -880,7 +888,8 @@ export function registerFeedRoutes(
             { lat: q.lat, lng: q.lng, radiusKm: q.radiusKm, cursor: q.cursor, limit: q.limit },
             reader,
           );
-          return sendSuccess(reply, resultat.data, { pagination: resultat.pagination });
+          const page = rankedListingPage(resultat, 'nearby');
+          return sendSuccess(reply, page.data, { pagination: page.pagination, meta: page.meta });
         }
       }
     } catch (error) {

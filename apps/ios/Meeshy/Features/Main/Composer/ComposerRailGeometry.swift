@@ -59,15 +59,9 @@ nonisolated enum ComposerRailGeometry {
     /// scène — l'ambiguïté même que l'encastrement existe pour lever.
     static let gutter: CGFloat = 8
 
-    /// **Le disque de verre d'un bouton FLOTTANT** (directive porteur
-    /// 2026-09-28 : « réduis la taille des boutons flottants liquidglass »).
-    /// Le DESSIN rétrécit, jamais la cible : le cadre du bouton garde
-    /// `railWidth`, et c'est l'écart entre deux cadres qui se resserre
-    /// (`floatingEntrySpacing`) pour que les disques gardent leur respiration.
-    static let floatingButtonSize: CGFloat = 36
-
-    /// L'écart entre deux CADRES de 44 pt dont le disque n'en dessine que 36 :
-    /// `2 + 2 × 4 = 10 pt` entre deux disques, la respiration d'avant.
+    /// L'écart entre deux CADRES de 44 pt d'un rail flottant. Les boutons n'ont
+    /// plus de disque de verre (#10358, #10364) : le cadre reste la cible, et
+    /// ce resserrement garde la colonne de glyphes compacte.
     static let floatingEntrySpacing: CGFloat = 2
 
     /// **La remontée des deux rails flottants** (même directive : « remonte-les
@@ -217,4 +211,50 @@ nonisolated enum ComposerRailGeometry {
     /// Une rangée se mesure LÀ, jamais sur l'appareil de développement : le
     /// débordement du 2026-08-31 a été vu sur 393 pt, il commençait à 375.
     static let narrowestSupportedScreenWidth: CGFloat = 375
+
+    // MARK: - La bande VERTICALE du rail droit (#10542)
+
+    /// **La hauteur qu'une colonne flottante REQUIERT** : `n × 44 + (n−1) × 2`.
+    /// Quinze entrées — les sous-outils d'un texte, ses actions, le `(x)` et
+    /// l'historique — demandent **688 pt**, quand une carte 9:16 de 393 pt de
+    /// large en offre 699. Le ressort d'une colonne dont le pied reste au pouce
+    /// ajoute son plancher et l'écart qui l'entoure.
+    static func columnHeight(entries: Int, withSpring: Bool = false) -> CGFloat {
+        guard entries > 0 else { return 0 }
+        return CGFloat(entries) * railWidth
+            + CGFloat(entries - 1 + (withSpring ? 2 : 0)) * floatingEntrySpacing
+    }
+
+    /// **Où le rail droit se pose dans la scène libre** — ses deux marges,
+    /// depuis le haut et depuis le bas de cette zone (retour porteur
+    /// 2026-10-13, iOS 17.5 : le premier outil d'un texte sortait de la carte).
+    ///
+    /// Un outil ouvert retire la barre haute (#9138) : la scène libre remonte
+    /// alors jusqu'à la zone sûre, au-dessus de la carte, que son calque cadre
+    /// sur une hauteur constante. Le rail part donc du haut de la CARTE, jamais
+    /// de celui de la zone.
+    ///
+    /// En bas, il garde la remontée que les deux rails partagent
+    /// (`floatingBottomInset`) et ne la rend que si la colonne ne tient pas
+    /// au-dessus — jusqu'au bord bas de la carte au plus. Ce qui ne tient
+    /// toujours pas DÉFILE (`ViewThatFits`, dans le rail) : resserrer, puis
+    /// défiler, jamais déborder.
+    ///
+    /// Les deux cadres sont dans le même repère. Sans mesure, ou si la carte
+    /// ne laisse pas la place d'un bouton, les marges de repos.
+    static func trailingRailBand(freeZone: CGRect, card: CGRect, columnHeight: CGFloat) -> ComposerRailBand {
+        let repos = ComposerRailBand(top: gutter, bottom: floatingBottomInset)
+        guard !freeZone.isNull, !card.isNull, freeZone.height > 0, card.height > 0 else { return repos }
+        let top = max(repos.top, card.minY - freeZone.minY)
+        guard freeZone.height - top - repos.bottom >= railWidth else { return repos }
+        let plancher = min(repos.bottom, max(gutter, freeZone.maxY - card.maxY))
+        let requis = freeZone.height - top - columnHeight
+        return ComposerRailBand(top: top, bottom: min(repos.bottom, max(plancher, requis)))
+    }
+}
+
+/// Les deux marges verticales d'un rail dans la scène libre (#10542).
+nonisolated struct ComposerRailBand: Equatable, Sendable {
+    let top: CGFloat
+    let bottom: CGFloat
 }

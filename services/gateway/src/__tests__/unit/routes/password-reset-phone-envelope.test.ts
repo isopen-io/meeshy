@@ -82,6 +82,8 @@ jest.mock('../../../utils/rate-limiter.js', () => ({
   createPhoneResetIdentityRateLimiter: jest.fn(() => ({ middleware: () => passeTout() })),
   createPhoneResetCodeRateLimiter: jest.fn(() => ({ middleware: () => passeTout() })),
   createPhoneResetResendRateLimiter: jest.fn(() => ({ middleware: () => passeTout() })),
+  createResetTokenVerifyIpRateLimiter: jest.fn(() => ({ middleware: () => passeTout() })),
+  createResetTokenVerifyTokenRateLimiter: jest.fn(() => ({ middleware: () => passeTout() })),
 }));
 
 // Les schémas partagés ne sont PAS doublés : les doubler désarmerait

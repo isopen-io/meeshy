@@ -95,8 +95,8 @@ extension UniversalComposerBar {
         let result = ComposerTextFormat.toggle(text: text, start: range.start, end: range.end, style: style)
         text = result.text
         selectionText = result.text
-        let lower = text.index(text.startIndex, offsetBy: result.start)
-        let upper = text.index(text.startIndex, offsetBy: result.end)
+        let lower = text.index(text.startIndex, offsetBy: result.start, limitedBy: text.endIndex) ?? text.endIndex
+        let upper = text.index(text.startIndex, offsetBy: result.end, limitedBy: text.endIndex) ?? text.endIndex
         formatSelectionStorage = TextSelection(range: lower..<upper)
     }
 }

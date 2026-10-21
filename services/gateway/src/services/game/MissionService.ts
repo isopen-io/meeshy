@@ -25,9 +25,10 @@ import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
 import { isEngagementAxisKey } from '@meeshy/shared/types/engagement';
 import type { GameChestReward, GameMission } from '@meeshy/shared/types/game';
 import { PRISM_HOUR_MULTIPLIER, isInPrismHour, prismHourWindow } from '@meeshy/shared/utils/game/boosts';
-import { dailyChest, type DailyChest } from '@meeshy/shared/utils/game/chest';
+import { chestPriceCutoff, dailyChest, dayEffort, type DailyChest } from '@meeshy/shared/utils/game/chest';
+import { meeshPrice } from '@meeshy/shared/utils/game/mint';
 import { FLAME_FREEZE_MAX, flameStatus } from '@meeshy/shared/utils/game/flame';
-import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
+import { SPARKS_USER_SELECT, currentLevelOf, levelSparksOf, sparksOf, unlockLevelOf } from './SparksFacts';
 import {
   MISSIONS_MIN_LEVEL,
   MISSION_DIFFICULTIES,
@@ -49,6 +50,8 @@ import { MeeshSpend } from './MeeshSpend';
 import { dayKeyOf, minuteOfDayInTimezone } from './gameClock';
 import { MISSION_PROFILE_USER_SELECT, missionProfileOf } from './MissionHabits';
 import { meeshTotalsFromLedger } from '../meesh/MeeshService';
+import { starFragmentsOf } from './StarFragments';
+import { stampGameRevisionAfterWrite } from './GameRevision';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
 const log = enhancedLogger.child({ module: 'MissionService' });
@@ -64,7 +67,7 @@ export const GAME_BONUS_AXIS: EngagementAxisKey = 'content.text_message';
 /** Trois missions par jour : facile, moyenne, difficile (ou Or). */
 export const DAILY_MISSION_SLOTS = 3;
 
-const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, engagementScore: true, levelRecord: true } as const;
+const USER_GAME_SELECT = { ...FLAME_USER_SELECT, ...MISSION_PROFILE_USER_SELECT, ...SPARKS_USER_SELECT } as const;
 
 /**
  * Les trois missions du JOUR, à l'exclusion de la mission personnelle (#9539, emplacement 3) : le coffre,
@@ -80,7 +83,8 @@ export const READ_ONLY_CREDIT: MissionServiceDeps['creditPoints'] = async () => 
 export type MissionServiceDeps = {
   /** Crédite des points de jeu au score et à un axe — `EngagementService.creditGamePoints`. */
   readonly creditPoints: (userId: string, points: number, axisKey: EngagementAxisKey) => Promise<void>;
-  readonly chest?: (params: { readonly userId: string; readonly dayKey: string }) => DailyChest;
+  /** Le coffre du jour — la loi partagée par défaut ; `effort` est celui des trois missions du jour (#10011). */
+  readonly chest?: (params: { readonly userId: string; readonly dayKey: string; readonly effort: number; readonly nextMeeshPrice: number }) => DailyChest;
   readonly glory?: GloryService;
   /**
    * Une mission vient d'être ACHEVÉE ET PAYÉE (#9386) : la saison en tire ses
@@ -107,7 +111,50 @@ export type SignalOptions = {
   readonly record?: number;
 };
 
-export type ChestResult = { readonly status: 'claimed' | 'already-claimed'; readonly reward: GameChestReward; readonly score: number };
+export type ChestResult = {
+  readonly status: 'claimed' | 'already-claimed';
+  readonly reward: GameChestReward;
+  readonly score: number;
+  /** Les fragments d'étoile collectés après l'ouverture (#10011) — absent quand la lecture tombe. */
+  readonly starFragments?: { readonly collected: number };
+};
+
+export type ChestDayColumns = {
+  chestPoints: number | null;
+  chestFragment: boolean | null;
+  chestFreeze: boolean | null;
+  chestGlory?: number | null;
+  chestBonus?: string | null;
+  chestBonusPoints?: number | null;
+};
+
+const CHEST_BONUSES = ['none', 'fifth', 'whole'] as const;
+const isChestBonus = (value: unknown): value is (typeof CHEST_BONUSES)[number] =>
+  typeof value === 'string' && (CHEST_BONUSES as readonly string[]).includes(value);
+
+/**
+ * Le contenu GRAVÉ d'un coffre ouvert, tel qu'il se sert. Un coffre ouvert avant #10011 n'a ni Gloire ni prime :
+ * la prime n'est servie que si elle est gravée. `fragment: true` veut dire « un fragment d'étoile trouvé ».
+ */
+export function chestRewardOf(day: ChestDayColumns | null): GameChestReward {
+  return {
+    points: day?.chestPoints ?? 0,
+    fragment: day?.chestFragment ?? false,
+    freeze: day?.chestFreeze ?? false,
+    glory: day?.chestGlory ?? 0,
+    ...(isChestBonus(day?.chestBonus) ? { bonus: day.chestBonus, bonusPoints: day?.chestBonusPoints ?? 0 } : {}),
+  };
+}
+
+const CHEST_CLEARED = {
+  chestClaimedAt: null,
+  chestPoints: null,
+  chestFragment: null,
+  chestFreeze: null,
+  chestGlory: null,
+  chestBonus: null,
+  chestBonusPoints: null,
+} as const;
 
 /**
  * « Pas encore faite » — le champ À NULL **ou ABSENT**. Sur MongoDB, Prisma ne fait
@@ -116,6 +163,9 @@ export type ChestResult = { readonly status: 'claimed' | 'already-claimed'; read
  */
 const NOT_COMPLETED = { OR: [{ completedAt: null }, { completedAt: { isSet: false } }] };
 const CHEST_UNCLAIMED = { OR: [{ chestClaimedAt: null }, { chestClaimedAt: { isSet: false } }] };
+/** Un cours de prime pas encore gravé (#10219) : absent du document, ou `null`. */
+const MINT_BASE_UNSET = { OR: [{ chestMintBase: null }, { chestMintBase: { isSet: false } }] };
+
 
 function isP2002(err: unknown): boolean {
   return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'P2002';
@@ -252,8 +302,9 @@ export class MissionService {
     const user = await this.userRow(userId);
     const recent = await this.recentMissions(userId);
     const dayKey = resolveGameDayKey({ candidate: dayKeyOf(now, user?.timezone), latest: latestOpenedDay(recent), now });
-    const level = levelForUnlocks({ score: user?.engagementScore ?? 0, levelRecord: user?.levelRecord ?? null });
-    const record = Math.max(level, user?.levelRecord ?? 0);
+    // Le niveau se lit sur le CYCLE d'étincelles ; l'ouverture des missions, sur le max à vie (#10846).
+    const level = currentLevelOf(user);
+    const record = unlockLevelOf(user);
     const unlocked = record >= MISSIONS_MIN_LEVEL;
 
     const facts = flameFactsOf(user ?? {}, now);
@@ -351,14 +402,20 @@ export class MissionService {
     const reachable = (row: DailyMission): boolean =>
       row.slot !== PERSONAL_MISSION_SLOT ||
       (row.startsAt != null && row.endsAt != null && isPersonalMissionOpen({ startsAt: row.startsAt, endsAt: row.endsAt, now }));
+    let advanced = false;
     for (const row of rows.filter((r) => r.signal === signal && r.completedAt === null && reachable(r))) {
       const progress = options.key !== undefined
         ? await this.advanceDistinct(row, options.key)
         : await this.advanceCounted(row, options.amount ?? 1);
-      if (progress !== null && progress >= row.target) {
+      if (progress === null) continue;
+      advanced = true;
+      if (progress >= row.target) {
         await this.complete(row, now, timezone ?? (await this.userRow(userId))?.timezone ?? null);
       }
     }
+    // La progression d'une mission est servie dans le bloc : la révision de l'état du jeu monte (#10912), après toutes
+    // les écritures du geste.
+    if (advanced) await stampGameRevisionAfterWrite(this.prisma, userId);
   }
 
   private async advanceCounted(row: DailyMission, amount: number): Promise<number> {
@@ -431,7 +488,7 @@ export class MissionService {
     if (present) return;
     try {
       await this.prisma.gameDay.create({
-        data: { userId, dayKey, chestClaimedAt: null, chestPoints: null, chestFragment: null, chestFreeze: null },
+        data: { userId, dayKey, ...CHEST_CLEARED },
       });
     } catch (err) {
       if (!isP2002(err)) throw err;
@@ -457,7 +514,7 @@ export class MissionService {
       // La mission personnelle (#9539) est la SIENNE : tirée sur ses usages et sa plage, elle ne se change pas.
       if (row.slot === PERSONAL_MISSION_SLOT) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const account = await db.user.findUnique({ where: { id: userId }, select: USER_GAME_SELECT });
-      const record = Math.max(levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }), account?.levelRecord ?? 0);
+      const record = unlockLevelOf(account);
       if (record < MISSIONS_MIN_LEVEL) throw new GameRefusal('MISSIONS_LOCKED');
       if (row.completedAt !== null) throw new GameRefusal('MISSION_REROLL_UNAVAILABLE');
       const day = await db.gameDay.findUnique({ where: { userId_dayKey: { userId, dayKey } }, select: { rerollCount: true } });
@@ -484,7 +541,7 @@ export class MissionService {
           profile,
           userId,
           dayKey,
-          level: levelForUnlocks({ score: account?.engagementScore ?? 0, levelRecord: account?.levelRecord ?? null }),
+          level: currentLevelOf(account),
           flameDays: status === 'out' ? 0 : facts.streak,
           missions: all.map(drawnOf),
           index: row.slot,
@@ -527,7 +584,17 @@ export class MissionService {
     return { mission: toGameMission(row), balance: outcome.balance };
   }
 
-  /** Ouvre le coffre du jour — réclamable une fois les trois missions faites. */
+  /**
+   * Ouvre le coffre du jour — réclamable une fois les trois missions faites.
+   *
+   * Son contenu suit l'EFFORT des trois missions du jour (#10011) : des points (500 à 10 000), de la Gloire, une
+   * prime en points au cours de la Meesh du compte FIGÉ au début du jour de jeu (`chestPriceBase`, #10219 : une
+   * frappe du jour ne la fait pas monter), UN fragment d'étoile une fois sur six et un gel une fois sur vingt. Comme une mission
+   * (`complete`), la réclamation est un `updateMany` conditionnel, puis la Gloire (idempotente, `chest:<jour>`) et
+   * les points (prime comprise) se créditent ; si l'un échoue, le coffre est rendu et un nouvel essai ne paie la
+   * Gloire qu'une fois. Le fragment d'étoile est gravé sur la journée DANS la réclamation : rendre le coffre
+   * l'efface avec lui, et le total collecté (`StarFragments`) le lit. Le coffre ne frappe aucune Meesh.
+   */
   async claimChest(params: { readonly userId: string; readonly requestId: string; readonly now?: Date }): Promise<ChestResult> {
     const { userId } = params;
     const now = params.now ?? new Date();
@@ -541,30 +608,57 @@ export class MissionService {
     if (rows.length < DAILY_MISSION_SLOTS || rows.some((r) => r.completedAt === null)) throw new GameRefusal('CHEST_NOT_READY');
 
     await this.ensureGameDay(userId, dayKey);
-    const reward = this.chestOf({ userId, dayKey });
+    const mintBase = await this.chestPriceBase({ userId, now, dayKey });
+    const chest = this.chestOf({ userId, dayKey, effort: dayEffort(rows), nextMeeshPrice: meeshPrice(mintBase + 1) });
     const claimed = await this.prisma.gameDay.updateMany({
       where: { userId, dayKey, ...CHEST_UNCLAIMED },
-      data: { chestClaimedAt: now, chestPoints: reward.points, chestFragment: reward.fragment, chestFreeze: reward.freeze },
+      data: {
+        chestClaimedAt: now,
+        chestPoints: chest.points,
+        chestFragment: chest.fragment,
+        chestFreeze: chest.freeze,
+        chestGlory: chest.glory,
+        chestBonus: chest.bonus,
+        chestBonusPoints: chest.bonusPoints,
+      },
     });
     if (claimed.count === 0) return this.alreadyClaimed(userId, await this.gameDay(userId, dayKey));
 
     try {
-      await this.deps.creditPoints(userId, reward.points, GAME_BONUS_AXIS);
+      if (chest.glory > 0) {
+        await this.glory.credit({
+          userId,
+          delta: chest.glory,
+          reason: 'chest',
+          requestId: `chest:${dayKey}`,
+          meta: { dayKey, points: chest.points },
+        });
+      }
+      await this.deps.creditPoints(userId, chest.points, GAME_BONUS_AXIS);
     } catch (error) {
-      await this.prisma.gameDay.updateMany({
-        where: { userId, dayKey, chestClaimedAt: now },
-        data: { chestClaimedAt: null, chestPoints: null, chestFragment: null, chestFreeze: null },
-      });
+      await this.prisma.gameDay.updateMany({ where: { userId, dayKey, chestClaimedAt: now }, data: CHEST_CLEARED });
       throw error;
     }
     // Les points sont PAYÉS : rendre le coffre maintenant les ferait payer deux
     // fois. Le gel offert est un appoint — son échec se journalise, sans plus.
-    if (reward.freeze) {
+    if (chest.freeze) {
       await this.grantFreeze(userId).catch((error: unknown) =>
         log.warn('chest freeze not granted', { userId, error: error instanceof Error ? error.message : String(error) }),
       );
     }
-    return { status: 'claimed', reward, score: (await this.userRow(userId))?.engagementScore ?? 0 };
+    return {
+      status: 'claimed',
+      reward: {
+        points: chest.points,
+        fragment: chest.fragment,
+        freeze: chest.freeze,
+        glory: chest.glory,
+        bonus: chest.bonus,
+        bonusPoints: chest.bonusPoints,
+      },
+      score: levelSparksOf(sparksOf(await this.userRow(userId))),
+      ...(await this.starFragmentsServed(userId)),
+    };
   }
 
   /**
@@ -582,19 +676,58 @@ export class MissionService {
         where: { id: userId, ...flameFreezesUnchanged(row.flameFreezes) },
         data: { flameFreezes: freezes + 1 },
       });
-      if (written.count === 1) return;
+      if (written.count === 1) {
+        await stampGameRevisionAfterWrite(this.prisma, userId);
+        return;
+      }
     }
     throw new Error('chest freeze contended');
   }
 
-  private async alreadyClaimed(
-    userId: string,
-    day: { chestPoints: number | null; chestFragment: boolean | null; chestFreeze: boolean | null } | null,
-  ): Promise<ChestResult> {
+  /**
+   * LE COURS DE LA PRIME DU JOUR (#10219) — les Meeshes frappées AVANT l'ouverture du jour de jeu (le tirage de ses
+   * missions, `chestPriceCutoff`), gravées sur `GameDay.chestMintBase` à la première lecture (le bloc `game` ou la
+   * réclamation) et relues ensuite telles quelles : l'affichage d'avant l'ouverture et la réclamation tirent la prime
+   * au MÊME cours, et une frappe du jour n'y change rien. Le compte est UNE requête bornée par l'instant d'ouverture :
+   * une frappe concurrente, postérieure, n'y entre pas ; le fuseau n'y entre pas non plus. La gravure est
+   * conditionnelle (`chestMintBase` absent) : la première gagne. Une journée sans gravure (ouverte avant #10219) se
+   * grave à sa lecture suivante.
+   */
+  async chestPriceBase(params: {
+    readonly userId: string;
+    readonly now?: Date;
+    readonly dayKey?: string;
+  }): Promise<number> {
+    const { userId } = params;
+    const now = params.now ?? new Date();
+    const dayKey = params.dayKey ?? (await this.gameDayKey(userId, (await this.userRow(userId))?.timezone, now));
+
+    const engraved = (await this.gameDay(userId, dayKey))?.chestMintBase;
+    if (typeof engraved === 'number') return engraved;
+
+    const missions = await this.prisma.dailyMission.findMany({ where: { userId, dayKey }, select: { createdAt: true } });
+    const cutoff = chestPriceCutoff({ missionsOpenedAt: missions.map((row) => row.createdAt), now });
+    const base = await this.prisma.meeshLedger.count({ where: { userId, reason: 'mint', createdAt: { lt: cutoff } } });
+
+    await this.ensureGameDay(userId, dayKey);
+    await this.prisma.gameDay.updateMany({ where: { userId, dayKey, ...MINT_BASE_UNSET }, data: { chestMintBase: base } });
+    const settled = (await this.gameDay(userId, dayKey))?.chestMintBase;
+    return typeof settled === 'number' ? settled : base;
+  }
+
+  /** Rejouer rend le contenu GRAVÉ, et le même total : une réclamation rejouée ne compte jamais deux fois. */
+  private async alreadyClaimed(userId: string, day: ChestDayColumns | null): Promise<ChestResult> {
     return {
       status: 'already-claimed',
-      reward: { points: day?.chestPoints ?? 0, fragment: day?.chestFragment ?? false, freeze: day?.chestFreeze ?? false },
-      score: (await this.userRow(userId))?.engagementScore ?? 0,
+      reward: chestRewardOf(day),
+      score: levelSparksOf(sparksOf(await this.userRow(userId))),
+      ...(await this.starFragmentsServed(userId)),
     };
+  }
+
+  /** Le total collecté : une LECTURE, qui ne retient jamais un coffre payé. */
+  private async starFragmentsServed(userId: string): Promise<{ starFragments?: { collected: number } }> {
+    const collected = await starFragmentsOf(this.prisma, userId).catch(() => null);
+    return collected === null ? {} : { starFragments: { collected } };
   }
 }

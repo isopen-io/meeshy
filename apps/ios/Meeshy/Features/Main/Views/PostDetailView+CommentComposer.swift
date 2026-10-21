@@ -76,6 +76,10 @@ extension PostDetailView {
                 || CommentQuotationStore.shared.quotation(for: postId) != nil,
             onPhotoLibrary: { showCommentPhotoPicker = true },
             onFilePicker: { showCommentFilePicker = true },
+            // Le panneau « + » retient la scène comme le clavier (#10544) :
+            // dit AVANT qu'il ne se monte, relâché quand il se referme.
+            onShowAttachments: { sceneMeasures = sceneMeasures.recordingInputPanel(open: true) },
+            onAttachmentsVisibilityChange: { sceneMeasures = sceneMeasures.recordingInputPanel(open: $0) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
             externalAttachments: commentAttachments,
@@ -93,7 +97,7 @@ extension PostDetailView {
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: MAX_POST_MEDIA,
-            matching: .any(of: [.images, .videos])
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current
         )
         .fileImporter(
             isPresented: $showCommentFilePicker,
@@ -258,4 +262,98 @@ extension PostDetailView {
         }
     }
     #endif
+}
+
+extension PostDetailView {
+
+    var replyBannerView: AnyView? {
+        // Mode ÉDITION : bandeau dédié (prioritaire sur la réponse).
+        if let editing = viewModel.editingComment {
+            return AnyView(
+                HStack(spacing: MeeshySpacing.sm) {
+                    Image(systemName: "pencil")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Color(hex: accentColor))
+                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                        Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(theme.textSecondary)
+                        Text(editing.displayContent)
+                            .font(.caption)
+                            .foregroundColor(theme.textMuted)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                            cancelEditComment()
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2.bold())
+                            .foregroundColor(theme.textMuted)
+                            .frame(width: 24, height: 24)
+                            .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                    }
+                    .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+                    .meeshyTapTarget(MeeshyControlSize.tapTarget)
+                }
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.vertical, MeeshySpacing.sm)
+                .background(
+                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                        .fill(theme.surfaceGradient(tint: accentColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                                .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                        )
+                )
+            )
+        }
+        guard let reply = viewModel.replyingTo else { return nil }
+        return AnyView(
+            HStack(spacing: MeeshySpacing.sm) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color(hex: reply.authorColor))
+                    .frame(width: 3, height: 36)
+
+                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                    Text(reply.author)
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Color(hex: reply.authorColor))
+
+                    Text(reply.displayContent)
+                        .font(.caption)
+                        .foregroundColor(theme.textSecondary)
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                Button {
+                    withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                        viewModel.clearReply()
+                    }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption2.bold())
+                        .foregroundColor(theme.textMuted)
+                        .frame(width: 24, height: 24)
+                        .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
+                }
+                .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
+                .meeshyTapTarget(MeeshyControlSize.tapTarget)
+            }
+            .padding(.horizontal, MeeshySpacing.md)
+            .padding(.vertical, MeeshySpacing.sm)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.surfaceGradient(tint: accentColor))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
+                    )
+            )
+        )
+    }
 }

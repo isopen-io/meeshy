@@ -282,6 +282,24 @@ final class MessageStoreTests: XCTestCase {
         )
     }
 
+    // MARK: - Recherche filtrée : un id ne tombe que dans un paquet
+
+    func test_searchIdChunks_overlappingPages_neverRepeatAnId() {
+        // 905 résultats dont un recouvrement de pages : « S0 » revient au-delà
+        // du premier paquet de 900.
+        let ids = (0..<905).map { "S\($0)" } + ["S0", "S3"]
+        let chunks = MessageStore.searchIdChunks(ids)
+        let flat = chunks.flatMap { $0 }
+        XCTAssertEqual(flat.count, Set(flat).count, "un même id dans deux paquets ramène la même ligne deux fois")
+        XCTAssertEqual(flat.count, 905)
+        XCTAssertTrue(chunks.allSatisfy { $0.count <= 900 }, "plafond SQLite des IN")
+    }
+
+    func test_searchIdChunks_emptyOrTinySize_staysWellFormed() {
+        XCTAssertEqual(MessageStore.searchIdChunks([]), [])
+        XCTAssertEqual(MessageStore.searchIdChunks(["a", "b", "a"], size: 0), [["a"], ["b"]])
+    }
+
     // MARK: - Duplicate server-id collapse (publish-boundary guard)
 
     func test_collapsingDuplicateServerIds_noCollision_returnsInputUnchanged() {

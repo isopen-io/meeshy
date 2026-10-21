@@ -13,6 +13,9 @@ struct ChangePasswordView: View {
     @State private var isSaving = false
     @State private var errorMessage: String?
     @State private var showSuccess = false
+    /// #9186 — `security.hasPassword` servi par la passerelle ; `nil` tant
+    /// qu'il est inconnu, et le formulaire reste celui d'un changement.
+    @State private var hasPassword: Bool?
     @FocusState private var focusedField: Field?
 
     private let accentColor = MeeshyColors.brandPrimaryHex
@@ -21,15 +24,18 @@ struct ChangePasswordView: View {
         case current, newPass, confirm
     }
 
-    private var passwordsMatch: Bool {
-        !newPassword.isEmpty && newPassword == confirmPassword
+    private var form: PasswordChangeForm {
+        PasswordChangeForm(
+            hasPassword: hasPassword,
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+            confirmPassword: confirmPassword
+        )
     }
 
-    private var isValid: Bool {
-        !currentPassword.isEmpty
-        && newPassword.count >= 8
-        && passwordsMatch
-    }
+    private var passwordsMatch: Bool { form.passwordsMatch }
+
+    private var isValid: Bool { form.canSubmit }
 
     var body: some View {
         ZStack {
@@ -51,13 +57,18 @@ struct ChangePasswordView: View {
                 successOverlay
             }
         }
+        .task {
+            hasPassword = try? await AuthService.shared.hasPassword()
+        }
     }
 
     // MARK: - Form Content
 
     private var formContent: some View {
         VStack(spacing: MeeshySpacing.xxl) {
-            currentPasswordSection
+            if form.asksCurrentPassword {
+                currentPasswordSection
+            }
             newPasswordSection
             validationHints
             saveButton
@@ -147,7 +158,7 @@ struct ChangePasswordView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
             validationRow(
                 text: String(localized: "auth.password.change.validation.length", defaultValue: "Minimum 8 caractères", bundle: .main),
-                met: newPassword.count >= 8
+                met: form.meetsMinLength
             )
             validationRow(
                 text: String(localized: "auth.password.change.validation.match", defaultValue: "Les mots de passe correspondent", bundle: .main),
@@ -201,7 +212,9 @@ struct ChangePasswordView: View {
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text(String(localized: "auth.password.change.submit", defaultValue: "Changer le mot de passe", bundle: .main))
+                    Text(form.asksCurrentPassword
+                         ? String(localized: "auth.password.change.submit", defaultValue: "Changer le mot de passe", bundle: .main)
+                         : String(localized: "auth.password.set.submit", defaultValue: "Définir le mot de passe", bundle: .main))
                         .font(.subheadline.weight(.bold))
                 }
                 .foregroundColor(.white)
@@ -232,7 +245,9 @@ struct ChangePasswordView: View {
                 .foregroundColor(MeeshyColors.success)
                 .accessibilityHidden(true)
 
-            Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifié", bundle: .main))
+            Text(form.asksCurrentPassword
+                 ? String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifié", bundle: .main)
+                 : String(localized: "auth.password.set.success", defaultValue: "Mot de passe défini", bundle: .main))
                 .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
         }
@@ -327,6 +342,7 @@ struct ChangePasswordView: View {
 
     private func changePassword() {
         guard isValid else { return }
+        let submitted = form
 
         isSaving = true
         errorMessage = nil
@@ -335,8 +351,8 @@ struct ChangePasswordView: View {
         Task {
             do {
                 try await AuthService.shared.changePassword(
-                    currentPassword: currentPassword,
-                    newPassword: newPassword
+                    currentPassword: submitted.submittedCurrentPassword,
+                    newPassword: submitted.newPassword
                 )
 
                 HapticFeedback.success()
@@ -350,7 +366,7 @@ struct ChangePasswordView: View {
                 // Le stack réseau ne lève que MeeshyError (pas APIError) : un 400
                 // = « mot de passe actuel incorrect » → message localisé dédié.
                 if case .server(let statusCode, let msg) = error {
-                    errorMessage = statusCode == 400
+                    errorMessage = statusCode == 400 && submitted.asksCurrentPassword
                         ? String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
                         : msg
                 } else {

@@ -57,3 +57,11 @@ public struct UserPresence: Codable, Sendable {
         return .offline
     }
 }
+
+public extension UserSearchResult {
+    /// La présence que la passerelle a SERVIE pour ce résultat (#10944) :
+    /// `nil` quand elle n'en sert aucune — l'avatar ne porte alors aucun point.
+    var servedPresence: PresenceState? {
+        isOnline.map { UserPresence(isOnline: $0).state }
+    }
+}

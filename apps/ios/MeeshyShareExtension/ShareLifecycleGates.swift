@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// Deux verrous purs pour le cycle de vie de l'écran de partage — round 2 de
 /// revue (Critical).
@@ -13,10 +14,15 @@ import Foundation
 ///
 /// Compilés DANS `MeeshyShareExtension` (glob de répertoire) ET listés
 /// explicitement dans les `sources:` de `MeeshyTests` (`project.yml`) — même
-/// précédent que `ShareLimits`/`ShareMediaStaging`/`SharePendingShare` :
-/// l'app-extension n'est pas liable depuis le bundle de tests.
+/// précédent que `ShareMediaStaging`/`SharePendingShare` : l'app-extension
+/// n'est pas liable depuis le bundle de tests.
+///
+/// Depuis l'écran unique (#10947), la question est posée à la FERMETURE de la
+/// feuille : on n'efface les fichiers copiés que si aucun envoi n'a été tenté
+/// et qu'aucune fiche (studio, relais) ne les décrit
+/// (`ShareViewController.finish`, `ExtensionShareDispatcher.holdsStagedMedia`).
 
-/// Décide si le bouton Annuler doit rester actif.
+/// Décide si la fermeture peut effacer les fichiers copiés.
 nonisolated enum ShareCancelPolicy {
     /// Une fois qu'un envoi a été TENTÉ (fiche committée), Annuler n'a plus
     /// de sens : le partage est déjà pris en charge, même différé. Ne dépend
@@ -31,51 +37,31 @@ nonisolated enum ShareCancelPolicy {
 /// Verrou à sens unique : la première invocation de `fireOnce` exécute
 /// l'action et arme le verrou ; toute invocation suivante est un no-op
 /// silencieux. Porte l'invariant « `complete()` ne peut être atteint deux
-/// fois » — qu'un second appel vienne d'`onCancel` (tapé pendant la fenêtre
-/// avant round 2) ou du réveil du `Task` qui appelle `onFinish()`.
+/// fois » — qu'un second appel vienne d'`onCancel` ou du réveil du `Task` qui
+/// appelle `onFinish()`.
 ///
-/// Round 3 de revue (Important) : le corps était auparavant
-/// `guard !hasFired else { return false }; hasFired = true; action()`, SANS
-/// verrou — non atomique, donc deux appels réellement concurrents pouvaient
-/// tous deux franchir le `guard` avant qu'aucun n'ait eu la chance d'écrire
-/// `hasFired`. Ça « marchait » aujourd'hui uniquement parce que les deux
-/// appelants réels (`ShareViewController.swift`, `onCancel`/`onFinish`)
-/// s'exécutent tous les deux sur le MainActor — une coïncidence d'isolation,
-/// pas une garantie du type, alors que le type est délibérément
-/// `nonisolated` et qu'une extension de partage est précisément l'endroit où
-/// des callbacks arrivent sur des files arbitraires. Même idiome que
-/// `ExtractionBox`/`StagingBox` (`ShareViewController.swift`) : `NSLock` +
-/// `@unchecked Sendable` + `nonisolated(unsafe)` sur le stockage — le verrou
-/// EST la synchronisation que le compilateur ne peut pas voir à travers
-/// l'isolation d'acteur. Preuve de la race : `ShareLifecycleGatesTests
+/// La décision d'état est atomique (`OSAllocatedUnfairLock`, `Sendable` par
+/// construction : ni `@unchecked` ni `nonisolated(unsafe)`). Preuve de la race :
+/// `ShareLifecycleGatesTests
 /// .test_fireOnce_underGenuineConcurrentThreads_firesTheActionExactlyOnce`.
-nonisolated final class ShareCompletionGate: @unchecked Sendable {
-    private let lock = NSLock()
-    // `nonisolated(unsafe)` : mutée uniquement sous `lock`, jamais lue ni
-    // écrite ailleurs — même rationale qu'`ExtractionBox.text`/`.url`.
-    nonisolated(unsafe) private var _hasFired = false
+nonisolated final class ShareCompletionGate: Sendable {
+    private let fired = OSAllocatedUnfairLock(initialState: false)
 
     init() {}
 
-    /// Lecture protégée : un accès direct à la variable de stockage
-    /// contournerait le verrou et redeviendrait une lecture non synchronisée.
     var hasFired: Bool {
-        lock.lock(); defer { lock.unlock() }
-        return _hasFired
+        fired.withLock { $0 }
     }
 
     @discardableResult
     func fireOnce(_ action: () -> Void) -> Bool {
-        lock.lock()
-        let shouldFire = !_hasFired
-        if shouldFire { _hasFired = true }
-        lock.unlock()
-
-        // `action()` s'exécute HORS du verrou : elle peut être un closure
-        // arbitraire (ici `extensionContext?.completeRequest`), et tenir le
-        // verrou pendant son exécution risquerait un deadlock si elle
-        // rappelait un jour dans `fireOnce` — la décision d'état, elle,
-        // reste atomique.
+        let shouldFire = fired.withLock { state -> Bool in
+            guard !state else { return false }
+            state = true
+            return true
+        }
+        // `action()` s'exécute HORS du verrou : une action qui rappellerait
+        // `fireOnce` ne doit pas pouvoir s'interbloquer.
         guard shouldFire else { return false }
         action()
         return true

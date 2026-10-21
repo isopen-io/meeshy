@@ -387,9 +387,9 @@ final class FeedViewModelTests: XCTestCase {
         let finishedWhileSaveHeld = await Self.finishes(load, within: .seconds(2))
         XCTAssertFalse(finishedWhileSaveHeld, "loadFeed(forceRefresh:) returned while the fetched page was still being persisted")
 
-        await store.releaseSave()
+        store.releaseSave()
         await load.value
-        let persisted = await store.items(for: "main-feed")
+        let persisted = store.items(for: "main-feed")
         XCTAssertEqual(persisted?.map(\.id), ["net-0"])
     }
 
@@ -750,6 +750,21 @@ final class FeedViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.posts.count, 1, "Post should be restored on delete failure")
         XCTAssertEqual(sut.posts[0].id, "p1")
+    }
+
+    /// Un post ouvert par un lien ou depuis un profil n'est pas dans le fil chargé : sa suppression part quand même,
+    /// et un refus du serveur ne glisse rien dans le fil.
+    func test_deletePost_outsideTheLoadedFeed_stillDeletes_andAFailureLeavesTheFeedAlone() async {
+        let (sut, api, _, postService) = makeSUT()
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
+        await sut.loadFeed(forceRefresh: true)
+
+        await sut.deletePost("p-elsewhere")
+        XCTAssertEqual(postService.deleteCallCount, 1)
+
+        postService.deleteResult = .failure(APIError.networkError(URLError(.timedOut)))
+        await sut.deletePost("p-elsewhere-2")
+        XCTAssertEqual(sut.posts.map(\.id), ["p1"])
     }
 
     // MARK: - createPost() — U1 ST3: text-only routes through the durable outbox
@@ -2450,7 +2465,7 @@ final class FeedViewModelTests: XCTestCase {
             .deletingLastPathComponent()   // .../Unit
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedViewModel.swift")
+            .appendingPathComponent("Meeshy/Features/Main/ViewModels/FeedMediaPrefetcher.swift")
         let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
 
         guard let body = DeclarationBodyScanner.body(containing: "func prefetchMedia(around index: Int)", in: source) else {
@@ -2478,8 +2493,10 @@ final class FeedViewModelTests: XCTestCase {
 /// `releaseSave()` — pour prouver qu'un appelant attend (ou non) sa
 /// persistance. Privé à ce fichier : un fichier de mock neuf exigerait un
 /// passage XcodeGen (cf. tasks/lessons.md, « fichier de test neuf »).
-private actor GatedFeedCacheStore: FeedCacheStoring {
+@MainActor
+private final class GatedFeedCacheStore: FeedCacheStoring {
     private var storage: [String: [FeedPost]] = [:]
+    nonisolated deinit {}
     private var saveRequested: [CheckedContinuation<Void, Never>] = []
     private var saveRequestedOnce = false
     private var gate: [CheckedContinuation<Void, Never>] = []

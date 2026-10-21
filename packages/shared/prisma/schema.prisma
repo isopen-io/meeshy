@@ -63,7 +63,23 @@ type AnonymousSessionDetails {
   sessionTokenHash  String
   country           String?
   deviceFingerprint String?
+  /// Le poste RÉDUIT relevé à l'entrée par lien (#10102) — absent sur toute
+  /// session antérieure, et sans User-Agent lisible. Voir `AnonymousClientDescriptor`.
+  client            AnonymousClientDescriptor?
   connectedAt       DateTime
+}
+
+/// Le poste d'un invité, RÉDUIT (#10102) : un nom et une version MAJEURE pour le
+/// navigateur et le système, la famille d'appareil. Jamais la chaîne User-Agent,
+/// ni le modèle, ni le fabricant (`describeGuestClient`,
+/// services/gateway/src/services/conversations/guestClient.ts). Lu par la seule
+/// fiche de modération de World Wide (`GET /world/participants/:participantId`).
+type AnonymousClientDescriptor {
+  browser        String?
+  browserVersion String?
+  os             String?
+  osVersion      String?
+  deviceType     String?
 }
 
 /// Profile info captured for an anonymous participant
@@ -146,6 +162,15 @@ model User {
   avatar                    String?
   /// User profile banner/cover image
   banner                    String?
+  /// Le contour d'avatar ÉQUIPÉ (#10632) : `"<pack>/<item>"` d'un pack `avatar-ring` possédé. Visible des autres.
+  equippedAvatarRing        String?
+  /// La bannière de design ÉQUIPÉE (#10632) : `"<pack>/<item>"` d'un pack `banner` possédé — le FOND. La photo
+  /// `banner` gagne toujours (#10933) : le design ne se peint qu'en son absence, sinon le défaut.
+  equippedBanner            String?
+  /// Le CADRE de bannière ÉQUIPÉ (#10932) : `"<pack>/<item>"` d'un pack `banner-frame` possédé. Il se pose SUR la
+  /// photo de bannière (ou, sans photo, sur le fond), centre transparent : il ne remplace ni l'une ni l'autre.
+  /// Visible des autres. Absent des documents antérieurs = aucun cadre (aucun rattrapage nécessaire).
+  equippedBannerFrame       String?
   isOnline                  Boolean  @default(false)
   /// Updated on every detectable activity (heartbeat, API request, typing, message send)
   lastActiveAt              DateTime @default(now())
@@ -186,6 +211,8 @@ model User {
   emailVerificationToken  String? // Token de vérification email (hash SHA-256)
   emailVerificationCode   String? // Code OTP 6 chiffres pour vérification mobile
   emailVerificationExpiry DateTime? // Expiration du token (24h par défaut)
+  /// #10872 — empreinte SHA-256 du secret de l'appareil qui a DEMANDÉ le lien ; null ⇒ lien non lié (confirmation exigée)
+  emailVerificationDeviceHash String?
   phoneVerifiedAt         DateTime?
   phoneVerificationCode   String? // Code SMS 6 chiffres (hashé)
   phoneVerificationExpiry DateTime? // Expiration du code (10 min par défaut)
@@ -283,15 +310,20 @@ model User {
   /// horodatage complet, pour que la comparaison de jour ne dépende pas de
   /// l'heure de l'appel.
   lastStreakDate    DateTime?
-  /// Score agrégé multi-axes pondéré (#5545,
-  /// docs/product/streaks-badges-modele.md § 5, § 7) — somme des poids
-  /// `ENGAGEMENT_AXIS_WEIGHTS` (@meeshy/shared/types/engagement) de chaque
-  /// activité créditée. Maintenu par lecture + écriture explicite dans
+  /// LES ÉTINCELLES EN POCHE (#10846) — le score agrégé multi-axes pondéré (#5545,
+  /// docs/product/streaks-badges-modele.md § 5, § 7) : la somme des points de
+  /// chaque activité créditée, MOINS ce que les frappes de Meesh ont dépensé.
+  /// Maintenu par lecture + écriture explicite dans
   /// `EngagementService.updateEngagementScore`, jamais par `$inc` (#5742 :
   /// mesuré contre Mongo 8, `$inc` sur un champ `null` lève — et ce champ
   /// PEUT valoir `null`, pas seulement ABSENT sur un `User` pré-migration,
   /// dès la première activité créditée avant ce correctif) ni par un
-  /// recalcul de scan. Monotone croissant — aucune activité ne le décrémente.
+  /// recalcul de scan.
+  ///
+  /// ⚠️ Ce n'est PAS un total monotone : la frappe d'une Meesh le débite, le
+  /// prestige le remet à zéro, la reprise d'un contenu retiré le réduit. Il
+  /// n'est plus la base du niveau (voir `sparksSincePrestige`) ni le total
+  /// accumulé (voir `sparksEarnedLifetime`). Poche ≤ cycle ≤ total à vie.
   engagementScore   Int       @default(0)
   /// Solde de Meeshes — PROJECTION de lecture du registre `MeeshLedger`, pas
   /// la vérité (#5743). La vérité est `Σ(MeeshLedger.delta)`, réconciliable ;
@@ -310,9 +342,47 @@ model User {
   // sont OPTIONNELS et ne s'écrivent que par VALEUR ABSOLUE, jamais par
   // incrément : un compte antérieur a le champ ABSENT, et `$add` d'un champ
   // absent rend null (leçon #6428). Absent se lit comme la valeur neutre.
-  /// Le plus haut niveau (1..100) atteint — règle le Vent arrière et la Gloire
-  /// du premier passage de chaque niveau. Absent = 0.
+  /// Le plus haut niveau atteint DANS LE CYCLE EN COURS — remis à 1 par le
+  /// prestige. Il réglait le Vent arrière (éteint avec les étincelles, #10846) ;
+  /// il reste servi sous `level.record`. Absent = 0.
   levelRecord         Int?
+  /// Le niveau MAX À VIE (#10846) : il survit au prestige — le prestige vide la
+  /// poche et le cycle et ramène le niveau actuel à 1, jamais ce champ. Il ouvre
+  /// les ligues et le duo après un prestige (conformité G-5 : le record « tous
+  /// cycles »). Monte avec le niveau, ne baisse jamais. Absent = lu sur `levelRecord`.
+  levelMaxLifetime    Int?
+  /// LE RECORD DE CHAQUE CYCLE CLOS (#10911) — un entier par Prestige, le plus ancien
+  /// d'abord, ajouté par le passage lui-même (`push` dans son écriture conditionnelle :
+  /// une fois par Prestige, jamais au rejeu). Il dit combien de fois un niveau a été
+  /// atteint, tous cycles confondus (la photo d'un palier refaite « ×2 »). Absent ou plus
+  /// court que `prestige` pour un compte passé avant : chaque cycle manquant a atteint au
+  /// moins le niveau 100 (`levelReachCount`, `@meeshy/shared/utils/game/photo-catch-up`).
+  prestigeLevelRecords Int[]
+  /// LES ÉTINCELLES DU CYCLE (#10846) — accumulées depuis le dernier prestige. C'est
+  /// elle que le NIVEAU lit : la frappe ne la touche jamais, donc ne fait plus
+  /// baisser le niveau. Remise à 0 par le prestige. BigInt (`long`) : le niveau est
+  /// sans limite et dépasse un Int32 vers le niveau 4 600. Écrite par commande
+  /// brute `$ifNull`/`$max` avec le score (jamais par incrément Prisma : leçon
+  /// #6428) ; absente = lue sur `engagementScore` (`sparksOf`, `@meeshy/shared`).
+  sparksSincePrestige BigInt?
+  /// LE TOTAL ACCUMULÉ À VIE (#10846) — le nombre d'étincelles gagnées depuis
+  /// l'ouverture du compte, tous chemins de crédit confondus. MONOTONE côté
+  /// joueur : ni la frappe ni le prestige ne le baissent. Seule la reprise d'un
+  /// contenu retiré le réduit, dans la limite de ce que ce contenu a rapporté
+  /// (ferme la triche « publier puis supprimer »). BigInt (`long`) ; sert en
+  /// nombre JSON entier sur le fil, saturé à 2^53 − 1. Absent = lu sur le cycle.
+  /// Rattrapage : `score + Σ prix des frappes (MeeshLedger.meta.price)`, borne basse.
+  sparksEarnedLifetime BigInt?
+  /// LA DETTE D'ÉTINCELLES (porteur, 2026-10-16) — ce qu'une reprise de contenu supprimé n'a pas pu prélever sur la poche,
+  /// déjà dépensée à la frappe. Déduite des prochaines étincelles gagnées (poche seule : cycle et total à vie montent
+  /// du gain entier) ; tant qu'elle est > 0, la frappe est refusée (`MINT_BLOCKED_BY_DEBT`). Absente = 0. BigInt (`long`).
+  sparksDebt BigInt?
+  /// LA RÉVISION DE L'ÉTAT DU JEU (#10912) — horloge logique hybride PAR COMPTE, gravée avec l'état : chaque écriture du
+  /// jeu (frappe, crédit, reprise, Prestige, dépense de Meesh, Gloire…) y pose `max(maintenant, révision lue + 1)` dans la
+  /// même écriture, donc elle ne recule jamais, quelles que soient les horloges des passerelles. Les lectures servent
+  /// celle-ci (`gameRevision` sur le fil), jamais l'heure de la réponse. Absente : la lecture sert l'instant, comme avant.
+  /// BigInt (`long`) : des millisecondes depuis l'époque.
+  gameRevision BigInt?
   /// Passages en Prestige (0..5). Absent = 0.
   prestige            Int?
   /// Gels de Flamme en réserve (0..2). Absent = 0.
@@ -374,6 +444,14 @@ model User {
   /// substitut. `PUT /me/consents/analytics` pose cette colonne.
   analyticsConsentAt DateTime?
 
+  /// Le REFUS d'analyse (#10499) : posé quand l'analyse ou son parent (le
+  /// traitement des données) est RETIRÉ par `PUT /me/consents`, effacé quand
+  /// l'analyse est de nouveau accordée. `analyticsConsentAt` absent ne dit pas
+  /// « refusé » (un compte neuf n'a rien tranché) ; cette date le dit. Un
+  /// compte qui a refusé ne laisse aucune ligne `ContentEvent`
+  /// (`services/gateway/src/services/social/eventPrivacy.ts`).
+  analyticsConsentWithdrawnAt DateTime?
+
   /// Acceptation des conditions générales. L'acte de CRÉATION d'un compte vaut
   /// acceptation (les trois clients l'écrivent sous le bouton), donc la colonne
   /// est posée au `create` — jamais un booléen à côté, la date suffit.
@@ -424,6 +502,7 @@ model User {
   pushTokens               PushToken[]
   stickers                 UserSticker[]
   stickerPacks             UserStickerPack[]
+  packOwnerships           UserPackOwnership[]
 
   // Signal Protocol E2EE Relations
   signalPreKeyBundle SignalPreKeyBundle?
@@ -477,6 +556,9 @@ model User {
   // Répertoire (carnet d'adresses synchronisé depuis l'appareil)
   addressBookEntries UserContact[] @relation("AddressBookOwner")
   addressBookMatches UserContact[] @relation("AddressBookMatchedUser")
+
+  // Séries d'engagement par acte (#10389)
+  engagementActStreaks EngagementActStreak[]
 
   @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
   @@index([blockedUserIds]) // Multikey: "qui m'a bloqué ?" (getBlockRelatedUserIds) — sinon COLLSCAN à chaque transition de présence
@@ -796,6 +878,14 @@ model ConversationShareLink {
   allowAnonymousFiles    Boolean   @default(false)
   allowAnonymousImages   Boolean   @default(true)
   allowViewHistory       Boolean   @default(true)
+  /// Familles de pièces jointes ouvertes aux INVITÉS (anonymes) de ce lien (#10001) :
+  /// `text`, `audio`, `image`, `pdf` (`types/guest-attachment-kinds.ts`). Vide — la
+  /// valeur de toute ligne écrite avant la colonne — = aucune restriction par famille,
+  /// `allowAnonymousFiles` / `allowAnonymousImages` s'appliquent comme avant. Non vide :
+  /// elle seule décide, sur la signature et le décodage du contenu ENTIER, à
+  /// l'upload (tus, REST) comme à l'envoi (REST, socket). Les comptes ne sont jamais
+  /// concernés. World Wide est plafonnée à `text` + `audio` par sa conversation.
+  allowedAttachmentKinds String[]  @default([])
   /// Si true, seuls les utilisateurs avec compte peuvent rejoindre (bloque l'accès anonyme)
   requireAccount         Boolean   @default(false)
   requireNickname        Boolean   @default(true)
@@ -805,6 +895,11 @@ model ConversationShareLink {
   allowedCountries       String[]  @default([])
   allowedLanguages       String[]  @default([])
   allowedIpRanges        String[]  @default([])
+  /// #10470 — la révocation des invités d'un GROS lien, fermé sans l'attendre,
+  /// est EN ATTENTE depuis cet instant (`closeShareLinkRevokingGuests`). Posée
+  /// dans l'écriture même qui ferme le lien, levée quand la révocation aboutit ;
+  /// le balayage horaire reprend toute ligne restée marquée. `null` = rien en attente.
+  guestRevocationPendingAt DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -899,6 +994,11 @@ model Participant {
   @@index([type])
   @@index([sessionTokenHash])
   @@index([shareLinkId, joinedAt])
+  /// #10443 — la révocation des invités d'un lien (`revokeShareLinkGuests`)
+  /// lit aussi la session embarquée (`OR` sur `anonymousSession.shareLinkId`) :
+  /// sans cet index, la branche parcourait tous les participants anonymes.
+  /// Posé par `migrations/2026-10-13-participant-anonymous-session-share-link-index.mongodb.js`.
+  @@index([anonymousSession.shareLinkId])
 }
 
 /// Message dans une conversation
@@ -1092,6 +1192,58 @@ model Message {
   @@index([storyReplyToId]) // Retrait d'un post cité : conversations à prévenir, en une requête (#7969)
   @@index([createdAt])
   @@index([viewOnceBurnAt]) // Balayage de purge des vues uniques (#7578)
+}
+
+/// La traduction d'un message qu'un MEMBRE a faite sur son appareil et PARTAGÉE
+/// aux autres (#9899) — gardée SCELLÉE : le serveur ne la lit jamais.
+///
+/// `payload` est le base64 d'une enveloppe AES-256-GCM (nonce ‖ chiffré ‖ tag)
+/// que seuls les lecteurs du message savent ouvrir. La passerelle la stocke et
+/// la relaie octet pour octet, sans la déchiffrer ni l'analyser (contrat :
+/// `packages/shared/types/shared-translation.ts`). `kdf` nomme la dérivation de
+/// la clé (`message-content` | `message-secret`) : c'est le seul indice que le
+/// serveur ait, et il ne sert qu'à refuser `message-content` quand le message
+/// est chiffré de bout en bout.
+///
+/// UNE traduction par `(messageId, targetLanguage, sourceVersion)` : le PREMIER
+/// partage gagne, l'index unique règle la course et le perdant relit la
+/// gagnante. `sourceVersion` est la version du message qui a été traduite —
+/// `Message.editedAt` en ISO au moment du partage, ou `"original"` pour un
+/// message jamais édité. Une édition change la version : l'ancienne ligne n'est
+/// plus servie (la lecture compare à la version COURANTE) et un nouveau partage
+/// redevient possible.
+///
+/// `sharedById` est le `Participant.id` du partageur — le même espace
+/// d'identifiants que `Message.senderId`. `conversationId` est une COPIE
+/// immuable de `Message.conversationId`, écrite par le serveur depuis la ligne
+/// du message : elle adresse la diffusion et l'index de lecture sans relire le
+/// message.
+///
+/// Aucune relation vers `Message`, à dessein : un message s'efface presque toujours
+/// en douceur (`deletedAt`) et la lecture écarte déjà un message effacé. Deux chemins
+/// retirent pourtant la LIGNE : la compensation d'un envoi dont la copie des pièces
+/// jointes échoue (`MessageProcessor.handleAttachments`) et le balayage des avis
+/// d'arrivée d'un expéditeur disparu (`repairOrphanedMessageSenders`). Une traduction
+/// partagée y survivrait sans message, mais elle n'est jamais SERVIE : la lecture
+/// charge d'abord les messages demandés et ne rend une enveloppe que pour la version
+/// COURANTE d'un message qu'elle sert elle-même. Le balayage de ces lignes
+/// orphelines est #10008. Prisma n'émet pas les index sur MongoDB : ils sont posés à
+/// la main par `prisma/migrations/2026-10-10-shared-translation-indexes.mongodb.js`.
+model SharedTranslation {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String   @db.ObjectId
+  messageId      String   @db.ObjectId
+  targetLanguage String
+  sourceVersion  String
+  kdf            String
+  payload        String
+  sharedById     String   @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  @@unique([messageId, targetLanguage, sourceVersion])
+  @@index([conversationId, messageId])
+  // L'effacement par COMPTE (`eraseSharedTranslationsOfAccount`) retire par partageur.
+  @@index([sharedById])
 }
 
 /// Traduction d'un message
@@ -2682,6 +2834,11 @@ model UserConversationPreferences {
   /// key/value store entry (E9).
   readingMode String @default("auto")
 
+  /// L'apparence PERSONNELLE de la conversation (#10631) : `ConversationAppearance`
+  /// (packages/shared/types/conversation-appearance.ts), validée par Zod à l'écriture.
+  /// Absente = Signature + accent calculé. Jamais servie à un autre membre.
+  appearance Json?
+
   /// Monotonic version for optimistic-concurrency resolution between
   /// client optimistic updates and socket-broadcast events. Server
   /// increments on every successful upsert; clients drop incoming
@@ -3007,6 +3164,10 @@ model UserSession {
 
   /// Lifecycle
   expiresAt         DateTime
+  /// #10477 — une session ouverte par un lien (lien magique, vérification d'adresse)
+  /// naît courte : `expiresAt` est sa fenêtre d'adoption, et ce champ l'échéance
+  /// qu'elle prend au premier usage. Nul ou absent : rien n'est en attente.
+  adoptedExpiresAt  DateTime?
   isValid           Boolean   @default(true)
   invalidatedAt     DateTime?
   invalidatedReason String? // "LOGOUT" | "PASSWORD_RESET" | "USER_REVOKED" | "ADMIN_ACTION" | "EXPIRED" | "SECURITY_BREACH"
@@ -3543,6 +3704,11 @@ model PushToken {
   /// Last time this token was successfully used to send a notification
   lastUsedAt DateTime?
 
+  /// Last time the device (re)registered this token — clients register at every
+  /// launch. Unlike `updatedAt`, a successful send does not touch it, so it says
+  /// which installs are still alive. Null on rows older than #10856.
+  registeredAt DateTime?
+
   /// Number of consecutive failed delivery attempts (for cleanup)
   failedAttempts Int @default(0)
 
@@ -3754,6 +3920,30 @@ model Post {
   postOpenCount      Int @default(0)
   qualifiedViewCount Int @default(0)
   playCount          Int @default(0)
+  /// Part ANONYME de `viewCount` / `impressionCount` (#10483) : lecteurs sans
+  /// compte, comptés par clé de lecteur HMAC. Les totaux affichés les incluent
+  /// déjà ; ces deux champs ne servent qu'à distinguer. Optionnels : un post
+  /// antérieur à la colonne vaut `null`, que `incrementPostCounters` traite en 0.
+  anonymousViewCount       Int? @default(0)
+  anonymousImpressionCount Int? @default(0)
+  /// Vues UNIQUES par jeton (#10483, règle du porteur 2026-10-13) : `viewCount`
+  /// compte CHAQUE ouverture ; `uniqueViewCount` ne monte qu'à la PREMIÈRE vue
+  /// d'un lecteur (ligne `PostView` d'un compte, ligne `AnonymousPostOpen` d'un
+  /// anonyme), `anonymousUniqueViewCount` en est la part anonyme. Enregistrés,
+  /// servis, pas encore affichés. `null` sur un post antérieur ⇒ lire 0.
+  uniqueViewCount          Int? @default(0)
+  anonymousUniqueViewCount Int? @default(0)
+  /// Ventilations de la portée (#10483, demande du porteur 2026-10-13) — des
+  /// sous-documents `{ clé: n }` incrémentés par `incrementPostCounters`
+  /// (`breakdowns`), absents d'un post qui n'en a jamais reçu (lire vide) :
+  /// `openCountByOrigin` — engagements d'ouverture (tap d'un listing) par
+  /// origine (`OPEN_ORIGINS`, `other` pour une origine inconnue) ;
+  /// `viewCountByProvenance` — vues COMPTÉES par provenance (`VIEW_PROVENANCES`,
+  /// une vue sans provenance n'y entre pas) ; `listingViewCountByOrigin` —
+  /// parmi les vues `listing`, le listing d'où l'écran a été ouvert.
+  openCountByOrigin        Json?
+  viewCountByProvenance    Json?
+  listingViewCountByOrigin Json?
   /// Nombre d'actions « Enregistrer » sur ce poste : +1 par action, quel que
   /// soit le nombre de médias téléchargés. NE VAUT PAS la somme des
   /// `PostMedia.downloadCount` de ce poste — l'un compte des actions, l'autre
@@ -3773,6 +3963,19 @@ model Post {
   contentEditedAt DateTime?
   /// null = actif, non-null = supprimé (soft delete) avec horodatage
   deletedAt DateTime?
+  /// RETRAIT DE MODÉRATION, réversible (#10315). null = en ligne ; non-null =
+  /// mis hors ligne par l'administration à cette date. Le retrait force
+  /// `visibility = PRIVATE` (seuls l'auteur et l'administration le lisent, par
+  /// les portes de visibilité existantes) et, tant qu'il tient, l'auteur ne
+  /// peut pas rouvrir l'audience (`PUT /posts/:postId` refuse `visibility`).
+  moderationHiddenAt DateTime?
+  /// Qui a mis la publication hors ligne : la lever exige un rang au moins égal
+  /// au sien (un modérateur ne défait pas le retrait d'un administrateur).
+  moderationHiddenById String? @db.ObjectId
+  /// L'audience que l'auteur avait choisie avant qu'un geste de modération ne
+  /// la force en PRIVATE, rendue par « Remettre en ligne ». null = aucune
+  /// audience retenue (rien à rendre).
+  moderationPriorVisibility PostVisibility?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3809,20 +4012,39 @@ model Post {
   @@index([repostOfId, authorId])
 }
 
-/// Déduplication des ouvertures ANONYMES d'un post (v1 "comptage bête").
-/// `sessionKey` = chaîne opaque issue du header X-Session-Token (token de
-/// session iOS anonyme OU token persisté par le navigateur). Identifiant
-/// FAIBLE — voir la section Sécurité de la spec 2026-06-17. INSERT-only :
-/// le 1ᵉʳ insert d'un (postId, sessionKey) incrémente Post.postOpenCount.
+/// Déduplication des VUES ANONYMES d'un post (#10483, ex « comptage bête »).
+/// `sessionKey` = clé de lecteur HMAC dérivée de X-Session-Token par la
+/// passerelle (`readerKeyOf`) — la valeur brute n'est jamais écrite. CHAQUE vue
+/// incrémente viewCount, anonymousViewCount et postOpenCount ; le 1ᵉʳ insert
+/// d'un (postId, sessionKey) incrémente en plus uniqueViewCount et
+/// anonymousUniqueViewCount ; une vue répétée monte `durationMs` au maximum.
 model AnonymousPostOpen {
-  id         String   @id @default(auto()) @map("_id") @db.ObjectId
-  postId     String   @db.ObjectId
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  postId     String    @db.ObjectId
+  /// Depuis #10483 : la CLÉ DE LECTEUR (HMAC-SHA256 hex 64 de `participant:<id>`
+  /// ou `token:<valeur>`), jamais la valeur brute de X-Session-Token.
   sessionKey String
-  createdAt  DateTime @default(now())
-  post       Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt  DateTime  @default(now())
+  /// Durée de lecture la plus longue déclarée par ce lecteur (ms, plafond 5 min).
+  durationMs Int?
+  /// Fin de vie de la ligne (création + 90 jours). L'index ci-dessous PORTE LE
+  /// NOM que Prisma lui donne (`AnonymousPostOpen_expiresAt_idx`) et la
+  /// migration #10483 le rend TTL (`expireAfterSeconds: 0`, création ou
+  /// `collMod`) sous CE nom : le moteur Prisma MongoDB compare un index par nom
+  /// et par clés, jamais par ses options, donc il le reconnaît et ne le recrée
+  /// pas. Ne jamais le renommer ni le retirer d'ici (un `db push` le
+  /// supprimerait avec son TTL) ; en staging et production, les index se
+  /// posent par migration, jamais par `prisma db push`.
+  expiresAt  DateTime?
+  /// Provenance et origine de la PREMIÈRE vue de ce lecteur (#10483), comme
+  /// `PostView.provenance` / `PostView.origin`. Facultatives.
+  provenance String?
+  origin     String?
+  post       Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
 
   @@unique([postId, sessionKey])
   @@index([postId])
+  @@index([expiresAt], map: "AnonymousPostOpen_expiresAt_idx")
 }
 
 /// Bibliothèque de sons — entité de première classe, réutilisable et créditée.
@@ -3930,10 +4152,17 @@ model PostMedia {
   thumbnailPath String?
   thumbnailUrl  String?
   thumbHash    String?  // Base64-encoded ThumbHash (~28 chars) — instant placeholder
+  /// Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — MÊME forme que
+  /// `MessageAttachment.imageVariants`, écrites par la fabrique `media-renditions.ts` que le
+  /// chemin résumable et le multipart partagent (#11260). OPTIONNEL : une ligne héritée n'en
+  /// porte pas, et une image déjà petite non plus. Images non chiffrées uniquement.
+  imageVariants Json?
 
   // Metadata audio/vidéo
   duration     Int?     // ms
   codec        String?
+  /// Codec de la piste vidéo (ffprobe), jumeau de `MessageAttachment.videoCodec` (#11260).
+  videoCodec   String?
 
   // Ordering dans le carousel
   order        Int      @default(0)
@@ -4103,6 +4332,16 @@ model PostView {
   viewedAt DateTime @default(now())
   /// Durée de vue en ms (temps passé sur le post)
   duration Int?
+  /// Écran de la PREMIÈRE vue déclaré par le client (`CONTENT_SURFACES`,
+  /// #10483) — facultatif : un ancien client ne l'envoie pas, une valeur
+  /// inconnue n'est pas rangée.
+  surface  String?
+  /// Provenance de la PREMIÈRE vue (`VIEW_PROVENANCES`, #10483) : listing,
+  /// notification, lien partagé, lien de suivi, externe, direct. Facultatif.
+  provenance String?
+  /// Le listing d'où l'écran a été ouvert quand `provenance = listing`
+  /// (`OPEN_ORIGINS`). Facultatif.
+  origin     String?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
   user User @relation("UserPostViews", fields: [userId], references: [id])
@@ -4117,12 +4356,44 @@ model PostView {
 model PostImpression {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   postId    String   @db.ObjectId
-  userId    String   @db.ObjectId
+  /// Le lecteur, quel que soit le statut d'analyse (#10785 : « qui a vu »).
+  /// Facultatif pour les seules lignes réduites écrites entre #10773 et
+  /// #10785, qui portent `readerKey` à la place et expirent en 8 jours.
+  userId    String?  @db.ObjectId
+  /// Empreinte HMAC du compte (`accountReaderKeyOf`) d'une ligne réduite
+  /// (#10773) — plus écrite depuis #10785, relue jusqu'à son expiration.
+  readerKey String?
   source    String   @default("feed")
+  /// Écran d'affichage déclaré par le client (`CONTENT_SURFACES`, #10483) —
+  /// facultatif : un ancien client ne l'envoie pas.
+  surface   String?
   createdAt DateTime @default(now())
 
+  /// Événements sociaux v2 (#10500, #10501) — tous FACULTATIFS : une ligne
+  /// d'un ancien client n'en porte aucun.
+  /// Clé HMAC de l'`eventId` du client (jamais l'identifiant brut) : un rejeu
+  /// ne crée pas de seconde ligne. Index unique PARTIEL (chaîne seulement),
+  /// posé par `ensureSocialEventIndexes` — jamais par `prisma db push`.
+  eventKey        String?
+  /// Rang rendu dans le listing (0-indexé) et source de classement servie.
+  position        Int?
+  rankingSource   String?
+  /// Identifiant opaque de la page de fil — rangé seulement si l'analyse est consentie.
+  feedRequestId   String?
+  /// Visibilité MRC : ≥ 50 % pendant ≥ 1 s (2 s pour une vidéo en lecture).
+  viewable        Boolean?
+  visibleFraction Float?
+  visibleMs       Int?
+  /// Session d'application — rangée seulement si l'analyse est consentie.
+  appSessionId    String?
+  platform        String?
+  /// Fin de conservation (90 j ; 8 j sur les lignes réduites de #10773 — index TTL `PostImpression_expiresAt_ttl`).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
+
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation("UserPostImpressions", fields: [userId], references: [id])
+  user User? @relation("UserPostImpressions", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([postId])
   @@index([userId])
@@ -4130,28 +4401,102 @@ model PostImpression {
   @@index([createdAt])
 }
 
+/// Un événement de télémétrie v2 (#10499, #10510) — append-only, borné par TTL.
+///
+/// Écrit en UN `insert` non ordonné par requête (`services/social/contentEvents.ts`),
+/// jamais par Prisma : les index (unique partiel de `eventKey`, TTL de
+/// `expiresAt`) sont posés par `ensureSocialEventIndexes`, à chaque démarrage
+/// et par la migration nommée — jamais par `prisma db push`.
+///
+/// `actorKind = none` : rangé SANS compte (analyse non consentie, refusée,
+/// lecteur anonyme, ou action qui ne s'attribue jamais) — aucun identifiant
+/// de session ni de requête n'y est alors rangé (revue de conformité O1).
+model ContentEvent {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  eventKey     String?
+  type         String
+  action       String
+  /// AAAAMMJJ UTC de `derivedAt` — la partition des agrégats quotidiens.
+  day          Int
+  derivedAt    DateTime
+  occurredAt   DateTime?
+  receivedAt   DateTime
+  clockSkewed  Boolean?
+  actorKind    String
+  userId       String?   @db.ObjectId
+  appSessionId String?
+  platform     String?
+  appVersion   String?
+  osName       String?
+  osVersion    String?
+  deviceClass  String?
+  network      String?
+  uiLanguage   String?
+  targetKind   String?
+  targetId     String?
+  parentKind   String?
+  parentId     String?
+  surface      String?
+  listing      Json?
+  prism        Json?
+  props        Json?
+  sampleRate   Float     @default(1)
+  expiresAt    DateTime
+
+  /// `ContentEvent_user_day` (partiel sur `userId`), l'unique partiel de
+  /// `eventKey` et le TTL de `expiresAt` ne se déclarent pas en Prisma :
+  /// `services/gateway/src/services/social/socialEventIndexes.ts` les pose.
+  @@index([targetKind, targetId, day], map: "ContentEvent_target_day")
+  @@index([type, action, day], map: "ContentEvent_type_action_day")
+}
+
 /// Session d'engagement append-only (temps + actions). N'altère NI PostView NI viewCount.
 /// Idempotence garantie par `sessionId @unique` (rejouer un ACK perdu = no-op via upsert).
 model PostEngagement {
   id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// La clé de session du client — ou, sur une ligne réduite écrite entre
+  /// #10771 et #10785, son empreinte HMAC (`engagementSessionKeyOf`).
   sessionId       String   @unique
   postId          String   @db.ObjectId
-  userId          String   @db.ObjectId
-  contentType     String
-  surface         String
-  startedAt       DateTime
-  dwellMs         Int
+  /// Le lecteur, quel que soit le statut d'analyse (#10785 : « qui a vu »).
+  /// Facultatif pour les seules lignes réduites écrites entre #10771 et
+  /// #10785, qui portent `readerKey` à la place et expirent en 8 jours.
+  userId          String?  @db.ObjectId
+  /// Empreinte HMAC du compte (`accountReaderKeyOf`) d'une ligne réduite
+  /// (#10771) — plus écrite depuis #10785, relue jusqu'à son expiration.
+  readerKey       String?
+  /// Mesure de la session, rangée quel que soit le statut (#10785) — absente
+  /// des seules lignes réduites antérieures.
+  contentType     String?
+  surface         String?
+  startedAt       DateTime?
+  dwellMs         Int?
   watchMs         Int?
   mediaDurationMs Int?
-  completed       Boolean  @default(false)
-  truncated       Boolean  @default(false)
+  completed       Boolean?
+  truncated       Boolean?
+  /// Le statut d'analyse ÉTABLI par la passerelle, jamais la valeur déclarée
+  /// par le client (#10772). Les lignes antérieures portent la valeur client.
   consent         String?
-  actions         Json     @default("[]")
-  watchSamples    Json     @default("[]")
+  /// Micro-actions et échantillons de lecture : télémétrie sans fonctionnalité
+  /// visible, rangée seulement sous `consent = granted` (vide sinon, #10785).
+  actions         Json?
+  watchSamples    Json?
+  /// Les compteurs du post que la session a déjà crédités (ouverture, lecture,
+  /// vue qualifiée) — pour fusionner son premier contact et sa mesure sans
+  /// recompter (#10771, #10785).
+  creditedOpen      Boolean?
+  creditedPlay      Boolean?
+  creditedQualified Boolean?
   createdAt       DateTime @default(now())
+  /// Fin de conservation (90 j ; 8 j sur les lignes réduites de #10771 — index
+  /// TTL `PostEngagement_expiresAt_ttl`, #10510).
+  /// Les lignes antérieures la reçoivent par la migration nommée
+  /// `2026-10-13-social-events-v2-retention.ts` (feu vert du porteur en production).
+  expiresAt       DateTime?
 
   post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
-  user User @relation("UserPostEngagements", fields: [userId], references: [id])
+  user User? @relation("UserPostEngagements", fields: [userId], references: [id])
 
   @@index([postId])
   @@index([userId])
@@ -4994,9 +5339,11 @@ model EngagementCounter {
   /// avec un multiplicateur ×5, ce qui viderait toute comparaison entre
   /// comptes de son sens.
   ///
-  /// L'invariant tenu par le service est `User.engagementScore == Σ(points)`.
-  /// Il remplace `Σ(count × poids)`, que l'accélérateur d'élan (#5749) rendra
-  /// faux dès qu'un point sera crédité à un facteur autre que 1.
+  /// Un crédit écrit le même montant ici et à la poche (`User.engagementScore`),
+  /// une reprise les débite ensemble ; la frappe débite la poche SEULE (#10846).
+  /// `engagementScore == Σ(points)` n'est donc plus un invariant. Celui de la
+  /// poche (#10892) : `sparksEarnedLifetime − engagementScore + sparksDebt ==
+  /// Σ(prix des frappes) + Σ(poches vidées au Prestige)`.
   points    Int      @default(0)
   updatedAt DateTime @updatedAt
 
@@ -5084,6 +5431,27 @@ model EngagementQuota {
 
   @@unique([userId, operationKey, bucket])
   @@index([userId, createdAt])
+}
+
+/// LA SÉRIE D'UN ACTE (#10389) — les jours civils consécutifs où CE geste a été
+/// crédité au compte : écrire dans une conversation, publier un post, un réel,
+/// une story, une humeur, commenter, réagir à un post, à un réel, à une story
+/// (`ENGAGEMENT_STREAK_ACTS`, `@meeshy/shared/types/engagement-act-streaks`).
+/// Une ligne par compte et par acte, avancée par `ActStreakRecorder` au jour
+/// civil du compte (`lastDay`, `YYYY-MM-DD`, son fuseau) ; ses paliers se payent
+/// une fois chacun, par le seau `streak:<acte>:<jours>` d'`EngagementQuota`.
+model EngagementActStreak {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  act         String
+  currentDays Int      @default(0)
+  longestDays Int      @default(0)
+  lastDay     String
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, act])
+  @@index([userId])
 }
 
 /// LE BARÈME d'engagement réglé par l'administration (#8906) — une ligne
@@ -5203,7 +5571,7 @@ model GloryLedger {
   userId    String   @db.ObjectId
   /// Jamais zéro ; négatif seulement pour une correction.
   delta     Int
-  /// "mint" | "level" | "flame-record" | "mission-gold" | "achievement" | "league" | "season" | "prestige" | "correction"
+  /// "mint" | "level" | "flame-record" | "mission-gold" | "achievement" | "league" | "season" | "prestige" | "chest" | "correction"
   reason    String
   actorId   String?  @db.ObjectId
   /// L'IDEMPOTENCE : `mint:<requestId>`, `level:<n>`, `flame-record:<jours>`…
@@ -5255,15 +5623,28 @@ model DailyMission {
 /// L'état du jeu d'UN jour pour un compte (#9375, #9376) : changements de
 /// mission consommés et coffre du jour.
 model GameDay {
-  id             String    @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String    @db.ObjectId
-  dayKey         String
-  rerollCount    Int       @default(0)
-  chestClaimedAt DateTime?
-  chestPoints    Int?
-  chestFragment  Boolean?
-  chestFreeze    Boolean?
-  createdAt      DateTime  @default(now())
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String    @db.ObjectId
+  dayKey           String
+  rerollCount      Int       @default(0)
+  chestClaimedAt   DateTime?
+  /// Le TOTAL crédité, prime comprise.
+  chestPoints      Int?
+  /// UN fragment d'étoile trouvé (une chance sur six) — compté dans le total collecté du compte
+  /// (`star-fragments.ts`, lu, jamais incrémenté).
+  chestFragment    Boolean?
+  chestFreeze      Boolean?
+  /// La Gloire du coffre (#10011) — absente d'un coffre ouvert avant elle (champ optionnel, aucun backfill).
+  chestGlory       Int?
+  /// La prime tirée (#10011) : "none" | "fifth" | "whole", et son montant en points au cours de la Meesh du
+  /// compte, déjà compris dans `chestPoints`. Absents d'un coffre ouvert avant elle.
+  chestBonus       String?
+  chestBonusPoints Int?
+  /// Le cours de la prime (#10219) : les Meeshes frappées AVANT l'ouverture de ce jour de jeu (`chestPriceCutoff`), gravées une
+  /// fois à la première lecture du jour. Une frappe du jour ne fait plus monter la prime. Absent (journée ouverte
+  /// avant lui, ou ancienne passerelle) : calculé puis gravé à la lecture suivante — aucun backfill.
+  chestMintBase    Int?
+  createdAt        DateTime  @default(now())
 
   @@unique([userId, dayKey])
 }
@@ -5290,8 +5671,38 @@ model GameProfile {
   /// HÉRITÉ (« les 100 Légendes du moment », abandonné par #9636) : plus lu ni écrit.
   /// Le Mythe vit dans `MythicSeat`, définitif.
   mythicAt              DateTime?
+  /// L'atmosphère des cadres de gloire (#10162, `GLORY_ATMOSPHERES`) ; null = pas encore choisie.
+  /// La choisir installe aussi son pack (`PUT /me/game/frames/atmosphere`).
+  frameAtmosphere       String?
+  /// « Me proposer d'immortaliser » (`PHOTO_INVITATIONS`) ; null = chaque étape.
+  photoInvitations      String?
+  /// La ligne de base des alertes d'immortalisation (#10162, § 5.16.2) : sa date et la situation
+  /// `PhotoCatchUpStanding` à cette date — les étapes passées s'en déduisent sans une ligne par étape.
+  photoAlertsBaselineAt DateTime?
+  photoAlertsBaseline   Json?
+  /// Le plus haut palier du trésor jamais atteint (D14) : il ne redescend pas quand on dépense.
+  treasuryPeakTier      String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+}
+
+/// LE REGISTRE DES MOMENTS PHOTO (#10162, § 5.16.2) : une ligne par (compte, étape du jeu), qui dit
+/// quand l'étape a été détectée, PRÉSENTÉE (sur n'importe quel appareil) et notifiée. `_id` est DÉRIVÉ
+/// de (userId, stepId) (`photoMomentId`, empreinte de 24 hex) : deux écritures de la même étape se
+/// heurtent à l'index `_id`, qui existe toujours ; l'unique (userId, stepId) et l'index de lecture sont
+/// posés par `migrations/2026-10-11-game-photo-moment-indexes.mongodb.js`. Purgé avec le compte.
+model GamePhotoMoment {
+  id          String    @id @map("_id") @db.ObjectId
+  userId      String    @db.ObjectId
+  stepId      String
+  detectedAt  DateTime?
+  presentedAt DateTime?
+  notifiedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, stepId])
+  @@index([userId, updatedAt])
 }
 
 /// UNE DES CENT PLACES DU MYTHE (#9636) : prise par le compte qui atteint
@@ -5472,6 +5883,58 @@ model GameSeason {
   @@index([number, settledAt])
 }
 
+/// LE CALENDRIER DES SAISONS (#10016) : une définition par saison PROGRAMMÉE par
+/// l'admin (ou proposée par l'IA puis validée). Ce qui n'y est pas se dérive de la
+/// loi (`packages/shared/utils/game/season-schedule.ts`) : saison 1 au
+/// 2026-12-21, saisons enchaînées de 56 jours. `startDay` est un lundi ; une
+/// saison en cours ou passée ne se réécrit pas. `revision` croît à chaque écriture
+/// (unique : deux écritures concurrentes ne peuvent pas prendre la même) et sert
+/// d'ETag au calendrier servi. Seed : migration
+/// `2026-10-11-game-season-calendar.mongodb.js`.
+model GameSeasonDefinition {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  number     Int      @unique
+  startDay   String
+  /// `scheduled` | `paused`
+  status     String   @default("scheduled")
+  themeKey   String
+  stepPoints Int      @default(100)
+  /// Textes en sept langues `{fr,en,es,de,it,pt-BR,ar → {title,tagline,description}}`, ou absent.
+  copy       Json?
+  revision   Int      @unique
+  updatedBy  String?  @db.ObjectId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+/// Une PROPOSITION de saison faite par l'IA (`services/agent`, #10016) : thème,
+/// textes en sept langues, points d'étape. Elle reste `pending` tant qu'un
+/// administrateur ne l'a ni validée (`approved` → écrite dans
+/// `GameSeasonDefinition`, `appliedRevision`) ni rejetée. Rien n'est publié sans
+/// cette validation.
+model GameSeasonProposal {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  number          Int
+  /// `pending` | `approved` | `rejected`
+  status          String    @default("pending")
+  startDay        String
+  themeKey        String
+  stepPoints      Int
+  copy            Json
+  brief           String?
+  model           String?
+  createdBy       String    @db.ObjectId
+  reviewedBy      String?   @db.ObjectId
+  reviewedAt      DateTime?
+  rejectReason    String?
+  appliedRevision Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@index([number])
+}
+
 /// Un TROPHÉE de la vitrine (#9387) : coupe de ligue, coupe de saison, Prestige,
 /// Flamme de 100 / 365 jours. `key` est la clé de `trophyKey` (`@meeshy/shared`) ;
 /// l'attribution est idempotente par `(userId, key)`.
@@ -5613,6 +6076,71 @@ model StickerPackItem {
   pack StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
 
   @@unique([packId, key])
+}
+
+/// Un pack d'APPARENCE proposé par un vendeur tiers (#10709) : fonds, contours ou bannières.
+/// Le contenu est un CONTRAT de données validé par le Zod des packs officiels, jamais un fichier.
+/// `pending` → `approved` par un modérateur, qui fixe aussi le prix ; seuls les `approved` sont servis.
+model CommunityAppearancePack {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  /// wallpaper · avatar-ring · banner
+  domain         String
+  slug           String
+  name           String
+  description    String
+  author         String
+  submitterId    String    @db.ObjectId
+  /// pending · approved · rejected
+  status         String    @default("pending")
+  reviewNote     String?
+  reviewerId     String?   @db.ObjectId
+  reviewedAt     DateTime?
+  /// Le prix en Meeshes, fixé par le modérateur à la publication ; absent = gratuit.
+  price          Int?
+  installCount   Int       @default(0)
+  /// Le contrat re-sérialisé par le schéma, tel que servi (adressé par `contractSha256`).
+  contractJson   String
+  contractSha256 String
+  /// `<sha16>.json` — l'adresse sous laquelle le contrat est servi par le magasin des packs.
+  contractSrc    String
+  contractBytes  Int
+  itemKeys       String[]
+  createdAt      DateTime  @default(now())
+
+  @@unique([domain, slug])
+  @@index([domain, status, createdAt])
+  @@index([submitterId])
+  @@index([contractSrc])
+}
+
+/// LA POSSESSION d'un pack payant (#10632). Quatre voies (#11272, `PACK_OWNERSHIP_SOURCES`) :
+/// l'ACHAT en Meeshes, écrit dans la MÊME transaction que la ligne `spend` du registre
+/// `MeeshLedger` (MeeshSpend.apply) — ni achat sans possession, ni possession sans achat —,
+/// le JEU (un rang, un trophée, une saison), un OCTROI de l'équipe, un ÉVÉNEMENT. Jamais
+/// acheté en argent réel (#11252). Les packs gratuits n'ont pas de ligne.
+/// `source`, `reference`, `priceMeeshes` et `requestId` sont OPTIONNELS (MongoDB : les lignes
+/// d'avant n'ont pas `source`, et lues sans elle sont des ACHATS ; seul un achat porte un
+/// prix payé non nul et un `requestId`). Une seule ligne par `(userId, packKey)` : c'est l'IDEMPOTENCE.
+model UserPackOwnership {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String   @db.ObjectId
+  /// `packChoiceKey(domaine, slug)` — même clé que `UserStickerPack.packSlug`.
+  packKey      String
+  /// La voie : `purchase` | `game` | `grant` | `event` ; absent = `purchase` (lignes antérieures).
+  source       String?
+  /// Pourquoi cette ligne existe, court : `rank:voix`, `trophy:<clé>`, `season:2`, ou la raison d'un octroi / d'un événement.
+  reference    String?
+  /// Le prix PAYÉ, figé à l'achat (le prix servi peut changer ensuite) ; 0 hors achat (`PackGrants` l'écrit,
+  /// pour qu'un serveur d'avant #11272 — qui le déclarait requis — relise la ligne après un retour arrière).
+  priceMeeshes Int?
+  /// Le `requestId` de la dépense — relie la possession à sa ligne de registre ; absent hors achat.
+  requestId    String?
+  acquiredAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// L'index unique sert aussi « les packs possédés de X » (préfixe userId) : aucun index userId seul.
+  @@unique([userId, packKey])
 }
 
 /// Le CHOIX d'un utilisateur sur un pack : sans ligne, le défaut du pack

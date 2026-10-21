@@ -4,7 +4,10 @@ import MeeshySDK
 
 // MARK: - Les trois décorations de LIEU (#4718)
 
-extension StickerTemplateRenderer {
+enum LocationStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .location
+    static let drawers: [StickerTemplateDrawer] = locationDrawers + locationMoreDrawers
+
 
     // MARK: Les emplacements, lus une fois
 

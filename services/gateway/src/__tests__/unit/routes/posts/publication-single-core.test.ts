@@ -53,6 +53,14 @@ const mockGetPostById = jest.fn<any>();
 const mockDuplicate = jest.fn<any>();
 const mockCanAccessConversation = jest.fn<any>();
 
+// #10315 — la porte de republication et le verdict d'audience ont leurs propres témoins
+// (`services/posts/__tests__/moderationHold.test.ts`) ; cette suite parle d'autre chose.
+jest.mock('../../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../../services/posts/moderationHold') as object),
+  mayRepostSource: async () => true,
+  audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }),
+}));
+
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     createPost: (...args: any[]) => mockCreatePost(...args),
@@ -479,4 +487,122 @@ describe('#4151 — la branche de diffusion suit le TYPE, sur les deux portes', 
       await app.close();
     },
   );
+});
+
+// ─── 3. #10525 — l'auteur republié est prévenu, quelle que soit la porte ──────
+
+describe('#10525 — republier le contenu de quelqu’un prévient son auteur, par les DEUX portes de republication', () => {
+  const repostRow = (type: 'POST' | 'STORY' | 'STATUS' | 'REEL') => ({
+    ...PUBLISHED_ROW,
+    id: '507f1f77bcf86cd7994390aa',
+    type,
+    repostOfId: SOURCE_POST_ID,
+  });
+  const sourceOf = (authorId: string, type: 'POST' | 'STORY' | 'STATUS' | 'REEL') => ({
+    ...PUBLISHED_ROW,
+    id: SOURCE_POST_ID,
+    authorId,
+    type,
+    createdAt: '2026-09-01T08:00:00.000Z',
+    expiresAt: type === 'STORY' ? '2026-09-02T05:00:00.000Z' : null,
+  });
+
+  it.each(['STORY', 'STATUS', 'REEL', 'POST'] as const)(
+    'POST /posts { repostOfId } — un %s republié notifie son auteur, typé',
+    async (type) => {
+      const row = repostRow(type);
+      mockCreatePost.mockResolvedValue(row);
+      mockGetPostById.mockResolvedValue(sourceOf(ALICE_ID, type));
+      const { app, notif } = await buildApp();
+
+      const res = await parPorte['POST /posts'](app, { type, repostOfId: SOURCE_POST_ID });
+      await settle();
+
+      expect(res.statusCode).toBe(201);
+      expect(notif.createPostRepostNotification).toHaveBeenCalledTimes(1);
+      expect(notif.createPostRepostNotification).toHaveBeenCalledWith(expect.objectContaining({
+        actorId: USER_ID,
+        originalPostId: SOURCE_POST_ID,
+        postAuthorId: ALICE_ID,
+        repostId: row.id,
+        postType: type,
+      }));
+      expect(mockGetPostById).toHaveBeenCalledWith(SOURCE_POST_ID, USER_ID);
+
+      await app.close();
+    },
+  );
+
+  it('les deux portes rendent la MÊME notification pour la même republication', async () => {
+    const row = repostRow('STORY');
+    mockCreatePost.mockResolvedValue(row);
+    mockRepostPost.mockResolvedValue(row);
+    mockGetPostById.mockResolvedValue(sourceOf(ALICE_ID, 'STORY'));
+    const { app, notif } = await buildApp();
+
+    await parPorte['POST /posts'](app, { type: 'STORY', repostOfId: SOURCE_POST_ID });
+    await app.inject({ method: 'POST', url: `/posts/${SOURCE_POST_ID}/repost`, payload: { targetType: 'STORY' } });
+    await settle();
+
+    expect(notif.createPostRepostNotification).toHaveBeenCalledTimes(2);
+    const [viaCreation, viaRepost] = notif.createPostRepostNotification.mock.calls.map((call) => call[0]);
+    expect(viaCreation).toEqual(viaRepost);
+
+    await app.close();
+  });
+
+  it('l’auteur republié ne reçoit pas EN PLUS « a publié une nouvelle story »', async () => {
+    mockCreatePost.mockResolvedValue(repostRow('STORY'));
+    mockGetPostById.mockResolvedValue(sourceOf(ALICE_ID, 'STORY'));
+    const { app, notif } = await buildApp();
+
+    await parPorte['POST /posts'](app, { type: 'STORY', repostOfId: SOURCE_POST_ID });
+    await settle();
+
+    expect(notif.createFriendContentNotificationsBatch).toHaveBeenCalledWith(
+      expect.objectContaining({ excludeUserIds: expect.arrayContaining([ALICE_ID]) }),
+    );
+
+    await app.close();
+  });
+
+  it('republier SON propre contenu ne notifie personne', async () => {
+    mockCreatePost.mockResolvedValue(repostRow('STORY'));
+    mockGetPostById.mockResolvedValue(sourceOf(USER_ID, 'STORY'));
+    const { app, notif } = await buildApp();
+
+    const res = await parPorte['POST /posts'](app, { type: 'STORY', repostOfId: SOURCE_POST_ID });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(notif.createPostRepostNotification).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('une publication ORIGINALE ne notifie aucune republication', async () => {
+    const { app, notif } = await buildApp();
+
+    await parPorte['POST /posts'](app);
+    await settle();
+
+    expect(notif.createPostRepostNotification).not.toHaveBeenCalled();
+    expect(mockGetPostById).not.toHaveBeenCalled();
+
+    await app.close();
+  });
+
+  it('une relecture de la source qui jette ne défait pas la republication (#6524)', async () => {
+    mockCreatePost.mockResolvedValue(repostRow('STORY'));
+    mockGetPostById.mockRejectedValue(new Error('PrismaClientValidationError'));
+    const { app, notif } = await buildApp();
+
+    const res = await parPorte['POST /posts'](app, { type: 'STORY', repostOfId: SOURCE_POST_ID });
+    await settle();
+
+    expect(res.statusCode).toBe(201);
+    expect(notif.createPostRepostNotification).not.toHaveBeenCalled();
+
+    await app.close();
+  });
 });

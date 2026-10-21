@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="World Wide">
+<title>World Wide</title>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366F1"/><stop offset="1" stop-color="#4338CA"/></linearGradient>
+<radialGradient id="glow" cx="0.22" cy="0.18" r="0.75"><stop offset="0" stop-color="#A855F7" stop-opacity="0.55"/><stop offset="1" stop-color="#A855F7" stop-opacity="0"/></radialGradient>
+<clipPath id="globe"><circle cx="226" cy="282" r="148"/></clipPath>
+</defs>
+<rect width="512" height="512" fill="url(#bg)"/>
+<rect width="512" height="512" fill="url(#glow)"/>
+<circle cx="226" cy="282" r="148" fill="#FFFFFF" fill-opacity="0.10"/>
+<g clip-path="url(#globe)"><g fill="none" stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" opacity="0.92"><circle cx="226" cy="282" r="148"/><line x1="78" y1="282" x2="374" y2="282"/><line x1="226" y1="134" x2="226" y2="430"/><ellipse cx="226" cy="282" rx="66.6" ry="148"/><path d="M99.6 205.0 Q226 187.3 352.4 205.0"/><path d="M99.6 359.0 Q226 376.7 352.4 359.0"/></g></g>
+<circle cx="226" cy="282" r="148" fill="none" stroke="#FFFFFF" stroke-width="22"/>
+<g>
+<path d="M300 96 h112 a40 40 0 0 1 40 40 v44 a40 40 0 0 1 -40 40 h-58 l-38 34 v-34 h-16 a40 40 0 0 1 -40 -40 v-44 a40 40 0 0 1 40 -40 z" fill="#FFFFFF" stroke="#4F46E5" stroke-width="16" stroke-linejoin="round"/>
+<rect x="292" y="128" width="104" height="16" rx="8" fill="#4F46E5"/>
+<rect x="292" y="152" width="80" height="16" rx="8" fill="#6366F1"/>
+<rect x="292" y="176" width="56" height="16" rx="8" fill="#A855F7"/>
+</g>
+</svg>

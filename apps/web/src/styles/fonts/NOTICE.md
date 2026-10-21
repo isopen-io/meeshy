@@ -67,3 +67,36 @@ fichiers ici ne sont pas modifiés et ne sont pas vendus.
 
 **Apache 2.0** (Tangerine, Permanent Marker) — redistribution libre, avis de
 licence conservé, modifications à signaler. Aucune modification ici.
+
+# Les polices des cadres de gloire — provenance et licences (#10158)
+
+La liste FERMÉE `GLORY_FRAME_FONTS` (`packages/shared/types/glory-frame-format.ts`) :
+un pack de cadres RÉFÉRENCE ces familles, il ne les transporte jamais. La table,
+les poids mesurés et le choix d'écriture vivent dans
+`src/lib/game-photo/glory-fonts.ts` ; les `@font-face`, dans `../glory-fonts.css`.
+
+| famille | graisses servies | fichier | licence | octets |
+|---|---|---|---|---|
+| Cinzel | 400 à 900 (variable) | `glory-cinzel-latin.woff2` | OFL 1.1 | 25 888 |
+| Cinzel Decorative | 700 | `glory-cinzel-decorative-700-latin.woff2` | OFL 1.1 | 15 428 |
+| Cinzel Decorative | 900 | `glory-cinzel-decorative-900-latin.woff2` | OFL 1.1 | 14 540 |
+| Cormorant Garamond | 300 à 700 (variable) | `glory-cormorant-garamond-latin.woff2` | OFL 1.1 | 37 776 |
+| Fraunces | 100 à 900 (variable, axe `wght` seul) | `glory-fraunces-latin.woff2` | OFL 1.1 | 36 560 |
+| Manrope | 200 à 800 (variable) | `glory-manrope-latin.woff2` | OFL 1.1 | 24 576 |
+| Caveat | 700 | `caveat-700-latin.woff2` (le fichier de `brush`, ci-dessus) | OFL 1.1 | — |
+
+**Provenance** : le sous-ensemble `latin` publié par Google Fonts le 2026-10-12,
+pris tel quel (même méthode que ci-dessus), par
+`https://fonts.googleapis.com/css2?family=Cinzel:wght@400..900&family=Cinzel+Decorative:wght@700;900&family=Cormorant+Garamond:wght@300..700&family=Fraunces:wght@100..900&family=Manrope:wght@200..800&display=swap`.
+Fraunces est demandée sans son axe optique (`opsz`) : 36 560 octets au lieu de
+67 388, pour une plaque dont la taille ne varie pas assez pour en tirer parti.
+
+**Le nom réservé.** L'avis de Cinzel Decorative porte « Copyright (c) 2012
+Natanael Gama, with Reserved Font Name 'Cinzel' ». Sous l'OFL 1.1, une version
+MODIFIÉE ne peut plus porter ce nom. Meeshy ne modifie pas ces fichiers : ni
+re-sous-ensemblage, ni conversion, ni réécriture de table — ils sont servis
+octet pour octet tels que Google Fonts les distribue (le témoin
+`glory-fonts.test.ts` en fige la taille). Cinzel (2020, « The Cinzel Project
+Authors »), Cormorant Garamond, Fraunces et Manrope ne déclarent pas de nom
+réservé. L'avis `conformite-juridique` demandé par le lot (#10158) reste à
+consigner sur l'issue : cette page dit les faits, elle n'est pas un avis.

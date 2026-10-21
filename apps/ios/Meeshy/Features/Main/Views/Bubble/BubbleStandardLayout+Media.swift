@@ -208,6 +208,7 @@ extension BubbleStandardLayout {
                 accentHex: contactColor,
                 isDark: isDark,
                 mentionDisplayNames: mentionDisplayNames,
+                authorPresence: quotedAuthorPresence(reply.reference),
                 onQuotedAuthorTap: onQuotedAuthorTap,
                 onQuotedMediaTap: onQuotedMediaTap
             )
@@ -299,6 +300,10 @@ fileprivate struct BubbleGridCell: View {
     let onOpenProtected: (MessageAttachment) -> Void
 
     @State private var showReactionPicker = false
+    /// L'image affichée par la case est ARRIVÉE (`onFullImageLoaded`) : le
+    /// badge « télécharger » se tait, elle est sur l'appareil (#10370).
+    @State private var displayedImageLanded = false
+    @Environment(\.displayScale) private var displayScale: CGFloat
 
     private var attachmentIsProtected: Bool {
         attachment.isViewOnce || attachment.isBlurred
@@ -473,7 +478,8 @@ fileprivate struct BubbleGridCell: View {
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
-            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth)
+            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth,
+                                onFullImageLoaded: { displayedImageLanded = true })
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
@@ -537,7 +543,11 @@ fileprivate struct BubbleGridCell: View {
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
-                }
+                },
+                displayedURL: BubbleGridImageView.displayedURL(for: attachment,
+                                                               cellPointWidth: cellPointWidth,
+                                                               displayScale: displayScale),
+                displayedImageLanded: displayedImageLanded
             )
         }
     }
@@ -598,24 +608,31 @@ fileprivate struct BubbleGridImageView: View {
     /// Largeur en points de la cellule (décidée par `visualMediaGrid`). Sert à
     /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
     let cellPointWidth: CGFloat
+    /// Le plein format affiché est résident — relayé au badge (#10370).
+    var onFullImageLoaded: (@MainActor () -> Void)? = nil
 
     @Environment(\.displayScale) private var displayScale: CGFloat
+
+    /// 5.2 — l'URL que la case AFFICHE : la plus petite variante
+    /// `>= largeur d'affichage en px` (atome pur SDK), ou l'original sans
+    /// variante (image chiffrée). Site unique : le badge y lit la MÊME URL
+    /// que celle que la case télécharge (#10370).
+    static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,
+                             displayScale: CGFloat) -> String? {
+        guard !attachment.fileUrl.isEmpty else { return nil }
+        return ImageVariantSelector.bestImageURL(
+            variants: attachment.imageVariants ?? [],
+            originalURL: attachment.fileUrl,
+            originalWidth: attachment.width,
+            targetWidthPx: Int((cellPointWidth * displayScale).rounded())
+        )
+    }
 
     var body: some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-
-        // 5.2 — choisir la plus petite variante `>= largeur d'affichage en px`
-        // (atome pur SDK). Sans variante (image chiffrée) → `originalFull`.
-        let targetWidthPx = Int((cellPointWidth * displayScale).rounded())
-        let selectedFull: String? = originalFull.map { orig in
-            ImageVariantSelector.bestImageURL(
-                variants: attachment.imageVariants ?? [],
-                originalURL: orig,
-                originalWidth: attachment.width,
-                targetWidthPx: targetWidthPx
-            )
-        }
+        let selectedFull = Self.displayedURL(for: attachment, cellPointWidth: cellPointWidth,
+                                             displayScale: displayScale)
         // N6 — quand une variante allégée est choisie (≠ original), le thumbHash
         // couvre déjà le remplissage instantané : on saute le tier thumbnail pour
         // ne pas télécharger thumbnail + variante.
@@ -628,7 +645,8 @@ fileprivate struct BubbleGridImageView: View {
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: effectiveThumb,
                 fullUrl: selectedFull,
-                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth)
+                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
+                onFullImageLoaded: onFullImageLoaded
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }
@@ -674,296 +692,5 @@ private struct AttachmentBlurOverlayView: View {
         .accessibilityHint(hint ?? "")
         .accessibilityAddTraits(.isButton)
         .onTapGesture { onReveal() }
-    }
-}
-
-// MARK: - Bubble Carousel View (Native Paging + Elegant Transitions)
-
-struct BubbleCarouselView: View {
-    let items: [MessageAttachment]
-    @Binding var carouselIndex: Int
-    @Binding var showCarousel: Bool
-    @Binding var fullscreenAttachment: MessageAttachment?
-    let contactColor: String
-    let messageDeliveryStatus: Message.DeliveryStatus
-    var footer: BubbleFooterModel = .empty
-    var isDark: Bool = false
-    var containerWidth: CGFloat = 260
-
-    @State private var currentPageID: String?
-
-    private func carouselHeight(width: CGFloat) -> CGFloat {
-        // Pager height = max(width / ratio) — pure aspect ratio respect, no
-        // cap. A portrait 9:16 slide in the mix dictates the pager height
-        // (≈ width × 1.78); landscape slides are letterboxed inside that
-        // height with their natural aspect. Voulu pour respecter le format
-        // de chaque vidéo.
-        let heights = items.map { att -> CGFloat in
-            let r = att.videoAspectRatio ?? (16.0 / 9.0)
-            return width / r
-        }
-        // Repli 9:16 — `SceneShape.aspect` (#6896/#6904), site unique du rapport.
-        return heights.max() ?? width * SceneShape.aspect
-    }
-
-    var body: some View {
-        ZStack(alignment: .top) {
-            AdaptiveHorizontalPager(
-                items: items,
-                currentPageID: $currentPageID,
-                fillVertical: false,
-                carouselTransition: true
-            ) { _, attachment in
-                carouselPage(attachment)
-            }
-            .frame(height: carouselHeight(width: containerWidth))
-
-            carouselTopBar
-        }
-        // Timestamp + delivery state — overlay footer. Aucune vidéo ne joue
-        // dans le carrousel (#8231) : il n'a plus de raison de s'effacer.
-        .overlay(alignment: .bottomTrailing) {
-            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
-                .equatable()
-                .padding(MeeshySpacing.sm)
-        }
-        .onAppear {
-            let startIndex = max(0, min(carouselIndex, items.count - 1))
-            currentPageID = items[startIndex].id
-        }
-        .adaptiveOnChange(of: currentPageID) { _, newID in
-            guard let newID,
-                  let newIndex = items.firstIndex(where: { $0.id == newID })
-            else { return }
-
-            let oldIndex = carouselIndex
-            carouselIndex = newIndex
-
-            if oldIndex != newIndex {
-                let oldAttachment = items[oldIndex]
-                if oldAttachment.type == .video {
-                    // BUG E fix : release (URL-gated) plutôt que pause sur
-                    // swipe-away — le player ne traîne pas en mémoire.
-                    SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)
-                }
-                HapticFeedback.light()
-            }
-
-            prefetchAdjacentPages(around: newIndex)
-        }
-    }
-
-    // MARK: - Top Bar
-
-    private var carouselTopBar: some View {
-        HStack(spacing: 0) {
-            Button {
-                // BUG E fix : libère le player de la slide active (URL-gated).
-                let current = items[max(0, min(carouselIndex, items.count - 1))]
-                if current.type == .video {
-                    SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
-                }
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    showCarousel = false
-                }
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "xmark")
-                    // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 26×26 → figé.
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(.ultraThinMaterial.opacity(MeeshyOpacity.intense)))
-                    .overlay(Circle().stroke(Color.white.opacity(MeeshyOpacity.light), lineWidth: MeeshyBorder.hairline))
-            }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
-
-            Spacer()
-
-            if items.count > 1 {
-                pageIndicator
-            }
-        }
-        .padding(.horizontal, MeeshySpacing.smPlus)
-        .padding(.top, MeeshySpacing.smPlus)
-    }
-
-    // MARK: - Page Indicator
-
-    @ViewBuilder
-    private var pageIndicator: some View {
-        let accent = Color(hex: contactColor)
-
-        if items.count <= 7 {
-            HStack(spacing: MeeshySpacing.xs) {
-                ForEach(0..<items.count, id: \.self) { i in
-                    Circle()
-                        .fill(i == carouselIndex ? accent : Color.white.opacity(MeeshyOpacity.strong))
-                        .frame(
-                            width: i == carouselIndex ? 7 : 5,
-                            height: i == carouselIndex ? 7 : 5
-                        )
-                        .shadow(
-                            color: i == carouselIndex ? accent.opacity(0.6) : .clear,
-                            radius: 4
-                        )
-                        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.smPlus)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
-                    .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
-            )
-        } else {
-            Text("\(carouselIndex + 1) / \(items.count)")
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
-                .padding(.horizontal, MeeshySpacing.smPlus)
-                .padding(.vertical, MeeshySpacing.xs)
-                .background(
-                    Capsule()
-                        .fill(.ultraThinMaterial.opacity(MeeshyOpacity.heavy))
-                        .overlay(Capsule().stroke(Color.white.opacity(MeeshyOpacity.subtle), lineWidth: MeeshyBorder.hairline))
-                )
-                .contentTransition(.numericText())
-                .animation(.spring(response: 0.3, dampingFraction: 0.7), value: carouselIndex)
-        }
-    }
-
-    // MARK: - Carousel Page
-
-    @ViewBuilder
-    private func carouselPage(_ attachment: MessageAttachment) -> some View {
-        ZStack {
-            Color.black
-
-            switch attachment.type {
-            case .image:
-                carouselImageCell(attachment)
-            case .video:
-                carouselVideoCell(attachment)
-            default:
-                EmptyView()
-            }
-        }
-        .frame(height: carouselHeight(width: containerWidth))
-        .clipped()
-        .contentShape(Rectangle())
-        .onTapGesture {
-            fullscreenAttachment = attachment
-            HapticFeedback.light()
-        }
-        .overlay(alignment: .bottom) {
-            DownloadBadgeView(
-                attachment: attachment,
-                accentColor: contactColor,
-                messageDeliveryStatus: messageDeliveryStatus,
-                onShareFile: { _ in }
-            )
-            .padding(.bottom, MeeshySpacing.sm)
-        }
-    }
-
-    // MARK: - Image Cell
-
-    @ViewBuilder
-    private func carouselImageCell(_ attachment: MessageAttachment) -> some View {
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl ?? thumbUrl
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
-            }
-            .aspectRatio(contentMode: .fit)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-        } else {
-            Color(hex: attachment.thumbnailColor)
-                .overlay(
-                    Image(systemName: "photo")
-                        .font(MeeshyFont.relative(MeeshyIconSize.xxxl))
-                        .foregroundColor(.white.opacity(0.4))
-                        .accessibilityHidden(true)
-                )
-        }
-    }
-
-    // MARK: - Video Cell
-
-    /// Même lecteur que la tuile (#8231) : trois contrôles, et le toucher de
-    /// la vidéo hors contrôles ouvre le plein écran.
-    private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
-            MeeshyVideoPlayer(
-                attachment: attachment,
-                style: .inline,
-                controls: .inlineMinimal,
-                accentColor: contactColor,
-                frame: .bubble,
-                availability: availability,
-                performance: .carousel,
-                surfaceTapExpands: true,
-                onDownload: onDownload,
-                onExpand: { fullscreenAttachment = attachment }
-            )
-        }
-            .overlay(alignment: .bottom) {
-                MediaConsumptionProgressBar(
-                    attachmentId: attachment.id,
-                    accentHex: contactColor,
-                    servedConsumption: attachment.currentUserConsumption,
-                    totalDuration: Double(attachment.duration ?? 0) / 1000.0)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    // MARK: - Prefetch
-
-    /// Pure gate: should this attachment kind be prefetched given the
-    /// resolved auto-download policy? Extracted so the wiring in
-    /// `prefetchAdjacentPages` (2026-07-21 fix — the ±1 carousel neighbor
-    /// prefetch previously ignored `MediaDownloadPolicyEngine` entirely,
-    /// burning cellular data against 'Never'/'Wi-Fi only') is testable
-    /// without spinning up the full carousel view.
-    nonisolated static func shouldPrefetchAttachment(
-        kind: MessageAttachment.AttachmentType,
-        allowImage: Bool,
-        allowVideo: Bool
-    ) -> Bool {
-        kind == .video ? allowVideo : allowImage
-    }
-
-    private func prefetchAdjacentPages(around index: Int) {
-        let prefetchRange = max(0, index - 1)...min(items.count - 1, index + 1)
-        // Respect the user's auto-download policy — mirrors
-        // ConversationMediaHandler.prefetchRecentMedia. Without this gate the
-        // ±1 neighbor prefetch pulled full-size media over cellular
-        // regardless of the 'Never'/'Wi-Fi only' preference.
-        let condition = NetworkConditionMonitor.shared.condition
-        let prefs = MediaDownloadPreferencesStore.shared.preferences
-        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
-        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
-        for i in prefetchRange {
-            let attachment = items[i]
-            guard Self.shouldPrefetchAttachment(kind: attachment.type, allowImage: allowImage, allowVideo: allowVideo) else { continue }
-            // BUG C fix : pour une vidéo, NE JAMAIS prefetch le body MP4 dans
-            // le cache image (téléchargement complet + échec de décodage
-            // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
-            let urlStr: String = attachment.type == .video
-                ? (attachment.thumbnailUrl ?? "")
-                : (attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl)
-            guard !urlStr.isEmpty else { continue }
-            Task {
-                _ = await CacheCoordinator.shared.images.image(
-                    for: MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString ?? urlStr
-                )
-            }
-        }
     }
 }

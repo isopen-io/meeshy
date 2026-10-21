@@ -97,6 +97,12 @@ export type PublishStoryParams = ConversationsDeps & {
   readonly alsoAsReel?: boolean;
   readonly storyEffects: CanvasV3;
   readonly mediaIds: readonly string[];
+  /**
+   * **LA CLÉ D'IDEMPOTENCE** (#10316, `X-Client-Mutation-Id`) — un rejeu du
+   * même contenu sous la même clé rend la publication déjà écrite, jamais une
+   * seconde. Absente ⇒ l'en-tête ne part pas (le corps d'un client antérieur).
+   */
+  readonly clientMutationId?: string;
   readonly signal?: AbortSignal;
 };
 
@@ -144,7 +150,7 @@ export async function publishStory(params: PublishStoryParams): Promise<ApiResul
   return params.transport.request<PublishStoryResult>({
     method: 'POST',
     path: postsEndpoints.root,
-    headers: CANVAS_CAPS_HEADERS,
+    headers: params.clientMutationId !== undefined ? { ...CANVAS_CAPS_HEADERS, 'X-Client-Mutation-Id': params.clientMutationId } : CANVAS_CAPS_HEADERS,
     body: {
       type: params.type ?? 'STORY',
       ...(params.visibility !== undefined ? { visibility: params.visibility } : {}),

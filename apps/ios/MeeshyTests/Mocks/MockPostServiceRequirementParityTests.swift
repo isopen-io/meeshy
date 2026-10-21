@@ -89,4 +89,18 @@ final class MockPostServiceRequirementParityTests: XCTestCase {
         XCTAssertEqual(mock.createCallCount, 1, "Le double doit avoir été atteint.")
         XCTAssertNil(mock.lastCreateDiscoverabilityPrecision)
     }
+
+    /// #10500 — la requirement de comptage prend des événements ENVELOPPÉS ;
+    /// la forme sans enveloppe est une commodité. Appelée par le protocole,
+    /// elle doit atteindre le double, enveloppe posée.
+    func test_leDouble_observeLaRequirementEnveloppeeDuComptage() async throws {
+        let mock = MockPostService()
+        let service: PostServiceProviding = mock
+
+        _ = try await service.recordSocialEvents([.view(postId: "p1", durationMs: nil, surface: .detail)], credential: .account)
+
+        XCTAssertEqual(mock.recordSocialEventsCallCount, 1, "La commodité est retombée à côté du double.")
+        XCTAssertEqual(mock.recordedStampedSocialEventBatches.first?.first?.event, .view(postId: "p1", durationMs: nil, surface: .detail))
+        XCTAssertNotNil(mock.recordedStampedSocialEventBatches.first?.first?.stamp.occurredAt)
+    }
 }

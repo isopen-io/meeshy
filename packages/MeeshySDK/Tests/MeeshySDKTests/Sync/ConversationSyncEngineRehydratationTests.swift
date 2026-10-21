@@ -186,7 +186,7 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
 
         _ = await engine.syncSinceLastCheckpoint()
 
-        XCTAssertEqual(mockAPI.requestCount, 0, "un renommage seul n'a rien à réhydrater")
+        XCTAssertEqual(mockAPI.requestCount, 0, "une ligne sans nouvelle activité, pas plus récente que le cache, n'a rien à réhydrater")
         let ligne = await c1()
         XCTAssertEqual(ligne?.lastMessagePreview, "On se cale à 15 h ?")
     }
@@ -218,6 +218,125 @@ final class ConversationSyncEngineRehydratationTests: XCTestCase {
             "au réveil, le premier essai tombe souvent sur un réseau pas encore rétabli : le signal suivant doit retenter")
         let ligne = await c1()
         XCTAssertEqual(ligne?.lastMessagePreview, "Le train part à 16 h")
+    }
+
+    // MARK: - La réaction et l'appel survenus app fermée (#7631)
+
+    /// Le cache tient la ligne telle qu'à la fermeture de l'app : même dernier
+    /// message que ce que `/sync` sert, modifiée pour la dernière fois AVANT
+    /// la ligne servie, et un appel alors en cours.
+    private func semeLaLigneDUnAppelEnCours() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        var ancienne = MeeshyConversation(
+            id: "c1", identifier: "equipe-lagos", type: .group,
+            lastMessageAt: Self.date("2026-09-04T11:59:00.000Z"),
+            updatedAt: Self.date("2026-09-04T11:00:00.000Z"),
+            unreadCount: 0
+        )
+        ancienne.title = "Équipe Lagos"
+        ancienne.lastMessagePreview = "Le train part à 16 h"
+        ancienne.activeCall = ConversationActiveCall(
+            id: "appel-1", kind: "audio", participantCount: 2,
+            startedAt: Self.date("2026-09-04T11:05:00.000Z")
+        )
+        try? await CacheCoordinator.shared.conversations.save([ancienne], for: "list")
+    }
+
+    private func pageRiche(json: String) -> OffsetPaginatedAPIResponse<[APIConversation]> {
+        let ligne = try! APIClient.makeAPIPayloadDecoder().decode(APIConversation.self, from: Data(json.utf8))
+        return OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: [ligne],
+            pagination: OffsetPagination(total: 1, hasMore: false, limit: 100, offset: 0),
+            error: nil
+        )
+    }
+
+    private func ligneRicheSansAppelAvecReaction() -> String {
+        """
+        {
+          "id": "c1",
+          "type": "group",
+          "identifier": "equipe-lagos",
+          "title": "Équipe Lagos",
+          "isActive": true,
+          "memberCount": 5,
+          "lastMessageAt": "2026-09-04T11:59:00.000Z",
+          "createdAt": "2026-08-01T10:00:00.000Z",
+          "updatedAt": "2026-09-04T11:59:30.000Z",
+          "unreadCount": 0,
+          "lastMessage": {
+            "id": "m9",
+            "content": "Le train part à 16 h",
+            "createdAt": "2026-09-04T11:59:00.000Z",
+            "sender": { "id": "p2", "userId": "u2", "displayName": "Awa" }
+          },
+          "activeCall": null,
+          "lastReaction": {
+            "emoji": "🎉",
+            "reactorId": "p3",
+            "reactorUserId": "u3",
+            "reactorName": "Kofi",
+            "messageId": "m9",
+            "targetSenderId": "p2",
+            "targetSenderUserId": "u2",
+            "excerpt": "Le train part à 16 h",
+            "createdAt": "2026-09-04T11:59:20.000Z"
+          }
+        }
+        """
+    }
+
+    func test_delta_appelTermineAppFermee_laLigneNeLAfficheplus() async {
+        await semeLaLigneDUnAppelEnCours()
+        mockSync.scripte = .delta(json: deltaJSON(ligne: ligneMaigreJSON()), validateur: nil)
+        mockAPI.stub("/conversations", result: pageRiche(json: ligneRicheSansAppelAvecReaction()))
+
+        let succes = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertTrue(succes)
+        let ligne = await c1()
+        XCTAssertNil(ligne?.activeCall,
+            "un appel terminé pendant que l'app était fermée ne s'affiche plus « en cours » au démarrage")
+        XCTAssertGreaterThan(mockAPI.requestCount, 0,
+            "la ligne modifiée sans nouveau message se relit par la route riche")
+    }
+
+    func test_delta_reactionRecueAppFermee_laLigneLaMontre() async {
+        await semeLaLigneDUnAppelEnCours()
+        mockSync.scripte = .delta(json: deltaJSON(ligne: ligneMaigreJSON()), validateur: nil)
+        mockAPI.stub("/conversations", result: pageRiche(json: ligneRicheSansAppelAvecReaction()))
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        let ligne = await c1()
+        XCTAssertEqual(ligne?.lastReaction?.emoji, "🎉",
+            "une réaction reçue app fermée apparaît au démarrage")
+        XCTAssertEqual(ligne?.lastReaction?.reactorName, "Kofi")
+    }
+
+    func test_delta_ligneQueLeCacheTientDeja_neRappellePasLaRouteRiche() async {
+        await semeLaLigneDUnAppelEnCours()
+        let dejaVue = """
+        {
+          "id": "c1",
+          "type": "group",
+          "identifier": "equipe-lagos",
+          "title": "Équipe Lagos",
+          "isActive": true,
+          "memberCount": 5,
+          "lastMessageAt": "2026-09-04T11:59:00.000Z",
+          "createdAt": "2026-08-01T10:00:00.000Z",
+          "updatedAt": "2026-09-04T11:00:00.000Z"
+        }
+        """
+        mockSync.scripte = .delta(json: deltaJSON(ligne: dejaVue), validateur: nil)
+
+        _ = await engine.syncSinceLastCheckpoint()
+
+        XCTAssertEqual(mockAPI.requestCount, 0,
+            "une ligne qui n'est pas plus récente que le cache n'a rien à réhydrater")
+        let ligne = await c1()
+        XCTAssertEqual(ligne?.activeCall?.id, "appel-1")
     }
 
     // MARK: - Les messages préchargés par l'extension de notification

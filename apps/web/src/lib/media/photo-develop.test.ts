@@ -99,6 +99,14 @@ describe('developPhoto', () => {
     expect(journal.encoded[0]?.quality).toBeLessThanOrEqual(0.92);
   });
 
+  test('une borne et une qualité propres à un usage (la source du carnet : 1 440 px, q0,85), sans look', async () => {
+    const { env, journal } = fakeEnv();
+    await developPhoto({ image: {} as CanvasImageSource, size: { width: 3024, height: 4032 } }, env, { maxEdge: 1440, quality: 0.85, look: null });
+    expect(journal.painted).toEqual([{ crop: { x: 0, y: 0, width: 3024, height: 4032 }, size: { width: 1080, height: 1440 } }]);
+    expect(journal.encoded).toEqual([{ mime: 'image/jpeg', quality: 0.85 }]);
+    expect(journal.put).toBe(0);
+  });
+
   test('un recadrage (zoom numérique) borne la sortie à la taille du recadrage', async () => {
     const { env, journal } = fakeEnv();
     await developPhoto({ image: {} as CanvasImageSource, size: { width: 1920, height: 1080 }, crop: { x: 480, y: 270, width: 960, height: 540 } }, env);
@@ -148,5 +156,74 @@ describe('developPhotoFile', () => {
     const { env } = fakeEnv();
     const file = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
     expect(await developPhotoFile(file, fileEnv(env, true))).toBe(file);
+  });
+});
+
+describe('hors du fil principal (#11310)', () => {
+  const offMainEnv = (offMain: PhotoFileEnv['offMain']): { readonly env: PhotoFileEnv; readonly decoded: number[] } => {
+    const decoded: number[] = [];
+    const base = fakeEnv().env;
+    return {
+      decoded,
+      env: { ...base, decode: async () => (decoded.push(1), { image: {} as CanvasImageSource, size: { width: 10, height: 10 }, close: () => undefined }), ...(offMain === undefined ? {} : { offMain }) },
+    };
+  };
+
+  test('une photo de la caméra du système est développée par le worker : aucun décodage ni pixel sur le fil principal', async () => {
+    const { env, decoded } = offMainEnv(() => Promise.resolve(new Blob(['j'], { type: 'image/jpeg' })));
+    const shot = new File([new Uint8Array(4)], 'IMG_9.HEIC', { type: 'image/heic' });
+    const developed = await developPhotoFile(shot, env);
+    expect(developed.name).toBe('IMG_9.jpg');
+    expect(developed.type).toBe('image/jpeg');
+    expect(decoded).toEqual([]);
+  });
+
+  test('le worker rend null (panne, worker muet) : le fil principal reprend, et la photo part développée', async () => {
+    const { env, decoded } = offMainEnv(() => Promise.resolve(null));
+    const shot = new File([new Uint8Array(4)], 'IMG_9.HEIC', { type: 'image/heic' });
+    const developed = await developPhotoFile(shot, env);
+    expect(decoded).toEqual([1]);
+    expect(developed.name).toBe('IMG_9.jpg');
+  });
+
+  test('le worker rend null et le fil principal ne sait pas la lire non plus : la photo part telle quelle', async () => {
+    const { env } = offMainEnv(() => Promise.resolve(null));
+    const unreadable: PhotoFileEnv = { ...env, decode: () => Promise.reject(new Error('decode')) };
+    const shot = new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' });
+    expect(await developPhotoFile(shot, unreadable)).toBe(shot);
+  });
+
+  test('le repli sur le fil principal ne repasse pas par le worker', async () => {
+    const offloaded: unknown[] = [];
+    const { env } = offMainEnv(() => Promise.resolve(null));
+    const withFrames: PhotoFileEnv = { ...env, develop: (request) => (offloaded.push(request.size), Promise.resolve(null)) };
+    await developPhotoFile(new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' }), withFrames);
+    expect(offloaded).toEqual([]);
+  });
+
+  test('un cadre que le worker rend null (panne) est développé sur le fil principal : la prise de vue ne se perd pas', async () => {
+    const { env, journal } = fakeEnv();
+    const blob = await developPhoto({ image: {} as CanvasImageSource, size: { width: 800, height: 600 } }, { ...env, develop: () => Promise.resolve(null) });
+    expect(blob?.type).toBe('image/jpeg');
+    expect(journal.painted).toHaveLength(1);
+  });
+
+  test('sans worker (undefined) : le chemin d’avant, sur le fil principal', async () => {
+    const { env, decoded } = offMainEnv(() => undefined);
+    const shot = new File([new Uint8Array(4)], 'IMG_9.jpg', { type: 'image/jpeg' });
+    await developPhotoFile(shot, env);
+    expect(decoded).toEqual([1]);
+  });
+
+  test('une image capturée (cadre vidéo) est confiée au worker quand l’environnement en a un', async () => {
+    const { env, journal } = fakeEnv();
+    const offloaded: unknown[] = [];
+    const blob = await developPhoto({ image: {} as CanvasImageSource, size: { width: 4000, height: 3000 } }, {
+      ...env,
+      develop: (request) => (offloaded.push(request.size), Promise.resolve(new Blob(['j'], { type: 'image/jpeg' }))),
+    });
+    expect(blob?.type).toBe('image/jpeg');
+    expect(offloaded).toEqual([{ width: PHOTO_MAX_EDGE, height: 1920 }]);
+    expect(journal.painted).toEqual([]);
   });
 });

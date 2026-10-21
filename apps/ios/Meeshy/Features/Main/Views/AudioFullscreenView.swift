@@ -115,9 +115,39 @@ struct AudioFullscreenSource: Identifiable {
     }
 }
 
+extension AudioFullscreenSource {
+
+    /// La piste que sert une élection du Prisme (`SocialAudioTrack`) : la
+    /// version traduite de cette langue si elle existe, l'original sinon.
+    func servedTrackURL(selection: String) -> String {
+        guard selection != SocialAudioTrack.originalSentinel,
+              let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selection.lowercased() })
+        else { return attachment.fileUrl }
+        return audio.url
+    }
+
+    /// L'entrée de file d'une page qu'on n'a pas encore ouverte : la piste
+    /// que sa page servirait en s'ouvrant — la même élection, jamais une
+    /// seconde descente.
+    @MainActor
+    var openingQueuedAudio: QueuedAudio {
+        queuedAudio(urlString: servedTrackURL(selection: SocialAudioTrack.openingSelection(for: self)))
+    }
+}
+
 // MARK: - Audio Fullscreen Container (swipe navigation + dismiss)
 
+/// **Le plein écran des vocaux** — un pager de pages `AudioFullscreenPage`,
+/// dans l'ordre de RÉCEPTION (#10383), sur un fond qui suit le thème.
+///
+/// Le conteneur tient ce qui dépasse une page : l'ordre, le chrome qui
+/// s'efface (`FullscreenChromeState`), l'enchaînement — la page suit la piste
+/// que le lecteur partagé joue —, et les deux couches où l'on PARLE du vocal
+/// (rangée d'émojis, barre de réponse, #8916), au-dessus de tout.
 struct AudioFullscreenView: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
     let allAudioItems: [AudioFullscreenSource]
     let startAttachmentId: String
     let contactColor: String
@@ -130,16 +160,69 @@ struct AudioFullscreenView: View {
     /// travers une barrière `fullScreenCover`, cf. lessons).
     var moodEmojiProvider: ((String) -> String?)?
     var moodTapProvider: ((String) -> ((CGPoint) -> Void)?)?
+    /// Réagir, répondre, créer avec ce son (#8916) — `nil` ⇒ aucun bouton.
+    var actions: AudioFullscreenActions?
+
+    init(allAudioItems: [AudioFullscreenSource],
+         startAttachmentId: String,
+         contactColor: String,
+         mentionDisplayNames: [String: String] = [:],
+         onDismissToMessage: ((String) -> Void)? = nil,
+         moodEmojiProvider: ((String) -> String?)? = nil,
+         moodTapProvider: ((String) -> ((CGPoint) -> Void)?)? = nil,
+         actions: AudioFullscreenActions? = nil) {
+        let ordered = AudioFullscreenSequence.ordered(allAudioItems, receivedAt: \.createdAt)
+        self.allAudioItems = ordered
+        self.startAttachmentId = startAttachmentId
+        // La page d'entrée est posée dès l'`init`, jamais dans un `onAppear` :
+        // sinon la page 0 naît ACTIVE, lance sa lecture, et la page suivie
+        // (`followActiveTrack`) ramènerait l'écran sur elle au lieu du vocal
+        // touché.
+        let startIndex = ordered.firstIndex { $0.attachment.id == startAttachmentId } ?? 0
+        self._currentIndex = State(initialValue: startIndex)
+        self._currentPageID = State(initialValue: ordered.indices.contains(startIndex) ? ordered[startIndex].id : nil)
+        self.contactColor = contactColor
+        self.mentionDisplayNames = mentionDisplayNames
+        self.onDismissToMessage = onDismissToMessage
+        self.moodEmojiProvider = moodEmojiProvider
+        self.moodTapProvider = moodTapProvider
+        self.actions = actions
+    }
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverRunning
     @State private var currentPageID: String?
     @State private var currentIndex: Int = 0
     @State private var dragOffset: CGFloat = 0
     @State private var isDismissing = false
+    /// Le chrome à l'écran, effacé, ou voilé par une ouverture — UNE loi pour
+    /// toutes les visionneuses (`FullscreenChromeState`, #8878).
+    @State private var chrome = FullscreenChromeState.initial
+    @State private var isPlaying = false
+    /// Chaque geste sur un contrôle relance le délai d'effacement.
+    @State private var chromeTouches = 0
+    @State private var showFullEmojiPicker = false
+    /// Le brouillon de réponse, PAR PIÈCE (#6165) : deux vocaux se commentent
+    /// séparément, et feuilleter ne change pas ce qu'on cite.
+    @State private var replyDrafts: [String: String] = [:]
+    @State private var replyTarget: AudioFullscreenSource?
+    @State private var replyLanguage: String = DefaultComposerLanguage.resolve()
+    @State private var replyKeyboard: KeyboardTransition?
+    /// La piste que l'écran a lui-même demandée — tenue hors du rendu : la
+    /// noter ne doit refaire aucune page.
+    @State private var turnMemory = AudioFullscreenTurnMemory()
+
+    private var coordinator: ConversationAudioCoordinator { .sharedForTesting }
+    private var ids: [String] { allAudioItems.map(\.id) }
+    /// Par IDENTITÉ : la pièce regardée, jamais « celle qui occupe son ancien rang ».
+    private var currentSource: AudioFullscreenSource? {
+        AudioFullscreenPaging.index(of: currentPageID, in: ids).map { allAudioItems[$0] }
+    }
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            AudioFullscreenBackdrop(accentHex: contactColor, isDark: colorScheme == .dark)
 
             if !allAudioItems.isEmpty {
                 AdaptiveHorizontalPager(
@@ -147,25 +230,16 @@ struct AudioFullscreenView: View {
                     currentPageID: $currentPageID,
                     fillVertical: true
                 ) { index, item in
-                    AudioFullscreenPage(
-                        item: item,
-                        contactColor: contactColor,
-                        mentionDisplayNames: mentionDisplayNames,
-                        isActive: index == currentIndex,
-                        pageIndex: index,
-                        totalPages: allAudioItems.count,
-                        moodEmojiProvider: moodEmojiProvider,
-                        moodTapProvider: moodTapProvider,
-                        onDismiss: { dismissView() },
-                        onDismissToMessage: { messageId in
-                            onDismissToMessage?(messageId)
-                            dismiss()
-                        }
-                    )
+                    page(index: index, item: item)
                 }
                 .offset(y: dragOffset)
-                .gesture(verticalDismissGesture)
+                .modifier(AudioFullscreenDismissDrag(offset: $dragOffset, onDismiss: dismissDownward))
                 .opacity(isDismissing ? 0 : 1)
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+                // La liste a bougé sous l'écran : la position suit la page regardée.
+                .adaptiveOnChange(of: ids) { _, newIds in
+                    if let idx = AudioFullscreenPaging.index(of: currentPageID, in: newIds), idx != currentIndex { currentIndex = idx }
+                }
                 .adaptiveOnChange(of: currentPageID) { _, newID in
                     guard let newID,
                           let newIdx = allAudioItems.firstIndex(where: { $0.id == newID })
@@ -173,48 +247,289 @@ struct AudioFullscreenView: View {
                     if currentIndex != newIdx {
                         currentIndex = newIdx
                         HapticFeedback.light()
+                        // La rangée d'émojis et la barre visaient la pièce
+                        // qu'on regardait ; l'immersion, elle, reste. Rien
+                        // d'ouvert ⇒ rien à animer pendant que la page glisse.
+                        let turned = chrome.turningPage()
+                        guard turned != chrome || replyTarget != nil else { return }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            chrome = turned
+                            replyTarget = nil
+                        }
                     }
                 }
             }
+
+            reactionLayer
+                .ignoresSafeArea(.keyboard, edges: .bottom)
+
+            replyLayer
+                .padding(.bottom, MediaReplyKeyboardInset.bottomInset(for: replyKeyboard))
+                .animation(.easeOut(duration: replyKeyboard?.duration ?? 0.25), value: replyKeyboard?.height)
         }
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        .observingKeyboardTransition($replyKeyboard)
         .statusBarHidden(true)
         .onAppear {
-            if let idx = allAudioItems.firstIndex(where: { $0.attachment.id == startAttachmentId }) {
+            // Filet : `scrollPosition(id:)` honore la valeur posée à l'`init`,
+            // mais une présentation qui recycle un état revient sur la pièce
+            // réellement touchée.
+            if let idx = allAudioItems.firstIndex(where: { $0.attachment.id == startAttachmentId }),
+               currentPageID != allAudioItems[idx].id {
                 currentIndex = idx
                 currentPageID = allAudioItems[idx].id
+            }
+        }
+        .onReceive(coordinator.$isPlaying) { playing in
+            isPlaying = playing
+            // Une pause — ou la fin du dernier vocal — ramène le chrome : on
+            // n'est plus en train d'écouter, on cherche quoi faire ensuite.
+            guard !playing, !chrome.showsChrome, chrome.overlay == nil else { return }
+            withAnimation(.easeInOut(duration: 0.25)) { chrome = chrome.revealing() }
+        }
+        // **La page SUIT la piste** : à la fin d'un vocal, le lecteur partagé
+        // enchaîne sur la suite que la page lui a posée (ordre de réception),
+        // et l'écran tourne avec lui ; le « suivant » de l'écran verrouillé
+        // aussi. `dropFirst` : la piste qui jouait AVANT l'ouverture ne
+        // détourne pas l'écran de la pièce touchée.
+        .onReceive(coordinator.$activeContext
+            .map { $0?.attachmentId }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+        ) { followActiveTrack($0) }
+        .task(id: AutoHideKey(chrome: chrome, isPlaying: isPlaying,
+                              touches: chromeTouches, voiceOver: voiceOverRunning)) {
+            await autoHideChrome()
+        }
+        .onDisappear(perform: restoreConversationQueue)
+        .sheet(isPresented: $showFullEmojiPicker) {
+            EmojiPickerSheet(quickReactions: MeeshyQuickReactions.standard) { emoji in
+                if let source = currentSource { actions?.react(source, emoji) }
+                showFullEmojiPicker = false
             }
         }
         .withStatusBubble()
     }
 
-    // MARK: - Vertical Dismiss Gesture
+    // MARK: - Une page
 
-    private var verticalDismissGesture: some Gesture {
-        DragGesture(minimumDistance: 40)
-            .onChanged { value in
-                let vertical = value.translation.height
-                if vertical > 0 {
-                    dragOffset = vertical * 0.6
-                }
-            }
-            .onEnded { value in
-                if value.translation.height > 120 || value.predictedEndTranslation.height > 300 {
-                    dismissDownward()
-                } else {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        dragOffset = 0
-                    }
-                }
-            }
+    /// **Une fenêtre de trois pages, chacune comparée avant d'être refaite**
+    /// (#10568, leçon 292) : au-delà des voisines, la page n'est qu'un vide —
+    /// ni onde, ni abonnement, ni transcription ne survivent au balayage ; et
+    /// une écriture d'état de la racine ne refait que les pages dont une entrée
+    /// VISIBLE a changé.
+    @ViewBuilder
+    private func page(index: Int, item: AudioFullscreenSource) -> some View {
+        if AudioFullscreenPaging.renders(index: index, current: currentIndex) {
+            livePage(index: index, item: item)
+                .equatable()
+        } else {
+            Color.clear
+        }
     }
 
+    private func livePage(index: Int, item: AudioFullscreenSource) -> AudioFullscreenPage {
+        let offer = actions?.offer(item) ?? .none
+        let memory = turnMemory
+        return AudioFullscreenPage(
+            item: item,
+            contactColor: contactColor,
+            mentionDisplayNames: mentionDisplayNames,
+            isActive: index == currentIndex,
+            pageIndex: index,
+            totalPages: allAudioItems.count,
+            chromeVisible: chrome.showsChrome,
+            offer: offer,
+            isReactionOpen: chrome.isOpen(.reactions) && index == currentIndex,
+            isReplyOpen: replyTarget?.id == item.id,
+            upcomingQueue: { upcomingQueue(after: item.id) },
+            moodEmojiProvider: moodEmojiProvider,
+            moodTapProvider: moodTapProvider,
+            onDismiss: { dismiss() },
+            onToggleChrome: toggleChrome,
+            onChromeInteraction: { chromeTouches += 1 },
+            onReact: {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    replyTarget = nil
+                    chrome = chrome.toggling(.reactions)
+                }
+            },
+            onReply: { openReply(on: item) },
+            onCompose: { actions?.compose(item) },
+            onNext: AudioFullscreenSequence.next(after: item.id, in: ids).map { id in { turn(to: id) } },
+            onPrevious: AudioFullscreenSequence.previous(before: item.id, in: ids).map { id in { turn(to: id) } },
+            onPlaybackRequested: { memory.requested = $0 }
+        )
+    }
+
+    private func turn(to id: String) {
+        withAnimation(.spring(response: 0.45, dampingFraction: 0.88)) {
+            currentPageID = id
+        }
+    }
+
+    /// **La suite du plein écran**, telle que le lecteur partagé la jouera :
+    /// chaque vocal reçu après celui-ci, dans sa piste élue.
+    private func upcomingQueue(after id: String) -> [QueuedAudio] {
+        let later = Set(AudioFullscreenSequence.upcoming(after: id, in: ids))
+        return allAudioItems.filter { later.contains($0.id) }.map(\.openingQueuedAudio)
+    }
+
+    private func followActiveTrack(_ activeId: String?) {
+        guard let target = AudioFullscreenSequence.pageToFollow(activeAttachmentId: activeId,
+                                                                currentPageId: currentPageID,
+                                                                ids: ids,
+                                                                requestedByScreen: turnMemory.requested) else { return }
+        turn(to: target)
+    }
+
+    /// **En sortant, la conversation reprend SA file** — les vocaux non
+    /// écoutés après celui qui joue. L'ordre de réception n'appartient qu'au
+    /// plein écran.
+    private func restoreConversationQueue() {
+        guard let activeId = coordinator.activeContext?.attachmentId,
+              let source = allAudioItems.first(where: { $0.id == activeId }),
+              let conversationTail = source.queueTailProvider else { return }
+        coordinator.replaceUpcoming(conversationTail())
+    }
+
+    // MARK: - Le chrome
+
+    private func toggleChrome() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            if replyTarget != nil {
+                replyTarget = nil
+                chrome = chrome.closingOverlay()
+            } else {
+                chrome = chrome.tappingMedia()
+            }
+        }
+    }
+
+    private struct AutoHideKey: Equatable {
+        let chrome: FullscreenChromeState
+        let isPlaying: Bool
+        let touches: Int
+        let voiceOver: Bool
+    }
+
+    private func autoHideChrome() async {
+        guard let delay = AudioFullscreenChromeTiming.autoHideDelay(state: chrome,
+                                                                    isPlaying: isPlaying,
+                                                                    voiceOverRunning: voiceOverRunning)
+        else { return }
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeInOut(duration: 0.35)) {
+            chrome = chrome.autoHiding()
+        }
+    }
+
+    // MARK: - Réagir
+
+    /// **La rangée d'émojis du plein écran** — celle de la galerie et de la
+    /// story (`FullscreenReactionStrip`), au-dessus de tout, ancrée en bas. Un
+    /// vocal n'a pas d'image pour lui servir de fond : elle se pose sur un
+    /// verre, sans quoi son « + » blanc disparaîtrait sur le fond clair.
+    @ViewBuilder
+    private var reactionLayer: some View {
+        if chrome.isOpen(.reactions), let source = currentSource, let actions, actions.offer(source).react {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                FullscreenReactionStrip(
+                    onReact: { emoji in
+                        actions.react(source, emoji)
+                        HapticFeedback.success()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            chrome = chrome.closingOverlay()
+                        }
+                    },
+                    onExpandFullPicker: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            chrome = chrome.closingOverlay()
+                        }
+                        showFullEmojiPicker = true
+                    }
+                )
+                .padding(.vertical, MeeshySpacing.xs)
+                .padding(.horizontal, MeeshySpacing.sm)
+                .adaptiveGlass(in: Capsule(), tint: MeeshyColors.mediaChromeFill)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.lg)
+            }
+            .transition(.asymmetric(
+                insertion: .scale(scale: 0.85, anchor: .bottom).combined(with: .opacity),
+                removal: .opacity
+            ))
+        }
+    }
+
+    // MARK: - Répondre
+
+    private func openReply(on source: AudioFullscreenSource) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            if replyTarget?.id == source.id {
+                replyTarget = nil
+                chrome = chrome.closingOverlay()
+            } else {
+                replyTarget = source
+                chrome = chrome.opening(.reply)
+            }
+        }
+    }
+
+    /// **Répondre sans quitter le plein écran** (#6165, #8916) — la barre
+    /// universelle de la galerie, qui CITE le vocal regardé. Rien ne se
+    /// referme à l'envoi : on parle de la pièce en l'écoutant.
+    @ViewBuilder
+    private var replyLayer: some View {
+        if let target = replyTarget, let actions, let citation = actions.replyCitation(target) {
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                MediaReplyComposerBar(
+                    citation: citation,
+                    accentColor: contactColor,
+                    pieceId: target.id,
+                    draft: Binding(
+                        get: { replyDrafts[target.id] ?? "" },
+                        set: { replyDrafts[target.id] = $0 }
+                    ),
+                    composerLanguage: $replyLanguage,
+                    onSend: { text, language in
+                        actions.sendReply(target, text, language)
+                        replyDrafts[target.id] = nil
+                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.sendEffects) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                replyTarget = nil
+                                chrome = chrome.closingOverlay()
+                            }
+                        }
+                        HapticFeedback.light()
+                    },
+                    onCancel: {
+                        MediaReplyKeyboardInset.apply(MediaReplyKeyboardInset.cancelEffects) {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                                replyTarget = nil
+                                chrome = chrome.closingOverlay()
+                            }
+                        }
+                    }
+                )
+            }
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    // MARK: - Vertical Dismiss Gesture
+
     private func dismissDownward() {
-        let currentItem = allAudioItems.indices.contains(currentIndex) ? allAudioItems[currentIndex] : nil
+        let currentItem = currentSource
         withAnimation(.easeOut(duration: 0.25)) {
             // Course de sortie mesurée sur la fenêtre : sur le display, une
             // fenêtre Split View sortait de l'écran bien avant la fin de
             // l'animation, donc la vue disparaissait d'un coup au lieu de glisser.
-            dragOffset = DeviceLayout.windowSize.height
+            dragOffset = hostHeight
             isDismissing = true
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
@@ -224,920 +539,15 @@ struct AudioFullscreenView: View {
             dismiss()
         }
     }
-
-    private func dismissView() {
-        dismiss()
-    }
-
 }
 
-// MARK: - Audio Fullscreen Page (single audio item)
 
-private struct AudioFullscreenPage: View {
-    let item: AudioFullscreenSource
-    let contactColor: String
-    var mentionDisplayNames: [String: String] = [:]
-    let isActive: Bool
-    let pageIndex: Int
-    let totalPages: Int
-    var moodEmojiProvider: ((String) -> String?)?
-    var moodTapProvider: ((String) -> ((CGPoint) -> Void)?)?
-    var onDismiss: () -> Void
-    var onDismissToMessage: ((String) -> Void)?
-
-    /// Moteur du coordinator — le plein écran n'a PLUS de moteur propre :
-    /// la lecture continue à la fermeture (mini-player) et la carte système
-    /// suit. Le repli ne sert qu'aux previews sans coordinator actif.
-    @ObservedObject private var player: AudioPlaybackManager
-    @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
-
-    @StateObject private var saveCoordinator = MediaSaveCoordinator()
-    @Environment(\.contentExitGate) private var exitGate
-    @Environment(\.isCaptureShielded) private var isCaptureShielded // #9574 : un son protégé ne part pas sur AirPlay
-
-    init(item: AudioFullscreenSource,
-         contactColor: String,
-         mentionDisplayNames: [String: String] = [:],
-         isActive: Bool,
-         pageIndex: Int,
-         totalPages: Int,
-         moodEmojiProvider: ((String) -> String?)? = nil,
-         moodTapProvider: ((String) -> ((CGPoint) -> Void)?)? = nil,
-         onDismiss: @escaping () -> Void,
-         onDismissToMessage: ((String) -> Void)? = nil) {
-        self.item = item
-        self.contactColor = contactColor
-        self.mentionDisplayNames = mentionDisplayNames
-        self.isActive = isActive
-        self.pageIndex = pageIndex
-        self.totalPages = totalPages
-        self.moodEmojiProvider = moodEmojiProvider
-        self.moodTapProvider = moodTapProvider
-        self.onDismiss = onDismiss
-        self.onDismissToMessage = onDismissToMessage
-        self._player = ObservedObject(
-            wrappedValue: ConversationAudioCoordinator.sharedForTesting.engineForBubble
-                ?? AudioPlaybackManager(registerWithCoordinator: false)
-        )
-        // Prisme AUDIO (#4926) — la raison de chaque terme est portée par
-        // `SocialAudioTrack.fullscreenSelection`, qui est la règle ; ici, le
-        // site d'appel n'en garde que l'appel.
-        self._selectedLanguage = State(initialValue: SocialAudioTrack.openingSelection(for: item))
-    }
-
-    @State private var isSeeking = false
-    @State private var seekValue: Double = 0
-    /// La langue de piste servie. Initialisée par le Prisme dans `init` (#4926)
-    /// — la valeur littérale qui vivait ici ne consultait rien.
-    @State private var selectedLanguage: String
-    @State private var showTranslationSheet = false
-    @State private var selectedProfileUser: ProfileSheetUser?
-    @State private var isRequestingTranscription = false
-    /// Transcription produite localement (on-device, Apple Speech) quand le
-    /// serveur n'en a pas fourni. Fusionnée dans `transcription`.
-    @State private var localTranscription: MessageTranscription?
-    /// Audios traduits arrivant en direct par socket (demandés depuis la
-    /// feuille de traduction). Fusionnés dans `translatedAudios`.
-    @State private var extraTranslatedAudios: [MessageTranslatedAudio] = []
-
-    private var attachment: MessageAttachment { item.attachment }
-
-    /// Transcription serveur (item) sinon transcription locale on-device.
-    private var transcription: MessageTranscription? { item.transcription ?? localTranscription }
-
-    /// Versions traduites du snapshot + celles arrivées en direct (dédupliquées
-    /// par langue cible, le snapshot ayant priorité).
-    private var translatedAudios: [MessageTranslatedAudio] {
-        guard !extraTranslatedAudios.isEmpty else { return item.translatedAudios }
-        var seen = Set(item.translatedAudios.map { $0.targetLanguage.lowercased() })
-        var result = item.translatedAudios
-        for audio in extraTranslatedAudios where !seen.contains(audio.targetLanguage.lowercased()) {
-            result.append(audio)
-            seen.insert(audio.targetLanguage.lowercased())
-        }
-        return result
-    }
-
-    /// Message synthétique (contenu vide → chemin audio de la feuille de
-    /// traduction) : la feuille de traduction des messages est couplée à
-    /// `Message`, mais pour l'audio elle n'a besoin que de l'attachment (id
-    /// pour `AttachmentService.translate`), de la langue d'origine et de
-    /// l'auteur. Fonctionne pour toutes les surfaces (conv/commentaire/post/réel).
-    private var translationMessage: Message {
-        Message(
-            id: item.messageId ?? item.attachment.id,
-            conversationId: "",
-            content: "",
-            originalLanguage: item.originalLanguage,
-            messageType: .audio,
-            createdAt: item.createdAt,
-            attachments: [item.attachment],
-            senderName: item.authorName,
-            senderColor: item.author.accentColor,
-            senderAvatarURL: item.authorAvatarURL,
-            senderUserId: item.authorUserId
-        )
-    }
-
-    private var accent: Color { Color(hex: contactColor) }
-    private let fullscreenSpeeds: [PlaybackSpeed] = [.x1_0, .x1_25, .x1_5, .x1_75, .x2_0]
-
-    private var progress: Double {
-        guard player.duration > 0 else { return 0 }
-        return isSeeking ? seekValue : player.progress
-    }
-
-    private var currentLangColorHex: String {
-        if selectedLanguage == "orig" {
-            return LanguageDisplay.colorHex(for: item.originalLanguage)
-        }
-        return LanguageDisplay.colorHex(for: selectedLanguage)
-    }
-
-    private var originalFlag: String {
-        LanguageFlagChip.flag(for: item.originalLanguage)
-    }
-
-    private var displaySegments: [TranscriptionDisplaySegment] {
-        if selectedLanguage != "orig",
-           let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedLanguage.lowercased() }),
-           !audio.segments.isEmpty {
-            return TranscriptionDisplaySegment.buildFrom(segments: audio.segments)
-        }
-        guard let t = transcription else { return [] }
-        let built = TranscriptionDisplaySegment.buildFrom(t)
-        if built.isEmpty, !t.text.isEmpty {
-            return [TranscriptionDisplaySegment(
-                text: t.text,
-                startTime: 0,
-                endTime: Double(t.durationMs ?? 0) / 1000.0,
-                speakerId: nil,
-                speakerColor: TranscriptionDisplaySegment.speakerPalette[0]
-            )]
-        }
-        return built
-    }
-
-    private var estimatedDuration: TimeInterval {
-        let metadata = Double(attachment.duration ?? 0) / 1000.0
-        if metadata > 0 { return metadata }
-        return player.duration
-    }
-
-    // MARK: - Body
-
-    var body: some View {
-        VStack(spacing: 0) {
-            topBar
-                .padding(.top, 50)
-                .padding(.horizontal, MeeshySpacing.lg)
-
-            Spacer()
-
-            VStack(spacing: MeeshySpacing.lg) {
-                waveformSection
-                    .padding(.horizontal, MeeshySpacing.xxl)
-
-                centerControls
-
-                VStack(spacing: MeeshySpacing.sm) {
-                    seekBar.padding(.horizontal, MeeshySpacing.xxl)
-                    timeRow.padding(.horizontal, MeeshySpacing.xxl)
-                    speedRow.padding(.horizontal, MeeshySpacing.xxl)
-                }
-            }
-
-            // Caption (texte du message contenant cet audio)
-            let captionText = item.caption.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !captionText.isEmpty {
-                MessageTextRenderer.render(
-                    captionText,
-                    fontSize: 13,
-                    color: .white.opacity(0.8),
-                    // Overlay plein écran TOUJOURS sombre → variantes dark figées.
-                    mentionColor: MeeshyColors.mentionColor(isDark: true),
-                    hashtagColor: MeeshyColors.hashtagColor(isDark: true),
-                    accentColor: accent,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                )
-                .multilineTextAlignment(.leading)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.mdPlus)
-                .tint(accent)
-            }
-
-            // Transcription (capped height)
-            if !displaySegments.isEmpty {
-                transcriptionSection
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, MeeshySpacing.sm)
-                    .frame(maxHeight: 120)
-            } else {
-                transcriptionEmptyState
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.top, MeeshySpacing.sm)
-                    .frame(maxHeight: 120)
-            }
-
-            // Language strip right below transcription — CHOISIR quelle version
-            // écouter (original + versions traduites, Prisme).
-            inlineLanguageFlags
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.top, MeeshySpacing.smPlus)
-
-            // Author info EN BAS, sous la ligne des langues (l'utilisateur choisit
-            // d'abord la version à écouter, l'auteur est une méta secondaire).
-            authorInfoRow
-                .padding(.horizontal, MeeshySpacing.xl)
-                .padding(.top, MeeshySpacing.mdPlus)
-
-            Spacer(minLength: 0)
-        }
-        .onAppear { if isActive { startPlayback() } }
-        .adaptiveOnChange(of: isActive) { _, active in
-            // Le changement de page appelle `startPlayback()` de la NOUVELLE
-            // page active, qui re-file le coordinator — aucun arrêt explicite
-            // n'est nécessaire ici (le coordinator est partagé, pas cette page).
-            if active {
-                startPlayback()
-            }
-        }
-        // Pas de `.onDisappear` : fermer le plein écran laisse la lecture
-        // continuer (mini-player + carte système) — le moteur est
-        // coordinator-owned, plus cette page (ni stop, ni unregister ici).
-        .sheet(isPresented: $showTranslationSheet) {
-            // LA feuille de traduction des messages (couleurs par langue +
-            // boutons Traduire / retraduire), réutilisée pour l'audio :
-            // traduit la transcription et génère les voix (Prisme).
-            NavigationStack {
-                MessageLanguageDetailView(
-                    message: translationMessage,
-                    transcription: transcription,
-                    translatedAudios: translatedAudios,
-                    onSelectAudioLanguage: { lang in
-                        selectLanguage(lang ?? "orig")
-                        showTranslationSheet = false
-                    }
-                )
-                .navigationTitle(String(localized: "audio.fullscreen.languages.title", defaultValue: "Langues", bundle: .main))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showTranslationSheet = false }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
-            .presentationDragIndicator(.visible)
-        }
-        // Transcription serveur (long-press) : le résultat revient par socket.
-        .onReceive(
-            MessageSocketManager.shared.transcriptionReady
-                .filter { $0.attachmentId == attachment.id }
-                .receive(on: DispatchQueue.main)
-        ) { event in
-            let segments = (event.transcription.segments ?? []).map {
-                MessageTranscriptionSegment(text: $0.text, startTime: $0.startTime, endTime: $0.endTime, speakerId: $0.speakerId)
-            }
-            localTranscription = MessageTranscription(
-                attachmentId: event.attachmentId,
-                text: event.transcription.text,
-                language: event.transcription.language,
-                confidence: event.transcription.confidence,
-                durationMs: event.transcription.durationMs,
-                segments: segments,
-                speakerCount: event.transcription.speakerCount
-            )
-            isRequestingTranscription = false
-            HapticFeedback.success()
-        }
-        // Audios traduits demandés depuis la feuille : arrivent en direct.
-        .onReceive(
-            MessageSocketManager.shared.audioTranslationReady
-                .filter { $0.attachmentId == attachment.id }
-                .receive(on: DispatchQueue.main)
-        ) { event in appendTranslatedAudio(from: event) }
-        .onReceive(
-            MessageSocketManager.shared.audioTranslationCompleted
-                .filter { $0.attachmentId == attachment.id }
-                .receive(on: DispatchQueue.main)
-        ) { event in appendTranslatedAudio(from: event) }
-        .sheet(item: $selectedProfileUser) { user in
-            UserProfileSheet(
-                user: user,
-                moodEmoji: moodEmojiProvider?(user.userId ?? ""),
-                onMoodTap: moodTapProvider.flatMap { $0(user.userId ?? "") },
-                presenceProvider: { PresenceManager.shared.knownPresenceState(for: $0) },
-                postsContent: { uid in AnyView(ProfileUserPostsList(
-                    userId: uid,
-                    onOpenPost: { post in ProfilePostsOpener.openPost(post) { selectedProfileUser = nil } },
-                    onOpenReel: { reel, reels in ProfilePostsOpener.openReel(reel, in: reels) { selectedProfileUser = nil } }
-                )) }
-            )
-            .presentationDetents([.large, .medium])
-            .presentationDragIndicator(.visible)
-        }
-    }
-
-    private func startPlayback() {
-        playThroughCoordinator(urlString: currentAudioUrl)
-        loadWaveform()
-    }
-
-    /// Route toute lecture démarrée depuis le plein écran vers le coordinator
-    /// partagé : si l'attachment est déjà la piste active, seule l'URL change
-    /// (variante de langue) — contexte et file survivent. Si une AUTRE page
-    /// de la MÊME conversation est déjà en session (swipe entre pages du
-    /// pager), `playKeepingQueue` bascule la tête sans rouvrir de session —
-    /// sinon `coordinator.play(tail: [])` écraserait la file de conversation
-    /// et le titre de la carte système basculerait sur le nom de l'auteur.
-    /// Sinon (pas de session active, ou conversation différente), démarre une
-    /// nouvelle session coordinator avec la file « à suivre » de la source
-    /// (vide pour les surfaces standalone).
-    private func playThroughCoordinator(urlString: String) {
-        let coordinator = ConversationAudioCoordinator.sharedForTesting
-        if coordinator.isActive(attachmentId: attachment.id) {
-            let translated = urlString != attachment.fileUrl
-            if urlString != player.currentUrl {
-                coordinator.playVariant(urlString: urlString, language: translated ? selectedLanguage : item.originalLanguage, isTranslated: translated)
-            }
-            return
-        }
-        let queued = item.queuedAudio(urlString: urlString)
-        if let activeConv = coordinator.activeContext?.conversationId,
-           !queued.conversationId.isEmpty, activeConv == queued.conversationId {
-            coordinator.playKeepingQueue(queued)
-            return
-        }
-        coordinator.play(
-            current: queued,
-            tail: item.queueTailProvider?() ?? [],
-            conversationName: item.nowPlayingContextName,
-            conversationArtworkURL: item.authorAvatarURL
-        )
-    }
-
-    // MARK: - Top Bar
-
-    private var topBar: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            FullscreenCloseButton { onDismiss() }
-
-            Spacer()
-
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                if totalPages > 1 {
-                    Text("\(pageIndex + 1) / \(totalPages)")
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, MeeshySpacing.md)
-                        .padding(.vertical, MeeshySpacing.xsPlus)
-                        .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
-                        .contentTransition(.numericText())
-                        .animation(.spring(response: 0.3), value: pageIndex)
-                }
-                if let dur = attachment.durationFormatted {
-                    Text(dur)
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .monospaced))
-                }
-                if let codec = attachment.codec {
-                    Text(codec.uppercased())
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .monospaced))
-                        .padding(.horizontal, MeeshySpacing.xs)
-                        .padding(.vertical, MeeshySpacing.xxs)
-                        .background(Capsule().fill(Color.white.opacity(MeeshyOpacity.subtle)))
-                }
-            }
-            .foregroundColor(.white.opacity(0.5))
-
-            Spacer()
-
-            ContentExitGated(contentId: attachment.id) { downloadButton }
-        }
-    }
-
-    // MARK: - Author Info
-
-    private var authorInfoRow: some View {
-        let authorColor = item.author.accentColor.isEmpty ? contactColor : item.author.accentColor
-        return HStack(spacing: MeeshySpacing.smPlus) {
-            Button {
-                selectedProfileUser = item.author
-                HapticFeedback.light()
-            } label: {
-                MeeshyAvatar(
-                    name: item.authorName,
-                    context: .messageBubble,
-                    accentColor: authorColor,
-                    avatarURL: item.authorAvatarURL,
-                    moodEmoji: item.authorUserId.isEmpty ? nil : moodEmojiProvider?(item.authorUserId),
-                    onMoodTap: item.authorUserId.isEmpty ? nil : moodTapProvider.flatMap { $0(item.authorUserId) }
-                )
-            }
-
-            Button {
-                selectedProfileUser = item.author
-                HapticFeedback.light()
-            } label: {
-                VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                    Text(item.authorName)
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.white)
-                        .lineLimit(1)
-
-                    Text(item.createdAt, format: .dateTime.day().month(.abbreviated).hour().minute())
-                        .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: MeeshySpacing.xsPlus) {
-                Image(systemName: "waveform")
-                    .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                    .foregroundColor(.white.opacity(0.4))
-                if attachment.fileSize > 0 {
-                    Text(attachment.fileSizeFormatted)
-                        .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(.white.opacity(0.35))
-                }
-            }
-        }
-    }
-
-    // MARK: - Download Button
-
-    private var downloadButton: some View {
-        Button { requestSave() } label: {
-            if saveCoordinator.isProcessing {
-                ProgressView()
-                    .tint(MeeshyColors.mediaChromeForeground)
-                    .frame(width: FullscreenChromeMetrics.tapTarget,
-                           height: FullscreenChromeMetrics.tapTarget)
-            } else {
-                FullscreenChromeDisc(systemImage: FullscreenChromeSymbol.save)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(saveCoordinator.isProcessing)
-        .accessibilityLabel(String(localized: "media.download", defaultValue: "Télécharger", bundle: .main))
-        // Composant UNIFIÉ « Enregistrer » : même sheet de destinations que
-        // les images, vidéos et documents (issue via toast + haptics).
-        .mediaSaveFlow(saveCoordinator)
-    }
-
-    private func requestSave() {
-        saveCoordinator.exitGate = exitGate
-        guard exitGate.mayLeave(attachment.id) else { return }
-        HapticFeedback.light()
-        saveCoordinator.requestSave(MediaSaveRequest(
-            kind: .audio,
-            origin: .transmitted,
-            remoteURLString: currentAudioUrl,
-            suggestedFileName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-            attachmentId: attachment.id.isEmpty ? nil : attachment.id
-        ))
-    }
-
-    // MARK: - Waveform Section
-
-    /// La bande d'onde vit dans `AudioFullscreenWaveform` (2026-09-13) :
-    /// le porteur y demande un GLISSEMENT (« on voit le recul sur la
-    /// waveform ») et ce fichier était hors budget, où la règle du dépôt
-    /// impose d'extraire AVANT d'ajouter. La page ne garde que le câblage.
-    private var waveformSection: some View {
-        AudioFullscreenWaveform(
-            samples: waveformAnalyzer.samples,
-            progress: progress,
-            accent: accent,
-            onSeek: { player.seek(to: $0) }
-        )
-    }
-
-    // MARK: - Center Controls
-
-    private var centerControls: some View {
-        // Contrôles de transport média : tailles de glyphes figées pour préserver
-        // la cohérence du rang (bouton lecture ancré dans un cercle fixe 64×64) —
-        // les libellés VoiceOver portent le sens des boutons icône-seule.
-        HStack(spacing: 48) {
-            Button {
-                player.skip(seconds: -10)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "gobackward.10")
-                    .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .accessibilityLabel(String(localized: "media.skipBack10s", defaultValue: "Reculer de 10 secondes", bundle: .main))
-
-            Button {
-                if player.isPlaying || player.progress > 0 {
-                    player.togglePlayPause()
-                } else {
-                    playThroughCoordinator(urlString: currentAudioUrl)
-                }
-                HapticFeedback.light()
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 64, height: 64)
-
-                    if player.isLoading {
-                        ProgressView().tint(.white).scaleEffect(0.8)
-                    } else {
-                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                            .font(.system(size: 32, weight: .bold))
-                            .foregroundColor(.white)
-                            .offset(x: player.isPlaying ? 0 : 3)
-                    }
-                }
-            }
-            .accessibilityLabel(player.isPlaying
-                ? String(localized: "media.pauseAudio", defaultValue: "Mettre en pause", bundle: .main)
-                : String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main))
-
-            Button {
-                player.skip(seconds: 10)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "goforward.10")
-                    .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            .accessibilityLabel(String(localized: "media.skipForward10s", defaultValue: "Avancer de 10 secondes", bundle: .main))
-
-            if !isCaptureShielded {
-                AirPlayRoutePicker(tintColor: .white, prioritizesVideoDevices: false)
-                    .frame(width: 44, height: 44)
-                    .accessibilityLabel(String(localized: "audio.fullscreen.airplay",
-                        defaultValue: "Diffuser sur un appareil", bundle: .main))
-            }
-        }
-    }
-
-    // MARK: - Seek Bar
-
-    private var seekBar: some View {
-        GeometryReader { geo in
-            let trackHeight: CGFloat = 5
-            let thumbSize: CGFloat = 16
-            let filledWidth = geo.size.width * progress
-
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(Color.white.opacity(MeeshyOpacity.medium))
-                    .frame(height: trackHeight)
-
-                Capsule()
-                    .fill(accent)
-                    .frame(width: max(0, filledWidth), height: trackHeight)
-
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 2, y: 1)
-                    .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
-            }
-            .frame(height: max(trackHeight, thumbSize))
-            .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    // L'écoute SUIT le doigt (`currentTime` : coût nul) — #6300.
-                    .onChanged { value in
-                        isSeeking = true
-                        seekValue = max(0, min(1, value.location.x / geo.size.width))
-                        player.seek(to: seekValue)
-                    }
-                    .onEnded { _ in
-                        isSeeking = false
-                        seekValue = 0
-                    }
-            )
-        }
-        .frame(height: 16)
-    }
-
-    // MARK: - Time Row
-
-    private var timeRow: some View {
-        HStack {
-            Text(formatMediaDuration(isSeeking ? seekValue * estimatedDuration : player.currentTime))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
-
-            Spacer()
-
-            Text(formatMediaDuration(estimatedDuration))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold, design: .monospaced))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
-        }
-    }
-
-    // MARK: - Speed Row
-
-    private var speedRow: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            ForEach(fullscreenSpeeds, id: \.rawValue) { speed in
-                Button {
-                    player.setSpeed(speed)
-                } label: {
-                    Text(speed.label)
-                        .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .monospaced))
-                        .foregroundColor(player.speed == speed ? .black : .white.opacity(0.7))
-                        .padding(.horizontal, MeeshySpacing.smPlus)
-                        .padding(.vertical, MeeshySpacing.xsPlus)
-                        .background(
-                            Capsule().fill(
-                                player.speed == speed
-                                    ? accent
-                                    : Color.white.opacity(MeeshyOpacity.light)
-                            )
-                        )
-                }
-                // Selection is otherwise conveyed by color (black-on-accent) only —
-                // expose it as a trait so VoiceOver announces the active speed.
-                .accessibilityLabel(speed.label)
-                .accessibilityAddTraits(player.speed == speed ? [.isSelected] : [])
-            }
-        }
-    }
-
-    // MARK: - Transcription Section (flexible height, scrollable)
-
-    private var transcriptionSection: some View {
-        MediaTranscriptionView(
-            segments: displaySegments,
-            currentTime: player.currentTime,
-            accentColor: currentLangColorHex,
-            isPlaying: player.isPlaying,
-            progress: player.progress,
-            onSeek: { time in
-                player.seekToTime(time)
-            }
-        )
-    }
-
-    // MARK: - Transcription Empty State
-
-    private var transcriptionEmptyState: some View {
-        VStack(spacing: MeeshySpacing.mdPlus) {
-            Spacer(minLength: 0)
-
-            Image(systemName: "text.word.spacing")
-                .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .light))
-                .foregroundColor(.white.opacity(0.25))
-                .accessibilityHidden(true)
-
-            Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                .foregroundColor(.white.opacity(0.4))
-
-            // Tap = transcription LOCALE (on-device, instantané, sans réseau).
-            // Long-press = menu natif pour transcrire via le SERVEUR (segments
-            // horodatés + diarisation + lecture synchronisée).
-            Button {
-                runLocalTranscription()
-            } label: {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    if isRequestingTranscription {
-                        ProgressView()
-                            .tint(.white)
-                            .scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "waveform.and.mic")
-                            .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    }
-                    Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
-                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .bold))
-                }
-                .foregroundColor(.white)
-                .padding(.horizontal, MeeshySpacing.lg)
-                .padding(.vertical, MeeshySpacing.smPlus)
-                .background(Capsule().fill(accent.opacity(0.7)))
-            }
-            .disabled(isRequestingTranscription)
-            .contextMenu {
-                Button {
-                    runLocalTranscription()
-                } label: {
-                    Label(String(localized: "audio.fullscreen.transcription.local", defaultValue: "Transcrire sur l'appareil", bundle: .main), systemImage: "iphone")
-                }
-                Button {
-                    requestServerTranscription()
-                } label: {
-                    Label(String(localized: "audio.fullscreen.transcription.server", defaultValue: "Transcrire via le serveur", bundle: .main), systemImage: "cloud")
-                }
-            }
-
-            Spacer(minLength: 0)
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    /// Transcription on-device (Apple Speech via `EdgeTranscriptionService`) —
-    /// quand aucune transcription serveur n'est disponible. Instantanée, hors
-    /// ligne. Produit des segments horodatés → lecture synchronisée.
-    private func runLocalTranscription() {
-        guard !isRequestingTranscription else { return }
-        isRequestingTranscription = true
-        HapticFeedback.light()
-        Task {
-            do {
-                guard await EdgeTranscriptionService.shared.requestAuthorization() else {
-                    await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
-                    return
-                }
-                let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-                guard let localURL = try? await CacheCoordinator.shared.audio.localFileURLOrThrow(for: resolved) else {
-                    await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
-                    return
-                }
-                let locale = EdgeTranscriptionService.normalizedLocale(for: Locale(identifier: item.originalLanguage))
-                let result = try await EdgeTranscriptionService.shared.transcribe(audioURL: localURL, locale: locale)
-                await MainActor.run {
-                    let segments = result.segments.map {
-                        MessageTranscriptionSegment(
-                            text: $0.text,
-                            startTime: $0.timestamp,
-                            endTime: $0.timestamp + $0.duration,
-                            speakerId: nil
-                        )
-                    }
-                    localTranscription = MessageTranscription(
-                        attachmentId: attachment.id,
-                        text: result.text,
-                        language: result.language,
-                        confidence: result.confidence,
-                        durationMs: Int(estimatedDuration * 1000),
-                        segments: segments,
-                        speakerCount: nil
-                    )
-                    isRequestingTranscription = false
-                    HapticFeedback.success()
-                }
-            } catch {
-                await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
-            }
-        }
-    }
-
-    /// Transcription SERVEUR (Whisper + diarisation) : produit les segments
-    /// horodatés persistés. Le résultat revient par socket (`transcriptionReady`).
-    private func requestServerTranscription() {
-        guard !isRequestingTranscription else { return }
-        isRequestingTranscription = true
-        HapticFeedback.light()
-        Task {
-            do {
-                try await AttachmentService.shared.requestTranscription(attachmentId: attachment.id)
-                // Le résultat arrive via l'abonnement socket ; garde le spinner
-                // le temps du traitement serveur, avec un plafond de sécurité.
-                try? await Task.sleep(nanoseconds: 20_000_000_000)
-                await MainActor.run { if localTranscription == nil { isRequestingTranscription = false } }
-            } catch {
-                await MainActor.run { isRequestingTranscription = false; HapticFeedback.error() }
-            }
-        }
-    }
-
-    /// Convertit un événement socket de traduction audio en modèle domaine et
-    /// l'ajoute aux versions disponibles (nouveau pill de langue + jouable).
-    private func appendTranslatedAudio(from event: AudioTranslationEvent) {
-        let info = event.translatedAudio
-        let segments = (info.segments ?? []).map {
-            MessageTranscriptionSegment(text: $0.text, startTime: $0.startTime, endTime: $0.endTime, speakerId: $0.speakerId)
-        }
-        let audio = MessageTranslatedAudio(
-            id: info.id,
-            attachmentId: event.attachmentId,
-            targetLanguage: info.targetLanguage,
-            url: info.url,
-            transcription: info.transcription,
-            durationMs: info.durationMs,
-            format: info.format,
-            cloned: info.cloned,
-            quality: info.quality,
-            voiceModelId: info.voiceModelId,
-            ttsModel: info.ttsModel,
-            segments: segments
-        )
-        if !extraTranslatedAudios.contains(where: { $0.targetLanguage.lowercased() == audio.targetLanguage.lowercased() }) {
-            extraTranslatedAudios.append(audio)
-            HapticFeedback.light()
-        }
-    }
-
-    /// Bascule la langue écoutée et lance sa lecture (original ou version TTS).
-    private func selectLanguage(_ code: String) {
-        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-            selectedLanguage = code
-        }
-        if code == "orig" {
-            playThroughCoordinator(urlString: attachment.fileUrl)
-        } else if let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-            playThroughCoordinator(urlString: audio.url)
-        }
-        loadWaveform()
-        HapticFeedback.light()
-    }
-
-    // MARK: - Inline Language Flags
-
-    private var inlineLanguageFlags: some View {
-        // Strip horizontalement scrollable des langues disponibles + bouton
-        // "ajouter une langue" ancré à droite (hors du scroll, toujours
-        // accessible). Sans ScrollView, les pills wrappaient en 2 lignes
-        // ("Fran/çais", "Deu/tsch"…) dès qu'on dépassait 3 langues.
-        HStack(spacing: MeeshySpacing.sm) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: MeeshySpacing.xsPlus) {
-                    languagePill(flag: originalFlag, code: "orig",
-                                 label: LanguageDisplay.from(code: item.originalLanguage)?.name ?? String(localized: "audio.fullscreen.language.original", defaultValue: "Original", bundle: .main),
-                                 isSelected: selectedLanguage == "orig")
-
-                    ForEach(translatedAudios, id: \.id) { audio in
-                        let display = LanguageDisplay.from(code: audio.targetLanguage)
-                        languagePill(
-                            flag: LanguageFlagChip.flag(for: audio.targetLanguage),
-                            code: audio.targetLanguage,
-                            label: display?.name ?? audio.targetLanguage,
-                            isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()
-                        )
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.xxs)
-            }
-
-            Button {
-                showTranslationSheet = true
-                HapticFeedback.light()
-            } label: {
-                // Cercle figé à 26×26 (déborderait s'il scalait, doctrine 86i) ; le
-                // libellé porte le sens. Second cadre = cible tapable au plancher HIG :
-                // la ScrollView de pastilles voisine absorbe les 18 pt, elle défile déjà.
-                Image(systemName: "translate")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
-                    .frame(width: 26, height: 26)
-                    .background(Circle().fill(Color.white.opacity(MeeshyOpacity.subtle)))
-                    .frame(width: 44, height: 44)
-                    .contentShape(Circle())
-            }
-            .accessibilityLabel(String(localized: "audio.fullscreen.language.choose", defaultValue: "Traduire l'audio", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.sm)
-    }
-
-    private func languagePill(flag: String, code: String, label: String, isSelected: Bool) -> some View {
-        let langColor = code == "orig"
-            ? Color(hex: LanguageDisplay.colorHex(for: item.originalLanguage))
-            : Color(hex: LanguageDisplay.colorHex(for: code))
-
-        return Button {
-            selectLanguage(code)
-        } label: {
-            HStack(spacing: MeeshySpacing.xxs) {
-                Text(flag).font(MeeshyFont.relative(MeeshyFont.smallSize))
-                Text(label)
-                    .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: isSelected ? .bold : .medium))
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-            .foregroundColor(isSelected ? .white : .white.opacity(0.55))
-            .padding(.horizontal, MeeshySpacing.sm)
-            .padding(.vertical, MeeshySpacing.xs)
-            .background(Capsule().fill(isSelected ? langColor.opacity(0.6) : Color.white.opacity(MeeshyOpacity.subtle)))
-        }
-        // The active listening language is signaled only by fill/weight — expose
-        // it as a VoiceOver trait so the selected language pill is distinguishable.
-        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
-    }
-
-    // MARK: - Helpers
-
-    private var currentAudioUrl: String {
-        if selectedLanguage != "orig",
-           let audio = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedLanguage.lowercased() }) {
-            return audio.url
-        }
-        return attachment.fileUrl
-    }
-
-    private func loadWaveform() {
-        let url = currentAudioUrl
-        let resolved = MeeshyConfig.resolveMediaURL(url)?.absoluteString ?? url
-        Task {
-            if let data = try? await CacheCoordinator.shared.audio.data(for: resolved) {
-                waveformAnalyzer.analyze(data: data)
-            }
-        }
-    }
-
+/// La dernière piste lancée par une page de l'écran. Une référence, pas un
+/// `@State` de valeur : l'écrire ne réévalue rien.
+@MainActor
+final class AudioFullscreenTurnMemory {
+    nonisolated deinit {}
+    var requested: String?
 }
 
 // MARK: - Feed / Comment / Reel / Post wiring

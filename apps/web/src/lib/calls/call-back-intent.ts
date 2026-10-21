@@ -110,7 +110,9 @@ export function listenCallBackIntents(env: CallBackIntentEnvironment): void {
   });
 }
 
-export async function listenCallBackIntentsInBrowser(): Promise<void> {
+type CallBackActions = Pick<CallBackIntentEnvironment, 'ready' | 'start' | 'confirm'>;
+
+async function callBackActions(): Promise<CallBackActions> {
   const [{ callActions }, { callIdentityOf }, { whenCallTransportReady }, { callBackPromptStore }] = await Promise.all([
     import('./call-actions'),
     import('./call-notice'),
@@ -121,8 +123,18 @@ export async function listenCallBackIntentsInBrowser(): Promise<void> {
     const known = callIdentityOf(request.conversationId);
     return { ...request, title: request.title === '' ? known.title : request.title, avatar: known.avatar };
   };
+  return {
+    ready: whenCallTransportReady,
+    start: (request) => callActions.start(identified(request)),
+    confirm: (request) => callBackPromptStore.setState({ request: identified(request) }),
+  };
+}
+
+export async function listenCallBackIntentsInBrowser(): Promise<void> {
+  const actions = await callBackActions();
   const container = 'serviceWorker' in navigator ? navigator.serviceWorker : undefined;
   listenCallBackIntents({
+    ...actions,
     path: window.location.pathname,
     search: window.location.search,
     forgetParams: () => {
@@ -131,9 +143,33 @@ export async function listenCallBackIntentsInBrowser(): Promise<void> {
       window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
     },
     container: container as unknown as CallBackIntentEnvironment['container'],
-    ready: whenCallTransportReady,
     mayPlayAudio: () => audioAutoplayAllowed(navigator as unknown as AutoplaySignals),
-    start: (request) => callActions.start(identified(request)),
-    confirm: (request) => callBackPromptStore.setState({ request: identified(request) }),
+  });
+}
+
+/**
+ * « Rappeler » touché sur une bannière de la coque Android (#10908) : l'appel
+ * arrive par le pont natif (`shell-call-back.ts`), jamais par l'adresse — le
+ * lien profond l'y laisse, et le relire composerait l'appel deux fois. La
+ * WebView de Capacitor joue le son sans geste
+ * (`setMediaPlaybackRequiresUserGesture(false)`) : l'appel part sans « Appeler ».
+ */
+export async function listenCallBackIntentsInShell(): Promise<void> {
+  const [actions, { ecouterRappels }, { coqueCourante }] = await Promise.all([
+    callBackActions(),
+    import('./shell-call-back'),
+    import('@/lib/native-shell'),
+  ]);
+  listenCallBackIntents({
+    ...actions,
+    path: '',
+    search: '',
+    forgetParams: () => undefined,
+    container: {
+      addEventListener: (_type, listener) => {
+        ecouterRappels(coqueCourante(), (callBack) => listener({ data: { type: NOTIFICATION_CLICKED_MESSAGE, callBack } }));
+      },
+    },
+    mayPlayAudio: () => true,
   });
 }

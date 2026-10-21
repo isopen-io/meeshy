@@ -99,9 +99,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
         let fx = try await makeFixture()
         let sticker = makeSticker()
 
-        let ok = await fx.sut.sendMessage(
-            content: "", attachmentIds: ["att-1"], localAttachments: [makeLocalAttachment()], sticker: sticker
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "", conversationId: fx.sut.conversationId, attachmentIds: ["att-1"], previews: [makeLocalAttachment()], sticker: sticker)).isAccepted
 
         XCTAssertTrue(ok)
         XCTAssertEqual(fx.messageService.sendCallCount, 1)
@@ -113,7 +111,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
     func test_sendMessage_withoutSticker_restRequestOmitsSticker() async throws {
         let fx = try await makeFixture()
 
-        _ = await fx.sut.sendMessage(content: "", attachmentIds: ["att-1"], localAttachments: [makeLocalAttachment()])
+        _ = await fx.sut.send(outgoingMessage(content: "", conversationId: fx.sut.conversationId, attachmentIds: ["att-1"], previews: [makeLocalAttachment()])).isAccepted
 
         XCTAssertNil(fx.messageService.lastSendRequest?.sticker)
     }
@@ -124,9 +122,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
         let fx = try await makeFixture()
         let sticker = makeSticker()
 
-        _ = await fx.sut.sendMessage(
-            content: "", attachmentIds: ["att-1"], localAttachments: [makeLocalAttachment()], sticker: sticker
-        )
+        _ = await fx.sut.send(outgoingMessage(content: "", conversationId: fx.sut.conversationId, attachmentIds: ["att-1"], previews: [makeLocalAttachment()], sticker: sticker)).isAccepted
 
         let surfaced = await awaitFirstMessageSticker(in: fx.sut)
         XCTAssertEqual(surfaced, sticker,
@@ -137,9 +133,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
         let fx = try await makeFixture(isOnline: false)
         let sticker = makeSticker()
 
-        let ok = await fx.sut.sendMessage(
-            content: "", attachmentIds: ["att-1"], localAttachments: [makeLocalAttachment()], sticker: sticker
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "", conversationId: fx.sut.conversationId, attachmentIds: ["att-1"], previews: [makeLocalAttachment()], sticker: sticker)).isAccepted
 
         XCTAssertTrue(ok)
         let items = await fx.offlineQueue.enqueuedItems
@@ -173,9 +167,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
         )
         let sticker = makeSticker()
 
-        let ok = await fx.sut.sendMessage(
-            content: "", attachmentIds: ["att-1"], localAttachments: [makeLocalAttachment()], sticker: sticker
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "", conversationId: fx.sut.conversationId, attachmentIds: ["att-1"], previews: [makeLocalAttachment()], sticker: sticker)).isAccepted
 
         XCTAssertTrue(ok)
         XCTAssertEqual(fx.messageSocket.sendViaSocketFallbackCallCount, 1)
@@ -189,9 +181,7 @@ final class ConversationViewModelStickerTests: XCTestCase {
         fx.messageSocket.sendViaSocketFallbackResult = nil
         let sticker = makeSticker()
 
-        let ok = await fx.sut.sendMessage(
-            content: "", attachmentIds: ["att-1"], localAttachments: [makeLocalAttachment()], sticker: sticker
-        )
+        let ok = await fx.sut.send(outgoingMessage(content: "", conversationId: fx.sut.conversationId, attachmentIds: ["att-1"], previews: [makeLocalAttachment()], sticker: sticker)).isAccepted
 
         XCTAssertFalse(ok)
         let items = await fx.offlineQueue.enqueuedItems

@@ -166,6 +166,31 @@ public enum GameSeason {
         self.season(at: dayKey) == season
     }
 
+    /// L'ÉTAT D'UNE SAISON À UN MOMENT (#10131) — miroir de `seasonTenseAt` (`season.ts`) : la fermeture du
+    /// dimanche 20 h ouvre la semaine suivante, la saison du lundi est donc en cours dès la veille à 20 h.
+    public static func tense(startDay: String, endDay: String, at moment: LeagueMoment) -> GameArchiveStatus {
+        let week = GameLeague.weekOfMoment(moment)
+        if week < GameLeague.weekKey(of: startDay) { return .upcoming }
+        return week > GameLeague.weekKey(of: endDay) ? .past : .current
+    }
+
+    /// L'état d'une COPIE (#10131) — miroir de `liveSeasonTense` : l'état servi, avancé par l'horloge locale. Une
+    /// saison « à venir » gardée hors ligne passe « en cours » le jour de son ouverture ; une horloge en retard ne
+    /// fait jamais reculer l'état servi.
+    public static func liveTense(served: GameArchiveStatus, startDay: String, endDay: String,
+                                 at moment: LeagueMoment) -> GameArchiveStatus {
+        let computed = tense(startDay: startDay, endDay: endDay, at: moment)
+        return tenseRank(computed) > tenseRank(served) ? computed : served
+    }
+
+    private static func tenseRank(_ tense: GameArchiveStatus) -> Int {
+        switch tense {
+        case .upcoming: return 0
+        case .current: return 1
+        case .past: return 2
+        }
+    }
+
     /// La saison À VENIR (#10014) : la saison 1 tant qu'aucune n'est ouverte, `nil` ensuite
     /// (les saisons s'enchaînent sans trou). Une donnée de calendrier, la même pour tous.
     public static func upcoming(of moment: LeagueMoment) -> SeasonCalendar? {
@@ -195,14 +220,16 @@ public enum GameSeason {
         )
     }
 
-    /// La récompense GRATUITE d'une étape : des points ; un fragment de cosmétique
+    /// La récompense GRATUITE d'une étape : des points (ceux de LA saison, bornés par le calendrier servi —
+    /// `SeasonSchedule`, #10232 ; à défaut ou illisibles, la loi : 100) ; UN fragment d'étoile (`GameStarFragments`)
     /// toutes les cinq étapes, un gel de Flamme toutes les dix, la coupe à la 40e.
-    public static func stepReward(_ step: Int) -> SeasonReward? {
+    public static func stepReward(_ step: Int, stepPoints seasonPoints: Int? = nil) -> SeasonReward? {
         guard (1...steps).contains(step) else { return nil }
         if step == steps { return SeasonReward(kind: .seasonCup, amount: 1) }
         if step % 10 == 0 { return SeasonReward(kind: .freeze, amount: 1) }
         if step % 5 == 0 { return SeasonReward(kind: .fragment, amount: 1) }
-        return SeasonReward(kind: .points, amount: stepPoints)
+        let amount = seasonPoints.flatMap { $0 > 0 ? $0 : nil } ?? stepPoints
+        return SeasonReward(kind: .points, amount: amount)
     }
 
     /// Le cosmétique de la rangée Sceau à cette étape, `nil` hors des étapes marquées.
@@ -217,8 +244,10 @@ public enum GameSeason {
         return balance >= sealPrice ? nil : .insufficientBalance
     }
 
-    public static func claim(season: Int, step: Int, stepsReached: Int, claimed: [Int], sealOwned: Bool) -> SeasonClaim {
-        guard let reward = stepReward(step) else { return .refused(.outOfRange) }
+    /// `stepPoints` : les points d'une étape ordinaire de CETTE saison (calendrier servi) ; absent, la loi.
+    public static func claim(season: Int, step: Int, stepsReached: Int, claimed: [Int], sealOwned: Bool,
+                             stepPoints seasonPoints: Int? = nil) -> SeasonClaim {
+        guard let reward = stepReward(step, stepPoints: seasonPoints) else { return .refused(.outOfRange) }
         if claimed.contains(step) { return .refused(.alreadyClaimed) }
         if step > stepsReached { return .refused(.locked) }
         return .allowed(reward: reward, seal: sealOwned ? sealReward(season: season, step: step) : nil)

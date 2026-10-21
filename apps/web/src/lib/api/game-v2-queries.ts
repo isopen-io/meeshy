@@ -17,6 +17,8 @@ import type { ApiResult, HttpTransport } from './http';
  * que `game-fixture.ts` ne voyage jamais dans un dist `VITE_DATA_SOURCE=gateway`.
  */
 export const GAME_V2_QUERY_PREFIX = ['me', 'game'] as const;
+/** Le calendrier des saisons servi (#10232) : la clé vit ici pour que l'administration l'invalide sans importer le cache. */
+export const SEASON_CALENDAR_QUERY_KEY = [...GAME_V2_QUERY_PREFIX, 'season-calendar'] as const;
 export const LEAGUE_WEEK_QUERY_KEY = [...GAME_V2_QUERY_PREFIX, 'league', 'week'] as const;
 export const LEAGUE_FRIENDS_QUERY_KEY = [...GAME_V2_QUERY_PREFIX, 'league', 'friends'] as const;
 

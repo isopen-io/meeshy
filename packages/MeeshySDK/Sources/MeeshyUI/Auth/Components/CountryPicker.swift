@@ -205,7 +205,7 @@ public struct CountryPicker: View {
             .accessibilityHint(String(localized: "auth.countryPicker.selector.hint", defaultValue: "Changer de pays", bundle: .module))
 
             // Phone number field
-            TextField(String(localized: "auth.countryPicker.phoneNumber", defaultValue: "Numero de telephone", bundle: .module), text: $phoneNumber)
+            TextField(String(localized: "auth.countryPicker.phoneNumber", defaultValue: "Numéro de téléphone", bundle: .module), text: $phoneNumber)
                 .keyboardType(.phonePad)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.mdPlus)

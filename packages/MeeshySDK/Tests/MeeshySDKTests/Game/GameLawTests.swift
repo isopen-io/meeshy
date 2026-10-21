@@ -116,13 +116,16 @@ struct GameLawTests {
 
     // MARK: Frappe
 
-    @Test("le prix monte de 6 % tous les dix numéros et s'arrête à quatre fois la base")
+    @Test("le prix monte de 30 % tous les dix numéros et s'arrête à 16 556, dès la 101e (#10011)")
     func priceGrowsAndCaps() {
         #expect(GameMint.price(forNumber: 1) == 1221)
         #expect(GameMint.price(forNumber: 10) == 1221)
-        #expect(GameMint.price(forNumber: 11) == 1294)
-        #expect(GameMint.price(forNumber: 250) == 4884)
-        #expect(GameMint.price(forNumber: 5000) == 4884)
+        #expect(GameMint.price(forNumber: 11) == 1587)
+        #expect(GameMint.price(forNumber: 21) == 2063)
+        #expect(GameMint.price(forNumber: 100) == 12_948)
+        #expect(GameMint.price(forNumber: 101) == 16_556)
+        #expect(GameMint.price(forNumber: 250) == 16_556)
+        #expect(GameMint.price(forNumber: 5000) == 16_556)
         #expect(GameMint.price(forNumber: 0) == 1221)
     }
 
@@ -131,10 +134,10 @@ struct GameLawTests {
     /// débordement d'entier qui ferait planter l'app sur une charge reçue.
     @Test("une valeur démesurée reçue du réseau se lit au plafond, sans planter")
     func hugeValuesReadAtTheCeiling() {
-        #expect(GameMint.price(forNumber: 7_000) == 4884)
-        #expect(GameMint.price(forNumber: 200_000) == 4884)
-        #expect(GameMint.price(forNumber: Int.max) == 4884)
-        #expect(GameMint.preview(score: 0, mintedLifetime: Int.max, debitablePoints: 0, levelCap: GameLevels.capBase).price == 4884)
+        #expect(GameMint.price(forNumber: 7_000) == 16_556)
+        #expect(GameMint.price(forNumber: 200_000) == 16_556)
+        #expect(GameMint.price(forNumber: Int.max) == 16_556)
+        #expect(GameMint.preview(score: 0, mintedLifetime: Int.max, debitablePoints: 0, levelCap: GameLevels.capBase).price == 16_556)
         #expect(GameLevels.level(forScore: Int.max, cap: GameLevels.capBase) == 499)
         #expect(GameLevels.progress(forScore: Int.max, cap: GameLevels.capBase).isMax)
         #expect(GameLevels.level(forScore: Int.max, cap: nil) == 1_000_000)
@@ -166,7 +169,7 @@ struct GameLawTests {
         let preview = GameMint.preview(score: 12_180, mintedLifetime: 12, debitablePoints: 12_180, levelCap: GameLevels.capBase)
         #expect(preview.canMint)
         #expect(preview.number == 13)
-        #expect(preview.price == 1294)
+        #expect(preview.price == 1587)
         #expect(preview.levelsLost == preview.levelBefore - preview.levelAfter)
         #expect(preview.levelsLost > 0)
         #expect(preview.gloryGained == 1000)
@@ -433,6 +436,16 @@ struct GameLawTests {
         #expect(GameBoosts.tailwind(level: 36, levelRecord: 36) == 1)
     }
 
+    @Test("avec les étincelles, le Vent arrière souffle à 7 niveaux ou plus sous le record, et s'arrête à 6 (#10896)")
+    func sparksTailwind() {
+        #expect(GameBoosts.tailwindLevelGap == 7)
+        #expect(GameBoosts.sparksTailwind(level: 29, levelRecord: 36) == 1.25)
+        #expect(GameBoosts.sparksTailwind(level: 12, levelRecord: 36) == 1.25)
+        #expect(GameBoosts.sparksTailwind(level: 30, levelRecord: 36) == 1)
+        #expect(GameBoosts.sparksTailwind(level: 36, levelRecord: 36) == 1)
+        #expect(GameBoosts.sparksTailwind(level: 1, levelRecord: 1) == 1, "un Prestige ne l'allume pas")
+    }
+
     @Test("l'Heure du Prisme tient dans 9 h – 21 h, sur un quart d'heure")
     func prismHourWindow() {
         for day in 1...28 {
@@ -446,13 +459,59 @@ struct GameLawTests {
         }
     }
 
-    @Test("le coffre du jour tient dans ses bornes annoncées")
+    @Test("le coffre du jour tient dans ses bornes annoncées, quel que soit l'effort — et n'ajoute que des points")
     func chestBounds() {
         for day in 1...28 {
-            let chest = GameChest.daily(userId: "u1", dayKey: String(format: "2026-10-%02d", day))
-            #expect((60...200).contains(chest.points))
+            for effort in [0, 300, 1000, 4500, 90_000] {
+                let chest = GameChest.daily(userId: "u1", dayKey: String(format: "2026-10-%02d", day), effort: effort, nextMeeshPrice: 1221)
+                let base = chest.points - chest.bonusPoints
+                #expect((500...10_000).contains(base))
+                #expect(chest.glory == base / 10)
+                #expect([0, 244, 1221].contains(chest.bonusPoints))
+            }
         }
-        #expect(GameChest.odds.fragment == 1.0 / 6.0)
+        #expect(GameChest.odds == ChestOdds(minPoints: 500, maxPoints: 10_000, fragment: 1.0 / 6.0, freeze: 1.0 / 20.0,
+                                             minGlory: 50, maxGlory: 1000, bonusWhole: 1.0 / 20.0, bonusFifth: 1.0 / 6.0))
+    }
+
+    @Test("les points du coffre suivent l'effort sur une droite, de 500 à 10 000 (#10011)")
+    func chestPointsFollowEffort() {
+        #expect(GameChest.points(forEffort: 0) == 500)
+        #expect(GameChest.points(forEffort: 300) == 500)
+        #expect(GameChest.points(forEffort: 415) == 760)
+        #expect(GameChest.points(forEffort: 2400) == 5250)
+        #expect(GameChest.points(forEffort: 4500) == 10_000)
+        #expect(GameChest.points(forEffort: Int.max) == 10_000)
+        let series = (0...4700).map(GameChest.points(forEffort:))
+        #expect(zip(series, series.dropFirst()).allSatisfy { $0 <= $1 })
+    }
+
+    @Test("la prime vaut le prix de la prochaine Meesh, ou son cinquième arrondi")
+    func chestBonusAmounts() {
+        #expect(GameChest.bonusAmounts(nextMeeshPrice: 1221) == (1221, 244))
+        #expect(GameChest.bonusAmounts(nextMeeshPrice: 16_556) == (16_556, 3311))
+        #expect(GameChest.bonusAmounts(nextMeeshPrice: -3) == (0, 0))
+        #expect(GameChest.content(forEffort: 300, nextMeeshPrice: 1587) == ChestContent(points: 500, glory: 50, bonusWhole: 1587, bonusFifth: 317))
+    }
+
+    @Test("les fragments d'étoile : un par étape 5, 15, 25, 35, une fois chacune, plus les coffres")
+    func starFragmentsCount() {
+        #expect(GameStarFragments.season(claimedSteps: [5, 5, 10, 15, 40]) == 2)
+        #expect(GameStarFragments.collected(chestDays: 3, seasons: [[5, 15, 25, 35], [5]]) == 8)
+        #expect(GameStarFragments.collected(chestDays: -1, seasons: []) == 0)
+    }
+
+    @Test("un ancien coffre se lit encore : sans Gloire ni prime ; fragment: true est un fragment d'étoile")
+    func legacyChestDecodes() throws {
+        let legacy = Data(#"{"points":140,"fragment":true,"freeze":false}"#.utf8)
+        let chest = try JSONDecoder().decode(DailyChest.self, from: legacy)
+        #expect(chest == DailyChest(points: 140, fragment: true, freeze: false, glory: 0, bonus: nil, bonusPoints: 0))
+        let current = Data(#"{"points":2327,"fragment":true,"freeze":false,"glory":208,"bonus":"fifth","bonusPoints":244}"#.utf8)
+        let decoded = try JSONDecoder().decode(DailyChest.self, from: current)
+        #expect(decoded.bonus == .fifth)
+        #expect(decoded.bonusPoints == 244)
+        let unknown = Data(#"{"points":500,"fragment":false,"freeze":false,"bonus":"triple"}"#.utf8)
+        #expect(try JSONDecoder().decode(DailyChest.self, from: unknown).bonus == nil)
     }
 
     // MARK: Guide
@@ -487,7 +546,7 @@ struct GameLawTests {
         let events: [GuideEvent] = [
             .firstLevel(level: 2, pointsToNext: 50), .newTier(tier: .lueur, nextTierLevel: 20), .missionsUnlocked,
             .firstMintPossible(price: 1221, levelsLost: 5, gloryGain: 100),
-            .firstMint(levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14), .badgeExtinguished(missingActions: 37),
+            .firstMint,
             .priceRises(nextPrice: 1294), .newRank(rank: .mythe, division: nil, glory: 200_000, gloryMissing: nil),
             .treasuryTier(tier: .escarcelle, nextTierMissing: 40), .flameAtRisk(days: 12),
             .flameOut(lostDays: 12, relightPrice: 3, canRelight: true), .returnAfterAbsence(daysAway: 9),

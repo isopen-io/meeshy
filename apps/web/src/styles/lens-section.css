@@ -1,0 +1,31 @@
+/*
+ * LE DÉPLIAGE D'UNE SECTION DE LA LISTE (#10103).
+ *
+ * Seul le dépliage qu'un GESTE vient de provoquer s'anime
+ * (`data-section-unfolding`, posé par la liste sur la section qu'on vient
+ * d'ouvrir) : la première peinture d'une liste en cache s'affiche d'un coup,
+ * jamais en fondu. Opacité et transformation SEULES — le compositeur les rend
+ * sans remettre la liste en page, d'où les 60 images par seconde ; la hauteur
+ * de la section ne s'anime pas. Le repli est immédiat : des rangées qui
+ * s'effacent en glissant retarderaient ce que l'on a demandé de ranger.
+ */
+[data-section-unfolding] {
+  animation: lens-section-unfold 160ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@keyframes lens-section-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-section-unfolding] {
+    animation: none;
+  }
+}

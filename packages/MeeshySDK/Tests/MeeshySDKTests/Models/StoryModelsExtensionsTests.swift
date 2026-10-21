@@ -749,6 +749,30 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(project.mediaObjects[0].duration, 5.0)
     }
 
+    func test_splitClipCommand_revert_keepsAClipInsertedBetweenTheHalves() throws {
+        var project = makeEmptyProject()
+        project.mediaObjects = [
+            StoryMediaObject(id: "v1", postMediaId: "pm",
+                             mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
+                             startTime: 0, duration: 5.0)
+        ]
+        let cmd = SplitClipCommand(clipId: "v1", kind: .video,
+                                   splitAtRelativeTime: 2.0,
+                                   leftId: "v1L", rightId: "v1R")
+        try cmd.apply(to: &project)
+        // Un média glissé entre les deux moitiés depuis la scission.
+        project.mediaObjects.insert(
+            StoryMediaObject(id: "x", postMediaId: "pmx",
+                             mediaType: "image", placement: "media",
+                             aspectRatio: 1.0,
+                             startTime: 0, duration: 1.0),
+            at: 1)
+        try cmd.revert(from: &project)
+        XCTAssertEqual(project.mediaObjects.map(\.id), ["v1", "x"])
+        XCTAssertEqual(project.mediaObjects[0].duration, 5.0)
+    }
+
     func test_splitClipCommand_apply_throwsWhenClipMissing() {
         var project = makeEmptyProject()
         let cmd = SplitClipCommand(clipId: "ghost", kind: .video,

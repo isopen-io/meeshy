@@ -5,7 +5,7 @@ import type { CameraResult } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
-import type { KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
+import type { KeepOutcome, KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
 import type { PhotoReferral } from '@/lib/game-photo/referral';
 import type { PhotoFiles } from '@/lib/game-photo/render';
 import type { ShareOutcome } from '@/lib/game-photo/share';
@@ -31,6 +31,8 @@ afterEach(unmountAll);
 const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 15)));
 const choose = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-photo-choice="${id}"]`);
 const by = (host: ParentNode, attribute: string) => host.querySelector<HTMLElement>(`[${attribute}]`);
+const takeFrame = (host: ParentNode) => host.querySelector<HTMLElement>('[data-photo-take="frame"]');
+const scene = (host: ParentNode) => host.querySelector<HTMLElement>('[data-photo-take="scene"]');
 
 type Log = {
   stops: number;
@@ -54,11 +56,11 @@ const files = (): PhotoFiles => ({
   square: new File(['q'], 'meeshy-profil.png', { type: 'image/png' }),
 });
 
-function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
+function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; keepOutcome?: KeepOutcome; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
   const log: Log = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], saved: [], outputs: [], rendered: [], closed: [] };
   const notebook: Notebook = {
     defer: async (moment) => (log.deferred.push(moment), true),
-    keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOk ?? true),
+    keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOutcome ?? (overrides.keepOk === false ? 'unavailable' : 'kept')),
     list: async () => [],
     remove: async () => true,
   };
@@ -149,13 +151,13 @@ describe('la proposition', () => {
 });
 
 describe('le selfie', () => {
-  test('la caméra s’ouvre, puis le déclencheur est là, nommé', async () => {
+  test('la caméra s’ouvre, puis la case du cadre est là, nommée : c’est elle qui déclenche', async () => {
     const { env: e, log } = env();
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
     expect(log.cameraOpened).toBe(1);
-    expect(by(host, 'data-photo-shutter')?.textContent).toBe('Prendre la photo');
+    expect(takeFrame(host)?.textContent).toContain('Voix II');
     expect(host.querySelector('video')).not.toBeNull();
   });
 
@@ -168,12 +170,28 @@ describe('le selfie', () => {
     expect(host.querySelector('[data-photo-art="emblem"]')).not.toBeNull();
   });
 
+  test('la scène garde son 9:16 quand le panneau déborde : elle ne se tasse pas, sa largeur suit sa hauteur bornée (#10293)', async () => {
+    const { env: e, log } = env();
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    const stage = host.querySelector<HTMLElement>('[data-photo-stage]');
+    expect(stage?.classList.contains('shrink-0')).toBe(true);
+    expect(stage?.classList.contains('w-full')).toBe(false);
+    const style = (stage?.getAttribute('style') ?? '').replace(/\s+/g, '');
+    // La largeur bornée par la hauteur vit dans le style (`min(100%, calc(62dvh * 9 / 16))`, que happy-dom ne relit pas) :
+    // la classe arbitraire d'avant n'avait AUCUNE règle dans la feuille servie (gate check-utilities, CI dev du 2026-10-13).
+    expect([...(stage?.classList ?? [])].some((name) => name.startsWith('w-['))).toBe(false);
+    expect(style).toContain('aspect-ratio:9/16');
+    expect(style).not.toContain('max-height');
+  });
+
   test('pendant l’ouverture : le déclencheur n’existe pas encore, l’état se dit', async () => {
     const { env: e, log } = env({ camera: 'pending' });
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    expect(by(host, 'data-photo-shutter')).toBeNull();
+    expect(takeFrame(host)).toBeNull();
     expect(host.textContent).toContain('Ouverture de la caméra');
   });
 
@@ -182,7 +200,7 @@ describe('le selfie', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     expect(log.rendered).toEqual([{ moment: rank, mirror: true }]);
     expect(by(host, 'data-photo-share')).not.toBeNull();
@@ -193,7 +211,7 @@ describe('le selfie', () => {
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     expect(log.stops).toBeGreaterThanOrEqual(1);
   });
@@ -225,7 +243,7 @@ describe('la photo se fige au déclenchement', () => {
     const host = await open(rank, frozen, log);
     await click(choose(host, 'selfie'));
     await settle();
-    await click(by(host, 'data-photo-shutter'));
+    await click(takeFrame(host));
     await settle();
     const still = host.querySelector('[data-photo-still]');
     expect(still).not.toBeNull();
@@ -242,7 +260,7 @@ describe('une caméra refusée n’est pas une impasse', () => {
       const host = await open(rank, e, log);
       await click(choose(host, 'selfie'));
       await settle();
-      expect(by(host, 'data-photo-shutter')).toBeNull();
+      expect(takeFrame(host)).toBeNull();
       expect(host.querySelector('[role="alert"]')?.textContent?.length).toBeGreaterThan(20);
       expect(by(host, 'data-photo-gallery')).not.toBeNull();
       expect(choose(host, 'card')).not.toBeNull();
@@ -255,6 +273,35 @@ describe('une caméra refusée n’est pas une impasse', () => {
     await click(choose(host, 'selfie'));
     await settle();
     expect(host.querySelector('[role="alert"]')?.textContent).toContain('Autorise');
+  });
+
+  /* #10833 — dans la coque Android, deux refus et Android ne redemande plus :
+     seule la fiche de l'app rend la caméra, comme aux composeurs (#8882, #10824). */
+  test('dans la coque, la caméra refusée offre d’ouvrir les réglages de l’app', async () => {
+    const opened: string[] = [];
+    const { env: e, log } = env({ camera: { ok: false, reason: 'denied' }, openSettings: () => void opened.push('openApp') });
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    const settings = by(host, 'data-photo-camera-settings');
+    expect(settings?.textContent).toBe('Ouvrir les réglages');
+    await click(settings);
+    expect(opened).toEqual(['openApp']);
+  });
+
+  test('sans porte vers les réglages (navigateur), ou pour une caméra absente, aucun bouton', async () => {
+    for (const { reason, openSettings } of [
+      { reason: 'denied', openSettings: null },
+      { reason: 'unsupported', openSettings: () => undefined },
+      { reason: 'unavailable', openSettings: () => undefined },
+    ] as const) {
+      const { env: e, log } = env({ camera: { ok: false, reason }, openSettings });
+      const host = await open(rank, e, log);
+      await click(choose(host, 'selfie'));
+      await settle();
+      expect(by(host, 'data-photo-camera-settings')).toBeNull();
+      unmountAll();
+    }
   });
 
   test('la carte seule reste possible après un refus', async () => {
@@ -417,22 +464,74 @@ describe('le résultat : partager, enregistrer, garder', () => {
     expect(host.textContent).not.toContain('Image enregistrée');
   });
 
-  test('« Garder au carnet » garde LES DEUX images, avec le mode, et le dit', async () => {
+  test('« Enregistrer » replié sur la feuille de partage ne se dit pas « enregistrée » et garde le bouton (#10284)', async () => {
+    const { host } = await toResult({ save: async () => 'shared' });
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(host.textContent).not.toContain('Image enregistrée');
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('« Garder au carnet » garde le 9:16, avec le mode, sans source pour une carte seule, et le dit', async () => {
     const { host, log } = await toResult();
     await click(by(host, 'data-photo-keep'));
     await settle();
     expect(log.kept).toHaveLength(1);
     expect(log.kept[0]?.photo.mode).toBe('card');
     expect((log.kept[0]?.photo.story as File).name).toBe('meeshy-story.png');
-    expect((log.kept[0]?.photo.square as File).name).toBe('meeshy-profil.png');
-    expect(host.textContent).toContain('Gardée au carnet');
+    expect(log.kept[0]?.photo.source ?? null).toBeNull();
+    expect(host.textContent).toContain('Gardée dans ta Chronique');
+  });
+
+  test('un selfie gardé emporte sa SOURCE réduite et sa recette (miroir) (#10161)', async () => {
+    const developed: unknown[] = [];
+    const source = new Blob(['jpeg'], { type: 'image/jpeg' });
+    const { env: e, log } = env({ developSource: async (photo) => (developed.push(photo), source) });
+    const host = await open(rank, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await click(takeFrame(host));
+    await settle();
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(developed).toHaveLength(1);
+    expect(log.kept[0]?.photo.source).toBe(source);
+    expect(log.kept[0]?.photo.recipe?.mirror).toBe(true);
+    expect(log.kept[0]?.photo.mode).toBe('selfie');
+  });
+
+  test('le carnet garde le 9:16 ré-encodé en JPEG ; le partage garde le PNG (#10238)', async () => {
+    const jpeg = new Blob(['jpeg'], { type: 'image/jpeg' });
+    const handed: Blob[] = [];
+    const { host, log } = await toResult({ keptStory: async (story) => (handed.push(story), jpeg) });
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(handed.map((story) => (story as File).name)).toEqual(['meeshy-story.png']);
+    expect(log.kept[0]?.photo.story).toBe(jpeg);
+    await click(by(host, 'data-photo-share'));
+    await settle();
+    expect(log.shared.map((shared) => shared.file.type)).toEqual(['image/png']);
+  });
+
+  test('plus de place sur l’appareil : un état d’erreur DESSINÉ propose la galerie, rien n’est gardé (#10161)', async () => {
+    const { host, log } = await toResult({ keepOutcome: 'no-space' });
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    const alert = host.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain('Plus de place sur cet appareil');
+    expect(host.textContent).not.toContain('Gardée dans ta Chronique');
+    expect((by(host, 'data-photo-keep') as HTMLButtonElement | null)?.disabled).toBe(false);
+    await click(alert?.querySelector<HTMLElement>('[data-photo-no-space-save]') ?? null);
+    await settle();
+    expect(log.saved.map((f) => f.name)).toEqual(['meeshy-story.png']);
   });
 
   test('un carnet qui refuse : on le dit, et la photo reste partageable', async () => {
     const { host } = await toResult({ keepOk: false });
     await click(by(host, 'data-photo-keep'));
     await settle();
-    expect(host.querySelector('[role="alert"]')?.textContent).toContain('carnet');
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Chronique');
     expect(by(host, 'data-photo-share')).not.toBeNull();
   });
 
@@ -543,14 +642,163 @@ describe('une vraie couche modale', () => {
     expect(document.activeElement).toBe(buttons[0] ?? null);
   });
 
-  test('le déclencheur porte son texte visible dans son nom accessible', async () => {
+  test('la case du cadre porte son texte visible dans son nom accessible', async () => {
     const { env: e, log } = env();
     const host = await open(rank, e, log);
     await click(choose(host, 'selfie'));
     await settle();
-    const shutter = by(host, 'data-photo-shutter');
-    const name = shutter?.getAttribute('aria-label') ?? shutter?.textContent ?? '';
-    expect(name).toContain(shutter?.textContent ?? '∅');
+    const shutter = takeFrame(host);
+    const visible = shutter?.querySelector('[data-photo-take-label]')?.textContent ?? '∅';
+    expect(shutter?.getAttribute('aria-label') ?? '').toContain(visible);
+  });
+});
+
+/**
+ * LE CADRE EST LE DÉCLENCHEUR (#10284) — directive porteur 2026-10-12 : aucun
+ * cercle d'enregistrement en plus du cadre ; la case du cadre prend la photo,
+ * l'enregistre dans la galerie (la galerie de la coque Android, un fichier dans
+ * un navigateur) puis ouvre le résultat ; la scène (toucher deux fois, tenir,
+ * ou Entrée au clavier) prend la photo sans l'écrire nulle part hors de l'app.
+ * « Enregistrer » n'apparaît que si la prise n'est pas déjà enregistrée avec ce
+ * cadre (loi `@meeshy/shared/utils/capture/capture-save`).
+ */
+describe('le cadre est le déclencheur (#10284)', () => {
+  const live = async (overrides: Parameters<typeof env>[0] = {}) => {
+    const bench = env(overrides);
+    const host = await open(rank, bench.env, bench.log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    return { ...bench, host };
+  };
+  const fire = (target: HTMLElement | null, event: Event) => act(() => void target?.dispatchEvent(event));
+
+  test('aucun rond d’enregistrement à côté du cadre : la case du cadre est le seul déclencheur', async () => {
+    const { host } = await live();
+    expect(by(host, 'data-photo-shutter')).toBeNull();
+    expect(host.querySelectorAll('[data-photo-take="frame"]')).toHaveLength(1);
+    expect(takeFrame(host)?.tagName).toBe('BUTTON');
+  });
+
+  test('toucher la case du cadre : la photo part dans la galerie, PUIS le résultat, sans « Enregistrer »', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    expect(log.saved).toHaveLength(1);
+    expect(log.saved[0]).toBe(log.outputs.at(-1)?.story);
+    expect(by(host, 'data-photo-share')).not.toBeNull();
+    expect(by(host, 'data-photo-save')).toBeNull();
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('Image enregistrée');
+  });
+
+  test('#10296 : story enregistrée par la case du cadre, puis le carré : « Enregistrer » revient et écrit le carré', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    expect(by(host, 'data-photo-save')).toBeNull();
+    await click(by(host, 'data-photo-format="square"'));
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(log.saved.map((f) => f.name)).toEqual(['meeshy-story.png', 'meeshy-profil.png']);
+    expect(by(host, 'data-photo-save')).toBeNull();
+  });
+
+  test('#10296 : le carré enregistré puis le retour à la story déjà enregistrée : masqué, sans doublon', async () => {
+    const { host, log } = await live();
+    await click(takeFrame(host));
+    await settle();
+    await click(by(host, 'data-photo-format="square"'));
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    await click(by(host, 'data-photo-format="story"'));
+    expect(by(host, 'data-photo-save')).toBeNull();
+    expect(log.saved).toHaveLength(2);
+  });
+
+  test('toucher deux fois la scène : le résultat, RIEN dans la galerie, « Enregistrer » visible', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    expect(by(host, 'data-photo-share')).not.toBeNull();
+    expect(log.saved).toEqual([]);
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('un seul toucher sur la scène ne prend rien', async () => {
+    const { host, log } = await live();
+    await click(scene(host));
+    await settle();
+    expect(log.rendered).toEqual([]);
+    expect(takeFrame(host)).not.toBeNull();
+  });
+
+  test('tenir la scène prend la photo hors cadre', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new PointerEvent('pointerdown', { bubbles: true }));
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 600)));
+    await fire(scene(host), new PointerEvent('pointerup', { bubbles: true }));
+    await settle();
+    expect(log.rendered).toHaveLength(1);
+    expect(log.saved).toEqual([]);
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('un appui bref sur la scène ne déclenche pas', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new PointerEvent('pointerdown', { bubbles: true }));
+    await fire(scene(host), new PointerEvent('pointerup', { bubbles: true }));
+    await act(() => new Promise<void>((resolve) => setTimeout(resolve, 600)));
+    expect(log.rendered).toEqual([]);
+  });
+
+  test('au clavier, la scène est un contrôle nommé : Entrée prend la photo hors cadre', async () => {
+    const { host, log } = await live();
+    const target = scene(host);
+    expect(target?.getAttribute('role')).toBe('button');
+    expect(target?.getAttribute('tabindex')).toBe('0');
+    expect(target?.getAttribute('aria-label')?.length).toBeGreaterThan(10);
+    await fire(target, new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(log.rendered).toHaveLength(1);
+    expect(log.saved).toEqual([]);
+  });
+
+  test('« Enregistrer » après une prise hors cadre : enregistrée une fois, puis le bouton disparaît', async () => {
+    const { host, log } = await live();
+    await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(log.saved).toHaveLength(1);
+    expect(by(host, 'data-photo-save')).toBeNull();
+  });
+
+  test('une galerie qui refuse l’écriture automatique : on le dit, et « Enregistrer » revient', async () => {
+    const { host } = await live({ save: async () => 'failed' });
+    await click(takeFrame(host));
+    await settle();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('L’enregistrement n’a pas pu aboutir');
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('un « Enregistrer » qui échoue revient', async () => {
+    const { host } = await live({ save: async () => 'failed' });
+    await fire(scene(host), new MouseEvent('dblclick', { bubbles: true }));
+    await settle();
+    await click(by(host, 'data-photo-save'));
+    await settle();
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+  });
+
+  test('une prise par le cadre déjà enregistrée ne propose plus la galerie quand le carnet est plein', async () => {
+    const { host, log } = await live({ keepOutcome: 'no-space' });
+    await click(takeFrame(host));
+    await settle();
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain('Plus de place');
+    expect(by(host, 'data-photo-no-space-save')).toBeNull();
+    expect(log.saved).toHaveLength(1);
   });
 });
 
@@ -889,5 +1137,40 @@ describe('aucun jeton de parrainage ne se crée sans geste', () => {
     await settle();
     expect(creations).toBe(0);
     expect(made.log.texts).toEqual([`Rejoins-moi sur Meeshy : ${LINK}`]);
+  });
+});
+
+/**
+ * LA CARTE QUI NOMME SON AUTEUR (#10816) — la proposition montre la carte
+ * posée du moment, gravée au pseudo de l'auteur ; et la plaque part dans
+ * l'image (le cadre de la scène la porte, la composition la relit).
+ */
+describe('la carte d’auteur', () => {
+  const author = { handle: 'atabeth' };
+  const openWith = (moment: PhotoMoment, e: PhotoEnv, log: Log, who: { handle: string } | null) =>
+    mount(<GamePhotoFlow moment={moment} env={e} author={who} onClose={(result) => log.closed.push(result)} />);
+
+  test('la proposition pose la carte du moment, gravée au pseudo', async () => {
+    const { env: e, log } = env();
+    const host = await openWith(rank, e, log, author);
+    const card = by(host, 'data-author-card');
+    expect(card?.getAttribute('aria-label')).toContain('@atabeth');
+    expect(card?.textContent).toContain('@atabeth');
+    expect(choose(host, 'selfie')).not.toBeNull();
+  });
+
+  test('sans auteur (invité) : la proposition d’avant, sans carte', async () => {
+    const { env: e, log } = env();
+    const host = await openWith(rank, e, log, null);
+    expect(by(host, 'data-author-card')).toBeNull();
+    expect(host.textContent).toContain('On immortalise ?');
+  });
+
+  test('la carte seule : le cadre de la scène porte la plaque que la composition relira', async () => {
+    const { env: e, log } = env({ render: async () => new Promise<PhotoFiles | null>(() => undefined) });
+    const host = await openWith(rank, e, log, author);
+    await click(choose(host, 'card'));
+    await settle();
+    expect(host.querySelector('[data-photo-stage] [data-photo-art="author"] svg')).not.toBeNull();
   });
 });

@@ -67,10 +67,10 @@ extension MessageRecord {
         }
 
         // Un sticker relu du cache mais non rendable vaut absence — la règle
-        // vit dans `MessageSticker.ifRenderable`, elle n'est pas réécrite ici.
+        // vit dans `MessageSticker.ifWireWorthy`, elle n'est pas réécrite ici.
         let uiSticker = stickerJson.flatMap { json -> MessageSticker? in
             guard let data = json.data(using: .utf8) else { return nil }
-            return decoder.decodeOrLog(MessageSticker.self, from: data, field: "stickerJson", id: localId)?.ifRenderable
+            return decoder.decodeOrLog(MessageSticker.self, from: data, field: "stickerJson", id: localId)?.ifWireWorthy
         }
 
         var effects = MessageEffects.none
@@ -154,6 +154,10 @@ extension MessageRecord {
             senderColor: resolvedColor ?? senderColor,
             senderAvatarURL: senderAvatarURL,
             senderUserId: senderId == currentUserId ? currentUserId : nil,
+            senderIsAnonymous: senderIsAnonymous ?? false,
+            // #10286 — inconnu (ligne antérieure, écho sans sender) ⇒ liens
+            // INERTES chez autrui ; la revalidation REST remplit la colonne.
+            senderHasAccount: senderHasAccount ?? (senderId == currentUserId || msgSource != .user),
             deliveryStatus: deliveryStatus,
             isMe: senderId == currentUserId,
             deliveredToAllAt: deliveredToAllAt,
@@ -165,12 +169,14 @@ extension MessageRecord {
             callSummary: uiCallSummary,
             joinNotice: systemNotice.join,
             captureNotice: systemNotice.capture,
+            arrivalsNotice: systemNotice.arrivals,
             location: uiLocation,
             sticker: uiSticker
         )
         // #7579 — l'état « déjà ouvert » d'une vue unique vit dans la colonne ;
         // le fil, qui ne lit que GRDB, le reçoit d'ici.
         message.viewOnceOpenedAt = viewOnceOpenedAt
+        message.senderRing = Self.decodeJSONText(ServedProfileDecorItem.self, senderRingJson, field: "senderRingJson", id: localId)
         message.trackedLinkMap = Self.decodeJSONText([TrackedLink].self, trackedLinksJson,
                                                      field: "trackedLinksJson", id: localId)?.trackedLinkMap ?? [:]
         return message

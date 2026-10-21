@@ -3,14 +3,12 @@
  * générateurs : `mee-ios-stickers.ts` (les personnages) et
  * `mee-ios-instants.ts` (les Instants, dont le texte est redessiné en natif).
  *
- * Chaque image est posée à la main (`document.getAnimations()`, temps fixé) :
- * aucune image ratée, aucune dépendance à l'horloge. Le WebP animé est celui
- * que lit `AnimatedImageDecoder`.
+ * Le « film » est un fichier `.lottie` (#10639) : le dessin vectoriel et son
+ * mouvement, MESURÉ image par image dans Chromium (`sticker-lottie/shoot.ts`),
+ * quelques Ko là où le WebP animé de 360 px en pesait des centaines. Le témoin
+ * `sticker-lottie-parity.ts` juge le résultat contre le SVG du web.
  */
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,15 +16,14 @@ import { chromium } from '@playwright/test';
 import type { CDPSession, Page } from '@playwright/test';
 
 import type { Motion } from '../src/lib/mee/motion';
+import { LOTTIE_FPS, MEE_EXPORT, exportLottie } from './sticker-lottie/shoot';
 
 export const OUT = fileURLToPath(new URL('../../../packages/MeeshySDK/Sources/MeeshyUI/Resources/MeeStickers', import.meta.url));
 export const STORY = join(OUT, '..', '..', 'Story');
 export const SIZE = 360;
-const FPS = 15;
 const MAX_LOOP = 4.8;
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const WORKERS = 4;
-const encode = promisify(execFile);
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
@@ -50,36 +47,11 @@ export type Shot = {
   readonly prepare?: (page: Page) => Promise<void>;
 };
 
-export async function filmShot(shot: Shot, page: Page, cdp: CDPSession): Promise<void> {
-  await page.setContent(`<html><body style="margin:0;background:transparent">${shot.svg}</body></html>`);
-  await shot.prepare?.(page);
-  const frames = mkdtempSync(join(tmpdir(), 'mee-'));
-  const count = shot.motion === null ? 1 : Math.round(loopSeconds(shot.motion) * FPS);
-  for (let index = 0; index < count; index += 1) {
-    await page.evaluate((ms) => {
-      for (const animation of document.getAnimations()) {
-        animation.pause();
-        animation.currentTime = ms;
-      }
-    }, (index * 1000) / FPS);
-    // `captureBeyondViewport` : la fenêtre de Chrome headless est plus courte
-    // que la page demandée, et sans lui la capture s'arrête à son bord — le
-    // bas de chaque sticker (pattes, ombre) partait coupé net.
-    const { data } = await cdp.send('Page.captureScreenshot', {
-      format: 'png',
-      clip: { x: 0, y: 0, width: SIZE, height: SIZE, scale: 1 },
-      captureBeyondViewport: true,
-    });
-    writeFileSync(join(frames, `${String(index).padStart(3, '0')}.png`), Buffer.from(data, 'base64'));
-  }
-  const target = join(OUT, `mee.${shot.id}.webp`);
-  const pngs = readdirSync(frames).sort().map((name) => join(frames, name));
-  if (count === 1) {
-    await encode('cwebp', ['-quiet', '-q', '80', '-alpha_q', '90', pngs[0] as string, '-o', target]);
-  } else {
-    await encode('img2webp', ['-loop', '0', '-lossy', '-q', '68', '-m', '6', '-d', String(Math.round(1000 / FPS)), ...pngs, '-o', target]);
-  }
-  rmSync(frames, { recursive: true, force: true });
+export async function filmShot(shot: Shot, page: Page, _cdp: CDPSession): Promise<void> {
+  const frames = shot.motion === null ? 1 : Math.round(loopSeconds(shot.motion) * LOTTIE_FPS);
+  const { bytes } = await exportLottie({ id: shot.id, svg: shot.svg, frames, preset: MEE_EXPORT, ...(shot.prepare === undefined ? {} : { prepare: shot.prepare }) }, page);
+  writeFileSync(join(OUT, `mee.${shot.id}.lottie`), bytes);
+  rmSync(join(OUT, `mee.${shot.id}.webp`), { force: true });
   process.stdout.write('.');
 }
 
@@ -99,9 +71,9 @@ export async function openPages<T>(work: (page: Page, cdp: CDPSession) => Promis
 }
 
 /** Le film d'un identifiant est-il déjà tourné ? (`--resume`) */
-export const hasFilm = (id: string): boolean => existsSync(join(OUT, `mee.${id}.webp`));
+export const hasFilm = (id: string): boolean => existsSync(join(OUT, `mee.${id}.lottie`));
 
 /** Retire les films d'une famille — jamais ceux de l'autre générateur. */
 export function removeFilms(ids: readonly string[]): void {
-  ids.forEach((id) => rmSync(join(OUT, `mee.${id}.webp`), { force: true }));
+  ids.forEach((id) => ['lottie', 'webp'].forEach((ext) => rmSync(join(OUT, `mee.${id}.${ext}`), { force: true })));
 }

@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { scriptedGateway } from '@/test-support/scripted-transport';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import { messagesOf } from '@/lib/api/fixtures';
 import { resolveInterfaceLanguageCode } from '@/lib/inline-interface-language-bootstrap.js';
@@ -101,6 +102,29 @@ describe('Attachments — l’image (#5805)', () => {
     expect(html).not.toContain('<img');
     expect(html).toContain('role="img"');
     expect(html).toContain('aria-label="Deployment dashboard screenshot, every service green"');
+  });
+});
+
+describe('Attachments — plusieurs vocaux : chaque piste est annoncée (#10678)', () => {
+  const voice = attachmentOf(MEDIA_VOICE_EN_WITNESS_ID);
+  const render = (count: number) =>
+    renderToStaticMarkup(
+      <Attachments
+        attachments={Array.from({ length: count }, (_, i) => ({ ...voice, id: `${voice.id}-${i}` }))}
+        languages={['fr']}
+        fallbackLanguage="fr"
+        mediaFrame="box"
+      />,
+    );
+
+  test('trois vocaux : « Vocal 1 sur 3 », « Vocal 2 sur 3 », « Vocal 3 sur 3 », chacun avec son nom et sa zone', () => {
+    const html = render(3);
+    ['Vocal 1 sur 3', 'Vocal 2 sur 3', 'Vocal 3 sur 3'].forEach((label) => expect(html).toContain(`aria-label="${label}"`));
+    expect(html.match(/data-voice-expand/g)?.length).toBe(3);
+  });
+
+  test('un seul vocal : aucune annonce de rang', () => {
+    expect(render(1)).not.toContain('sur 1');
   });
 });
 
@@ -230,7 +254,7 @@ describe('Attachments — le vocal, la piste suit le TEXTE servi (#5805, cycle 1
   test('le bouton porte le vocabulaire iOS repris, aucun aria-pressed, la durée 0:12', () => {
     const html = renderOne(voiceEn, { languages: ['fr'] });
     // React échappe l'apostrophe en entité HTML dans un attribut.
-    expect(html).toContain('aria-label="Lire l&#x27;audio"');
+    expect(html).toContain('aria-label="Lire l’audio"');
     expect(html).not.toContain('aria-pressed');
     expect(html).toContain('>0:12<');
   });
@@ -529,7 +553,7 @@ describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
 
     expect(container.querySelector('[data-consumption]')).toBeNull();
 
-    const playButton = container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement;
+    const playButton = container.querySelector('button[aria-label="Lire l’audio"]') as HTMLButtonElement;
     await act(async () => {
       playButton.click();
       await Promise.resolve();
@@ -567,7 +591,7 @@ describe('Attachments — le vocal RAPPORTE sa consommation (#7225)', () => {
     Object.defineProperty(audio, 'currentTime', { value: 11.9, configurable: true, writable: true });
 
     await act(async () => {
-      (container.querySelector('button[aria-label="Lire l\'audio"]') as HTMLButtonElement).click();
+      (container.querySelector('button[aria-label="Lire l’audio"]') as HTMLButtonElement).click();
       await new Promise((resolve) => setTimeout(resolve, 40));
     });
 
@@ -643,6 +667,35 @@ describe('Attachments — ouvrir un document REÇU rapporte, jamais le sien (#73
     expect(link?.getAttribute('target')).toBe('_blank');
     expect(link?.getAttribute('aria-label')).toBe('Ouvrir contrat.pdf');
     expect(link?.style.minHeight).toBe('44px');
+  });
+
+  test('le poids du document suit la langue de l’interface — « 200 kB », jamais « 200 Ko » en anglais (#10748)', async () => {
+    await loadInterfaceCatalog('en');
+    const previous = document.documentElement.lang;
+    document.documentElement.lang = 'en';
+    try {
+      container = document.createElement('div');
+      document.body.appendChild(container);
+      root = createRoot(container);
+      act(() => {
+        root.render(<Attachments attachments={[document_]} languages={['en']} fallbackLanguage="en" mediaFrame="box" />);
+      });
+      const text = container.querySelector('[data-attachment-file="att-doc-1"]')?.textContent ?? '';
+      expect(text).toContain('200');
+      expect(text).not.toContain('Ko');
+    } finally {
+      document.documentElement.lang = previous;
+    }
+  });
+
+  test('un document de taille inconnue (0) ne s’annonce pas « 0 Ko », comme sur iOS (#10748)', () => {
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root.render(<Attachments attachments={[{ ...document_, fileSize: 0 }]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
+    });
+    expect(container.querySelector('[data-attachment-file="att-doc-1"]')?.textContent ?? '').not.toContain('Ko');
   });
 
   test('dans la coque, un document EN COURS D’ENVOI (blob:) n’est pas un lien — la WebView naviguerait dessus (#8402)', () => {

@@ -107,6 +107,19 @@ const surveil = (target, keys) =>
       if (!keys.includes(key)) return value.bind(object);
       return async (...args) => {
         const made = await value.apply(object, args);
+        // LA LANGUE D'INTERFACE DES GATES (#10645) : la coque suit désormais la langue du navigateur, et le
+        // Chromium de Playwright est `en-US`. Ces gates ont été écrits contre l'interface FRANÇAISE — celle que la
+        // webapp servait à tous avant #10645, quel que soit le navigateur. Le choix explicite de la langue
+        // d'interface (`localStorage`, lu AVANT le navigateur) la leur rend ; le navigateur, lui, reste `en-US`,
+        // si bien que les témoins qui comptent sur ses langues (rang des pistes, #check-media) ne bougent pas.
+        // Un gate qui pose une `locale` choisit sa langue : rien n'est imposé.
+        if (keys.includes('newContext') && (key === 'newPage' || key === 'newContext') && args[0]?.locale === undefined) {
+          await made.addInitScript(() => {
+            try {
+              if (localStorage.getItem('meeshy.interface-language') === null) localStorage.setItem('meeshy.interface-language', 'fr');
+            } catch {}
+          });
+        }
         if (key === 'newPage') {
           watched.push(watchPage(made));
           return made;
@@ -122,6 +135,10 @@ export const launchChromium = async (options = {}) => {
   for (const signal of ['uncaughtException', 'unhandledRejection']) {
     process.on(signal, (cause) => {
       console.error(`\n  ${signal} : ${cause instanceof Error ? cause.message : String(cause)}`);
+      // L'attente qui a expiré, nommée : sans ses lignes de témoin, « Timeout 5000ms exceeded » ne désigne aucune
+      // des dizaines d'attentes d'un gate — la CI rendait un rouge qu'on ne pouvait pas localiser.
+      const frames = cause instanceof Error ? (cause.stack ?? '').split('\n').filter((line) => line.includes('/scripts/')) : [];
+      for (const frame of frames.slice(0, 4)) console.error(`    ${frame.trim()}`);
       reportOpenPages();
       process.exit(1);
     });

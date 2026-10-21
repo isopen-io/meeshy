@@ -108,4 +108,40 @@ final class AchievementRevealMedalTests: XCTestCase {
             XCTAssertTrue(try source(host).contains("RevealRim.entry("), "\(host) doit passer la rareté mesurée à la célébration")
         }
     }
+
+    // MARK: - Le titre d'un palier d'axe garde la casse des noms allemands (#7778)
+
+    func test_titre_axeAllemand_garde_la_majuscule_des_noms() {
+        XCTAssertEqual(ProgressionCopy.badgeTierTitle(threshold: 10, axisName: "Geknüpfte Freundschaften", language: "de"),
+                       "10 geknüpfte Freundschaften")
+        XCTAssertEqual(ProgressionCopy.badgeTierTitle(threshold: 100, axisName: "Öffentliche Unterhaltungen", language: "de-DE"),
+                       "100 öffentliche Unterhaltungen")
+    }
+
+    func test_titre_axeAllemand_un_nom_en_tete_garde_sa_majuscule() {
+        XCTAssertEqual(ProgressionCopy.badgeTierTitle(threshold: 100, axisName: "Sprachnachrichten", language: "de"),
+                       "100 Sprachnachrichten")
+        XCTAssertEqual(ProgressionCopy.badgeTierTitle(threshold: 50, axisName: "Bearbeitungen in der App", language: "de"),
+                       "50 Bearbeitungen in der App")
+    }
+
+    func test_titre_axe_les_autres_langues_passent_en_minuscule() {
+        XCTAssertEqual(ProgressionCopy.badgeTierTitle(threshold: 10, axisName: "Amitiés nouées", language: "fr"),
+                       "10 amitiés nouées")
+        XCTAssertEqual(ProgressionCopy.badgeTierTitle(threshold: 10, axisName: "Friendships Made", language: "en"),
+                       "10 friendships made")
+    }
+
+    func test_la_celebration_compose_le_titre_d_axe_par_la_loi() throws {
+        let view = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        XCTAssertTrue(view.contains("ProgressionCopy.badgeTierTitle("))
+        XCTAssertFalse(view.contains(".lowercased())\""), "le titre d'axe ne se met plus en minuscule en bloc")
+    }
+
+    /// #10829 — sur la carte indigo, la ligne de rareté prend l'encre claire
+    /// de l'explication : la couleur discrète du thème y tombe sous l'AA.
+    func test_theRarityLine_onTheIndigoCard_wearsTheReadableInk() throws {
+        let view = try source("Meeshy/Features/Main/Views/AchievementRevealView.swift")
+        XCTAssertTrue(view.contains("GameRarityLine(entry: rarity, ink: MeeshyColors.indigo200)"))
+    }
 }

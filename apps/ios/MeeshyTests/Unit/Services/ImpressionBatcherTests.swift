@@ -49,9 +49,11 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p2")
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 1)
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1", "p2"])
-        XCTAssertEqual(service.lastRecordImpressionsSource, "feed")
+        XCTAssertEqual(service.recordedSocialEventBatches, [[
+            .impression(postId: "p1", source: "feed", surface: nil),
+            .impression(postId: "p2", source: "feed", surface: nil),
+        ]], "Sans surface déclarée, le lot part quand même par la porte unique, clé surface absente.")
+        XCTAssertEqual(service.recordedSocialEventsCredentials, [.account])
     }
 
     /// Une impression par apparition : les répétitions doivent survivre au lot.
@@ -63,7 +65,7 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p1")
         try? await Task.sleep(nanoseconds: 200_000_000)
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1", "p1", "p1"])
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1", "p1", "p1"])
     }
 
     // MARK: - Sortie d'écran / arrière-plan
@@ -74,8 +76,8 @@ final class ImpressionBatcherTests: XCTestCase {
         sut.record("p1")
         await sut.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 1)
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1"])
+        XCTAssertEqual(service.recordSocialEventsCallCount, 1)
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"])
     }
 
     func test_flushNow_withNothingPending_doesNotCallTheService() async {
@@ -83,7 +85,7 @@ final class ImpressionBatcherTests: XCTestCase {
 
         await sut.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 0)
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0)
     }
 
     // MARK: - Survie à la fermeture de l'app
@@ -104,7 +106,7 @@ final class ImpressionBatcherTests: XCTestCase {
         )
         await revived.flushNow()
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1", "p1", "p2"])
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1", "p1", "p2"])
     }
 
     /// Le rejeu ne doit pas dépendre d'une nouvelle apparition : une surface qui
@@ -122,7 +124,7 @@ final class ImpressionBatcherTests: XCTestCase {
         )
         try? await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1"])
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"])
         withExtendedLifetime(revived) {}
     }
 
@@ -137,7 +139,7 @@ final class ImpressionBatcherTests: XCTestCase {
         )
         await revived.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 0,
+        XCTAssertEqual(service.recordSocialEventsCallCount, 0,
                        "un lot déjà envoyé ne doit pas être recompté au lancement suivant")
     }
 
@@ -151,26 +153,51 @@ final class ImpressionBatcherTests: XCTestCase {
         profile.record("p2")
         await profile.flushNow()
 
-        XCTAssertEqual(profileService.lastRecordImpressionPostIds, ["p2"])
-        XCTAssertEqual(profileService.lastRecordImpressionsSource, "profile")
+        XCTAssertEqual(profileService.lastSocialEventPostIds, ["p2"])
+        XCTAssertEqual(profileService.recordedImpressionSources.last, "profile")
     }
 
     // MARK: - Échec réseau
 
     func test_failedFlush_keepsOccurrencesForTheNextAttempt() async {
         let (sut, service) = makeSUT(flushDelay: 60)
-        service.recordImpressionsResult = .failure(NSError(domain: "net", code: -1009))
+        service.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
         sut.record("p1")
 
         await sut.flushNow()
-        XCTAssertEqual(service.recordImpressionsCallCount, 1)
+        XCTAssertEqual(service.recordSocialEventsCallCount, 1)
 
-        service.recordImpressionsResult = .success(())
+        service.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
         await sut.flushNow()
 
-        XCTAssertEqual(service.recordImpressionsCallCount, 2)
-        XCTAssertEqual(service.lastRecordImpressionPostIds, ["p1"],
+        XCTAssertEqual(service.recordSocialEventsCallCount, 2)
+        XCTAssertEqual(service.lastSocialEventPostIds, ["p1"],
                        "l'occurrence perdue par le réseau doit repartir, pas disparaître")
+    }
+}
+
+/// Une file d'impressions sans plafond grossissait sans fin pendant une longue
+/// panne (hors ligne, 5xx, 429, session expirée) : chaque carte apparue
+/// réencodait tout le tableau dans `UserDefaults`, sur le fil principal.
+extension ImpressionBatcherTests {
+
+    func test_failedFlushes_keepAtMostTheCap_newestFirstKept() async {
+        let service = MockPostService()
+        service.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let sut = ImpressionBatcher(
+            source: "feed", postService: service, flushDelay: 60,
+            defaults: defaults, accountId: { "acc-cap" }
+        )
+        let total = ImpressionBatcher.pendingCap + 40
+        for i in 0..<total { sut.record("p\(i)") }
+        await sut.flushNow()
+        for i in total..<(total + 10) { sut.record("p\(i)") }
+
+        let key = ImpressionBatcher.storageKey(source: "feed", surface: nil, accountId: "acc-cap")
+        let kept = ImpressionBatcher.restore(from: defaults, key: key)
+        XCTAssertEqual(kept.count, ImpressionBatcher.pendingCap)
+        XCTAssertEqual(kept.last?.postId, "p\(total + 9)", "la plus récente est gardée")
+        XCTAssertFalse(kept.contains { $0.postId == "p0" }, "la plus ancienne est abandonnée")
     }
 }
 
@@ -189,4 +216,148 @@ extension ImpressionBatcherTests {
         XCTAssertEqual(defaults.string(forKey: "meeshy.unrelated.key"), "garder",
                        "seules les clés préfixées impressions sont purgées")
     }
+}
+
+/// #10398 — un paquet refusé pour de bon (4xx hors 408/429, ou réponse 2xx
+/// illisible) était réinséré, renvoyé, refusé encore : la surface ne
+/// comptait plus jamais rien. Le refus permanent se jette ; la panne se garde.
+extension ImpressionBatcherTests {
+
+    func test_aChunkRejectedWith400_isDroppedInsteadOfBlockingTheSurface() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResult = .failure(APIError.serverError(400, "body/events must NOT have more than 200 items"))
+        sut.record("p1")
+
+        await sut.flushNow()
+        service.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordSocialEventsCallCount, 1,
+                       "un refus permanent ne se rejoue pas — sinon la file ne se vide jamais")
+    }
+
+    func test_aRejectedChunk_doesNotTakeTheNextChunkWithIt() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResultsQueue = [
+            .failure(APIError.serverError(400, nil)),
+            .success(SocialEventsReceipt(recorded: 50, rejected: 0)),
+        ]
+        (0..<250).forEach { sut.record("p\($0)") }
+
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventBatches.map(\.count), [200, 50],
+                       "le paquet suivant part quand même")
+    }
+
+    func test_aChunkRejectedWith429_isKeptForTheNextAttempt() async {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResult = .failure(APIError.serverError(429, nil))
+        sut.record("p1")
+
+        await sut.flushNow()
+        service.recordSocialEventsResult = .success(SocialEventsReceipt(recorded: 1, rejected: 0))
+        await sut.flushNow()
+
+        XCTAssertEqual(service.recordedSocialEventBatches.map { $0.map(\.postId) }, [["p1"], ["p1"]])
+    }
+}
+
+/// #10500 — un lot rejoué après une panne n'est compté qu'une fois, et daté de
+/// l'APPARITION. Avant, la file ne gardait que des identifiants : chaque
+/// tentative fabriquait de nouveaux événements, que la passerelle recomptait,
+/// datés de l'envoi.
+extension ImpressionBatcherTests {
+
+    private func stamps(_ service: MockPostService) -> [[SocialEventStamp]] {
+        service.recordedStampedSocialEventBatches.map { $0.map(\.stamp) }
+    }
+
+    func test_retryAfterAFailure_sendsExactlyTheSameEventIds() async throws {
+        let (sut, service) = makeSUT(flushDelay: 60)
+        service.recordSocialEventsResultsQueue = [
+            .failure(NSError(domain: "net", code: -1009)),
+            .failure(NSError(domain: "net", code: -1009)),
+        ]
+        sut.record("p1")
+        sut.record("p2")
+
+        await sut.flushNow()
+        await sut.flushNow()
+        await sut.flushNow()
+
+        let attempts = stamps(service).map { $0.map(\.eventId) }
+        XCTAssertEqual(attempts.count, 3)
+        XCTAssertEqual(Set(attempts[0]).count, 2, "Deux apparitions, deux identifiants.")
+        XCTAssertEqual(attempts[1], attempts[0], "La tentative 2 renvoie les mêmes eventId.")
+        XCTAssertEqual(attempts[2], attempts[0], "La tentative 3 aussi.")
+    }
+
+    func test_retryAcrossALaunch_sendsTheSameEventIds() async throws {
+        let failing = MockPostService()
+        failing.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults, accountId: { nil })
+        first.record("p1")
+        await first.flushNow()
+
+        let online = MockPostService()
+        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults, accountId: { nil })
+        await revived.flushNow()
+
+        XCTAssertEqual(stamps(online).flatMap { $0 }.map(\.eventId), stamps(failing).flatMap { $0 }.map(\.eventId))
+    }
+
+    func test_occurredAt_isTheAppearanceTime_notTheSendTime() async throws {
+        let service = MockPostService()
+        let clock = ClockBox(now: Date(timeIntervalSince1970: 1_700_000_000))
+        let sut = ImpressionBatcher(
+            source: "feed", postService: service, flushDelay: 60, defaults: defaults,
+            accountId: { nil }, clock: { clock.now }
+        )
+        sut.record("p1")
+        clock.now = Date(timeIntervalSince1970: 1_700_000_900)
+
+        await sut.flushNow()
+
+        XCTAssertEqual(stamps(service).first?.first?.occurredAt, Date(timeIntervalSince1970: 1_700_000_000))
+    }
+
+    /// L'ancien format (`[String]`) est relu sans perte, puis réécrit : deux
+    /// relectures successives voient les MÊMES identifiants.
+    func test_legacyIdsQueue_isReadWithoutLoss_andRewrittenInTheNewFormat() async throws {
+        let key = ImpressionBatcher.storageKey(source: "feed", surface: nil)
+        defaults.set(["p1", "p2", "p1"], forKey: key)
+
+        let migrated = ImpressionBatcher.restore(from: defaults, key: key)
+        let reread = ImpressionBatcher.restore(from: defaults, key: key)
+
+        XCTAssertEqual(migrated.map(\.postId), ["p1", "p2", "p1"])
+        XCTAssertTrue(migrated.allSatisfy { $0.stamp.occurredAt == nil }, "L'heure est inconnue : la passerelle date à réception.")
+        XCTAssertNil(defaults.stringArray(forKey: key), "L'ancien format est réécrit aussitôt.")
+        XCTAssertNotNil(defaults.data(forKey: key))
+        XCTAssertEqual(reread.map(\.stamp.eventId), migrated.map(\.stamp.eventId))
+    }
+
+    func test_legacyIdsQueue_isReplayedWithTheRewrittenEventIds() async throws {
+        let key = ImpressionBatcher.storageKey(source: "feed", surface: nil)
+        defaults.set(["p1"], forKey: key)
+        let failing = MockPostService()
+        failing.recordSocialEventsResult = .failure(NSError(domain: "net", code: -1009))
+        let first = ImpressionBatcher(source: "feed", postService: failing, flushDelay: 60, defaults: defaults, accountId: { nil })
+        await first.flushNow()
+
+        let online = MockPostService()
+        let revived = ImpressionBatcher(source: "feed", postService: online, flushDelay: 60, defaults: defaults, accountId: { nil })
+        await revived.flushNow()
+
+        XCTAssertEqual(online.recordedImpressionPostIds, ["p1"])
+        XCTAssertEqual(stamps(online).flatMap { $0 }.map(\.eventId), stamps(failing).flatMap { $0 }.map(\.eventId))
+    }
+}
+
+@MainActor
+private final class ClockBox {
+    nonisolated deinit {}
+    var now: Date
+    init(now: Date) { self.now = now }
 }

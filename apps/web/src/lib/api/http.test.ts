@@ -53,6 +53,16 @@ describe('createHttpTransport — composition d’URL', () => {
   });
 });
 
+describe('createHttpTransport — keepalive (#10474)', () => {
+  test('`keepalive` demandé ⇒ transmis à fetch, pour qu’une requête survive au déchargement de la page', async () => {
+    const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await transport.request({ method: 'POST', path: '/api/v1/auth/logout', keepalive: true });
+    await transport.request({ method: 'POST', path: '/api/v1/auth/logout' });
+    expect(calls.map((call) => call.init.keepalive)).toEqual([true, undefined]);
+  });
+});
+
 describe('createHttpTransport — les deux régimes d’identité (APIClient.swift:480-483)', () => {
   test('crédential enregistré ⇒ Authorization Bearer, PAS de X-Session-Token', async () => {
     const { impl, calls } = fakeFetch({ status: 200, body: { success: true, data: {} } });

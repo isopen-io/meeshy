@@ -10,6 +10,7 @@ import type {
 } from '@meeshy/shared/types/conversation-preview';
 import type { ConversationUpdatedEventData } from '@meeshy/shared/types/socketio-events/conversation';
 import { isLastMessageProtected } from '@meeshy/shared/utils/last-message-protection';
+import { buildTranslationRecord } from '@meeshy/shared/utils/conversation-helpers';
 
 import { CONVERSATIONS_QUERY_KEY, patchConversation } from './conversations';
 import type { Conversation, Message } from './types';
@@ -270,12 +271,28 @@ export function editLastMessage(
  * texte ni sa carte (le cache de liste est PERSISTÉ). L'aperçu du message
  * précédent arrive par `conversation:updated` (`previewRecalculated`,
  * `emitConversationPreviewUpdate`), qui l'adopte malgré son horodatage plus
- * ancien. Le rang ne bouge pas ici.
+ * ancien.
+ *
+ * En attendant (#11466) : le SURVIVANT du fil chargé, quand il y en a un, prend
+ * la place, comme iOS (`recomputeLastMessagePreviewAfterDeletion`) ; sinon la
+ * pierre tombale garde `deletedAt`, que la ligne dit « Message supprimé ». Une
+ * pierre tombale VIDE sans cette date se lisait « Nom : » suivi de rien. Le
+ * rang ne bouge pas ici.
  */
-export function deleteLastMessage(queryClient: QueryClient, conversationId: string, messageId: string, now: Date): void {
+export function deleteLastMessage(
+  queryClient: QueryClient,
+  conversationId: string,
+  messageId: string,
+  now: Date,
+  survivor?: Message,
+): void {
   patchConversation(queryClient, conversationId, (c) => {
     const last = c.lastMessage;
     if (last === undefined || last === null || last.id !== messageId) return c;
+    if (survivor !== undefined) {
+      const { lastMessageAt: _survivorAt, ...adopted } = adoptLastMessage(c, survivor, buildTranslationRecord(survivor.translations));
+      return c.lastMessageAt === undefined ? adopted : { ...adopted, lastMessageAt: c.lastMessageAt };
+    }
     const { attachments: _attachments, attachmentSummary: _summary, ...rest } = last as ListLastMessage;
     const tombstone = { ...rest, content: '', translations: [], deletedAt: now.toISOString() as unknown as Date } as Message;
     return { ...withoutCard(c), lastMessage: tombstone };

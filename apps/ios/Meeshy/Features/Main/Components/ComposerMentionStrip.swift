@@ -113,12 +113,14 @@ struct ComposerMentionStrip: View {
                         // Chaque entrée : avatar + nom d'affichage (au-dessus)
                         // + @pseudo (en dessous) — retour porteur 2026-08-27.
                         HStack(spacing: MeeshySpacing.sm) {
-                            MeeshyAvatar(
+                            LivePresence { MeeshyAvatar(
                                 name: candidate.displayName,
                                 context: .userListItem,
                                 accentColor: accentColor,
-                                avatarURL: candidate.avatarURL
-                            )
+                                avatarURL: candidate.avatarURL,
+                                presenceState: PresenceManager.shared.presenceState(for: candidate.id),
+                                ring: candidate.ring
+                            ) }
                             // L'encre et la capsule viennent du FOND que l'hôte
                             // déclare (#4122) — voir `capsuleFill(on:)`. Un
                             // token plus discret (`textMuted`) tomberait SOUS

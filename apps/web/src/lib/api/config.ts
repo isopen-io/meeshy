@@ -9,6 +9,15 @@
  * `VITE_API_BASE` / `VITE_DATA_SOURCE`) — une décision figée au déploiement,
  * jamais relue à l'exécution.
  *
+ * DEPUIS #10208, L'ORIGINE SE DÉCLARE AU DÉMARRAGE DU CONTENEUR, PAS AU BUILD.
+ * Une origine figée au build interdisait de promouvoir en production l'image
+ * recettée sur le staging (#9325), et d'installer Meeshy sur site sans le
+ * reconstruire. L'entrypoint de l'image (`docker/runtime-config.sh`) écrit
+ * `/config.js` depuis `MEESHY_API_URL` / `MEESHY_WEB_URL`, chargé avant le
+ * bundle ; sans déclaration, l'origine se DÉRIVE de l'hôte qui sert la page.
+ * Ordre, du plus explicite au plus implicite : exécution → build → proxy de
+ * dev → hôte de la page → production.
+ *
  * `resolveApiConfig` est PURE et prend l'environnement en paramètre : c'est
  * ce qui la rend testable sans construire (motif `cors-origins.ts:70`,
  * `resolveAllowedOrigins(env)`). `apiConfig`, plus bas, est l'UNIQUE
@@ -25,6 +34,8 @@
  * web nu EN DÉVELOPPEMENT, et une base cassée partout ailleurs — c'est ce qui
  * a coupé la connexion sur `staging.meeshy.me` le 2026-09-09 (#5872).
  */
+
+import { PRODUCTION_ORIGIN } from './production-origin';
 
 /** Le CHOIX de source de données — jamais lu ailleurs qu'ici et par les
  * consommateurs de `apiConfig.source`. */
@@ -45,6 +56,35 @@ export type ApiConfig = {
    * sur tout choix collant.
    */
   readonly readingModesEnabled: boolean;
+  /**
+   * L'origine PUBLIQUE du site, quand le déploiement la déclare
+   * (`MEESHY_WEB_URL`) — celle des liens partagés. `null` : elle se déduit de
+   * la passerelle ou de la page (`publicWebOrigin`).
+   */
+  readonly webOrigin: string | null;
+};
+
+/**
+ * Ce que l'entrypoint du conteneur pose dans `window.__MEESHY_RUNTIME__`
+ * (`public/config.js`, réécrit au démarrage). Donnée NON FIABLE par principe :
+ * chaque champ est relu et validé ici, jamais cru sur sa forme.
+ */
+export type RuntimeConfig = {
+  readonly apiUrl?: unknown;
+  readonly webUrl?: unknown;
+};
+
+/** L'hôte qui sert la page — `window.location`, réduit à ce que la dérivation lit. */
+export type PageLocation = {
+  readonly protocol: string;
+  readonly hostname: string;
+  readonly port: string;
+};
+
+export type ResolveOptions = {
+  readonly shell: boolean;
+  readonly runtime?: RuntimeConfig | undefined;
+  readonly page?: PageLocation | undefined;
 };
 
 /**
@@ -66,15 +106,7 @@ export type ApiEnv = {
   readonly VITE_READING_MODES?: string;
 };
 
-/**
- * L'origine de la passerelle de PRODUCTION — celle qu'un build sans
- * `VITE_API_BASE` vise, donc l'image construite sur `main` que meeshy.me sert
- * depuis la décommission du legacy (#6702). `docker.yml` ne pose
- * `VITE_API_BASE` que sur `dev` (`gate.staging.meeshy.me`). Elle servait aussi
- * `legacy-link.ts` (#6354), supprimé avec les derniers renvois vers le legacy
- * (#6335).
- */
-export const PRODUCTION_ORIGIN = 'https://gate.meeshy.me';
+export { PRODUCTION_ORIGIN };
 const API_PREFIX_PATTERN = /\/api\/v1\/?$/;
 const ABSOLUTE_ORIGIN_PATTERN = /^https?:\/\//i;
 
@@ -138,25 +170,67 @@ function declaredOverride(env: ApiEnv): string | undefined {
  * Une coque, elle, n'a jamais de proxy : `capacitor://localhost/api/v1` ne
  * mène nulle part, d'où le rejet d'une surcharge relative dans cette branche.
  */
-function resolveBase(env: ApiEnv, { shell }: { readonly shell: boolean }): string {
+function resolveBase(env: ApiEnv, { shell, runtime, page }: ResolveOptions): string {
+  const declared = shell ? undefined : runtimeOrigin(runtime?.apiUrl);
+  if (declared !== undefined) return declared;
   const override = declaredOverride(env);
   if (override !== undefined && ABSOLUTE_ORIGIN_PATTERN.test(override)) {
     return normalizeOrigin(override);
   }
   if (!shell) {
     if (override !== undefined) return normalizeOrigin(override);
-    return env.DEV === true ? '' : PRODUCTION_ORIGIN;
+    if (env.DEV === true) return '';
+    return page === undefined ? PRODUCTION_ORIGIN : (gatewayOfPage(page) ?? PRODUCTION_ORIGIN);
   }
   return PRODUCTION_ORIGIN;
 }
 
-export function resolveApiConfig(env: ApiEnv, options: { readonly shell: boolean }): ApiConfig {
+/**
+ * Une origine déclarée au démarrage — la MÊME grammaire que l'entrypoint
+ * (`docker/runtime-config.sh`, `is_origin`) : `http(s)://hôte[:port][/chemin]`,
+ * sans identifiants, requête ni guillemet. Une valeur malformée est ignorée,
+ * jamais réparée : l'entrypoint refuse déjà de démarrer sur elle, ce filtre ne
+ * sert que le cas où `config.js` aurait été écrit à la main.
+ */
+const DECLARED_ORIGIN_PATTERN = /^https?:\/\/([a-z0-9]([a-z0-9.-]*[a-z0-9])?|\[[0-9a-f:.]+\])(:\d{1,5})?(\/[\w.~/-]*)?$/i;
+
+function runtimeOrigin(raw: unknown): string | undefined {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  return DECLARED_ORIGIN_PATTERN.test(value) ? normalizeOrigin(value) : undefined;
+}
+
+const IPV4_PATTERN = /^\d{1,3}(\.\d{1,3}){3}$/;
+/** Le port par défaut de la passerelle (`services/gateway`, `PORT=3000`). */
+const GATEWAY_DEFAULT_PORT = '3000';
+
+/**
+ * LA PASSERELLE DÉDUITE DE L'HÔTE DE LA PAGE — la convention de tous les
+ * déploiements Meeshy : le site sur `H`, la passerelle sur `gate.H`
+ * (`meeshy.me` → `gate.meeshy.me`, `staging.meeshy.me` →
+ * `gate.staging.meeshy.me`, `chat.acme.fr:8443` → `gate.chat.acme.fr:8443`).
+ * `www.` désigne le même site. Une IP, `localhost` ou un nom sans point n'a
+ * pas de sous-domaine : la passerelle y est attendue sur le même hôte, à son
+ * port par défaut. Un déploiement qui ne suit pas la convention déclare
+ * `MEESHY_API_URL` — c'est la règle, la dérivation n'est que le défaut.
+ */
+function gatewayOfPage({ protocol, hostname, port }: PageLocation): string | null {
+  if (protocol !== 'http:' && protocol !== 'https:') return null;
+  const host = hostname.toLowerCase().replace(/^www\./, '');
+  if (host === '') return null;
+  const bare = host === 'localhost' || IPV4_PATTERN.test(host) || host.startsWith('[') || !host.includes('.');
+  if (bare) return `${protocol}//${hostname}:${GATEWAY_DEFAULT_PORT}`;
+  return `${protocol}//gate.${host}${port === '' ? '' : `:${port}`}`;
+}
+
+export function resolveApiConfig(env: ApiEnv, options: ResolveOptions): ApiConfig {
   return {
     base: resolveBase(env, options),
     source: resolveSource(env),
     readingModesEnabled: resolveReadingModes(env),
+    webOrigin: options.shell ? null : (runtimeOrigin(options.runtime?.webUrl) ?? null),
   };
 }
+
 
 /**
  * `__SHELL__` — littéral de construction posé par `vite.config.ts` (même
@@ -170,4 +244,8 @@ export function resolveApiConfig(env: ApiEnv, options: { readonly shell: boolean
  * (`[define]`), avec la valeur du build NORMAL. Ne pas compter sur un import
  * « partiel » pour l'éviter : il n'existe pas.
  */
-export const apiConfig: ApiConfig = resolveApiConfig(import.meta.env, { shell: __SHELL__ });
+export const apiConfig: ApiConfig = resolveApiConfig(import.meta.env, {
+  shell: __SHELL__,
+  runtime: (globalThis as { __MEESHY_RUNTIME__?: RuntimeConfig }).__MEESHY_RUNTIME__,
+  page: typeof window === 'undefined' ? undefined : window.location,
+});

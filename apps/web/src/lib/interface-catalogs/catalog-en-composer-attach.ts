@@ -89,6 +89,20 @@ const enComposerAttach = {
   'composer.effects.entrance': 'Entrance animation',
   'composer.effects.permanent': 'Permanent effect',
   'composer.effects.clearAll': 'Clear all',
+  'composer.guest.kind.text': 'Text file (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Image',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'text files (.txt)',
+  'composer.guest.inline.audio': 'audio',
+  'composer.guest.inline.image': 'images',
+  'composer.guest.inline.pdf': 'PDFs',
+  'composer.guest.note': 'Without an account, {title} accepts your messages, your voice notes, plus {kinds}.',
+  'composer.guest.createAccount': 'Create an account to share everything else.',
+  'composer.guest.refused.kind': '“{name}” isn’t accepted here: only {kinds} go through.',
+  'composer.guest.refused.size': '“{name}” is too large: {max} at most.',
+  'send.failure.guestKind': 'this file isn’t accepted here',
+  'send.failure.guestTooLarge': 'this file is too large here ({max} at most)',
 } satisfies ComposerAttachCatalogSlice;
 
 export default enComposerAttach;

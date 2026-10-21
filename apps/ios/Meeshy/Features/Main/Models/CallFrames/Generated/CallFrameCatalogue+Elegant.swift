@@ -26,7 +26,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#F3E3B5", fill: nil),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.gala.comite",
@@ -48,7 +49,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .elegant, color: "#F3E3B5", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.gala.groupe",
@@ -70,7 +72,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .elegant, color: "#F3E3B5", fill: "#0B0B0FD9"),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.gala.tablee",
@@ -92,7 +95,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .elegant, color: "#F3E3B5", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.art-deco.duo",
@@ -113,7 +117,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .poster, color: "#0B0B0F", fill: "#C9A45CF2"),
                 title: CallFrameTitle(source: .names, font: .poster, color: "#F3E3B5", place: .bottom, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.art-deco.comite",
@@ -134,7 +139,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .poster, color: "#0B0B0F", fill: "#C9A45CF2"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#F3E3B5", place: .bottom, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.art-deco.groupe",
@@ -155,7 +161,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .poster, color: "#0B0B0F", fill: "#C9A45CF2"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#F3E3B5", place: .bottom, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.art-deco.tablee",
@@ -176,7 +183,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .poster, color: "#0B0B0F", fill: nil),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#F3E3B5", place: .bottom, size: .m, effect: nil, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.opera.duo",
@@ -197,7 +205,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .ribbon, font: .italic, color: "#0B0B0F", fill: "#C9A45C"),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.opera.comite",
@@ -219,7 +228,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .ribbon, font: .italic, color: "#0B0B0F", fill: "#C9A45C"),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.opera.groupe",
@@ -240,7 +250,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .italic, color: "#0B0B0F", fill: "#C9A45CF2"),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .italic, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: nil)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "elegant.tete-a-tete.duo",
@@ -262,7 +273,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .italic, color: "#F3E3B5", fill: nil),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F3E3B5", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .elegant, color: "#C9A45C", place: .top, size: .s, effect: nil, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         )
     ]
 }

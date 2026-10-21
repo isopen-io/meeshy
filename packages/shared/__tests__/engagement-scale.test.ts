@@ -107,7 +107,7 @@ describe('parseEngagementScale', () => {
       parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: -1, multiplied: true, cap: null } } }),
     ).toBeNull();
     expect(
-      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: 1_000_000, multiplied: true, cap: null } } }),
+      parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, operations: { ...ops, 'tool.sticker': { points: 10_000_001, multiplied: true, cap: null } } }),
     ).toBeNull();
   });
 
@@ -133,6 +133,17 @@ describe('parseEngagementScale', () => {
     expect(parsed?.operations['tool.reaction']).toEqual({ points: 4, multiplied: true, cap: 12, variantPoints: {} });
     expect(parsed?.linkVisits).toEqual(DEFAULT_ENGAGEMENT_SCALE.linkVisits);
     expect(parsed?.abuse).toEqual(DEFAULT_ENGAGEMENT_SCALE.abuse);
+  });
+
+  it('ne garde plus de fenêtre de reprise réglable : la fenêtre est la loi des 30 jours (#11491)', () => {
+    expect(Object.keys(DEFAULT_ENGAGEMENT_SCALE.abuse).sort()).toEqual(['heavyPoints', 'unverifiedMaxPoints']);
+  });
+
+  it('accepte et ignore le clawbackHours qu’un ancien client ou un ancien barème stocké porte encore (#11491)', () => {
+    for (const clawbackHours of [24, 99999, 'x', null]) {
+      const parsed = parseEngagementScale({ ...DEFAULT_ENGAGEMENT_SCALE, abuse: { ...DEFAULT_ENGAGEMENT_SCALE.abuse, clawbackHours } });
+      expect(parsed?.abuse).toEqual({ heavyPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.heavyPoints, unverifiedMaxPoints: DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints });
+    }
   });
 
   it('refuse une variante que le catalogue ne déclare pas', () => {

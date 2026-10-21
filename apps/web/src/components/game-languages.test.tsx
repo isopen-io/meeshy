@@ -91,7 +91,6 @@ function surfaces(): Surfaces {
         <GameMintPreview
           mint={game.mint}
           held={game.level.score}
-          badgesLost={2}
           online
           minting={false}
           celebration={null}
@@ -103,7 +102,7 @@ function surfaces(): Surfaces {
     moment: text(
       renderToStaticMarkup(
         <GameGuideCard
-          card={cardOfMoment(guideMoment({ kind: 'first-mint', levelBefore: 14, levelAfter: 9, tailwindUntilLevel: 14 }, []))}
+          card={cardOfMoment(guideMoment({ kind: 'first-mint' }, []))}
           onAction={() => undefined}
           onDismiss={() => undefined}
           onPhoto={() => undefined}
@@ -142,8 +141,8 @@ describe('chaque surface du jeu se rend dans la langue de l’interface', () => 
     /* Le niveau a quitté les jauges pour le héros pleine largeur (#5841) : c'est là qu'un anglophone le lit. */
     expect(rendered.hero).toContain('Level');
     expect(rendered.banner).toMatch(/^Level \d+, /);
-    expect(rendered.missions).toContain('Missions of the day');
-    expect(rendered.missions).toContain('Chest of the day');
+    expect(rendered.missions).toContain('Tonight’s dream');
+    expect(rendered.missions).toContain('The Offering');
     expect(rendered.offer).toContain('Shall we capture it?');
   });
 

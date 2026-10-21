@@ -5,6 +5,10 @@
       "id": "feerique.conte",
       "mood": "feerique",
       "name": "Conte",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "grid",
@@ -183,6 +187,10 @@
       "id": "feerique.lucioles",
       "mood": "feerique",
       "name": "Lucioles",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "scatter",
@@ -331,6 +339,10 @@
       "id": "feerique.clair-de-lune",
       "mood": "feerique",
       "name": "Clair de lune",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "orbit",
@@ -487,6 +499,10 @@
       "id": "feerique.coeur-de-rose",
       "mood": "feerique",
       "name": "Cœur de rose",
+      "surfaces": [
+        "capture",
+        "live"
+      ],
       "base": {
         "layout": {
           "arrangement": "split",

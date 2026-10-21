@@ -80,6 +80,10 @@ const REPONSES = {
     message: 'Code requis',
   }),
   'POST /api/v1/auth/forgot-password': ok({ message: 'ok' }),
+  // #10859 : le jeton voyage dans le CORPS (`POST`) ; le `GET` ne sert plus qu'au repli sur une passerelle d'avant.
+  // Sans la réponse au `POST`, la requête était avortée (pas un 404) : la page restait sur son erreur réseau et le
+  // témoin n'atteignait jamais le formulaire.
+  'POST /api/v1/auth/reset-password/verify-token': ok({ valid: true }),
   'GET /api/v1/auth/reset-password/verify-token': ok({ valid: true }),
   'POST /api/v1/auth/reset-password': ok({ message: 'ok' }),
   'POST /api/v1/auth/magic-link/request': ok({ expiresInSeconds: 600 }),

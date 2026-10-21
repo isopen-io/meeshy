@@ -22,10 +22,15 @@ struct CommentMoreMenu: View {
     var loadedReplies: [FeedComment] = []
     /// Le post du commentaire (#9686) : « Imager » compose alors la carte — le
     /// post en tête, le fil jusqu'à une réponse, les réponses choisies. `nil`
-    /// (story) : la carte du commentaire, sa racine en citation.
+    /// et sans `story` : la carte du commentaire, sa racine en citation.
     var post: FeedPost? = nil
+    /// La story du commentaire (#10915) : « Imager » compose alors la carte comme pour
+    /// un post — le visuel de la story en HERO, puis le commentaire (et son fil).
+    var story: PostCommentCardStory? = nil
     var onEdit: (() -> Void)? = nil
     var onDelete: (() -> Void)? = nil
+    /// #11151 — retire le commentaire d'un autre ; reçoit le motif de la feuille.
+    var onRemove: ((String) -> Void)? = nil
     var glyphSize: CGFloat = 14
     var glyphColor: Color = .secondary
 
@@ -49,12 +54,18 @@ struct CommentMoreMenu: View {
     }
 
     private var ownRequest: MessageCardExportRequest? {
-        guard let post else { return imagineRequest(comment, quoting: root) }
-        return MessageCardExportMenu.request(
-            post: post, comment: comment, thread: thread, showOriginal: showOriginal, accentColor: accentColor,
+        guard post != nil || story != nil else { return imagineRequest(comment, quoting: root) }
+        let composed = MessageCardExportMenu.request(
+            post: post, story: story, comment: comment, thread: thread, showOriginal: showOriginal, accentColor: accentColor,
             viewer: viewer, handle: viewer.username,
             audioPrism: ConversationLanguagePreferences(user: AuthManager.shared.currentUser).resolved
         )
+        guard composed == nil, PostCommentCardComposition.fallsBackToCommentAlone(compositionSource) else { return composed }
+        return imagineRequest(comment, quoting: root)
+    }
+
+    private var compositionSource: PostCommentCardSource {
+        PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal, story: story)
     }
 
     /// Le fil chargé autour du commentaire : sa racine et les réponses qu'on a.
@@ -62,11 +73,13 @@ struct CommentMoreMenu: View {
         (root.map { [$0] } ?? []) + loadedReplies
     }
 
-    /// « Imager » s'offre-t-il ? Pour un commentaire de post, dès qu'un mode compose une carte.
+    /// « Imager » s'offre-t-il ? Pour un commentaire de post ou de story, dès qu'un mode compose une
+    /// carte — ou, quand le fil d'une réponse n'est pas chargé, par la carte du commentaire seul.
     private var canImagine: Bool {
-        guard let post else { return ownRequest != nil }
-        let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal)
-        return !PostCommentCardComposition.modes(of: source).isEmpty
+        guard post != nil || story != nil else { return ownRequest != nil }
+        let source = compositionSource
+        guard PostCommentCardComposition.modes(of: source).isEmpty else { return true }
+        return PostCommentCardComposition.fallsBackToCommentAlone(source) && imagineRequest(comment, quoting: root) != nil
     }
 
     private var threadReplies: [FeedComment] {
@@ -80,7 +93,8 @@ struct CommentMoreMenu: View {
             servedText: servedText,
             canImagine: canImagine,
             editable: onEdit != nil,
-            deletable: onDelete != nil
+            deletable: onDelete != nil,
+            removable: onRemove != nil
         )
     }
 
@@ -119,7 +133,7 @@ struct CommentMoreMenu: View {
     @ViewBuilder
     private func entry(_ action: CommentMenuAction) -> some View {
         switch action {
-        case .imagine where post == nil && !threadReplies.isEmpty:
+        case .imagine where post == nil && story == nil && !threadReplies.isEmpty:
             Menu {
                 Button(String(localized: "comment.imagine.alone", defaultValue: "Ce commentaire seul", bundle: .main)) {
                     perform(.imagine)
@@ -134,7 +148,7 @@ struct CommentMoreMenu: View {
             } label: {
                 Label(Self.title(of: action), systemImage: Self.symbol(of: action))
             }
-        case .delete:
+        case .delete, .remove:
             Button(role: .destructive) { perform(action) } label: {
                 Label(Self.title(of: action), systemImage: Self.symbol(of: action))
             }
@@ -163,6 +177,10 @@ struct CommentMoreMenu: View {
         case .delete:
             HapticFeedback.medium()
             onDelete?()
+        case .remove:
+            HapticFeedback.medium()
+            guard let onRemove else { return }
+            ContentRemovalPresenter.present(.comment, onConfirm: onRemove)
         }
     }
 
@@ -190,6 +208,7 @@ struct CommentMoreMenu: View {
         case .edit: return String(localized: "comment.action.edit", defaultValue: "Modifier", bundle: .main)
         case .report: return String(localized: "comment.action.report", defaultValue: "Signaler", bundle: .main)
         case .delete: return String(localized: "comment.action.delete", defaultValue: "Supprimer", bundle: .main)
+        case .remove: return String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main)
         }
     }
 
@@ -200,6 +219,7 @@ struct CommentMoreMenu: View {
         case .edit: return "pencil"
         case .report: return "flag"
         case .delete: return "trash"
+        case .remove: return ContentRemovalKind.symbol
         }
     }
 }

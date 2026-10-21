@@ -68,7 +68,7 @@ final class FocalFocusTimestampTests: XCTestCase {
     func test_focalRow_feedsTheCatalogWords_toTheRule() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Focal/Row/FocalRow.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift")
         let code = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
             .components(separatedBy: .whitespacesAndNewlines).filter { !$0.isEmpty }.joined(separator: " ")
         XCTAssertTrue(code.contains("FocalFocusTimestamp.label( sentAt: sentAt, timeString: content.meta.timeString,"))

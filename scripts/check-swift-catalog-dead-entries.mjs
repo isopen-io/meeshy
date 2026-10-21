@@ -436,7 +436,106 @@ const EXCLUDED_DIR_NAMES = new Set(['Tests', 'MeeshyTests', 'MeeshyUIDeviceTests
 // GÉNÉRÉE depuis `route-manifest.json` par `916e564ac9` sans relever cette
 // référence — la jumelle Swift de `world.root`. PRÉMATURÉE : aucune vue iOS ne
 // lit encore l'entrée publique de World Wide. Valeur MESURÉE le 2026-10-10.
-const BASELINE_DEAD_ENTRIES = 292;
+//
+// 292 -> 294 (#9947, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` (`GET /me/game/seasons/:number`)
+// et `MeEndpoint.gameLeagueWeeksByWeekKey` (`GET /me/game/league/weeks/:weekKey`), GÉNÉRÉES avec
+// leurs routes — PRÉMATURÉES : les écrans iOS d'une saison passée ou future et d'une semaine
+// passée les appelleront avec #10018, qui ramène la référence à 292. Valeur MESURÉE le 2026-10-11.
+//
+// 294 -> 292 (#10006, 2026-10-11) : `WorldEndpoint.root` a son appelant (`WorldService`,
+// l'entrée invité de l'écran de connexion iOS), et une seconde entrée a trouvé le sien
+// dans le même intervalle de dev. Valeur MESURÉE le 2026-10-11 (CI run 38110701717).
+//
+// 292 -> 290 (#10018, 2026-10-11) : `MeEndpoint.gameSeasonsByNumber` et
+// `MeEndpoint.gameLeagueWeeksByWeekKey` ont leur appelant (`GameService.fetchSeasonArchive`,
+// `GameService.fetchLeagueWeekArchive`, lus par les pages Saison et Ligue d'un lien du Jeu),
+// comme annoncé au 292 -> 294. Valeur MESURÉE le 2026-10-11.
+//
+// 292 -> 293 (#10102, 2026-10-11) : `WorldEndpoint.participantsByParticipantId`
+// (`GET /api/v1/world/participants/:participantId`, la fiche d'un participant de World
+// Wide lue par l'équipe), GÉNÉRÉE avec sa route — PRÉMATURÉE : la vue iOS qui l'ouvre
+// en touchant un auteur est #10125, qui ramène la référence à 292. Valeur MESURÉE le
+// 2026-10-11.
+//
+// 293 -> 291 (2026-10-11) : les deux mouvements ci-dessus, partis chacun de 292, se sont
+// croisés sur dev — #10018 (−2) et #10102 (+1) donnent 291, et non 293. Valeur MESURÉE
+// le 2026-10-11 sur dev 33e24c995c (CI run 38133983531 rouge sur 293).
+//
+// 291 -> 295 (#10200, 2026-10-11) : `PacksEndpoint.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP2 #10150 (« iOS installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`PackServiceProviding`)
+// et ramènera la référence à 291. Valeur MESURÉE le 2026-10-11 sur dev 8a68ca00fe (CI run
+// 38147814970 rouge sur 295).
+// 295 -> 296 (#10157, 2026-10-11) : `PackAssetsEndpoint.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP2 #10150 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+// 296 -> 290 (2026-10-11) : LP2 (6046fcc6cd, la Boutique des cadres dans Réglages ›
+// Packs et téléchargements) donne leur appelant aux entrées de packs prématurées
+// ci-dessus ; trois relèvements partis de bases différentes s'étaient croisés sur dev.
+// Valeur MESURÉE le 2026-10-11 sur dev efee739ae5 (CI run 38160460790 rouge sur 296).
+// 290 -> 293 (#10162, 2026-10-11) : `MeEndpoint.gameFramesAtmosphere`, `.gamePhotoMomentsInvitations` et
+// `.gamePhotoMomentsPresented` (L10a), générées depuis le manifeste — PRÉMATURÉES : iOS les appellera par
+// `GameRoutes.swift` et ses lots (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+// 293 -> 301 (#10233, 2026-10-12) : les huit `AdminEndpoint.gameSeasons*` (`/api/v1/admin/game/seasons…` —
+// lecture, édition, propositions de l'IA, validation, rejet, export `store.app_events`), générées depuis le
+// manifeste — l'administration du calendrier des saisons n'a pas d'écran iOS (web seulement), même raison que les
+// dizaines d'autres `AdminEndpoint.*` ci-dessus. `MeEndpoint.gameSeasonsCalendar` a, lui, son appelant
+// (`GameEndpointPolicy.gameSeasonCalendar`). Valeur MESURÉE le 2026-10-12 en CI (run 38190033361 rouge sur 301).
+// 301 -> 303 (#10315, 2026-10-12) : `AdminEndpoint.usersByUserIdPublications` et `…PublicationsModeration`
+// (`/api/v1/admin/users/:userId/publications[/moderation]`) — la modération des publications d'un membre est un
+// écran d'administration web, sans écran iOS, même raison que les autres `AdminEndpoint.*`. Valeur MESURÉE le
+// 2026-10-12 en CI (run 38270055989 rouge sur 303) et en local.
+// 303 -> 310 (#10392, #10394, #10396, 2026-10-13) : `AdminEndpoint.postsGestures`, `.postsByPostIdGestures`,
+// `.reportsByReportIdAct`, `.commentsByCommentIdRemove` (gestes de publication et actes sur un signalement) et
+// `.opsHostMetrics`, `.opsStatus`, `.opsByOperation` (l'écran Opérations : hôte en direct, sauvegarde, purge) —
+// des écrans d'administration web, sans écran iOS, même raison que les autres `AdminEndpoint.*`. Valeur MESURÉE le
+// 2026-10-13 en CI (run 38319791863 rouge sur 310) et en local.
+// 310 -> 313 (#10483, #10499, 2026-10-13) : iOS compte désormais tout par `POST /social/events`
+// (`SocialEndpoint.events` gagne son appelant, -1) et ses quatre anciennes portes de comptage perdent le leur (+4) :
+// `PostsEndpoint.byPostIdView`, `.byPostIdImpression`, `.impressionsBatch`, `.engagementBatch`
+// (`.byPostIdAnonymousView` et `.byPostIdDownloads` étaient déjà sans appelant iOS sur dev). Ces entrées ne se
+// retirent PAS : la passerelle sert toujours ces routes aux ANCIENS clients (rétrocompatibilité stricte, #9223/#9231 —
+// un ancien chemin ne se retire qu'à zéro usage mesuré), et le catalogue est généré depuis son manifeste. Ce ne sont
+// pas des faux morts (#5427) : iOS ne les appelle vraiment plus. Valeur MESURÉE le 2026-10-13 en CI
+// (run 38371153599 rouge sur 313) et en local (diff des entrées mortes origin/dev ↔ feat/social-events-v2).
+// 313 -> 314 (#10559, 2026-10-13) : `AffiliateEndpoint.byTokenOg` (`GET /api/v1/affiliate/:token/og`) — la page
+// d'aperçu Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par
+// User-Agent (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais, iOS pas plus
+// que le web : l'entrée existe parce que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13
+// en CI (run 38458186282 rouge sur 314).
+// 314 -> 331 (#10631, #10632, 2026-10-15) : la régénération des énumérations Swift (cliquet
+// `ios-endpoints-generated-ratchet` de `packages/shared`, rouge sur dev) inscrit les routes du décor de profil et
+// des trois domaines de packs d'apparence : `MeEndpoint.profileDecor` et, dans `PacksEndpoint`, `shop` puis pour
+// `wallpaper`, `banner` et `avatarRing` la liste, le détail, l'installation, l'achat et les installés (5 × 3).
+// Le web les appelle déjà (vitrine unique, `lib/api/packs-shop.ts`) ; l'app iOS ne les branche pas encore —
+// entrées PRÉMATURÉES, pas des faux morts (#5427). Valeur MESURÉE le 2026-10-15 en CI (Quality rouge sur
+// afe92fecb1) et en local.
+// 331 -> 315 (#10632, 2026-10-15) : la vitrine unique iOS (`PackShopService`, `PackService`) branche les routes
+// d'apparence que la régénération venait d'inscrire — `PacksEndpoint.shop`, et pour les fonds, contours et
+// bannières la liste, le détail, l'installation, l'achat et les installés. Valeur MESURÉE le 2026-10-15 en local
+// sur 5109a0e737 (CI « Quality » rouge sur l'amélioration non enregistrée).
+// 315 -> 314 (#10632, 2026-10-15) : `MeEndpoint.profileDecor` (`PUT /api/v1/me/profile-decor`) a son appelant
+// iOS — `ProfileDecorService.update`, qui équipe un contour d'avatar ou une bannière depuis le profil. Valeur
+// MESURÉE le 2026-10-15 en local sur e6ba10bab4.
+// 314 -> 326 (#10709, 2026-10-15) : la relecture des vendeurs tiers d'apparence inscrit au catalogue, pour les
+// fonds, les contours et les bannières, le contrat d'un pack en attente, son verdict de modération, la file des
+// packs en attente et les propositions de l'auteur — 12 entrées. Prématurées : la passerelle les sert, aucun
+// client n'a encore l'écran de modération ni de dépôt d'un pack vendeur (même relève au cliquet TS). Valeur
+// MESURÉE le 2026-10-15 en local sur 79129ae28f.
+// 326 -> 325 (2026-10-15) : une entrée de la vitrine gagne son appelant iOS (91e38008e2). Valeur MESURÉE en local
+// sur e13e8be719.
+// 325 -> 324 (2026-10-17) : une entrée du catalogue Swift a trouvé son appelant sur dev (lien de réinitialisation
+// ouvert dans l'app, ceb0b1572a). Valeur MESURÉE en CI (Quality, run du 89160f284c) et en local sur origin/dev.
+// 324 -> 325 (#11441, 2026-10-21) : `AdminEndpoint.opsContainers` (`GET /api/v1/admin/ops/containers`, les
+// conteneurs Docker de l'environnement). Prématurée comme toutes les entrées `AdminEndpoint` : l'administration
+// vit dans le web (`apps/web/src/lib/api/admin-ops-containers.ts` l'appelle), aucun écran iOS ne l'expose. Valeur
+// MESURÉE le 2026-10-21 en local.
+// 325 -> 323 (#11421, #11431, 2026-10-21) : MessagesEndpoint.byMessageIdDeleteForMe et
+// MessagesEndpoint.bulkDeleteForMe trouvent leur appelant iOS — MessageService.hideForMe et le plan de sélection
+// ForMeSelectionPlan (« Supprimer pour moi »). Valeur MESURÉE en CI (Quality, run 119150128073) et en local en
+// diffant deadEntries() entre origin/dev et la branche de #11421, puis sur la fusion avec #11441 (325).
+const BASELINE_DEAD_ENTRIES = 323;
 
 const CATALOG_ENUM_RE = /public enum ([A-Za-z0-9_]+)\s*:\s*MeeshyEndpoint\b/;
 // Une déclaration de cas n'a jamais de point après `case` ; une branche de

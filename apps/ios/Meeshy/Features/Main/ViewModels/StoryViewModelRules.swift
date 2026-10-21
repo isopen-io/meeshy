@@ -73,6 +73,17 @@ extension StoryViewModel {
         var bannerThumbHash: String?
         var moodEmoji: String?
         var moodMessage: String?
+        /// Le contour équipé de l'auteur (#10946) : servi avec la story, puis celui du profil résolu.
+        var avatarRing: ServedProfileDecorItem?
+        /// La bannière de design équipée (#10946) — peinte seulement sans photo (`bannerPaint`).
+        var bannerDecor: ServedProfileDecorItem?
+    }
+
+    /// L'intro AVANT toute résolution de profil : ce que la story a déjà servi (nom, contour).
+    static func introPlaceholder(for group: StoryGroup) -> StoryGroupIntro {
+        var intro = StoryGroupIntro(userId: group.id, username: group.username)
+        intro.avatarRing = group.authorRing
+        return intro
     }
 
     /// Mapping pur profil → intro (testable) : displayName explicite, sinon
@@ -89,6 +100,8 @@ extension StoryViewModel {
         intro.username = user.username
         intro.bannerURL = user.banner
         intro.bannerThumbHash = user.bannerThumbHash
+        intro.avatarRing = user.profileDecor?.avatarRing ?? intro.avatarRing
+        intro.bannerDecor = user.profileDecor?.banner
     }
 
     // MARK: - R5 Offline replay pin (story vue = médias non-évincables jusqu'à expiry)

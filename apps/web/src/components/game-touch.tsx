@@ -100,7 +100,6 @@ export type GameFactChip = {
   readonly fact: GameDetailFact;
   readonly label: string;
   readonly value: string;
-  readonly short?: boolean;
   /** Les précisions d'un ÉLÉMENT (une étoile de Prestige) plutôt que la phrase de la donnée. */
   readonly detail?: ElementDetail;
 };
@@ -115,7 +114,7 @@ export function GameFactChips({ concept, chips, marker }: { readonly concept: Pr
           <GameTouch
             detail={chip.detail ?? factDetail(concept, chip.fact, chip.label, chip.value)}
             className="flex min-h-[44px] max-w-full items-baseline gap-1 rounded-chip px-2.5 py-1"
-            style={{ backgroundColor: chip.short ? 'color-mix(in srgb, var(--color-warn) 14%, transparent)' : 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }}
+            style={{ backgroundColor: 'color-mix(in srgb, var(--color-ios-ink-3) 12%, transparent)' }}
           >
             <span className="text-check font-semibold" style={{ color: GAME_INK_2 }}>
               {chip.label}
@@ -130,6 +129,30 @@ export function GameFactChips({ concept, chips, marker }: { readonly concept: Pr
   );
 }
 
+/**
+ * CE QU'IL MANQUE EST UNE PHRASE QUI NOMME SON BUT (#10540) — « Il manque 1 Meesh pour acheter un
+ * gel. », jamais « Il manque 1 Meesh » : un manque sans cible se lisait à côté de trois autres chiffres
+ * sans dire lequel il visait. La phrase se touche comme une pastille et ouvre les précisions de SA donnée.
+ */
+export type GameMissingLine = {
+  readonly fact: GameDetailFact;
+  /** Le manque déjà dit dans son unité ; rend la phrase entière, cible comprise. */
+  readonly line: (missing: string) => string;
+};
+
+function MissingLine({ concept, fact, line, amount }: { readonly concept: ProgressionConcept; readonly fact: GameDetailFact; readonly line: string; readonly amount: string }) {
+  return (
+    <GameTouch
+      detail={factDetail(concept, fact, line, amount)}
+      marker={{ 'data-game-missing': fact }}
+      className="flex min-h-[44px] items-center rounded-chip px-2.5 py-1 text-caption font-semibold"
+      style={{ backgroundColor: 'color-mix(in srgb, var(--color-warn) 14%, transparent)', color: GAME_INK }}
+    >
+      {line}
+    </GameTouch>
+  );
+}
+
 export type GameSpendLineProps = {
   readonly concept: ProgressionConcept;
   /** Ce qu'on a ; `spendable` : la part qui paie, quand elle est plus petite (`spendPreview`). */
@@ -138,23 +161,34 @@ export type GameSpendLineProps = {
   readonly spendable?: number;
   /** Le solde, le prix et le reste dans leur unité (points, Meeshes). */
   readonly format: (count: number) => string;
-  /** Le manque, quand il ne se dit pas dans l'unité du solde (les points CONVERTIBLES d'une frappe). */
+  /** Le manque, quand il ne se dit pas dans l'unité du solde (les points À CONVERTIR d'une frappe). */
   readonly formatMissing?: (count: number) => string;
   /** La phrase de la pastille du solde, quand le concept en a une plus juste que la générique. */
   readonly heldFact?: GameDetailFact;
-  readonly missingFact?: GameDetailFact;
+  /** Une donnée de plus entre le solde et le prix : la part du solde qui paie (les points à convertir). */
+  readonly between?: GameFactChip;
+  /** Ce qu'il manque, dit avec son but : aucun geste ne dit « Il manque » sans dire pour quoi. */
+  readonly missing: GameMissingLine;
 };
 
-export function GameSpendLine({ concept, held, cost, spendable, format, formatMissing = format, heldFact = 'spend_held', missingFact = 'spend_missing' }: GameSpendLineProps) {
+/**
+ * CE QU'UN GESTE DÉPENSE : ce qu'on a, ce qu'il faut, et ce qu'il manque quand il manque. Jamais ce qui RESTERA
+ * (#11178, épopée § 3.3) : une soustraction n'est pas un fait de la fiche, et le solde d'après se lit, après le
+ * geste, à sa place.
+ */
+export function GameSpendLine({ concept, held, cost, spendable, format, formatMissing = format, heldFact = 'spend_held', between, missing }: GameSpendLineProps) {
   const spend = spendPreview(spendable === undefined ? { held, cost } : { held, cost, spendable });
   const chips: readonly GameFactChip[] = [
     { fact: heldFact, label: gameText('game.fact.balance'), value: format(spend.held) },
+    ...(between === undefined ? [] : [between]),
     { fact: 'spend_cost', label: gameText('game.fact.cost'), value: format(spend.cost) },
-    spend.affordable
-      ? { fact: 'spend_after', label: gameText('game.fact.after'), value: format(spend.after) }
-      : { fact: missingFact, label: gameText('game.fact.missing'), value: formatMissing(spend.missing), short: true },
   ];
-  return <GameFactChips concept={concept} chips={chips} marker="data-game-spend" />;
+  return (
+    <>
+      <GameFactChips concept={concept} chips={chips} marker="data-game-spend" />
+      {spend.affordable ? null : <MissingLine concept={concept} fact={missing.fact} line={missing.line(formatMissing(spend.missing))} amount={formatMissing(spend.missing)} />}
+    </>
+  );
 }
 
 export type GameRequirementLineProps = {
@@ -172,7 +206,18 @@ export function GameRequirementLine({ concept, current, required, record = false
       ? { fact: 'level_record', label: gameText('game.fact.record'), value: formatCount(requirement.current) }
       : { fact: 'level_now', label: gameText('game.mint.row.level'), value: formatCount(requirement.current) },
     { fact: 'level_required', label: gameText('game.fact.required'), value: formatCount(requirement.required) },
-    ...(requirement.met ? [] : [{ fact: 'spend_missing', label: gameText('game.fact.missing'), value: levelsLabel(requirement.missing), short: true } satisfies GameFactChip]),
   ];
-  return <GameFactChips concept={concept} chips={chips} marker="data-game-requirement" />;
+  return (
+    <>
+      <GameFactChips concept={concept} chips={chips} marker="data-game-requirement" />
+      {requirement.met ? null : (
+        <MissingLine
+          concept={concept}
+          fact="spend_missing"
+          line={gameText('game.spend.missing.unlock', { missing: levelsLabel(requirement.missing) })}
+          amount={levelsLabel(requirement.missing)}
+        />
+      )}
+    </>
+  );
 }

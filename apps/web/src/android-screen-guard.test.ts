@@ -53,6 +53,15 @@ describe('le pont de capture de la coque Android', () => {
     expect(plugin).toContain('state.put("recordingDetection", recordingWatch != null);');
   });
 
+  test('les règles de capacité (#10508) disent les MÊMES versions que les gardes du greffon : 34 capture, 35 enregistrement', () => {
+    const regles = lire('ScreenGuardRules.java');
+    expect(regles).toContain('static final int SCREENSHOT_MIN_SDK = 34;');
+    expect(regles).toContain('static final int RECORDING_MIN_SDK = 35;');
+    const plugin = lire('MeeshyScreenGuardPlugin.java');
+    expect(plugin).toContain('Build.VERSION_CODES.UPSIDE_DOWN_CAKE');
+    expect(plugin).toContain('Build.VERSION_CODES.VANILLA_ICE_CREAM');
+  });
+
   test('la coque l’enregistre avant de construire le pont', () => {
     const activite = lire('MainActivity.java');
     const enregistrement = activite.indexOf('registerPlugin(MeeshyScreenGuardPlugin.class);');

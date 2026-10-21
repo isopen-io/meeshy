@@ -13,6 +13,9 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
         <item name="android:background">@null</item>
+        <!-- #10005 — `SystemBars.setStyle` repeint la fenetre de ce fond : derriere les barres
+             systeme, la surface de l'ecran et non le gris du theme DayNight. -->
+        <item name="android:windowBackground">@color/surface</item>
     </style>
 
 

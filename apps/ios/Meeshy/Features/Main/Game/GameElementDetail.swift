@@ -87,6 +87,8 @@ enum GameElementKind: String, CaseIterable, Equatable {
 enum GameDetailFactKey: String, CaseIterable, Equatable {
     case tier
     case score
+    /// Les points À CONVERTIR : la part des points que la frappe peut reprendre (#10540).
+    case convertible
     case levelNext = "level_next"
     case levelRecord = "level_record"
     case tailwind
@@ -244,9 +246,6 @@ enum GameElementDetails {
         .obtained(since: date.map { GameDetailText.earnedOn($0.formatted(date: .long, time: .omitted)) })
     }
 
-    /// « Il manque … » — ce qu'il reste à réunir, en mots.
-    private static func missing(_ what: String) -> String { GameDetailText.missing(what) }
-
     // MARK: Badge / médaille
 
     /// Ce que la fiche d'un badge porte en propre (#9640) : son guide, sa matière et ses étoiles en lignes.
@@ -271,7 +270,7 @@ enum GameElementDetails {
             emblem: .badge(family: GameMedalFamily(axis.family), glyph: GameMedalGlyph(axis: axis.axis), material: material,
                            lit: false, progress: axis.scale.progress),
             name: ProgressionCopy.title(for: axis.axis),
-            status: .locked(missing: axis.scale.remainingToNext.map { missing(count($0)) }, progress: axis.scale.progress),
+            status: .locked(missing: axis.scale.remainingToNext.map { GameDetailText.badgeMissing(missing: count($0)) }, progress: axis.scale.progress),
             facts: badgeFacts(guide),
             concept: .badges,
             badge: guide
@@ -292,7 +291,7 @@ enum GameElementDetails {
             name: ProgressionCopy.title(for: item.axis),
             status: item.lit
                 ? obtained(on: EngagementProgressResolver.reachedDate(reachedAt))
-                : .locked(missing: missing(count(item.missing)), progress: item.progress),
+                : .locked(missing: GameBadgeGuideText.imprint(missing: count(item.missing)), progress: item.progress),
             facts: badgeFacts(guide),
             concept: .badges,
             badge: guide
@@ -380,7 +379,7 @@ enum GameElementDetails {
             status = .value(GameText.seasonStepReady, progress: nil)
         } else {
             status = .locked(
-                missing: missing(GameText.seasonStars(count: max(0, needed - season.stars))),
+                missing: ConceptText.spendMissingUnlock(missing: GameText.seasonStars(count: max(0, needed - season.stars))),
                 progress: share(season.stars, needed)
             )
         }
@@ -391,7 +390,7 @@ enum GameElementDetails {
             status: status,
             facts: [
                 fact(ConceptText.name(.season), count(season.number)),
-                fact(ConceptText.factStars, count(season.stars)),
+                fact(ConceptText.factStrides, count(season.stars)),
             ],
             concept: .season
         )
@@ -416,7 +415,7 @@ enum GameElementDetails {
     static func leagueGem(_ league: GameLeagueBlock) -> GameElementDetail? {
         guard let current = GameLeagueDetail.current(of: league) else { return nil }
         let toPromotion: ProgressionConceptFact? = current.pointsToPromotion.flatMap {
-            $0 > 0 ? fact(ConceptText.factToPromotion, ConceptText.chipMissing(GameCopy.points($0))) : nil
+            $0 > 0 ? fact(ConceptText.missingForPromotion, GameCopy.points($0)) : nil
         }
         return GameElementDetail(
             kind: .leagueGem, key: current.league.rawValue,
@@ -460,7 +459,7 @@ enum GameElementDetails {
             name: GameText.trophyPrestige(number: count(index)),
             status: index <= prestige.stars ? .obtained(since: nil) : .locked(missing: missing, progress: nil),
             facts: [
-                fact(ConceptText.factStars, ConceptText.ratio(count(prestige.stars), count(prestige.max))),
+                fact(ConceptText.factRebirths, ConceptText.ratio(count(prestige.stars), count(prestige.max))),
                 fact(ConceptText.factGloryOnPass, count(prestige.gloryOnPass)),
             ],
             concept: .prestige
@@ -470,17 +469,18 @@ enum GameElementDetails {
     // MARK: Rang
 
     static func rank(_ glory: GameBlock.Glory) -> GameElementDetail {
-        let missing: String = glory.gloryMissing.map { " · " + ConceptText.chipMissing(count($0)) } ?? ""
-        let next: ProgressionConceptFact? = glory.next.map {
-            fact(ConceptText.factNextRank, GameCopy.rankLabel($0.rank, division5: $0.shownDivision) + missing)
+        let nextName: String? = glory.next.map { GameCopy.rankLabel($0.rank, division5: $0.shownDivision) }
+        let next: ProgressionConceptFact? = nextName.map { fact(ConceptText.factNextRank, $0) }
+        // Ce qu'il manque nomme le rang visé (#10540) : « Il manque pour Voix IV — Gloire 1 800 ».
+        let missing: ProgressionConceptFact? = nextName.flatMap { name in
+            glory.gloryMissing.map { fact(ConceptText.missingForRank(rank: name), GameCopy.gloryAmount(count($0))) }
         }
         return GameElementDetail(
             kind: .rank, key: glory.rank.rawValue + (glory.shownDivision.map { ".\($0.rawValue)" } ?? ""),
             emblem: .rank(glory.rank, glory.shownDivision, glory.mythicSeat),
             name: GameCopy.rankLabel(glory),
-            status: .value(String(localized: "game.rank.glory", defaultValue: "Gloire \(count(glory.glory))", bundle: .main),
-                           progress: glory.next == nil ? nil : glory.progress),
-            facts: [next].compactMap { $0 },
+            status: .value(GameCopy.gloryAmount(count(glory.glory)), progress: glory.next == nil ? nil : glory.progress),
+            facts: [next, missing].compactMap { $0 },
             concept: .glory
         )
     }
@@ -547,9 +547,7 @@ enum GameElementDetails {
             emblem: .chest(open: chest.status == .claimed),
             name: ConceptText.factChest,
             status: status,
-            facts: [
-                fact(ConceptText.name(.points), ConceptText.ratio(count(chest.odds.minPoints), count(chest.odds.maxPoints))),
-            ],
+            facts: [],
             concept: .missions
         )
     }
@@ -564,7 +562,7 @@ enum GameElementDetails {
             name: ConceptText.factCoin(count(mint.number), GameCopy.editionName(mint.edition)),
             status: mint.canMint
                 ? .value(ConceptText.chipMintReady, progress: 1)
-                : .locked(missing: missing(GameCopy.points(mint.missingPoints)),
+                : .locked(missing: ConceptText.spendMissingMint(missing: GameCopy.convertiblePoints(mint.missingPoints), number: count(mint.number)),
                           progress: share(max(0, mint.price - mint.missingPoints), mint.price)),
             facts: [
                 fact(ConceptText.factNextPrice, GameCopy.points(mint.price)),
@@ -576,7 +574,7 @@ enum GameElementDetails {
 
     static func treasuryTier(_ treasury: TreasuryStanding) -> GameElementDetail {
         let next: ProgressionConceptFact? = treasury.next.map {
-            fact(ConceptText.factNextTreasury, GameCopy.treasuryName($0.key) + " · " + ConceptText.chipMissing(count($0.missing)))
+            fact(ConceptText.factNextTreasury, GameCopy.treasuryNext(missing: count($0.missing), tier: GameCopy.treasuryName($0.key)))
         }
         return GameElementDetail(
             kind: .treasuryTier, key: treasury.tier?.rawValue ?? "none",
@@ -592,18 +590,21 @@ enum GameElementDetails {
     // MARK: Niveau
 
     /// Le niveau se lit sur la VÉRITÉ (`level.shown`, #9688) ; au plafond du rang, le fait dit quel rang ouvre la suite.
+    /// La valeur dit ce qu'il reste ET le niveau visé ; les points en poche ont leur ligne, nommée (#10540).
     static func levelRing(_ block: GameBlock.Level) -> GameElementDetail {
         let level = block.shown
+        let atTop = level.nextThreshold == nil
         let record: ProgressionConceptFact? = level.record > level.level
             ? fact(ConceptText.factRecord, GameText.bannerLevel(level: count(level.record))) : nil
         return GameElementDetail(
             kind: .levelRing, key: "\(level.level)",
             emblem: .tier(level.tier),
             name: GameText.bannerLevel(level: count(level.level)) + " · " + GameCopy.tierName(level.tier),
-            status: .value(GameCopy.points(block.score), progress: level.nextThreshold == nil ? nil : level.progress),
-            facts: [
-                fact(ConceptText.factNextLevel, level.nextThreshold == nil
-                    ? GameCopy.levelTopShort(cap: level.cap) : ConceptText.chipMissing(GameCopy.points(level.pointsToNext))),
+            status: .value(atTop ? GameCopy.levelTop(cap: level.cap) : GameCopy.levelToNext(remaining: level.pointsToNext, nextLevel: level.level + 1),
+                           progress: atTop ? nil : level.progress),
+            // Les deux paires des étincelles (#10846), toujours — la poche, base du niveau (#10892), et le cumul indicatif.
+            facts: GameSparkPairs(block).facts + [
+                atTop ? fact(ConceptText.factNextLevel, GameCopy.levelTopShort(cap: level.cap)) : nil,
                 record,
             ].compactMap { $0 },
             concept: .level
@@ -622,7 +623,8 @@ enum GameElementDetails {
             name: GameCopy.levelStepLine(step),
             status: step.met
                 ? .obtained(since: nil)
-                : .locked(missing: GameCopy.levelStepProgress(step), progress: share(step.current, step.target)),
+                : .locked(missing: GameDetailText.levelStepProgress(progress: GameCopy.levelStepProgress(step)),
+                          progress: share(step.current, step.target)),
             facts: all.map {
                 fact(GameText.bannerLevel(level: count($0.level)), GameCopy.levelStepGoal($0) + " · " + GameCopy.levelStepState($0))
             },

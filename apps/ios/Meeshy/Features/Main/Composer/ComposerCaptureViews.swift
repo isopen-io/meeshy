@@ -25,6 +25,19 @@ struct ComposerCapturePreview: View {
             && ComposerCaptureSurfaceRule.showsThermalNotice(look: session.look, budget: session.thermalBudget)
     }
 
+    /// La couche système montre-t-elle l'objectif ? Le vœu suit aussi la bascule,
+    /// qui règle la connexion neuve dans sa transaction (#10308).
+    private var mirrorsSystemLayer: Bool {
+        ComposerCaptureSurfaceRule.mirrorsSystemLayer(paintsWithMetal: session.paintsWithMetal,
+                                                      metalHasFrame: metalHasFrame)
+    }
+
+    /// Une retouche n'a pas besoin de l'objectif (#11133).
+    private var surface: ComposerSceneCameraSurface.Shown {
+        guard !session.phase.isEditing else { return .viewfinder }
+        return ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission)
+    }
+
     /// Ce que le peintre lit en édition : la photo figée, ou la boucle.
     private var editedSource: (any ComposerFrameSourcing)? {
         session.phase.isEditing ? session.editSource : nil
@@ -33,7 +46,7 @@ struct ComposerCapturePreview: View {
     var body: some View {
         ZStack {
             Color.black
-            switch ComposerSceneCameraSurface.shown(stage: session.stage, permission: session.camera.permission) {
+            switch surface {
             case .scene:
                 EmptyView()
             case .viewfinder:
@@ -43,8 +56,8 @@ struct ComposerCapturePreview: View {
                     let canevas = ComposerLookPainter.previewCanvas(aspect: proportions)
                     ZStack {
                         CameraPreviewLayer(session: session.camera.session, focusPoints: session.focusPoints,
-                                           mirrorsFrames: ComposerCaptureSurfaceRule.mirrorsSystemLayer(
-                                               paintsWithMetal: session.paintsWithMetal, metalHasFrame: metalHasFrame))
+                                           mirrorsFrames: mirrorsSystemLayer,
+                                           connectionEpoch: session.camera.inputEpoch)
                             .background(GeometryReader { proxy in
                                 Color.clear.adaptiveOnChange(of: proxy.frame(in: .global), initial: true) { _, cadre in
                                     session.focusPoints.previewFrame = cadre
@@ -88,6 +101,8 @@ struct ComposerCapturePreview: View {
                         }
                     }
                     .frame(width: toile.width, height: toile.height)
+                    .modifier(ComposerCameraSwitchVeilStyle(switching: editedSource == nil
+                                                            && session.camera.isSwitchingCamera))
                     .animation(.easeOut(duration: 0.15), value: session.camera.switchCover != nil)
                     .position(x: toile.midX, y: toile.midY)
                     .adaptiveOnChange(of: proportions, initial: true) { _, vues in
@@ -97,6 +112,9 @@ struct ComposerCapturePreview: View {
             case .permissionRefused:
                 CameraPermissionPanel()
             }
+        }
+        .adaptiveOnChange(of: mirrorsSystemLayer, initial: true) { _, montre in
+            session.camera.previewMirroring.isWanted = montre
         }
         .adaptiveOnChange(of: session.paintsWithMetal) { _, peint in
             if !peint { metalHasFrame = false }
@@ -108,7 +126,8 @@ struct ComposerCapturePreview: View {
             if montree { UIAccessibility.post(notification: .announcement, argument: ComposerCaptureCopy.thermalNotice) }
         }
         .clipShape(RoundedRectangle(
-            cornerRadius: ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing),
+            cornerRadius: ComposerCapturePlacement.radius(for: size, editing: session.phase.isEditing,
+                                                           framed: session.editFramesScene),
             style: .continuous))
         .allowsHitTesting(false)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
@@ -151,16 +170,13 @@ struct ComposerCaptureChrome: View {
 
     /// L'anneau de la dernière mise au point — un état de VUE, pas de la machine.
     @State private var focusMark: ComposerCaptureFocusMark?
-    @State private var confirmsDiscard = false
-    /// Ce que la confirmation abandonne, fixé à la question : la prise en
-    /// retouche, ou le viseur (#9781).
-    @State private var discardsTake = false
-    @State private var discardsPhoto = false
     /// Retombe tout seul quand le pincement finit — y compris annulé par le
     /// système, qui n'appelle pas `onEnded`.
     @GestureState private var pinchActive = false
     /// Le dernier pas du glissé et du pincement de cadrage — des états de VUE.
     @State private var reframeStep: ComposerCaptureReframeStep?
+    /// Ce qu'est le glissé de retouche en cours, fixé à son premier pas (#10930).
+    @State private var editSwipeMode: ComposerEditSwipe.Mode?
     @State private var rezoomStep: CGFloat?
     /// La fin de la dernière tenue — sa levée ne compte pas pour un toucher.
     @State private var holdEndedAt: Date?
@@ -171,6 +187,11 @@ struct ComposerCaptureChrome: View {
 
     private var context: ComposerCaptureGestureContext {
         session.gestureContext(allowsPhoto: allowsPhoto, allowsVideo: allowsVideo)
+    }
+
+    /// Sous un cadre, le chrome blanc se pose sur un voile qui lui garde 4,5:1 (#9777).
+    private var chromeVeil: Double {
+        ComposerCaptureChromeLegibility.veilOpacity(framed: session.look.frame != ComposerPhotoFrame.none)
     }
 
     /// « Terminé » rend : seule la croix répond encore.
@@ -220,7 +241,8 @@ struct ComposerCaptureChrome: View {
             }
             if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
                 GeometryReader { proxy in
-                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels)
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
+                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
                     ComposerCropBrackets(scene: ComposerEditScene.rect(aspect: aspect, in: zone), area: zone) { cadre in
                         guard cadre.height > 0 else { return }
                         session.setEditAspect(cadre.width / cadre.height)
@@ -230,32 +252,40 @@ struct ComposerCaptureChrome: View {
                 .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editPanels)
                 .transition(.opacity)
             }
-            VStack(spacing: 0) {
-                ComposerSceneCameraBar(
-                    stage: session.stage,
-                    flashMode: session.flash,
-                    onCycleFlash: { session.cycleFlash() },
-                    onFlipCamera: { session.flipCamera() },
-                    onDisarm: { requestDisarm() },
-                    size: size,
-                    onToggleSize: onToggleSize,
-                    offersSizeToggle: offersSizeToggle,
-                    segments: session.segments,
-                    onDropLastSegment: { session.dropLastSegment() },
-                    onValidateSegments: onValidateSegments,
-                    liveDuration: session.camera.recordingDuration,
-                    flashIntensity: session.barCapture.flashIntensity,
-                    onFlashIntensity: { session.setFlashIntensity($0) },
-                    flipping: session.barCapture.flipping,
-                    editing: session.phase.isEditing,
-                    rendering: session.isRenderingLook || session.takeSaveState == .saving,
-                    onDone: { session.finishEditing() },
-                    saveState: session.takeSaveState,
-                    onSave: { session.saveTakeToPhotos() })
-                Spacer(minLength: 0)
-                ComposerCaptureBottomRow(session: session, context: context)
-                    .allowsHitTesting(!finishing)
+            if !finishing, session.offersEditPlayback { editPlayback }
+            // **Les formats, PAR-DESSUS le cadre** (#10930), au bas de la scène.
+            if !finishing, session.showsCropBrackets, let aspect = session.editAspect {
+                GeometryReader { proxy in
+                    let zone = ComposerEditScene.area(container: proxy.size, top: 0, bottom: 0, panels: session.editPanels,
+                                                      framed: session.editFramesScene, playback: session.offersEditPlayback)
+                    let rangee = ComposerEditPresetsLayout.frame(scene: ComposerEditScene.rect(aspect: aspect, in: zone))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        ComposerCropPresetBar(selected: session.cropPreset) { session.applyCropPreset($0) }
+                    }
+                    .frame(width: rangee.width, height: rangee.height)
+                    .position(x: rangee.midX, y: rangee.midY)
+                }
+                .animation(reduceMotion ? nil : ComposerCaptureMount<EmptyView>.growth, value: session.editAspect)
+                .transition(.opacity)
             }
+            VStack(spacing: 0) {
+                // Toujours montée, jamais retirée de l'arbre : une rangée insérée
+                // et retirée au gré des outils peut rester peinte le temps d'une
+                // transition, et porte la croix qui présente l'alerte.
+                topRow.opacity(showsTopRow ? 1 : 0)
+                    .allowsHitTesting(showsTopRow)
+                    .accessibilityHidden(!showsTopRow)
+                Spacer(minLength: 0)
+                // En retouche, le bas suit le chrome (#10930) : la prise garde
+                // tout l'écran, les outils se posent par-dessus.
+                if !session.phase.isEditing || session.editChromeShown {
+                    ComposerCaptureBottomRow(session: session, context: context)
+                        .allowsHitTesting(!finishing)
+                        .background(ComposerCaptureChromeVeil(edge: .bottom, opacity: chromeVeil))
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+            }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: chromeVeil)
             if session.isRenderingLook {
                 ProgressView()
                     .progressViewStyle(.circular)
@@ -267,12 +297,72 @@ struct ComposerCaptureChrome: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: session.showsCropBrackets)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: showsTopRow)
+        .animation(reduceMotion ? nil : .spring(response: 0.35, dampingFraction: 0.85), value: session.editChromeShown)
         .offset(y: ComposerSceneCameraFrame.dismissOffset(translationY: session.dismissDrag))
         .opacity(ComposerSceneCameraFrame.dismissOpacity(translationY: session.dismissDrag))
-        .alert(ComposerSceneCameraCopy.discardTitle(photo: discardsPhoto), isPresented: $confirmsDiscard) {
-            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) { confirmDiscard() }
-            Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) {}
+        .alert(ComposerSceneCameraCopy.discardTitle(photo: session.discardPrompt.request?.photo ?? false),
+               isPresented: Binding(get: { session.discardPrompt.isPresented },
+                                    set: { montree in
+                                        // Hors de la mise à jour de la vue (« Publishing changes from within
+                                        // view updates », mesuré au test d'interface #10930).
+                                        guard !montree else { return }
+                                        Task { @MainActor in session.discardPrompt.dismiss() }
+                                    })) {
+            Button(ComposerSceneCameraCopy.discardConfirm, role: .destructive) {
+                if ComposerCaptureDiscardFlow.confirm(session) { onDisarm() }
+            }
+            Button(ComposerSceneCameraCopy.discardKeep, role: .cancel) { ComposerCaptureDiscardFlow.keep(session) }
         }
+    }
+
+    /// **(x) et « Terminé » cèdent la place aux éléments d'édition** (porteur
+    /// 2026-10-20) : une famille ouverte ou un outil montré les cache.
+    private var showsTopRow: Bool {
+        !session.phase.isEditing
+            || ComposerEditTools.showsTopRow(familyOpen: session.openFamily != nil, shownTools: session.shownEditTools)
+    }
+
+    private var topRow: some View {
+        ComposerSceneCameraBar(
+            stage: session.stage,
+            flashMode: session.flash,
+            onCycleFlash: { session.cycleFlash() },
+            onFlipCamera: { session.flipCamera() },
+            onDisarm: { requestDisarm() },
+            size: size,
+            onToggleSize: onToggleSize,
+            offersSizeToggle: offersSizeToggle,
+            segments: session.segments,
+            onDropLastSegment: { session.dropLastSegment() },
+            onValidateSegments: onValidateSegments,
+            liveDuration: session.camera.recordingDuration,
+            flashIntensity: session.barCapture.flashIntensity,
+            onFlashIntensity: { session.setFlashIntensity($0) },
+            flipping: session.barCapture.flipping,
+            editing: session.phase.isEditing,
+            rendering: session.isRenderingLook || session.takeSaveState == .saving,
+            onDone: { session.finishEditing() },
+            saveState: session.takeSaveState,
+            onSave: { session.saveTakeToPhotos() })
+        .background(ComposerCaptureChromeVeil(edge: .top, opacity: chromeVeil))
+    }
+
+    /// **Lecture et volume d'une vidéo, en haut à droite sous « Terminé »,
+    /// toujours visibles** (porteur 2026-10-20) — outil ouvert ou non, chrome
+    /// montré ou non.
+    private var editPlayback: some View {
+        GeometryReader { proxy in
+            let rangee = ComposerEditPlaybackLayout.frame(container: proxy.size, hasAudio: session.takeHasAudio)
+            ComposerEditPlaybackControls(paused: session.editPaused,
+                                         hasAudio: session.takeHasAudio,
+                                         muted: session.takeSound.muted,
+                                         onTogglePlayback: { session.toggleEditPlayback() },
+                                         onToggleMute: { session.toggleTakeMute() })
+                .frame(width: rangee.width, height: rangee.height)
+                .position(x: rangee.midX, y: rangee.midY)
+        }
+        .transition(.opacity)
     }
 
     /// La croix et le glissé de rangement passent par ici : un enregistrement
@@ -287,18 +377,7 @@ struct ComposerCaptureChrome: View {
             return retouche ? session.cancelEditing() : onDisarm()
         }
         HapticFeedback.warning()
-        discardsTake = session.phase.isEditing
-        discardsPhoto = session.phase == .editing(.photo)
-        confirmsDiscard = true
-    }
-
-    /// L'abandon confirmé : la retouche, si c'est elle qu'on a demandé de
-    /// quitter et qu'elle est encore là — une remise survenue entre-temps ne
-    /// ferme pas le viseur ; sinon le viseur.
-    private func confirmDiscard() {
-        guard discardsTake else { return onDisarm() }
-        guard session.phase.isEditing else { return }
-        session.cancelEditing()
+        session.discardPrompt.ask(take: retouche, photo: session.phase == .editing(.photo))
     }
 
     /// Un geste sur la scène, décidé par la table.
@@ -359,7 +438,11 @@ struct ComposerCaptureChrome: View {
                 case .close:
                     session.followDismissDrag(translationY: valeur.translation.height)
                 case .reframe:
-                    reframe(valeur)
+                    let mode = editSwipeMode ?? ComposerEditSwipe.mode(translation: valeur.translation,
+                                                                       zoomed: session.framing.scale > 1.001,
+                                                                       cropping: session.editFramesScene)
+                    editSwipeMode = mode
+                    if mode == .reframe { reframe(valeur) }
                 default:
                     return
                 }
@@ -367,6 +450,16 @@ struct ComposerCaptureChrome: View {
             .onEnded { valeur in
                 reframeStep = nil
                 session.endZoomDrag()
+                let glisse = editSwipeMode == .swipe
+                editSwipeMode = nil
+                if glisse, session.phase.isEditing {
+                    switch ComposerEditSwipe.outcome(translationY: valeur.translation.height) {
+                    case .reveal: session.revealEditChrome()
+                    case .hide: session.hideEditChrome()
+                    case .none: break
+                    }
+                    return
+                }
                 guard session.holdStartedAt == nil else { return }
                 guard session.releaseDismissDrag(translationY: valeur.translation.height) else { return }
                 HapticFeedback.light()
@@ -418,7 +511,10 @@ struct ComposerCaptureChrome: View {
     private func tapGesture(origin: CGPoint) -> some Gesture {
         SpatialTapGesture(count: 1, coordinateSpace: .global).onEnded { toucher in
             guard !session.pinchSpoilsGestures, session.holdStartedAt == nil,
-                  !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()) else { return }
+                  !ComposerCaptureTapRule.followsAHold(holdEndedAt, now: Date()),
+                  !session.discardPrompt.swallowsTap(now: Date()) else { return }
+            let geste = ComposerCaptureGesture.action(zone: .scene, gesture: .tap, context: context)
+            guard geste != .toggleEditChrome else { return session.perform(geste, item: nil) }
             switch session.tapAction(context: context) {
             case .photo: session.perform(.photoToEdit, item: nil)
             case .focus: focus(at: toucher.location, origin: origin)

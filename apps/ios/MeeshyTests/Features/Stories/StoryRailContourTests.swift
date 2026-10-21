@@ -81,6 +81,21 @@ final class StoryRailContourTests: XCTestCase {
         XCTAssertFalse(store.participation(for: "st-2", hasReacted: false).hasCommented)
     }
 
+    /// Les marques (commenté, envoyé, republié) appartiennent au compte qui a
+    /// fait le geste : elles survivaient à la déconnexion, et le compte suivant
+    /// voyait les contours du précédent sur les stories qu'ils partagent.
+    func test_store_resetForLogout_forgetsEveryMark() {
+        let store = StoryViewerParticipationStore()
+        store.note(.commented, storyId: "st-1")
+        store.resetForLogout()
+        XCTAssertFalse(store.participation(for: "st-1", hasReacted: false).hasCommented)
+    }
+
+    func test_logoutTeardown_resetsStoryParticipation() throws {
+        let source = try AppSourceGuard.unit("Meeshy/Core/DependencyContainer.swift")
+        XCTAssertTrue(source.contains("StoryViewerParticipationStore.shared.resetForLogout()"))
+    }
+
     func test_store_participation_carriesTheServedReaction() {
         let store = StoryViewerParticipationStore()
         XCTAssertTrue(store.participation(for: "st-1", hasReacted: true).hasReacted)

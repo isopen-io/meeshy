@@ -14,7 +14,10 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 import { showsFloatingMenus } from '@/lib/view/floating-gate';
 import { ROUTES } from '@/routes/route-table';
 
-import { ReelsBackButton, ReelsEmpty, ReelsFailure, ReelsFrame, ReelsSkeleton } from './reels';
+import type { PostMenuHost } from '@/components/feed-post-menu';
+import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+
+import { ReelsBackButton, ReelsEmpty, ReelsFailure, ReelsFrame, ReelsMoreMenu, ReelsSkeleton } from './reels';
 
 /**
  * LE LECTEUR DES RÉELS, RENDU (#6457) — `renderToStaticMarkup`, même méthode que
@@ -739,5 +742,121 @@ describe('ReelPage et son cadre — le chrome commun des visionneuses (#8879)', 
     expect(html).not.toMatch(/rgba\(0, ?0, ?0/);
     expect(html).not.toMatch(/rgba\(255, ?255, ?255/);
     expect(html).toContain('var(--color-on-media-2)');
+  });
+});
+
+/**
+ * **LE MENU « … » DU PLEIN ÉCRAN** (#11156) — miroir `ReelMoreOptionsMenu`
+ * (`ReelsPlayerView+ActionRail.swift`) : dans la barre haute, au bord de FIN,
+ * les MÊMES entrées que la carte du fil (`postMenuEntries`), dont « Retirer »
+ * pour la modération sur le réel d'un autre.
+ */
+describe('Réels — le menu « … » de la barre haute (#11156)', () => {
+  const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
+
+  beforeAll(async () => {
+    ensureHappyDomRegistered();
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+    await loadInterfaceCatalog('fr');
+  });
+
+  afterAll(async () => {
+    await act(async () => {});
+    delete globals.IS_REACT_ACT_ENVIRONMENT;
+    await releaseHappyDomIfRegistered();
+  });
+
+  const hostOf = (journal: string[], overrides: Partial<PostMenuHost> = {}): PostMenuHost => ({
+    viewerId: 'u-moderateur',
+    viewerModerates: true,
+    onCopyText: (text) => journal.push(`copy:${text}`),
+    onPin: (id) => journal.push(`pin:${id}`),
+    onEdit: () => Promise.resolve('done'),
+    onDelete: (id) => journal.push(`delete:${id}`),
+    onRemove: (id, reason) => journal.push(`remove:${id}:${reason}`),
+    onReport: (id, reason) => journal.push(`report:${id}:${reason}`),
+    ...overrides,
+  });
+
+  const mountBar = (menu: PostMenuHost) => {
+    const container = window.document.createElement('div');
+    window.document.body.appendChild(container);
+    const root = createRoot(container);
+    act(() => {
+      root.render(
+        <ReelsBackButton
+          language="fr"
+          onBack={() => undefined}
+          trailing={<ReelsMoreMenu model={modelOf(REEL_SUNSET_EN)} menu={menu} onShare={() => undefined} onGesture={() => undefined} />}
+        />,
+      );
+    });
+    return {
+      container,
+      unmount: () => {
+        act(() => root.unmount());
+        container.remove();
+        window.document.querySelectorAll('[role="menu"], [role="dialog"]').forEach((node) => node.remove());
+      },
+    };
+  };
+
+  const open = async (container: HTMLElement) => {
+    act(() => container.querySelector<HTMLButtonElement>('[data-feed-post-menu]')?.click());
+    await act(async () => {
+      await import('@/components/publication-menu-panel');
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return [...window.document.querySelectorAll<HTMLButtonElement>('[data-feed-post-action]')];
+  };
+
+  test('le « … » est dans la barre haute, APRÈS « Retour », nommé et annoncé comme un menu', () => {
+    const view = mountBar(hostOf([]));
+    const bar = view.container.querySelector('[data-viewer-top-bar]');
+    const button = bar?.querySelector<HTMLButtonElement>('[data-feed-post-menu]');
+    expect(button?.getAttribute('aria-label')).toBe('Plus d’options');
+    expect(button?.getAttribute('aria-haspopup')).toBe('menu');
+    const back = bar?.querySelector('[data-reels-back]');
+    expect(back !== null && button !== null && back !== undefined && button !== undefined).toBe(true);
+    expect(back!.compareDocumentPosition(button!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    view.unmount();
+  });
+
+  test('modérateur, réel d’un autre : les entrées de la carte, « Retirer » avant « Signaler »', async () => {
+    const view = mountBar(hostOf([]));
+    const entries = await open(view.container);
+    const ids = entries.map((entry) => entry.dataset.feedPostAction);
+    expect(ids).toContain('open');
+    expect(ids).toContain('share');
+    expect(ids.slice(-2)).toEqual(['remove', 'report']);
+    view.unmount();
+  });
+
+  test('« Retirer » demande le motif, puis remet le réel et le motif nettoyé', async () => {
+    const journal: string[] = [];
+    const view = mountBar(hostOf(journal));
+    const entries = await open(view.container);
+    act(() => entries.find((entry) => entry.dataset.feedPostAction === 'remove')?.click());
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+    const field = window.document.querySelector<HTMLTextAreaElement>('[data-content-removal-reason]');
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set;
+    act(() => {
+      setter?.call(field, '  Contenu violent ');
+      field?.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    act(() => window.document.querySelector<HTMLButtonElement>('[data-content-removal="confirm"]')?.click());
+    expect(journal).toEqual([`remove:${REEL_SUNSET_EN.id}:Contenu violent`]);
+    view.unmount();
+  });
+
+  test('sans le rôle, aucun « Retirer » ; sur son propre réel, « Supprimer »', async () => {
+    const lambda = mountBar(hostOf([], { viewerModerates: false }));
+    expect((await open(lambda.container)).map((entry) => entry.dataset.feedPostAction)).not.toContain('remove');
+    lambda.unmount();
+    const own = mountBar(hostOf([], { viewerId: REEL_SUNSET_EN.author?.id ?? '' }));
+    const ids = (await open(own.container)).map((entry) => entry.dataset.feedPostAction);
+    expect(ids).toContain('delete');
+    expect(ids).not.toContain('remove');
+    own.unmount();
   });
 });

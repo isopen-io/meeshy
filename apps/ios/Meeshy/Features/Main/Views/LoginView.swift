@@ -17,7 +17,8 @@ enum LoginServerPicker {
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     // Normal login form state
     @State private var username = ""
@@ -191,7 +192,8 @@ struct LoginView: View {
                 }
 
                 // Signature de marque partagée avec le splash (BrandSignature) :
-                // « Meeshy <version> · <build> » + « Par Services CEO » + logo.
+                // « Meeshy <version> · <build> » + « by services.ceo » (lien vers la
+                // plateforme, #10096) + logo.
                 BrandSignature()
                     .padding(.top, MeeshySpacing.md)
                     .opacity(showFields ? 1 : 0)
@@ -208,6 +210,7 @@ struct LoginView: View {
         }
         .sheet(isPresented: $showForgotPassword, onDismiss: accessPresentationDismissed) {
             MeeshyForgotPasswordView(prefilledEmail: prefillableEmail)
+                .feedbackToastOverlay()
         }
         .sheet(item: $codeEntry, onDismiss: accessPresentationDismissed) { entry in
             EmailVerificationView(
@@ -217,10 +220,12 @@ struct LoginView: View {
                 pendingSessionToken: entry.pending.pendingSessionToken,
                 onVerified: { sessionGate.openWhenDismissed($0) }
             )
+            .feedbackToastOverlay()
         }
         .sheet(isPresented: $showMagicLink, onDismiss: accessPresentationDismissed) {
             MagicLinkView(onVerified: { sessionGate.openWhenDismissed($0) }, prefilledEmail: prefillableEmail)
                 .environmentObject(authManager)
+                .feedbackToastOverlay()
         }
         .fullScreenCover(isPresented: $showRegister, onDismiss: accessPresentationDismissed) {
             // #5218 — UN écran remplace l'assistant en huit étapes. `onComplete`
@@ -238,6 +243,7 @@ struct LoginView: View {
                     showRegister = false
                 }
             )
+            .feedbackToastOverlay()
         }
         .adaptiveOnChange(of: hasAccessPresentation) { _, presenting in
             if presenting { sessionGate.presentationBegan() }
@@ -894,11 +900,7 @@ struct LoginView: View {
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
         .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                focusedField = .twoFactorCode
-            }
-        }
+        .onAppear(after: .milliseconds(350)) { focusedField = .twoFactorCode }
     }
 
     private func attempt2FALogin() {

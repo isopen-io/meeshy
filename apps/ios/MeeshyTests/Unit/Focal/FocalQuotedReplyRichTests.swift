@@ -66,7 +66,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent(path)
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     private func quotedReplySource() throws -> String {
@@ -392,7 +392,7 @@ final class FocalQuotedReplyRichTests: XCTestCase {
 
     // MARK: - Zone 3 : la résolution hôte, inchangée
 
-    func test_host_resolvesQuotedAuthor_fromLocalStore_withNameOnlyFallback() throws {
+    func test_host_resolvesQuotedAuthor_fromLocalStore_withReferenceIdFallback() throws {
         let code = try quotedMediaHostSource()
         XCTAssertTrue(
             code.contains("func openQuotedAuthorProfile(_ reference: ReplyReference)"),
@@ -403,8 +403,8 @@ final class FocalQuotedReplyRichTests: XCTestCase {
             "La résolution passe par le store local (message cité → sender réel), jamais par une seconde source de vérité."
         )
         XCTAssertTrue(
-            code.contains("username: reference.authorName"),
-            "Repli nom-seul obligatoire : un message cité hors fenêtre locale doit quand même ouvrir une fiche profil."
+            code.contains("referenceAuthorUserId: reference.authorUserId"),
+            "Repli sur l'identifiant gravé dans la citation : un message cité hors fenêtre locale ouvre quand même la fiche ; sans identifiant, rien ne s'ouvre."
         )
     }
 

@@ -159,7 +159,7 @@ const ouvre = async (chemin) => {
 };
 
 // ─────────────────────────────────── 1. LA LISTE DES CONVERSATIONS (le premier écran)
-const liste = await ouvre('/');
+const liste = await ouvre('/chats');
 await liste.waitForSelector('[data-row]');
 await liste.waitForTimeout(400);
 

@@ -30,6 +30,19 @@ final class ShareLinkDetailCopyTests: XCTestCase {
         XCTAssertEqual(ShareLinkDetailCopy.sentence(["pseudo"], locale: Locale(identifier: "fr_FR")), "Pseudo")
     }
 
+    /// #10381 — l'expiration choisie à la création se lit dans la liste des liens, pas seulement dans la fiche.
+    func test_rowExpiry_namesTheChosenDay_saysExpiredOncePast_andStaysSilentWithoutExpiry() {
+        let now = Date(timeIntervalSince1970: 1_792_000_000)
+        let inSevenDays = now.addingTimeInterval(7 * 86_400)
+
+        XCTAssertNil(ShareLinkDetailCopy.rowExpiry(nil, now: now))
+        XCTAssertEqual(
+            ShareLinkDetailCopy.rowExpiry(inSevenDays, now: now),
+            "\(ShareLinkDetailCopy.expiresOn) \(ShareLinkDateFormat.day(inSevenDays))"
+        )
+        XCTAssertEqual(ShareLinkDetailCopy.rowExpiry(now.addingTimeInterval(-60), now: now), ShareLinkDetailCopy.linkExpired)
+    }
+
     func test_nameField_asksForFirstAndLastNameSeparately() {
         XCTAssertEqual(ShareLinkDetailCopy.fieldNames(.name).count, 2)
     }

@@ -76,6 +76,7 @@ function makePrisma(row: Record<string, unknown> | null = foreignLinkRow()) {
       delete: jest.fn<any>().mockResolvedValue({}),
     },
     participant: {
+      count: jest.fn<any>().mockResolvedValue(0),
       findMany: jest.fn<any>().mockResolvedValue([]),
       updateMany: jest.fn<any>().mockResolvedValue({ count: 0 }),
     },

@@ -5,6 +5,10 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     var baseURL: String = "https://mock.api"
     var authToken: String?
     var anonymousSessionToken: String?
+    /// Le jeton que rendrait un rafraîchissement — `nil` : rien à rafraîchir.
+    var freshAuthTokenStub: String?
+
+    func freshAuthToken() async -> String? { freshAuthTokenStub ?? authToken }
 
     // MARK: - Recording
 
@@ -21,7 +25,9 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         var path: String { endpoint }
     }
 
-    private(set) var requests: [RecordedRequest] = []
+    private let recorded = Locked<[RecordedRequest]>([])
+
+    var requests: [RecordedRequest] { recorded.read { $0 } }
 
     var lastRequest: RecordedRequest? { requests.last }
     var requestCount: Int { requests.count }
@@ -54,6 +60,11 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         }
     }
 
+    /// Erreur choisie REQUÊTE PAR REQUÊTE, après enregistrement — pour un
+    /// double qui refuse une requête d'un lot et accepte sa voisine sur la
+    /// même adresse (#10483 : les `open` refusés, les vues acceptées).
+    var errorForRequest: ((RecordedRequest) -> Error?)?
+
     func stub<T>(_ endpoint: String, result: T) {
         stubs[endpoint] = result
     }
@@ -61,11 +72,12 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     // MARK: - Reset
 
     func reset() {
-        requests.removeAll()
+        recorded.mutate { $0.removeAll() }
         stubs.removeAll()
         errorToThrow = nil
         endpointErrors.removeAll()
         authToken = nil
+        freshAuthTokenStub = nil
         anonymousSessionToken = nil
     }
 
@@ -105,6 +117,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         // écrivent déjà. `legacyPath(for:)` la donne (#4282).
         let endpoint = legacyPath(for: typedEndpoint)
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems, headers: headers)
+        if let last = requests.last, let error = errorForRequest?(last) { throw error }
         if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
@@ -217,12 +230,14 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         queryItems: [URLQueryItem]? = nil, headers: [String: String]? = nil
     ) {
         let json = bodyData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: queryItems, headers: headers))
+        let recordedRequest = RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: queryItems, headers: headers)
+        recorded.mutate { $0.append(recordedRequest) }
     }
 
     private func recordRequest<U: Encodable>(endpoint: String, method: String, encodableBody: U) {
         let data = try? JSONEncoder().encode(encodableBody)
         let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: nil, headers: nil))
+        let recordedRequest = RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: nil, headers: nil)
+        recorded.mutate { $0.append(recordedRequest) }
     }
 }

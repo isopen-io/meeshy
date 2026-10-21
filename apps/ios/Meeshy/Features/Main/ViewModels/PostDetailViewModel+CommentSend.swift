@@ -31,7 +31,6 @@ extension PostDetailViewModel {
     func sendComment(_ content: String, originalLanguage: String?, effectFlags: Int? = nil, location: SharedPlace? = nil, quoted: CommentQuotedMedia? = nil) async -> Bool {
         guard let post else { return false }
         let cmid = ClientMutationId.generate()
-        let snapshot = comments
         let snapshotCount = self.post?.commentCount ?? 0
         let currentUser = AuthManager.shared.currentUser
         let optimistic = FeedComment(
@@ -67,21 +66,18 @@ extension PostDetailViewModel {
         )
         do {
             try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
 
             // R5 — roll back the optimistic comment if the outbox exhausts its
             // retry budget (server permanently rejects). The synchronous catch
             // below only covers an enqueue refusal; without this observer a
             // permanently-failing comment stays in the list forever.
             observeOutcome(cmid: cmid, rollback: { [weak self] in
-                guard let self else { return }
-                self.comments = snapshot
-                self.post?.commentCount = snapshotCount
+                self?.withdrawOptimisticComment(cmid, parentId: nil)
             }, toast: String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
             return true
         } catch {
-            comments = snapshot
-            self.post?.commentCount = snapshotCount
+            withdrawOptimisticComment(cmid, parentId: nil)
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Impossible d'envoyer le commentaire", bundle: .main))
             return false
         }
@@ -101,9 +97,7 @@ extension PostDetailViewModel {
         let parentId = parent.parentId ?? parent.id
         replyingTo = nil
         let cmid = ClientMutationId.generate()
-        let snapshotReplies = repliesMap[parentId] ?? []
         let snapshotExpanded = expandedThreads.contains(parentId)
-        let snapshotParentReplies = comments.first(where: { $0.id == parentId })?.replies
         let snapshotCount = self.post?.commentCount ?? 0
         let currentUser = AuthManager.shared.currentUser
         let optimistic = FeedComment(
@@ -140,26 +134,18 @@ extension PostDetailViewModel {
             try await offlineQueue.enqueueComment(payload, ownerId: CommentPublisher.currentAccountId())
             // Une réponse vit sous une clé SÉPARÉE de son parent : persister
             // les deux, sinon un kill avant flush perd la réponse au cold start.
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)")
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(repliesMap[parentId] ?? [], for: "replies-\(parentId)") }
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.3", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
 
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 guard let self else { return }
-                self.repliesMap[parentId] = snapshotReplies
+                self.withdrawOptimisticComment(cmid, parentId: parentId)
                 if !snapshotExpanded { self.expandedThreads.remove(parentId) }
-                if let idx = self.comments.firstIndex(where: { $0.id == parentId }) {
-                    self.comments[idx].replies = snapshotParentReplies ?? self.comments[idx].replies
-                }
-                self.post?.commentCount = snapshotCount
             }, toast: String(localized: "feed.comment.replyError", defaultValue: "Impossible d'envoyer la réponse", bundle: .main))
             return true
         } catch {
-            repliesMap[parentId] = snapshotReplies
+            withdrawOptimisticComment(cmid, parentId: parentId)
             if !snapshotExpanded { expandedThreads.remove(parentId) }
-            if let idx = comments.firstIndex(where: { $0.id == parentId }) {
-                comments[idx].replies = snapshotParentReplies ?? comments[idx].replies
-            }
-            self.post?.commentCount = snapshotCount
             FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Impossible d'envoyer la réponse", bundle: .main))
             return false
         }
@@ -169,29 +155,43 @@ extension PostDetailViewModel {
         replyingTo = nil
     }
 
+    /// Retire le commentaire optimiste `cmid` — et lui seul (`OptimisticRollback`) : ce qui est arrivé
+    /// par socket ou par pagination pendant l'attente reste. Les compteurs suivent la ligne retirée.
+    func withdrawOptimisticComment(_ cmid: String, parentId: String?) {
+        let removed: Bool
+        if let parentId {
+            let result = OptimisticRollback.withdrawing(cmid, from: repliesMap[parentId] ?? [])
+            repliesMap[parentId] = result.items
+            removed = result.removed
+            if removed, let idx = comments.firstIndex(where: { $0.id == parentId }) {
+                comments[idx].replies = OptimisticRollback.decremented(comments[idx].replies, removed: true)
+            }
+        } else {
+            let result = OptimisticRollback.withdrawing(cmid, from: comments)
+            comments = result.items
+            removed = result.removed
+        }
+        if let count = post?.commentCount {
+            post?.commentCount = OptimisticRollback.decremented(count, removed: removed)
+        }
+    }
+
     /// Pose une traduction de commentaire fraîchement arrivée (racine ou
     /// réponse) — uniquement si la langue est préférée, qu'aucune traduction
     /// n'est déjà affichée, ET que la langue d'origine du commentaire n'occupe
     /// pas déjà un rang au moins aussi prioritaire dans le Prisme (#6531,
     /// jumelle de `FeedViewModel.applyCommentTranslation` — même garde).
     func applyCommentTranslationUpdate(commentId: String, language: String, text: String) {
-        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
-        guard let incomingRank = preferred.firstIndex(where: { $0 == language.lowercased() }) else { return }
-        func shouldApply(_ comment: FeedComment) -> Bool {
-            guard comment.translatedContent == nil else { return false }
-            let originalRank = comment.originalLanguage
-                .map { $0.lowercased() }
-                .flatMap { orig in preferred.firstIndex(where: { $0 == orig }) }
-            if let originalRank, originalRank <= incomingRank { return false }
-            return true
-        }
-        if let idx = comments.firstIndex(where: { $0.id == commentId }), shouldApply(comments[idx]) {
-            comments[idx].translatedContent = text
+        // Même règle que `FeedViewModel.applyCommentTranslation` : la
+        // traduction rejoint le dictionnaire, l'affichage se re-résout.
+        let langs = preferredLanguages
+        if let idx = comments.firstIndex(where: { $0.id == commentId }) {
+            comments[idx] = comments[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
             return
         }
         for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }), shouldApply(replies[idx]) {
-                replies[idx].translatedContent = text
+            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
+                replies[idx] = replies[idx].mergingTranslation(text, language: language, preferredLanguages: langs)
                 repliesMap[key] = replies
                 return
             }
@@ -223,8 +223,6 @@ extension PostDetailViewModel {
             originalLanguage: originalLanguage, media: pendingMedia.map(\.optimistic),
             quotedMedia: quoted
         )
-        let snapshotComments = comments
-        let snapshotReplies = parentId.flatMap { repliesMap[$0] }
         let snapshotCount = post.commentCount
         if let parentId {
             var existing = repliesMap[parentId] ?? []
@@ -275,14 +273,10 @@ extension PostDetailViewModel {
                 comments.insert(server, at: 0)
             }
             CommentMediaUploader.discardLocalFiles(pendingMedia)
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentSend.comments.savePreservingFreshness.4", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
             return true
         } catch {
-            let rollback = {
-                self.comments = snapshotComments
-                if let parentId { self.repliesMap[parentId] = snapshotReplies }
-                self.post?.commentCount = snapshotCount
-            }
+            let rollback = { self.withdrawOptimisticComment(tempId, parentId: parentId) }
             // La limite du jour est un refus : la ligne part, avec sa raison.
             let cause = (error as? CommentPublisher.Interrupted)?.underlying ?? error
             guard !DailyGestureLimitNotice.surface(cause) else { rollback(); return false }

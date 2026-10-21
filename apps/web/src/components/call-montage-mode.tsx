@@ -7,15 +7,17 @@ import { captureSize, MONTAGE_STYLES, montageLayout, type MontageStyle, type Siz
 import type { MontageCall, MontageCircle } from '@/lib/calls/call-montage-circle';
 import { drawMontage, type MontageText } from '@/lib/calls/call-montage-render';
 import { browserFaceDetector } from '@/lib/calls/face-tracker';
+import { startFrameClock } from '@/lib/calls/frame-clock';
 import type { CaptureFrame, FrameMood } from '@/lib/calls/frames/frame-spec';
 import type { FrameStudio } from '@/lib/calls/frames/frame-studio';
 import { loadCallStudioCatalog, translateCallStudio as t } from '@/lib/i18n-call-studio-catalog';
+import { frameUsageText, loadFrameUsageCatalog } from '@/lib/i18n-frame-usage-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
 import { CaptureFlash, CaptureHint, CaptureStatus, KeyboardRecord, RecordingStop, useCaptureStudio, type StudioVideo } from './call-capture-studio';
 import { CallModeBar, ModeCarousel, ModeOption, type CarouselItem } from './call-mode-carousel';
 import { MoodChips } from './call-montage-moods';
-import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
+import { browserCircle, montageChrome, paintFramed, useMontageFrames, type CircleOf, type FrameStudioLoader } from './use-montage-frames';
 
 /**
  * **LE MODE MONTAGE** (#8552, #8578, #8580) — « Capturer » (rangée L'appel)
@@ -35,11 +37,18 @@ import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type Frame
  * ambiances qui ont un cadre pour les PERSONNES de l'appel, moi compris.
  * Une puce change le carrousel dans la même image ; une arrivée ou un
  * départ réconcilie le cadre choisi (la variante de son motif, sinon un
- * cadre de son ambiance, sinon les classiques). L'aperçu, la photo et la
+ * cadre de son ambiance, sinon les classiques). La capture propose les
+ * cadres de capture seule ET ceux du direct (#10146 : l'atelier par
+ * défaut, `CAPTURE_FRAME_USES`), et chaque vignette dit où elle sert
+ * (`describeFrameUsage`). L'aperçu, la photo et la
  * vidéo d'un cadre passent par son peintre : couches en cache, visages
  * repeints à chaque image, jamais en miroir ; ses vignettes ne se rendent
  * que pour la fenêtre visible du carrousel (± 3). Pendant une vidéo, les
  * puces s'effacent : sur un petit écran, elles couvraient le stop.
+ * L'aperçu d'un cadre du DIRECT se resserre entre les commandes mesurées
+ * (#10481, comme iOS #9777) : aucun de ses textes ne passe dessous. La
+ * photo et la vidéo, elles, partent pleines — pendant une vidéo, l'aperçu
+ * filmé reprend donc la mise en page entière (décision de capture : #10480).
  *
  * Chunk à part (`budgets.json` › `call_montage_mode`) qui n'importe rien de
  * l'écran d'appel ; son catalogue se charge avec lui (`loadMontageModeText`).
@@ -47,7 +56,7 @@ import { browserCircle, paintFramed, useMontageFrames, type CircleOf, type Frame
  * remet par `loadFrames` et que le mode charge à son entrée.
  */
 
-export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => loadCallStudioCatalog(language);
+export const loadMontageModeText = (language: InterfaceLanguage): Promise<unknown> => Promise.all([loadCallStudioCatalog(language), loadFrameUsageCatalog(language)]);
 
 export const MONTAGE_PREVIEW_FPS = 5;
 
@@ -124,6 +133,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
   const lastInMood = useRef(new Map<FrameMood, string>());
   const root = useRef<HTMLDivElement>(null);
   const preview = useRef<HTMLCanvasElement>(null);
+  const controls = useRef<HTMLDivElement>(null);
   const thumbs = useRef(new Map<string, HTMLCanvasElement>());
   const painted = useRef(new WeakSet<HTMLCanvasElement>());
   const current = useRef<string>(style);
@@ -152,7 +162,10 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     }
     const { studio: atelier, circle: shown } = framing.current;
     const chosen = atelier?.find(id) ?? null;
-    if (atelier !== null && shown !== null && chosen !== null) paintFramed(canvas, scene.current(), atelier, chosen, shown, tier);
+    if (atelier === null || shown === null || chosen === null) return;
+    const stage = scene.current();
+    const reserved = tier === 'preview' && !studio.recording && atelier.servesCall(chosen);
+    paintFramed(canvas, stage, atelier, chosen, shown, tier, reserved ? montageChrome({ stage, controls: controls.current, viewport: viewport() }) : null);
   };
   const paintRef = useRef(paintChoice);
   paintRef.current = paintChoice;
@@ -192,10 +205,10 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
     const small = (): void => thumbs.current.forEach((canvas, id) => paintRef.current(canvas, id, 'thumb'));
     big();
     small();
-    const bigTimer = setInterval(big, 1000 / (studio.recording ? MONTAGE_RECORD_FPS : MONTAGE_PREVIEW_FPS));
+    const bigClock = startFrameClock({ fps: studio.recording ? MONTAGE_RECORD_FPS : MONTAGE_PREVIEW_FPS, tick: big, driver: () => scene.current()?.querySelector<HTMLVideoElement>('video') ?? null });
     const smallTimer = setInterval(small, 1000 / MONTAGE_THUMB_FPS);
     return () => {
-      clearInterval(bigTimer);
+      bigClock.stop();
       clearInterval(smallTimer);
     };
   }, [studio.recording]);
@@ -252,11 +265,12 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
       label: t(language, `callStudio.montage.${option}`),
       visual: <canvas ref={thumbRef(option)} aria-hidden width={thumbSize.width} height={thumbSize.height} className="size-full object-cover" data-call-capture-thumb={option} />,
     }));
-  const frameItems = (offered: readonly CaptureFrame[]): readonly CarouselItem[] => {
+  const frameItems = (atelier: FrameStudio, offered: readonly CaptureFrame[]): readonly CarouselItem[] => {
     const at = Math.max(0, offered.findIndex((option) => option.id === chosenId));
     return offered.map((option, index) => ({
       id: option.id,
       label: option.name,
+      detail: frameUsageText(language, atelier.usageLabel(option)),
       visual:
         Math.abs(index - at) <= FRAME_THUMB_WINDOW ? (
           <canvas ref={thumbRef(option.id)} aria-hidden width={frameThumbSize.width} height={frameThumbSize.height} className="size-full object-cover" data-call-frame-thumb={option.id} />
@@ -265,7 +279,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
         ),
     }));
   };
-  const items = frames === null || shelf === CLASSICS ? classicItems() : frameItems(frames.framesOf(people, shelf));
+  const items = frames === null || shelf === CLASSICS ? classicItems() : frameItems(frames, frames.framesOf(people, shelf));
   const moods = frames === null ? [] : frames.moods(people);
   const chips = [{ id: CLASSICS, label: t(language, 'callStudio.frames.mood.classics') }, ...moods.map((mood) => ({ id: mood, label: t(language, `callStudio.frames.mood.${mood}`) }))];
 
@@ -307,7 +321,7 @@ export function CallMontageMode({ language, quitGlyph, onExit, stage, onWheel, a
         />
       </div>
       {studio.recording ? <RecordingStop language={language} elapsedMs={studio.elapsedMs} onStop={() => void studio.stop()} /> : null}
-      <div className="relative z-10 flex w-full flex-col items-center gap-3">
+      <div ref={controls} className="relative z-10 flex w-full flex-col items-center gap-3" data-call-montage-controls="">
         <CaptureStatus status={studio.status} />
         <CaptureHint language={language} />
         {studio.recording ? null : <MoodChips label={t(language, 'callStudio.frames.moods')} chips={chips} selected={shelf} onPick={pickShelf} onWheel={onWheel} />}

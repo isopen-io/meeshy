@@ -89,6 +89,20 @@ const arComposerAttach = {
   'composer.effects.entrance': 'حركة الدخول',
   'composer.effects.permanent': 'تأثير دائم',
   'composer.effects.clearAll': 'مسح الكل',
+  'composer.guest.kind.text': 'ملف نصي (.txt)',
+  'composer.guest.kind.audio': 'صوت',
+  'composer.guest.kind.image': 'صورة',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'ملفات نصية (.txt)',
+  'composer.guest.inline.audio': 'ملفات صوتية',
+  'composer.guest.inline.image': 'صور',
+  'composer.guest.inline.pdf': 'ملفات PDF',
+  'composer.guest.note': 'بدون حساب، يقبل {title} رسائلك ورسائلك الصوتية وأيضًا {kinds}.',
+  'composer.guest.createAccount': 'أنشئ حسابًا لمشاركة الباقي.',
+  'composer.guest.refused.kind': '«{name}» غير مقبول هنا: لا يمر إلا {kinds}.',
+  'composer.guest.refused.size': '«{name}» كبير جدًا: {max} كحد أقصى.',
+  'send.failure.guestKind': 'هذا الملف غير مقبول هنا',
+  'send.failure.guestTooLarge': 'هذا الملف كبير جدًا هنا ({max} كحد أقصى)',
 } satisfies ComposerAttachCatalogSlice;
 
 export default arComposerAttach;

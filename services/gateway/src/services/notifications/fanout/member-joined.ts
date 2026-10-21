@@ -5,7 +5,9 @@
  * `createNotification`.
  */
 import type { Notification } from '@meeshy/shared/types/notification';
+import { memberJoinedAction } from '@meeshy/shared/utils/notification-strings';
 import { notificationLogger } from '../../../utils/logger-enhanced';
+import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../../utils/recipient-language';
 import { filterMutedRecipients } from '../mutedRecipients';
 import type { FanoutDependencies } from './dependencies';
 
@@ -45,7 +47,8 @@ export async function createMemberJoinedNotification(
   const snapshot = await loadMemberJoinedSnapshot(deps, params.newMemberUserId, params.conversationId);
   if (!snapshot) return null;
 
-  return createMemberJoinedFor(deps, params.recipientUserId, params, snapshot);
+  const langs = await loadRecipientLangs(deps, [params.recipientUserId]);
+  return createMemberJoinedFor(deps, params.recipientUserId, params, snapshot, langs.get(params.recipientUserId) ?? 'fr');
 }
 
 /**
@@ -81,10 +84,12 @@ export async function createMemberJoinedNotificationsBatch(
   const snapshot = await loadMemberJoinedSnapshot(deps, common.newMemberUserId, common.conversationId);
   if (!snapshot) return 0;
 
+  const langs = await loadRecipientLangs(deps, listening);
   // `createNotification` ne rejette jamais (catch interne) — un destinataire
   // en échec rend `null` et n'emporte pas les autres.
   const results = await Promise.all(
-    listening.map((recipientUserId) => createMemberJoinedFor(deps, recipientUserId, common, snapshot))
+    listening.map((recipientUserId) =>
+      createMemberJoinedFor(deps, recipientUserId, common, snapshot, langs.get(recipientUserId) ?? 'fr'))
   );
   return results.filter(Boolean).length;
 }
@@ -117,17 +122,50 @@ async function loadMemberJoinedSnapshot(
   return { newMember, conversation, memberCount };
 }
 
+/**
+ * La langue de CADRAGE de chaque destinataire, en UNE lecture pour toute
+ * l'audience (#10299) : la phrase « a rejoint Les Amis » se dit dans la langue
+ * du lecteur, et la lire destinataire par destinataire rendrait au lot le coût
+ * qu'il a été écrit pour retirer.
+ */
+async function loadRecipientLangs(
+  deps: FanoutDependencies,
+  recipientUserIds: readonly string[]
+): Promise<ReadonlyMap<string, string>> {
+  try {
+    const users = await deps.prisma.user.findMany({
+      where: { id: { in: [...recipientUserIds] } },
+      select: { id: true, ...RECIPIENT_LANG_SELECT },
+    });
+    return new Map(users.map((user) => [user.id, recipientLanguage(user, 'fr')]));
+  } catch (error) {
+    // Une langue introuvable appauvrit la phrase (repli `fr`), elle ne retient
+    // pas l'arrivée : la notification part quand même.
+    notificationLogger.warn('Member-joined recipient languages unreadable, falling back', {
+      audienceSize: recipientUserIds.length,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new Map();
+  }
+}
+
 function createMemberJoinedFor(
   deps: FanoutDependencies,
   recipientUserId: string,
   common: { newMemberUserId: string; conversationId: string; joinMethod?: 'via_link' | 'invited' },
-  snapshot: MemberJoinedSnapshot
+  snapshot: MemberJoinedSnapshot,
+  lang: string
 ): Promise<Notification | null> {
   return deps.createNotification({
     userId: recipientUserId,
     type: 'member_joined',
     priority: 'low',
-    content: 'Nouveau membre',
+    // #10299 — le corps NOMME la conversation (« a rejoint Les Amis ») : c'est
+    // le seul texte que FCM et WebPush rendent sous le nom de l'arrivant. Même
+    // phrase que l'action du titre persisté (`memberJoinedAction`), donc la
+    // bannière iOS la dédoublonne au lieu de la dire deux fois.
+    content: memberJoinedAction(lang, snapshot.conversation?.title),
+    lang,
 
     actor: {
       id: common.newMemberUserId,

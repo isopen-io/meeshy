@@ -1,49 +1,24 @@
 /**
  * LES NIVEAUX du Jeu Meeshy (#9373, ouverts par le rang depuis #9688) — seuil(N) = 100 × N² (#9706).
  *
- * `docs/product/jeu-meeshy-conception.html` § II.2. Le niveau se lit sur le
- * score EN POCHE (`User.engagementScore`), celui que la frappe d'une Meesh
- * débite : il peut donc redescendre. Le niveau RECORD, lui, ne redescend
- * jamais ; il règle le Vent arrière et la Gloire du premier passage.
+ * `docs/product/jeu-meeshy-conception.html` § II.2.
  *
- * ## Un million de points pour le niveau 100, une étape tous les dix niveaux (#9706, porteur 2026-10-08)
+ * ## Le niveau se lit sur les étincelles EN POCHE (#10892, porteur 2026-10-17)
  *
- * La courbe vaut 100 × N² : le niveau 10 demande 10 000 points, le 50 en
- * demande 250 000, le 100 un million. Et de 10 à 100, chaque dizaine demande
- * une ÉTAPE simple (`level-steps.ts`) : sans elle, le niveau attend au palier
- * précédent, puis monte d'un coup dès qu'elle est faite. Le niveau servi est
- * donc le plus petit de trois : celui des points, le plafond du rang, et le
- * palier des étapes (`levelProgress(score, cap, gate)`).
+ * Le niveau se lit sur les étincelles en poche (`levelSparksOf`, `sparks.ts`), que la frappe d'une Meesh
+ * débite : il redescend du montant dépensé. Les étincelles accumulées depuis le dernier prestige et à vie
+ * ne sont qu'indicatives (le potentiel du profil). Du 2026-10-16 au 2026-10-17 (#10846), le niveau se
+ * lisait sur le cycle. Les fonctions de ce fichier restent PURES sur « un score » — c'est l'appelant qui
+ * leur passe la poche. Le niveau RECORD (`levelRecord`) est le plus haut atteint depuis le prestige ; le
+ * niveau MAX À VIE (`levelMaxLifetime`) survit au prestige. Le Vent arrière souffle à 7 niveaux ou plus sous le record (`boosts.ts`).
  *
- * Les étapes ne se défont jamais (une Meesh frappée le reste, une mission faite
- * aussi, le record de Flamme et le rang ne redescendent pas) : le palier qu'elles
- * ouvrent ne se referme pas. D'où la lecture SANS relire les étapes
- * (`levelForUnlocks`) : un record gravé au-delà d'une dizaine prouve que son
- * étape est faite, et sous le record, le niveau ne passe pas la dizaine suivante.
+ * ## Les noms des paliers (#10849, porteur 2026-10-16)
  *
- * ## La courbe ne s'arrête plus à 100 (#9688, porteur 2026-10-08)
- *
- * La formule continue sans fin ; c'est le RANG de Gloire qui ouvre les niveaux
- * (`levelCapForRank`, `glory.ts`) : 499 au plus sous Ambassadeur, 1000 pour
- * Ambassadeur et Orateur, sans limite à partir d'Oracle. Un compte qui porte
- * plus de points que son plafond lit son plafond, et monte dès que son rang
- * l'ouvre — le rang ne redescend jamais, un plafond levé ne se referme pas.
- * Le niveau 100 n'est plus un maximum : c'est le seuil du Prestige, facultatif.
- *
- * Le niveau minimum est 1 : le score le plus bas lit déjà « niveau 1 », dont
- * la barre part de 0. `LEVEL_THRESHOLDS` (`types/engagement.ts`, six seuils)
- * reste intact et servi aux anciens clients jusqu'à zéro usage mesuré.
- *
- * ## Rétrocompatibilité du fil (#9223)
- *
- * Les clients publiés bornent le niveau à 100 et décodent STRICTEMENT les dix
- * premiers paliers (web : `isInt(v, 1, 100)` ; iOS : `LevelTierKey` à dix cas,
- * qui fait tomber le bloc entier sur une clé inconnue). Le fil garde donc ses
- * champs d'hier sous l'ANCIENNE loi — `legacyLevelProgress` : le niveau borné
- * à 100, le palier parmi les dix premiers — et porte la nouvelle lecture dans
- * un objet NEUF (`ladder`), comme `division` / `division5` pour les rangs.
- *
- * Tout est en entiers : iOS rejoue ces lois sur `game.vectors.json`.
+ * Les CLÉS ci-dessous sont l'identifiant stable du fil : les clients publiés les décodent strictement
+ * (iOS `LevelTierKey`, un cas inconnu fait tomber le bloc entier). Le palier 1 à 9 garde la clé `etincelle`
+ * mais s'AFFICHE **« Braise »** (« étincelle » désigne les points) ; le palier 10 à 19, clé `lueur`, reste
+ * « Lueur ». Ordre affiché : Braise (1-9), Lueur (10-19), puis la suite inchangée. Le nom affiché vit dans les
+ * catalogues de textes des clients (`game.tier.etincelle`), jamais ici.
  */
 
 export const GAME_LEVEL_MIN = 1;
@@ -64,7 +39,10 @@ export type LevelCap = number | null;
 /** Aucune limite : la lecture brute de la courbe (Oracle et au-delà). */
 export const NO_LEVEL_CAP: LevelCap = null;
 
-/** Les dix paliers d'hier — 1 à 100 —, les seuls que lisent les clients publiés. */
+/**
+ * Les dix paliers d'hier — 1 à 100 —, les seuls que lisent les clients publiés. IDENTIFIANTS STABLES du fil :
+ * `etincelle` (niveaux 1 à 9) s'affiche « Braise » (#10849) mais ne se renomme jamais ici.
+ */
 export const LEGACY_LEVEL_TIER_KEYS = [
   'etincelle',
   'lueur',

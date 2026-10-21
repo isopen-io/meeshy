@@ -1,347 +1,249 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  MAX_CONVERSATION_TARGETS,
-  MAX_PUBLISH_TARGETS,
-  planSend,
-  publishOffered,
-  targetKeyOf,
-  type SendPayload,
-  type SendPreview,
-  type SendTarget,
-} from './send-sheet-plan';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
+import type { ShareMessage } from '@meeshy/shared/utils/share-plan';
+import { SHARE_LIMITS } from '@meeshy/shared/utils/share-limits';
+
+import { planSend, targetKeyOf, type SendPayload, type SendTarget } from './send-sheet-plan';
 
 /**
- * LE PLAN D'UN ENVOI (#8884) — PUR : aucune requête, aucun DOM. Ce qui est
- * éprouvé ici est l'ORDRE et la FORME des opérations par cible ; que chaque
- * opération parte bien vers la passerelle est l'affaire de `send-sheet-run`.
+ * LE PLAN D'UN ENVOI (#8884, #10948) — PUR. Éprouvé ici : l'ORDRE et la FORME
+ * des opérations par cible, à partir du verdict de `planShare`.
  */
-const preview = (over: Partial<SendPreview> = {}): SendPreview => ({ kind: 'text', text: 'Salut', ...over });
+const exitOf = (id: string, over: Partial<ShareMessage> = {}): ShareMessage => ({ id, text: 'Salut', ...over });
 
-const messages = (over: Partial<Extract<SendPayload, { kind: 'messages' }>> = {}): SendPayload => ({
+const messages = (exit: readonly ShareMessage[], over: Partial<Extract<SendPayload, { kind: 'messages' }>> = {}): SendPayload => ({
   kind: 'messages',
   conversationId: 'src',
-  messages: [{ id: 'm1', content: 'Salut', originalLanguage: 'fr' }],
-  preview: preview(),
+  messages: exit.map((m) => ({ id: m.id, content: m.text ?? '', originalLanguage: 'fr' })),
+  exit,
+  preview: { kind: 'text', text: 'Salut' },
   ...over,
 });
 
-const attachment = (over: Partial<Extract<SendPayload, { kind: 'attachment' }>> = {}): SendPayload => ({
+const piece = (over: Partial<ShareMessage> = {}, mime = 'image/jpeg'): SendPayload => ({
   kind: 'attachment',
   conversationId: 'src',
   messageId: 'm7',
-  attachmentId: 'a7',
-  mime: 'image/jpeg',
-  previewUrl: 'https://cdn/a7.jpg',
-  mine: true,
-  protected: false,
-  ...over,
+  attachmentId: 'a3',
+  mime,
+  previewUrl: 'https://cdn/a3.jpg',
+  exit: exitOf('m7', { pieces: [{ id: 'a1', mimeType: mime }, { id: 'a2', mimeType: mime }, { id: 'a3', mimeType: mime }], ...over }),
 });
 
-const publication = (over: Partial<Extract<SendPayload, { kind: 'publication' }>> = {}): SendPayload => ({
+const publication = (postType: 'POST' | 'STORY' | 'REEL' = 'POST'): SendPayload => ({
   kind: 'publication',
   postId: 'p1',
-  postType: 'POST',
+  postType,
   url: 'https://meeshy.me/p/p1',
-  preview: preview({ kind: 'publication' }),
-  ...over,
+  preview: { kind: 'publication' },
 });
 
-const file = (name: string, type: string): File => new File([new Uint8Array(2)], name, { type });
+const file = (name: string, type: string, size = 2): File => new File([new Uint8Array(size)], name, { type });
 const files = (...list: readonly File[]): SendPayload => ({ kind: 'files', files: list });
 
-const conversation = (id: string): SendTarget => ({ kind: 'conversation', conversationId: id, label: id });
+const conversation = (id: string, encrypted = false): SendTarget => ({ kind: 'conversation', conversationId: id, label: id, ...(encrypted ? { encrypted } : {}) });
 const contact = (id: string): SendTarget => ({ kind: 'contact', userId: id, label: id });
 const publish = (as: 'POST' | 'STORY' | 'REEL'): SendTarget => ({ kind: 'publish', as });
 
-const plan = (payload: SendPayload, targets: readonly SendTarget[], caption = '') => planSend({ payload, targets, caption, viewerId: 'me' });
+const plan = (payload: SendPayload, targets: readonly SendTarget[], caption = '', extra: Partial<Parameters<typeof planSend>[0]> = {}) =>
+  planSend({ payload, targets, caption, viewerId: 'me', ...extra });
 
-const stepsOf = (payload: SendPayload, targets: readonly SendTarget[], caption = '') => {
-  const result = plan(payload, targets, caption);
+const stepsOf = (payload: SendPayload, targets: readonly SendTarget[], caption = '', extra: Partial<Parameters<typeof planSend>[0]> = {}) => {
+  const result = plan(payload, targets, caption, extra);
   if (!result.ok) throw new Error(`plan refusé : ${JSON.stringify(result.error)}`);
   return result.entries.map((entry) => entry.steps);
 };
 
-describe('publishOffered — quelles pastilles offrir', () => {
-  test('une pièce VIDÉO non protégée : POST, STORY, RÉEL ; une IMAGE seule n’est pas un réel (#9286)', () => {
-    expect(publishOffered(attachment({ mime: 'video/mp4' }))).toEqual(['POST', 'STORY', 'REEL']);
-    expect(publishOffered(attachment())).toEqual(['POST', 'STORY']);
-  });
-
-  test('JAMAIS rien pour un contenu protégé', () => {
-    expect(publishOffered(attachment({ protected: true }))).toEqual([]);
-  });
-
-  test('une pièce audio ou un document ne se publie pas', () => {
-    expect(publishOffered(attachment({ mime: 'audio/webm' }))).toEqual([]);
-    expect(publishOffered(attachment({ mime: 'application/pdf' }))).toEqual([]);
-  });
-
-  test('des fichiers image ou vidéo : les trois ; un fichier d’un autre genre : aucune', () => {
-    expect(publishOffered(files(file('a.png', 'image/png'), file('b.mp4', 'video/mp4')))).toEqual(['POST', 'STORY', 'REEL']);
-    expect(publishOffered(files(file('a.png', 'image/png'), file('b.pdf', 'application/pdf')))).toEqual([]);
-    expect(publishOffered(files())).toEqual([]);
-  });
-
-  test('le RÉEL suit la règle serveur (`qualifiesAsReel`) : une vidéo, ou au moins deux images (#9286)', () => {
-    expect(publishOffered(files(file('a.png', 'image/png')))).toEqual(['POST', 'STORY']);
-    expect(publishOffered(files(file('a.png', 'image/png'), file('b.jpg', 'image/jpeg')))).toEqual(['POST', 'STORY', 'REEL']);
-    expect(publishOffered(files(file('b.mp4', 'video/mp4')))).toEqual(['POST', 'STORY', 'REEL']);
-  });
-
-  test('un média venu d’une publication ou d’un commentaire : POST et STORY, le RÉEL s’il est vidéo', () => {
-    const media: SendPayload = { kind: 'media', url: 'https://cdn/x.jpg', mime: 'image/jpeg', name: 'x.jpg', preview: preview({ kind: 'image' }) };
-    expect(publishOffered(media)).toEqual(['POST', 'STORY']);
-    expect(publishOffered({ ...media, mime: 'video/mp4' })).toEqual(['POST', 'STORY', 'REEL']);
-  });
-
-  test('une publication : STORY, RÉEL, POST (repost)', () => {
-    expect(publishOffered(publication())).toEqual(['STORY', 'REEL', 'POST']);
-  });
-
-  test('un texte : POST seulement', () => {
-    expect(publishOffered({ kind: 'text', text: 'Salut' })).toEqual(['POST']);
-  });
-
-  test('des messages : aucune, sauf UN message portant UN média non protégé', () => {
-    expect(publishOffered(messages())).toEqual([]);
-    const sole = { attachmentId: 'a1', mime: 'video/mp4', protected: false };
-    expect(publishOffered(messages({ soleMedia: sole }))).toEqual(['POST', 'STORY', 'REEL']);
-    expect(publishOffered(messages({ soleMedia: { ...sole, mime: 'image/png' } }))).toEqual(['POST', 'STORY']);
-    expect(publishOffered(messages({ soleMedia: { ...sole, protected: true } }))).toEqual([]);
-    expect(
-      publishOffered(
-        messages({
-          messages: [
-            { id: 'm1', content: '', originalLanguage: 'fr' },
-            { id: 'm2', content: '', originalLanguage: 'fr' },
-          ],
-          soleMedia: sole,
-        }),
-      ),
-    ).toEqual([]);
-  });
-});
-
-describe('planSend — messages (transfert)', () => {
-  test('le transfert, puis la légende en second message', () => {
-    const [steps] = stepsOf(messages(), [conversation('c1')], 'Regarde ça');
-    expect(steps).toEqual([
-      { kind: 'forward', sourceConversationId: 'src', messages: [{ id: 'm1', content: 'Salut', originalLanguage: 'fr' }] },
-      { kind: 'text', text: 'Regarde ça' },
+describe('des messages', () => {
+  test('le transfert, puis la légende en message à part (D4)', () => {
+    expect(stepsOf(messages([exitOf('m1')]), [conversation('c1')], 'Regarde')).toEqual([
+      [
+        { kind: 'forward', sourceConversationId: 'src', messages: [{ id: 'm1', content: 'Salut', originalLanguage: 'fr' }] },
+        { kind: 'text', text: 'Regarde' },
+      ],
     ]);
   });
 
-  test('sans légende, le transfert seul', () => {
-    const [steps] = stepsOf(messages(), [conversation('c1')]);
-    expect(steps).toHaveLength(1);
-    expect(steps?.[0]?.kind).toBe('forward');
+  test('une sélection mixte : le protégé est retiré, le reste part dans l’ordre (D6)', () => {
+    const [steps] = stepsOf(messages([exitOf('a'), exitOf('b', { isViewOnce: true }), exitOf('c')]), [conversation('c1')]);
+    expect(steps?.[0]).toMatchObject({ kind: 'forward', messages: [{ id: 'a' }, { id: 'c' }] });
   });
 
-  test('une légende blanche n’est pas une légende', () => {
-    const [steps] = stepsOf(messages(), [conversation('c1')], '   \n ');
-    expect(steps).toHaveLength(1);
+  test('tout est protégé : refusé, rien ne part', () => {
+    expect(plan(messages([exitOf('b', { isViewOnce: true })]), [conversation('c1')])).toEqual({ ok: false, error: { kind: 'blocked' } });
   });
 
-  test('une personne sans conversation : la conversation est ouverte D’ABORD', () => {
-    const [steps] = stepsOf(messages(), [contact('u1')]);
-    expect(steps?.map((s) => s.kind)).toEqual(['open-direct', 'forward']);
-    expect(steps?.[0]).toEqual({ kind: 'open-direct', userId: 'u1' });
+  test('un message que le web ne sait pas recopier est retiré (D7)', () => {
+    const [steps] = stepsOf(messages([exitOf('a'), exitOf('b', { encrypted: true })], { unsendable: ['b'] }), [conversation('c1')]);
+    expect(steps?.[0]).toMatchObject({ kind: 'forward', messages: [{ id: 'a' }] });
   });
 
-  test('une entrée PAR cible, dans l’ordre choisi, chacune avec sa clé', () => {
-    const result = plan(messages(), [conversation('c1'), contact('u1'), conversation('c2')]);
-    expect(result.ok && result.entries.map((e) => e.key)).toEqual(['conversation:c1', 'contact:u1', 'conversation:c2']);
+  test('une personne sans conversation : la conversation directe est ouverte D’ABORD', () => {
+    expect(stepsOf(messages([exitOf('m1')]), [contact('u1')])[0]?.[0]).toEqual({ kind: 'open-direct', userId: 'u1' });
   });
 
-  test('une cible donnée deux fois n’est planifiée qu’une fois', () => {
-    const result = plan(messages(), [conversation('c1'), conversation('c1')]);
-    expect(result.ok && result.entries).toHaveLength(1);
-  });
-});
-
-describe('planSend — une pièce de message', () => {
-  test('la mienne : UNE copie serveur, la légende dans le même message', () => {
-    const [steps] = stepsOf(attachment(), [conversation('c1')], 'Tiens');
-    expect(steps).toEqual([{ kind: 'copy-attachment', messageId: 'm7', content: 'Tiens' }]);
+  test('créer un groupe avec deux personnes : la conversation de groupe d’abord, un seul envoi (D12)', () => {
+    const target: SendTarget = { kind: 'new-group', userIds: ['u1', 'u2'], title: 'Léa, Léon' };
+    const result = stepsOf(messages([exitOf('m1')]), [target]);
+    expect(result).toHaveLength(1);
+    expect(result[0]?.[0]).toEqual({ kind: 'open-group', userIds: ['u1', 'u2'], title: 'Léa, Léon' });
   });
 
-  test('la mienne sans légende : la clé content est absente', () => {
-    const [steps] = stepsOf(attachment(), [conversation('c1')]);
-    expect(steps).toEqual([{ kind: 'copy-attachment', messageId: 'm7' }]);
+  test('la durée choisie d’une flamme est portée par l’étape de transfert, pas par la légende', () => {
+    const flame = exitOf('m1', { effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 3600 });
+    const [steps] = stepsOf(messages([flame]), [conversation('c1')], 'Vite', { forwardDuration: 600 });
+    expect(steps?.[0]).toMatchObject({ kind: 'forward', ephemeralDuration: 600 });
+    expect(steps?.[1]).toEqual({ kind: 'text', text: 'Vite' });
   });
 
-  test('celle d’un autre : un transfert, la légende en second message', () => {
-    const [steps] = stepsOf(attachment({ mine: false }), [conversation('c1')], 'Tiens');
-    expect(steps).toEqual([
-      { kind: 'forward-attachment', messageId: 'm7', sourceConversationId: 'src' },
-      { kind: 'text', text: 'Tiens' },
-    ]);
+  test('un seul message à une seule pièce se publie par sa pièce', () => {
+    const one = messages([exitOf('m1', { pieces: [{ id: 'a1', mimeType: 'image/jpeg' }] })]);
+    expect(stepsOf(one, [publish('STORY')], 'Belle')).toEqual([[{ kind: 'publish-attachment', attachmentId: 'a1', format: 'STORY', content: 'Belle' }]]);
   });
 
-  test('la mienne mais PROTÉGÉE (éphémère) : un transfert, pour que la copie HÉRITE de la durée — jamais une copie serveur permanente', () => {
-    const [steps] = stepsOf(attachment({ protected: true }), [conversation('c1')], 'Tiens');
-    expect(steps).toEqual([
-      { kind: 'forward-attachment', messageId: 'm7', sourceConversationId: 'src' },
-      { kind: 'text', text: 'Tiens' },
-    ]);
+  test('après un retrait D6, la pièce publiée est celle du message GARDÉ, jamais celle du message retiré en tête', () => {
+    const secret = exitOf('m1', { text: null, isViewOnce: true, pieces: [{ id: 'a-secret', mimeType: 'image/jpeg', isViewOnce: true }] });
+    const kept = exitOf('m2', { text: null, pieces: [{ id: 'a-ok', mimeType: 'image/jpeg' }] });
+    expect(stepsOf(messages([secret, kept]), [publish('STORY')])).toEqual([[{ kind: 'publish-attachment', attachmentId: 'a-ok', format: 'STORY' }]]);
   });
 
-  test('publier : from-attachment avec le format et la légende', () => {
-    const [post, story, reel] = stepsOf(attachment({ mime: 'video/mp4' }), [publish('POST'), publish('STORY'), publish('REEL')], 'Beau');
-    expect(post).toEqual([{ kind: 'publish-attachment', attachmentId: 'a7', format: 'POST', content: 'Beau' }]);
-    expect(story).toEqual([{ kind: 'publish-attachment', attachmentId: 'a7', format: 'STORY', content: 'Beau' }]);
-    expect(reel).toEqual([{ kind: 'publish-attachment', attachmentId: 'a7', format: 'REEL', content: 'Beau' }]);
+  test('un message retiré SANS pièce en tête ne fait pas refuser l’envoi vers une publication et une conversation', () => {
+    const secretText = exitOf('m0', { isViewOnce: true });
+    const kept = exitOf('m2', { text: null, pieces: [{ id: 'a-ok', mimeType: 'image/jpeg' }] });
+    const result = plan(messages([secretText, kept]), [conversation('c1'), publish('STORY')]);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.entries[1]?.steps).toEqual([{ kind: 'publish-attachment', attachmentId: 'a-ok', format: 'STORY' }]);
   });
 
-  test('publier un contenu protégé est REFUSÉ', () => {
-    const result = plan(attachment({ protected: true }), [publish('POST')]);
-    expect(result).toEqual({ ok: false, error: { kind: 'protected' } });
-  });
-
-  test('un média protégé peut encore être envoyé à une conversation (le serveur juge le transfert)', () => {
-    expect(plan(attachment({ protected: true }), [conversation('c1')]).ok).toBe(true);
-  });
-
-  test('un seul message portant un seul média : publier passe par sa pièce', () => {
-    const payload = messages({ soleMedia: { attachmentId: 'a1', mime: 'image/png', protected: false } });
-    const [steps] = stepsOf(payload, [publish('STORY')]);
-    expect(steps).toEqual([{ kind: 'publish-attachment', attachmentId: 'a1', format: 'STORY' }]);
+  test('le contenu que la file ÉCRIT ne garde que les messages qui partent : le texte d’un message retiré (D6) n’est jamais stocké', () => {
+    const secret = exitOf('m1', { text: 'secret', isViewOnce: true });
+    const kept = exitOf('m2', { text: 'public' });
+    const payload = messages([secret, kept], { unsendable: ['m9'] });
+    const result = plan(payload, [conversation('c1')]);
+    if (!result.ok) throw new Error('plan refusé');
+    expect(JSON.stringify(result.payload)).not.toContain('secret');
+    expect(result.payload).toEqual(messages([kept], { preview: payload.kind === 'messages' ? payload.preview : { kind: 'messages' } }));
   });
 
   test('des messages sans média ne se publient pas', () => {
-    expect(plan(messages(), [publish('POST')])).toEqual({ ok: false, error: { kind: 'unsupported', targetKey: 'publish:POST' } });
+    expect(plan(messages([exitOf('m1')]), [publish('POST')])).toEqual({ ok: false, error: { kind: 'unsupported', targetKey: 'publish:POST' } });
   });
 });
 
-describe('planSend — une publication', () => {
-  test('vers une conversation : UN message texte, la légende puis l’adresse', () => {
-    const [steps] = stepsOf(publication(), [conversation('c1')], 'À voir');
-    expect(steps).toEqual([{ kind: 'text', text: 'À voir\nhttps://meeshy.me/p/p1' }]);
-  });
-
-  test('sans légende : l’adresse seule', () => {
-    const [steps] = stepsOf(publication(), [conversation('c1')]);
-    expect(steps).toEqual([{ kind: 'text', text: 'https://meeshy.me/p/p1' }]);
-  });
-
-  test('republier : un repost, isQuote si et seulement s’il y a une légende', () => {
-    const [withCaption] = stepsOf(publication(), [publish('STORY')], 'Bravo');
-    expect(withCaption).toEqual([{ kind: 'repost', postId: 'p1', format: 'STORY', content: 'Bravo', isQuote: true }]);
-    const [silent] = stepsOf(publication(), [publish('REEL')]);
-    expect(silent).toEqual([{ kind: 'repost', postId: 'p1', format: 'REEL', isQuote: false }]);
-  });
-});
-
-describe('planSend — fichiers et médias', () => {
-  const pics = files(file('a.png', 'image/png'), file('b.png', 'image/png'));
-
-  test('vers une conversation : UN message qui porte les fichiers et la légende', () => {
-    const [steps] = stepsOf(pics, [conversation('c1')], 'Vacances');
-    expect(steps).toEqual([{ kind: 'send-files', content: 'Vacances' }]);
-  });
-
-  test('vers plusieurs : chacune reçoit SON envoi (le moteur décide qui téléverse)', () => {
-    const all = stepsOf(pics, [conversation('c1'), contact('u1'), conversation('c2')]);
-    expect(all.map((s) => s.map((x) => x.kind))).toEqual([['send-files'], ['open-direct', 'send-files'], ['send-files']]);
-  });
-
-  test('publier : UNE publication par fichier, chacune avec la légende', () => {
-    const [steps] = stepsOf(pics, [publish('STORY')], 'Regarde');
-    expect(steps).toEqual([
-      { kind: 'publish-file', format: 'STORY', fileIndex: 0, caption: 'Regarde' },
-      { kind: 'publish-file', format: 'STORY', fileIndex: 1, caption: 'Regarde' },
+describe('une pièce d’un message (#9914)', () => {
+  test('seule la pièce choisie part, nommée par son id, la légende juste après', () => {
+    expect(stepsOf(piece(), [conversation('c1')], 'Fourvière')).toEqual([
+      [
+        { kind: 'forward-attachment', messageId: 'm7', attachmentId: 'a3', sourceConversationId: 'src' },
+        { kind: 'text', text: 'Fourvière' },
+      ],
     ]);
   });
 
-  test('un média venu d’ailleurs compte pour UN fichier', () => {
-    const media: SendPayload = { kind: 'media', url: 'https://cdn/x.jpg', mime: 'image/jpeg', name: 'x.jpg', preview: preview({ kind: 'image' }) };
-    const [conv, post] = stepsOf(media, [conversation('c1'), publish('POST')]);
-    expect(conv).toEqual([{ kind: 'send-files' }]);
-    expect(post).toEqual([{ kind: 'publish-file', format: 'POST', fileIndex: 0 }]);
+  test('publier : depuis la pièce', () => {
+    expect(stepsOf(piece(), [publish('POST')])).toEqual([[{ kind: 'publish-attachment', attachmentId: 'a3', format: 'POST' }]]);
   });
 
-  test('publier des fichiers qui ne sont ni image ni vidéo : refusé', () => {
-    expect(plan(files(file('a.pdf', 'application/pdf')), [publish('POST')])).toEqual({
-      ok: false,
-      error: { kind: 'unsupported', targetKey: 'publish:POST' },
-    });
-  });
-
-  test('pas plus de dix fichiers à publier d’un coup', () => {
-    const many = files(...Array.from({ length: 11 }, (_, i) => file(`${i}.png`, 'image/png')));
-    expect(plan(many, [publish('POST')])).toEqual({ ok: false, error: { kind: 'too-many-files', max: 10 } });
+  test('une flamme ne se publie pas', () => {
+    expect(plan(piece({ effectFlags: MESSAGE_EFFECT_FLAGS.EPHEMERAL, ephemeralDuration: 60 }), [publish('POST')]).ok).toBe(false);
   });
 });
 
-describe('planSend — un texte', () => {
-  test('vers une conversation : légende, texte, adresse — un seul message', () => {
-    const [steps] = stepsOf({ kind: 'text', text: 'Un extrait', url: 'https://x.test/a' }, [conversation('c1')], 'Lis ça');
-    expect(steps).toEqual([{ kind: 'text', text: 'Lis ça\nUn extrait\nhttps://x.test/a' }]);
+describe('des fichiers venus d’ailleurs', () => {
+  test('ensemble (défaut, D3) : UN message, la légende en est le texte', () => {
+    expect(stepsOf(files(file('a.jpg', 'image/jpeg'), file('b.jpg', 'image/jpeg')), [conversation('c1')], 'Lyon')).toEqual([
+      [{ kind: 'send-files', indexes: [0, 1], content: 'Lyon' }],
+    ]);
   });
 
-  test('publier : un post texte', () => {
-    const [steps] = stepsOf({ kind: 'text', text: 'Un extrait' }, [publish('POST')]);
-    expect(steps).toEqual([{ kind: 'publish-text', format: 'POST', content: 'Un extrait' }]);
+  test('séparément : un message par fichier, la légende sur le premier', () => {
+    expect(stepsOf(files(file('a.jpg', 'image/jpeg'), file('b.jpg', 'image/jpeg')), [conversation('c1')], 'Lyon', { grouping: 'separate' })).toEqual([
+      [
+        { kind: 'send-files', indexes: [0], content: 'Lyon' },
+        { kind: 'send-files', indexes: [1] },
+      ],
+    ]);
   });
 
-  test('un texte ne fait ni story ni réel', () => {
-    expect(plan({ kind: 'text', text: 'x' }, [publish('STORY')])).toEqual({ ok: false, error: { kind: 'unsupported', targetKey: 'publish:STORY' } });
+  test('un audio et un document partent comme des fichiers (D9)', () => {
+    expect(stepsOf(files(file('a.m4a', 'audio/mp4'), file('b.pdf', 'application/pdf')), [conversation('c1')])).toEqual([[{ kind: 'send-files', indexes: [0, 1] }]]);
+  });
+
+  test('vingt et un fichiers : refusé, en disant combien retirer (D10)', () => {
+    const many = Array.from({ length: SHARE_LIMITS.maxFiles + 1 }, (_, i) => file(`${i}.jpg`, 'image/jpeg'));
+    expect(plan(files(...many), [conversation('c1')])).toEqual({ ok: false, error: { kind: 'over-limits', trimCount: 1 } });
+  });
+
+  test('publier : UNE publication par fichier, chacune avec la légende', () => {
+    expect(stepsOf(files(file('a.jpg', 'image/jpeg'), file('b.jpg', 'image/jpeg')), [publish('POST')], 'Lyon')).toEqual([
+      [
+        { kind: 'publish-file', format: 'POST', fileIndex: 0, caption: 'Lyon' },
+        { kind: 'publish-file', format: 'POST', fileIndex: 1, caption: 'Lyon' },
+      ],
+    ]);
+  });
+
+  test('un fichier qui n’est ni image ni vidéo ne se publie pas d’ici', () => {
+    expect(plan(files(file('a.pdf', 'application/pdf')), [publish('POST')]).ok).toBe(false);
   });
 });
 
-describe('planSend — les bornes', () => {
+describe('une publication, un profil, une invitation, un texte', () => {
+  test('une publication part en carte : la légende puis l’adresse', () => {
+    expect(stepsOf(publication(), [conversation('c1')], 'Regarde')).toEqual([[{ kind: 'text', text: 'Regarde\nhttps://meeshy.me/p/p1' }]]);
+  });
+
+  test('republier : isQuote si et seulement s’il y a une légende', () => {
+    expect(stepsOf(publication(), [publish('POST')])).toEqual([[{ kind: 'repost', postId: 'p1', format: 'POST', isQuote: false }]]);
+    expect(stepsOf(publication(), [publish('STORY')], 'Oui')).toEqual([[{ kind: 'repost', postId: 'p1', format: 'STORY', content: 'Oui', isQuote: true }]]);
+  });
+
+  test('une story ne se republie pas (D14)', () => {
+    expect(plan(publication('STORY'), [publish('STORY')]).ok).toBe(false);
+  });
+
+  test('le profil part par son adresse (D15)', () => {
+    expect(stepsOf({ kind: 'profile', userId: 'u', url: 'https://meeshy.me/u/lea', name: 'Léa' }, [conversation('c1')])).toEqual([[{ kind: 'text', text: 'https://meeshy.me/u/lea' }]]);
+  });
+
+  test('un texte avec adresse : un seul message, texte puis adresse', () => {
+    expect(stepsOf({ kind: 'text', text: 'Programme', url: 'https://x.org' }, [conversation('c1')], 'Tiens')).toEqual([[{ kind: 'text', text: 'Tiens\nProgramme\nhttps://x.org' }]]);
+  });
+
+  test('publier un texte : un post', () => {
+    expect(stepsOf({ kind: 'text', text: 'Bonjour' }, [publish('POST')])).toEqual([[{ kind: 'publish-text', format: 'POST', content: 'Bonjour' }]]);
+  });
+});
+
+describe('les garde-fous', () => {
   test('aucune cible : refusé', () => {
-    expect(plan(messages(), [])).toEqual({ ok: false, error: { kind: 'no-targets' } });
+    expect(plan(messages([exitOf('m1')]), [])).toEqual({ ok: false, error: { kind: 'no-targets' } });
   });
 
-  test('dix destinataires au plus', () => {
-    const ten = Array.from({ length: MAX_CONVERSATION_TARGETS }, (_, i) => conversation(`c${i}`));
-    expect(plan(messages(), ten).ok).toBe(true);
-    expect(plan(messages(), [...ten, contact('u1')])).toEqual({ ok: false, error: { kind: 'too-many-targets', max: 10 } });
+  test('dix destinataires au plus, publications comprises (D10)', () => {
+    const ten = Array.from({ length: SHARE_LIMITS.maxRecipients }, (_, i) => conversation(`c${i}`));
+    expect(plan(files(file('a.jpg', 'image/jpeg')), [...ten, publish('STORY')])).toEqual({ ok: false, error: { kind: 'too-many-targets', max: SHARE_LIMITS.maxRecipients } });
+    expect(plan(files(file('a.jpg', 'image/jpeg')), ten).ok).toBe(true);
   });
 
-  test('les pastilles de publication ne comptent pas dans les dix', () => {
-    const ten = Array.from({ length: MAX_CONVERSATION_TARGETS }, (_, i) => conversation(`c${i}`));
-    const payload = attachment({ mime: 'video/mp4' });
-    expect(plan(payload, [...ten, publish('POST'), publish('STORY'), publish('REEL')]).ok).toBe(true);
-    expect(MAX_PUBLISH_TARGETS).toBe(3);
+  test('une cible donnée deux fois n’est planifiée qu’une fois', () => {
+    const result = plan(messages([exitOf('m1')]), [conversation('c1'), conversation('c1')]);
+    expect(result.ok && result.entries.map((e) => e.key)).toEqual(['conversation:c1']);
   });
 
   test('on ne s’écrit pas à soi-même', () => {
-    expect(plan(messages(), [contact('me')])).toEqual({ ok: false, error: { kind: 'self-target' } });
+    expect(plan(messages([exitOf('m1')]), [contact('me')])).toEqual({ ok: false, error: { kind: 'self-target' } });
   });
 
-  test('une légende de plus de 5000 caractères ne se publie pas', () => {
-    const long = 'x'.repeat(5001);
-    expect(plan(attachment(), [publish('POST')], long)).toEqual({ ok: false, error: { kind: 'caption-too-long', max: 5000 } });
-    expect(plan(attachment(), [conversation('c1')], long).ok).toBe(true);
+  test('une légende de plus de 5000 caractères est refusée', () => {
+    expect(plan(files(file('a.jpg', 'image/jpeg')), [conversation('c1')], 'x'.repeat(5001))).toEqual({ ok: false, error: { kind: 'caption-too-long', max: 5000 } });
   });
 
-  test('la clé d’une cible est stable', () => {
+  test('la clé d’une cible est stable, un groupe neuf quel que soit l’ordre des personnes', () => {
     expect(targetKeyOf(conversation('c1'))).toBe('conversation:c1');
     expect(targetKeyOf(contact('u1'))).toBe('contact:u1');
     expect(targetKeyOf(publish('REEL'))).toBe('publish:REEL');
-  });
-});
-
-/** #9573 — la durée choisie pour une flamme transférée voyage dans l'étape de transfert, et nulle part ailleurs. */
-describe('planSend — la durée d’une flamme transférée', () => {
-  const flame = messages({ messages: [{ id: 'm1', content: 'Salut', originalLanguage: 'fr', maxDurationSeconds: 300 }] });
-  const target: SendTarget = { kind: 'conversation', conversationId: 'c1', label: 'C1' };
-
-  test('la durée choisie est portée par l’étape de transfert', () => {
-    const plan = planSend({ payload: flame, targets: [target], caption: '', viewerId: 'moi', forwardDuration: 60 });
-    expect(plan.ok && plan.entries[0]?.steps).toEqual([{ kind: 'forward', sourceConversationId: 'src', messages: flame.kind === 'messages' ? flame.messages : [], ephemeralDuration: 60 }]);
-  });
-
-  test('sans choix, l’étape ne porte rien : le transport retombe sur la durée de chaque source', () => {
-    const plan = planSend({ payload: flame, targets: [target], caption: '', viewerId: 'moi' });
-    expect(plan.ok && plan.entries[0]?.steps[0] !== undefined && 'ephemeralDuration' in plan.entries[0].steps[0]).toBe(false);
-  });
-
-  test('la légende qui suit un transfert de flamme ne porte pas de durée', () => {
-    const plan = planSend({ payload: flame, targets: [target], caption: 'regarde', viewerId: 'moi', forwardDuration: 60 });
-    expect(plan.ok && plan.entries[0]?.steps[1]).toEqual({ kind: 'text', text: 'regarde' });
+    expect(targetKeyOf({ kind: 'new-group', userIds: ['b', 'a'], title: '' })).toBe(targetKeyOf({ kind: 'new-group', userIds: ['a', 'b'], title: 'x' }));
   });
 });

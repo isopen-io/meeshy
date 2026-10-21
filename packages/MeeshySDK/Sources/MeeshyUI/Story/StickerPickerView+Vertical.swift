@@ -444,10 +444,12 @@ extension StickerPickerView {
         HStack(spacing: 6) {
             if let icone {
                 Text(icone).font(.system(size: 13))
+                    .accessibilityHidden(true)
             } else if let symbole {
                 Image(systemName: symbole)
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(MeeshyColors.brandGradient)
+                    .accessibilityHidden(true)
             }
             // **Capitales et interlettrage**, comme les titres de section de la
             // fiche audio : sans fond ni filet, c'est la FORME du texte qui

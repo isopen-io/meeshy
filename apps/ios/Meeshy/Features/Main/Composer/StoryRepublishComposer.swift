@@ -67,14 +67,6 @@ struct StoryRepublishComposer: View {
     /// l'hôte qui possède l'état de présentation, pas cette vue.
     let onFinish: () -> Void
 
-    /// **Le format sur lequel la porte OUVRE** (#5055). `nil` — le geste
-    /// « Republier » — ouvre sur celui de la source, une story.
-    ///
-    /// `.post` est le geste « Éditer et republier en post » du menu, qui a DIT
-    /// son format : le lui redemander serait lui faire répéter son choix.
-    /// L'éventail reste peint dans les deux cas — pré-rempli, jamais verrouillé.
-    var opening: ComposerFormat? = nil
-
     /// L'aperçu monté DANS la porte, exactement comme `StoryComposerCover` le
     /// fait pour le tray : il se superpose au composer et lui rend la main à la
     /// fermeture, sans démonter la session.
@@ -90,8 +82,7 @@ struct StoryRepublishComposer: View {
             // sa source, et la table y ajoute `.post` : l'ANCRAGE, « garder la
             // chose pour de bon ». L'éphémère reste éphémère par défaut.
             intent: ComposerIntent(origin: .repost(ofPostId: source.story.id,
-                                                   sourceFormat: .story),
-                                   opening: opening),
+                                                   sourceFormat: .story)),
             // La porte passe l'audience de la source ; le meuble la relira de
             // toute façon par l'hydratation, qui a le dernier mot. Les DEUX
             // disent la même chose, et c'est voulu : le paramètre est requis, et
@@ -175,39 +166,13 @@ struct StoryRepublishComposer: View {
             },
             onDismiss: onFinish
         )
-        .fullScreenCover(item: $previewAssets, onDismiss: {
-            NotificationCenter.default.post(name: .storyComposerUnmuteCanvas, object: nil)
-        }) { assets in
-            let items = assets.slides.map { $0.toPreviewStoryItem() }
-            let group = StoryGroup(
-                id: "preview",
-                username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-                avatarColor: MeeshyColors.brandPrimaryHex,
-                stories: items
-            )
-            StoryViewerView(
-                viewModel: viewModel,
-                groups: [group],
-                currentGroupIndex: 0,
-                isPresented: Binding(
-                    get: { previewAssets != nil },
-                    set: { if !$0 { previewAssets = nil } }
-                ),
-                isPreviewMode: true,
-                preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-                preloadedVideoURLs: assets.videoURLs,
-                preloadedAudioURLs: assets.audioURLs
-            )
-            // Les objets d'environnement ne descendent PAS à travers un
-            // `fullScreenCover` — la remarque est écrite noir sur blanc dans
-            // `StoryViewerView` (« from the parent fullScreenCover are NOT
-            // inherited automatically »). Les reposer ici n'est pas une
-            // ceinture-bretelle : sans eux, l'aperçu planterait à la première
-            // lecture d'un de ces trois modèles.
-            .environmentObject(router)
-            .conversationListObject(conversationListViewModel)
-            .environmentObject(statusViewModel)
-        }
+        .modifier(StoryPreviewReaderCover(
+            assets: $previewAssets,
+            storyViewModel: viewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationListViewModel
+        ))
     }
 
     /// **Ancrer une republication en POST** — `POST /posts/:id/repost`, le seul

@@ -126,8 +126,14 @@ final class CameraModelSwitchDuringRecordingTests: XCTestCase {
     // this is pinned structurally rather than via synthetic AVFoundation media)
 
     private func mergeSegmentsBody() throws -> String {
-        let source = try cameraViewSource()
-        return try body(from: "nonisolated static func mergeSegments(_ urls: [URL]) async -> URL? {", to: "\n}", in: source)
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Components/CameraSegmentMerger.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        return try body(from: "static func merge(_ urls: [URL]) async -> URL? {", to: "\n}", in: source)
     }
 
     func test_mergeSegments_skipsUnreadableSegmentsInsteadOfFailingEntirely() throws {

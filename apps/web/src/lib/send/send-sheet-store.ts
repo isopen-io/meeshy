@@ -1,3 +1,4 @@
+import type { ShareDestination } from '@/lib/api/social-events-v2-types';
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
 import type { SendPayload } from './send-sheet-plan';
@@ -19,6 +20,8 @@ export type SendSheetIntent = 'forward' | 'share';
 export type SendSheetRequest = {
   readonly payload: SendPayload;
   readonly intent: SendSheetIntent;
+  /** La légende déjà écrite — le texte qu'une autre app a joint à ses fichiers (D9). */
+  readonly caption?: string;
   /** « Plus d’options… » : la feuille système, avec l’adresse à partager. */
   readonly moreOptions?: { readonly url?: string };
   /**
@@ -27,7 +30,8 @@ export type SendSheetRequest = {
    * lien » : l'entrée y accroche son compteur (`POST /posts/:id/share`).
    * Jamais à l'ouverture, jamais sur un envoi refusé.
    */
-  readonly onShared?: () => void;
+  /** #10502 — par où le partage est parti (conversation, publication, lien copié, feuille du système). */
+  readonly onShared?: (destination?: ShareDestination) => void;
 };
 
 export type SendSheetState = {

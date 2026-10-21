@@ -19,7 +19,11 @@ struct ConversationPreferencesTab: View {
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
     @State private var showEmojiPicker: Bool = false
+    @State private var showAppearanceSheet: Bool = false
     @State private var customNameLocal: String = ""
+
+    /// Le séparateur part du texte des lignes, pas de leur icône.
+    private static let rowDividerInset: CGFloat = 54
 
     private var isDirect: Bool { conversation.type == .direct }
     private var isCreator: Bool { conversation.currentUserRole?.lowercased() == "creator" }
@@ -143,7 +147,7 @@ struct ConversationPreferencesTab: View {
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
 
-            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
 
             Button {
                 showEmojiPicker = true
@@ -168,6 +172,29 @@ struct ConversationPreferencesTab: View {
                 }
             }
             .buttonStyle(.plain)
+
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
+
+            Button {
+                showAppearanceSheet = true
+            } label: {
+                settingsRow(icon: "paintpalette.fill", iconColor: accentColor, title: String(localized: "conversation.appearance.entry.title", defaultValue: "Fond de la conversation", bundle: .main)) {
+                    Image(systemName: "chevron.forward")
+                        .font(MeeshyFont.relative(11, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.plain)
+            .sheet(isPresented: $showAppearanceSheet) {
+                ConversationAppearanceSheet(
+                    conversationId: conversation.id,
+                    initial: conversation.userState.appearance,
+                    accentColor: conversation.colorPalette.primary
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
         .sheet(isPresented: $showEmojiPicker) {
             EmojiPickerSheet(
@@ -196,7 +223,7 @@ struct ConversationPreferencesTab: View {
                 )
             )
 
-            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
 
             // Catégorie
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -228,7 +255,7 @@ struct ConversationPreferencesTab: View {
             .padding(.horizontal, MeeshySpacing.mdPlus)
             .padding(.vertical, MeeshySpacing.smPlus)
 
-            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
 
             // Tags
             VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -271,7 +298,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMuted(val) }
                 )
             )
-            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
             settingsToggleRow(
                 icon: "at",
                 iconColor: MeeshyColors.tileCoralHex,
@@ -301,7 +328,7 @@ struct ConversationPreferencesTab: View {
             .buttonStyle(.plain)
 
             if canLeave {
-                Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+                Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
                 Button {
                     showLeaveConfirm = true
                 } label: {
@@ -313,7 +340,7 @@ struct ConversationPreferencesTab: View {
                 .buttonStyle(.plain)
             }
 
-            Divider().padding(.leading, 54).opacity(MeeshyOpacity.medium)
+            Divider().padding(.leading, Self.rowDividerInset).opacity(MeeshyOpacity.medium)
             Button {
                 showDeleteConfirm = true
             } label: {

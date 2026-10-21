@@ -1,0 +1,893 @@
+[
+  {
+    "slug": "contours-essentiels",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 0,
+    "installedByDefault": true,
+    "removable": false,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "724d3e3ab2580a32.webp",
+      "bytes": 5724,
+      "sha256": "724d3e3ab2580a32f6437bfcd0c5930957717032804e7e066af906bb5e200998"
+    },
+    "preview": null,
+    "contract": {
+      "src": "fbebf21ffcfa5642.json",
+      "bytes": 3690,
+      "sha256": "fbebf21ffcfa5642b028c6b40ee4712f4aac408477d2667bdc96c457f41444da"
+    },
+    "strings": {
+      "fr": {
+        "src": "6bdf252c3f520da2.json",
+        "bytes": 137,
+        "sha256": "6bdf252c3f520da2b7c709d04e5cf1a78c87edaf220509c2afafdb37e13cf11b"
+      },
+      "en": {
+        "src": "59c8e9fe6d996ebd.json",
+        "bytes": 141,
+        "sha256": "59c8e9fe6d996ebdf1d5fcbd9c8fe80247f8511acd83cbace34253ad66f3ab65"
+      },
+      "es": {
+        "src": "4da2f6e56fbd76a1.json",
+        "bytes": 136,
+        "sha256": "4da2f6e56fbd76a10ddbe7805a958e2b399b5e6c6b516e914c55282f220038a8"
+      },
+      "pt": {
+        "src": "79f443c4c6fed651.json",
+        "bytes": 137,
+        "sha256": "79f443c4c6fed65135bd3ee462716c23109dba6e0c90a1d2f7eff6b9699bf61b"
+      },
+      "de": {
+        "src": "163df992d5ea95b8.json",
+        "bytes": 150,
+        "sha256": "163df992d5ea95b8b9e7db45d2ac571bd781423e0169e5f10b62d517cd573f13"
+      },
+      "it": {
+        "src": "fbd6afa15d90e729.json",
+        "bytes": 138,
+        "sha256": "fbd6afa15d90e729c55444e2e7dcc9b27e23261a009e9ae89685d13b1562debc"
+      },
+      "ar": {
+        "src": "c1268a73e389eb98.json",
+        "bytes": 158,
+        "sha256": "c1268a73e389eb98d86185994c1727003d6d29f0b343b09d6d765b3fc941015d"
+      }
+    },
+    "downloadBytes": {
+      "story": 3690,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contours essentiels",
+        "description": "Six contours pour votre avatar."
+      },
+      "en": {
+        "name": "Essential rings",
+        "description": "Six rings for your avatar."
+      },
+      "es": {
+        "name": "Contornos esenciales",
+        "description": "Seis contornos para tu avatar."
+      },
+      "pt": {
+        "name": "Contornos essenciais",
+        "description": "Seis contornos para o teu avatar."
+      },
+      "de": {
+        "name": "Basis-Rahmen",
+        "description": "Sechs Rahmen für deinen Avatar."
+      },
+      "it": {
+        "name": "Contorni essenziali",
+        "description": "Sei contorni per il tuo avatar."
+      },
+      "ar": {
+        "name": "إطارات أساسية",
+        "description": "ست إطارات لصورتك الرمزية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-animes",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 1,
+    "installedByDefault": true,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 1,
+    "cover": {
+      "src": "a0040abf0d734e87.webp",
+      "bytes": 5506,
+      "sha256": "a0040abf0d734e8755fe15d19c5e29417ca69e88591e49da530b973094eb0309"
+    },
+    "preview": null,
+    "contract": {
+      "src": "b9b7392e7d283e2a.json",
+      "bytes": 328,
+      "sha256": "b9b7392e7d283e2a5a55fa138b30de2b1f63210657d5d59bed3684ca6f387454"
+    },
+    "strings": {
+      "fr": {
+        "src": "e1c17dc55b522cef.json",
+        "bytes": 29,
+        "sha256": "e1c17dc55b522cef04004ae813a0033ccd46996815829634cf6a83d1399b5410"
+      },
+      "en": {
+        "src": "b6fe496462d63f63.json",
+        "bytes": 30,
+        "sha256": "b6fe496462d63f63ffd02b8083e21613a6aeca94266f8f68f4ba136e9704ec77"
+      },
+      "es": {
+        "src": "9df01473aedf2e9d.json",
+        "bytes": 30,
+        "sha256": "9df01473aedf2e9dcc7c386c8254d224b83c38aef58f2dd4e904939a7955fa2f"
+      },
+      "pt": {
+        "src": "f6173646923084e4.json",
+        "bytes": 31,
+        "sha256": "f6173646923084e4aa16aa96ea8c7c9fc3de811c8b847cceae6f40205dc89fb0"
+      },
+      "de": {
+        "src": "6cfc10666ad5f4a5.json",
+        "bytes": 32,
+        "sha256": "6cfc10666ad5f4a526bea0f34a537a7a4a9e0a0980541460517d0377f9418630"
+      },
+      "it": {
+        "src": "6c28b8c99b27899e.json",
+        "bytes": 31,
+        "sha256": "6c28b8c99b27899e2df9eceab2301df7f53bf81cebc1616caa1b56a2cdf70fa0"
+      },
+      "ar": {
+        "src": "09b25472ef37d77e.json",
+        "bytes": 38,
+        "sha256": "09b25472ef37d77e0efa35df840794a9b99530b5abc8b4c6135d708de1be2b8d"
+      }
+    },
+    "downloadBytes": {
+      "story": 328,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contours animés",
+        "description": "Un arc doré fait le tour de l’avatar."
+      },
+      "en": {
+        "name": "Animated rings",
+        "description": "A golden arc travels around the avatar."
+      },
+      "es": {
+        "name": "Contornos animados",
+        "description": "Un arco dorado rodea el avatar."
+      },
+      "pt": {
+        "name": "Contornos animados",
+        "description": "Um arco dourado contorna o avatar."
+      },
+      "de": {
+        "name": "Animierte Konturen",
+        "description": "Ein goldener Bogen umkreist den Avatar."
+      },
+      "it": {
+        "name": "Contorni animati",
+        "description": "Un arco dorato gira attorno all’avatar."
+      },
+      "ar": {
+        "name": "إطارات متحركة",
+        "description": "قوس ذهبي يدور حول الصورة الرمزية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-haussmannien",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 2,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "5a9b2ec984f40e65.webp",
+      "bytes": 10524,
+      "sha256": "5a9b2ec984f40e653949c654bda377557712d7ea806f7b3599a0646f9742b2a2"
+    },
+    "preview": null,
+    "contract": {
+      "src": "a89d5d725472f97f.json",
+      "bytes": 15740,
+      "sha256": "a89d5d725472f97ff6ee33629097fe9485d631491e4701c1fb7e40bda9603b23"
+    },
+    "strings": {
+      "fr": {
+        "src": "5d5a875fc095c018.json",
+        "bytes": 82,
+        "sha256": "5d5a875fc095c01859262afac6843f0df7f001301bdfe2eaadef72ea28a553fb"
+      },
+      "en": {
+        "src": "8e7c8d81be61c113.json",
+        "bytes": 79,
+        "sha256": "8e7c8d81be61c113d2eb668918ce64b89452c4382bab4c49332bcafe35d08c0e"
+      },
+      "es": {
+        "src": "0a738050b17a8eaf.json",
+        "bytes": 85,
+        "sha256": "0a738050b17a8eaf9d76ce809213f424a34cf3a584925f9313b7089a38ca4336"
+      },
+      "pt": {
+        "src": "0a738050b17a8eaf.json",
+        "bytes": 85,
+        "sha256": "0a738050b17a8eaf9d76ce809213f424a34cf3a584925f9313b7089a38ca4336"
+      },
+      "de": {
+        "src": "aebcd4d97ee354e7.json",
+        "bytes": 79,
+        "sha256": "aebcd4d97ee354e7f74e476e4046c0d28cf2f5e15de8263bbdb35435dfb4a5b4"
+      },
+      "it": {
+        "src": "045606f0d37ec221.json",
+        "bytes": 85,
+        "sha256": "045606f0d37ec2213d306425fb92afbdee52091370b8d1c8da52a4e54734e0de"
+      },
+      "ar": {
+        "src": "898e28b336008bc3.json",
+        "bytes": 90,
+        "sha256": "898e28b336008bc3efcb9e8036a9530a6d2cd4020b77f700b7accb39b57f2c0f"
+      }
+    },
+    "downloadBytes": {
+      "story": 15740,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour haussmannien",
+        "description": "La façade parisienne : pierre de taille, fonte et clé d’arc."
+      },
+      "en": {
+        "name": "Haussmann ring",
+        "description": "The Parisian façade: dressed stone, cast iron and keystone."
+      },
+      "es": {
+        "name": "Contorno Haussmanniano",
+        "description": "La fachada parisina: sillería, hierro fundido y clave de arco."
+      },
+      "pt": {
+        "name": "Contorno Haussmanniano",
+        "description": "A fachada parisiense: cantaria, ferro fundido e fecho de arco."
+      },
+      "de": {
+        "name": "Rahmen Haussmann",
+        "description": "Die Pariser Fassade: Quaderstein, Gusseisen und Schlussstein."
+      },
+      "it": {
+        "name": "Contorno Haussmanniano",
+        "description": "La facciata parigina: pietra da taglio, ghisa e chiave di volta."
+      },
+      "ar": {
+        "name": "إطار هوسماني",
+        "description": "الواجهة الباريسية: حجر منحوت وحديد مصبوب وحجر عقد."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-arabe",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 3,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "7a475a87e077dda0.webp",
+      "bytes": 13274,
+      "sha256": "7a475a87e077dda06fee6ee5366298e940d5bcb91cf386d5f0ffdc9df9741b69"
+    },
+    "preview": null,
+    "contract": {
+      "src": "e6661bdf31178718.json",
+      "bytes": 13839,
+      "sha256": "e6661bdf311787181f7fba0d928419fee50b6b105b92690352738588df975c41"
+    },
+    "strings": {
+      "fr": {
+        "src": "e2a6515a8bf53863.json",
+        "bytes": 54,
+        "sha256": "e2a6515a8bf53863514e024cd44bab10a37b83631e36a8e1767883e17b57d06e"
+      },
+      "en": {
+        "src": "35166397ec6bc5a6.json",
+        "bytes": 65,
+        "sha256": "35166397ec6bc5a6d6f492be6ce1c24c99f619f5f5a5e43405daa74c0d3cbd62"
+      },
+      "es": {
+        "src": "70c9b511c7836f18.json",
+        "bytes": 57,
+        "sha256": "70c9b511c7836f18872954e7a2794f38d3edf35ee408d4ff3837ce1a4e4a337f"
+      },
+      "pt": {
+        "src": "70c9b511c7836f18.json",
+        "bytes": 57,
+        "sha256": "70c9b511c7836f18872954e7a2794f38d3edf35ee408d4ff3837ce1a4e4a337f"
+      },
+      "de": {
+        "src": "ca0119aadf9309f5.json",
+        "bytes": 63,
+        "sha256": "ca0119aadf9309f534620a017aa4af1fd2ec8251a645428ca0b574fe1dcb8354"
+      },
+      "it": {
+        "src": "48182516cc117324.json",
+        "bytes": 55,
+        "sha256": "48182516cc11732495b5f6a123e4a3002d8abbc2acbb2208b3effa48bbe10046"
+      },
+      "ar": {
+        "src": "b66aa767d7747c1b.json",
+        "bytes": 64,
+        "sha256": "b66aa767d7747c1be9514988582ad88c5ceafeada5f2848adf6a4a20fbd7b840"
+      }
+    },
+    "downloadBytes": {
+      "story": 13839,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour arabe",
+        "description": "Entrelacs de l’Alhambra, étoiles à huit branches et arc polylobé."
+      },
+      "en": {
+        "name": "Arabesque ring",
+        "description": "Alhambra interlace, eight-pointed stars and a lobed arch."
+      },
+      "es": {
+        "name": "Contorno Árabe",
+        "description": "Lacería de la Alhambra, estrellas de ocho puntas y arco lobulado."
+      },
+      "pt": {
+        "name": "Contorno Árabe",
+        "description": "Entrelaçado da Alhambra, estrelas de oito pontas e arco polilobado."
+      },
+      "de": {
+        "name": "Rahmen Arabisch",
+        "description": "Flechtwerk der Alhambra, achtzackige Sterne und Vielpassbogen."
+      },
+      "it": {
+        "name": "Contorno Arabo",
+        "description": "Intrecci dell’Alhambra, stelle a otto punte e arco polilobato."
+      },
+      "ar": {
+        "name": "إطار عربي",
+        "description": "تشابيك الحمراء ونجوم ثمانية وقوس مفصّص."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-grec",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 4,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "f209c6b9000f1e47.webp",
+      "bytes": 13260,
+      "sha256": "f209c6b9000f1e475383cbf23ae91673c337d8223f0c743829bb7e9df648b981"
+    },
+    "preview": null,
+    "contract": {
+      "src": "3885c13a5762d8ed.json",
+      "bytes": 18532,
+      "sha256": "3885c13a5762d8ed9703529f60048f50a37b233d57677defda3d462aec3b9564"
+    },
+    "strings": {
+      "fr": {
+        "src": "4c31bb9dd35cc0ae.json",
+        "bytes": 50,
+        "sha256": "4c31bb9dd35cc0ae08315441e282f6ee1dfdd1afefa98a621f5c551fef29ebd1"
+      },
+      "en": {
+        "src": "ca6764e2b950ebd7.json",
+        "bytes": 55,
+        "sha256": "ca6764e2b950ebd76360c52accd1ad505d28935285375b1fea1942cb6dc18088"
+      },
+      "es": {
+        "src": "14cadccbf6356b20.json",
+        "bytes": 55,
+        "sha256": "14cadccbf6356b20cb485d51e60182a9671a90e1db12874d0782926cdce5e9f4"
+      },
+      "pt": {
+        "src": "15acf5a97e55002c.json",
+        "bytes": 53,
+        "sha256": "15acf5a97e55002c63abf38aaea71669f31c176ffaa3774e8a14fb63cd955eb5"
+      },
+      "de": {
+        "src": "9045460f5d2ca29a.json",
+        "bytes": 65,
+        "sha256": "9045460f5d2ca29ae005324c862bd773ba537e7c7ddd4f6b78f6161634229c99"
+      },
+      "it": {
+        "src": "96db04d70801bae7.json",
+        "bytes": 53,
+        "sha256": "96db04d70801bae7d4a8622f7675882728dd46cbbf9ce660ad0f461d5d241e8e"
+      },
+      "ar": {
+        "src": "873ac154d89003eb.json",
+        "bytes": 70,
+        "sha256": "873ac154d89003ebc7e60d2c20a8c7fd58e9bef8fa9950c73038e7da5fadebcf"
+      }
+    },
+    "downloadBytes": {
+      "story": 18532,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour grec",
+        "description": "Méandre, palmettes et volutes ioniques."
+      },
+      "en": {
+        "name": "Greek ring",
+        "description": "Meander, palmettes and Ionic volutes."
+      },
+      "es": {
+        "name": "Contorno Griego",
+        "description": "Meandro, palmetas y volutas jónicas."
+      },
+      "pt": {
+        "name": "Contorno Grego",
+        "description": "Meandro, palmetas e volutas jônicas."
+      },
+      "de": {
+        "name": "Rahmen Griechisch",
+        "description": "Mäander, Palmetten und ionische Voluten."
+      },
+      "it": {
+        "name": "Contorno Greco",
+        "description": "Meandro, palmette e volute ioniche."
+      },
+      "ar": {
+        "name": "إطار إغريقي",
+        "description": "المتعرّج والسعيفات والحلزونات الأيونية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-ancestral",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 5,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "e1a6defdeda66f88.webp",
+      "bytes": 12974,
+      "sha256": "e1a6defdeda66f888ea1e722e86f8c5544716882d873b1fc12d746fd5301d1d4"
+    },
+    "preview": null,
+    "contract": {
+      "src": "1b81113c9215f3b7.json",
+      "bytes": 17665,
+      "sha256": "1b81113c9215f3b75bb465bcf41162e64e6194d7b7325bc0fc8219aa066386fe"
+    },
+    "strings": {
+      "fr": {
+        "src": "0ba9175ce589cdc4.json",
+        "bytes": 88,
+        "sha256": "0ba9175ce589cdc494b8e4aadc81d9636c6332ab51c9cb1bf2d6dc4352ca14c8"
+      },
+      "en": {
+        "src": "1eaa13b204a2e56c.json",
+        "bytes": 89,
+        "sha256": "1eaa13b204a2e56ca0fdce318a0886cbff32ad481880ec8c137a0eb345ae1023"
+      },
+      "es": {
+        "src": "eab1e28c32c74975.json",
+        "bytes": 89,
+        "sha256": "eab1e28c32c749751b0bb6664c9200e54596062901aab52b169ed688ce54ed9c"
+      },
+      "pt": {
+        "src": "eab1e28c32c74975.json",
+        "bytes": 89,
+        "sha256": "eab1e28c32c749751b0bb6664c9200e54596062901aab52b169ed688ce54ed9c"
+      },
+      "de": {
+        "src": "f0030e13ed320358.json",
+        "bytes": 91,
+        "sha256": "f0030e13ed320358a7acdf0a18120a6be47ac3f5372ab885e8a4a086036fcee8"
+      },
+      "it": {
+        "src": "926d294246e8c0ca.json",
+        "bytes": 91,
+        "sha256": "926d294246e8c0ca9780c1cb6929ffd83f095bbe737471e78a32bc3762336628"
+      },
+      "ar": {
+        "src": "597daaf54ee8558d.json",
+        "bytes": 98,
+        "sha256": "597daaf54ee8558deb7a7b4122acc92f0e951f676c4955ba20b8029573d9d11f"
+      }
+    },
+    "downloadBytes": {
+      "story": 17665,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour africain ancestral",
+        "description": "Bogolan peint à la terre et signe adinkra."
+      },
+      "en": {
+        "name": "Ancestral African ring",
+        "description": "Earth-painted bogolan and an adinkra sign."
+      },
+      "es": {
+        "name": "Contorno Africano ancestral",
+        "description": "Bogolán pintado con tierra y signo adinkra."
+      },
+      "pt": {
+        "name": "Contorno Africano ancestral",
+        "description": "Bogolan pintado com terra e símbolo adinkra."
+      },
+      "de": {
+        "name": "Rahmen Afrikanisch, Ahnen",
+        "description": "Mit Erde bemalter Bogolan und ein Adinkra-Zeichen."
+      },
+      "it": {
+        "name": "Contorno Africano ancestrale",
+        "description": "Bogolan dipinto con la terra e simbolo adinkra."
+      },
+      "ar": {
+        "name": "إطار أفريقي عريق",
+        "description": "بوغولان مرسوم بالطين ورمز أدينكرا."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-technologique",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 6,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "f096a25ca226ac70.webp",
+      "bytes": 11104,
+      "sha256": "f096a25ca226ac7000e394c1e60072eb3c5d954d22d3b41412e3cfdcd6729788"
+    },
+    "preview": null,
+    "contract": {
+      "src": "7e525490f83c9eba.json",
+      "bytes": 13908,
+      "sha256": "7e525490f83c9eba836df8338795c7a0d4c4874e4ceb699c3350e2857e232304"
+    },
+    "strings": {
+      "fr": {
+        "src": "162f1021edf98011.json",
+        "bytes": 104,
+        "sha256": "162f1021edf980117732d3adb65a2978c30a447d6b2b65e2c3cccb6a10ed0aaa"
+      },
+      "en": {
+        "src": "13b2d4938d525e2c.json",
+        "bytes": 87,
+        "sha256": "13b2d4938d525e2c0a2ed1936e12948c1f3ea71cf3264f038c96702c373d861c"
+      },
+      "es": {
+        "src": "3c27ccd7b83681d3.json",
+        "bytes": 103,
+        "sha256": "3c27ccd7b83681d386c619c5985465f7d68e5a34faf58dd69fc86d980d02cd16"
+      },
+      "pt": {
+        "src": "3c27ccd7b83681d3.json",
+        "bytes": 103,
+        "sha256": "3c27ccd7b83681d386c619c5985465f7d68e5a34faf58dd69fc86d980d02cd16"
+      },
+      "de": {
+        "src": "0fec4466418efcd4.json",
+        "bytes": 103,
+        "sha256": "0fec4466418efcd4380316a2033f0921dfa4359f808e049e28a4ce67a7deef3a"
+      },
+      "it": {
+        "src": "abdafd736219cd0f.json",
+        "bytes": 101,
+        "sha256": "abdafd736219cd0fbf5270d5283bdb79b51429b977d5e910a7de3c8f7442996d"
+      },
+      "ar": {
+        "src": "3ba230602f623da0.json",
+        "bytes": 106,
+        "sha256": "3ba230602f623da0becaa5eff1d8e9aac69bd5abaf357bf5469124fd33b7e684"
+      }
+    },
+    "downloadBytes": {
+      "story": 13908,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour africain technologique",
+        "description": "Marches ndebele en néon et pistes de circuit."
+      },
+      "en": {
+        "name": "African tech ring",
+        "description": "Neon Ndebele steps and circuit traces."
+      },
+      "es": {
+        "name": "Contorno Africano tecnológico",
+        "description": "Escalones ndebele de neón y pistas de circuito."
+      },
+      "pt": {
+        "name": "Contorno Africano tecnológico",
+        "description": "Degraus ndebele em néon e trilhas de circuito."
+      },
+      "de": {
+        "name": "Rahmen Afrikanisch, Technik",
+        "description": "Ndebele-Stufen in Neon und Leiterbahnen."
+      },
+      "it": {
+        "name": "Contorno Africano tecnologico",
+        "description": "Gradini ndebele al neon e piste di circuito."
+      },
+      "ar": {
+        "name": "إطار أفريقي تقني",
+        "description": "درجات نديبيلي بالنيون ومسارات دارة."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-rituel",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 7,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "f53595c2fbffe2ce.webp",
+      "bytes": 11658,
+      "sha256": "f53595c2fbffe2ceba733af24dd04cedd05b7dcd66fcfac3d7db453e1cbcb074"
+    },
+    "preview": null,
+    "contract": {
+      "src": "776002268fbcfdb3.json",
+      "bytes": 31566,
+      "sha256": "776002268fbcfdb3cc2bc6e2c773a47a500dcec76d2812cd170b095c3a55ff46"
+    },
+    "strings": {
+      "fr": {
+        "src": "9caba1963f0613da.json",
+        "bytes": 76,
+        "sha256": "9caba1963f0613daab14705ec2be90d188a291426a7db1cc709d9cedf916507d"
+      },
+      "en": {
+        "src": "8b03ab7bbd6605b8.json",
+        "bytes": 77,
+        "sha256": "8b03ab7bbd6605b825783d084b25782240a9ccdd6273e3c4f8ec3e6d6fbdb8da"
+      },
+      "es": {
+        "src": "cda156cb83769c40.json",
+        "bytes": 77,
+        "sha256": "cda156cb83769c40e5f2d765ff206c58e73649ffdbbff4d73547e12e5053698f"
+      },
+      "pt": {
+        "src": "cda156cb83769c40.json",
+        "bytes": 77,
+        "sha256": "cda156cb83769c40e5f2d765ff206c58e73649ffdbbff4d73547e12e5053698f"
+      },
+      "de": {
+        "src": "13d9b498e79d62c0.json",
+        "bytes": 87,
+        "sha256": "13d9b498e79d62c0f9e0dbe6201cef960bbf179fd261d2f650e3f4446b8cf894"
+      },
+      "it": {
+        "src": "303e9ff406190246.json",
+        "bytes": 79,
+        "sha256": "303e9ff406190246fe7e23c201a6b6c23bcb448e3d1db0fc8b4d058a09af8252"
+      },
+      "ar": {
+        "src": "8a7bb558170e488b.json",
+        "bytes": 92,
+        "sha256": "8a7bb558170e488b5d78e08d50b372d5991fce9c77290becac022d802d7bb241"
+      }
+    },
+    "downloadBytes": {
+      "story": 31566,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour africain rituel",
+        "description": "Raffia frangé, cauris, perles et masque de bois."
+      },
+      "en": {
+        "name": "African ritual ring",
+        "description": "Fringed raffia, cowries, beads and a wooden mask."
+      },
+      "es": {
+        "name": "Contorno Africano ritual",
+        "description": "Rafia con flecos, cauris, cuentas y máscara de madera."
+      },
+      "pt": {
+        "name": "Contorno Africano ritual",
+        "description": "Ráfia franjada, búzios, contas e máscara de madeira."
+      },
+      "de": {
+        "name": "Rahmen Afrikanisch, Ritual",
+        "description": "Gefranster Bast, Kaurimuscheln, Perlen und Holzmaske."
+      },
+      "it": {
+        "name": "Contorno Africano rituale",
+        "description": "Rafia sfrangiata, cauri, perline e maschera di legno."
+      },
+      "ar": {
+        "name": "إطار أفريقي طقسي",
+        "description": "رافيا مهدّبة وودع وخرز وقناع خشبي."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  },
+  {
+    "slug": "contours-celte",
+    "domain": "avatar-ring",
+    "origin": "builtin",
+    "version": 1,
+    "order": 8,
+    "installedByDefault": false,
+    "removable": true,
+    "hidden": false,
+    "contractSchema": 2,
+    "cover": {
+      "src": "625c0d2a680ba4bf.webp",
+      "bytes": 12144,
+      "sha256": "625c0d2a680ba4bf7104f1d098c7ca79587fc5464e03181c72d969c9e3287d6a"
+    },
+    "preview": null,
+    "contract": {
+      "src": "30caa90c0d714bae.json",
+      "bytes": 46590,
+      "sha256": "30caa90c0d714bae75eb3dd7bddfb2921c4a0619f2914a9f97b8559a477c7d99"
+    },
+    "strings": {
+      "fr": {
+        "src": "9bee23025161f3bb.json",
+        "bytes": 54,
+        "sha256": "9bee23025161f3bb252f553cbe5904b879da67d1c32a8cd0c5a7838bef8ee867"
+      },
+      "en": {
+        "src": "2e50d99178ac9fda.json",
+        "bytes": 59,
+        "sha256": "2e50d99178ac9fda56033d16f12acda4182d6c535584a3a23684387113dff7e8"
+      },
+      "es": {
+        "src": "85f9aa1e659871b1.json",
+        "bytes": 55,
+        "sha256": "85f9aa1e659871b112355c1e588b6411f6a75d8e82754e84ba653e409029472b"
+      },
+      "pt": {
+        "src": "85f9aa1e659871b1.json",
+        "bytes": 55,
+        "sha256": "85f9aa1e659871b112355c1e588b6411f6a75d8e82754e84ba653e409029472b"
+      },
+      "de": {
+        "src": "d5fd2642eeb2807d.json",
+        "bytes": 63,
+        "sha256": "d5fd2642eeb2807dac9f66c19c5363359f8161de0534b4e881bec9b6be8f8f0c"
+      },
+      "it": {
+        "src": "256cbe3ffa5640bd.json",
+        "bytes": 59,
+        "sha256": "256cbe3ffa5640bdac098e06f3e815e03c3a464992d45770126356106954fe7f"
+      },
+      "ar": {
+        "src": "8a985b7dc7cd9223.json",
+        "bytes": 64,
+        "sha256": "8a985b7dc7cd9223af1dbb465cf0757bc6df8e9627e5a8f1e80e399a6323a4ca"
+      }
+    },
+    "downloadBytes": {
+      "story": 46590,
+      "square": null
+    },
+    "names": {
+      "fr": {
+        "name": "Contour celte",
+        "description": "Tresse sans fin et triskèles en spirale."
+      },
+      "en": {
+        "name": "Celtic ring",
+        "description": "Endless braid and spiral triskeles."
+      },
+      "es": {
+        "name": "Contorno Celta",
+        "description": "Trenza sin fin y trisqueles en espiral."
+      },
+      "pt": {
+        "name": "Contorno Celta",
+        "description": "Trança sem fim e triskles em espiral."
+      },
+      "de": {
+        "name": "Rahmen Keltisch",
+        "description": "Endloses Flechtband und Triskelen."
+      },
+      "it": {
+        "name": "Contorno Celtico",
+        "description": "Treccia infinita e trischeli a spirale."
+      },
+      "ar": {
+        "name": "إطار سلتي",
+        "description": "ضفيرة لا تنتهي وتريسكيل حلزونية."
+      }
+    },
+    "usage": {
+      "kind": "free",
+      "surfaces": [
+        "avatar"
+      ]
+    }
+  }
+]

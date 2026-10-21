@@ -94,39 +94,36 @@ nonisolated enum ComposerInlineEditing {
     /// **Les sous-outils d'une famille, dans l'ordre que ses inventaires ont
     /// déjà fixé** (`ComposerObjectEditorRail.entries`) — aucune seconde liste.
     ///
-    /// **La fenêtre de temps et le plan 2D sont réservés au TEXTE** : leur
-    /// réglage n'écrit que sur un objet texte (`ComposerObjectTimingControls`),
-    /// et les offrir ailleurs serait servir un contrôle sans effet — ce que la
-    /// loi 4 bannit. Un fond, lui, dure la slide entière.
+    /// **La fenêtre de temps et le plan 2D vont à toute famille POSÉE**
+    /// (#9144) : leur écrivain sert les cinq familles
+    /// (`StoryComposerViewModel.setSceneObjectTiming`). Un fond, lui, dure la
+    /// slide entière — les lui offrir serait servir un contrôle sans effet, ce
+    /// que la loi 4 bannit.
     ///
     /// **Une IMAGE se recadre, d'abord** — l'ordre des décisions de la vue
-    /// `2d`. Deux images le servent : le FOND IMAGE d'une pièce retouchée
-    /// (#9136), où il se cuit dans la pièce rendue, et l'image POSÉE (#9499),
-    /// dont le calque, le lecteur web et la vignette lisent la borne. Un fond
-    /// hors retouche ne l'offre pas — le lecteur ne recadre pas un fond — ni une
-    /// vidéo, dont le player ne lit pas encore la borne (#9153) : ce seraient
-    /// des contrôles sans effet.
+    /// `2d`. L'image POSÉE le sert (#9499) : son calque, le lecteur web et la
+    /// vignette lisent la borne. Un fond ne l'offre pas — le lecteur ne recadre
+    /// pas un fond — ni une vidéo, dont le player ne lit pas encore la borne
+    /// (#9153) : ce seraient des contrôles sans effet.
     ///
     /// **Les RÉGLAGES vont à tout média qui les PEINT** — l'image posée
     /// (#9175), la vidéo dont le player peint les trames (#9169), et le fond,
     /// image ou vidéo, que sa couche peint par `StoryBackgroundLook` (#9496).
     /// Les EFFETS (#9498) vont à l'IMAGE, posée ou fond : ils suivent le filtre.
     static func sections(for family: ComposerInlineFamily,
-                         hasTrimmableSource: Bool,
-                         retouching: Bool = false) -> [ComposerObjectEditorSection] {
+                         hasTrimmableSource: Bool) -> [ComposerObjectEditorSection] {
         let servies = ComposerObjectEditorRail.entries(for: family.sceneKind,
                                                        hasTrimmableSource: hasTrimmableSource,
                                                        offersFilter: !family.isVideo,
                                                        offersAdjust: family.sceneKind == .media)
             .filter { section in
                 switch section {
-                case .timing, .plan:  return family == .text
+                case .timing, .plan:  return !family.isBackground
                 case .media(let outil): return MediaEditTool.served.contains(outil)
                 case .tool:           return true
                 }
             }
-        let recadre = family == .image || (retouching && family == .background(isVideo: false))
-        return (recadre ? [.media(.crop)] : []) + servies
+        return (family == .image ? [.media(.crop)] : []) + servies
     }
 
     /// **Une demande d'édition, sur la scène, devient l'édition en place.** La
@@ -136,10 +133,9 @@ nonisolated enum ComposerInlineEditing {
                       family: ComposerInlineFamily,
                       onSceneSurface: Bool,
                       requested: ComposerObjectEditorSection?,
-                      hasTrimmableSource: Bool,
-                      retouching: Bool = false) -> ComposerInlineEdit? {
+                      hasTrimmableSource: Bool) -> ComposerInlineEdit? {
         guard onSceneSurface else { return nil }
-        let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource, retouching: retouching)
+        let servies = sections(for: family, hasTrimmableSource: hasTrimmableSource)
         return ComposerInlineEdit(objectId: objectId,
                                   family: family,
                                   openSection: requested.flatMap { servies.contains($0) ? $0 : nil })
@@ -242,13 +238,48 @@ nonisolated enum ComposerInlinePanelLayout {
         min(max(content, 1), maxHeight(freeHeight: freeHeight))
     }
 
-    // MARK: Laisser voir l'objet qu'on règle (#9495)
+    // MARK: Laisser voir l'objet qu'on règle (#9495, #9143)
 
-    /// **Les sous-outils qui changent le RENDU de l'objet** — filtre, réglages,
-    /// effets (#9498) et recadrage (#9499). On les juge à l'œil : le panneau ne doit pas cacher ce qu'il
-    /// règle, et « Comparer » n'a de sens que si l'image comparée se voit.
-    static func keepsObjectInSight(_ section: ComposerObjectEditorSection) -> Bool {
-        [.media(.filter), .media(.adjust), .media(.effects), .media(.crop)].contains(section)
+    /// **Le panneau ne descend jamais plus bas que ce qui laisse l'objet en
+    /// vue** — en deçà, une rangée d'options ne tient plus et le panneau
+    /// reprend sa hauteur : il défile, il ne disparaît pas.
+    static let minimumReducedHeight: CGFloat = 120
+
+    /// **Où et sur quelle hauteur s'ouvre le panneau, pour TOUT sous-outil de
+    /// TOUT objet** (#9143 : « le panneau s'ancre du côté opposé à l'objet
+    /// sélectionné, ou se réduit, de sorte que l'objet reste visible pendant le
+    /// réglage »). La police d'un texte cachait le texte qu'elle règle ; le
+    /// rangement du #9495 ne servait que le filtre et les réglages d'une image.
+    ///
+    /// Le haut d'abord, s'il laisse l'objet entier ; sinon le côté qui le
+    /// couvre moins (`edge`). Si les deux le couvrent, le panneau se RÉDUIT au
+    /// côté qui a le plus de place hors de l'objet, et défile.
+    static func placement(object: CGRect?, free: CGSize, panelHeight: CGFloat,
+                          roomy: Bool = false) -> ComposerInlinePanelPlacement {
+        let pleine = maxHeight(freeHeight: free.height)
+        guard let object, !object.isNull, !object.isEmpty else {
+            return ComposerInlinePanelPlacement(edge: .top, maxHeight: pleine)
+        }
+        let cote = edge(object: object, free: free, panelHeight: panelHeight, roomy: roomy)
+        let cadre = frame(edge: cote, free: free, panelHeight: panelHeight, roomy: roomy)
+        guard covered(object, by: cadre) > 0 else {
+            return ComposerInlinePanelPlacement(edge: cote, maxHeight: pleine)
+        }
+        let gouttiere = ComposerRailGeometry.gutter
+        let auDessus = object.minY - 2 * gouttiere
+        let auDessous = free.height - object.maxY - 2 * gouttiere
+        let reduit = auDessus >= auDessous
+            ? ComposerInlinePanelPlacement(edge: .top, maxHeight: auDessus)
+            : ComposerInlinePanelPlacement(edge: .bottom, maxHeight: auDessous)
+        guard reduit.maxHeight >= minimumReducedHeight else {
+            return ComposerInlinePanelPlacement(edge: cote, maxHeight: pleine)
+        }
+        return ComposerInlinePanelPlacement(edge: reduit.edge, maxHeight: min(reduit.maxHeight, pleine))
+    }
+
+    /// La hauteur du panneau placé : son contenu, borné par sa place.
+    static func height(content: CGFloat, placement: ComposerInlinePanelPlacement) -> CGFloat {
+        min(max(content, 1), max(1, placement.maxHeight))
     }
 
     /// **Le haut ou le bas de la scène libre, du côté qui laisse voir l'objet**
@@ -300,6 +331,12 @@ nonisolated enum ComposerInlinePanelLayout {
 nonisolated enum ComposerInlinePanelEdge: Equatable, Sendable {
     case top
     case bottom
+}
+
+/// Le côté du panneau et la hauteur qu'il peut prendre sans couvrir l'objet.
+nonisolated struct ComposerInlinePanelPlacement: Equatable, Sendable {
+    let edge: ComposerInlinePanelEdge
+    let maxHeight: CGFloat
 }
 
 nonisolated enum ComposerInlineEditCopy {

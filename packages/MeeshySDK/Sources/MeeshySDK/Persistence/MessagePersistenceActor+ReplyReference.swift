@@ -22,7 +22,7 @@ extension MessagePersistenceActor {
     ///
     /// `nonisolated` et pure : appelée depuis la fermeture d'écriture GRDB,
     /// hors de l'isolation de l'actor — elle ne lit que ce qu'on lui remet.
-    /// Marquée explicitement comme sa voisine `pendingOutboxMessageIds`, qui
+    /// Marquée explicitement comme sa voisine `PendingOutboxLookup.messageIds`, qui
     /// est appelée depuis la même fermeture.
     nonisolated static func replyToJson(
         for api: APIMessage,

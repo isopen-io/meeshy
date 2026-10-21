@@ -6,6 +6,8 @@ export type RealtimeIdentity = {
   /** Change ⇒ la connexion se RECONSTRUIT (jeton renouvelé, bascule compte ↔ invité). */
   readonly key: string;
   readonly auth: SocketAuth;
+  /** Le compte qui ouvre la connexion — seul nommable par un « compte supprimé » (audit #10237) ; `null` pour un invité. */
+  readonly account: string | null;
 };
 
 /**
@@ -27,10 +29,10 @@ export type RealtimeIdentity = {
  */
 export function realtimeIdentityOf(session: SessionState): RealtimeIdentity | null {
   if (session.status === 'authenticated') {
-    return { key: `t:${session.token}`, auth: { token: session.token, sessionToken: session.sessionToken } };
+    return { key: `t:${session.token}`, auth: { token: session.token, sessionToken: session.sessionToken }, account: session.user.id };
   }
   if (session.status === 'guest') {
-    return { key: `g:${session.sessionToken}`, auth: { sessionToken: session.sessionToken } };
+    return { key: `g:${session.sessionToken}`, auth: { sessionToken: session.sessionToken }, account: null };
   }
   return null;
 }
@@ -48,7 +50,7 @@ export type RealtimeConnectionKeeper = {
  * personne ne garde rien.
  */
 export function keepRealtimeConnection<C extends { destroy(): void }>(deps: {
-  readonly open: (auth: SocketAuth) => C;
+  readonly open: (auth: SocketAuth, account: string | null) => C;
   readonly onChange: (next: C | null) => void;
 }): RealtimeConnectionKeeper {
   let current: C | null = null;
@@ -66,7 +68,7 @@ export function keepRealtimeConnection<C extends { destroy(): void }>(deps: {
       if (current !== null && currentKey === identity.key) return;
       current?.destroy();
       currentKey = identity.key;
-      current = deps.open(identity.auth);
+      current = deps.open(identity.auth, identity.account);
       deps.onChange(current);
     },
   };

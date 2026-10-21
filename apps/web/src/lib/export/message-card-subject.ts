@@ -85,6 +85,8 @@ export type MessageCardMediaItem = {
   readonly posterUrl: string | null;
   /** Qui l'a posté — absent : inconnu, la carte ne le signe pas. */
   readonly author?: CardMediaAuthor | null;
+  /** Le média du SUPPORT (post, story, réel) : il ouvre la carte en héros, avant la citation, au lieu de se poser avec la réponse. */
+  readonly hero?: true;
 };
 
 /** Les mêmes médias, attribués à `author`. */
@@ -103,7 +105,13 @@ export type MessageCardSubject = {
   readonly media: readonly MessageCardMediaItem[];
   /** Ce qui suit la réponse sur la carte — les réponses d'un commentaire (#8734). */
   readonly followUps?: readonly MessageCardSubjectPart[];
+  /** Les commentaires du fil entre la citation et la réponse, chacun à son niveau d'imbrication — vide ou absent : aucun. */
+  readonly context?: readonly MessageCardSubjectContext[];
+  /** Le niveau d'imbrication de la réponse — 0 : premier niveau. */
+  readonly replyDepth?: number;
 };
+
+export type MessageCardSubjectContext = { readonly part: MessageCardSubjectPart; readonly depth: number; readonly folded: boolean };
 
 /** Ce qu'il faut d'une pièce — celle d'un message (`Attachment`) comme celle d'un commentaire (`FeedMedia`). */
 export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {
@@ -117,6 +125,8 @@ export type CardMediaFields = Pick<Attachment, 'id' | 'fileUrl'> & {
   readonly isBlurred?: boolean;
   readonly isEncrypted?: boolean;
   readonly effectFlags?: number | null;
+  /** Le porteur déclare la pièce un sticker (l'image d'un commentaire-sticker) : elle se peint ajustée, jamais coupée. */
+  readonly sticker?: boolean;
 };
 
 /** Des effets qui MASQUENT un contenu — vue unique, flou. Lu par les cartes de commentaire, qui n'ont pas de nature de disparition. */
@@ -130,7 +140,9 @@ export function cardMediaOf(attachments: readonly CardMediaFields[] | null | und
     const mimeType = piece.mimeType ?? '';
     const kind = kindOf({ mimeType });
     const base = { id: piece.id, url: piece.fileUrl, mimeType, posterUrl: nonBlank(piece.thumbnailUrl) };
-    if (kind === 'image' || kind === 'video') return [{ ...base, card: { kind, width: piece.width ?? 0, height: piece.height ?? 0 } }];
+    if (kind === 'image' || kind === 'video') {
+      return [{ ...base, card: { kind, width: piece.width ?? 0, height: piece.height ?? 0, mimeType, ...(piece.sticker === true ? { sticker: true } : {}) } }];
+    }
     if (kind === 'audio') {
       const peaks = waveformOf(piece, 40);
       return [{ ...base, card: { kind: 'audio', durationMs: piece.duration ?? 0, name: nonBlank(piece.originalName) ?? 'audio', peaks } }];

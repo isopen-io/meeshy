@@ -178,4 +178,28 @@ final class ComposerPreUploadTests: XCTestCase {
         let apres = String(code[appel.upperBound...]).prefix(1)
         XCTAssertEqual(apres, "}", "le balayage doit être la DERNIÈRE chose que la dérivation fait")
     }
+
+    // MARK: - Seule une story pré-monte (cycle 8)
+
+    /// Un post, un réel ou un statut publie par le DOCUMENT, qui re-téléverse tous ses fichiers en « post » et
+    /// rebranche le canvas sur ces nouveaux médias (#5280) : leur pré-montée ne laissait qu'un `PostMedia` orphelin
+    /// et une bande passante gaspillée. Seul le canal de la scène (la story) RÉFÉRENCE ce qui a été pré-monté.
+    func test_seuleLaScene_rentabiliseUnePreMontee() {
+        XCTAssertTrue(ComposerPreUploadPolicy.pays(for: .story))
+        XCTAssertFalse(ComposerPreUploadPolicy.pays(for: .post))
+        XCTAssertFalse(ComposerPreUploadPolicy.pays(for: .reel))
+        XCTAssertFalse(ComposerPreUploadPolicy.pays(for: .status))
+    }
+
+    func test_leBalayage_neMonteRienPourUnFormatPublieParLeDocument_etRepartQuandLeFormatChange() throws {
+        let preUpload = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost+PreUpload.swift"))
+        XCTAssertTrue(preUpload.contains("guard ComposerPreUploadPolicy.pays(for: selectedFormat) else { return }"),
+                      "le balayage se tait quand le format choisi ne référencera pas la pré-montée")
+        // Le changement de format relance la dérivation, qui finit par le balayage
+        // (`test_leBalayage_estAppeleEnFinDeDerivation`) : passer en story après avoir posé les médias les pré-monte.
+        let host = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Composer/MeeshyComposerHost.swift"))
+            .components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(host.contains(".adaptiveOnChange(of:selectedFormat,initial:true){_,_insyncPostMediaIntoSlides()"),
+                      "passer en story après avoir posé les médias doit les pré-monter")
+    }
 }

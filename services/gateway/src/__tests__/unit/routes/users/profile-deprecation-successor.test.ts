@@ -48,7 +48,13 @@ jest.mock('../../../../routes/users/presence-gate', () => ({
   presenceFor: () => null,
   applyPresenceVisibilityAsOffline: (rows: unknown) => rows,
   gateProfilePresence: async (_f: unknown, _r: unknown, user: unknown) => user,
-  getOptionalAuth: () => async () => {},
+  // Un lecteur INSCRIT tiers : un lecteur sans compte ne lit plus aucun profil (#10205).
+  getOptionalAuth: () => async (req: any) => {
+    req.authContext = {
+      type: 'user', isAuthenticated: true, isAnonymous: false,
+      userId: '507f1f77bcf86cd7994390fe', registeredUser: { id: '507f1f77bcf86cd7994390fe', role: 'USER' },
+    };
+  },
 }));
 
 import { getUserByUsername, getUserById, getUserByIdDedicated } from '../../../../routes/users/profile';
@@ -72,7 +78,8 @@ const LIGNE_COMPLETE = {
 };
 
 function buildPrisma() {
-  const findFirst = jest.fn<any>(async () => LIGNE_COMPLETE);
+  // La question du blocage n'a pas de ligne : personne n'a bloqué personne.
+  const findFirst = jest.fn<any>(async (args?: any) => (args?.where?.blockedUserIds ? null : LIGNE_COMPLETE));
   return { user: { findFirst } };
 }
 

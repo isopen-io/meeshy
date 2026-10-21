@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -108,15 +109,24 @@ enum ReelPrewarm {
 
     /// Lance — ou rejoint — le téléchargement silencieux du fichier vidéo de
     /// `post` dans le registre partagé. Rend la clé de cache, `nil` pour un
-    /// réel sans vidéo.
+    /// réel sans vidéo. Le palier choisit la session réseau (#11283) : un
+    /// palier lointain est discrétionnaire et ne part sur cellulaire que si le
+    /// réglage vidéo de l'utilisateur l'autorise.
     @discardableResult
-    static func prefetchFile(of post: FeedPost, center: AttachmentDownloadCenter = .shared) -> String? {
+    static func prefetchFile(
+        of post: FeedPost,
+        tier: ReelPreloadWindow.Tier = .decode,
+        center: AttachmentDownloadCenter = .shared
+    ) -> String? {
         guard let media = post.primaryReelDisplayMedia, media.type == .video,
               videoURL(for: post) != nil else { return nil }
         let attachment = media.toMessageAttachment()
         center.prefetch(urlString: attachment.fileUrl,
                         expectedSize: Int64(attachment.fileSize),
-                        cacheStore: .video)
+                        cacheStore: .video,
+                        profile: ReelTransferPolicy.profile(
+                            for: tier,
+                            videoPolicy: MediaDownloadPreferencesStore.shared.preferences.video))
         return AttachmentDownloadCenter.key(for: attachment.fileUrl)
     }
 
@@ -135,7 +145,24 @@ enum ReelPrewarm {
     static func prerollFromDisk(_ post: FeedPost) async {
         guard !Task.isCancelled, let url = videoURL(for: post),
               CacheCoordinator.videoLocalFileURL(for: url.absoluteString) != nil else { return }
-        await StoryMediaLoader.shared.preloadAndCachePlayer(url: url)
+        await StoryMediaLoader.shared.preloadAndCachePlayer(url: url, resume: resumePosition(of: post))
+    }
+
+    /// La reprise du réel `post`, résolue comme le moteur la résoudra à
+    /// l'adoption (#10354) : position locale, sinon servie, sous la règle des
+    /// bords — le lecteur préparé arrive à sa place, `play()` suffit.
+    static func resumePosition(of post: FeedPost) -> ((TimeInterval) -> TimeInterval?)? {
+        guard let media = post.primaryReelDisplayMedia, media.type == .video else { return nil }
+        let local = VideoPlaybackPositionStore.shared.position(for: media.id)
+        let served = media.toMessageAttachment().currentUserConsumption
+        return { total in
+            MediaResumeResolver.resumePosition(
+                localPositionSeconds: local,
+                servedConsumption: served,
+                medium: .video,
+                totalDuration: total,
+                isEligible: SharedAVPlayerManager.isResumable)
+        }
     }
 
     /// Rend ce que `post` tenait : son téléchargement automatique en cours
@@ -145,6 +172,49 @@ enum ReelPrewarm {
               let url = videoURL(for: post) else { return }
         center.cancelPrefetch(urlString: media.toMessageAttachment().fileUrl)
         StoryMediaLoader.shared.discardCachedPlayer(for: url)
+    }
+}
+
+// MARK: - Le poster arrive net (#10354)
+
+/// **L'image que la page d'un réel montre avant sa première image vidéo** —
+/// préchargée, décodée et réduite à la taille de l'écran HORS du fil
+/// principal, puis posée dans le cache mémoire que la page lit en synchrone.
+///
+/// Constat filmé sur l'iPhone 16 Pro Max : le réel entrant n'était qu'un fond
+/// sombre avec une petite vignette. Aucun poster n'était préchargé, et l'init
+/// du poster lisait et réduisait le fichier SUR le fil principal.
+///
+/// La clé est celle que la page lit, et nulle autre :
+/// - réel vidéo : `ReelPoster(url: media.thumbnailUrl ?? media.url)` — seule la
+///   vignette se précharge (l'adresse vidéo n'est pas une image) ;
+/// - réel image : `ReelImageCell` (`fullUrl: media.url ?? media.thumbnailUrl`).
+///
+/// Le décodage passe par `DiskCacheStore.image(for:maxPixelSize:)` — le même
+/// décodeur que tout le dépôt (`CGImageSourceCreateThumbnailAtIndex`, décodage
+/// immédiat sur l'acteur du cache), sans jumeau. Au-dessus de 1 200 px, la
+/// variante occupe le slot plein format, celui que `WarmImageProbe.residentImage`
+/// lit à l'init de la page.
+nonisolated enum ReelPosterPrefetch {
+
+    /// L'adresse RÉSOLUE de l'image que la page de `reel` affiche d'abord,
+    /// `nil` quand il n'y en a pas (scène, son, vidéo sans vignette).
+    static func posterURL(for reel: FeedPost) -> String? {
+        guard let media = reel.primaryReelDisplayMedia else { return nil }
+        let raw: String?
+        switch media.type {
+        case .video: raw = media.thumbnailUrl
+        case .image: raw = media.url ?? media.thumbnailUrl
+        default: raw = nil
+        }
+        guard let raw, !raw.isEmpty else { return nil }
+        return MeeshyConfig.resolveMediaURL(raw)?.absoluteString ?? raw
+    }
+
+    /// La taille de décodage : le plus grand côté de l'écran en pixels, borné
+    /// par le plafond de la lecture synchrone du cache.
+    static func pixelSize(screenPoints: CGSize, scale: CGFloat) -> CGFloat {
+        min(max(screenPoints.width, screenPoints.height) * scale, DiskCacheStore.warmedPixelCap)
     }
 }
 
@@ -190,7 +260,7 @@ final class ReelPagerPreloader {
     }
 
     /// Les signaux de l'appareil, lus à l'instant : chemin réseau, mémoire,
-    /// économie d'énergie, état thermique.
+    /// économie d'énergie, état thermique, et son tier média (#11281).
     static func liveContext(visits: [ReelPreloadWindow.Visit]) -> ReelPreloadWindow.Context {
         let info = ProcessInfo.processInfo
         return ReelPreloadWindow.Context(
@@ -198,7 +268,8 @@ final class ReelPagerPreloader {
             network: ReelPreloadWindow.Network(snapshot: NetworkPathSource.shared.current),
             deviceMemoryGb: ReelPreloadWindow.gigabytes(physicalMemory: info.physicalMemory),
             lowPower: info.isLowPowerModeEnabled,
-            thermalState: info.thermalState
+            thermalState: info.thermalState,
+            tier: DeviceMediaTier.current
         )
     }
 
@@ -206,13 +277,18 @@ final class ReelPagerPreloader {
     /// automatique en cours, lecteur préparé — et les lecteurs des réels qui
     /// n'y sont plus au palier « décode ». Synchrone : rien n'attend le réseau.
     func retire(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) {
+        StoryMediaLoader.shared.setRetentionDistances(
+            Self.retentionDistances(reels: reels, activeIndex: activeIndex))
         let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
         let tiers = Dictionary(uniqueKeysWithValues: plan.map { ($0.index, $0.tier) })
         for (index, reel) in reels.enumerated() where index != activeIndex {
             switch tiers[index] {
             case nil:
                 ReelPrewarm.release(reel, center: center)
-            case .some(.decode):
+            // N±2 garde aussi le lecteur qu'il tient déjà (#10354) — le réel
+            // quitté il y a deux pages reprend à l'instant ; le pool, borné à
+            // trois, déborde par le plus loin (`PlayerPoolEviction`).
+            case .some(.decode), .some(.mount):
                 continue
             case .some:
                 if let url = ReelPrewarm.videoURL(for: reel) {
@@ -230,9 +306,19 @@ final class ReelPagerPreloader {
             thermalState: ProcessInfo.processInfo.thermalState
         ) else { return }
         let plan = ReelPreloadWindow.plan(count: reels.count, activeIndex: activeIndex, window: window)
+        // Les posters partent EN MÊME TEMPS que les fichiers : quelques
+        // centaines de Ko, et c'est ce que la page montre la première.
+        async let posters: Void = prefetchPosters(reels: reels, indices: [activeIndex] + plan.map(\.index))
+        await prepareFiles(reels: reels, plan: plan)
+        await posters
+    }
+
+    /// Fichiers, lecteurs préparés et sons de la fenêtre, palier par palier.
+    private func prepareFiles(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
         let near = plan.filter { $0.tier == .decode || $0.tier == .mount }
         let nearKeys: [(step: ReelPreloadWindow.Step, key: String)] = near.compactMap { step in
-            ReelPrewarm.prefetchFile(of: reels[step.index], center: center).map { (step: step, key: $0) }
+            ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center)
+                .map { (step: step, key: $0) }
         }
 
         await prefetchAudio(reels: reels, plan: plan)
@@ -246,8 +332,25 @@ final class ReelPagerPreloader {
         }
         for step in plan where step.tier == .prime {
             guard !Task.isCancelled else { return }
-            guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], center: center) else { continue }
+            guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center) else {
+                continue
+            }
             await ReelPrewarm.awaitFile(key: key, center: center)
+        }
+    }
+
+    /// **Les posters de la fenêtre, le plus proche d'abord** (#10354) : décodés
+    /// à la taille de l'écran sur l'acteur du cache, puis résidents en mémoire
+    /// sous la clé que la page lit à son init. Un poster déjà en mémoire ne
+    /// repart pas.
+    private func prefetchPosters(reels: [FeedPost], indices: [Int]) async {
+        let scale = DeviceLayout.activeWindow?.traitCollection.displayScale ?? UITraitCollection.current.displayScale
+        let pixels = ReelPosterPrefetch.pixelSize(screenPoints: DeviceLayout.windowSize, scale: scale)
+        for index in indices where reels.indices.contains(index) {
+            guard !Task.isCancelled else { return }
+            guard let url = ReelPosterPrefetch.posterURL(for: reels[index]),
+                  WarmImageProbe.residentImage(for: url) == nil else { continue }
+            _ = await CacheCoordinator.shared.images.image(for: url, maxPixelSize: pixels)
         }
     }
 
@@ -270,8 +373,27 @@ final class ReelPagerPreloader {
     /// Le lecteur se ferme : rien de ce qu'il préparait ne doit continuer à
     /// consommer réseau ou décodeur.
     func releaseAll(reels: [FeedPost], except activeId: String?) {
+        StoryMediaLoader.shared.setRetentionDistances([:])
         for reel in reels where reel.id != activeId {
             ReelPrewarm.release(reel, center: center)
         }
+    }
+
+    /// **La distance de chaque lecteur au réel affiché** (#10354), que le pool
+    /// lit pour déborder par le plus LOIN : N±1 puis N±2 restent, le réel
+    /// qu'on vient de quitter garde son lecteur. Clé : l'URL distante, celle du
+    /// pool. Une vidéo présente deux fois prend sa plus petite distance ; hors
+    /// de N±`radius`, aucune déclaration (le pool les rend d'abord).
+    nonisolated static func retentionDistances(
+        reels: [FeedPost], activeIndex: Int, radius: Int = 10
+    ) -> [String: Int] {
+        reels.indices
+            .filter { abs($0 - activeIndex) <= radius }
+            .reduce(into: [String: Int]()) { distances, index in
+                guard let key = ReelPrewarm.videoURL(for: reels[index])?.absoluteString else { return }
+                let distance = index - activeIndex
+                if let known = distances[key], abs(known) <= abs(distance) { return }
+                distances[key] = distance
+            }
     }
 }

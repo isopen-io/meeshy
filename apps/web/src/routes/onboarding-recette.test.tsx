@@ -138,7 +138,7 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     signIn();
     const { deps } = harness({ state: served({ stepRewards: { global: 28, story: 20, friendship: 14 } }) });
     const global = await mount(<OnboardingJourney deps={deps} search={at('global')} clearSearch={() => undefined} />);
-    expect(text(global, '[data-onb-card="global"] .onb-reward-hint')).toBe('+28 pts à l’envoi');
+    expect(text(global, '[data-onb-card="global"] .onb-reward-hint')).toBe('+28 étincelles à l’envoi');
   });
 
   test('élan à 2 : le salut crédite 28 — le « +N » dit 28, la pastille aussi, jamais le barème', async () => {
@@ -149,7 +149,7 @@ describe('#7908 — les points sont ceux du serveur, élan compris', () => {
     await click(action(host, 'global.send'));
     await settle();
     expect(text(host, '[data-onb-flight]')).toBe('+28');
-    expect(text(host, '[data-onb-announce]')).toBe('Tu gagnes 28 points.');
+    expect(text(host, '[data-onb-announce]')).toBe('Tu fais jaillir 28 étincelles.');
     await landed();
     expect(text(host, '[data-onb-pill]')).toBe('28');
   });
@@ -203,7 +203,7 @@ describe('#7909 — le récapitulatif ne montre que les chiffres du serveur', ()
     await settle();
     expect(host.querySelector('[data-onb-recap-loading]')).toBeNull();
     expect([...host.querySelectorAll('[data-tile]')].map((tile) => tile.getAttribute('data-tile'))).toEqual(['points']);
-    expect(text(host, '[data-tile="points"]')).toBe('24 pts');
+    expect(text(host, '[data-tile="points"]')).toBe('24 étincelles');
   });
 
   test('le serveur a répondu : ses chiffres, tels quels', async () => {
@@ -212,8 +212,8 @@ describe('#7909 — le récapitulatif ne montre que les chiffres du serveur', ()
     const host = await mount(<OnboardingJourney deps={deps} search={at('friends')} clearSearch={() => undefined} />);
     await click(action(host, 'friends.later'));
     await settle();
-    expect(text(host, '[data-tile="points"]')).toBe('35 pts');
-    expect(text(host, '[data-tile="badges"]')).toBe('Badges : 3');
+    expect(text(host, '[data-tile="points"]')).toBe('35 étincelles');
+    expect(text(host, '[data-tile="badges"]')).toBe('Médailles : 3');
   });
 });
 

@@ -20,7 +20,7 @@ final class ConversationViewReadingModeSourceGuardTests: XCTestCase {
     }
 
     private func source(_ fileName: String) throws -> String {
-        try String(contentsOf: hostRoot().appendingPathComponent(fileName), encoding: .utf8)
+        try AppSourceGuard.text(at: hostRoot().appendingPathComponent(fileName))
     }
 
     private func strippedSource(_ fileName: String) throws -> String {

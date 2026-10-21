@@ -65,3 +65,35 @@ enum EditClockThrottle {
         return (now - lastInteractionAt) >= idleDelay ? .idle : .full
     }
 }
+
+/// **Ce que le repos de l'horloge d'édition suspend : l'image, jamais le son (#10362).**
+///
+/// Le repos (#3906) existe pour laisser refroidir l'appareil : le lien à
+/// 60–120 Hz et le décodage vidéo en boucle chauffent. Il suspendait aussi le
+/// mixer audio — et le son de la scène s'arrêtait quatre secondes après la
+/// dernière touche, à chaque pause entre deux gestes : la musique qu'on pose
+/// pour l'écouter pendant qu'on compose se taisait dès qu'on l'écoutait. Le
+/// rendu audio ne coûte presque rien ; il continue.
+nonisolated enum EditIdleSuspension: Equatable, Sendable {
+    case video
+    case audio
+
+    static func suspended(playsVideo: Bool, playsAudio: Bool) -> Set<EditIdleSuspension> {
+        playsVideo ? [.video] : []
+    }
+}
+
+/// **Un canvas préchargé n'arme aucun lien d'édition** (#9864).
+///
+/// `StoryReaderPrefetcher` monte ses canvas voisins en `.edit`, invisibles et
+/// non interactifs (`isUserInteractionEnabled = false`), dans une fenêtre :
+/// `didMoveToWindow` leur armait chacun un `editDisplayLink` à 120 Hz pendant
+/// la fenêtre de grâce d'`EditClockThrottle` — trois liens à 120 Hz après
+/// chaque balayage, pour des scènes que personne ne voit ni ne touche. Le lien
+/// d'édition sert les gestes, le verre d'une vidéo en édition et les
+/// décorations animées du composer : un canvas sans interaction n'en a aucun.
+enum EditClockArming {
+    nonisolated static func shouldArm(isEditing: Bool, isInteractive: Bool) -> Bool {
+        isEditing && isInteractive
+    }
+}

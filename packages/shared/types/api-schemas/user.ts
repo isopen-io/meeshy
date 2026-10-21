@@ -38,7 +38,8 @@ export const userPermissionsSchema = {
     // vérifie contre son PRODUCTEUR — témoin :
     // `services/gateway/.../admin/me-permissions.test.ts` § « le schéma PARTAGÉ
     // déclare les mêmes clés que la projection ».
-    canManageAgent: { type: 'boolean', description: 'Can manage the agent service' }
+    canManageAgent: { type: 'boolean', description: 'Can manage the agent service' },
+    canManageGame: { type: 'boolean', description: 'Can schedule the Game seasons calendar (#10016)' }
   }
 } as const;
 
@@ -126,6 +127,32 @@ export const userSchema = {
 } as const;
 
 /**
+ * Le contour d'avatar ÉQUIPÉ d'un participant (#10713) — la forme servie par
+ * `/me` et le profil public (`ServedProfileDecor`, `types/profile-decor.ts`),
+ * réduite au contour : c'est lui que les listes et les bulles dessinent.
+ * Il vit ICI, au moyeu des schémas : la fiche de conversation ET l'auteur d'un
+ * message (`messageSchema.sender`) le déclarent, et `message.ts` ne peut pas
+ * importer `conversation.ts` (qui l'importe).
+ * ADDITIVE — absente pour un participant sans contour ou sans compte.
+ */
+export const participantProfileDecorSchema = {
+  type: 'object',
+  description: 'Equipped avatar ring served with the participant (#10713)',
+  properties: {
+    avatarRing: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        pack: { type: 'string' },
+        item: { type: 'string' },
+        origin: { type: 'string' },
+        contract: { type: 'string', nullable: true },
+      },
+    },
+  },
+} as const;
+
+/**
  * Minimal user schema for lists and references
  */
 export const userMinimalSchema = {
@@ -138,6 +165,9 @@ export const userMinimalSchema = {
     displayName: { type: 'string', description: 'Display name' },
     avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
     isOnline: { type: 'boolean', description: 'Online status' },
+    // #10945 — le contour équipé voyage avec chaque résumé de personne ;
+    // absent sans contour, donc un ancien client n'y voit rien de neuf.
+    profileDecor: participantProfileDecorSchema,
     // A-t-il un compte ? `Participant.type` répond, et cette ligne est tout ce
     // qui manquait pour que la réponse ARRIVE : la requête chargeait déjà le
     // champ, le mapping l'étalait déjà, et fast-json-stringify le retirait

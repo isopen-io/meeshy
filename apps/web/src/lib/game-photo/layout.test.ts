@@ -234,3 +234,39 @@ describe('containFit — un dessin non carré tient dans son cadre carré sans s
     expect(containFit({ width: 0, height: 0 }, frame)).toEqual(frame);
   });
 });
+
+/**
+ * LA PLAQUE D'AUTEUR (#10816) a sa place à elle : sous la date en 9:16, entre
+ * Mee et Meo en 1:1. Elle ne recouvre ni le texte, ni les oiseaux, ni le
+ * bandeau de parrainage, et garde la proportion du cartouche (360 × 100).
+ */
+const overlaps = (a: Rect, b: Rect): boolean => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+
+for (const format of FORMATS) {
+  for (const banner of [false, true]) {
+    describe(`la plaque d’auteur, ${format}${banner ? ' avec bandeau' : ''}`, () => {
+      const layout = photoLayout(format, { banner });
+      const { width, height } = PHOTO_FORMATS[format];
+
+      test('centrée, dans l’image, à la proportion du cartouche', () => {
+        const plate = layout.author;
+        expect(plate.x + plate.w / 2).toBeCloseTo(width / 2, 5);
+        expect(plate.x).toBeGreaterThanOrEqual(0);
+        expect(plate.y + plate.h).toBeLessThanOrEqual(height);
+        expect(plate.w / plate.h).toBeCloseTo(3.6, 5);
+      });
+
+      test('sous la date, sans toucher Mee, Meo ni le bandeau', () => {
+        expect(layout.author.y).toBeGreaterThan(layout.date.y);
+        expect(overlaps(layout.author, layout.mee)).toBe(false);
+        expect(overlaps(layout.author, layout.meo)).toBe(false);
+        expect(overlaps(layout.author, layout.signature)).toBe(false);
+        if (layout.banner !== undefined) expect(overlaps(layout.author, layout.banner.frame)).toBe(false);
+      });
+
+      test('assez grande pour qu’un pseudo se lise sur l’image (≥ 40 % de la largeur)', () => {
+        expect(layout.author.w).toBeGreaterThanOrEqual(width * 0.4);
+      });
+    });
+  }
+}

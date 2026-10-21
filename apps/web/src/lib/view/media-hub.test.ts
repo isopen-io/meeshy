@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { amina, anonymousGuest } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 
 import { MEDIA_HUB_KINDS, itemsOfKind, mediaHubViewerOf, type MediaHubItem } from './media-hub';
@@ -31,6 +32,7 @@ const message = (overrides: Partial<Message> & { readonly id: string }): Message
   ({
     conversationId: 'c1',
     senderId: 'u1',
+    sender: amina,
     content: '',
     originalLanguage: 'fr',
     messageType: 'text',
@@ -74,6 +76,16 @@ describe('itemsOfKind — chaque segment ne garde que ce qui est le sien', () =>
     const once = message({ id: 'm2', attachments: [attachment({ id: 'secret', mimeType: 'image/png', isViewOnce: true } as never)] });
     const onceMessage = message({ id: 'm3', isViewOnce: true, attachments: [attachment({ id: 'x', mimeType: 'image/png' })] } as never);
     expect(itemsOfKind([once, onceMessage], 'visual')).toEqual([]);
+  });
+
+  test('l’image jointe d’un STICKER n’entre jamais dans l’index : ce n’est pas un média de la conversation', () => {
+    const sticker = message({
+      id: 'st1',
+      metadata: { sticker: { stickerId: 's1' } },
+      attachments: [attachment({ id: 'png', mimeType: 'image/png' })],
+    } as never);
+    const rooted = message({ id: 'st2', sticker: { emoji: '🔥' }, attachments: [attachment({ id: 'png2', mimeType: 'image/png' })] } as never);
+    expect(itemsOfKind([sticker, rooted], 'visual')).toEqual([]);
   });
 
   test('les messages gardent l’ordre SERVI (le plus récent d’abord)', () => {
@@ -132,5 +144,13 @@ describe('mediaHubViewerOf — la visionneuse feuillette TOUTE la conversation (
 
   test('une tuile disparue ouvre au début, jamais une visionneuse vide', () => {
     expect(mediaHubViewerOf(itemsOfKind(pages, 'visual'), 'x:y').startIndex).toBe(0);
+  });
+});
+
+describe('les adresses d’un anonyme ne rejoignent pas l’index (#10286)', () => {
+  test('ni lien, ni conversation : elles restent du texte dans le fil', () => {
+    const fromGuest = message({ id: 'm-ano', sender: anonymousGuest, content: 'https://exemple.com et https://meeshy.me/chat/mshy_x' });
+    expect(itemsOfKind([fromGuest], 'link')).toEqual([]);
+    expect(itemsOfKind([fromGuest], 'conversation')).toEqual([]);
   });
 });

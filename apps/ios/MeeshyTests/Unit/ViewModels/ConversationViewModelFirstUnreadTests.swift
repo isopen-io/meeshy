@@ -196,6 +196,41 @@ final class ConversationViewModelFirstUnreadTests: XCTestCase {
         XCTAssertEqual(sut.unreadSeparatorCount, 0)
     }
 
+    // MARK: - Repli sur le compte serveur (#7427, miroir du repli TS #7351)
+
+    /// **Aucun rang chronologique, compte serveur connu** — l'appareil qui
+    /// ouvre la conversation sans curseur ni `joinedAt` (deep link,
+    /// notification). Le séparateur se pose sur les N DERNIERS messages
+    /// d'autrui, comme le web — jamais sur le premier message chargé.
+    func test_loadMessages_noRankAtAll_serverCountElectsTheLastOtherMessages() async throws {
+        let (sut, pool) = try makeSUTWithSeams(serverUnreadCount: 2)
+        try await seed(pool, [
+            (localId: "m-1", senderId: otherUserId, offset: 0),
+            (localId: "m-2", senderId: otherUserId, offset: 10),
+            (localId: "m-mine", senderId: myUserId, offset: 15),
+            (localId: "m-3", senderId: otherUserId, offset: 20)
+        ])
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(sut.firstUnreadMessageId, "m-2", "les 2 derniers messages d'autrui, jamais m-1")
+        XCTAssertEqual(sut.unreadSeparatorCount, 2)
+    }
+
+    /// Dès qu'un rang existe, le compte ne déplace plus la frontière.
+    func test_loadMessages_joinedAtKnown_serverCountDoesNotMoveTheBoundary() async throws {
+        let (sut, pool) = try makeSUTWithSeams(serverUnreadCount: 1, memberJoinedAt: t0.addingTimeInterval(5))
+        try await seed(pool, [
+            (localId: "m-before", senderId: otherUserId, offset: 0),
+            (localId: "m-after-1", senderId: otherUserId, offset: 10),
+            (localId: "m-after-2", senderId: otherUserId, offset: 20)
+        ])
+
+        await sut.loadMessages()
+
+        XCTAssertEqual(sut.firstUnreadMessageId, "m-after-1", "le rang joinedAt tranche, le compte ne recoupe pas")
+    }
+
     // MARK: - Helpers
 
     private func makeSUTWithSeams(

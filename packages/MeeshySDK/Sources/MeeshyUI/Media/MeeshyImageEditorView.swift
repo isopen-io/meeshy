@@ -2,41 +2,6 @@ import MeeshySDK
 import SwiftUI
 import UIKit
 
-// MARK: - Editor Tool
-
-/// One tool reachable from the floating FAB cluster. `CaseIterable` drives the
-/// FAB column and the in-controller tool switcher.
-enum EditorTool: String, CaseIterable, Identifiable {
-    case crop, filters, adjust, effects
-
-    var id: String { rawValue }
-
-    var icon: String {
-        switch self {
-        case .crop: return "crop"
-        case .filters: return "camera.filters"
-        case .adjust: return "slider.horizontal.3"
-        case .effects: return "sparkles"
-        }
-    }
-
-    var label: String {
-        switch self {
-        case .crop: return String(localized: "media.editor.tool.crop", defaultValue: "Recadrer", bundle: .module)
-        case .filters: return String(localized: "media.editor.tool.filters", defaultValue: "Filtres", bundle: .module)
-        case .adjust: return String(localized: "media.editor.tool.adjust", defaultValue: "Ajuster", bundle: .module)
-        case .effects: return String(localized: "media.editor.tool.effects", defaultValue: "Effets", bundle: .module)
-        }
-    }
-
-    /// Tools available in Simple mode. Pro mode exposes every tool.
-    var isEssential: Bool { self != .effects }
-
-    static func rail(for mode: ImageEditorMode) -> [EditorTool] {
-        mode.isPro ? allCases : allCases.filter(\.isEssential)
-    }
-}
-
 // MARK: - Meeshy Image Editor View
 
 /// The single, immersive, full-screen image editor used everywhere in the app
@@ -59,6 +24,8 @@ public struct MeeshyImageEditorView: View {
     @StateObject private var viewModel: ImageEditorViewModel
     @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    /// Les marges sûres de la fenêtre qui porte l'éditeur, mesurées par sa racine.
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
 
     private let accentColor: String
     private let onAccept: (UIImage) -> Void
@@ -115,7 +82,8 @@ public struct MeeshyImageEditorView: View {
     /// applique au chrome, en laissant le canvas immersif. Même pattern que
     /// `MeeshyVideoEditorView` et `StoryComposerView.safeAreaBottomInset`.
     private var deviceSafeAreaInsets: UIEdgeInsets {
-        WindowMetrics.safeAreaInsets
+        let insets = SceneWindowSize.resolveInsets(sceneSafeAreaInsets, fallback: WindowMetrics.safeAreaEdgeInsets)
+        return UIEdgeInsets(top: insets.top, left: insets.leading, bottom: insets.bottom, right: insets.trailing)
     }
 
     // MARK: - Body
@@ -149,7 +117,18 @@ public struct MeeshyImageEditorView: View {
             }
 
             if showHistory {
-                historyOverlay
+                ImageEditorHistoryOverlay(
+                    steps: viewModel.historySteps,
+                    currentStepID: viewModel.currentHistoryStepID,
+                    accentColor: accentColor,
+                    onJump: { id in
+                        viewModel.jump(to: id)
+                        resetInspection()
+                    },
+                    onClose: {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = false }
+                    }
+                )
                     .transition(.opacity)
             }
         }
@@ -207,7 +186,7 @@ public struct MeeshyImageEditorView: View {
     private var compareBadge: some View {
         if isComparing {
             Text(String(localized: "media.editor.before", defaultValue: "Original", bundle: .module))
-                .font(.system(size: MeeshyFont.footnoteSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                 .foregroundColor(.white)
                 .padding(.horizontal, MeeshySpacing.md)
                 .padding(.vertical, MeeshySpacing.xsPlus)
@@ -291,7 +270,7 @@ public struct MeeshyImageEditorView: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: MeeshyIconSize.xs, weight: .bold))
                 Text(String(localized: "media.editor.done", defaultValue: "Termin\u{00E9}", bundle: .module))
-                    .font(.system(size: MeeshyFont.bodySize, weight: .bold))
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
             }
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.lg)
@@ -548,7 +527,7 @@ public struct MeeshyImageEditorView: View {
             }
         } label: {
             Text(ratio.label)
-                .font(.system(size: MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: isSelected ? .bold : .medium))
                 .foregroundColor(isSelected ? .white : theme.textSecondary)
                 .padding(.horizontal, MeeshySpacing.lg)
                 .padding(.vertical, MeeshySpacing.sm)
@@ -641,7 +620,7 @@ public struct MeeshyImageEditorView: View {
                         HapticFeedback.light()
                     } label: {
                         Text(String(localized: "media.editor.reset", defaultValue: "R\u{00E9}initialiser", bundle: .module))
-                            .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
                             .foregroundColor(accent)
                     }
                     .buttonStyle(.plain)
@@ -667,7 +646,7 @@ public struct MeeshyImageEditorView: View {
                 .frame(width: 18)
 
             Text(kind.label)
-                .font(.system(size: MeeshyFont.smallSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
                 .foregroundColor(theme.textSecondary)
                 .frame(width: 78, alignment: .leading)
 
@@ -737,91 +716,6 @@ public struct MeeshyImageEditorView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
                     .strokeBorder(isSelected ? accent : .clear, lineWidth: MeeshyBorder.emphasis)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // MARK: - History Overlay
-
-    private var historyOverlay: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.opacity(0.4)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = false }
-                }
-
-            VStack(spacing: 0) {
-                HStack {
-                    Text(String(localized: "media.editor.history", defaultValue: "Historique", bundle: .module))
-                        .font(.system(size: MeeshyFont.bodySize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
-                    Spacer()
-                    Button {
-                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = false }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: MeeshyIconSize.xs, weight: .bold))
-                            .foregroundColor(theme.textSecondary)
-                            .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                            .background(Circle().fill(theme.inputBackground))
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(MeeshySpacing.lg)
-
-                ScrollView {
-                    VStack(spacing: MeeshySpacing.xsPlus) {
-                        ForEach(viewModel.historySteps.indices.reversed(), id: \.self) { index in
-                            historyRow(index: index, step: viewModel.historySteps[index])
-                        }
-                    }
-                    .padding(.horizontal, MeeshySpacing.lg)
-                    .padding(.bottom, MeeshySpacing.xl)
-                }
-                .frame(maxHeight: 320)
-            }
-            .background(
-                UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
-                    .fill(theme.backgroundSecondary)
-                    .ignoresSafeArea(edges: .bottom)
-            )
-            .transition(.move(edge: .bottom))
-        }
-    }
-
-    private func historyRow(index: Int, step: ImageEditHistoryStep) -> some View {
-        let isCurrent = step.id == viewModel.currentHistoryStepID
-        return Button {
-            viewModel.jump(to: step.id)
-            resetInspection()
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: MeeshySpacing.md) {
-                ZStack {
-                    Circle()
-                        .fill(isCurrent ? AnyShapeStyle(theme.buttonGradient(color: accentColor)) : AnyShapeStyle(theme.inputBackground))
-                        .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
-                    Text("\(index)")
-                        .font(.system(size: MeeshyFont.smallSize, weight: .bold))
-                        .foregroundColor(isCurrent ? .white : theme.textSecondary)
-                }
-                Text(step.label)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: isCurrent ? .semibold : .regular))
-                    .foregroundColor(isCurrent ? theme.textPrimary : theme.textSecondary)
-                Spacer()
-                if isCurrent {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                        .foregroundColor(accent)
-                }
-            }
-            .padding(.horizontal, MeeshySpacing.md)
-            .padding(.vertical, MeeshySpacing.smPlus)
-            .background(
-                RoundedRectangle(cornerRadius: MeeshyRadius.smPlus, style: .continuous)
-                    .fill(isCurrent ? accent.opacity(isDark ? 0.12 : 0.07) : .clear)
             )
         }
         .buttonStyle(.plain)
@@ -1094,327 +988,5 @@ public struct MeeshyImageEditorView: View {
             width: width,
             height: height
         )
-    }
-}
-
-// MARK: - Crop Overlay View
-
-/// Interactive crop frame with corner + edge handles. Aspect-ratio aware:
-/// when `aspectRatio` is set, edge handles are hidden and corners resize
-/// proportionally.
-struct CropOverlayView: View {
-    @Binding var cropRect: CGRect
-    let imageDisplayRect: CGRect
-    let aspectRatio: Double?
-    let image: UIImage
-    /// Fired once when the user first grabs a handle — lets the host know the
-    /// crop frame was deliberately engaged.
-    var onInteraction: () -> Void = {}
-
-    private let handleSize: CGFloat = 24
-    private let handleHitArea: CGFloat = 44
-    private let minCropSize: CGFloat = 56
-
-    @State private var isDragging = false
-    @State private var activeHandle: CropHandle = .none
-    @State private var lastTranslation: CGSize = .zero
-
-    enum CropHandle {
-        case none
-        case topLeft, topRight, bottomLeft, bottomRight
-        case top, bottom, left, right
-        case center
-    }
-
-    var body: some View {
-        ZStack {
-            GeometryReader { geo in
-                Path { path in
-                    path.addRect(CGRect(origin: .zero, size: geo.size))
-                    path.addRect(cropRect)
-                }
-                .fill(Color.black.opacity(0.6), style: FillStyle(eoFill: true))
-            }
-            .allowsHitTesting(false)
-
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFit()
-                .frame(width: imageDisplayRect.width, height: imageDisplayRect.height)
-                .position(x: imageDisplayRect.midX, y: imageDisplayRect.midY)
-                .mask(
-                    Rectangle()
-                        .frame(width: cropRect.width, height: cropRect.height)
-                        .position(x: cropRect.midX, y: cropRect.midY)
-                )
-
-            CropFrameView(rect: cropRect)
-            cropHandles
-        }
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    if !isDragging {
-                        activeHandle = detectHandle(at: value.startLocation)
-                        isDragging = true
-                        lastTranslation = .zero
-                        if activeHandle != .none { onInteraction() }
-                    }
-                    let delta = CGSize(
-                        width: value.translation.width - lastTranslation.width,
-                        height: value.translation.height - lastTranslation.height
-                    )
-                    lastTranslation = value.translation
-                    updateCropRect(with: delta, handle: activeHandle)
-                }
-                .onEnded { _ in
-                    isDragging = false
-                    activeHandle = .none
-                    lastTranslation = .zero
-                    constrainCropRect()
-                }
-        )
-    }
-
-    private var cropHandles: some View {
-        ZStack {
-            cornerHandle(at: .topLeft)
-            cornerHandle(at: .topRight)
-            cornerHandle(at: .bottomLeft)
-            cornerHandle(at: .bottomRight)
-
-            if aspectRatio == nil {
-                edgeHandle(at: .top)
-                edgeHandle(at: .bottom)
-                edgeHandle(at: .left)
-                edgeHandle(at: .right)
-            }
-        }
-    }
-
-    private func cornerHandle(at handle: CropHandle) -> some View {
-        let position: CGPoint = switch handle {
-        case .topLeft: CGPoint(x: cropRect.minX, y: cropRect.minY)
-        case .topRight: CGPoint(x: cropRect.maxX, y: cropRect.minY)
-        case .bottomLeft: CGPoint(x: cropRect.minX, y: cropRect.maxY)
-        case .bottomRight: CGPoint(x: cropRect.maxX, y: cropRect.maxY)
-        default: .zero
-        }
-
-        return ZStack {
-            Color.clear.frame(width: handleHitArea, height: handleHitArea)
-            CornerHandleShape(corner: handle)
-                .stroke(Color.white, lineWidth: 3)
-                .frame(width: handleSize, height: handleSize)
-                .shadow(color: .black.opacity(0.5), radius: 2)
-        }
-        .position(position)
-    }
-
-    private func edgeHandle(at handle: CropHandle) -> some View {
-        let position: CGPoint = switch handle {
-        case .top: CGPoint(x: cropRect.midX, y: cropRect.minY)
-        case .bottom: CGPoint(x: cropRect.midX, y: cropRect.maxY)
-        case .left: CGPoint(x: cropRect.minX, y: cropRect.midY)
-        case .right: CGPoint(x: cropRect.maxX, y: cropRect.midY)
-        default: .zero
-        }
-
-        let isHorizontal = handle == .top || handle == .bottom
-
-        return ZStack {
-            Color.clear.frame(width: handleHitArea, height: handleHitArea)
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.white)
-                .frame(width: isHorizontal ? 30 : 4, height: isHorizontal ? 4 : 30)
-                .shadow(color: .black.opacity(0.5), radius: 2)
-        }
-        .position(position)
-    }
-
-    private func detectHandle(at point: CGPoint) -> CropHandle {
-        let threshold = handleHitArea / 2
-
-        if distance(from: point, to: CGPoint(x: cropRect.minX, y: cropRect.minY)) < threshold { return .topLeft }
-        if distance(from: point, to: CGPoint(x: cropRect.maxX, y: cropRect.minY)) < threshold { return .topRight }
-        if distance(from: point, to: CGPoint(x: cropRect.minX, y: cropRect.maxY)) < threshold { return .bottomLeft }
-        if distance(from: point, to: CGPoint(x: cropRect.maxX, y: cropRect.maxY)) < threshold { return .bottomRight }
-
-        if aspectRatio == nil {
-            if abs(point.y - cropRect.minY) < threshold && point.x > cropRect.minX && point.x < cropRect.maxX { return .top }
-            if abs(point.y - cropRect.maxY) < threshold && point.x > cropRect.minX && point.x < cropRect.maxX { return .bottom }
-            if abs(point.x - cropRect.minX) < threshold && point.y > cropRect.minY && point.y < cropRect.maxY { return .left }
-            if abs(point.x - cropRect.maxX) < threshold && point.y > cropRect.minY && point.y < cropRect.maxY { return .right }
-        }
-
-        if cropRect.contains(point) { return .center }
-        return .none
-    }
-
-    private func distance(from p1: CGPoint, to p2: CGPoint) -> CGFloat {
-        sqrt(pow(p1.x - p2.x, 2) + pow(p1.y - p2.y, 2))
-    }
-
-    private func updateCropRect(with translation: CGSize, handle: CropHandle) {
-        var newRect = cropRect
-
-        switch handle {
-        case .none:
-            return
-        case .center:
-            newRect.origin.x += translation.width
-            newRect.origin.y += translation.height
-        case .topLeft:
-            if let ratio = aspectRatio {
-                let diagonal = min(translation.width, translation.height)
-                newRect.origin.x += diagonal
-                newRect.origin.y += diagonal / ratio
-                newRect.size.width -= diagonal
-                newRect.size.height -= diagonal / ratio
-            } else {
-                newRect.origin.x += translation.width
-                newRect.origin.y += translation.height
-                newRect.size.width -= translation.width
-                newRect.size.height -= translation.height
-            }
-        case .topRight:
-            if let ratio = aspectRatio {
-                let change = max(translation.width, -translation.height)
-                newRect.origin.y -= change / ratio
-                newRect.size.width += change
-                newRect.size.height += change / ratio
-            } else {
-                newRect.origin.y += translation.height
-                newRect.size.width += translation.width
-                newRect.size.height -= translation.height
-            }
-        case .bottomLeft:
-            if let ratio = aspectRatio {
-                let change = max(-translation.width, translation.height)
-                newRect.origin.x -= change
-                newRect.size.width += change
-                newRect.size.height += change / ratio
-            } else {
-                newRect.origin.x += translation.width
-                newRect.size.width -= translation.width
-                newRect.size.height += translation.height
-            }
-        case .bottomRight:
-            if let ratio = aspectRatio {
-                let change = max(translation.width, translation.height)
-                newRect.size.width += change
-                newRect.size.height += change / ratio
-            } else {
-                newRect.size.width += translation.width
-                newRect.size.height += translation.height
-            }
-        case .top:
-            newRect.origin.y += translation.height
-            newRect.size.height -= translation.height
-        case .bottom:
-            newRect.size.height += translation.height
-        case .left:
-            newRect.origin.x += translation.width
-            newRect.size.width -= translation.width
-        case .right:
-            newRect.size.width += translation.width
-        }
-
-        if newRect.width >= minCropSize && newRect.height >= minCropSize {
-            cropRect = newRect
-        }
-    }
-
-    private func constrainCropRect() {
-        var constrained = cropRect
-        constrained.size.width = max(minCropSize, min(constrained.width, imageDisplayRect.width))
-        constrained.size.height = max(minCropSize, min(constrained.height, imageDisplayRect.height))
-        constrained.origin.x = max(imageDisplayRect.minX, min(constrained.origin.x, imageDisplayRect.maxX - constrained.width))
-        constrained.origin.y = max(imageDisplayRect.minY, min(constrained.origin.y, imageDisplayRect.maxY - constrained.height))
-
-        withAnimation(.easeOut(duration: 0.2)) {
-            cropRect = constrained
-        }
-    }
-}
-
-// MARK: - Crop Frame View
-
-private struct CropFrameView: View {
-    let rect: CGRect
-
-    var body: some View {
-        ZStack {
-            Rectangle()
-                .stroke(Color.white, lineWidth: MeeshyBorder.emphasis)
-                .frame(width: rect.width, height: rect.height)
-                .position(x: rect.midX, y: rect.midY)
-                .shadow(color: .black.opacity(0.3), radius: 2)
-
-            GridLinesView()
-                .frame(width: rect.width, height: rect.height)
-                .position(x: rect.midX, y: rect.midY)
-        }
-    }
-}
-
-// MARK: - Grid Lines View
-
-private struct GridLinesView: View {
-    var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                Path { path in
-                    path.move(to: CGPoint(x: geo.size.width / 3, y: 0))
-                    path.addLine(to: CGPoint(x: geo.size.width / 3, y: geo.size.height))
-                    path.move(to: CGPoint(x: geo.size.width * 2 / 3, y: 0))
-                    path.addLine(to: CGPoint(x: geo.size.width * 2 / 3, y: geo.size.height))
-                }
-                .stroke(Color.white.opacity(0.5), lineWidth: MeeshyBorder.hairline)
-
-                Path { path in
-                    path.move(to: CGPoint(x: 0, y: geo.size.height / 3))
-                    path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height / 3))
-                    path.move(to: CGPoint(x: 0, y: geo.size.height * 2 / 3))
-                    path.addLine(to: CGPoint(x: geo.size.width, y: geo.size.height * 2 / 3))
-                }
-                .stroke(Color.white.opacity(0.5), lineWidth: MeeshyBorder.hairline)
-            }
-        }
-    }
-}
-
-// MARK: - Corner Handle Shape
-
-private struct CornerHandleShape: Shape {
-    let corner: CropOverlayView.CropHandle
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let length = rect.width * 0.6
-
-        switch corner {
-        case .topLeft:
-            path.move(to: CGPoint(x: 0, y: length))
-            path.addLine(to: CGPoint(x: 0, y: 0))
-            path.addLine(to: CGPoint(x: length, y: 0))
-        case .topRight:
-            path.move(to: CGPoint(x: rect.width - length, y: 0))
-            path.addLine(to: CGPoint(x: rect.width, y: 0))
-            path.addLine(to: CGPoint(x: rect.width, y: length))
-        case .bottomLeft:
-            path.move(to: CGPoint(x: 0, y: rect.height - length))
-            path.addLine(to: CGPoint(x: 0, y: rect.height))
-            path.addLine(to: CGPoint(x: length, y: rect.height))
-        case .bottomRight:
-            path.move(to: CGPoint(x: rect.width, y: rect.height - length))
-            path.addLine(to: CGPoint(x: rect.width, y: rect.height))
-            path.addLine(to: CGPoint(x: rect.width - length, y: rect.height))
-        default:
-            break
-        }
-
-        return path
     }
 }

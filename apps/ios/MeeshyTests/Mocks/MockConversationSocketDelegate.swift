@@ -15,6 +15,8 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     /// dans le fil), une entrée pour vérifier qu'un visage connu est bien relayé.
     var stubbedAvatarURLs: [String: String] = [:]
     func localAvatarURL(forSender userId: String) -> String? { stubbedAvatarURLs[userId] }
+    var stubbedRings: [String: ServedProfileDecorItem] = [:]
+    func localRing(forSender userId: String) -> ServedProfileDecorItem? { stubbedRings[userId] }
     var lastUnreadMessage: Message?
     var messageTranslations: [String: [MessageTranslation]] = [:]
     var messageTranscriptions: [String: MessageTranscription] = [:]
@@ -78,8 +80,12 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
         restoredForMeBatches.append(ids)
     }
 
+    /// Porte posée par un témoin d'ORDRE : le déchiffrement y attend, ce qui
+    /// ralentit la réconciliation d'un message entrant sans rien changer d'autre.
+    var decryptGate: (@MainActor () async -> Void)?
+
     func decryptMessagesIfNeeded(_ msgs: inout [Message]) async {
-        // no-op in tests
+        await decryptGate?()
     }
 
     var pendingServerIds: [String: String] = [:]

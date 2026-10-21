@@ -27,7 +27,7 @@ const participant = (id: string): DigestParticipant => ({
   displayName: id,
   avatarUrl: null,
   colorHex: '#000000',
-  presence: 'offline',
+  participant: undefined,
 });
 
 const VIEWER = 'viewer';

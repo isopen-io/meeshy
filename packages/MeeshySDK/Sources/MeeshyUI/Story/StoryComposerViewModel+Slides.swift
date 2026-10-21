@@ -47,17 +47,23 @@ extension StoryComposerViewModel {
         }
     }
 
+    /// La slide visée par un travail ASYNCHRONE (sélecteur de photos, mesure
+    /// d'un asset) : celle qu'il a épinglée, sinon la courante. Une slide
+    /// épinglée SUPPRIMÉE entre-temps ne retombe plus sur la courante — le
+    /// média, sa durée ou son URL atterrissaient sur la slide visible, celle
+    /// d'un autre contenu.
+    func slideIndex(pinnedTo slideId: String?) -> Int? {
+        if let slideId {
+            return slides.firstIndex { $0.id == slideId }
+        }
+        return slides.indices.contains(currentSlideIndex) ? currentSlideIndex : nil
+    }
+
     func autoExtendDuration(forElementEnd end: Float, slideId: String? = nil) {
         // Target the slide that owns the element, NOT the currently-visible one.
         // Without this, a video added to slide 0 while the user is on slide 1
         // (PhotosPicker async race) would extend slide 1's duration.
-        let targetIndex: Int = {
-            if let id = slideId, let idx = slides.firstIndex(where: { $0.id == id }) {
-                return idx
-            }
-            return currentSlideIndex
-        }()
-        guard slides.indices.contains(targetIndex) else { return }
+        guard let targetIndex = slideIndex(pinnedTo: slideId) else { return }
         // Miroir legacy : `slide.duration` n'est plus la source de vérité (ignoré par
         // `computedTotalDuration`). Le contenu foreground est désormais couvert par
         // `contentDerivedDuration()` (qui inclut les vidéos non-bg), et le timeline pose

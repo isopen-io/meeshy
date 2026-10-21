@@ -428,6 +428,62 @@ export const callersIn = (contents, nsNames) => {
 // PRÉMATURÉE : l'entrée publique de World Wide sera lue par la landing et la
 // connexion web (#10003, #10007), qui la feront redescendre. Valeur MESURÉE le
 // 2026-10-10.
+// 275 → 277 (2026-10-11, #9947) : `me.gameSeasonsByNumber` et `me.gameLeagueWeeksByWeekKey` —
+// comme les autres `me.game*`, le web les lira par leur table partagée `GAME_ARCHIVE_ROUTES`
+// (`packages/shared/types/game-archive.ts`, écrans de #10018), jamais par le catalogue.
+// Valeur MESURÉE le 2026-10-11.
+// 277 → 276 (2026-10-11, #10002/#10003) : `world.root` a son appelant web — la landing et
+// l'entrée invité lisent `GET /api/v1/world` par le catalogue. Valeur MESURÉE le 2026-10-11.
+// 276 → 275 (2026-10-11, #10103) : `me.categories` et `me.categoriesByCategoryId` ont leur
+// appelant web — les catégories de la liste et la préférence de pliage (`isExpanded`).
+// Mesuré 277 juste avant ce lot (une entrée générée entre-temps, non relevée) : 277 − 2.
+// Valeur MESURÉE le 2026-10-11.
+// 275 → 274 (2026-10-11, #10102) : `world.participantsByParticipantId` a son appelant web —
+// la fiche d'un participant de World Wide (`apps/web/src/lib/api/world-participant-card.ts`),
+// ouverte par l'équipe depuis le fil. Valeur MESURÉE le 2026-10-11.
+// 274 → 278 (#10201, 2026-10-11) : `packs.gloryFrame`, `.gloryFrameBySlug`,
+// `.gloryFrameBySlugInstall` et `.gloryFrameInstalled` (LP0 #10148, `/api/v1/packs/glory-frame`),
+// GÉNÉRÉES avec leurs routes — PRÉMATURÉES : LP1 #10149 (« le web installe des packs de tout
+// domaine »), qui dépend explicitement de LP0, leur donnera leur appelant (`apps/web/src/lib/api/packs.ts`)
+// et ramènera la référence à 274. Valeur MESURÉE le 2026-10-11 sur dev 4c4c56ebd8 (CI run
+// 38150253397 rouge sur 278).
+// 278 -> 279 (#10157, 2026-10-11) : `packAssets.byFile` (L5, `GET /api/v1/pack-assets/:file`, le magasin
+// adressé par contenu des packs officiels), GÉNÉRÉE avec sa route — PRÉMATURÉE : LP1 #10149 lira
+// couvertures, contrats et vignettes par cette adresse. Valeur MESURÉE le 2026-10-11 en local.
+// 279 -> 274 (2026-10-11) : plusieurs lots partis de bases différentes (packs, aperçus
+// Open Graph #10192, accueil des visiteurs sans compte) ont donné leur appelant à cinq
+// entrées sur dev sans relever le cliquet. Valeur MESURÉE sur dev 827ee17789.
+// 274 -> 277 (#10162, 2026-10-11) : `me.gameFramesAtmosphere`, `me.gamePhotoMomentsInvitations` et
+// `me.gamePhotoMomentsPresented` (L10a, `GAME_PHOTO_ROUTES`), GÉNÉRÉES avec leurs routes — comme les
+// autres `me.game*`, le web les lira par leur table partagée (`packages/shared/types/game-routes.ts`),
+// jamais par le catalogue (L10b #10163, L18 #10174). Valeur MESURÉE le 2026-10-11 en local.
+// 277 -> 278 (#10235, 2026-10-12) : `admin.gameSeasonsAppEventsYaml` (`GET /api/v1/admin/game/seasons/app-events.yaml`),
+// le téléchargement DIRECT du bloc `store.app_events` d'andp, pour un script ou un `curl` d'administrateur — l'écran
+// web télécharge le champ `yaml` de la réponse JSON (`admin.gameSeasonsAppEvents`). Les sept autres entrées
+// `admin.gameSeasons*` et `me.gameSeasonsCalendar` ont leur appelant (`apps/web/src/lib/api/admin-game-seasons.ts`,
+// `game-season-calendar.ts`). Valeur MESURÉE le 2026-10-12 en local.
+// 276 -> 275 (#10502, #10499, 2026-10-13) : `me.consents` (`GET /api/v1/me/consents`) a son appelant web —
+// `apps/web/src/lib/api/consents.ts`, qui confirme l'accord d'analyse du contexte de lot `/social/events`
+// (a44deebecf). Valeur MESURÉE le 2026-10-13 en CI (run 38380030207 rouge sur 275) et en local.
+// 275 -> 276 (#10559, 2026-10-13) : `affiliate.byTokenOg` (`GET /api/v1/affiliate/:token/og`) — la page d'aperçu
+// Open Graph d'un lien d'affiliation, servie par la passerelle aux ROBOTS que Traefik trie par User-Agent
+// (jumelle des aperçus `/chat/<lien>` et `/l/<jeton>`). Aucun client ne l'appelle jamais : l'entrée existe parce
+// que le catalogue est généré depuis le manifeste. Valeur MESURÉE le 2026-10-13 en CI (run 38460483889 rouge sur 276).
+// 271 -> 270 (#7558, 2026-10-14) : `conversations.byIdMessagesByMessageIdPin` (`PUT`/`DELETE
+// …/messages/:messageId/pin`) a son appelant web — `apps/web/src/lib/api/pin-message.ts`, le geste « Épingler /
+// Désépingler » de la feuille « Plus… » du fil. Valeur MESURÉE le 2026-10-14 en local.
+// 270 -> 267 (#10613, #7836, #10615, 2026-10-14) : la fiche de groupe du web gagne trois appelants —
+// `conversations.byIdParticipantsByParticipantKey` (`DELETE …/participants/:key`, expulser),
+// `conversations.byIdParticipantsByUserIdBan` (`…/ban`) et `conversations.byIdParticipantsByUserIdRole`
+// (`…/participants/:key/role`, promouvoir/rétrograder). Valeur MESURÉE en CI (run 38602621428, rouge sur 267).
+// 265 -> 277 (#10709, 2026-10-15) : la relecture des vendeurs tiers d'apparence inscrit au catalogue, pour les
+// fonds, les contours et les bannières, `…BySlugContract`, `…BySlugReview`, `…Pending` et `…Submissions` —
+// 12 entrées. Prématurées : la passerelle les sert, aucun client n'a encore l'écran de modération ni de dépôt
+// d'un pack vendeur. Valeur MESURÉE le 2026-10-15 en local sur 79129ae28f.
+// 277 -> 276 (2026-10-17) : une entrée de plus a trouvé son appelant sur dev. Valeur MESURÉE en CI
+// (run 38990820855, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
+// 276 -> 275 (2026-10-19) : une entrée de plus a trouvé son appelant sur dev, révélé une fois la première
+// peinture repassée sous son plafond (#10974). Valeur MESURÉE en CI (run 39191671718, « AMÉLIORATION NON ENREGISTRÉE ») et en local sur origin/dev.
 const BASELINE_DEAD_ENTRIES = 275;
 
 export const readWorld = (root) => {

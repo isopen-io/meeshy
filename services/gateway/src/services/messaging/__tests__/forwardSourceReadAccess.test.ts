@@ -70,7 +70,7 @@ const PEER_IN_SOURCE = '68b000000000000000000012';
 const secondsFrom = (instant: Date, seconds: number): Date => new Date(instant.getTime() + seconds * 1000);
 
 const sourceMessage = (overrides: Row = {}): Row =>
-  messageRow({ ephemeralDuration: null, attachments: [], _count: { attachments: 1 }, ...overrides });
+  messageRow({ ephemeralDuration: null, attachments: [], _count: { attachments: 1 }, encryptionMode: null, conversation: { encryptionEnabledAt: null, encryptionMode: null }, ...overrides });
 
 const senderInTarget = (overrides: Row = {}): Row =>
   participantRow({ id: SENDER, conversationId: TARGET_CONVERSATION, ...overrides });

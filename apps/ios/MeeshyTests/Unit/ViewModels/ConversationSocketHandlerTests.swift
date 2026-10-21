@@ -205,7 +205,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let apiMsg = makeAPIMessage(id: "mymsg", senderId: currentUserId, content: "My msg")
         socket.simulateMessage(apiMsg)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertEqual(delegate.messages.count, 0, "Should not append own message from socket")
         XCTAssertEqual(
@@ -225,7 +225,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let apiMsg = makeAPIMessage(id: "existingmsg", senderId: otherUserId, content: "duplicate")
         socket.simulateMessage(apiMsg)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertEqual(delegate.messages.count, 1, "Should not add duplicate")
     }
@@ -454,7 +454,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.simulateMessageEdited(editedApiMsg)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         // Without persistence wired, delegate.messages stays as seeded.
         XCTAssertEqual(delegate.messages[0].content, "Original")
@@ -526,7 +526,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.simulateMessageEdited(editedApiMsg)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertTrue(delegate.invalidatedTranslationIds.isEmpty,
                       "une transition d'état d'appel ne périme aucune traduction")
@@ -648,7 +648,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         socket.simulateMessageExpired(MessageExpiredEvent(messageId: "unknown", conversationId: conversationId))
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertFalse(delegate.messages[0].isDeleted)
         XCTAssertEqual(delegate.messages[0].content, "Keep me")
@@ -662,7 +662,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         socket.simulateMessageDeleted(MessageDeletedEvent(messageId: "unknown", conversationId: conversationId))
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertFalse(delegate.messages[0].isDeleted)
         XCTAssertEqual(delegate.messages[0].content, "Keep me")
@@ -710,7 +710,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "add")
         socket.reactionAdded.send(event)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         // Without persistence wired, the production reactionAdded path is a no-op
         // on delegate.messages. The seeded reaction stays as-is — dedup is now
@@ -813,7 +813,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         socket.typingStarted.send(TypingEvent(userId: currentUserId, username: "Me", conversationId: conversationId))
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertTrue(delegate.typingUsernames.isEmpty, "Should not add self to typing list")
     }
@@ -826,7 +826,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await waitUntil("le frappeur apparaît") { delegate.typingUsernames.count == 1 }
 
         socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: conversationId))
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertEqual(delegate.typingUsernames.count, 1, "Should not duplicate typing username")
     }
@@ -837,7 +837,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "Alice", conversationId: "other-conv"))
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertTrue(delegate.typingUsernames.isEmpty, "Should filter events for other conversations")
     }
@@ -1045,7 +1045,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.readStatusUpdated.send(event)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .sent, "Should not update own read status events")
     }
@@ -1070,7 +1070,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.readStatusUpdated.send(event)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertEqual(delegate.messages[0].deliveryStatus, .read, "Should not downgrade from read to delivered")
     }
@@ -1080,7 +1080,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
     // `message:pending-delivered` announces that the offline queue for the
     // current user was just replayed. iOS had no listener at all (verified:
     // no occurrence anywhere under apps/ios or packages/MeeshySDK before this
-    // lot) — web-v2 already reacts to it by resyncing the named conversations
+    // lot) — the web already reacts to it by resyncing the named conversations
     // (`apps/web/src/lib/api/socket.ts`). The handler mirrors the existing
     // reconnect/foreground resync path (`triggerSyncIfNeeded` →
     // `delegate.syncMissedMessages()`), scoped to the currently open
@@ -1108,7 +1108,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
             PendingMessagesDeliveredEvent(count: 1, conversationIds: ["some-other-conversation"])
         )
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertFalse(delegate.syncMissedCalled,
             "a drain that never touched the open conversation must not resync it")
@@ -1188,7 +1188,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.attachmentStatusUpdated.send(event)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertNil(MediaConsumptionStore.shared.fraction(for: attachmentId))
     }
@@ -1214,7 +1214,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.attachmentStatusUpdated.send(event)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertNil(
             MediaConsumptionStore.shared.fraction(for: attachmentId),
@@ -1497,7 +1497,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         // Let the runloop settle so the Combine pipeline delivery (receive(on:
         // DispatchQueue.main)) is fully wired before we emit.
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         let apiMsg = makeAPIMessage(id: "duptest", senderId: otherUserId, content: "Once")
         socket.simulateMessage(apiMsg)
@@ -1672,7 +1672,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
                 hiddenAt: nil
             )
         )
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         let fetched = try await db.read { db in try MessageRecord.fetchOne(db, key: "other_conv_msg") }
         XCTAssertNotNil(fetched, "une référence hors du fil courant n'est pas l'affaire de ce handler")
@@ -1717,7 +1717,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
                 restoredAt: nil
             )
         )
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertTrue(
             delegate.restoredForMeBatches.isEmpty,
@@ -1965,6 +1965,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(rows.first?.localId, cid, "the optimistic row's localId is preserved")
         XCTAssertEqual(rows.first?.serverId, "srv_race_1",
             "applyEvent(.serverAck) must backfill the server id on the optimistic row")
+        // La publication suivante du store rend la ligne sous son id SERVEUR : sans la table
+        // `cid → serverId`, la ligne optimiste n'était ni dans les ids reçus ni marquée
+        // remplacée, et `mergeIntoMessages` gardait les deux bulles.
+        XCTAssertEqual(delegate.pendingServerIds[cid], "srv_race_1",
+            "l'écho qui devance la réponse REST enregistre la correspondance, comme l'envoi")
     }
 
     /// An own-message echo from the REST broadcast path carries NO
@@ -2023,7 +2028,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.simulateMessage(echo)
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         let conversationId = self.conversationId
         let rows = try await db.read { db in
@@ -2138,7 +2143,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         // Two attachments on the SAME message, each translated to "en".
         socket.audioTranslationReady.send(
@@ -2159,7 +2164,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let (sut, delegate, socket) = makeSUT()
         _ = sut
 
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         socket.audioTranslationReady.send(
             makeAudioTranslationEvent(messageId: "m1", attachmentId: "attA", targetLanguage: "en", url: "https://x/old.mp3")
@@ -2190,7 +2195,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         // Send exact same ID again — should be dropped by dedup
         delegate.lastUnreadMessage = nil
         socket.messageReceived.send(msg)
-        await drainMainQueue()
+        await drainEvents(of: sut)
         XCTAssertNil(delegate.lastUnreadMessage, "Duplicate message ID should be suppressed by dedup window")
     }
 
@@ -2257,7 +2262,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         socket.typingStarted.send(
             TypingEvent(userId: "cap_user_0", username: "CapUser0", conversationId: conversationId)
         )
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         // Count must not grow — "CapUser0" was already in the list.
         XCTAssertEqual(delegate.typingUsernames.count, 200, "Re-sending existing user must not duplicate the entry")
@@ -2307,7 +2312,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
         socket.messageReceived.send(
             makeAPIMessage(id: "burst_msg_0", senderId: otherUserId, content: "burst 0")
         )
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertNil(
             delegate.lastUnreadMessage,
@@ -2385,7 +2390,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         sut.activate()
         sut.armSocketSubscriptions()
-        await drainMainQueue()
+        await drainEvents(of: sut)
 
         XCTAssertTrue(delegate.accessRevokedReasons.isEmpty)
     }

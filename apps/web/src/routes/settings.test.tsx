@@ -6,7 +6,7 @@ import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-su
 
 import type { AppPreferences } from '@/lib/api/app-preferences';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
-import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
+import { loadDeviceTranslationCatalog } from '@/lib/i18n-device-translation-catalog';
 
 import {
   AboutSection,
@@ -15,10 +15,10 @@ import {
   DataSection,
   LogoutButton,
   NotificationsSection,
+  PacksSection,
   PrivacySection,
   ProfileCard,
-  SETTINGS_HEADER_HEIGHT,
-  SETTINGS_TOP_RESERVE,
+  SettingsContent,
   SettingsHeaderBar,
   ToolsSection,
   type PreferencesView,
@@ -33,8 +33,9 @@ import {
  * qu'aucun contrôle n'est offert quand il ne peut rien faire.
  */
 
-beforeAll(() => {
+beforeAll(async () => {
   ensureHappyDomRegistered();
+  await loadDeviceTranslationCatalog('fr');
 });
 
 afterAll(async () => {
@@ -71,19 +72,26 @@ const switchNamed = (host: HTMLElement, name: string) => host.querySelector(`[ro
 
 const linkTo = (host: HTMLElement, href: string) => host.querySelector(`a[href="${href}"]`);
 
-describe('le couloir des disques flottants', () => {
-  /* Les deux disques se posent entre 126 et 178 px du haut (`floating-corridor.ts`).
-     Au repos, la carte de profil — un contrôle — commence sous ce couloir,
-     comme la première rangée de la cloche et le plateau du Flux. */
-  test('le contenu réserve la hauteur du couloir sous l’en-tête', () => {
-    expect(SETTINGS_HEADER_HEIGHT + SETTINGS_TOP_RESERVE).toBe(FLOATING_CORRIDOR_BOTTOM);
+describe('le haut de l’écran', () => {
+  /* #10634 — l'écran réservait sous son en-tête la hauteur du couloir des
+     disques flottants (122 px vides). `SettingsView` d'iOS commence sous son
+     en-tête (`.padding(.top, MeeshySpacing.sm)`) et les disques flottent
+     par-dessus, comme sur le profil : la carte de profil y commence aussi. */
+  test('le contenu commence sous l’en-tête, à la même cote que le profil, sans réserver le couloir', () => {
+    const root = dom(
+      <SettingsContent>
+        <p>contenu</p>
+      </SettingsContent>,
+    ).firstElementChild;
+    expect(root?.getAttribute('style') ?? '').not.toContain('padding-top');
+    expect(root?.className.split(' ')).toContain('pt-2');
   });
 });
 
 describe('l’en-tête', () => {
   test('un retour NOMMÉ vers les conversations, et le titre', () => {
     const host = dom(<SettingsHeaderBar language="fr" />);
-    expect(host.querySelector('a[aria-label="Revenir aux conversations"]')?.getAttribute('href')).toBe('/');
+    expect(host.querySelector('a[aria-label="Revenir aux conversations"]')?.getAttribute('href')).toBe('/chats');
     expect(host.querySelector('h1')?.textContent).toBe('Réglages');
   });
 
@@ -290,6 +298,18 @@ describe('les données — seul l’export reste offert', () => {
   });
 });
 
+describe('les packs et téléchargements (#10149)', () => {
+  /* Demande porteur 2026-10-11 : la Boutique des stickers ET celle des cadres
+     du jeu. Un volet des réglages, sans route neuve (première peinture). */
+  test('la rangée ouvre le volet des packs des réglages', () => {
+    const host = dom(<PacksSection language="fr" />);
+    const row = host.querySelector<HTMLAnchorElement>('[data-settings-packs]');
+    expect(row?.getAttribute('href')).toBe('/settings?volet=packs');
+    expect(row?.textContent).toContain('Boutique des stickers et des cadres');
+    expect(host.textContent).toContain('PACKS ET TÉLÉCHARGEMENTS');
+  });
+});
+
 describe('la galerie de la coque Android (#8308)', () => {
   test('hors coque Android, aucune bascule de galerie n’est offerte', () => {
     const host = dom(<DataSection language="fr" />);
@@ -304,6 +324,51 @@ describe('la galerie de la coque Android (#8308)', () => {
     expect(on.textContent).toContain('album Meeshy');
     const off = dom(<DataSection language="fr" gallery={{ enabled: false, onToggle: noop }} />);
     expect(switchNamed(off, 'Enregistrer dans la galerie')?.getAttribute('aria-checked')).toBe('false');
+  });
+});
+
+describe('la traduction sur l’appareil (#9898)', () => {
+  test('sans réglage fourni, aucune bascule n’est offerte', () => {
+    expect(dom(<DataSection language="fr" />).querySelector('[data-setting="deviceTranslation"]')).toBeNull();
+  });
+
+  test('la bascule s’annonce avec son état ; la légende nomme les sept langues, la taille d’une paire et ce que le serveur garde', () => {
+    const on = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
+    const toggle = switchNamed(on, 'Traduire sur cet appareil');
+    expect(toggle?.getAttribute('aria-checked')).toBe('true');
+    expect(toggle?.getAttribute('data-setting')).toBe('deviceTranslation');
+    expect(toggle?.hasAttribute('disabled')).toBe(false);
+    for (const language of ['français', 'anglais', 'espagnol', 'portugais', 'allemand', 'italien', 'arabe']) expect(on.textContent).toContain(language);
+    expect(on.textContent).toContain('110 Mo');
+    expect(on.textContent).toContain('une seule fois');
+    expect(on.textContent).toContain('par le serveur');
+    expect(on.textContent).toContain('non chiffrées de bout en bout');
+
+    const off = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
+    expect(switchNamed(off, 'Traduire sur cet appareil')?.getAttribute('aria-checked')).toBe('false');
+  });
+
+  test('tant que l’accord n’est pas lu sur l’appareil, la bascule existe mais n’est pas actionnable', () => {
+    const host = dom(<DataSection language="fr" deviceTranslation={{ ready: false, enabled: false, onToggle: noop }} />);
+    expect(switchNamed(host, 'Traduire sur cet appareil')?.hasAttribute('disabled')).toBe(true);
+  });
+
+  test('la rangée est légendée : la légende est lue avec la bascule', () => {
+    const host = dom(<DataSection language="fr" deviceTranslation={{ ready: true, enabled: false, onToggle: noop }} />);
+    const toggle = switchNamed(host, 'Traduire sur cet appareil');
+    const captionId = toggle?.getAttribute('aria-describedby') ?? '';
+    expect(captionId).not.toBe('');
+    expect(host.querySelector(`[id="${captionId}"]`)?.textContent).toContain('110 Mo');
+  });
+
+  test('chaque langue d’interface la dit, depuis son catalogue chargé à la demande', async () => {
+    for (const language of ['en', 'es', 'pt', 'de', 'it', 'ar'] as const) {
+      await Promise.all([loadInterfaceCatalog(language), loadDeviceTranslationCatalog(language)]);
+      const host = dom(<DataSection language={language} deviceTranslation={{ ready: true, enabled: true, onToggle: noop }} />);
+      const toggle = host.querySelector('[data-setting="deviceTranslation"]');
+      expect(toggle?.getAttribute('aria-label') ?? '').not.toBe('');
+      expect(host.textContent).toContain('110');
+    }
   });
 });
 

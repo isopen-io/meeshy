@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { ModelPostMenu, type PostMenuHost } from '@/components/feed-post-menu';
 import { GlyphSvg, Glyph } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import { CommentsSheetPortal } from '@/components/publication-comments-sheet-lazy';
@@ -12,6 +13,7 @@ import { cachedCardSeed } from '@/lib/api/card-caches';
 import { apiDeps } from '@/lib/api/deps';
 import { feedQuery } from '@/lib/api/feed';
 import type { FeedPost } from '@/lib/api/feed-pages';
+import type { PostToggleKind } from '@/lib/feed/interactions';
 import { postQueryOptions } from '@/lib/api/publication-detail';
 import { reelsQuery } from '@/lib/api/reels';
 import { resolveFeedCardModel, type FeedCardModel } from '@/lib/feed/card-model';
@@ -19,13 +21,17 @@ import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
 import { currentHistory, reelsExitOf } from '@/lib/reels/exit';
+import { createReelMediaUnlocker } from '@/lib/reels/media-unlock';
 import { reelPrimeSourceOf } from '@/lib/reels/scene';
+import { createPagerSettle } from '@/lib/reels/settle';
 import { useReelPreload } from '@/lib/reels/use-reel-preload';
-import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels } from '@/lib/reels/thread';
+import { activeIndexOf, composeReelThread, entryReelIds, holdReelThread, neighborIndex, pageModeOf, reelSeedOf, reelVisitorState, shouldLoadMoreReels, withoutHiddenReels } from '@/lib/reels/thread';
 import { useRoute } from '@/lib/router';
 import { chromeYields } from '@/lib/view/chrome-yields';
 import { sceneYieldOf, writingSceneScale, yieldingScene } from '@/lib/view/scene-yields';
 import { REEL_COLUMN_STYLE } from '@/lib/view/reading-column';
+import { SWIPED_REEL, entryAttribution } from '@/lib/view/content-open';
+import { useViewAttribution } from '@/lib/view/reading-telemetry';
 import { screenGestureYields, shortcutYieldsToTarget } from '@/lib/view/shortcut-scope';
 import { useCommentsSheetHost } from '@/lib/view/use-comments-sheet-host';
 import { useMinute } from '@/lib/view/use-minute';
@@ -50,7 +56,8 @@ import { href, navigate } from '@/routes/route-table';
  * - **Le défilement est celui du navigateur** : `scroll-snap` obligatoire, un
  *   arrêt par réel (`snap-always`). Le geste reste sur le compositeur — aucun
  *   suivi du doigt réécrit en JavaScript, aucune transition qui l'amortit. Le
- *   réel visible se lit sur la position (`activeIndexOf`), une fois par image.
+ *   réel visible se lit sur la position (`activeIndexOf`), une fois le geste
+ *   FINI (`lib/reels/settle.ts`) : jamais à mi-balayage.
  * - **Au clavier**, flèches et Page haut/bas valent le balayage ; le défilement
  *   est instantané sous `prefers-reduced-motion`. Échap referme.
  * - **La sortie est l'historique** : `/reels` est une adresse, le retour du
@@ -117,19 +124,45 @@ export function ReelsBackButton({
   language,
   onBack,
   hidden = false,
+  trailing,
 }: {
   readonly language: InterfaceLanguage;
   readonly onBack: () => void;
   /** La feuille de commentaires est ouverte (`chromeYields`, #8601). */
   readonly hidden?: boolean;
+  /** Le menu « … » du réel regardé, au bord de FIN (#11156). */
+  readonly trailing?: React.ReactNode;
 }) {
   return (
     <ViewerTopBar
       placement="overlay"
       hidden={hidden}
+      {...(trailing === undefined ? {} : { trailing })}
       exit={{ kind: 'back', label: translate(language, 'reels.back'), onExit: onBack, probe: { 'data-reels-back': '' } }}
     />
   );
+}
+
+/**
+ * **LE MENU « … » DU RÉEL REGARDÉ** (#11156) — miroir `ReelMoreOptionsMenu`
+ * (`ReelsPlayerView+ActionRail.swift`), monté par la barre haute au bord de
+ * FIN : les MÊMES entrées que la carte du fil (`postMenuEntries`, via
+ * `ModelPostMenu`) — Ouvrir, Copier, Partager, Enregistrer, puis Épingler ·
+ * Modifier · Supprimer pour l'auteur, Retirer (modération) · Signaler pour
+ * les autres.
+ */
+export function ReelsMoreMenu({
+  model,
+  menu,
+  onShare,
+  onGesture,
+}: {
+  readonly model: FeedCardModel;
+  readonly menu: PostMenuHost;
+  readonly onShare: (postId: string) => void;
+  readonly onGesture: (postId: string, kind: PostToggleKind) => void;
+}) {
+  return <ModelPostMenu model={model} isDetail={false} tone="overlay" menu={menu} onShare={onShare} onGesture={onGesture} />;
 }
 
 /** Le démarrage à froid SEUL — jamais sur un rafraîchissement de fond. */
@@ -192,10 +225,22 @@ export default function ReelsScreen() {
      réel d'entrée. */
   const { params, search } = useRoute();
   const seed = reelSeedOf({ params, search });
+  /* LE PREMIER RÉEL porte la provenance d'entrée (tap d'un listing, lien,
+     notification…), les réels atteints par balayage `listing` / `reels` (#10483). */
+  const entry = useViewAttribution();
+  const [viewAttribution] = useState(() => entryAttribution(entry, SWIPED_REEL));
   const online = useOnline();
   const { languages: readerLanguages } = useReaderLanguages();
   const minute = useMinute();
-  const { announcement, onGesture, onShare, onRepost, repostConfirm } = usePostGesture();
+  /* LE RÉEL RETIRÉ QUITTE LA PILE AVANT LA RÉPONSE (#11156), et y revient
+     si la passerelle refuse — le registre des caisses le rend aussi
+     (`snapshotCardPost`), mais la graine se relit pendant le vol. */
+  const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(() => new Set());
+  const onDeleting = useCallback((postId: string) => {
+    setHiddenIds((ids) => new Set([...ids, postId]));
+    return () => setHiddenIds((ids) => new Set([...ids].filter((id) => id !== postId)));
+  }, []);
+  const { announcement, onGesture, onShare, onRepost, repostConfirm, menu } = usePostGesture({ onDeleting });
   const [soundOn, setSoundOn] = useState(hasUserActivation);
   const toggleSound = useCallback(() => setSoundOn((on) => !on), []);
   const soundBlocked = useCallback(() => setSoundOn(false), []);
@@ -245,12 +290,16 @@ export default function ReelsScreen() {
   const held = useRef<{ readonly ids: readonly string[]; readonly activeId: string }>({ ids: [], activeId: '' });
   const thread = useMemo(
     () =>
-      holdReelThread({
-        heldIds: held.current.ids,
-        activeId: held.current.activeId,
-        composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
-      }),
-    [entryIds, known, reels.data],
+      withoutHiddenReels(
+        holdReelThread({
+          heldIds: held.current.ids,
+          activeId: held.current.activeId,
+          composed: composeReelThread({ entryIds, known, served: reels.data ?? EMPTY_POSTS }),
+          ...(seed !== undefined ? { entryId: seed } : {}),
+        }),
+        hiddenIds,
+      ),
+    [entryIds, known, reels.data, seed, hiddenIds],
   );
   /* UN MODÈLE PAR PUBLICATION, GARDÉ tant que la publication, la langue et la
      minute ne changent pas (#9277) : une page de réels de plus ne recompose
@@ -299,21 +348,9 @@ export default function ReelsScreen() {
     anchorTop: 0,
     reducedMotion: prefersReducedMotion(),
   });
-  const frame = useRef<number | null>(null);
-  const onScroll = useCallback(() => {
-    if (frame.current !== null) return;
-    frame.current = window.requestAnimationFrame(() => {
-      frame.current = null;
-      const el = scroller.current;
-      if (el !== null) setActiveIndex(activeIndexOf({ scrollTop: el.scrollTop, pageHeight: el.clientHeight, count }));
-    });
-  }, [count]);
-  useEffect(
-    () => () => {
-      if (frame.current !== null) window.cancelAnimationFrame(frame.current);
-    },
-    [],
-  );
+  const countRef = useRef(count);
+  countRef.current = count;
+  const [unlocker] = useState(createReelMediaUnlocker);
 
   const close = useCallback(() => {
     if (reelsExitOf(currentHistory()) === 'back') window.history.back();
@@ -372,6 +409,45 @@ export default function ReelsScreen() {
   });
   const ask = invitation.ask;
 
+  /* LE RÉEL REGARDÉ SE DÉCIDE GESTE FINI (`lib/reels/settle.ts`) — doigt levé,
+     puis `scrollend` ou un court silence : aucune pause, aucune lecture, aucun
+     montage de lecteur pendant les images du balayage. Le doigt qui se lève
+     BÉNIT aussi les voisins montés (`lib/reels/media-unlock.ts`) : sous iOS,
+     le réel suivant précharge alors vraiment, et joue avec le son. Écouteurs
+     PASSIFS : un `touchstart` actif retarderait le départ du défilement. */
+  const pagerShown = !loading && !failed && !coldOffline && count > 0;
+  useEffect(() => {
+    const el = scroller.current;
+    if (!pagerShown || el === null) return undefined;
+    const settle = createPagerSettle({
+      onSettle: () => setActiveIndex(activeIndexOf({ scrollTop: el.scrollTop, pageHeight: el.clientHeight, count: countRef.current })),
+    });
+    const lifted = (): void => {
+      unlocker.unlock(el);
+      settle.touchEnded();
+    };
+    const passive = { passive: true } as const;
+    el.addEventListener('scroll', settle.scrolled, passive);
+    el.addEventListener('scrollend', settle.scrollEnded, passive);
+    el.addEventListener('touchstart', settle.touchStarted, passive);
+    el.addEventListener('touchend', lifted, passive);
+    el.addEventListener('touchcancel', lifted, passive);
+    return () => {
+      el.removeEventListener('scroll', settle.scrolled);
+      el.removeEventListener('scrollend', settle.scrollEnded);
+      el.removeEventListener('touchstart', settle.touchStarted);
+      el.removeEventListener('touchend', lifted);
+      el.removeEventListener('touchcancel', lifted);
+      settle.dispose();
+    };
+  }, [pagerShown, unlocker]);
+
+  const activeModel = pagerShown ? models[active] : undefined;
+  const reelMenu =
+    activeModel === undefined ? undefined : (
+      <ReelsMoreMenu key={activeModel.id} model={activeModel} menu={menu} onShare={visitor ? ask : onShare} onGesture={visitor ? ask : onGesture} />
+    );
+
   const body = loading ? (
     <ReelsSkeleton language={language} />
   ) : failed || coldOffline ? (
@@ -387,7 +463,6 @@ export default function ReelsScreen() {
         aria-label={translate(language, 'reels.title')}
         aria-busy={isFetchingNextPage}
         data-reels-pager
-        onScroll={onScroll}
         /* LA FEUILLE RÉCLAME LE GESTE (D-90, miroir du rail `inert` de
            `routes/story.tsx`) — un sous-arbre inerte n'intercepte plus le
            doigt ni le clavier : sans elle, un balayage sous la feuille
@@ -415,6 +490,7 @@ export default function ReelsScreen() {
             onGesture={visitor ? ask : onGesture}
             onShare={visitor ? ask : onShare}
             onSoundBlocked={soundBlocked}
+            viewAttribution={viewAttribution}
             chromeHidden={chromeYielded}
             {...(canWrite ? { onComment: comments.open, onRepost } : { onComment: ask })}
           />
@@ -425,7 +501,7 @@ export default function ReelsScreen() {
   );
 
   return (
-    <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded}>
+    <ReelsFrame language={language} onBack={close} announcement={announcement} chromeHidden={chromeYielded} trailing={reelMenu}>
       {body}
       {repostConfirm}
       {invitation.dialog}
@@ -439,12 +515,14 @@ export function ReelsFrame({
   announcement,
   children,
   chromeHidden = false,
+  trailing,
 }: {
   readonly language: InterfaceLanguage;
   readonly onBack: () => void;
   readonly announcement: string;
   readonly children: React.ReactNode;
   readonly chromeHidden?: boolean;
+  readonly trailing?: React.ReactNode;
 }) {
   return (
     <div data-reels className="h-dvh overflow-hidden bg-media-backdrop text-on-media">
@@ -462,7 +540,7 @@ export function ReelsFrame({
         {/* « Retour » EN TÊTE du document (#6498) : sa place à l'écran est
             absolue, mais le clavier et le lecteur d'écran suivent l'ordre du
             document — après le fil, il fallait traverser chaque réel monté. */}
-        <ReelsBackButton language={language} onBack={onBack} hidden={chromeHidden} />
+        <ReelsBackButton language={language} onBack={onBack} hidden={chromeHidden} {...(trailing === undefined ? {} : { trailing })} />
         {children}
       </div>
       <p role="status" aria-live="polite" className="sr-only">

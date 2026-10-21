@@ -13,7 +13,9 @@
  * ne garde que ses clés : rien d'autre ne traverse, même si le script en
  * écrivait davantage.
  *
- * La sauvegarde part chaque nuit à minuit, heure de Paris ; le contrôle a lieu
+ * La sauvegarde part chaque nuit à minuit, heure de Paris, en production ; un
+ * autre environnement déclare la sienne par `BACKUP_RUN_TIME=HH:MM` (le staging
+ * se sauvegarde à 2 h 30, hors de la fenêtre de la production, #10460). Le contrôle a lieu
  * chaque jour à 5 h, heure de Paris. Une sauvegarde réussie de plus de 26 h est
  * VIEILLIE : la passerelle surveille le script, pas l'inverse, et c'est ce qui
  * attrape une sauvegarde qui ne s'est jamais lancée.
@@ -64,6 +66,18 @@ export function backupStatusFile(env: Readonly<Record<string, string | undefined
   return configured ? configured : BACKUP_STATUS_FILE_DEFAULT;
 }
 
+export type BackupSchedule = { readonly hour: number; readonly minute: number };
+
+export const BACKUP_DEFAULT_SCHEDULE: BackupSchedule = { hour: BACKUP_RUN_HOUR, minute: 0 };
+
+const RUN_TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+/** L'heure de sauvegarde de CET environnement (`BACKUP_RUN_TIME=HH:MM`) ; illisible ou absente ⇒ minuit, celle de la production. */
+export function backupScheduleFromEnv(env: Readonly<Record<string, string | undefined>> = process.env): BackupSchedule {
+  const match = RUN_TIME.exec(env.BACKUP_RUN_TIME?.trim() ?? '');
+  return match ? { hour: Number(match[1]), minute: Number(match[2]) } : BACKUP_DEFAULT_SCHEDULE;
+}
+
 export function parseBackupVerdict(raw: unknown): BackupVerdict | null {
   const parsed = backupVerdictSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
@@ -112,22 +126,24 @@ const parisOffsetMs = (instantMs: number): number => {
 };
 
 /**
- * L'instant UTC où Paris affiche `hour:00` ce jour-là. Minuit et 5 h existent
+ * L'instant UTC où Paris affiche `hour:minute` ce jour-là. Minuit et 5 h existent
  * une et une seule fois chaque jour (les changements d'heure ont lieu à 2 h et
- * 3 h) : deux raffinements du décalage suffisent.
+ * 3 h) : deux raffinements du décalage suffisent. Une heure de la fenêtre du
+ * changement (2 h 30) se résout sur l'un de ses deux instants, ou sur l'heure
+ * d'après quand elle n'existe pas — comme le fait systemd.
  */
-function parisInstant(year: number, month: number, day: number, hour: number): number {
-  const wallAsUtc = Date.UTC(year, month - 1, day, hour);
+function parisInstant(year: number, month: number, day: number, hour: number, minute: number): number {
+  const wallAsUtc = Date.UTC(year, month - 1, day, hour, minute);
   const first = wallAsUtc - parisOffsetMs(wallAsUtc);
   return wallAsUtc - parisOffsetMs(first);
 }
 
-/** Le prochain `hour:00` à Paris, STRICTEMENT après `after`. */
-export function nextParisTime(after: Date, hour: number): Date {
+/** Le prochain `hour:minute` à Paris, STRICTEMENT après `after`. */
+export function nextParisTime(after: Date, hour: number, minute = 0): Date {
   const today = parisWallClock(after.getTime());
   const candidates = [0, 1, 2].map((offset) => {
     const civil = new Date(Date.UTC(today.year, today.month - 1, today.day + offset));
-    return parisInstant(civil.getUTCFullYear(), civil.getUTCMonth() + 1, civil.getUTCDate(), hour);
+    return parisInstant(civil.getUTCFullYear(), civil.getUTCMonth() + 1, civil.getUTCDate(), hour, minute);
   });
   return new Date(candidates.find((candidate) => candidate > after.getTime()) ?? candidates[2]);
 }
@@ -149,7 +165,7 @@ export type BackupCard = {
 };
 
 /** La carte servie par `GET /admin/monitoring` — `null` quand le verdict est inconnu. */
-export function backupCardOf(verdict: BackupVerdict | null, now: Date): BackupCard | null {
+export function backupCardOf(verdict: BackupVerdict | null, now: Date, schedule: BackupSchedule = BACKUP_DEFAULT_SCHEDULE): BackupCard | null {
   if (verdict === null) return null;
   const age = ageMs(verdict.lastSuccessAt, now);
   return {
@@ -159,7 +175,7 @@ export function backupCardOf(verdict: BackupVerdict | null, now: Date): BackupCa
     lastSuccessAt: verdict.lastSuccessAt,
     ageSeconds: age === null ? null : Math.max(0, Math.floor(age / 1000)),
     stale: isStale(age),
-    nextRunAt: nextParisTime(now, BACKUP_RUN_HOUR).toISOString(),
+    nextRunAt: nextParisTime(now, schedule.hour, schedule.minute).toISOString(),
     lastSuccess: verdict.lastSuccess,
   };
 }

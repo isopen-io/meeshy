@@ -245,6 +245,19 @@ const browserPictureInPicture = (video: PictureInPictureVideo): boolean =>
 const knownDuration = (element: HTMLMediaElement): number =>
   Number.isFinite(element.duration) && element.duration > 0 ? element.duration : 0;
 
+/**
+ * POURQUOI `play()` A REJETÉ — `interrupted` : un `pause()` ou un `load()` a
+ * devancé la lecture (balayage rapide), les événements natifs disent déjà
+ * l'état ; `refused` : la politique de lecture automatique (son sans geste,
+ * économie d'énergie iOS), le média reste lisible au prochain tap ; `broken` :
+ * le média ne se lit pas.
+ */
+function playRefusalOf(reason: unknown): 'interrupted' | 'refused' | 'broken' {
+  const name = typeof reason === 'object' && reason !== null && 'name' in reason ? String(reason.name) : '';
+  if (name === 'AbortError') return 'interrupted';
+  return name === 'NotAllowedError' ? 'refused' : 'broken';
+}
+
 type Listeners = Readonly<Record<string, () => void>>;
 
 /**
@@ -279,6 +292,14 @@ export function useMediaPlayback(params: {
    * deux lecteurs, et le coordinateur arbitre entre elles.
    */
   readonly claimKey?: string;
+  /**
+   * LE SON REFUSÉ NE FIGE PAS LA LECTURE — une lecture que la politique du
+   * navigateur refuse PARCE QU'ELLE EST SONORE (iOS : un réel atteint d'un
+   * balayage, sans tap) repart MUETTE, et l'hôte apprend que son préférence
+   * « son ouvert » n'a pas tenu. Sans ce rappel, un refus laisse le média en
+   * pause, prêt pour le tap du lecteur.
+   */
+  readonly onSoundBlocked?: () => void;
 }): MediaPlayback {
   const { attachmentId, tracksTime = false } = params;
   const [playerKey] = useState(() => nextPlayerKey(attachmentId));
@@ -304,6 +325,8 @@ export function useMediaPlayback(params: {
   // chaque rendu par l'appelant ne doit pas réarmer les écouteurs natifs.
   const reportRef = useRef(params.report);
   reportRef.current = params.report;
+  const soundBlockedRef = useRef(params.onSoundBlocked);
+  soundBlockedRef.current = params.onSoundBlocked;
   const trackerRef = useRef<PlaybackStretchTracker | null>(null);
   if (trackerRef.current === null) trackerRef.current = new PlaybackStretchTracker();
   const lastReportAtRef = useRef(0);
@@ -566,11 +589,28 @@ export function useMediaPlayback(params: {
     // « Réessayer » des autres surfaces du fil.
     if (status === 'error') element.load();
 
-    coordinator.claim(claimId, () => element.pause());
-    void element.play().catch(() => {
-      coordinator.release(claimId);
-      setStatus('error');
-    });
+    const attempt = (): void => {
+      coordinator.claim(claimId, () => element.pause());
+      void element.play().catch((reason: unknown) => {
+        const refusal = playRefusalOf(reason);
+        if (refusal === 'interrupted') return;
+        coordinator.release(claimId);
+        if (refusal === 'broken') {
+          setStatus('error');
+          return;
+        }
+        const onSoundBlocked = soundBlockedRef.current;
+        if (onSoundBlocked !== undefined && !element.muted) {
+          element.muted = true;
+          setMutedState(true);
+          onSoundBlocked();
+          attempt();
+          return;
+        }
+        setStatus((current) => (current === 'error' ? current : 'paused'));
+      });
+    };
+    attempt();
   }, [claimId, coordinator, status]);
 
   const seek = useCallback(

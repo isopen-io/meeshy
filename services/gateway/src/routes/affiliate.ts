@@ -17,6 +17,8 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
 import { EngagementService } from '../services/engagement/EngagementService';
 import { linkVisitorFromRequest } from './links/utils/link-visitor';
+import { isShareLinkOpen } from '../services/conversationCard';
+import { AFFILIATE_INVITER_SELECT, affiliateInviterOf } from '../services/linkUnfurl/affiliate';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 
@@ -521,7 +523,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
                     firstName: { type: 'string', nullable: true, description: 'First name' },
                     lastName: { type: 'string', nullable: true, description: 'Last name' },
                     displayName: { type: 'string', nullable: true, description: 'Display name' },
-                    avatar: { type: 'string', nullable: true, description: 'Avatar URL' }
+                    avatar: { type: 'string', nullable: true, description: 'Avatar URL' },
+                    banner: { type: 'string', nullable: true, description: 'Profile banner URL' }
                   }
                 }
               }
@@ -542,33 +545,18 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const affiliateToken = await fastify.prisma.affiliateToken.findUnique({
         where: { token },
         include: {
-          creator: {
-            select: {
-              id: true,
-              username: true,
-              displayName: true,
-              avatar: true
-            }
-          }
+          creator: { select: { id: true, ...AFFILIATE_INVITER_SELECT } }
         }
       });
 
-      if (!affiliateToken) {
+      // Jeton inconnu, désactivé, échu ou épuisé : rien n'est servi.
+      if (!affiliateToken || !isShareLinkOpen(affiliateToken, new Date())) {
         return sendSuccess(reply, { isValid: false });
       }
 
-      // Vérifier si le token est actif
-      if (!affiliateToken.isActive) {
-        return sendSuccess(reply, { isValid: false });
-      }
-
-      // Vérifier si le token a expiré
-      if (affiliateToken.expiresAt && new Date() > affiliateToken.expiresAt) {
-        return sendSuccess(reply, { isValid: false });
-      }
-
-      // Vérifier si le token a atteint sa limite d'utilisation
-      if (affiliateToken.maxUses && affiliateToken.currentUses >= affiliateToken.maxUses) {
+      // Un compte désactivé ou supprimé n'invite plus personne (#10559).
+      const inviter = affiliateInviterOf(affiliateToken.creator);
+      if (inviter === null) {
         return sendSuccess(reply, { isValid: false });
       }
 
@@ -591,7 +579,8 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
           firstName: null,
           lastName: null,
           displayName: affiliateToken.creator.displayName,
-          avatar: affiliateToken.creator.avatar
+          avatar: inviter.avatar,
+          banner: inviter.banner
         }
       });
     } catch (error) {

@@ -130,6 +130,8 @@ const countdown = (deadline: Date): Row => ({ messageId: SOURCE_MESSAGE, partici
 
 const sourceMessage = (overrides: Row = {}): Row =>
   messageRow({
+    // D7 — une source EN CLAIR : la passerelle n'en recopie rien sinon.
+    encryptionMode: null, conversation: { encryptionEnabledAt: null, encryptionMode: null },
     content: SOURCE_SECRET,
     ephemeralDuration: null,
     viewOnceBurnedAt: null,
@@ -464,6 +466,110 @@ describe('MessagingService.handleMessage — on ne transfère que ce qu’on a l
 
       expect(response.success).toBe(true);
       expect(written()?.forwardedFromConversationId ?? null).toBeNull();
+    });
+  });
+
+  describe('une pièce seule d’un message à plusieurs pièces (#9914), une source chiffrée (D7), un code stable (#9598)', () => {
+    const PIECES = ['68b0000000000000000000c1', '68b0000000000000000000c2', '68b0000000000000000000c3'];
+    const pieceRow = (id: string): Row => ({ id, mimeType: 'image/jpeg', fileUrl: `${SOURCE_FILE}?${id}`, thumbnailUrl: null, isViewOnce: false, isBlurred: false, effectFlags: 0 });
+    const threePieces = (overrides: Row = {}) =>
+      readableStore({ messages: [sourceMessage({ attachments: PIECES.map(pieceRow), _count: { attachments: 3 }, ...overrides })] });
+
+    const mountWithPieces = (store: Scenario) => {
+      mount(store);
+      mockPrisma.messageAttachment.findMany.mockImplementation(async (args: { where?: { messageId?: string; id?: { in?: string[] } } }) =>
+        args?.where?.messageId === SOURCE_MESSAGE
+          ? PIECES.filter((id) => !args.where?.id?.in || args.where.id.in.includes(id)).map((id) => ({
+              id, messageId: SOURCE_MESSAGE, mimeType: 'image/jpeg', filePath: `/p/${id}.jpg`, fileUrl: `${SOURCE_FILE}?${id}`, fileName: `${id}.jpg`, originalName: `${id}.jpg`, fileSize: 10,
+            }))
+          : []
+      );
+    };
+
+    const copiedPieces = (): string[] =>
+      mockPrisma.messageAttachment.create.mock.calls.map(([args]: [{ data: Row }]) => args.data.forwardedFromAttachmentId as string);
+
+    it('transférer la 3ᵉ pièce ne recopie que cette pièce', async () => {
+      mountWithPieces(threePieces());
+
+      const response = await send({ content: '', forwardedFromId: SOURCE_MESSAGE, forwardedAttachmentIds: [PIECES[2]] } as Row);
+
+      expect(response.success).toBe(true);
+      expect(copiedPieces()).toEqual([PIECES[2]]);
+      expect(mockPrisma.messageAttachment.create.mock.calls[0][0].data).toMatchObject({ rank: 0, isForwarded: true });
+    });
+
+    it('un sous-ensemble se recopie dans l’ordre demandé', async () => {
+      mountWithPieces(threePieces());
+
+      await send({ content: '', forwardedFromId: SOURCE_MESSAGE, forwardedAttachmentIds: [PIECES[2], PIECES[0]] } as Row);
+
+      expect(copiedPieces()).toEqual([PIECES[2], PIECES[0]]);
+    });
+
+    it('sans sélection, tout le lot part, comme avant', async () => {
+      mountWithPieces(threePieces());
+
+      await send({ content: '', forwardedFromId: SOURCE_MESSAGE });
+
+      expect(copiedPieces()).toEqual(PIECES);
+    });
+
+    it('une pièce d’un autre message est refusée avec son code, sans rien écrire', async () => {
+      mountWithPieces(threePieces());
+
+      const response = await send({ content: '', forwardedFromId: SOURCE_MESSAGE, forwardedAttachmentIds: ['68b0000000000000000000d9'] } as Row);
+
+      expect(response).toMatchObject({ success: false, code: 'forwarded-attachment-not-in-source' });
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('une source chiffrée ne se recopie jamais : le média seul est refusé avec son code', async () => {
+      mountWithPieces(threePieces({ conversation: { encryptionEnabledAt: new Date('2026-01-01T00:00:00Z'), encryptionMode: 'e2ee' } }));
+
+      const response = await send({ content: '', forwardedFromId: SOURCE_MESSAGE });
+
+      expect(response).toMatchObject({ success: false, code: 'encrypted-source-not-server-copyable' });
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      expect(copiedPieces()).toEqual([]);
+    });
+
+    it('une photo légendée d’une source chiffrée, transférée avec sa seule légende : refusée avec son code, rien d’écrit (#10987)', async () => {
+      mountWithPieces(threePieces({ isEncrypted: true, encryptionMode: 'e2ee' }));
+
+      const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedFromConversationId: SOURCE_CONVERSATION });
+
+      expect(response).toMatchObject({ success: false, code: 'encrypted-source-not-server-copyable' });
+      expect(typeof response.error).toBe('string');
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+      expect(copiedPieces()).toEqual([]);
+    });
+
+    it('une pièce choisie d’une source chiffrée, accompagnée d’un texte : refusée avec son code (#10987)', async () => {
+      mountWithPieces(threePieces({ isEncrypted: true, encryptionMode: 'e2ee' }));
+
+      const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedAttachmentIds: [PIECES[1]] } as Row);
+
+      expect(response).toMatchObject({ success: false, code: 'encrypted-source-not-server-copyable' });
+      expect(mockPrisma.message.create).not.toHaveBeenCalled();
+    });
+
+    it('une source chiffrée SANS pièce dont le CLIENT renvoie le texte : admise, rien de la source recopié', async () => {
+      mountWithPieces(threePieces({ isEncrypted: true, encryptionMode: 'e2ee', attachments: [], _count: { attachments: 0 } }));
+
+      const response = await send({ forwardedFromId: SOURCE_MESSAGE, forwardedFromConversationId: SOURCE_CONVERSATION });
+
+      expect(response.success).toBe(true);
+      expect(written()?.content).toBe(OWN_TEXT);
+      expect(copiedFromSource()).toBe(false);
+    });
+
+    it('un refus de nature porte son code stable (#9598)', async () => {
+      mount(readableStore({ messages: [viewOnceSource()] }));
+
+      const response = await send({ content: '', forwardedFromId: SOURCE_MESSAGE });
+
+      expect(response).toMatchObject({ success: false, code: 'view-once-not-forwardable', error: 'Un message à vue unique ne peut pas être transféré' });
     });
   });
 });

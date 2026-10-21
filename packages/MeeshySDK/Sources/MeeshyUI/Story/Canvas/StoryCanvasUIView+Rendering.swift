@@ -136,16 +136,22 @@ extension StoryCanvasUIView {
         // ce qui détache automatiquement du parent précédent (O(1)).
         itemsContainer.sublayers?.forEach { $0.removeFromSuperlayer() }
 
-        // Drop the stale canvas backdrop captured during the previous tick,
-        // then re-capture against the current slide state. The helper short-
-        // circuits to a no-op when no glass-style text exists on the slide,
-        // so this is essentially free for the common path.
-        backdropCapture.invalidate()
-        _ = backdropCapture.captureCanvasBackdrop(slide: slide,
-                                                  geometry: geometry,
-                                                  time: currentTime,
-                                                  mode: renderMode,
-                                                  languages: readerContext.preferredLanguages)
+        // En LECTURE, le verre ne se recapture que si ce qui est dessous a
+        // changé (#9864) — `refreshPlaybackGlassBackdropIfNeeded`, puis la
+        // passe `feedPlaybackGlassLayers` après le rendu. Ailleurs (composer,
+        // preview de timeline), chaque reconstruction suit une mutation du
+        // modèle : la capture reste celle d'avant, à chaque appel.
+        let feedsGlassFromPlaybackLaw = mode == .play
+        if feedsGlassFromPlaybackLaw {
+            refreshPlaybackGlassBackdropIfNeeded(now: CACurrentMediaTime())
+        } else {
+            backdropCapture.invalidate()
+            _ = backdropCapture.captureCanvasBackdrop(slide: slide,
+                                                      geometry: geometry,
+                                                      time: currentTime,
+                                                      mode: renderMode,
+                                                      languages: readerContext.preferredLanguages, contentsScale: traitCollection.storyCanvasDisplayScale)
+        }
 
         // Cache CALayer : actif dans LES DEUX modes depuis 2026-07-11.
         // - `.play` : `displayLinkTick` rebuild à 60 Hz sans mutation du modèle
@@ -163,9 +169,17 @@ extension StoryCanvasUIView {
             cacheForRender.invalidateIfNeeded(slideId: slide.id,
                                               languages: readerContext.preferredLanguages,
                                               mode: renderMode,
-                                              renderSize: geometry.renderSize)
+                                              renderSize: geometry.renderSize, contentsScale: traitCollection.storyCanvasDisplayScale)
         }
 
+        let editGlassProvider: StoryRenderer.BackdropProvider?
+        if feedsGlassFromPlaybackLaw {
+            editGlassProvider = nil
+        } else {
+            editGlassProvider = { [weak backdropCapture] frame in
+                backdropCapture?.cropRegion(frame)
+            }
+        }
         let rendered = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: currentTime,
@@ -175,13 +189,14 @@ extension StoryCanvasUIView {
                                             imageCache: readerContext.imageCache,
                                             playerProvider: readerContext.playerProvider,
                                             cache: cacheForRender,
-                                            backdropProvider: { [weak backdropCapture] frame in
-                                                backdropCapture?.cropRegion(frame)
-                                            },
+                                            backdropProvider: editGlassProvider, contentsScale: traitCollection.storyCanvasDisplayScale, imageDecodeTiming: .offMainActor,
                                             suppressDrawingOverlay: isDrawingOverlayActive,
                                             outOfWindowGhostOpacity: timelineGhostOpacity)
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
+        }
+        if feedsGlassFromPlaybackLaw {
+            feedPlaybackGlassLayers()
         }
 
         // Re-stamp l'état mute global sur les media layers fraîchement
@@ -304,6 +319,59 @@ extension StoryCanvasUIView {
             if let media = sub as? StoryMediaLayer {
                 block(media)
             }
+        }
+    }
+
+    /// **Le verre se capture quand ce qui est dessous change** (#9864).
+    ///
+    /// La décision est `StoryGlassBackdropPlayback.shouldRecapture` : une
+    /// capture pour un dessous immobile, ~12 Hz pour un dessous qui bouge, et
+    /// une nouvelle dès que la slide, sa révision, la taille de rendu, les
+    /// langues ou l'ensemble des objets visibles changent. Une slide sans verre
+    /// rend sa texture tout de suite.
+    func refreshPlaybackGlassBackdropIfNeeded(now: CFTimeInterval) {
+        guard StoryGlassBackdropPlayback.slideHasGlass(slide) else {
+            backdropCapture.invalidate()
+            return
+        }
+        let languages = readerContext.preferredLanguages
+        let key = StoryGlassCaptureKey(
+            slideId: slide.id,
+            contentRevision: slideContentRevision,
+            renderSize: geometry.renderSize,
+            languages: languages,
+            visibleItemIds: StoryGlassBackdropPlayback.visibleBackdropItemIds(slide: slide,
+                                                                               at: currentTime.seconds))
+        let backgroundIsVideo: Bool = {
+            if case .video = backgroundLayer.kind { return true }
+            return false
+        }()
+        guard StoryGlassBackdropPlayback.shouldRecapture(
+            previous: backdropCapture.playbackKey,
+            current: key,
+            backdropMoves: StoryGlassBackdropPlayback.backdropMoves(slide: slide,
+                                                                    backgroundIsVideo: backgroundIsVideo),
+            now: now,
+            lastCaptureAt: backdropCapture.playbackCapturedAt) else { return }
+        backdropCapture.capturePlaybackBackdrop(slide: slide,
+                                                geometry: geometry,
+                                                time: currentTime,
+                                                languages: languages, contentsScale: traitCollection.storyCanvasDisplayScale,
+                                                key: key,
+                                                now: now)
+    }
+
+    /// Ne re-nourrit que le verre qui n'a pas déjà la découpe de la capture
+    /// courante pour son cadre courant (#9864) : sans cette garde, chaque tick
+    /// rejouait découpe, flou MPS et `createCGImage` sur une image identique.
+    func feedPlaybackGlassLayers() {
+        let generation = backdropCapture.generation
+        for sub in itemsContainer.sublayers ?? [] {
+            guard let textLayer = sub as? StoryTextLayer, textLayer.hasGlassBackdrop else { continue }
+            let stamp = StoryGlassFeedStamp(generation: generation, frame: textLayer.frame)
+            guard StoryGlassBackdropPlayback.shouldFeed(lastFed: textLayer.glassBackdropFeedStamp,
+                                                        current: stamp) else { continue }
+            textLayer.setBackdropTexture(backdropCapture.cropRegion(textLayer.frame), stamp: stamp)
         }
     }
 

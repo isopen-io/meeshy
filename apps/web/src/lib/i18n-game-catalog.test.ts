@@ -120,17 +120,17 @@ describe('un « +N » ne tombe jamais seul en fin de ligne', () => {
 });
 
 describe('le pluriel suit les catégories de la langue de l’interface', () => {
-  test('français : zéro et un s’accordent au singulier (« 0 point », « 1 point »), deux au pluriel', async () => {
+  test('français : zéro et un s’accordent au singulier (« 0 étincelle », « 1 étincelle »), deux au pluriel', async () => {
     await loadGameCatalog('fr');
-    expect(translateGamePlural('fr', 'game.points', 0)).toBe('0 point');
-    expect(translateGamePlural('fr', 'game.points', 1)).toBe('1 point');
-    expect(translateGamePlural('fr', 'game.points', 2)).toBe('2 points');
+    expect(translateGamePlural('fr', 'game.points', 0)).toBe('0 étincelle');
+    expect(translateGamePlural('fr', 'game.points', 1)).toBe('1 étincelle');
+    expect(translateGamePlural('fr', 'game.points', 2)).toBe('2 étincelles');
   });
 
-  test('anglais : zéro est un pluriel (« 0 points »)', async () => {
+  test('anglais : zéro est un pluriel (« 0 sparks »)', async () => {
     await loadGameCatalog('en');
-    expect(translateGamePlural('en', 'game.points', 0)).toBe('0 points');
-    expect(translateGamePlural('en', 'game.points', 1)).toBe('1 point');
+    expect(translateGamePlural('en', 'game.points', 0)).toBe('0 sparks');
+    expect(translateGamePlural('en', 'game.points', 1)).toBe('1 spark');
   });
 
   test('arabe : singulier, duel, pluriel de 3 à 10, puis le singulier du compté', async () => {
@@ -182,7 +182,7 @@ describe('le refus d’un pseudonyme de ligue cite le tiret bas', () => {
 describe('translateGame', () => {
   test('interpole les paramètres', async () => {
     await loadGameCatalog('en');
-    expect(translateGame('en', 'game.level.to_next', { points: '12 points', level: '5' })).toBe('12 points more before level 5');
+    expect(translateGame('en', 'game.level.to_next', { points: '12 points', level: '5' })).toBe('12 points to level 5');
   });
 });
 

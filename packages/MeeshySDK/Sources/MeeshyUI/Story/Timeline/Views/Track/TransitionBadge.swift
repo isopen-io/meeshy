@@ -71,10 +71,12 @@ public struct TransitionBadge: View, Equatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityHint(String(localized: "story.timeline.transition.delete", bundle: .module))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { onTap() }
     }
 }
 
-private struct Diamond: Shape {
+nonisolated private struct Diamond: Shape {
     func path(in rect: CGRect) -> Path {
         var p = Path()
         p.move(to: CGPoint(x: rect.midX, y: rect.minY))

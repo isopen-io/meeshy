@@ -4,7 +4,8 @@
 # pendant que Traefik le déclarait `healthy` et que la CI restait verte — la
 # route que l'app iOS appelait n'existait tout simplement pas sur ce binaire.
 # Aucun témoin ne comparait ce qui TOURNE à ce qui est ÉCRIT sur SA branche
-# (`origin/main` pour production, `origin/dev` pour staging — #5862).
+# (`origin/dev` pour staging ET pour production depuis la promotion #9223 —
+# #5862, #10914).
 #
 # `/health` grave déjà `build.commit` (`packages/shared/utils/build-info.ts`,
 # posé par `VCS_REF`/`GIT_COMMIT` au build Docker) — ce job ne fait que le LIRE
@@ -36,7 +37,7 @@ jobs:
       matrix:
         # **Chaque cible déclare SA branche, et ce n'est pas un détail (#5862).**
         # `deploy-staging` (docker.yml) porte `if: github.ref ==
-        # 'refs/heads/dev'` : staging sert `dev`, production sert `main`.
+        # 'refs/heads/dev'` : staging sert `dev` (et la production aussi, par promotion).
         # Comparer les deux à `main` exigeait de staging qu'il serve une
         # révision de `main` — vert seulement si `dev == main`, donc jamais.
         # Le job tournant toutes les heures, il rougissait une fois par heure
@@ -49,15 +50,24 @@ jobs:
         # hors de ce périmètre (ex. `apps/web-v2` pendant #5491) ne peut pas
         # faire rougir la cible, puisqu'il n'aurait de toute façon pas
         # déclenché de nouvelle image ni de redéploiement.
+        #
+        # **La production sert `dev`, par PROMOTION (#9223, #10914).**
+        # `promote-production.yml` (`--ref dev`) pose sur l'hôte de production
+        # les digests que staging exécute : une révision de `dev`, jamais de
+        # `main`. Son retard sur la tête de `dev` est VOULU — on ne promeut
+        # qu'après recette — donc publié, jamais un échec (`drift: report`) ;
+        # une révision HORS de `dev` reste une alerte.
         target:
           - name: production
             url: https://gate.meeshy.me/health
-            ref: origin/main
+            ref: origin/dev
             paths: 'services/gateway packages/shared'
+            drift: report
           - name: staging
             url: https://gate.staging.meeshy.me/health
             ref: origin/dev
             paths: 'services/gateway packages/shared'
+            drift: fail
           # #6551 — le frontend a sa PROPRE image, construite et déployée
           # indépendamment du gateway (`docker.yml` ne recrée que ce dont le
           # digest a bougé). Le confondre avec la cible `staging` ci-dessus
@@ -73,6 +83,7 @@ jobs:
             url: https://staging.meeshy.me/build-info.json
             ref: origin/dev
             paths: 'apps/web packages/design-tokens packages/shared'
+            drift: fail
     steps:
       - name: Checkout (historique complet — requis par git merge-base/rev-list)
         uses: actions/checkout@v7
@@ -95,6 +106,7 @@ jobs:
           COMMIT: ${{ steps.health.outputs.commit }}
           REF: ${{ matrix.target.ref }}
           PATHS: ${{ matrix.target.paths }}
+          DRIFT_MODE: ${{ matrix.target.drift }}
           MAX_DRIFT: ${{ github.event.inputs.max_drift_commits || '15' }}
         run: |
           set -euo pipefail
@@ -138,6 +150,10 @@ jobs:
             echo ""
             echo "Sert \`${COMMIT}\` — **$DRIFT** commit(s) derrière son contexte de build sur \`$REF\` (\`${REF_EFFECTIVE}\`, seuil : $MAX_DRIFT)."
           } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$DRIFT_MODE" = "report" ]; then
+            exit 0
+          fi
 
           if [ "$DRIFT" -gt "$MAX_DRIFT" ]; then
             echo "::error::${{ matrix.target.name }} est en retard de $DRIFT commits sur son contexte de build (\`$REF_EFFECTIVE\` sur \`$REF\`, seuil $MAX_DRIFT) — cf. #5644 : vérifier que le conteneur a bien été recréé après le dernier build"

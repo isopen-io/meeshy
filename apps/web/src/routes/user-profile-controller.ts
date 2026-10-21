@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useStore } from 'zustand/react';
 
@@ -15,16 +15,23 @@ import {
   type FriendActionOutcome,
 } from '@/lib/api/friend-actions';
 import type { PersonSummary } from '@/lib/api/friend-requests';
-import { publicProfileQueryOptions } from '@/lib/api/public-profile';
+import { publicProfileQueryKey, publicProfileQueryOptions, publicProfileStatsQueryOptions, type PublicProfile } from '@/lib/api/public-profile';
 import { appQueryClient } from '@/lib/api/query-client';
 import { reportUser, type ReportReason } from '@/lib/api/reports';
+import { presenceStore } from '@/lib/api/presence-store';
 import { sessionStore } from '@/lib/api/session';
+import { statusMoodsQueryOptions } from '@/lib/api/stories';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
+import type { KnownPerson } from '@/lib/profile/known-people';
+import { knownPersonOrCached } from '@/lib/profile/known-people-cache';
+import { profileFailureOf } from '@/lib/profile/failure';
 import { profilePresenceLine } from '@/lib/profile/presence-line';
 import { actionsFor, pendingRequestFrom, relationFromServed, type ProfileActionKind } from '@/lib/profile/relation';
 import { announcementToneOf } from '@/lib/view/announcement-tone';
+import { moodsByAuthor } from '@/lib/view/story-tray';
 import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { useMinute } from '@/lib/view/use-minute';
 import { href, navigate } from '@/routes/route-table';
 
 /**
@@ -37,6 +44,16 @@ import { href, navigate } from '@/routes/route-table';
  * par commodité de table aurait annoncé une autre action que celle posée — un
  * lecteur d'écran aurait entendu le mauvais mot avant de changer d'écran.
  */
+const seedProfile = (known: KnownPerson): PublicProfile => ({
+  id: known.id ?? '',
+  username: known.username,
+  displayName: known.displayName,
+  avatar: known.avatar,
+  banner: null,
+  bio: null,
+  createdAt: null,
+});
+
 const ANNOUNCE = {
   add: {
     done: 'discover.announce.sent',
@@ -98,9 +115,42 @@ export function useProfileController(username: string, language: InterfaceLangua
      exactement comme `/me` le fait (`profile.tsx:132`). */
   const signedIn = apiDeps.source === 'fixtures' || viewerId !== null;
 
-  const view = useQuery(publicProfileQueryOptions({ ...apiDeps, handle: username }), appQueryClient);
-  const person = view.data?.profile;
+  /* CACHE D'ABORD, SYNCHRO À L'OUVERTURE (#10092) — la fiche en cache se
+     peint au premier rendu, et la lecture repart à CHAQUE ouverture, fraîche
+     ou non : statistiques et relation bougent sous les gestes des autres. Un
+     échec garde la fiche affichée (TanStack conserve `data`). */
+  const fetched = useQuery({ ...publicProfileQueryOptions({ ...apiDeps, handle: username }), refetchOnMount: 'always' }, appQueryClient);
+  /* UN REFUS DE REVALIDATION REMPLACE LA FICHE EN CACHE (#10740) : un 403/404
+     servi alors que la fiche est déjà là (le profil m'a bloqué, ou a disparu)
+     ne la garde pas affichée avec son décor périmé — elle sort de l'écran à
+     l'instant et du cache persisté, pour qu'un rechargement ne la rende pas. */
+  const gone = fetched.isError && profileFailureOf(fetched.error, true) === 'refused';
+  useEffect(() => {
+    if (gone) appQueryClient.removeQueries({ queryKey: publicProfileQueryKey(username), exact: true });
+  }, [gone, username]);
+  const view = gone ? { ...fetched, data: undefined } : fetched;
+  /* LES COMPTEURS PARTENT DANS LE MÊME TOUR, JAMAIS APRÈS (profil lent dans la
+     coque Android) — même adresse, autre `expand` (`public-profile.ts`) : la
+     fiche se peint dès que l'identité et la relation sont là, les compteurs
+     la rejoignent quand leur calcul, le seul coûteux de la route, a fini. Une
+     fiche persistée AVANT cette séparation porte encore ses compteurs : ils
+     servent tant que la lecture dédiée n'a rien rendu. */
+  const statsQuery = useQuery({ ...publicProfileStatsQueryOptions({ ...apiDeps, handle: username }), refetchOnMount: 'always' }, appQueryClient);
+  const stats = statsQuery.data ?? view.data?.stats ?? null;
+  const statsLoading = statsQuery.isFetching && stats === null;
   const served = view.data?.relation ?? 'none';
+  /* CE QU'ON SAVAIT DE LA PERSONNE amorce une fiche jamais vue : son identité
+     seule, jamais une relation ni des gestes devinés. D'abord ce qu'un toucher
+     a retenu, sinon ce que la liste des conversations en cache porte déjà
+     (`known-people-cache.ts`) — une adresse ouverte sans toucher (lien,
+     notification, démarrage de la coque) a enfin un premier rendu. */
+  const [known] = useState(() => knownPersonOrCached(appQueryClient, username));
+  const seed = view.data === undefined && !view.isError && known !== null ? seedProfile(known) : null;
+  const person = view.data?.profile;
+  /* LE SUJET, DÈS QU'ON LE CONNAÎT — l'identifiant servi, ou celui que le
+     cache portait : les lectures qui prennent un `User.id` (conversations
+     partagées) partent avec la fiche au lieu de l'attendre. `''` = inconnu. */
+  const subjectId = person?.id ?? seed?.id ?? '';
 
   /**
    * **LE BLOCAGE SE LIT PAR SUJET, SUR LE MÊME FIL QUE L'IDENTITÉ** (#7125) —
@@ -140,11 +190,32 @@ export function useProfileController(username: string, language: InterfaceLangua
   });
   const actions = actionsFor(relation);
 
-  const name = person?.displayName ?? person?.username ?? `@${username}`;
-  const accent = person === undefined ? 'var(--color-ios-brand)' : authorAccentColor(person.id, name);
+  const shown = person ?? seed ?? undefined;
+  const name = shown?.displayName ?? shown?.username ?? `@${username}`;
+  /* L'accent ne dépend que de l'identifiant (`authorAccentColor`) : connu par
+     le cache, il est déjà le bon, et la bannière ne change pas de couleur à
+     l'arrivée de la fiche. */
+  const accent = subjectId === '' ? 'var(--color-ios-brand)' : authorAccentColor(subjectId, name);
   /* La présence d'un AMI (#9063) — telle que la passerelle l'a servie, et
-     jamais sur une fiche bloquée : la pastille ne survit pas au geste. */
-  const presence = relation.kind === 'blocked' ? null : profilePresenceLine(view.data?.presence ?? null, new Date(), language);
+     jamais sur une fiche bloquée : la pastille ne survit pas au geste.
+     VIVANTE (#10571) : une fiche dont la passerelle sert la présence suit
+     ensuite `user:status`, et sa ligne vieillit à la minute (« vu il y a… »). */
+  const livePresence = useStore(presenceStore, (state) => (person === undefined ? undefined : state.byUser[person.id]));
+  useMinute();
+  const servedPresence = view.data?.presence ?? null;
+  /* … et jamais sur SA PROPRE fiche (décision porteur 2026-10-21, #11412). */
+  const ownProfile = person !== undefined && person.id === viewerId;
+  const presence =
+    relation.kind === 'blocked' || servedPresence === null || ownProfile
+      ? null
+      : profilePresenceLine(livePresence ?? servedPresence, new Date(), language);
+  /* L'HUMEUR DU MOMENT (#10528) — lue dans le corpus que le rail a déjà chargé
+     (même clé, même fraîcheur que `useStatusMoods`) : le serveur décide qui la
+     voit, la fiche ne demande rien de plus. Un visiteur sans compte n'a pas de
+     corpus ; une fiche bloquée n'en montre rien, comme la présence. */
+  const moods = useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled: signedIn }, appQueryClient);
+  const servedMood = useMemo(() => (person === undefined ? undefined : moodsByAuthor(moods.data ?? []).get(person.id)), [moods.data, person]);
+  const mood = relation.kind === 'blocked' ? undefined : servedMood;
 
   const deps: FriendActionDeps = useMemo(
     () => ({
@@ -242,11 +313,16 @@ export function useProfileController(username: string, language: InterfaceLangua
   return {
     view,
     person,
+    seed,
+    subjectId,
+    stats,
+    statsLoading,
     name,
     accent,
     presence,
     relation,
     actions,
+    mood,
     viewerId,
     signedIn,
     busy,

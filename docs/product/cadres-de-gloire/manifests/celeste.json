@@ -1,0 +1,192 @@
+[
+ {
+  "file": "celeste-ambassadeur-5.jpg",
+  "rank": "ambassadeur",
+  "division": 5,
+  "option": "V",
+  "name": "La Porte de lune",
+  "story": "Dans le mur chaulé d'un jardin de lettrés, une porte ronde « de lune » cadre la photo ; un cerisier en fleurs passe par-dessus le chaperon de tuiles grises, des bambous montent la garde, une lanterne de pierre s'allume au pied du mur, les hirondelles rentrent au crépuscule et les pétales tombent.",
+  "layout": "perchés : Mee (amoureuse) et Meo (love) sur le chaperon du mur",
+  "message": "Pour toi, maman"
+ },
+ {
+  "file": "celeste-ambassadeur-4.jpg",
+  "rank": "ambassadeur",
+  "division": 4,
+  "option": "IV",
+  "name": "La Porte vermillon",
+  "story": "Au soir, une porte de palais s'ouvre sur la photo : laque vermillon, clous d'or en rangs, heurtoirs à tête de lion, un auvent de tuiles vernissées vert jade sur sa frise de consoles, deux lanternes de papier rouge et, derrière, les toits de la cité sous la pleine lune — l'entrée dans l'Empire céleste.",
+  "layout": "pied : Mee (sourire) et Meo (salut) sur le seuil",
+  "message": null
+ },
+ {
+  "file": "celeste-ambassadeur-3.jpg",
+  "rank": "ambassadeur",
+  "division": 3,
+  "option": "III",
+  "name": "Le Pavillon aux tuiles de jade",
+  "story": "La façade d'un pavillon impérial : toit à croupes de tuiles vernissées vert jade et coins relevés, frise de consoles dougong, poutre peinte de bleus et de verts, colonnes laquées, lanternes de palais aux panneaux de soie et balustrade de marbre blanc à têtes de nuage.",
+  "layout": "balustrade : Mee (bravo) et Meo (bravo) debout aux deux bouts de la balustrade",
+  "message": null
+ },
+ {
+  "file": "celeste-ambassadeur-2.jpg",
+  "rank": "ambassadeur",
+  "division": 2,
+  "option": "II",
+  "name": "L'Ambassade de Malindi",
+  "story": "En 1414, l'ambassade de Malindi, sur la côte swahilie, offrit une girafe à la cour Ming, qui la salua comme un qilin. La photo passe une porte sculptée de Lamu et de Zanzibar — chaînes, rosaces, tympan rayonnant, clous de laiton — ouverte dans un mur vermillon ; au ciel, la girafe-qilin sur son nuage et une jonque de la flotte des trésors.",
+  "layout": "pied : Mee (coucou) et Meo (selfie) sur les flots, au pied de la porte",
+  "message": "Le voyage continue"
+ },
+ {
+  "file": "celeste-ambassadeur-1.jpg",
+  "rank": "ambassadeur",
+  "division": 1,
+  "option": "I",
+  "name": "Les Deux Dragons et la perle",
+  "story": "Deux dragons d'or serpentins (création) montent le long de la photo et se disputent, au-dessus du blason, la perle flamboyante de la sagesse ; laque rouge semée de nuages d'or, grecque « hui » autour de la fenêtre et, au pied, l'eau debout, les flots et les rochers des robes impériales.",
+  "layout": "pied : Mee (fête) et Meo (roi) au pied des dragons",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "celeste-orateur-a.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "A",
+  "name": "La Nuit des mille lanternes",
+  "story": "La fête des lanternes : des centaines de lanternes célestes montent dans la nuit indigo, deux guirlandes de lanternes rouges se croisent au-dessus de la photo, les pagodes s'allument sur la rive et le blason rayonne comme une voix qui porte.",
+  "layout": "pied : Mee (danse) et Meo (sérénade) sur la rive",
+  "message": "Merci la team !"
+ },
+ {
+  "file": "celeste-orateur-b.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "B",
+  "name": "Le Phénix de l'aube",
+  "story": "Le fenghuang, oiseau de l'harmonie, se lève avec le soleil au-dessus des pitons dans la brume : ailes de vermillon et d'or déployées, aigrette à ocelles, et quatre longues rectrices qui descendent de part et d'autre de la photo, comme la voix qui s'élève et se répand.",
+  "layout": "pied : Mee (wow) et Meo (feu d'artifice) dans les nuages",
+  "message": null
+ },
+ {
+  "file": "celeste-orateur-c.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "C",
+  "name": "Le Carillon et les cauris",
+  "story": "Un portique de carillon : six cloches de bronze à bossettes (bianzhong) sous une poutre laquée, un disque de jade bi derrière le blason, et des ondes d'or qui se propagent comme la voix. Un peu d'Afrique y est tissé : les poteaux sont habillés de bandes à la manière du kente d'Asante et les cloches pendent à des cordons de cauris — le coquillage qui fut monnaie dans la Chine des Shang comme en Afrique de l'Ouest.",
+  "layout": "pied : Mee (bravo) et Meo (trophée) sous le portique",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "celeste-oracle-a.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "A",
+  "name": "Le Bagua des cieux",
+  "story": "Le Yi Jing, le livre des oracles : la photo devient l'octogone du bagua, ses huit trigrammes gravés en or dans l'ordre du Ciel antérieur. Au-dessus, une sphère armillaire d'observatoire encercle le blason ; le ciel s'ouvre — Voie lactée, comète des atlas de soie, les Trois Étoiles du bonheur (la ceinture d'Orion), le Dragon azur de l'Orient en étoiles — et l'on entrevoit l'infime : la bande du bagua est un réseau cristallin, un atome à chaque nœud, et trois miroirs de bronze, suspendus comme des oracles, montrent un flocon fractal, la fleur de vie et un grain de pollen.",
+  "layout": "pied : Mee (wow) et Meo (cool)",
+  "message": null
+ },
+ {
+  "file": "celeste-oracle-b.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "B",
+  "name": "L'Étang aux lunes",
+  "story": "La photo est une fenêtre en fleur de pommier ouverte sur un étang de nuit : les koïs tournent entre les feuilles de lotus, les ronds dans l'eau se croisent en interférences, les six phases de la lune s'arquent autour de la pleine lune du blason — et, à la surface, flotte l'infime : grains de pollen hérissés et diatomées aux coques de verre, dont quatre rosaces ferment les angles de la fenêtre.",
+  "layout": "feuilles de lotus : Mee (bisou volé) et Meo (salut)",
+  "message": "Sous la même lune"
+ },
+ {
+  "file": "celeste-oracle-c.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "C",
+  "name": "La Grue et les flocons",
+  "story": "Une nuit d'hiver à travers une fenêtre en cloche de temple : trois grues du Japon passent devant la pleine lune, la constellation de la Grue (Grus) s'allume, la montagne enneigée sort de la brume, des pruniers fleurissent sous la neige — et le givre prend la fenêtre : de son cadre poussent des aiguilles de glace qui se ramifient à soixante degrés, la fractale même du cristal que l'on retrouve, en grand, dans chaque flocon.",
+  "layout": "pied : Mee (montée au ciel) et Meo (bravo)",
+  "message": null
+ },
+ {
+  "file": "celeste-legende-5.jpg",
+  "rank": "legende",
+  "division": 5,
+  "option": "V",
+  "name": "La Perle-lune et l'arche de glace",
+  "story": "Un dragon d'argent (création) s'élance par-dessus la photo pour saisir la perle-lune parmi les nébuleuses ; sur son passage la nuit gèle. L'arche qui encadre la photo est taillée dans la glace et, vue de près, ses mailles sont le réseau hexagonal du cristal, un atome à chaque nœud ; des flocons fractals tombent le long du cadre — de la Lune au cristal, le premier pas vers les deux infinis.",
+  "layout": "pied : Mee (lettre) et Meo (yo)",
+  "message": null
+ },
+ {
+  "file": "celeste-legende-4.jpg",
+  "rank": "legende",
+  "division": 4,
+  "option": "IV",
+  "name": "Le Phénix-nébuleuse",
+  "story": "Le fenghuang déploie ses ailes devant une supernova ; ses quatre rectrices sont devenues des nébuleuses rose, cyan, violette et or qui coulent de part et d'autre de la photo, et l'ocelle au bout de chacune s'ouvre sur l'infime : deux cellules vivantes, une diatomée de verre, un grain de pollen. Des amas de galaxies brillent au pied du cadre.",
+  "layout": "pied : Mee (jackpot) et Meo (champagne)",
+  "message": null
+ },
+ {
+  "file": "celeste-legende-3.jpg",
+  "rank": "legende",
+  "division": 3,
+  "option": "III",
+  "name": "La Rivière céleste",
+  "story": "La légende du Bouvier et de la Tisserande : séparés par la Rivière céleste, la Voie lactée, ils se retrouvent une nuit par an sur un pont de pies. Ici le pont qui relie Véga à Altaïr est une double hélice d'ADN, et de chaque étoile descend, le long de la photo, le fil de soie de la Tisserande — tordu lui aussi en double hélice : la galaxie et la molécule de vie tissent le même cadre.",
+  "layout": "pied : Mee (bisou volé) et Meo (love)",
+  "message": "Jusqu'aux étoiles"
+ },
+ {
+  "file": "celeste-legende-2.jpg",
+  "rank": "legende",
+  "division": 2,
+  "option": "II",
+  "name": "Le Cerisier-neurone",
+  "story": "Un cerisier dont les branches sont des neurones : il monte le long de la photo et la couronne, chaque fourche est un soma qui s'allume, chaque fleur un bouton synaptique. Derrière, la toile cosmique dessine le même réseau à l'échelle des galaxies ; deux lanternes-planètes pendent aux rameaux.",
+  "layout": "perchés : Mee et Meo main dans la main sur la branche-neurone qui couronne la photo",
+  "message": "Ensemble, plus loin"
+ },
+ {
+  "file": "celeste-legende-1.jpg",
+  "rank": "legende",
+  "division": 1,
+  "option": "I",
+  "name": "Le Dragon de la Voie lactée",
+  "story": "Le dragon est devenu la Voie lactée : un corps de lumière semé d'étoiles qui fait le tour complet de la photo et poursuit, au-dessus du blason, une perle devenue trou noir, son disque d'accrétion en feu. Galaxies spirales, supernova, amas et nébuleuses d'un côté ; au pied, une balustrade de laque dont les huit fenêtres rondes s'ouvrent sur l'infime — quarks, noyau, atome, molécule, ADN, cellule, neurone, paquet d'ondes : le cadre s'ouvre au plus loin dans les deux sens.",
+  "layout": "pied : Mee (courage) et Meo (muscles)",
+  "message": "Le ciel nous attend"
+ },
+ {
+  "file": "celeste-mythe-a.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "A",
+  "name": "Le Dragon et le quasar",
+  "story": "Le dragon d'or s'enroule autour d'une galaxie spirale et la perle qu'il poursuit est devenue un quasar aux jets relativistes. De part et d'autre de la photo pendent des lanternes-médaillons : à gauche l'infime (noyau, traces de particules, mousse quantique, cordes), à droite l'immense (trou noir, amas, toile cosmique), sur un fond de nébuleuses et de filaments.",
+  "layout": "pied : Mee (wow) et Meo (feu d'artifice)",
+  "message": "Du quark au quasar"
+ },
+ {
+  "file": "celeste-mythe-b.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "B",
+  "name": "La Pagode des échelles",
+  "story": "Deux pagodes à six étages encadrent la photo et chaque étage ouvre sa fenêtre sur une puissance de dix : à gauche on descend de la cellule à l'ADN, à l'atome, au noyau, aux quarks et aux cordes ; à droite on monte de la Terre au Soleil, au trou noir, à la galaxie, à l'amas et à la toile cosmique. Les deux tours portent le linteau d'un portique (pailou) gravé « Du quark au quasar » ; au-dessus, une galaxie spirale et un quasar aux jets relativistes.",
+  "layout": "pied : Mee (sourire) et Meo (roi) au pied des pagodes",
+  "message": null
+ },
+ {
+  "file": "celeste-mythe-c.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "C",
+  "name": "Les Anneaux de jade",
+  "story": "La photo est au cœur d'un disque de jade bi, et chaque anneau change d'échelle : les grains du jade, vus de loin, sont des galaxies ; autour court une double hélice d'ADN ; plus loin une même orbite porte des électrons d'un côté et des planètes de l'autre — l'atome et le système solaire. Au-dessus, un trou noir d'or et d'encre, un quasar, un amas et les astérismes du Dragon et de la Grue ; en bas, les traces d'un noyau dans la chambre à bulles, la mousse quantique et une galaxie spirale.",
+  "layout": "pied : Mee (danse) et Meo (sérénade)",
+  "message": "Plus loin que les étoiles"
+ }
+]

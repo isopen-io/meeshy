@@ -19,6 +19,7 @@ jest.mock('../../../services/notifications/contact-recently-active', () => ({
 }));
 
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { StatusService } from '../../../services/StatusService';
@@ -33,7 +34,7 @@ function handler() {
   const prisma = {
     user: {
       findUnique: jest.fn(async () => ({
-        id: 'user-123', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'fr', regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
       })),
       update: jest.fn(async () => undefined),
     },
@@ -42,6 +43,7 @@ function handler() {
       findUnique: jest.fn(async () => null),
       findMany: jest.fn(async () => []),
     },
+    userSession: { findFirst: jest.fn(async () => liveSession()) },
     callParticipant: { findMany: jest.fn(async () => []) },
   } as unknown as PrismaClient;
   return new AuthHandler({
@@ -61,7 +63,7 @@ function handler() {
 beforeEach(() => {
   scheduled.length = 0;
   process.env.JWT_SECRET = 'test-secret-key-for-unit-tests';
-  jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as never);
+  jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as never);
 });
 
 afterEach(() => jest.restoreAllMocks());
@@ -72,7 +74,7 @@ describe('l’annonce de retour part à la première socket authentifiée', () =
 
     await auth.handleTokenAuthentication(socketNamed('s-a', { token: 'jwt' }));
 
-    expect(scheduled).toEqual(['user-123']);
+    expect(scheduled).toEqual(['aaaaaaaaaaaaaaaaaaaa0123']);
   });
 
   it('un second appareil du même compte n’en programme pas une seconde', async () => {
@@ -81,7 +83,7 @@ describe('l’annonce de retour part à la première socket authentifiée', () =
     await auth.handleTokenAuthentication(socketNamed('s-a', { token: 'jwt' }));
     await auth.handleTokenAuthentication(socketNamed('s-b', { token: 'jwt' }));
 
-    expect(scheduled).toEqual(['user-123']);
+    expect(scheduled).toEqual(['aaaaaaaaaaaaaaaaaaaa0123']);
   });
 
   it('un participant anonyme n’annonce rien', async () => {

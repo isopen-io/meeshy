@@ -8,18 +8,8 @@ jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
   ...jest.requireActual<Record<string, unknown>>('@meeshy/shared/utils/conversation-helpers'),
   isValidMongoId: jest.fn<any>((id: string) => /^[0-9a-fA-F]{24}$/.test(id)) }));
 
-jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: {
-    PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
-    CONVERSATION_JOINED: 'conversation:joined',
-    CONVERSATION_PARTICIPANT_JOINED: 'conversation:participant-joined',
-    CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
-  },
-  ROOMS: {
-    conversation: (id: string) => `conversation:${id}`,
-    user: (id: string) => `user:${id}`,
-  },
-}));
+// `@meeshy/shared/types/socketio-events` n'est PAS doublé : il n'expose que des
+// constantes, et un double partiel perd en silence toute room ajoutée en amont.
 
 jest.mock('@meeshy/shared/types/api-schemas', () => ({
   conversationParticipantSchema: { type: 'object' },
@@ -174,7 +164,7 @@ function createMockIO() {
   const mockFetchSockets = jest.fn<any>().mockResolvedValue([{ leave: mockLeave }]);
   const sent: Array<{ rooms: string[]; event: string; payload: any }> = [];
   const chain = (rooms: string[]): any => ({
-    to: (room: string) => chain([...rooms, room]),
+    to: (room: string) => chain([...rooms, room]), except: () => chain(rooms),
     emit: (event: string, payload: unknown) => {
       sent.push({ rooms, event, payload });
       mockEmit(event, payload);
@@ -936,7 +926,7 @@ describe('registerParticipantsRoutes', () => {
         );
       });
 
-      it('restreint un lecteur anonyme (aucun rôle plateforme)', async () => {
+      it('refuse la liste à un lecteur anonyme (403 ACCOUNT_REQUIRED, #10205)', async () => {
         const route = getRoute(mockFastify, 'GET', '/participants');
         mockedCanAccess.mockResolvedValue(true);
         mockPrisma.participant.findFirst.mockResolvedValue({
@@ -959,7 +949,7 @@ describe('registerParticipantsRoutes', () => {
           reply
         );
 
-        expect(mockPrisma.conversationMessageStats.findUnique).toHaveBeenCalled();
+        expect(reply.status).toHaveBeenCalledWith(403);
       });
 
       it('laisse le listing complet à un rôle de conversation au-dessus de member', async () => {
@@ -1191,12 +1181,12 @@ describe('registerParticipantsRoutes', () => {
       expect(other.lastActiveAt).toBeNull();
     });
 
-    it('viewer anonyme ⇒ cachée, et le service reçoit un viewer nul', async () => {
-      const [other] = await list('anonymous');
+    it('viewer anonyme ⇒ refusé (#10205) : aucune ligne servie, aucune présence résolue', async () => {
+      const served = await list('anonymous');
 
-      expect(other.isOnline).toBe(false);
-      expect(other.lastActiveAt).toBeNull();
-      expect(mockResolveForTargets).toHaveBeenCalledWith(null, [TARGET_USER_ID]);
+      expect(served).toBeUndefined();
+      expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
+      expect(mockResolveForTargets).not.toHaveBeenCalled();
     });
 
     // Un participant sans compte n'a pas de `User.id` : le service ne peut pas
@@ -1357,20 +1347,20 @@ describe('registerParticipantsRoutes', () => {
       expect(servedIds(reply)).toEqual([PARTICIPANT_ID, FRIEND_PARTICIPANT_ID]);
     });
 
-    it('anonyme ⇒ page vide et aucune amitié consultée — chemin non restreint (ensemble autorisé VIDE en base)', async () => {
+    it('anonyme ⇒ refusé (#10205), aucune amitié consultée — chemin non restreint', async () => {
       const reply = await listUnrestricted('anonymous', [friendRow(), strangerRow()]);
 
       expect(mockAcceptedFriendIds).not.toHaveBeenCalled();
-      expect(findManyWhere().userId).toEqual({ in: [] });
-      expect(servedIds(reply)).toEqual([]);
+      expect(mockPrisma.participant.findMany).not.toHaveBeenCalled();
+      expect(served(reply)).toBeUndefined();
     });
 
-    it('anonyme ⇒ page vide — chemin restreint (simple member)', async () => {
+    it('anonyme ⇒ refusé (#10205) — chemin restreint (simple member)', async () => {
       const reply = await listRestricted('anonymous', [friendRow(), strangerRow()]);
 
-      expect(mockPrisma.conversationMessageStats.findUnique).toHaveBeenCalled();
+      expect(reply.status).toHaveBeenCalledWith(403);
       expect(mockAcceptedFriendIds).not.toHaveBeenCalled();
-      expect(servedIds(reply)).toEqual([]);
+      expect(served(reply)).toBeUndefined();
     });
 
     it('chemin RESTREINT — USER simple member : le top-N est borné en mémoire à soi et ses amis en ligne', async () => {

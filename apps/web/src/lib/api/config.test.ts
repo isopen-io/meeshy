@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { publicWebOriginOf } from '@/lib/links/public-origin';
+
 import { resolveApiConfig } from './config';
 
 /**
@@ -125,5 +127,100 @@ describe('resolveApiConfig — readingModesEnabled (paramètre de construction, 
 
   test('VITE_READING_MODES=off : désactivé', () => {
     expect(resolveApiConfig({ VITE_READING_MODES: 'off' }, { shell: false }).readingModesEnabled).toBe(false);
+  });
+});
+
+/**
+ * L'ORIGINE SE DÉCLARE AU DÉMARRAGE, SINON SE DÉDUIT DE L'HÔTE (#10208).
+ *
+ * Une seule image doit servir le staging, la production et tout déploiement
+ * sur site : l'origine figée au build interdisait de promouvoir l'image
+ * recettée (#9325) et d'installer Meeshy sur un domaine ou une IP sans le
+ * reconstruire.
+ */
+const page = (url: string) => {
+  const { protocol, hostname, port } = new URL(url);
+  return { protocol, hostname, port };
+};
+
+describe('resolveApiConfig — la configuration de démarrage (#10208)', () => {
+  test("MEESHY_API_URL déclarée gagne sur tout : le build, l'hôte, la production", () => {
+    const config = resolveApiConfig(
+      { VITE_API_BASE: 'https://gate.staging.meeshy.me' },
+      { shell: false, runtime: { apiUrl: 'http://10.0.0.5:3000/' }, page: page('https://chat.acme.fr') },
+    );
+    expect(config.base).toBe('http://10.0.0.5:3000');
+  });
+
+  test('une origine déclarée avec /api/v1 est normalisée comme au build', () => {
+    expect(resolveApiConfig({}, { shell: false, runtime: { apiUrl: 'https://api.acme.fr/api/v1' } }).base).toBe(
+      'https://api.acme.fr',
+    );
+  });
+
+  test('une valeur déclarée malformée est IGNORÉE, jamais réparée', () => {
+    const malformed = ['', '   ', '/api/v1', 'javascript:alert(1)', 'https://u:p@api.acme.fr', 'https://api.acme.fr?x=1', 42, null];
+    for (const apiUrl of malformed) {
+      expect(resolveApiConfig({}, { shell: false, runtime: { apiUrl }, page: page('https://meeshy.me') }).base).toBe(
+        'https://gate.meeshy.me',
+      );
+    }
+  });
+
+  test('la coque ignore la configuration de démarrage : son origine est celle de son build', () => {
+    const config = resolveApiConfig({}, { shell: true, runtime: { apiUrl: 'https://api.acme.fr', webUrl: 'https://acme.fr' } });
+    expect(config.base).toBe('https://gate.meeshy.me');
+    expect(config.webOrigin).toBeNull();
+  });
+
+  test('MEESHY_WEB_URL déclarée devient l’origine publique des liens', () => {
+    const config = resolveApiConfig({}, { shell: false, runtime: { webUrl: 'https://chat.acme.fr/' }, page: page('https://chat.acme.fr') });
+    expect(config.webOrigin).toBe('https://chat.acme.fr');
+    expect(publicWebOriginOf(config, 'https://chat.acme.fr')).toBe('https://chat.acme.fr');
+  });
+
+  test('sans MEESHY_WEB_URL, l’origine publique se lit sur la passerelle, sinon sur la page', () => {
+    const derived = resolveApiConfig({}, { shell: false, page: page('https://www.meeshy.me') });
+    expect(derived.webOrigin).toBeNull();
+    expect(publicWebOriginOf(derived, 'https://www.meeshy.me')).toBe('https://meeshy.me');
+    const ip = resolveApiConfig({}, { shell: false, page: page('http://10.0.0.5:3400') });
+    expect(publicWebOriginOf(ip, 'http://10.0.0.5:3400')).toBe('http://10.0.0.5:3400');
+  });
+});
+
+describe("resolveApiConfig — la passerelle déduite de l'hôte de la page (#10208)", () => {
+  const baseFor = (url: string) => resolveApiConfig({}, { shell: false, page: page(url) }).base;
+
+  test('production et staging Meeshy : gate.<hôte>', () => {
+    expect(baseFor('https://meeshy.me/chats')).toBe('https://gate.meeshy.me');
+    expect(baseFor('https://www.meeshy.me')).toBe('https://gate.meeshy.me');
+    expect(baseFor('https://staging.meeshy.me')).toBe('https://gate.staging.meeshy.me');
+  });
+
+  test('un domaine tiers garde son protocole et son port', () => {
+    expect(baseFor('https://chat.acme.fr:8443')).toBe('https://gate.chat.acme.fr:8443');
+    expect(baseFor('http://meeshy.intranet.local')).toBe('http://gate.meeshy.intranet.local');
+  });
+
+  test('une IP, localhost ou un nom sans point : même hôte, port de la passerelle', () => {
+    expect(baseFor('http://10.0.0.5:3400')).toBe('http://10.0.0.5:3000');
+    expect(baseFor('http://localhost:3400')).toBe('http://localhost:3000');
+    expect(baseFor('http://meeshy:3400')).toBe('http://meeshy:3000');
+    expect(baseFor('http://[::1]:3400')).toBe('http://[::1]:3000');
+  });
+
+  test("le build déclaré passe AVANT l'hôte : les images existantes ne changent pas de cible", () => {
+    const config = resolveApiConfig({ VITE_API_BASE: 'https://gate.staging.meeshy.me' }, { shell: false, page: page('https://meeshy.me') });
+    expect(config.base).toBe('https://gate.staging.meeshy.me');
+  });
+
+  test("en DEV, le proxy Vite passe avant l'hôte", () => {
+    expect(resolveApiConfig({ DEV: true }, { shell: false, page: page('http://localhost:5173') }).base).toBe('');
+  });
+
+  test('un protocole non web (fichier, coque) retombe sur la production', () => {
+    expect(resolveApiConfig({}, { shell: false, page: { protocol: 'file:', hostname: '', port: '' } }).base).toBe(
+      'https://gate.meeshy.me',
+    );
   });
 });

@@ -20,6 +20,7 @@ import {
   memberSummaryOf,
   type AdminMemberSection,
 } from '@/lib/admin/member-summaries';
+import { adminMotiveOf } from '@/lib/admin/use-admin-motive';
 import { useAdminOpen } from '@/lib/admin/use-admin-open';
 import type { AdminReach } from '@/lib/admin/use-admin-reach';
 import { userEntityOf } from '@/lib/admin/user-entity';
@@ -39,6 +40,7 @@ import { AdminMemberImagesSection } from './admin-member-images';
 import { AdminMemberLifecycle } from './admin-member-lifecycle';
 import { AdminMemberMeta } from './admin-member-meta';
 import { AdminMemberQuickActions } from './admin-member-quick-actions';
+import { AdminMemberQuickEdit } from './admin-member-quick-edit';
 import { AdminMemberRoleSection } from './admin-member-role';
 import { AdminMemberSecuritySection } from './admin-member-security';
 import { AdminMemberStats } from './admin-member-stats';
@@ -54,6 +56,7 @@ import {
 import { AdminUserGallery } from './admin-user-gallery';
 import { AdminUserConversationsSection, AdminUserMediaSection } from './admin-user-lists';
 import { AdminUserPasswordSheet } from './admin-user-password-sheet';
+import { AdminUserPublicationsSection } from './admin-user-publications';
 import { AdminUserPreferencesTab } from './admin-user-preferences';
 
 /**
@@ -70,6 +73,10 @@ import { AdminUserPreferencesTab } from './admin-user-preferences';
  * s'est scindé en quatre cartes — identité, contact, mot de passe et protections,
  * rôle et statut ; un lien d'hier `?tab=<onglet>` ouvre la modale du même nom.
  * Aucune section ne lit sa route tant que sa modale est fermée.
+ *
+ * **L'ÉDITION RAPIDE EN TÊTE** (#10562) — pseudo, noms, naissance, rôle, compte, présence et
+ * tentatives s'éditent là où ils s'affichent (clic, perte du focus = validé), dans une carte
+ * repliable qui range aussi TOUS les gestes du compte ; les modales gardent le détail.
  *
  * **Éditée EN PLACE, section par section** (#8289) — plus de bouton « Modifier » :
  * chaque section porte son « Enregistrer ». Les gestes lourds — changer le rôle, suspendre, réinitialiser un
@@ -108,7 +115,7 @@ export function AdminUserFiche({
   /* #8003 — les préférences ne se lisent que sous `canViewSensitiveData`, que portent les seuls
      rangs d'administration : la même marque que la révocation des sessions (`admin-user-sessions.tsx`).
      Une section absente de la liste n'a ni carte, ni modale, et son adresse n'ouvre rien. */
-  const offertes = adminMemberSectionsFor({ sensitive: reach.hasAdminRank });
+  const offertes = adminMemberSectionsFor({ sensitive: reach.hasAdminRank, moderate: reach.can('canModerateContent') });
   const sections = useAdminOpen(offertes, { legacyTab: true });
   const annonceur = useLiveAnnouncer();
   const [motDePasse, setMotDePasse] = useState(false);
@@ -186,6 +193,8 @@ export function AdminUserFiche({
         return <AdminUserConversationsSection membre={membre} language={language} gerer={gererConversation} onAnnounce={annonceur.announce} deps={deps} now={now} />;
       case 'media':
         return <AdminUserMediaSection userId={membre.id} language={language} deps={deps} />;
+      case 'publications':
+        return <AdminUserPublicationsSection userId={membre.id} language={language} onAnnounce={annonceur.announce} deps={deps} now={now} />;
       case 'contacts':
         return <AdminUserContactsTab userId={membre.id} language={language} deps={deps} now={now} fallback={membre.counts} />;
       case 'communities':
@@ -247,8 +256,20 @@ export function AdminUserFiche({
         stats={<AdminMemberStats userId={membre.id} language={language} deps={deps} />}
         aside={<AdminMemberMeta membre={membre} language={language} now={now} onAnnounce={annonceur.announce} />}
       >
-        <AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
-        <AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} />
+        {/* L'ÉDITION RAPIDE (#10562) : l'essentiel du membre s'édite en place, en tête de fiche,
+            et TOUS les gestes du compte vivent dans sa carte — plus de cartes d'un seul bouton. */}
+        <AdminMemberQuickEdit
+          key={`quick-${membre.id}`}
+          membre={membre}
+          language={language}
+          onAnnounce={annonceur.announce}
+          onOpenPassword={() => setMotDePasse(true)}
+          onOpenBan={() => setBannissement(true)}
+          deps={deps}
+          now={now}
+          leading={<AdminMemberQuickActions membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />}
+          trailing={<AdminMemberLifecycle membre={membre} language={language} onAnnounce={annonceur.announce} deps={deps} embedded />}
+        />
         <section aria-labelledby={dossierTitle} className="@container grid gap-3" data-admin-member-cards>
           <h2 id={dossierTitle} className="text-body font-semibold" style={{ color: 'var(--color-ios-ink)' }}>
             {translateAdmin(language, 'admin.people.cards.title')}
@@ -293,7 +314,15 @@ export function AdminUserFiche({
       ))}
 
       {motDePasse ? (
-        <AdminUserPasswordSheet userId={membre.id} language={language} onClose={() => setMotDePasse(false)} onAnnounce={annonceur.announce} deps={deps} sovereign={reach.isSovereign} />
+        <AdminUserPasswordSheet
+          userId={membre.id}
+          language={language}
+          onClose={() => setMotDePasse(false)}
+          onAnnounce={annonceur.announce}
+          deps={deps}
+          sovereign={reach.isSovereign}
+          motiveFallback={adminMotiveOf(reach, language).fallback}
+        />
       ) : null}
 
       {bannissement ? (

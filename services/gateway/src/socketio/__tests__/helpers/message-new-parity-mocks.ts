@@ -101,6 +101,7 @@ jest.mock('../../../services/MaintenanceService', () => ({
       setStatusBroadcastCallback: jest.fn(),
       setIsCurrentlyConnected: jest.fn(),
       setSessionRevoker: jest.fn(),
+      setShareLinkRevocationLive: jest.fn(),
     };
     return mockMaintenanceServiceInstance;
   }),
@@ -110,6 +111,7 @@ let mockStatusServiceInstance: any;
 jest.mock('../../../services/StatusService', () => ({
   StatusService: jest.fn().mockImplementation(() => {
     mockStatusServiceInstance = {
+      setPresenceCallback: jest.fn(),
       updateUserOnline: jest.fn().mockResolvedValue(undefined),
       updateUserOffline: jest.fn().mockResolvedValue(undefined),
     };

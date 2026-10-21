@@ -29,7 +29,7 @@ final class ComposerSceneSoundChipMountGuardTests: XCTestCase {
     }
 
     private var surface: String {
-        get throws { try source("ComposerSceneSurface.swift") }
+        get throws { try source("ComposerSceneSurface.swift") + "\n" + source("ComposerSceneSoundChips.swift") }
     }
 
     /// La puce est montée, et en mode COMPOSER — le mode lecteur n'a ni

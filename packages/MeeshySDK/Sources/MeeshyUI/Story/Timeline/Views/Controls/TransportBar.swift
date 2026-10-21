@@ -7,6 +7,10 @@ public struct TransportBar: View {
 
     public let isPlaying: Bool
     public let currentTime: Float
+    /// Tête de lecture observée par le SEUL readout (#9874) : quand elle est
+    /// fournie, `currentTime` est ignoré et les boutons ne se réévaluent plus
+    /// à chaque tick. `nil` = valeur figée `currentTime` (surfaces sans moteur).
+    public let playhead: PlayheadClock?
     public let duration: Float
     public let zoomScale: CGFloat
     public let isMuted: Bool
@@ -35,6 +39,7 @@ public struct TransportBar: View {
     public let onSave: (() -> Void)?
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
+                playhead: PlayheadClock? = nil,
                 zoomScale: CGFloat, isMuted: Bool,
                 showsTimeReadout: Bool = true,
                 canUndo: Bool? = nil, canRedo: Bool? = nil,
@@ -49,6 +54,7 @@ public struct TransportBar: View {
                 onSnapToggle: @escaping () -> Void = {},
                 onSave: (() -> Void)? = nil) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
+        self.playhead = playhead
         self.zoomScale = zoomScale; self.isMuted = isMuted
         self.showsTimeReadout = showsTimeReadout
         self.canUndo = canUndo; self.canRedo = canRedo
@@ -131,12 +137,12 @@ public struct TransportBar: View {
         }
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
-        .frame(minHeight: 44)
+        .frame(minHeight: MeeshyControlSize.tapTarget)
         .background(rowBackground)
         // MARK: - Keyboard Shortcuts (iPad / external keyboard)
-        // Space — play/pause
-        .keyboardShortcut(" ", modifiers: [])
-        // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
+        // Space — play/pause, porté par le SEUL bouton invisible de l'overlay. Posé aussi sur le `HStack`, le raccourci
+        // s'appliquait à CHAQUE bouton de la rangée (lecture, annuler, refaire, aimant, zoom, son) : l'action de la
+        // barre d'espace dépendait de l'ordre de résolution de SwiftUI.
         .background(keyboardShortcutOverlay)
     }
 
@@ -147,7 +153,7 @@ public struct TransportBar: View {
     private func trailingCluster(showTime: Bool, showZoomLabel: Bool, spacing: CGFloat) -> some View {
         HStack(spacing: spacing) {
             if showTime {
-                timeReadout
+                timeReadoutHost
             }
             undoRedoCluster
             snapChip
@@ -189,7 +195,7 @@ public struct TransportBar: View {
     /// Documented HIG contract: effective touch target (visual frame + contentShape inset)
     /// must meet Apple's 44×44pt minimum. Visual icons are 30×30 (or 36×36 for play)
     /// extended via `.contentShape(Rectangle().inset(by: -7))` / `inset(by: -4)`.
-    public static let minimumHitTargetSize = CGSize(width: 44, height: 44)
+    public static let minimumHitTargetSize = CGSize(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
 
     // MARK: - Sub-views
 
@@ -232,12 +238,21 @@ public struct TransportBar: View {
                                    bundle: .module))
     }
 
-    private var timeReadout: some View {
-        let nowCompact = Self.formatTimeCompact(seconds: currentTime)
+    @ViewBuilder
+    private var timeReadoutHost: some View {
+        if let playhead {
+            PlayheadTimeReader(clock: playhead) { timeReadout(at: $0) }
+        } else {
+            timeReadout(at: currentTime)
+        }
+    }
+
+    private func timeReadout(at seconds: Float) -> some View {
+        let nowCompact = Self.formatTimeCompact(seconds: seconds)
         let totalCompact = Self.formatTimeCompact(seconds: duration)
         // Full-precision strings reserved for accessibility — matches what the
         // Pro inspector and tests expect from `formatTime(seconds:)`.
-        let nowPrecise = Self.formatTime(seconds: currentTime)
+        let nowPrecise = Self.formatTime(seconds: seconds)
         let totalPrecise = Self.formatTime(seconds: duration)
         return HStack(spacing: MeeshySpacing.xs) {
             Text(nowCompact)

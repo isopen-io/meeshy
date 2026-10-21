@@ -21,7 +21,7 @@ final class NotificationCallRoutingTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("Meeshy/Features/Main/Views/RootView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/RootNotificationNavigator.swift")
         return try String(contentsOf: url, encoding: .utf8)
     }
 
@@ -54,7 +54,7 @@ final class NotificationCallRoutingTests: XCTestCase {
         }
         let caseBody = String(afterCase[..<caseEnd])
         XCTAssertTrue(
-            caseBody.contains("CallManager.shared.handleIncomingCallNotification"),
+            caseBody.contains("CallManager.shared.handleIncomingCallAlertTap("),
             "the China incoming-call push must drive CallManager.handleIncomingCallNotification " +
             "(WebRTC negotiation + answer UI) — a plain navigateToConversationById would leave the " +
             "user staring at a conversation with no way to answer the call")
@@ -95,8 +95,27 @@ final class NotificationCallRoutingTests: XCTestCase {
         }
         let caseBody = String(afterCase[..<caseEnd])
         XCTAssertTrue(
-            caseBody.contains("CallManager.shared.handleIncomingCallNotification"),
+            caseBody.contains("CallManager.shared.handleIncomingCallAlertTap("),
             "iPad must drive the same call-answer flow as RootView — no CallKit, no PushKit VoIP " +
             "registration in China on iPad either")
+    }
+
+    // MARK: - Le tap d'alerte ne double pas un appel qui sonne déjà
+
+    /// Tapé pendant que le socket fait déjà sonner X, le bandeau ouvrait un
+    /// « appel en attente » pour X par-dessus sa propre sonnerie — et
+    /// « Refuser » y rejetait l'appel qui sonnait.
+    func test_alertTap_sameCallAlreadyRinging_startsNothing() {
+        XCTAssertFalse(CallManager.alertTapStartsRinging(
+            callId: "X", currentCallId: "X", callState: .ringing(isOutgoing: false), pendingCallId: nil))
+        XCTAssertFalse(CallManager.alertTapStartsRinging(
+            callId: "X", currentCallId: "Y", callState: .connected, pendingCallId: "X"))
+    }
+
+    func test_alertTap_newCall_rings() {
+        XCTAssertTrue(CallManager.alertTapStartsRinging(
+            callId: "X", currentCallId: nil, callState: .idle, pendingCallId: nil))
+        XCTAssertTrue(CallManager.alertTapStartsRinging(
+            callId: "X", currentCallId: "X", callState: .ended(reason: .remote), pendingCallId: nil))
     }
 }

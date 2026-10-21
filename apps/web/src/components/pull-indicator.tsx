@@ -1,5 +1,7 @@
 import { BrandMark } from './brand-mark';
 import { PULL_SETTLE_MS, type PullPhase } from '@/lib/view/pull-to-refresh';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 export type PullIndicatorProps = {
   readonly phase: PullPhase;
@@ -19,9 +21,10 @@ function progressOf(phase: PullPhase): number {
 }
 
 function announcementOf(phase: PullPhase): string {
-  if (phase.kind === 'armed') return 'Relâchez pour actualiser';
-  if (phase.kind === 'refreshing') return 'Actualisation…';
-  if (phase.kind === 'completing') return phase.outcome === 'ok' ? 'Liste à jour' : 'Actualisation impossible';
+  const language = currentInterfaceLanguage();
+  if (phase.kind === 'armed') return translate(language, 'list.pull.armed');
+  if (phase.kind === 'refreshing') return translate(language, 'list.pull.refreshing');
+  if (phase.kind === 'completing') return translate(language, phase.outcome === 'ok' ? 'list.pull.done' : 'list.pull.failed');
   return '';
 }
 

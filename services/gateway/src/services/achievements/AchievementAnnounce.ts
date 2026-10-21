@@ -47,8 +47,7 @@ import {
   tiersOf,
   type AchievementFamily,
 } from '@meeshy/shared/types/achievement-catalog';
-import { achievementLabel } from '@meeshy/shared/utils/achievement-labels';
-import { notificationString } from '@meeshy/shared/utils/notification-strings';
+import { tierReachedNotification } from '@meeshy/shared/utils/tier-reached-notification';
 import { NotificationService } from '../notifications/NotificationService';
 import { getSharedNotificationService } from '../notifications/notification-service-registry';
 import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-language';
@@ -122,7 +121,7 @@ export async function graveEtAnnonce(params: {
 /**
  * La bannière d'un succès, dans la langue du LECTEUR.
  *
- * Le libellé passe par `achievementLabel`, qui rend `null` pour une famille
+ * Le libellé passe par `tierReachedNotification` (et `achievementLabel`), qui rend `null` pour une famille
  * sans gabarit : dans ce cas on n'annonce RIEN plutôt que d'afficher la clé.
  * C'est la leçon du `first_content` servi tel quel sur un écran verrouillé
  * (#5731) — une clé stable n'est pas un mot.
@@ -142,20 +141,24 @@ async function annonce(params: {
   try {
     const user = await prisma.user.findUnique({ where: { id: userId }, select: RECIPIENT_LANG_SELECT });
     const lang = recipientLanguage(user, 'fr');
-    const titre = achievementLabel(lang, family, tier);
-    if (titre === null) return;
+    // #10298 — le PALIER en titre, l'EXPLOIT chiffré et le palier en corps.
+    const banner = tierReachedNotification(lang, { kind: 'achievement', family, tier });
+    if (banner === null) return;
 
     const notificationService = getSharedNotificationService() ?? new NotificationService(prisma);
     await notificationService.createNotification({
       userId,
       type: 'achievement_unlocked',
       priority: 'normal',
-      content: notificationString(lang, 'engagement.achievementUnlocked', { title: titre }),
+      title: banner.title,
+      content: banner.body,
       context: {},
       metadata: {
         action: 'view_details',
         route: ENGAGEMENT_ROUTE,
         achievementKey: achievementKey(family, tier),
+        tierRank: banner.rank,
+        value: banner.value,
       },
     });
   } catch (err) {

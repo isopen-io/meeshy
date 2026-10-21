@@ -18,266 +18,167 @@ import MeeshySDK
 ///   quick actions on the banner / lock screen / notification center.
 /// - Override the badge value so iOS keeps the displayed count in sync without a
 ///   foreground round-trip.
-nonisolated class NotificationService: UNNotificationServiceExtension {
+class NotificationService: UNNotificationServiceExtension {
 
-    private var contentHandler: ((UNNotificationContent) -> Void)?
+    private var delivery: NSEDelivery<UNNotificationContent>?
     private var bestAttemptContent: UNMutableNotificationContent?
-
-    // Timestamp recorded at the very start of didReceive so that each download
-    // can cap its URLRequest timeout to what's left in the OS budget.
-    var extensionStartTime: Date = .distantPast
-
-    // The OS grants the NSE ~30 s. We reserve 3 s at the end for INSendMessageIntent
-    // construction + contentHandler invocation, giving downloads 27 s total.
-    static let nseBudget: TimeInterval = 27
-    // Never start a download with less than 2 s left — it would almost certainly
-    // time out mid-transfer and leave the extension hung right up to the OS kill.
-    static let minDownloadBudget: TimeInterval = 2
+    private var enrichment: Task<Void, Never>?
 
     override func didReceive(
         _ request: UNNotificationRequest,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        extensionStartTime = Date()
-        self.contentHandler = contentHandler
-        bestAttemptContent = request.content.mutableCopy() as? UNMutableNotificationContent
-
-        guard let bestAttemptContent else {
-            contentHandler(request.content)
+        let budget = NSEBudget(start: Date())
+        let delivery = NSEDelivery(handler: contentHandler)
+        self.delivery = delivery
+        // #10507 — « reçue » : déposée dans la boîte du groupe d'app, sans réseau.
+        if let received = SocialNotificationEvents.event(.received, userInfo: request.content.userInfo) {
+            SocialNotificationInbox.shared.append(received)
+        }
+        guard let content = request.content.mutableCopy() as? UNMutableNotificationContent else {
+            delivery.deliver(request.content)
             return
         }
+        bestAttemptContent = content
+        prepareBestAttempt(content)
+        startEnrichment(
+            request: request,
+            content: content,
+            delivery: delivery,
+            budget: budget
+        )
+    }
 
-        applyCategory(to: bestAttemptContent)
-        applyBadge(to: bestAttemptContent)
-        applyThreading(to: bestAttemptContent)
+    override func serviceExtensionTimeWillExpire() {
+        enrichment?.cancel()
+        guard let bestAttemptContent else { return }
+        delivery?.deliver(bestAttemptContent)
+    }
+
+    // MARK: - Pipeline
+
+    private func prepareBestAttempt(_ content: UNMutableNotificationContent) {
+        applyCategory(to: content)
+        applyBadge(to: content)
+        applyThreading(to: content)
         // Préférences de notification (miroir App Group) — APRÈS applyBadge et
         // applyThreading pour que sons/badge/regroupement coupés gagnent, et
         // avant tout chemin de sortie (contentHandler / expiration).
         NSEPreferencesGate.apply(
             preferences: NSEPreferencesGate.loadPreferences() ?? .defaults,
-            to: bestAttemptContent,
-            rawType: bestAttemptContent.userInfo["type"] as? String
+            to: content,
+            rawType: content.userInfo["type"] as? String
         )
-        updateSharedUnreadCount(from: bestAttemptContent.userInfo)
-        prefetchMessageData(from: bestAttemptContent.userInfo)
-        prefetchSocialData(from: bestAttemptContent.userInfo)
-        prePersistMessage(from: bestAttemptContent.userInfo)
-        postDeliveryReceipt(from: bestAttemptContent.userInfo)
+        updateSharedUnreadCount(from: content.userInfo)
+        prefetchMessageData(from: content.userInfo)
+        prefetchSocialData(from: content.userInfo)
+        NSEMessagePrePersister.prePersist(from: content.userInfo)
+        postDeliveryReceipt(from: content.userInfo)
+        applyBodyRewrites(to: content)
+        // #7453 — L'ÉCHÉANCE, pas une durée figée : une HEURE ne se périme pas,
+        // et elle est aussi GRAVÉE dans le `userInfo` où les balayages la lisent.
+        applyEphemeralDeadline(to: content)
+        // Une NSE s'exécute à chaque push reçu : l'occasion la plus fréquente
+        // de retirer les bannières dont l'échéance est passée.
+        Self.sweepExpiredDeliveredBanners()
+    }
 
-        let userInfo = bestAttemptContent.userInfo
-
-        // E2EE decryption: if the push payload contains encrypted content,
-        // attempt to decrypt it locally using the shared Keychain session key.
-        // On success, replace the notification body with the decrypted plaintext.
+    private func applyBodyRewrites(to content: UNMutableNotificationContent) {
+        let userInfo = content.userInfo
         var didDecrypt = false
         if let encryptedContent = userInfo["encryptedContent"] as? String,
            let senderId = userInfo["senderId"] as? String,
-           !encryptedContent.isEmpty {
-            if let decrypted = NSEDecryptor.decrypt(
-                encryptedBase64: encryptedContent,
-                senderUserId: senderId
-            ) {
-                bestAttemptContent.body = decrypted
-                didDecrypt = true
-            }
+           !encryptedContent.isEmpty,
+           let decrypted = NSEDecryptor.decrypt(encryptedBase64: encryptedContent, senderUserId: senderId) {
+            content.body = decrypted
+            didDecrypt = true
         }
-
-        // Localize protected message placeholders.
-        //
-        // The gateway now sends icon-only bodies for protected messages
-        // ("👁️ 🎵", "🔥 💬 5min", "🌫️ 🖼️", "🔒 🎬") that already convey
-        // protection + content type without leaking content. Those bodies
-        // are emoji and don't need locale-side localisation, so we MUST
-        // NOT clobber them with NSLocalizedString here.
-        //
-        // The locKey override is still useful for ONE case : E2EE pushes
-        // where decryption failed locally (key missing, sender device key
-        // not paired, etc.). In that case the gateway has no way to know
-        // it couldn't be decrypted client-side, so its iconified body
-        // ("🔒 🎵") is fine — but historically the NSE swapped it for the
-        // user's localised "Message chiffré" string, which is friendlier.
-        // We keep that behaviour gated strictly to the E2EE-failure path :
-        // any non-E2EE protected message (view-once / blurred / ephemeral)
-        // keeps the iconified body from the gateway.
+        // Les corps protégés de la passerelle sont des emoji déjà localisés :
+        // seul l'échec de déchiffrement E2EE les remplace par le libellé du
+        // catalogue de l'extension.
         let isEncryptedPush = userInfo["isEncrypted"] as? Bool == true
             || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
         if isEncryptedPush, !didDecrypt,
            let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
             let localized = NSLocalizedString(locKey, bundle: InterfaceLanguageResolver.bundle(), comment: "")
             if localized != locKey {
-                bestAttemptContent.body = localized
+                content.body = localized
             }
         }
-
-        // Bug B — audio-only E2EE messages reach the device with an empty
-        // plaintext body (the gateway encrypts only the optional caption,
-        // which is empty for a voice memo). Without a fallback the user
-        // sees just the sender name with no hint that a voice message is
-        // waiting. We apply this AFTER the decryption and locKey steps so
-        // we only catch the truly-empty case, never a decrypted caption.
+        // Bug B — un vocal E2EE arrive au corps vide : le repli audio n'agit
+        // qu'APRÈS déchiffrement et locKey, jamais sur une légende déchiffrée.
         if let fallback = NotificationPayloadHelpers.audioBodyFallback(
-            currentBody: bestAttemptContent.body,
+            currentBody: content.body,
             userInfo: userInfo
         ) {
-            bestAttemptContent.body = fallback
+            content.body = fallback
         }
         // #8858 — position, contact, invitation, lien : le corps DIT le détail
         // quand la passerelle ne l'a pas composé (vide, ou URL brute).
-        applyDetailedBody(to: bestAttemptContent)
+        applyDetailedBody(to: content)
+    }
 
-        // #7453 — L'ÉCHÉANCE, pas une durée figée.
-        //
-        // La passerelle compose « 🔥 💬 5min » une fois pour toutes ; ce texte
-        // est déjà faux à la seconde où il s'affiche, et il le reste sur
-        // l'écran verrouillé pendant que le message meurt. iOS ne sait pas
-        // faire battre une seconde dans une bannière standard — mais une
-        // HEURE ne se périme pas : elle dit la même chose à 14:30 et à 14:31.
-        //
-        // L'échéance est aussi GRAVÉE dans le `userInfo`, où les trois
-        // balayages viendront la lire. Sans elle, rien ne saurait quelles
-        // bannières retirer sans réseau.
-        applyEphemeralDeadline(to: bestAttemptContent)
-
-        // Le balayage, à chaque passage : c'est le chemin « si iOS le
-        // supporte » de la directive. Une NSE s'exécute à chaque push reçu,
-        // ce qui en fait l'occasion la plus fréquente de nettoyer — bien plus
-        // souvent que le retour de l'application au premier plan.
-        Self.sweepExpiredDeliveredBanners()
-
-        // Prisme Linguistique (i18n serveur) : pour `message_reaction`, le gateway
-        // envoie désormais le body DÉJÀ localisé dans la langue du destinataire
-        // (« reacted ❤️ to your message » / « a réagi ❤️ à votre message » …, via
-        // `notificationString(lang, 'reaction.message')`). Le NSE ne reconstruit
-        // plus rien : il affiche le body tel quel. Le nom du réacteur est porté par
-        // INSendMessageIntent (titre Communication Notification), l'avatar via
-        // INPerson.image. Voir docs/superpowers/specs/2026-06-16-notification-system-i18n-design.md
-
-        let isCommunicationType = Self.communicationTypes.contains(
-            userInfo["type"] as? String ?? ""
+    private func startEnrichment(
+        request: UNNotificationRequest,
+        content: UNMutableNotificationContent,
+        delivery: NSEDelivery<UNNotificationContent>,
+        budget: NSEBudget
+    ) {
+        guard let working = content.mutableCopy() as? UNMutableNotificationContent else {
+            delivery.deliver(content)
+            return
+        }
+        let userInfo = working.userInfo
+        let plan = NSEEnrichmentRequest.make(
+            userInfo: userInfo,
+            apiBaseURL: NSEDataSync.trustedApiBaseURL,
+            budget: budget,
+            now: Date()
         )
-
-        // Phase A — separate concerns:
-        //   1. `imageURL`  → sender's avatar — ONLY fed to INPerson.image so the
-        //      Communication Notification renders it on the left of the banner
-        //      with the app icon as a badge bottom-right (WhatsApp/Telegram style).
-        //      NEVER attached as UNNotificationAttachment — that slot is for
-        //      message media, and feeding the avatar there made iOS render it as
-        //      the message preview while the banner kept showing the default
-        //      app icon on the left.
-        //   2. `attachmentUrl` + `attachmentMimeType` → media of the message
-        //      itself (audio/image/video). Downloaded and attached with a UTI
-        //      typeHint so iOS picks the native inline renderer (audio waveform
-        //      with play button, image preview, video thumbnail with tap-to-play).
-        let group = DispatchGroup()
-        var avatarData: Data?
-        nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
-
-        // Un push de REMPLACEMENT (édition, réaction changée) annule la bannière d'avant AVANT de
-        // s'afficher : le `contentHandler` n'est appelé qu'au `notify` du
-        // groupe, donc après ce retrait confirmé.
-        group.enter()
-        Self.removeReplacedBanners(userInfo: userInfo, incomingIdentifier: request.identifier) {
-            group.leave()
-        }
-
-        // Les URLs du payload sont RELATIVES quand le média est servi par le
-        // gateway (`/api/v1/attachments/file/…`) : `URL(string:)` les accepte
-        // mais produit une URL sans hôte, que `URLSession` refuse. On les
-        // résout contre l'origine API de confiance (allowlist NSE) — sans quoi
-        // l'avatar n'arrive jamais et la bannière retombe sur l'icône de l'app.
-        let apiBaseURL = NSEDataSync.trustedApiBaseURL
-
-        if let avatarURLString = userInfo["imageURL"] as? String,
-           let avatarURL = NotificationPayloadHelpers.resolveRemoteMediaURL(
-               avatarURLString, apiBaseURL: apiBaseURL
-           ) {
-            group.enter()
-            // L'avatar est le SEUL octet que l'INPerson exige en mémoire. Il
-            // descend malgré tout sur disque, et n'est lu que si sa taille
-            // mesurée tient dans le plafond : un « avatar » de 30 Mo servi par
-            // erreur ne doit pas emporter l'extension (#7003).
-            downloadFile(from: avatarURL) { fileURL in
-                defer { group.leave() }
-                guard let fileURL else { return }
-                defer { try? FileManager.default.removeItem(at: fileURL) }
-                guard let size = NotificationService.fileSize(at: fileURL),
-                      size > 0, size <= NSEAttachmentPolicy.maxAttachmentBytes else { return }
-                avatarData = try? Data(contentsOf: fileURL)
-            }
-        }
-
-        if let attachmentURLString = userInfo["attachmentUrl"] as? String,
-           let attachmentURL = NotificationPayloadHelpers.resolveRemoteMediaURL(
-               attachmentURLString, apiBaseURL: apiBaseURL
-           ) {
-            let mime = userInfo["attachmentMimeType"] as? String ?? ""
-            // PRÉ-VOL (#7003) : la famille et la taille DÉCLARÉE sur le fil
-            // décident AVANT la requête. Le gateway pose `firstAttachmentUrl`
-            // pour tout type dès qu'un média peut voyager — vidéos et documents
-            // compris —, et la taille qu'il pose à côté n'était pas lue.
-            let declaredSize = NSEAttachmentPolicy.declaredFileSize(userInfo["attachmentFileSize"])
-            // #7453 — SECOND VERROU sur la protection. Le serveur ne pose déjà
-            // plus d'URL pour un message protégé (`mediaMayTravel`, cycle 125),
-            // mais un champ de service qui DÉCLARE une restriction ne la fait
-            // pas respecter : c'est l'hôte qui rend, et c'est donc ici que le
-            // refus doit aussi pouvoir tomber. Une photo à vue unique s'est
-            // affichée ENTIÈRE sur un écran verrouillé sous une bannière qui
-            // disait « 👁️ 🖼️ ».
-            let isProtected = NSEAttachmentPolicy.declaresProtection(userInfo: userInfo)
-            if !isProtected, NSEAttachmentPolicy.mayAttach(mimeType: mime, fileSize: declaredSize) {
-                group.enter()
-                downloadFile(from: attachmentURL) { [weak self] fileURL in
-                    defer { group.leave() }
-                    guard let self, let fileURL else { return }
-                    // APRÈS-VOL : un serveur n'est pas tenu par ce qu'il
-                    // annonce. Le fichier est sur DISQUE, donc le mesurer ne
-                    // coûte rien — et le refuser non plus.
-                    guard NSEAttachmentPolicy.mayAttach(
-                        mimeType: mime, fileSize: NotificationService.fileSize(at: fileURL)
-                    ) else {
-                        try? FileManager.default.removeItem(at: fileURL)
-                        return
-                    }
-                    messageAttachment = self.createMessageAttachment(
-                        fromFile: fileURL,
-                        originalURL: attachmentURL,
-                        mimeType: mime
-                    )
-                }
-            }
-        }
-
-        // #8858 — la carte d'une position ou la vignette d'une vidéo, quand le
-        // message n'a pas de média attachable (une vidéo ne l'est jamais).
-        let detailAttachment = DetailAttachmentBox()
-        enqueueDetailAttachment(userInfo: userInfo, apiBaseURL: apiBaseURL, group: group) {
-            detailAttachment.store($0)
-        }
-
-        group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
-            guard let self else {
-                contentHandler(bestAttemptContent)
-                return
-            }
-            if let attachment = messageAttachment ?? detailAttachment.value {
-                bestAttemptContent.attachments = [attachment]
-            }
-            if isCommunicationType {
-                let finalContent = self.applyCommunicationIntent(
-                    to: bestAttemptContent,
-                    avatarData: avatarData
-                )
-                contentHandler(finalContent)
-            } else {
-                contentHandler(bestAttemptContent)
-            }
+        let isCommunicationType = Self.communicationTypes.contains(userInfo["type"] as? String ?? "")
+        let identifier = request.identifier
+        let owned = NSEOwnedContent(content: working)
+        enrichment = Task {
+            await NotificationService.deliverEnriched(
+                owned.content,
+                plan: plan,
+                incomingIdentifier: identifier,
+                budget: budget,
+                delivery: delivery,
+                isCommunicationType: isCommunicationType
+            )
         }
     }
 
-    override func serviceExtensionTimeWillExpire() {
-        if let contentHandler, let bestAttemptContent {
-            contentHandler(bestAttemptContent)
+    private static func deliverEnriched(
+        _ working: UNMutableNotificationContent,
+        plan: NSEEnrichmentRequest,
+        incomingIdentifier: String,
+        budget: NSEBudget,
+        delivery: NSEDelivery<UNNotificationContent>,
+        isCommunicationType: Bool
+    ) async {
+        let result = await enrich(plan, incomingIdentifier: incomingIdentifier, budget: budget)
+        guard !delivery.hasDelivered else {
+            discard(result)
+            return
         }
+        delivery.deliver(finalContent(from: working, result: result, isCommunicationType: isCommunicationType))
+    }
+
+    private static func finalContent(
+        from content: UNMutableNotificationContent,
+        result: NSEEnrichmentResult,
+        isCommunicationType: Bool
+    ) -> UNNotificationContent {
+        if let file = result.attachment,
+           let attachment = createMessageAttachment(
+               fromFile: file.fileURL, originalURL: file.originalURL, mimeType: file.mimeType
+           ) {
+            content.attachments = [attachment]
+        }
+        guard isCommunicationType else { return content }
+        return applyCommunicationIntent(to: content, avatarData: result.avatarData)
     }
 
     // MARK: - Enrichment
@@ -444,195 +345,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         NSEDataSync.syncPost(postId: postId) { _ in }
     }
 
-    // MARK: - GRDB Pre-persist
-
-    /// Writes the incoming message directly to the App Group GRDB store so that
-    /// when the user taps the notification banner the message is already available
-    /// locally — no network round-trip required on cold launch.
-    ///
-    /// This is a best-effort, fire-and-forget operation. Any failure is silently
-    /// swallowed; the main app will fetch the message from the REST API on resume.
-    ///
-    /// #8656 — la base visée est celle du compte DESTINATAIRE (le compte actif
-    /// publié dans l'App Group, dans son environnement), jamais une base
-    /// commune : l'extension survit d'un push à l'autre, et un changement de
-    /// compte entre deux pushes doit la faire écrire ailleurs. Personne de
-    /// connecté ⇒ aucune base, aucune écriture.
-    private static let poolLock = NSLock()
-    nonisolated(unsafe) private static var poolsByPath: [String: DatabasePool] = [:]
-
-    private static func recipientPool() -> DatabasePool? {
-        guard let path = recipientDatabasePath() else { return nil }
-        return poolLock.withLock {
-            if let pool = poolsByPath[path] { return pool }
-            do {
-                // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
-                // the main app holds its own pool on this same file, and GRDB's
-                // default `.immediateError` busy mode would turn a cross-process
-                // write collision into an SQLITE_BUSY swallowed by the catch
-                // below (pre-persisted bubble silently lost).
-                var config = Configuration()
-                config.busyMode = .timeout(5)
-                let pool = try DatabasePool(path: path, configuration: config)
-                try MessageDatabaseMigrations.runAll(on: pool)
-                poolsByPath[path] = pool
-                return pool
-            } catch { return nil }
-        }
-    }
-
-    /// Pré-enregistre la bulle d'un message qui ARRIVE, et rien d'autre.
-    ///
-    /// Deux verrous, et aucun ne subsume l'autre :
-    ///
-    ///  1. **le TYPE** — `prePersistedMessagePlan` refuse tout push dont le
-    ///     `messageId` ne désigne pas un message qui arrive. Il n'y avait aucun
-    ///     gate ici, alors que le frère d'en dessous (`postDeliveryReceipt`) en
-    ///     porte un et que son commentaire NOMME le cas exclu. Une notification
-    ///     de RÉACTION porte le `messageId` du message RÉAGI — celui que le
-    ///     destinataire a le plus souvent écrit lui-même — et un `senderId` qui
-    ///     est celui du réacteur : `save()` étant un UPSERT sur la clé primaire
-    ///     `localId`, réagir à un message VIDAIT son texte en base, lui
-    ///     réassignait son auteur, le rehorodatait à l'instant du push et
-    ///     jetait ses pièces jointes, ses réactions et sa citation.
-    ///
-    ///  2. **la LIGNE** — une bulle pré-enregistrée est un PLACEHOLDER pour la
-    ///     fenêtre qui précède la synchro REST. Elle n'a donc jamais à
-    ///     remplacer une ligne canonique déjà là, quel que soit le type qui
-    ///     l'amène : l'écriture est un INSERT, jamais un UPSERT. C'est ce
-    ///     second verrou qui couvre le cas du chemin d'ÉDITION, où une mention
-    ///     ajoutée à un message EXISTANT produit un `user_mentioned` légitime
-    ///     sur un `messageId` que le destinataire peut déjà détenir.
-    private func prePersistMessage(from userInfo: [AnyHashable: Any]) {
-        // Audit 2026-05-11: For E2EE messages we deliberately skip the
-        // pre-persist path. The push payload's plaintext `content` field
-        // is just the placeholder ("Encrypted message"), and writing
-        // `isEncrypted: false` would let attacker-controlled push content
-        // render in the bubble until NSEDataSync.syncMessage's API
-        // response overwrites it. NSEDataSync already fetches the
-        // canonical record from the gateway and writes it via the
-        // pending-messages path — that's the trustworthy source.
-        //
-        // Audit 2026-08-13: that last sentence is a PREMISE, and it was false
-        // from the day it was written until this audit — `syncMessage` aimed
-        // at a route the gateway never registered, so an E2EE push staged
-        // NOTHING: no pre-persist (skipped here, correctly) and no canonical
-        // fetch (404). The skip is only safe while the fetch works; whoever
-        // changes `NSEDataSync.syncMessage`'s endpoint owns this branch too.
-        //
-        // Ce refus, comme le gate de type et la lecture des champs GW5, vit
-        // désormais dans `prePersistedMessagePlan` — pur, donc gardé par des
-        // témoins.
-        // #7168 — LE FILTRE DE TYPE D'ABORD. Une clause de `guard` s'évalue
-        // dans l'ordre, et `Self.sharedPool` est une `static let` paresseuse
-        // qui ouvre `DatabasePool` PUIS rejoue toutes les migrations, avec un
-        // `busyMode` qui bloque jusqu'à cinq secondes sur collision avec l'app
-        // principale. L'évaluer en premier faisait payer cette ouverture à
-        // TOUT push qui n'annonce pas l'arrivée d'un message — like, réaction,
-        // commentaire, demande d'ami, arrivée d'un membre — pour repartir les
-        // mains vides, sur le budget qui sert à télécharger l'avatar et la
-        // pièce jointe avant d'afficher la bannière.
-        //
-        // Le filtre est PUR et gardé en propre (`NSEMessageArrivalGateTests`) ;
-        // l'ordre, lui, n'est pas observable d'ici — ce fichier n'est compilé
-        // que dans la cible d'extension.
-        guard NotificationPayloadHelpers.announcesMessageArrival(userInfo["type"] as? String) else { return }
-        guard let plan = NotificationPayloadHelpers.prePersistedMessagePlan(
-                  userInfo: userInfo,
-                  now: Date()
-              ),
-              let pool = Self.recipientPool()
-        else { return }
-
-        do {
-            let now = Date()
-            let record = MessageRecord(
-                localId: plan.messageId, serverId: plan.messageId,
-                conversationId: plan.conversationId, senderId: plan.senderId,
-                // Don't hardcode "fr" — read from push payload if present, else
-                // default to "en" (the safer fake for an unknown language than
-                // the previous "fr" which guaranteed wrong Prisme Linguistique
-                // resolution for non-French speakers). The NSEDataSync API
-                // fetch will overwrite with the canonical value seconds later.
-                content: plan.content,
-                originalLanguage: plan.originalLanguage,
-                messageType: plan.messageType, messageSource: "user",
-                contentType: plan.contentType,
-                // Incoming messages are .delivered (received by us), not
-                // .sent (which means "sent BY us and acked by server").
-                // The previous .sent value broke any GRDB query that
-                // partitions by sender ownership.
-                state: .delivered, retryCount: 0, lastError: nil,
-                isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-                replyToId: nil, storyReplyToId: nil,
-                forwardedFromId: nil, forwardedFromConversationId: nil,
-                replyToJson: nil, forwardedFromJson: nil,
-                // #7453 — la protection VOYAGE avec la bulle pré-enregistrée.
-                // Ces deux champs valaient `nil` et `0` en dur : au démarrage
-                // à froid depuis la bannière, un éphémère s'affichait comme un
-                // message ordinaire (sans décompte) et une vue unique sans
-                // voile, jusqu'à ce que la synchro REST rapporte la ligne
-                // canonique — c'est-à-dire pendant les secondes où
-                // l'utilisateur regarde.
-                expiresAt: plan.expiresAt, effectFlags: plan.effectFlags,
-                maxViewOnceCount: nil, viewOnceCount: 0,
-                isEdited: false, editedAt: nil, deletedAt: nil,
-                pinnedAt: nil, pinnedBy: nil,
-                // `senderName` était lu sous une clé qu'AUCUN producteur
-                // n'émet : la bulle pré-enregistrée était anonyme. Les trois
-                // clés réelles (`senderDisplayName`, `senderUsername`,
-                // `senderAvatar`) sont celles que `applyCommunicationIntent`
-                // lit cent lignes plus bas, dans ce même fichier.
-                senderName: plan.senderName,
-                senderUsername: plan.senderUsername,
-                senderColor: nil, senderAvatarURL: plan.senderAvatarURL,
-                deliveredCount: 0, readCount: 0,
-                deliveredToAllAt: nil, readByAllAt: nil,
-                createdAt: plan.createdAt, sentAt: nil,
-                deliveredAt: nil, readAt: nil, updatedAt: now,
-                attachmentsJson: nil, reactionsJson: nil,
-                reactionCount: 0, currentUserReactionsJson: nil,
-                mentionedUsersJson: nil,
-                cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-                cachedLastLineWidth: nil, cachedLineCount: nil,
-                cachedTimestampInline: nil,
-                layoutVersion: 0, layoutMaxWidth: nil,
-                changeVersion: 0
-            )
-
-            // INSERT, jamais UPSERT (verrou 2 ci-dessus) : un placeholder ne
-            // remplace pas une ligne canonique. `save()` écrasait TOUTES les
-            // colonnes de la ligne existante.
-            try pool.write { db in
-                guard try MessageRecord.fetchOne(db, key: plan.messageId) == nil else { return }
-                try record.insert(db)
-            }
-        } catch {
-            // Silent fail — the app will fetch the message from the API on launch.
-        }
-    }
-
-    /// Returns the path to the shared App Group SQLite database, or nil if
-    /// the App Group entitlement is not available (misconfigured signing,
-    /// stripped entitlement on Ad Hoc builds, etc.). Audit 2026-05-11
-    /// removed the prior `containerURL!` force-unwrap which crashed the
-    /// extension via EXC_BREAKPOINT on the very first push when the
-    /// entitlement was absent — invisible to users, hard to diagnose
-    /// without a sysdiagnose.
-    ///
-    /// #8656 — le fichier est celui du compte destinataire (utilisateur +
-    /// environnement, `MessageStoreAccountKey`), la même clé que l'app ouvre.
-    private static func recipientDatabasePath() -> String? {
-        guard let container = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
-        ), let key = MessageStoreAccountKey.activeAccount(
-            appGroupDefaults: UserDefaults(suiteName: "group.me.meeshy.apps"),
-            serverOrigin: NSEDataSync.trustedApiBaseURL
-        ) else { return nil }
-        let dbDir = container.appendingPathComponent("Database")
-        nseCreateDirectory(dbDir, context: "NSE database directory")
-        return dbDir.appendingPathComponent(key.databaseFileName).path
-    }
+    // MARK: - GRDB Pre-persist (voir NSEMessagePrePersister)
 
     // MARK: - Éphémère (#7453)
 
@@ -668,7 +381,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// balayage ne doit jamais retarder l'affichage. Il ne touche QUE les
     /// bannières qui portent une échéance — une notification ordinaire n'est
     /// jamais retirée par ce chemin.
-    nonisolated static func sweepExpiredDeliveredBanners(now: Date = Date()) {
+    static func sweepExpiredDeliveredBanners(now: Date = Date()) {
         // Le centre est redemandé DANS la fermeture plutôt que capturé : une
         // fermeture d'API système doit être `@Sendable`, et la capture d'un
         // objet de framework y coûte une exception de concurrence pour rien —
@@ -680,65 +393,6 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             let expired = EphemeralBannerDeadline.expiredIdentifiers(from: entries, now: now)
             guard !expired.isEmpty else { return }
             UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: expired)
-        }
-    }
-
-    /// Délai accordé à la CONFIRMATION du retrait d'une bannière remplacée.
-    /// Prélevé sur le budget de la NSE, borné pour ne jamais retarder
-    /// l'affichage de la version d'après au-delà de ce qu'il vaut.
-    static let replacedBannerConfirmationBudget: TimeInterval = 2
-
-    /// Retire la bannière qu'un push de REMPLACEMENT annule
-    /// (`userInfo.replacesNotificationId`, édition d'un message / post /
-    /// commentaire), puis appelle `completion` — que l'hôte place AVANT le
-    /// `contentHandler`.
-    ///
-    /// L'annulation voyage dans le même push que la version d'après : c'est
-    /// ce qui garantit qu'elle ne peut ni la suivre (et l'effacer) ni se
-    /// perdre (app tuée), contrairement à la révocation silencieuse séparée.
-    /// `removeDeliveredNotifications` n'ayant aucun completion handler, le
-    /// retrait est CONFIRMÉ par relecture, dans un délai borné.
-    nonisolated static func removeReplacedBanners(
-        userInfo: [AnyHashable: Any],
-        incomingIdentifier: String,
-        completion: @escaping @Sendable () -> Void
-    ) {
-        guard let replacement = NotificationReplacement(userInfo: userInfo) else {
-            completion()
-            return
-        }
-        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
-            let identifiers = replacement.identifiersToRemove(
-                from: delivered.map { (id: $0.request.identifier, userInfo: $0.request.content.userInfo) },
-                excluding: incomingIdentifier
-            )
-            guard !identifiers.isEmpty else {
-                completion()
-                return
-            }
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
-            Self.confirmReplacedBannersRemoved(
-                Set(identifiers),
-                deadline: Date().addingTimeInterval(Self.replacedBannerConfirmationBudget),
-                completion: completion
-            )
-        }
-    }
-
-    private nonisolated static func confirmReplacedBannersRemoved(
-        _ identifiers: Set<String>,
-        deadline: Date,
-        completion: @escaping @Sendable () -> Void
-    ) {
-        UNUserNotificationCenter.current().getDeliveredNotifications { delivered in
-            let stillDelivered = Set(delivered.map { $0.request.identifier })
-            guard !stillDelivered.isDisjoint(with: identifiers), Date() < deadline else {
-                completion()
-                return
-            }
-            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 0.05) {
-                Self.confirmReplacedBannersRemoved(identifiers, deadline: deadline, completion: completion)
-            }
         }
     }
 
@@ -796,7 +450,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     /// Creates an `INSendMessageIntent` and returns updated notification content
     /// that iOS renders with circular avatar + sender name + group name.
-    private func applyCommunicationIntent(
+    private static func applyCommunicationIntent(
         to content: UNMutableNotificationContent,
         avatarData: Data?
     ) -> UNNotificationContent {
@@ -942,63 +596,10 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // MARK: - Attachments
 
-    /// Generic file download for any push payload URL (avatar or message media).
-    /// Fire-and-forget — completion is invoked exactly once, with nil on any failure.
-    /// The caller OWNS the returned file and must delete it when done.
-    ///
-    /// The timeout is dynamically capped to the remaining OS budget so that a slow
-    /// download never holds the notification hostage past the 30 s kill deadline.
-    /// If the remaining budget is below `minDownloadBudget` the download is skipped
-    /// immediately (completion(nil)) — better to deliver without rich content than
-    /// to let the extension be killed mid-transfer with no content at all.
-    ///
-    /// **`downloadTask`, jamais `dataTask` (#7003).** Un `dataTask` ramène tout
-    /// le corps de la réponse EN MÉMOIRE, sans plafond ni lecture de
-    /// `Content-Length` — et une extension de notification ne dispose que d'une
-    /// enveloppe d'environ 24 Mo, dans laquelle quatre à cinq téléchargements
-    /// s'additionnent. Un message vidéo de 40 Mo la faisait dépasser, et iOS la
-    /// tuait par jetsam : pas de rapport de crash, pas de trace, juste une
-    /// bannière sans enrichissement qu'on ne distingue pas d'un réseau lent.
-    /// Écrire sur DISQUE rend la taille du fichier inoffensive pour la mémoire
-    /// et MESURABLE avant tout usage — cf. `NSEAttachmentPolicy`.
-    func downloadFile(
-        from url: URL,
-        completion: @escaping (URL?) -> Void
-    ) {
-        let elapsed = Date().timeIntervalSince(extensionStartTime)
-        let budgetRemaining = Self.nseBudget - elapsed
-        guard budgetRemaining > Self.minDownloadBudget else {
-            completion(nil)
-            return
-        }
-        // Cap to 12 s max per download; reduce proportionally as budget shrinks.
-        let timeout = min(12, budgetRemaining)
-        nonisolated(unsafe) let completion = completion
-        let request = URLRequest(url: url, timeoutInterval: timeout)
-        let task = URLSession.shared.downloadTask(with: request) { location, _, error in
-            // Le fichier rendu par `downloadTask` est effacé dès le retour de ce
-            // bloc : on le DÉPLACE avant de rendre la main, sans quoi l'appelant
-            // reçoit une URL qui n'existe déjà plus.
-            guard let location, error == nil else {
-                completion(nil)
-                return
-            }
-            let destination = FileManager.default.temporaryDirectory
-                .appendingPathComponent(UUID().uuidString)
-            do {
-                try FileManager.default.moveItem(at: location, to: destination)
-                completion(destination)
-            } catch {
-                completion(nil)
-            }
-        }
-        task.resume()
-    }
-
     /// Taille d'un fichier local, `nil` s'il a disparu. C'est la mesure du
     /// SECOND étage de `NSEAttachmentPolicy` : un serveur n'est jamais tenu par
     /// la taille qu'il annonce sur le fil.
-    nonisolated static func fileSize(at url: URL) -> Int? {
+    static func fileSize(at url: URL) -> Int? {
         guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path) else {
             return nil
         }
@@ -1016,7 +617,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// ensuite ce fichier dans son propre magasin ; s'il refuse, on efface —
     /// une extension qui laisse des temporaires derrière elle les paie au
     /// push suivant.
-    func createMessageAttachment(
+    static func createMessageAttachment(
         fromFile downloadedFile: URL,
         originalURL: URL,
         mimeType: String
@@ -1084,4 +685,11 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         let ext = fallbackPathExtension.isEmpty ? "bin" : fallbackPathExtension
         return (ext, nil)
     }
+}
+
+// unchecked: le contenu est copié juste avant la tâche d'enrichissement et n'est plus touché que par elle ;
+// l'expiration livre bestAttemptContent, un autre objet. Le vérificateur par régions de Xcode 26.1.1 ne sait pas
+// analyser cette capture (« pattern that the region based isolation checker does not understand »).
+struct NSEOwnedContent: @unchecked Sendable {
+    let content: UNMutableNotificationContent
 }

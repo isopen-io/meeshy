@@ -5,6 +5,16 @@
  * Meesh, l'opération se fait par une action MANUELLE. Ce qui fait redescendre
  * le niveau de chaque élément ayant permis de l'obtenir. »
  *
+ * ## ⚠️ LA LOI D'HIER (étincelles, #10846 — porteur 2026-10-16)
+ *
+ * Tout ce qui suit décrit la frappe qui reprenait des points PAR AXE et en retirait des ACTIONS (donc éteignait des
+ * badges). Elle n'existe plus côté serveur : la frappe dépense la poche (`User.engagementScore`), tout est
+ * convertible, elle ne débite ni `count` ni les points d'un axe, et n'éteint aucun badge. La passerelle ne lit plus
+ * `computeMeeshMintPlan` ni `MEESH_DEBIT_ORDER` pour frapper (`MeeshService`, `utils/game/sparks.ts`). Restent,
+ * @deprecated et sans autre usage : `computeMeeshMintPlan` (la prévision que rejouent encore les clients publiés,
+ * retirée avec eux), `MEESH_DEBIT_ORDER` (aussi l'ordre où la REPRISE d'un contenu retiré va chercher son reliquat),
+ * et `MEESH_POINTS_ONLY_AXES`. La distinction « points à convertir » (`MEESH_OPERATIONS_OUTSIDE_DEBIT`) est supprimée.
+ *
  * ## Ce que ce module contient, et ce qu'il ne contient pas
  *
  * Il contient la LOI : le prix, l'ordre du débit, et le PLAN qu'une frappe

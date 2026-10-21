@@ -108,7 +108,7 @@ const makeToken = (userOverrides: Record<string, unknown> = {}, tokenOverrides: 
   ...tokenOverrides
 });
 
-const validation: MagicLinkValidation = { token: 'raw-token', requestContext };
+const validation: MagicLinkValidation = { token: 'raw-token', requestContext, confirmed: true };
 
 const sha256 = (value: string) => crypto.createHash('sha256').update(value).digest('hex');
 
@@ -121,6 +121,7 @@ describe('validateMagicLink — le second facteur (#4534)', () => {
     mockCreateSession.mockResolvedValue({ id: 'session-1', userId: 'user-123' });
     mockJwtSign.mockReturnValue('jwt-token-abc');
     mockPrisma.magicLinkToken.update.mockResolvedValue({ id: 'mlt-1' });
+    mockPrisma.magicLinkToken.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.user.update.mockResolvedValue({ id: 'user-123' });
     mockPrisma.securityEvent.create.mockResolvedValue({ id: 'ev-1' });
 
@@ -197,8 +198,8 @@ describe('validateMagicLink — le second facteur (#4534)', () => {
     it('consomme quand même le lien — il a servi, il ne se rejoue pas', async () => {
       await service.validateMagicLink(validation);
 
-      expect(mockPrisma.magicLinkToken.update).toHaveBeenCalledWith({
-        where: { id: 'mlt-1' },
+      expect(mockPrisma.magicLinkToken.updateMany).toHaveBeenCalledWith({
+        where: expect.objectContaining({ id: 'mlt-1' }),
         data: { usedAt: expect.any(Date) }
       });
     });

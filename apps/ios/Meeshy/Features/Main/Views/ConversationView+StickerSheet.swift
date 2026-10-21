@@ -10,7 +10,10 @@ extension ConversationView {
     /// de sa famille (`ConversationView+Sticker`).
     func sendStickerChoice(_ choice: StickerSheetChoice) {
         switch choice {
-        case .emoji(let emoji): sendEmojiSticker(emoji)
+        case .emoji(let emoji):
+            // Choisi dans la feuille : il entre dans la rangée rapide (#10842).
+            RecentEmojiStore.record([emoji])
+            sendEmojiSticker(emoji)
         case .library(let item): sendLibrarySticker(item)
         case .template(let gabarit, let slots): sendTemplateSticker(gabarit, slots: slots)
         case .locationTemplate(let lieu, let gabarit): sendLocationTemplateSticker(place: lieu, template: gabarit)
@@ -23,14 +26,15 @@ extension ConversationView {
     /// **Un sticker de pack part comme un Mee** (#9190) : son image de repli —
     /// celle que le web joint aussi — et le descripteur `pack.<slug>.<clé>`,
     /// que le web redessine. Les octets viennent du cache des images ; une
-    /// image introuvable ne part pas, et le dit.
+    /// image introuvable ne part pas, et le dit. Un sticker CINÉMATIQUE part
+    /// avec son fichier d'origine (#9210) : la bulle le joue animé.
     func sendPackSticker(_ pack: StickerPack, item: StickerPackItem) {
         Task {
             guard let loaded = await StickerPackItemImages.load(item) else {
                 FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
                 return
             }
-            sendStickerImage(loaded.image, sticker: pack.messageSticker(for: item))
+            sendStickerImage(loaded.image, sticker: pack.messageSticker(for: item), original: loaded.outgoingFile)
         }
     }
 }

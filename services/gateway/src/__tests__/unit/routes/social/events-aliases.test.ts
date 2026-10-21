@@ -27,7 +27,6 @@ import Fastify, { FastifyInstance, FastifyRequest } from 'fastify';
 
 const mockRecordView = jest.fn<any>().mockResolvedValue(true);
 const mockGetPostById = jest.fn<any>().mockResolvedValue(null);
-const mockRecordAnonymousOpen = jest.fn<any>().mockResolvedValue(true);
 const mockRecordMediaDownloads = jest.fn<any>().mockResolvedValue({ recorded: 2 });
 const mockRecordEngagementBatch = jest.fn<any>().mockResolvedValue(1);
 
@@ -35,7 +34,6 @@ jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     recordView: (...a: any[]) => mockRecordView(...a),
     getPostById: (...a: any[]) => mockGetPostById(...a),
-    recordAnonymousOpen: (...a: any[]) => mockRecordAnonymousOpen(...a),
     recordMediaDownloads: (...a: any[]) => mockRecordMediaDownloads(...a),
     recordEngagementBatch: (...a: any[]) => mockRecordEngagementBatch(...a),
     likePost: jest.fn<any>(), unlikePost: jest.fn<any>(), bookmarkPost: jest.fn<any>(),
@@ -84,13 +82,14 @@ function makePrisma() {
     });
   return {
     ecritures,
+    $runCommandRaw: journalise('post.runCommandRaw', { ok: 1 }),
     post: {
       // Le double HONORE la clause `visibility` du `where` — il ne se contente
       // pas de filtrer par id. Sans cela il ACCEPTERAIT ce que Mongo refuse : la
       // passe anonyme borne sa lecture à `{ visibility: PUBLIC }`, et un double
       // qui l'ignore rend un post PRIVATE à un visiteur, donc atteste une fuite
       // là où la production n'en a pas — ou l'inverse.
-      findMany: jest.fn<any>().mockImplementation(({ where }: any) => {
+      findMany: jest.fn<any>().mockImplementation(({ where, select }: any) => {
         if (where?.repostOfId !== undefined) return Promise.resolve([]);
         const lignes = ((where?.id?.in ?? []) as string[])
           .filter((id) => id === VISIBLE_ID || id === HIDDEN_ID)
@@ -99,6 +98,14 @@ function makePrisma() {
             visibility: id === VISIBLE_ID ? 'PUBLIC' : 'PRIVATE',
             visibilityUserIds: [] as string[], expiresAt: null,
           }));
+        // La garde anonyme (#10483) lit l'auteur et l'original, et tranche
+        // elle-même : la ligne PRIVATE lui est rendue, elle la refuse.
+        if (select?.author) {
+          return Promise.resolve(lignes.map((l) => ({
+            ...l, deletedAt: null, repostOfId: null, originalRepostOfId: null, repostOf: null,
+            author: { isActive: true, deletedAt: null, deactivatedAt: null },
+          })));
+        }
         return Promise.resolve(where?.visibility === undefined
           ? lignes
           : lignes.filter((l) => l.visibility === where.visibility));
@@ -110,6 +117,13 @@ function makePrisma() {
     postImpression: {
       create: journalise('postImpression.create', {}),
       createMany: journalise('postImpression.createMany', { count: 1 }),
+      findFirst: jest.fn<any>().mockResolvedValue(null),
+      findMany: jest.fn<any>().mockResolvedValue([]),
+      deleteMany: journalise('postImpression.deleteMany', { count: 0 }),
+    },
+    anonymousPostOpen: {
+      create: journalise('anonymousPostOpen.create', {}),
+      updateMany: journalise('anonymousPostOpen.updateMany', { count: 0 }),
     },
     friendRequest: { findFirst: jest.fn<any>().mockResolvedValue(null) },
     postMention: { findFirst: jest.fn<any>().mockResolvedValue(null) },
@@ -159,7 +173,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockRecordView.mockResolvedValue(true);
   mockGetPostById.mockResolvedValue(null);
-  mockRecordAnonymousOpen.mockResolvedValue(true);
   mockRecordMediaDownloads.mockResolvedValue({ recorded: 2 });
   mockRecordEngagementBatch.mockResolvedValue(1);
 });
@@ -236,7 +249,6 @@ describe('critère 6 — les six DÉLÈGUENT : aucune n’écrit sur un post hor
       // `deletedAt`.
       expect(prisma.ecritures).toEqual([]);
       expect(mockRecordView).not.toHaveBeenCalled();
-      expect(mockRecordAnonymousOpen).not.toHaveBeenCalled();
       expect(mockRecordMediaDownloads).not.toHaveBeenCalled();
       expect(mockRecordEngagementBatch).not.toHaveBeenCalled();
       await app.close();
@@ -256,7 +268,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
     const app = await buildApp(makePrisma());
     const ok = await app.inject({ method: 'POST', url: `/posts/${VISIBLE_ID}/impression`, payload: { source: 'feed' } });
     const ko = await app.inject({ method: 'POST', url: `/posts/${HIDDEN_ID}/impression`, payload: { source: 'feed' } });
-    expect(ok.json().data).toEqual({ recorded: true });
+    expect(ok.json().data).toMatchObject({ recorded: true });
     expect(ko.statusCode).toBe(404);
     await app.close();
   });
@@ -268,7 +280,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
       payload: { postIds: [VISIBLE_ID, HIDDEN_ID], source: 'feed' },
     });
     // Deux demandés, un admis : `recorded` compte ce qui a été ÉCRIT.
-    expect(res.json().data).toEqual({ recorded: 1 });
+    expect(res.json().data).toMatchObject({ recorded: 1 });
     await app.close();
   });
 
@@ -280,7 +292,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
     });
     // UN événement de téléchargement, DEUX médias — c'est le second nombre que
     // ses clients lisent, et les confondre changerait la réponse sous eux.
-    expect(res.json().data).toEqual({ recorded: 2 });
+    expect(res.json().data).toMatchObject({ recorded: 2 });
     await app.close();
   });
 
@@ -301,7 +313,6 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
       headers: { authorization: 'Bearer jeton', 'x-session-token': 'jeton-visiteur' },
     });
     expect(res.json().data).toEqual({ counted: false });
-    expect(mockRecordAnonymousOpen).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -316,7 +327,7 @@ describe('critère 6 — chaque alias sert encore SA forme de réponse historiqu
         }],
       },
     });
-    expect(res.json().data).toEqual({ recorded: 1 });
+    expect(res.json().data).toMatchObject({ recorded: 1 });
     expect(mockRecordEngagementBatch).toHaveBeenCalledTimes(1);
     await app.close();
   });

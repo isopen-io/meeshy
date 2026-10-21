@@ -67,7 +67,7 @@ public extension PreferenceServiceProviding {
     func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {}
 }
 
-public final class PreferenceService: PreferenceServiceProviding, @unchecked Sendable {
+public final class PreferenceService: PreferenceServiceProviding, Sendable {
     public static let shared = PreferenceService()
     private let api: APIClientProviding
 
@@ -88,7 +88,9 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     public func updateConversationPreferences(conversationId: String, request: UpdateConversationPreferencesRequest) async throws {
-        let _: APIResponse<[String: String]> = try await api.put(
+        // #10716 — la route rend la LIGNE entière (`data.isPinned`, `data.tags`…), pas un
+        // dictionnaire de chaînes : on n'attend de la réponse que son accusé.
+        let _: APIResponse<EmptySuccess> = try await api.put(
             UserPreferencesEndpoint.conversationsByConversationId(conversationId: conversationId), body: request
         )
     }
@@ -110,7 +112,8 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
 
     public func patchCategory(id: String, isExpanded: Bool) async throws {
         let body = ["isExpanded": isExpanded]
-        let _: APIResponse<[String: String]> = try await api.patch(
+        // #10716 — la route rend la LIGNE de catégorie (`isExpanded`, `order`) : seul l'accusé compte.
+        let _: APIResponse<EmptySuccess> = try await api.patch(
             MeEndpoint.preferencesCategoriesByCategoryId(categoryId: id), body: body
         )
     }
@@ -123,7 +126,8 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     public func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws {
-        let _: APIResponse<[String: String]> = try await api.patch(
+        // #10716 — la route rend la catégorie entière (booléens, nombres) : seul l'accusé compte.
+        let _: APIResponse<EmptySuccess> = try await api.patch(
             category.endpoint, body: body
         )
     }

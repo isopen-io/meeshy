@@ -23,6 +23,16 @@ const loadSheet = () =>
 
 const LazySendSheet = lazy(loadSheet);
 
+/* LA FILE D'ENVOI DURABLE (#10948) et son toast : chargés APRÈS la première peinture, par UNE seule frontière dynamique —
+   chaque `import()` de l'entrée y paie sa liste de dépendances (#10974). Au lancement, la file relit ce qui n'était pas
+   parti (IndexedDB) et le rejoue ; une file vide ne charge aucun port réseau. */
+const LazySendQueue = lazy(() =>
+  import('./send-toast-host').then(({ SendToastHost, startSendQueue }) => {
+    startSendQueue();
+    return { default: SendToastHost };
+  }),
+);
+
 /** Une identité par DEMANDE : une seconde demande remonte une feuille neuve
  * (sélection, légende et envoi en cours ne passent pas d'un contenu à l'autre). */
 const ids = new WeakMap<SendSheetRequest, number>();
@@ -35,16 +45,24 @@ const idOf = (request: SendSheetRequest): number => {
   return nextId;
 };
 
-export function SendSheetHost() {
+export function SendSheetHost({ queue = true }: { readonly queue?: boolean } = {}) {
   const request = useStore(sendSheetStore, (state) => state.request);
-  if (request === null) return null;
   /* Ne ferme que SA demande : une feuille remplacée qui se ferme n'efface pas la suivante. */
   const onClose = () => {
-    if (sendSheetStore.getState().request === request) closeSendSheet();
+    if (request !== null && sendSheetStore.getState().request === request) closeSendSheet();
   };
   return (
-    <Suspense fallback={null}>
-      <LazySendSheet key={idOf(request)} request={request} onClose={onClose} />
-    </Suspense>
+    <>
+      {queue ? (
+        <Suspense fallback={null}>
+          <LazySendQueue />
+        </Suspense>
+      ) : null}
+      {request === null ? null : (
+        <Suspense fallback={null}>
+          <LazySendSheet key={idOf(request)} request={request} onClose={onClose} />
+        </Suspense>
+      )}
+    </>
   );
 }

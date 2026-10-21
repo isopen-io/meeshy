@@ -13,12 +13,14 @@ import UIKit
 /// à NO).
 ///
 /// Rien pour un message protégé : `resolve` rend `nil`, la vue garde une hauteur
-/// nulle, et seul le texte — déjà un placeholder — s'affiche.
+/// nulle, et seul le texte — déjà un placeholder — s'affiche. Seule exception,
+/// l'éphémère (#7455) : son décompte vivant, jamais son contenu.
 final class NotificationViewController: UIViewController, UNNotificationContentExtension {
 
     private var content: NotificationExpandedContent?
     private var player: NotificationAudioPlayer?
     private var hosting: UIViewController?
+    private var expiry: Task<Void, Never>?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -38,6 +40,23 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
         }
         mount(root(for: resolved, attachments: request.attachments.map(\.url)))
         preferredContentSize = CGSize(width: view.bounds.width, height: NotificationExpandedLayout.height(for: resolved))
+        if case .ephemeral(let deadline) = resolved {
+            scheduleExpiry(at: deadline, identifier: notification.request.identifier)
+        }
+    }
+
+    /// #7455 — à l'échéance, la notification déployée d'un éphémère part :
+    /// le message qu'elle annonce n'existe plus. Les balayages de #7453 la
+    /// retirent aussi, mais aucun ne tourne pendant qu'elle est déployée.
+    private func scheduleExpiry(at deadline: Date, identifier: String) {
+        expiry?.cancel()
+        let sleep = NotificationExpandedContent.expirySleepNanoseconds(deadline: deadline, now: Date())
+        expiry = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: sleep)
+            guard !Task.isCancelled else { return }
+            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [identifier])
+            self?.extensionContext?.dismissNotificationContentExtension()
+        }
     }
 
     func didReceive(
@@ -66,6 +85,7 @@ final class NotificationViewController: UIViewController, UNNotificationContentE
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         player?.stop()
+        expiry?.cancel()
     }
 
     // MARK: - Rendu

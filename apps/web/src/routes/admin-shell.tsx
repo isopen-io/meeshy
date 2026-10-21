@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 import { CHROME_ACTION_HIT_CLASS, ChromeActionDisc } from '@/components/chrome-action';
 import { AdminGlyph } from '@/components/admin/admin-glyph';
@@ -16,6 +16,7 @@ import {
   writeSidebarFolded,
   type AdminSpace,
 } from '@/lib/admin/admin-space';
+import { matchesNavQuery } from '@/lib/admin/nav-filter';
 import { ADMIN_GROUPS, visibleAdminSections, type ServedAdminSection } from '@/lib/admin/sections';
 import { translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import { translate } from '@/lib/i18n-catalog';
@@ -107,6 +108,11 @@ function AdminNavItem({
  * LE MENU GROUPÉ (#8876) — sept groupes titrés, dans l'ordre où ils se lisent ;
  * un groupe sans section visible n'est pas rendu. Replié en rail d'icônes, le
  * titre cède la place à un séparateur : les groupes restent lisibles sans mot.
+ *
+ * « ALLER À… » (#10562) — déplié, un champ en tête filtre les entrées (libellé ou
+ * groupe, sans casse ni accents : `matchesNavQuery`) ; Entrée suit la première
+ * section trouvée, Échap efface la recherche (et seulement elle : le tiroir reste
+ * ouvert). Replié, le rail n'a pas la place d'un champ : il n'en porte pas.
  */
 function AdminNav({
   language,
@@ -123,37 +129,81 @@ function AdminNav({
   readonly folded: boolean;
   readonly onNavigate?: () => void;
 }) {
-  const groupes = ADMIN_GROUPS.map((groupe) => ({ groupe, entrees: sections.filter((section) => section.group === groupe.id) })).filter(
-    ({ entrees }) => entrees.length > 0,
-  );
+  const [query, setQuery] = useState('');
+  const nav = useRef<HTMLElement>(null);
+  const navId = useId();
+  const search = folded ? '' : query;
+  const groupes = ADMIN_GROUPS.map((groupe) => {
+    const titre = translateAdmin(language, groupe.labelKey);
+    return { groupe, entrees: sections.filter((section) => section.group === groupe.id && matchesNavQuery(search, [translateAdmin(language, section.labelKey), titre])) };
+  }).filter(({ entrees }) => entrees.length > 0);
 
   return (
-    <nav aria-label={translateAdmin(language, 'admin.shell.menu')} className="min-h-0 flex-1 overflow-y-auto px-2">
-      {groupes.map(({ groupe, entrees }, index) => (
-        <div key={groupe.id} data-admin-nav-group={groupe.id} role="group" aria-label={translateAdmin(language, groupe.labelKey)}>
-          {folded ? (
-            index === 0 ? null : <hr aria-hidden="true" className="mx-3 my-2" style={{ border: 0, borderTop: `1px solid ${EDGE}` }} />
-          ) : (
-            <p aria-hidden="true" className="px-3 pb-1 pt-4 text-caption font-semibold uppercase" style={{ color: INK3 }}>
-              {translateAdmin(language, groupe.labelKey)}
-            </p>
-          )}
-          <ul className="grid gap-1">
-            {entrees.map((section) => (
-              <AdminNavItem
-                key={section.id}
-                language={language}
-                section={section}
-                space={space}
-                active={active}
-                folded={folded}
-                {...(onNavigate === undefined ? {} : { onNavigate })}
-              />
-            ))}
-          </ul>
+    <>
+      {folded || sections.length === 0 ? null : (
+        <div className="shrink-0 px-3 pb-1">
+          <label className="flex items-center gap-2 rounded-chip px-3" style={{ minHeight: 44, border: `1px solid ${EDGE}`, color: INK3 }}>
+            <AdminGlyph name="magnifyingGlass" size={16} />
+            <input
+              type="search"
+              data-admin-nav-filter
+              value={query}
+              aria-label={translateAdmin(language, 'admin.navFilter.label')}
+              aria-controls={navId}
+              placeholder={translateAdmin(language, 'admin.navFilter.placeholder')}
+              autoComplete="off"
+              spellCheck={false}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+              onChange={() => undefined}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  nav.current?.querySelector<HTMLAnchorElement>('a[data-admin-nav]')?.click();
+                  return;
+                }
+                if (event.key !== 'Escape' || query === '') return;
+                event.preventDefault();
+                event.stopPropagation();
+                setQuery('');
+              }}
+              className="min-w-0 flex-1 bg-transparent text-body outline-none"
+              style={{ minHeight: 42, color: INK }}
+            />
+          </label>
         </div>
-      ))}
-    </nav>
+      )}
+      <nav ref={nav} id={navId} aria-label={translateAdmin(language, 'admin.shell.menu')} className="min-h-0 flex-1 overflow-y-auto px-2">
+        {groupes.length === 0 && search.trim() !== '' ? (
+          <p role="status" data-admin-nav-empty className="px-3 pt-4 text-caption" style={{ color: INK2 }}>
+            {translateAdmin(language, 'admin.navFilter.empty')}
+          </p>
+        ) : null}
+        {groupes.map(({ groupe, entrees }, index) => (
+          <div key={groupe.id} data-admin-nav-group={groupe.id} role="group" aria-label={translateAdmin(language, groupe.labelKey)}>
+            {folded ? (
+              index === 0 ? null : <hr aria-hidden="true" className="mx-3 my-2" style={{ border: 0, borderTop: `1px solid ${EDGE}` }} />
+            ) : (
+              <p aria-hidden="true" className="px-3 pb-1 pt-4 text-caption font-semibold uppercase" style={{ color: INK3 }}>
+                {translateAdmin(language, groupe.labelKey)}
+              </p>
+            )}
+            <ul className="grid gap-1">
+              {entrees.map((section) => (
+                <AdminNavItem
+                  key={section.id}
+                  language={language}
+                  section={section}
+                  space={space}
+                  active={active}
+                  folded={folded}
+                  {...(onNavigate === undefined ? {} : { onNavigate })}
+                />
+              ))}
+            </ul>
+          </div>
+        ))}
+      </nav>
+    </>
   );
 }
 

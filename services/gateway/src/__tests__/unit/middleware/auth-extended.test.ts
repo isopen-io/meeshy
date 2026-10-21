@@ -96,13 +96,17 @@ function createMockPrisma(overrides: Record<string, unknown> = {}) {
       findUnique: overrides.userFindUnique ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
     },
     userSession: {
-      findFirst: overrides.sessionFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+      findFirst: overrides.sessionFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) }),
       update: overrides.sessionUpdate ?? (jest.fn() as jest.Mock<any>).mockReturnValue({
         catch: jest.fn(),
       }),
     },
     participant: {
       findFirst: overrides.participantFindFirst ?? (jest.fn() as jest.Mock<any>).mockResolvedValue(null),
+    },
+    // #10437 — la résolution d'un invité relit son lien (échéance) : un lien vivant, sans échéance.
+    conversationShareLink: {
+      findUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue({ expiresAt: null }),
     },
   } as unknown as ConstructorParameters<typeof AuthMiddleware>[0];
 }
@@ -132,7 +136,7 @@ function createTestUser(overrides: Record<string, unknown> = {}) {
 }
 
 function signJwt(userId: string): string {
-  return jwt.sign({ userId, sid: 'test-session' }, JWT_SECRET, { expiresIn: '1h' });
+  return jwt.sign({ userId, sid: '507f1f77bcf86cd799439031' }, JWT_SECRET, { expiresIn: '1h' });
 }
 
 function signExpiredJwt(userId: string): string {
@@ -659,7 +663,11 @@ describe('AuthMiddleware — StatusService integration', () => {
     jest.clearAllMocks();
   });
 
-  it('calls updateUserLastSeen and ensureUserOnline when user is offline', async () => {
+  // #10575 — une requête REST ne prouve pas qu'une personne est LÀ : l'extension
+  // de notification iOS (`NSEDataSync`) et celle de partage appellent l'API en
+  // arrière-plan, et la marquer en ligne allumait sa pastille chez ses amis. La
+  // présence appartient à la socket au premier plan ; REST ne date que l'activité.
+  it('calls updateUserLastSeen but NEVER declares an offline user online from REST', async () => {
     const user = createTestUser({ isOnline: false });
     const prisma = createMockPrisma({
       userFindUnique: (jest.fn() as jest.Mock<any>).mockResolvedValue(user),
@@ -675,7 +683,7 @@ describe('AuthMiddleware — StatusService integration', () => {
     await middleware.createAuthContext(`Bearer ${token}`);
 
     expect(statusService.updateUserLastSeen).toHaveBeenCalledWith(user.id);
-    expect(statusService.ensureUserOnline).toHaveBeenCalledWith(user.id, false);
+    expect(statusService.ensureUserOnline).not.toHaveBeenCalled();
   });
 
   it('calls updateUserLastSeen but NOT ensureUserOnline when user is already online', async () => {
@@ -758,7 +766,7 @@ describe('AuthMiddleware — StatusService integration', () => {
     expect(sessionUpdateManyMock).toHaveBeenCalledTimes(1);
     expect(sessionUpdateManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: 'test-session', userId: user.id, isValid: true }),
+        where: expect.objectContaining({ id: '507f1f77bcf86cd799439031', userId: user.id, isValid: true }),
         data: expect.objectContaining({ lastActivityAt: expect.any(Date) }),
       })
     );

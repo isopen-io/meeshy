@@ -106,3 +106,63 @@ struct ReelsRevealMaskModifier: ViewModifier {
         }
     }
 }
+
+// MARK: - Feed Button Anchor (pure mapping)
+
+/// Le centre du bouton Flux, d'où naît le disque des réels : lu dans
+/// `FloatingButtonGeometry.layout`, la source que le conteneur des boutons
+/// emploie pour le poser (#9679) — le disque naît au centre EXACT du bouton.
+enum FeedButtonAnchor {
+    static func screenPoint(fromRaw raw: String, geometry: FloatingButtonGeometry) -> CGPoint {
+        geometry.center(forStorage: raw, default: FloatingButtonGeometry.defaultFeedStorage)
+    }
+
+    /// Le centre du bouton (global) en fraction du cadre GLOBAL `frame` de la
+    /// vue qui révèle les réels — qui peut, comme le conteneur des boutons, ne
+    /// pas commencer en haut de l'écran (bannière du joueur).
+    static func unitPoint(fromRaw raw: String, geometry: FloatingButtonGeometry, in frame: CGRect) -> UnitPoint {
+        guard frame.width > 0, frame.height > 0 else { return .topLeading }
+        let p = screenPoint(fromRaw: raw, geometry: geometry)
+        return UnitPoint(x: (p.x - frame.minX) / frame.width, y: (p.y - frame.minY) / frame.height)
+    }
+}
+
+// MARK: - Sous les réels, rien ne travaille (#10354)
+
+/// **Les réels RECOUVRENT l'écran** : le disque d'ouverture a fini de grandir
+/// et la fermeture n'a pas commencé. La liste et le fil restent montés dessous
+/// (leur état, leur défilement), mais n'ont plus rien à montrer.
+nonisolated enum ReelsCover {
+    static func isCovered(hasLaunch: Bool, revealCompleted: Bool) -> Bool {
+        hasLaunch && revealCompleted
+    }
+}
+
+/// **Un sous-arbre que les réels recouvrent ne se réévalue plus par son parent.**
+///
+/// Profilé sur l'iPhone 16 Pro Max (build Release, 2026-10-12) pendant des
+/// balayages de réels : `MeeshyAvatar.body` et `StoryCoverURLMemo.coverURL`
+/// (≈ 2 % chacun) — la liste des conversations, montée SOUS la couche des
+/// réels, se réévaluait à chaque rendu de `RootView`, dont elle reçoit des
+/// fermetures et des liaisons qu'aucune comparaison ne déclare égales.
+///
+/// Monté avec `.equatable()` : deux valeurs RECOUVERTES sont égales, le corps
+/// n'est pas réévalué et ses enfants gardent ce qu'ils ont. Au moindre
+/// découvrement (fermeture des réels), l'égalité tombe et le sous-arbre se
+/// remet à jour avec les valeurs du moment. Ce que le sous-arbre observe
+/// lui-même (ses propres modèles) n'est pas retenu : c'est une donnée vraie.
+struct CoveredFreeze<Content: View>: View, Equatable {
+    let isCovered: Bool
+    let content: Content
+
+    init(isCovered: Bool, @ViewBuilder content: () -> Content) {
+        self.isCovered = isCovered
+        self.content = content()
+    }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.isCovered && rhs.isCovered
+    }
+
+    var body: some View { content }
+}

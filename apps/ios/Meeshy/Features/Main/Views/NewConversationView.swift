@@ -203,15 +203,16 @@ struct NewConversationView: View {
 
     private func selectedUserChip(_ user: SearchedUser) -> some View {
         HStack(spacing: MeeshySpacing.xsPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: user.displayName ?? user.username,
                 context: .custom(24),
                 accentColor: DynamicColorGenerator.colorForName(user.username),
                 secondaryColor: accentColor,
                 moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                 presenceState: PresenceManager.shared.resolvedState(userId: user.id, isOnline: user.isOnline, lastActiveAt: user.lastActiveAt),
+                ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
-            )
+            ) }
 
             Text(user.displayName ?? user.username)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
@@ -320,7 +321,7 @@ struct NewConversationView: View {
             emptyState
         } else {
             ForEach(viewModel.searchResults) { user in
-                userRow(user)
+                liveUserRow(user)
             }
         }
     }
@@ -354,7 +355,7 @@ struct NewConversationView: View {
         } else {
             contactsSectionHeader
             ForEach(viewModel.contacts) { user in
-                userRow(user)
+                liveUserRow(user)
             }
         }
     }
@@ -426,6 +427,10 @@ struct NewConversationView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func liveUserRow(_ user: SearchedUser) -> some View {
+        LivePresence { userRow(user) }
+    }
+
     private func userRow(_ user: SearchedUser) -> some View {
         let isSelected = selectedUsers.contains { $0.id == user.id }
         let isBlocked = blockService.isBlocked(userId: user.id)
@@ -450,6 +455,7 @@ struct NewConversationView: View {
                     secondaryColor: accentColor,
                     moodEmoji: statusViewModel.statusForUser(userId: user.id)?.moodEmoji,
                     presenceState: presence,
+                    ring: user.avatarRing,
                     onMoodTap: statusViewModel.moodTapHandler(for: user.id)
                 )
 
@@ -527,7 +533,7 @@ struct NewConversationView: View {
 
 // MARK: - Searched User Model
 
-struct SearchedUser: Decodable, Identifiable {
+struct SearchedUser: Decodable, Identifiable, ProfileDecorWearer {
     let id: String
     let username: String
     let firstName: String?
@@ -537,6 +543,8 @@ struct SearchedUser: Decodable, Identifiable {
     let isOnline: Bool?
     let lastActiveAt: Date?
     let avatar: String?
+    /// Le décor servi avec la personne — son contour équipé (#10945, #10946).
+    let profileDecor: ServedProfileDecor?
 }
 
 extension SearchedUser {
@@ -555,7 +563,8 @@ extension SearchedUser {
             email: nil,
             isOnline: friend.isOnline,
             lastActiveAt: friend.lastActiveAt,
-            avatar: friend.avatar
+            avatar: friend.avatar,
+            profileDecor: friend.profileDecor
         )
     }
 }

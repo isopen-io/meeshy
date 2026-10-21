@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import MeeshySDK
 
 /// Pourquoi un cadre choisi n'est pas montré : l'appareil se protège, ou le cadre bouge
 /// alors que l'utilisateur a demandé moins d'animations.
@@ -28,6 +29,8 @@ nonisolated struct CallLiveFrameLayerInputs: Equatable, Sendable {
     let people: [CallFramePerson]
     let texts: CallFrameTexts
     let size: CGSize
+    /// Les bandes de l'écran que les contrôles de l'appel couvrent (#9777).
+    var reserve: CallFrameChromeReserve = .none
 }
 
 /// **LE CADRE EN DIRECT D'UN APPEL À DEUX** (#9214, doc frames 06 § 4, étape 3.2) — les
@@ -41,12 +44,11 @@ nonisolated enum CallLiveFrameRule {
     static let paintLongestSide: CGFloat = 2048
     private static let idAlphabet = Set("abcdefghijklmnopqrstuvwxyz0123456789-")
 
-    /// Un cadre se propose en direct s'il sert un duo et qu'il le déclare — ou, tant que le
-    /// catalogue ne déclare pas encore ses surfaces, s'il est léger ou sans coût déclaré.
+    /// Un cadre se propose en direct s'il sert un duo et que la loi d'usage lui ouvre l'appel —
+    /// c'est-à-dire s'il DÉCLARE `live` (#10195). Un cadre de capture seule ne sert jamais
+    /// l'appel, quel que soit son coût (directive porteur 2026-10-11).
     static func isEligible(_ design: CallFrameDesign) -> Bool {
-        guard design.serves(people: people) else { return false }
-        if design.isOffered(on: .live) { return true }
-        return design.cost == nil || design.cost == .light
+        design.serves(people: people) && FrameUsageLaw.canUseFrame(design.usage, .call)
     }
 
     static func frames(mood: CallFrameMood? = nil, in catalogue: [CallFrameDesign] = CallFrameCatalogue.all) -> [CallFrameDesign] {
@@ -121,6 +123,16 @@ nonisolated enum CallLiveFrameRule {
         let longest = max(pixels.width, pixels.height)
         let factor = longest > paintLongestSide ? paintLongestSide / longest : 1
         return CGSize(width: (pixels.width * factor).rounded(), height: (pixels.height * factor).rounded())
+    }
+
+    /// **Aucun texte du cadre sous un contrôle** (#9777) : en haut la rangée d'en-tête (réduire,
+    /// conversation, durée) sous la Dynamic Island, en bas la pilule des commandes. Le cadre se peint
+    /// à la taille de l'écran : ces bandes, en points, sont sa part de la toile.
+    static let headerRowHeight: CGFloat = 52
+    static let controlsPillHeight: CGFloat = 84
+
+    static func chromeReserve(viewHeight: CGFloat, topInset: CGFloat, bottomInset: CGFloat) -> CallFrameChromeReserve {
+        .covering(top: topInset + headerRowHeight, bottom: bottomInset + controlsPillHeight, height: viewHeight)
     }
 
     /// Faut-il repeindre ? Seulement si une entrée a changé.

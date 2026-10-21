@@ -14,19 +14,28 @@ import XCTest
 /// Trois familles, dont un fusible. Le fusible n'est pas décoratif : la moitié
 /// des témoins ci-dessous sont négatifs, et un négatif sur une lecture vide
 /// passe au vert sans qu'aucune assertion ne puisse le dire.
+@MainActor
 final class ConversationFilterLabelGuardTests: XCTestCase {
 
     private static let row = "Meeshy/Features/Main/Views/ConversationListView.swift"
-    private static let panel = "Meeshy/Features/Main/Views/ConversationListView+Overlays.swift"
+    private static let panel = "Meeshy/Features/Main/Views/ConversationListView+BottomBar.swift"
 
+    /// L'UNITÉ du fichier (`Foo.swift` + `Foo+*.swift`) : la rangée de filtres vit dans
+    /// `ConversationListView+FilterChips.swift`, et une garde qui ne lirait que le
+    /// fichier-tête verdirait sans la voir.
     private func source(_ path: String) throws -> String {
-        try MyStoriesSourceCorpus.text(of: path)
+        MyStoriesSourceCorpus.strippingComments(try AppSourceGuard.unit(path))
     }
 
     // MARK: - 1. Aucune des deux rangées ne montre l'identité
 
     func test_neitherChipRow_showsTheRawValueAsATitle() throws {
-        for path in [Self.row, Self.panel] {
+        XCTAssertFalse(
+            try source(Self.panel).contains("ThemedFilterChip("),
+            "Le panneau de recherche ne porte plus de rangée de filtres (#10924) : elle " +
+            "doublonnait celle de la tête de liste, la seule qui reste."
+        )
+        for path in [Self.row] {
             XCTAssertFalse(
                 try source(path).contains("title: filter.rawValue"),
                 "\(path) affiche l'IDENTITÉ du filtre. Un `rawValue` sert d'`id`, se compare " +
@@ -85,7 +94,7 @@ final class ConversationFilterLabelGuardTests: XCTestCase {
     /// Fusible de lecture : deux des témoins ci-dessus sont négatifs.
     func test_theGuardActuallyReadsItsSources() throws {
         XCTAssertGreaterThan(try source(Self.row).count, 20_000)
-        XCTAssertGreaterThan(try source(Self.panel).count, 20_000)
+        XCTAssertGreaterThan(try source(Self.panel).count, 4_000)
         XCTAssertGreaterThan(
             try source("Meeshy/Features/Main/Models/ConversationFilterLabel.swift").count, 1_000)
     }

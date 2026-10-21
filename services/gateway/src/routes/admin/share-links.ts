@@ -88,7 +88,7 @@ import { type UserRole } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { requirePermission, withAudit } from '../../middleware/authorize';
-import { revokeShareLinkGuests } from '../../socketio/revokeShareLinkGuests';
+import { closeShareLinkRevokingGuests } from '../../socketio/closeShareLinkRevokingGuests';
 
 const requireAdmin = requirePermission('canAccessAdmin');
 
@@ -155,16 +155,17 @@ export function registerAdminShareLinkRoutes(fastify: FastifyInstance): void {
         return sendNotFound(reply, 'Lien de partage non trouvé');
       }
 
-      await revokeShareLinkGuests({
+      // #10470 — un gros lien est fermé sans attendre l'éviction de ses
+      // invités (`closeShareLinkRevokingGuests`).
+      await closeShareLinkRevokingGuests({
         prisma: fastify.prisma,
         io: fastify.socketIOHandler?.getManager()?.getIO(),
         manager: fastify.socketIOHandler?.getManager(),
         shareLinkId: shareLink.id,
-      });
-
-      await fastify.prisma.conversationShareLink.update({
-        where: { id: shareLink.id },
-        data: { isActive: false }
+        close: (mark) => fastify.prisma.conversationShareLink.update({
+          where: { id: shareLink.id },
+          data: { isActive: false, ...mark }
+        }),
       });
 
       await withAudit(request, {

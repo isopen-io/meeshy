@@ -166,8 +166,6 @@ extension ConversationMediaGalleryView {
                     }
                 }
                 .disabled(saveCoordinator.isProcessing)
-                .accessibilityLabel(
-                    String(localized: "gallery.menu.more", defaultValue: "Autres actions", bundle: .main))
                 .accessibilityValue(saveStateAccessibilityValue)
                 // Le flux vit DANS la présentation plein écran : une sheet attachée
                 // sous un `fullScreenCover` ne se présente pas (SwiftUI iOS 16).

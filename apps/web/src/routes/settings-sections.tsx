@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 import { getLanguageInfo } from '@meeshy/shared/utils/languages';
 
@@ -16,15 +16,17 @@ import {
   SECTION_INK_2,
 } from '@/components/grouped-section';
 import type { AppPreferences } from '@/lib/api/app-preferences';
+import type { DeviceTranslationSetting } from '@/lib/device-translation/use-device-translation-setting';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { isDeviceTranslationCatalogLoaded, loadDeviceTranslationCatalog, translateDeviceTranslation } from '@/lib/i18n-device-translation-catalog';
 import { SUPPORTED_INTERFACE_LANGUAGES } from '@/lib/inline-interface-language-bootstrap.js';
 import { appInstitutionalHref } from '@/lib/institutional-href';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import type { ThemePreference } from '@/lib/scheme';
 import { initialsOf } from '@/lib/view/conversation';
-import { FLOATING_CORRIDOR_BOTTOM } from '@/lib/view/floating-corridor';
 import type { DevicePushRow } from '@/lib/push/use-device-push';
 import { Link } from '@/routes/route-table';
+import { useMyRing } from '@/lib/profile-decor/my-ring';
 
 /**
  * **LES SECTIONS DES RÉGLAGES** (#5563) — miroir de `SettingsView.swift`, dans
@@ -55,15 +57,8 @@ export const SETTINGS_HEADER_HEIGHT = 64;
 /** Le volet Sécurité des réglages (#6720) — `/settings?volet=securite`. */
 export const SECURITY_PANEL_PARAM = 'volet';
 export const SECURITY_PANEL = 'securite';
-
-/**
- * **LE COULOIR DES DISQUES FLOTTANTS** — la loi de `floating-corridor.ts`, portée
- * comme la cloche et le Flux (`FEED_TOP_RESERVE`) : au repos, la carte de profil,
- * premier contrôle de l'écran, commence SOUS les deux disques. iOS y pose le grand
- * titre dépliable de `CollapsibleHeader` ; l'encoche s'annule dans la soustraction,
- * elle décale à la fois le couloir et l'écran (`pt-safe`).
- */
-export const SETTINGS_TOP_RESERVE = FLOATING_CORRIDOR_BOTTOM - SETTINGS_HEADER_HEIGHT;
+/** Le volet des packs (#10149) — `/settings?volet=packs`, sans route neuve. */
+export const PACKS_PANEL = 'packs';
 
 type IconSpec = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'ecran'; readonly name: SettingsGlyphName };
 
@@ -127,6 +122,8 @@ export function SettingsHeaderBar({ language }: { readonly language: InterfaceLa
 export type SettingsUser = { readonly username: string; readonly displayName: string | null; readonly avatar: string | null };
 
 export function ProfileCard({ language, user }: { readonly language: InterfaceLanguage; readonly user: SettingsUser | null }) {
+  /* MON CONTOUR ÉQUIPÉ (#10946) — le même que sur mon profil. */
+  const myRing = useMyRing();
   const title = translate(language, 'settings.my_profile');
   const name = user === null ? title : user.displayName ?? user.username;
   return (
@@ -137,7 +134,7 @@ export function ProfileCard({ language, user }: { readonly language: InterfaceLa
       className="flex items-center gap-3.5 rounded-card p-4 focus-visible:outline-2"
       style={{ ...SECTION_CARD_STYLE, minHeight: 72, outlineColor: 'var(--color-ios-brand)' }}
     >
-      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} />
+      <Avatar initials={initialsOf(name)} color="var(--color-ios-brand)" size={48} {...(user?.avatar ? { src: user.avatar } : {})} {...(myRing === null ? {} : { ring: myRing })} />
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
         <span className="truncate text-body font-semibold" style={{ color: SECTION_INK }}>
           {name}
@@ -188,10 +185,19 @@ export function AccountSection({ language }: { readonly language: InterfaceLangu
    jamais l'ancienne `meeshy.me/settings#privacy`. */
 export type GalleryToggle = { readonly enabled: boolean; readonly onToggle: (enabled: boolean) => void };
 
-export function DataSection({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery?: GalleryToggle }) {
+export function DataSection({
+  language,
+  gallery,
+  deviceTranslation,
+}: {
+  readonly language: InterfaceLanguage;
+  readonly gallery?: GalleryToggle;
+  readonly deviceTranslation?: DeviceTranslationSetting;
+}) {
   return (
     <GroupedSection id="settings-data" title={upper(language, 'settings.section.data')} icon={SECTION_ICON({ set: 'ecran', name: 'export' })}>
       {gallery === undefined ? null : <GalleryToggleRow language={language} gallery={gallery} />}
+      {deviceTranslation === undefined ? null : <DeviceTranslationRow language={language} toggle={deviceTranslation} />}
       <Link to="dataExport" data-settings-export className={ROW_CLASS} style={ROW_STYLE}>
         <RowIcon tint="var(--color-warning)">
           <IconOf icon={{ set: 'ecran', name: 'export' }} size={15} />
@@ -203,32 +209,118 @@ export function DataSection({ language, gallery }: { readonly language: Interfac
   );
 }
 
+/* UNE BASCULE LOCALE À L'APPAREIL — la galerie de la coque (#8308) et la
+   traduction sur l'appareil (#9898) : un réglage qui n'attend aucune passerelle,
+   donc jamais grisé hors ligne. `disabled` ne sert qu'à poser une bascule dont
+   l'état n'est pas encore lu. */
+function LocalToggleRow({
+  setting,
+  name,
+  caption,
+  icon,
+  tint,
+  enabled,
+  disabled = false,
+  onToggle,
+}: {
+  readonly setting: string;
+  readonly name: string;
+  readonly caption: string;
+  readonly icon: IconSpec;
+  readonly tint?: string;
+  readonly enabled: boolean;
+  readonly disabled?: boolean;
+  readonly onToggle: (enabled: boolean) => void;
+}) {
+  const captionId = useId();
+  return (
+    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
+      <RowIcon {...(tint === undefined ? {} : { tint })}>
+        <IconOf icon={icon} size={15} />
+      </RowIcon>
+      <RowText label={name} caption={caption} captionId={captionId} />
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
+        aria-label={name}
+        aria-describedby={captionId}
+        data-setting={setting}
+        {...(disabled ? { disabled: true } : {})}
+        onClick={() => onToggle(!enabled)}
+        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
+        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)', ...(disabled ? { opacity: 0.5 } : {}) }}
+      >
+        <Switch checked={enabled} />
+      </button>
+    </div>
+  );
+}
+
+/* LES PACKS ET TÉLÉCHARGEMENTS (#10149, demande porteur 2026-10-11) — la
+   Boutique des stickers et celle des cadres du jeu, dans un volet des réglages
+   (`?volet=packs`) chargé à la demande : aucune route neuve, rien dans la
+   première peinture. La Boutique des stickers reste AUSSI le dernier onglet de
+   la feuille de stickers, là où on la cherche en écrivant. */
+export function PacksSection({ language }: { readonly language: InterfaceLanguage }) {
+  return (
+    <GroupedSection id="settings-packs" title={upper(language, 'settings.section.packs')} icon={SECTION_ICON({ set: 'ecran', name: 'hardDrives' })}>
+      <Link to="settings" search={{ [SECURITY_PANEL_PARAM]: PACKS_PANEL }} data-settings-packs className={ROW_CLASS} style={ROW_STYLE}>
+        <RowIcon tint="var(--ios-indigo-400)">
+          <IconOf icon={{ set: 'ecran', name: 'sparkle' }} size={15} />
+        </RowIcon>
+        <RowText label={translate(language, 'settings.packs.shop')} />
+        <Chevron />
+      </Link>
+    </GroupedSection>
+  );
+}
+
 /* LA GALERIE DE LA COQUE ANDROID (#8308) — réglage LOCAL à l'appareil (la
    galerie est la sienne), offert sur la seule coque qui sait y écrire (loi 4) :
    l'écran l'omet partout ailleurs. Actif par défaut. */
 function GalleryToggleRow({ language, gallery }: { readonly language: InterfaceLanguage; readonly gallery: GalleryToggle }) {
-  const captionId = useId();
-  const label = translate(language, 'settings.gallery.auto_save');
   return (
-    <div className="flex items-center gap-3 px-3.5 py-2.5" style={{ minHeight: 52 }}>
-      <RowIcon tint="var(--color-success)">
-        <IconOf icon={{ set: 'socle', name: 'image' }} size={15} />
-      </RowIcon>
-      <RowText label={label} caption={translate(language, 'settings.gallery.auto_save.info')} captionId={captionId} />
-      <button
-        type="button"
-        role="switch"
-        aria-checked={gallery.enabled}
-        aria-label={label}
-        aria-describedby={captionId}
-        data-setting="galleryAutoSave"
-        onClick={() => gallery.onToggle(!gallery.enabled)}
-        className="grid shrink-0 place-items-center rounded-chip focus-visible:outline-2"
-        style={{ minWidth: 56, minHeight: 44, outlineColor: 'var(--color-ios-brand)' }}
-      >
-        <Switch checked={gallery.enabled} />
-      </button>
-    </div>
+    <LocalToggleRow
+      setting="galleryAutoSave"
+      name={translate(language, 'settings.gallery.auto_save')}
+      caption={translate(language, 'settings.gallery.auto_save.info')}
+      icon={{ set: 'socle', name: 'image' }}
+      tint="var(--color-success)"
+      enabled={gallery.enabled}
+      onToggle={gallery.onToggle}
+    />
+  );
+}
+
+/* LA TRADUCTION SUR L'APPAREIL (#9898) — offerte partout : tout navigateur a un Worker, et le consentement est local.
+   Ses libellés vivent hors du catalogue d'interface (`i18n-device-translation-catalog.ts`) : la rangée les attend. */
+function DeviceTranslationRow({ language, toggle }: { readonly language: InterfaceLanguage; readonly toggle: DeviceTranslationSetting }) {
+  const [, setLoadedLanguage] = useState<InterfaceLanguage | null>(null);
+  useEffect(() => {
+    if (isDeviceTranslationCatalogLoaded(language)) return undefined;
+    let live = true;
+    loadDeviceTranslationCatalog(language).then(
+      () => {
+        if (live) setLoadedLanguage(language);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [language]);
+  if (!isDeviceTranslationCatalogLoaded(language)) return null;
+  return (
+    <LocalToggleRow
+      setting="deviceTranslation"
+      name={translateDeviceTranslation(language, 'settings.device_translation')}
+      caption={translateDeviceTranslation(language, 'settings.device_translation.info')}
+      icon={{ set: 'socle', name: 'translate' }}
+      enabled={toggle.enabled}
+      disabled={!toggle.ready}
+      onToggle={toggle.onToggle}
+    />
   );
 }
 
@@ -237,7 +329,8 @@ export type PreferencesView =
   | { readonly kind: 'loading' }
   | { readonly kind: 'error' };
 
-export type BooleanPreference = Exclude<keyof AppPreferences, 'theme'>;
+/** `allowAnalytics` est LU (#10502), jamais basculé d'ici : le web n'a pas d'interrupteur « Analytique ». */
+export type BooleanPreference = Exclude<keyof AppPreferences, 'theme' | 'allowAnalytics'>;
 
 type ToggleSpec = {
   readonly key: BooleanPreference;
@@ -736,10 +829,17 @@ export function SettingsOfflineNotice({ language }: { readonly language: Interfa
   );
 }
 
-/** Le contenu défilant : la réserve du couloir, puis les sections espacées comme `SettingsView`. */
+/**
+ * Le contenu défilant, ses sections espacées comme `SettingsView`.
+ *
+ * IL COMMENCE SOUS L'EN-TÊTE (#10634) — comme `SettingsView` d'iOS
+ * (`.padding(.top, MeeshySpacing.sm)`) et le profil : les disques flottants se
+ * posent par-dessus, au lieu de laisser sous l'en-tête la hauteur vide de leur
+ * couloir (122 px).
+ */
 export function SettingsContent({ children }: { readonly children: ReactNode }) {
   return (
-    <div className="mx-auto grid max-w-xl gap-6 pb-24" style={{ paddingTop: SETTINGS_TOP_RESERVE + 8 }}>
+    <div className="mx-auto grid max-w-xl gap-6 pb-24 pt-2">
       {children}
     </div>
   );

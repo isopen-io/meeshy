@@ -114,6 +114,14 @@ describe('aucune valeur n’est une phrase anglaise ou française recopiée', ()
  */
 const SAME_AS_ENGLISH: Readonly<Record<Language, ReadonlySet<string>>> = {
   es: new Set([
+    /* Termes techniques gardés tels quels (#10396) : Swap, GPU, Docker, durées « 1 min ». */
+    'admin.ops.gauge.swap',
+    'admin.ops.gpu.title',
+    'admin.ops.docker.title',
+    'admin.ops.series.load1',
+    'admin.ops.series.load5',
+    'admin.ops.series.load15',
+    'admin.ops.series.swap',
     'admin.scale.variant.global',
     'admin.password.level.simple',
     'admin.list.no',
@@ -155,6 +163,14 @@ const SAME_AS_ENGLISH: Readonly<Record<Language, ReadonlySet<string>>> = {
     'admin.agentPanel.trigger.manual',
   ]),
   pt: new Set([
+    /* Termes techniques gardés tels quels (#10396) : Swap, GPU, Docker, durées « 1 min ». */
+    'admin.ops.gauge.swap',
+    'admin.ops.gpu.title',
+    'admin.ops.docker.title',
+    'admin.ops.series.load1',
+    'admin.ops.series.load5',
+    'admin.ops.series.load15',
+    'admin.ops.series.swap',
     'admin.scale.variant.global',
     'admin.stats.reels',
     'admin.stats.stories',

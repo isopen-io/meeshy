@@ -10,6 +10,7 @@ import type { Attachment } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { audioCarryStore, dropCarriedAudio } from '@/lib/view/audio-carry';
 import type { MediaCarrier } from '@/lib/view/media';
+import { NO_MEDIA_OFFERS } from '@/lib/view/viewer-page-offers';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import MediaViewer from './media-viewer';
@@ -84,7 +85,7 @@ const carrier: MediaCarrier = { caption: null, sender: { displayName: 'Kwame Men
 type HostHandle = { setItems: (items: readonly Attachment[]) => void; close: () => void };
 
 /** L'hôte du fil : il tient la liste (que le temps réel enrichit) et ferme le lecteur comme `Attachments`. */
-function mount({ items, deps, languages = ['fr'] }: { readonly items: readonly Attachment[]; readonly deps?: ConversationsDeps; readonly languages?: readonly string[] }): HostHandle {
+function mount({ items, deps, languages = ['fr'], transcribe }: { readonly items: readonly Attachment[]; readonly deps?: ConversationsDeps; readonly languages?: readonly string[]; readonly transcribe?: boolean }): HostHandle {
   const handle: HostHandle = { setItems: () => {}, close: () => {} };
   function Host() {
     const [current, setCurrent] = useState(items);
@@ -99,6 +100,7 @@ function mount({ items, deps, languages = ['fr'] }: { readonly items: readonly A
         languages={languages}
         fallbackLanguage="fr"
         carrier={carrier}
+        {...(transcribe === undefined ? {} : { actionsAt: (i: number) => ({ attachment: current[i] as Attachment, messageId: 'm1', conversationId: 'c1', offers: NO_MEDIA_OFFERS, transcribe }) })}
         {...(deps !== undefined ? { deps } : {})}
       />
     ) : null;
@@ -117,6 +119,14 @@ const transcript = (): HTMLElement | null => page()?.querySelector<HTMLElement>(
 const track = (id = 'a-bare'): HTMLAudioElement | null => page(id)?.querySelector<HTMLAudioElement>('audio[data-viewer-audio-track]') ?? null;
 
 describe('Transcrire à la demande (#9256)', () => {
+  test('« Transcrire » est absent quand le serveur ne lit pas le vocal (#10700)', async () => {
+    mount({ items: [bare()], transcribe: false });
+    await until(() => page() !== null);
+
+    expect(page()?.querySelector('[data-viewer-audio-transcript-empty]')).not.toBeNull();
+    expect(transcribeButton()).toBeNull();
+  });
+
   test('une pièce sans transcription offre « Transcrire » sous « Aucune transcription »', async () => {
     mount({ items: [bare()] });
     await until(() => page() !== null);

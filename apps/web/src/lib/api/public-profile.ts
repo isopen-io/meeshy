@@ -1,14 +1,17 @@
 import * as z from 'zod/mini';
 import * as directoryEndpoints from '@meeshy/shared/api/endpoints/directory';
 
+import type { ServedProfileDecor } from '@meeshy/shared/types/profile-decor';
+
 import { unwrap } from './client';
 import type { DataSource } from './config';
 import type { ApiResult, HttpTransport } from './http';
+import { readProfileDecor } from './profile-decor';
 
 /**
  * **LE PORT DU PROFIL PUBLIC** (#7032, étendu par #7083) —
- * `GET directory.peopleByHandle?expand=stats,relation`
- * (`services/gateway/src/routes/directory/person.ts:170`,
+ * `GET directory.peopleByHandle?expand=relation,presence` et, en parallèle,
+ * `?expand=stats` (`services/gateway/src/routes/directory/person.ts:170`,
  * `routes/users/public-profile.ts#servirProfilPublic`).
  *
  * C'est l'adresse CANONIQUE : `GET /users/:id`, `GET /users/id/:id` et
@@ -22,11 +25,19 @@ import type { ApiResult, HttpTransport } from './http';
  * 'insensitive' } }`) : un `@Alice` écrit dans un message résout la même
  * personne que `@alice`.
  *
- * **UN ALLER-RETOUR, PAS TROIS.** Le doc-comment de la route l'écrit : « un
- * écran de profil coûtait deux appels systématiques … jusqu'à trois selon
- * l'hôte iOS ; `?expand=stats` les fond en un ». `UserProfileViewModel`
- * (iOS) demande déjà `stats` ; la v3.1 demande `stats,relation` — l'identité,
- * les compteurs et l'état relationnel arrivent ensemble.
+ * **DEUX LECTURES EN PARALLÈLE, JAMAIS EN SÉRIE** (profil lent dans la coque
+ * Android). La v3.1 demandait `stats,relation,presence` en UN aller-retour :
+ * l'identité attendait alors les compteurs, qui sont le seul calcul coûteux
+ * de la route (`computeUserStats`, neuf agrégations dont trois sur la
+ * collection `Message`). Mesuré en production : plus de 9 s de squelette sur
+ * `/u/jcnm`, alors que le nom, l'avatar et la relation tiennent en deux
+ * lectures indexées. La fiche pose désormais DEUX questions À LA MÊME ADRESSE,
+ * parties dans le même tour : `expand=relation,presence` (ce qui peint la
+ * fiche et arme les gestes) et `expand=stats` (ce qui remplit les compteurs,
+ * `publicProfileStatsQueryOptions`). Aucune n'attend l'autre — ni un
+ * identifiant que l'autre rendrait : toutes deux prennent le PSEUDO de
+ * l'adresse. Une passerelle plus ancienne sert les deux à l'identique (la
+ * route accepte toute combinaison d'`expand` depuis #4161).
  *
  * **CE QUI EST DÉCODÉ EST CE QUI S'AFFICHE.** La charge servie est déjà
  * projetée par `buildPublicProfile` (ni e-mail, ni téléphone), mais le cache
@@ -63,6 +74,8 @@ export type PublicProfile = {
   readonly banner: string | null;
   readonly bio: string | null;
   readonly createdAt: string | null;
+  /** Le contour et la bannière de design équipés (#10632) ; absent = ancien serveur, rendu inchangé. */
+  readonly decor?: ServedProfileDecor;
 };
 
 /** Les onze compteurs de `UserStats`, moins `languages`/`achievements` que
@@ -150,6 +163,11 @@ const WireProfile = z.object({
   createdAt: optionalText,
 });
 
+const decorOf = (raw: unknown): { readonly decor?: ServedProfileDecor } => {
+  const decor = readProfileDecor(raw);
+  return decor === undefined ? {} : { decor };
+};
+
 const textOrNull = (value: string | null | undefined): string | null =>
   value === undefined || value === null || value.trim() === '' ? null : value;
 
@@ -167,6 +185,7 @@ export function decodePublicProfile(raw: unknown): PublicProfile | null {
     banner: textOrNull(banner),
     bio: textOrNull(bio),
     createdAt: textOrNull(createdAt),
+    ...decorOf(raw),
   };
 }
 
@@ -226,8 +245,13 @@ export function decodePublicProfileView(raw: unknown): PublicProfileView | null 
 }
 
 /** L'ordre des jetons est celui que le témoin lit. `presence` ne fait que
- * POSER la question (§ doc-comment du fichier). */
-const PUBLIC_PROFILE_EXPAND = 'stats,relation,presence';
+ * POSER la question (§ doc-comment du fichier). `stats` n'y est PLUS : les
+ * compteurs ont leur propre lecture, partie en même temps
+ * (`loadPublicProfileStats`), pour que la fiche ne les attende pas. */
+const PUBLIC_PROFILE_EXPAND = 'relation,presence';
+
+/** La seconde question, posée À LA MÊME ADRESSE et dans le même tour. */
+const PUBLIC_PROFILE_STATS_EXPAND = 'stats';
 
 export async function loadPublicProfile(
   params: PublicProfileDeps & { readonly handle: string; readonly signal?: AbortSignal },
@@ -272,5 +296,56 @@ export function publicProfileQueryOptions(deps: PublicProfileDeps & { readonly h
     staleTime: PUBLIC_PROFILE_STALE_TIME,
     retry: false,
     queryFn: ({ signal }: { readonly signal: AbortSignal }) => loadPublicProfile({ ...deps, signal }).then(unwrap),
+  };
+}
+
+/**
+ * **LES COMPTEURS, LUS À CÔTÉ DE LA FICHE** (profil lent dans la coque
+ * Android) — `GET directory.peopleByHandle?expand=stats`, lancée dans le MÊME
+ * tour que `loadPublicProfile` et jamais après elle : elle prend le pseudo de
+ * l'adresse, pas l'identifiant que la fiche rendrait.
+ *
+ * Elle rend `null` quand la passerelle n'a servi aucun compteur — exactement
+ * la loi de `decodePublicStats` : un jeu absent n'est pas un jeu à zéro. Seuls
+ * les compteurs sont décodés ici : l'identité qui voyage avec eux est celle
+ * que l'autre lecture a déjà rangée, et la lire deux fois ferait deux vérités.
+ */
+export async function loadPublicProfileStats(
+  params: PublicProfileDeps & { readonly handle: string; readonly signal?: AbortSignal },
+): Promise<ApiResult<PublicProfileStats | null>> {
+  if (__FIXTURES__ && params.source === 'fixtures') {
+    const { fixturePublicProfile } = await import('./fixtures-rich-text');
+    const found = fixturePublicProfile(params.handle);
+    return found === null
+      ? { ok: false, status: 404, error: 'User not found', code: 'NOT_FOUND' }
+      : { ok: true, data: found.stats };
+  }
+  const query = new URLSearchParams({ expand: PUBLIC_PROFILE_STATS_EXPAND });
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `${directoryEndpoints.peopleByHandle(params.handle)}?${query.toString()}`,
+    ...(params.signal !== undefined ? { signal: params.signal } : {}),
+  });
+  if (!result.ok) return result;
+  const wire = result.data;
+  return { ...result, data: wire !== null && typeof wire === 'object' ? decodePublicStats((wire as { stats?: unknown }).stats) : null };
+}
+
+/**
+ * Une famille À PART (`people-stats`), jamais sous `PUBLIC_PROFILE_QUERY_PREFIX` :
+ * `friend-actions.ts` lit chaque entrée de ce préfixe comme une
+ * `PublicProfileView` pour y patcher la relation — un jeu de compteurs rangé
+ * dessous y serait lu comme une fiche sans `profile`.
+ */
+export const PUBLIC_PROFILE_STATS_QUERY_PREFIX = ['directory', 'people-stats'] as const;
+
+export const publicProfileStatsQueryKey = (handle: string) => [...PUBLIC_PROFILE_STATS_QUERY_PREFIX, handle.toLowerCase()] as const;
+
+export function publicProfileStatsQueryOptions(deps: PublicProfileDeps & { readonly handle: string }) {
+  return {
+    queryKey: publicProfileStatsQueryKey(deps.handle),
+    staleTime: PUBLIC_PROFILE_STALE_TIME,
+    retry: false,
+    queryFn: ({ signal }: { readonly signal: AbortSignal }) => loadPublicProfileStats({ ...deps, signal }).then(unwrap),
   };
 }

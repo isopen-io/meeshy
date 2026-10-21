@@ -17,11 +17,15 @@ export const ART_SLOTS = ['emblem', 'mee', 'meo', 'signature'] as const;
 export type ArtSlot = (typeof ART_SLOTS)[number];
 /** La Flamme du bandeau de parrainage (#7742) : un dessin FACULTATIF — son absence ou son échec ne défait pas la carte. */
 const FLAME_SLOT = 'flame';
-export type ArtMarkup = Readonly<Record<ArtSlot, string>> & { readonly flame?: string };
+/** La plaque d'auteur (#10816) : FACULTATIVE aussi — un invité ou un moment sans plaque n'en porte pas. */
+const AUTHOR_SLOT = 'author';
+export type ArtMarkup = Readonly<Record<ArtSlot, string>> & { readonly flame?: string; readonly author?: string };
 
 /** Les tailles de rastérisation (côté le plus large) : deux fois ce que la plus grande mise en page demande. */
 const SIZES: Readonly<Record<ArtSlot, number>> = { emblem: 768, mee: 512, meo: 512, signature: 256 };
 const FLAME_SIZE = 256;
+/** Le cartouche est large (360 × 100) : la plus grande mise en page le pose sur 756 px. */
+const AUTHOR_SIZE = 1440;
 
 export function collectArtMarkup(root: ParentNode): ArtMarkup | null {
   const found: Partial<Record<ArtSlot, string>> = {};
@@ -31,7 +35,8 @@ export function collectArtMarkup(root: ParentNode): ArtMarkup | null {
     found[slot] = svg.outerHTML;
   }
   const flame = root.querySelector(`[data-photo-art="${FLAME_SLOT}"] svg`);
-  return { ...(found as Record<ArtSlot, string>), ...(flame === null ? {} : { flame: flame.outerHTML }) };
+  const author = root.querySelector(`[data-photo-art="${AUTHOR_SLOT}"] svg`);
+  return { ...(found as Record<ArtSlot, string>), ...(flame === null ? {} : { flame: flame.outerHTML }), ...(author === null ? {} : { author: author.outerHTML }) };
 }
 
 export async function loadArt(params: {
@@ -48,6 +53,7 @@ export async function loadArt(params: {
   );
   const [emblem, mee, meo, signature] = images;
   if (!(emblem && mee && meo && signature)) return null;
-  const flame = markup.flame === undefined ? null : await params.raster(prepareSvgMarkup(markup.flame, { size: FLAME_SIZE, read: params.read }).markup);
-  return { emblem, mee, meo, signature, ...(flame === null ? {} : { flame }) };
+  const optional = (svg: string | undefined, size: number) => (svg === undefined ? Promise.resolve(null) : params.raster(prepareSvgMarkup(svg, { size, read: params.read }).markup));
+  const [flame, author] = await Promise.all([optional(markup.flame, FLAME_SIZE), optional(markup.author, AUTHOR_SIZE)]);
+  return { emblem, mee, meo, signature, ...(flame === null ? {} : { flame }), ...(author === null ? {} : { author }) };
 }

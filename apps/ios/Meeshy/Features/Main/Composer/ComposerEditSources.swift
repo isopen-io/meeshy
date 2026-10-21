@@ -1,7 +1,9 @@
 import AVFoundation
 import CoreImage
 import ImageIO
+import MediaToolbox
 import MeeshyUI
+import os
 import QuartzCore
 
 /// L'orientation qu'une piste DÉCLARE (`preferredTransform`) — les tampons de
@@ -36,13 +38,18 @@ protocol ComposerLoopPlayerProviding: ComposerFrameSourcing {
     nonisolated var hasAudio: Bool { get }
     @MainActor func configure(fps: Int, declaredSpace: CGColorSpace?)
     @MainActor func play()
+    /// **La lecture s'arrête à sa position** (#10356) : `play()` la reprend de là.
+    @MainActor func pause()
+    /// La vidéo avance — ni en pause, ni suspendue par un glissé de la règle.
+    @MainActor var isPlaying: Bool { get }
     @MainActor func stop()
     @MainActor func setRange(_ range: ClosedRange<TimeInterval>)
     @MainActor func seek(to time: TimeInterval)
     /// La boucle se suspend et l'aperçu montre l'image EXACTE de cet instant ;
     /// `setRange` relance la boucle (#9754).
     @MainActor func scrub(to time: TimeInterval)
-    /// Le gain qu'on entend, de 0 (muet) à 1 (#9754).
+    /// Le gain qu'on entend, de 0 (muet) à 2 (#9754, #10360) : au-dessus de 1,
+    /// l'aperçu amplifie par la loi du rendu (`ComposerTakeGain`).
     @MainActor func setVolume(_ gain: Float)
     @MainActor var currentTime: TimeInterval { get }
 }
@@ -62,6 +69,10 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     }
 
     private let asset: AVURLAsset
+    private let audioTrackIDs: [CMPersistentTrackID]
+    /// L'amplification au-delà de 100 %, lue par le tap de chaque élément de la
+    /// boucle — elle survit à la reconstruction du looper et au muet (#10360).
+    private let boostLevel = ComposerTakeBoostLevel()
     private let whole: CMTimeRange
     private let orientation: CGImagePropertyOrientation
     private let player = AVQueuePlayer()
@@ -86,13 +97,14 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     nonisolated deinit {}
 
     private init(asset: AVURLAsset, whole: CMTimeRange, uprightSize: CGSize,
-                 orientation: CGImagePropertyOrientation, hasAudio: Bool) {
+                 orientation: CGImagePropertyOrientation, audioTrackIDs: [CMPersistentTrackID]) {
         self.asset = asset
+        self.audioTrackIDs = audioTrackIDs
         self.whole = whole
         self.duration = whole.duration.seconds
         self.uprightSize = uprightSize
         self.orientation = orientation
-        self.hasAudio = hasAudio
+        self.hasAudio = !audioTrackIDs.isEmpty
         super.init()
     }
 
@@ -106,11 +118,11 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
               let transformation = try? await piste.load(.preferredTransform),
               let duree = try? await asset.load(.duration),
               duree.isNumeric, duree.seconds > 0 else { return nil }
-        let son = (try? await asset.loadTracks(withMediaType: .audio))?.isEmpty == false
+        let son = ((try? await asset.loadTracks(withMediaType: .audio)) ?? []).map(\.trackID)
         return ComposerLoopPlayer(
             asset: asset, whole: CMTimeRange(start: .zero, duration: duree),
             uprightSize: MeeshyVideoWatermarkBaker.orientedSize(natural: naturelle, transform: transformation),
-            orientation: ComposerVideoOrientation.orientation(of: transformation), hasAudio: son)
+            orientation: ComposerVideoOrientation.orientation(of: transformation), audioTrackIDs: son)
     }
 
     func latestImage() -> CIImage? {
@@ -132,7 +144,7 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     @MainActor
     func configure(fps: Int, declaredSpace: CGColorSpace?) {
         self.fps = max(1, fps)
-        link?.preferredFramesPerSecond = self.fps
+        link?.preferredFrameRateRange = .pinned(fps: self.fps)
         lock.lock()
         space = declaredSpace
         lock.unlock()
@@ -143,11 +155,25 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         if looper == nil { setRange(0...duration) }
         player.play()
         guard link == nil else { return }
-        let lien = CADisplayLink(target: ComposerLoopPlayerTick(owner: self),
-                                 selector: #selector(ComposerLoopPlayerTick.tick(_:)))
-        lien.preferredFramesPerSecond = fps
+        let lien = WeakDisplayLinkTarget.makeLink(frameRateRange: .pinned(fps: fps)) { [weak self] lien in
+            guard let self else {
+                lien.invalidate()
+                return
+            }
+            self.tick()
+        }
         lien.add(to: .main, forMode: .common)
         link = lien
+    }
+
+    @MainActor
+    func pause() {
+        player.pause()
+    }
+
+    @MainActor
+    var isPlaying: Bool {
+        player.rate != 0
     }
 
     @MainActor
@@ -183,6 +209,7 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         outputs = boucle.loopingPlayerItems.reduce(into: [:]) { sorties, element in
             let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
             element.add(sortie)
+            attachBoost(to: element)
             sorties[ObjectIdentifier(element)] = sortie
         }
         looper = boucle
@@ -205,9 +232,20 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         seekExactly(cible)
     }
 
+    /// **Le gain réel, au-delà de 100 % compris** (#10360) : le lecteur pose
+    /// l'atténuation, le tap de chaque élément l'amplification — la loi du rendu.
     @MainActor
     func setVolume(_ gain: Float) {
-        player.volume = max(0, min(1, gain))
+        player.volume = ComposerTakeGain.volume(gain)
+        boostLevel.boost = ComposerTakeGain.boost(gain)
+    }
+
+    /// Chaque élément qui joue porte son propre tap, branché sur le niveau
+    /// partagé : un élément recréé (découpe, filet du tick) amplifie comme les autres.
+    @MainActor
+    private func attachBoost(to element: AVPlayerItem) {
+        guard !audioTrackIDs.isEmpty else { return }
+        element.audioMix = ComposerTakeBoostTap.audioMix(trackIDs: audioTrackIDs, volume: 1, level: boostLevel)
     }
 
     @MainActor
@@ -221,6 +259,7 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
         let element = AVPlayerItem(asset: asset)
         let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
         element.add(sortie)
+        attachBoost(to: element)
         outputs = [ObjectIdentifier(element): sortie]
         player.insert(element, after: nil)
     }
@@ -269,29 +308,121 @@ nonisolated final class ComposerLoopPlayer: NSObject, ComposerLoopPlayerProvidin
     private func attachOutput(to element: AVPlayerItem) -> AVPlayerItemVideoOutput {
         let sortie = AVPlayerItemVideoOutput(pixelBufferAttributes: Self.attributes)
         element.add(sortie)
+        if element.audioMix == nil { attachBoost(to: element) }
         outputs[ObjectIdentifier(element)] = sortie
         return sortie
     }
 }
 
-/// La cible du `CADisplayLink` — elle ne retient pas le lecteur, et coupe le lien
-/// si le lecteur est parti sans `stop()` (un lien vivant tiendrait 30 réveils par
-/// seconde pour rien).
-private final class ComposerLoopPlayerTick: NSObject {
-    weak var owner: ComposerLoopPlayer?
+/// **L'amplification qu'on règle pendant que le son joue** (#10360) : le fil
+/// principal l'écrit, le fil audio la lit à chaque tampon — un verrou sans
+/// attente, le temps d'un `Float`.
+nonisolated final class ComposerTakeBoostLevel: @unchecked Sendable {
+    private let state: OSAllocatedUnfairLock<Float>
 
-    nonisolated deinit {}
-
-    init(owner: ComposerLoopPlayer) {
-        self.owner = owner
-        super.init()
+    init(boost: Float = 1) {
+        state = OSAllocatedUnfairLock(initialState: ComposerTakeGain.boost(boost))
     }
 
-    @objc func tick(_ lien: CADisplayLink) {
-        guard let owner else {
-            lien.invalidate()
-            return
+    var boost: Float {
+        get { state.withLock { $0 } }
+        set {
+            let borne = ComposerTakeGain.boost(newValue)
+            state.withLock { $0 = borne }
         }
-        owner.tick()
+    }
+}
+
+/// Ce qu'un tap garde pour lui : le niveau partagé, et si le format que la
+/// lecture lui remet est bien du flottant 32 bits — sinon il laisse passer.
+private nonisolated final class ComposerTakeBoostTapContext: @unchecked Sendable {
+    let level: ComposerTakeBoostLevel
+    private let floats = OSAllocatedUnfairLock(initialState: true)
+
+    init(level: ComposerTakeBoostLevel) {
+        self.level = level
+    }
+
+    var acceptsFloats: Bool {
+        get { floats.withLock { $0 } }
+        set { floats.withLock { $0 = newValue } }
+    }
+}
+
+/// **Le tap qui amplifie** (#10360) : un `MTAudioProcessingTap` posé sur chaque
+/// piste de son, qui multiplie les échantillons par l'amplification du niveau
+/// et les écrête en douceur (`ComposerTakeGain.amplified`). L'aperçu (chaque
+/// élément de la boucle) et le rendu (`ComposerLookVideoExporter.audioMix`) le
+/// posent tous deux : une seule loi pour ce qu'on entend et ce qui part.
+nonisolated enum ComposerTakeBoostTap {
+
+    /// Un mixage dont chaque piste porte le volume `volume` et un tap branché sur
+    /// `level`. `nil` sans piste.
+    static func audioMix(trackIDs: [CMPersistentTrackID], volume: Float,
+                         level: ComposerTakeBoostLevel) -> AVAudioMix? {
+        guard !trackIDs.isEmpty else { return nil }
+        let mixage = AVMutableAudioMix()
+        mixage.inputParameters = trackIDs.map { piste in
+            let reglage = AVMutableAudioMixInputParameters()
+            reglage.trackID = piste
+            reglage.setVolume(ComposerTakeGain.volume(volume), at: .zero)
+            reglage.audioTapProcessor = make(level)
+            return reglage
+        }
+        return mixage
+    }
+
+    /// Le tap, ou `nil` si le système le refuse (le son passe alors à 100 %).
+    static func make(_ level: ComposerTakeBoostLevel) -> MTAudioProcessingTap? {
+        let contexte = Unmanaged.passRetained(ComposerTakeBoostTapContext(level: level)).toOpaque()
+        var rappels = MTAudioProcessingTapCallbacks(
+            version: kMTAudioProcessingTapCallbacksVersion_0,
+            clientInfo: contexte,
+            init: { _, clientInfo, tapStorageOut in
+                tapStorageOut.pointee = clientInfo
+            },
+            finalize: { tap in
+                Unmanaged<ComposerTakeBoostTapContext>.fromOpaque(MTAudioProcessingTapGetStorage(tap)).release()
+            },
+            prepare: { tap, _, format in
+                let lu = Unmanaged<ComposerTakeBoostTapContext>
+                    .fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
+                lu.acceptsFloats = ComposerTakeBoostTap.acceptsFloats(format.pointee)
+            },
+            unprepare: nil,
+            process: { tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
+                let statut = MTAudioProcessingTapGetSourceAudio(tap, numberFrames, bufferListInOut,
+                                                                flagsOut, nil, numberFramesOut)
+                guard statut == OSStatus(noErr) else { return }
+                let lu = Unmanaged<ComposerTakeBoostTapContext>
+                    .fromOpaque(MTAudioProcessingTapGetStorage(tap)).takeUnretainedValue()
+                guard lu.acceptsFloats else { return }
+                ComposerTakeBoostTap.amplify(bufferListInOut, boost: lu.level.boost)
+            })
+        var tap: MTAudioProcessingTap?
+        let statut = MTAudioProcessingTapCreate(kCFAllocatorDefault, &rappels,
+                                                kMTAudioProcessingTapCreationFlag_PostEffects, &tap)
+        guard statut == OSStatus(noErr) else { return nil }
+        return tap
+    }
+
+    /// Seul le flottant 32 bits se multiplie ici ; tout autre format passe intact.
+    static func acceptsFloats(_ format: AudioStreamBasicDescription) -> Bool {
+        format.mFormatID == kAudioFormatLinearPCM
+            && format.mFormatFlags & kAudioFormatFlagIsFloat != 0
+            && format.mBitsPerChannel == 32
+    }
+
+    /// Chaque échantillon de chaque tampon passe par la loi ; sans
+    /// amplification, rien n'est touché.
+    static func amplify(_ list: UnsafeMutablePointer<AudioBufferList>, boost: Float) {
+        guard boost > 1 else { return }
+        UnsafeMutableAudioBufferListPointer(list).forEach { tampon in
+            guard let donnees = tampon.mData else { return }
+            let echantillons = UnsafeMutableBufferPointer(
+                start: donnees.assumingMemoryBound(to: Float.self),
+                count: Int(tampon.mDataByteSize) / MemoryLayout<Float>.size)
+            echantillons.indices.forEach { echantillons[$0] = ComposerTakeGain.amplified(echantillons[$0], boost: boost) }
+        }
     }
 }

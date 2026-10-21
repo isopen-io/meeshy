@@ -43,7 +43,7 @@ public enum MeeshyEndpointPolicy {
     /// l'inscription et la preuve d'adresse sont les routes dont le contrat
     /// DOCUMENTE ses codes.
     public static func rejectionPolicy(forLegacyPath path: String) -> MeeshyEndpointRejectionPolicy {
-        path.hasPrefix("/auth/register") || path == "/auth/verify-email" ? .structured : .opaque
+        path.hasPrefix("/auth/register") || path == "/auth/verify-email" || path == "/auth/reset-password" ? .structured : .opaque
     }
 }
 
@@ -79,9 +79,13 @@ public extension AuthEndpoint {
     /// pose `INVALID_VERIFICATION`, `VERIFICATION_EXPIRED` et `WEAK_PASSWORD`,
     /// et sa phrase est écrite en français — l'écran de saisie du code doit
     /// lire le CODE pour parler la langue de l'interface.
+    ///
+    /// **La réinitialisation du mot de passe aussi (#10867)** : `RESET_TOKEN_INVALID`,
+    /// `RESET_PASSWORD_WEAK`, `TWO_FACTOR_REQUIRED`… (#10866) — un compte 2FA doit
+    /// voir la saisie du code, pas « lien invalide ».
     var rejectionPolicy: MeeshyEndpointRejectionPolicy {
         switch self {
-        case .register, .verifyEmail: return .structured
+        case .register, .verifyEmail, .resetPassword: return .structured
         default: return .opaque
         }
     }
@@ -93,6 +97,27 @@ public extension SignalEndpoint {
     /// 2 s + 4 s de temporisation et ne peut pas aboutir, pendant que
     /// l'appelant attend son repli en clair.
     var retryPolicy: MeeshyEndpointRetryPolicy { .never }
+}
+
+public extension ConversationsEndpoint {
+    /// **Le partage d'une traduction rend un refus que l'appareil LIT (#9899).**
+    ///
+    /// `POST …/shared-translations` répond 409 `SHARED_TRANSLATION_STALE_SOURCE`
+    /// quand le message a été modifié depuis que l'appareil l'a traduit : la
+    /// traduction ne dit plus ce que les autres lisent, elle reste locale. Sans
+    /// cette déclaration le transport ne rend qu'une phrase
+    /// (`MeeshyError.server(409, _)`), et ce refus se confondrait avec une panne —
+    /// `SharedTranslationService` en lit le CODE.
+    ///
+    /// Une seule adresse : toutes les autres routes de conversation gardent la
+    /// forme d'erreur qu'elles ont, et les sites qui filtrent leurs
+    /// `.server(400, _)` ne bougent pas.
+    var rejectionPolicy: MeeshyEndpointRejectionPolicy {
+        switch self {
+        case .byIdSharedTranslations: return .structured
+        default: return .opaque
+        }
+    }
 }
 
 

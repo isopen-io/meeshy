@@ -77,7 +77,12 @@ export type StudioVisualAsset = {
   /** LE RECADRAGE d'une image (#9136, `MediaCropRect` normalisé sur la
    * source). Absent ⇒ le cadre entier. */
   readonly crop?: MediaCropRect;
+  /** LE QUART DE TOUR du fond (#9160, `StoryMediaRotation` iOS) — en degrés
+   * de [0, 360), appliqué APRÈS le recadrage. Absent ⇒ droit. */
+  readonly rotation?: StudioQuarterTurn;
 };
+
+export type StudioQuarterTurn = 90 | 180 | 270;
 
 export type StudioMediaTrim = { readonly start: number; readonly end: number };
 
@@ -256,6 +261,16 @@ export function pageWithBackgroundCrop(page: StudioPage, crop: MediaCropRect | n
   if (page.background === null) return page;
   const { crop: _previous, ...rest } = page.background;
   return { ...page, background: crop === null || isFullMediaCrop(crop) ? rest : { ...rest, crop: clampMediaCrop(crop) } };
+}
+
+/** « Pivoter » (#9160, `StoryMediaRotation.turned` iOS) — un quart de tour
+ * dans le sens du glyphe ⟲ (antihoraire, −90° ramené dans [0, 360)) ; le
+ * quatrième rend la pièce droite, écrite par son ABSENCE. */
+export function pageWithBackgroundTurned(page: StudioPage): StudioPage {
+  if (page.background === null) return page;
+  const { rotation: previous, ...rest } = page.background;
+  const next = ((previous ?? 0) + 270) % 360;
+  return { ...page, background: next === 0 ? rest : { ...rest, rotation: next as StudioQuarterTurn } };
 }
 
 /** LE TEXTE ALTERNATIF de CE média (#8518) — même borne que la légende

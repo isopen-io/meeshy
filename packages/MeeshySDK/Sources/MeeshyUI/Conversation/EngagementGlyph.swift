@@ -17,8 +17,7 @@ import SwiftUI
 /// vient du composant d'origine (`ReelFeedCard.actionGlyph`) et elle est
 /// intentionnelle : un anneau autour du symbole se lit comme un badge d'état de
 /// l'application, pas comme une trace de l'utilisateur. Passer un
-/// `outline` de la famille `.circle` la viole — c'est ce que faisait le repost
-/// du fil, seul des trois à changer de famille de symbole selon son état.
+/// `outline` d'une autre forme que le glyphe la viole.
 ///
 /// Ce composant NE décide de rien : il ne sait ni ce qu'est un like, ni qui est
 /// le lecteur. Il reçoit un booléen déjà résolu et des symboles opaques — d'où
@@ -31,10 +30,8 @@ public struct EngagementGlyph: View {
     /// Il doit retracer le bord du glyphe AFFICHÉ à ce moment — donc la même
     /// famille que `filled`.
     public let outline: String
-    /// Symbole du glyphe AU REPOS. Vaut `outline` par défaut, mais s'en sépare
-    /// quand l'état actif change de famille : le repost montre des flèches nues
-    /// au repos et un disque plein une fois reposté — un seul symbole ne peut
-    /// pas dire les deux, et les confondre changerait l'apparence du repos.
+    /// Symbole du glyphe AU REPOS. Vaut `outline` par défaut, et ne s'en sépare
+    /// que si l'état actif change de famille de symbole.
     public let inactiveSymbol: String
     /// Symbole PLEIN — l'état actif.
     public let filled: String
@@ -91,8 +88,8 @@ public struct EngagementGlyph: View {
     /// ne proscrit pas la famille `.circle` — un glyphe QUI EST un disque a
     /// légitimement un contour circulaire. Ce qu'elle proscrit, c'est un contour
     /// d'une AUTRE forme que le glyphe qu'il borde : superposer
-    /// `arrow.2.squarepath.circle` à un `heart.fill` dessinerait un anneau
-    /// étranger au glyphe.
+    /// `checkmark.circle` à un `heart.fill` dessinerait un anneau étranger au
+    /// glyphe.
     ///
     /// Fonction pure : XCTest ne peut pas introspecter une hiérarchie SwiftUI,
     /// seule la DÉCISION est vérifiable.

@@ -42,7 +42,7 @@ public struct VoiceProfileManageView: View {
                     Task { await viewModel.deleteProfile() }
                 }
             } message: {
-                Text(String(localized: "voiceProfile.manage.deleteMessage", defaultValue: "Cette action supprimera definitivement votre profil vocal, tous vos echantillons et revoquera votre consentement. Cette action est irreversible (RGPD).", bundle: .module))
+                Text(String(localized: "voiceProfile.manage.deleteMessage", defaultValue: "Cette action supprimera définitivement votre profil vocal, tous vos échantillons et révoquera votre consentement. Cette action est irreversible (RGPD).", bundle: .module))
             }
         }
     }
@@ -58,11 +58,11 @@ public struct VoiceProfileManageView: View {
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(statusTitle)
-                        .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
+                        .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                         .foregroundColor(.primary)
 
                     Text(statusSubtitle)
-                        .font(.system(size: MeeshyFont.smallSize))
+                        .font(MeeshyFont.relative(MeeshyFont.smallSize))
                         .foregroundColor(.secondary)
                 }
 
@@ -71,10 +71,10 @@ public struct VoiceProfileManageView: View {
 
             if let profile = viewModel.profile {
                 HStack(spacing: MeeshySpacing.lg) {
-                    statItem(label: String(localized: "voiceProfile.manage.samples", defaultValue: "Echantillons", bundle: .module), value: "\(profile.sampleCount)")
-                    statItem(label: String(localized: "voiceProfile.manage.totalDuration", defaultValue: "Duree totale", bundle: .module), value: "\(profile.totalDurationSeconds)s")
+                    statItem(label: String(localized: "voiceProfile.manage.samples", defaultValue: "Échantillons", bundle: .module), value: "\(profile.sampleCount)")
+                    statItem(label: String(localized: "voiceProfile.manage.totalDuration", defaultValue: "Durée totale", bundle: .module), value: "\(profile.totalDurationSeconds)s")
                     if let quality = profile.quality {
-                        statItem(label: String(localized: "voiceProfile.manage.quality", defaultValue: "Qualite", bundle: .module), value: "\(Int(quality * 100))%")
+                        statItem(label: String(localized: "voiceProfile.manage.quality", defaultValue: "Qualité", bundle: .module), value: "\(Int(quality * 100))%")
                     }
                 }
             }
@@ -89,7 +89,7 @@ public struct VoiceProfileManageView: View {
     private func statItem(label: String, value: String) -> some View {
         VStack(spacing: MeeshySpacing.xxs) {
             Text(value)
-                .font(.system(size: MeeshyFont.calloutSize, weight: .bold))
+                .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
             Text(label)
                 .font(.system(size: MeeshyFont.captionSize, weight: .medium))
@@ -105,18 +105,18 @@ public struct VoiceProfileManageView: View {
         case .processing: return String(localized: "voiceProfile.status.processing", defaultValue: "En traitement...", bundle: .module)
         case .pending: return String(localized: "voiceProfile.status.pending", defaultValue: "En attente", bundle: .module)
         case .failed: return String(localized: "voiceProfile.status.failed", defaultValue: "Erreur", bundle: .module)
-        case .expired: return String(localized: "voiceProfile.status.expired", defaultValue: "Expire", bundle: .module)
+        case .expired: return String(localized: "voiceProfile.status.expired", defaultValue: "Expiré", bundle: .module)
         }
     }
 
     private var statusSubtitle: String {
-        guard let profile = viewModel.profile else { return String(localized: "voiceProfile.subtitle.noProfile", defaultValue: "Creez un profil vocal pour activer le clonage", bundle: .module) }
+        guard let profile = viewModel.profile else { return String(localized: "voiceProfile.subtitle.noProfile", defaultValue: "Créez un profil vocal pour activer le clonage", bundle: .module) }
         switch profile.status {
-        case .ready: return String(localized: "voiceProfile.subtitle.active", defaultValue: "Votre voix est utilisee pour les traductions audio", bundle: .module)
-        case .processing: return String(localized: "voiceProfile.subtitle.processing", defaultValue: "Vos echantillons sont en cours de traitement", bundle: .module)
+        case .ready: return String(localized: "voiceProfile.subtitle.active", defaultValue: "Votre voix est utilisée pour les traductions audio", bundle: .module)
+        case .processing: return String(localized: "voiceProfile.subtitle.processing", defaultValue: "Vos échantillons sont en cours de traitement", bundle: .module)
         case .pending: return String(localized: "voiceProfile.subtitle.pending", defaultValue: "En attente de traitement", bundle: .module)
-        case .failed: return String(localized: "voiceProfile.subtitle.failed", defaultValue: "Le traitement a echoue, reessayez", bundle: .module)
-        case .expired: return String(localized: "voiceProfile.subtitle.expired", defaultValue: "Enregistrez de nouveaux echantillons", bundle: .module)
+        case .failed: return String(localized: "voiceProfile.subtitle.failed", defaultValue: "Le traitement a échoué, réessayez", bundle: .module)
+        case .expired: return String(localized: "voiceProfile.subtitle.expired", defaultValue: "Enregistrez de nouveaux échantillons", bundle: .module)
         }
     }
 
@@ -138,7 +138,7 @@ public struct VoiceProfileManageView: View {
                     .font(.system(size: MeeshyFont.labelSize, weight: .medium))
                     .foregroundColor(.primary)
                 Text(String(localized: "voiceProfile.manage.cloningSubtitle", defaultValue: "Utiliser votre voix pour les traductions", bundle: .module))
-                    .font(.system(size: MeeshyFont.footnoteSize))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
                     .foregroundColor(.secondary)
             }
 
@@ -167,14 +167,14 @@ public struct VoiceProfileManageView: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                 Text(String(localized: "voiceProfile.manage.samplesHeader", defaultValue: "ECHANTILLONS VOCAUX", bundle: .module))
-                    .font(.system(size: MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
+                    .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.0)
             }
 
             if viewModel.samples.isEmpty {
-                Text(String(localized: "voiceProfile.manage.noSamples", defaultValue: "Aucun echantillon enregistre", bundle: .module))
-                    .font(.system(size: MeeshyFont.subheadSize))
+                Text(String(localized: "voiceProfile.manage.noSamples", defaultValue: "Aucun échantillon enregistré", bundle: .module))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, MeeshySpacing.xl)
@@ -185,14 +185,14 @@ public struct VoiceProfileManageView: View {
                             .font(.system(size: 13))
                             .foregroundColor(Color(hex: accentColor))
 
-                        Text(String(localized: "voiceProfile.manage.sample", defaultValue: "Echantillon", bundle: .module))
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        Text(String(localized: "voiceProfile.manage.sample", defaultValue: "Échantillon", bundle: .module))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                             .foregroundColor(.primary)
 
                         Spacer()
 
                         Text("\(sample.durationSeconds)s")
-                            .font(.system(size: MeeshyFont.smallSize, weight: .medium, design: .monospaced))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium, design: .monospaced))
                             .foregroundColor(.secondary)
 
                         Button {
@@ -224,7 +224,7 @@ public struct VoiceProfileManageView: View {
                 HStack {
                     Image(systemName: "trash.fill")
                         .font(.system(size: MeeshyIconSize.sm, weight: .semibold))
-                    Text(String(localized: "voiceProfile.manage.deleteAllData", defaultValue: "Supprimer toutes les donnees vocales", bundle: .module))
+                    Text(String(localized: "voiceProfile.manage.deleteAllData", defaultValue: "Supprimer toutes les données vocales", bundle: .module))
                         .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
                 }
                 .foregroundColor(MeeshyColors.errorStrong)
@@ -240,7 +240,7 @@ public struct VoiceProfileManageView: View {
                 )
             }
 
-            Text(String(localized: "voiceProfile.manage.gdprNotice", defaultValue: "Conforme au RGPD - Vos donnees vocales seront definitivement supprimees de nos serveurs.", bundle: .module))
+            Text(String(localized: "voiceProfile.manage.gdprNotice", defaultValue: "Conforme au RGPD - Vos données vocales seront définitivement supprimées de nos serveurs.", bundle: .module))
                 .font(.system(size: MeeshyFont.captionSize))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

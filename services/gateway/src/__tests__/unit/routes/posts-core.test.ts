@@ -39,6 +39,12 @@ jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn<any>().mockResolvedValue([]),
 }));
 
+const mockCreateNotification = jest.fn<any>().mockResolvedValue({ id: 'notif-1' });
+
+jest.mock('../../../services/notifications/notification-service-registry', () => ({
+  getSharedNotificationService: () => ({ createNotification: (...a: any[]) => mockCreateNotification(...a) }),
+}));
+
 jest.mock('../../../services/notifications/NotificationService', () => ({
   NotificationService: jest.fn().mockImplementation(() => ({
     createPostMentionNotificationsBatch: jest.fn<any>().mockResolvedValue(undefined),
@@ -132,7 +138,7 @@ const MOCK_POST = {
 
 // ─── buildApp ─────────────────────────────────────────────────────────────────
 
-async function buildApp({ authenticated = true, emailVerified = true, activation = undefined as unknown, prisma = {} as unknown } = {}): Promise<FastifyInstance> {
+async function buildApp({ authenticated = true, emailVerified = true, activation = undefined as unknown, prisma = {} as unknown, role = 'USER' } = {}): Promise<FastifyInstance> {
   const app = Fastify({ logger: false, ajv: { customOptions: { strict: false } } });
 
   const requiredAuth = async (req: any, reply: any) => {
@@ -144,7 +150,7 @@ async function buildApp({ authenticated = true, emailVerified = true, activation
       type: 'user',
       isAnonymous: false,
       userId: USER_ID,
-      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role: 'USER', activation },
+      registeredUser: { emailVerifiedAt: emailVerified ? new Date() : null, id: USER_ID, role, activation },
     };
   };
 
@@ -420,11 +426,18 @@ describe('DELETE /posts/:postId — not authenticated', () => {
   });
 });
 
+const AUTHOR_ID = '507f1f77bcf86cd799439099';
+
+const deletePrisma = (post: { authorId: string; type?: string } | null, authorRole = 'USER') => ({
+  post: { findFirst: jest.fn<any>().mockResolvedValue(post) },
+  user: { findUnique: jest.fn<any>().mockResolvedValue({ role: authorRole, systemLanguage: 'fr' }) },
+});
+
 describe('DELETE /posts/:postId — not found', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockDeletePost.mockResolvedValue(null);
-    app = await buildApp();
+    mockDeletePost.mockReset();
+    app = await buildApp({ prisma: deletePrisma(null) });
   });
   afterAll(async () => { await app.close(); });
 
@@ -434,41 +447,83 @@ describe('DELETE /posts/:postId — not found', () => {
       url: `/posts/${POST_ID}`,
     });
     expect(res.statusCode).toBe(404);
+    expect(mockDeletePost).not.toHaveBeenCalled();
   });
 });
 
 describe('DELETE /posts/:postId — forbidden', () => {
-  let app: FastifyInstance;
-  beforeAll(async () => {
-    mockDeletePost.mockRejectedValue(new Error('FORBIDDEN'));
-    app = await buildApp();
-  });
-  afterAll(async () => { await app.close(); });
+  it('returns 403 when a plain user is not the post author', async () => {
+    mockDeletePost.mockReset();
+    const app = await buildApp({ prisma: deletePrisma({ authorId: AUTHOR_ID }) });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Hors charte' } });
+    await app.close();
 
-  it('returns 403 when user is not the post author', async () => {
-    const res = await app.inject({
-      method: 'DELETE',
-      url: `/posts/${POST_ID}`,
-    });
     expect(res.statusCode).toBe(403);
+    expect(mockDeletePost).not.toHaveBeenCalled();
+  });
+
+  it('#11149 — un MODERATOR ne retire pas la publication d’un ADMIN', async () => {
+    mockDeletePost.mockReset();
+    const app = await buildApp({ role: 'MODERATOR', prisma: deletePrisma({ authorId: AUTHOR_ID }, 'ADMIN') });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'Hors charte' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(403);
+    expect(mockDeletePost).not.toHaveBeenCalled();
   });
 });
 
 describe('DELETE /posts/:postId — success', () => {
   let app: FastifyInstance;
   beforeAll(async () => {
-    mockDeletePost.mockResolvedValue({ ...MOCK_POST, deletedAt: new Date() });
-    app = await buildApp();
+    mockDeletePost.mockReset().mockResolvedValue({ ...MOCK_POST, deletedAt: new Date() });
+    mockCreateNotification.mockClear();
+    app = await buildApp({ prisma: deletePrisma({ authorId: USER_ID, type: 'POST' }) });
   });
   afterAll(async () => { await app.close(); });
 
-  it('returns 200 with success=true', async () => {
+  it("returns 200 with success=true — l'auteur, sans corps, sans motif ni notification", async () => {
     const res = await app.inject({
       method: 'DELETE',
       url: `/posts/${POST_ID}`,
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+    expect(mockDeletePost).toHaveBeenCalledWith(POST_ID, USER_ID, { actorRole: 'USER' });
+    expect(mockCreateNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /posts/:postId — retrait par la modération (#11149)', () => {
+  it('exige un motif : 400 MODERATION_REASON_REQUIRED, rien de retiré', async () => {
+    mockDeletePost.mockReset();
+    const app = await buildApp({ role: 'MODERATOR', prisma: deletePrisma({ authorId: AUTHOR_ID }) });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: 'no' } });
+    await app.close();
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('MODERATION_REASON_REQUIRED');
+    expect(mockDeletePost).not.toHaveBeenCalled();
+  });
+
+  it("retire avec le motif nettoyé et prévient l'AUTEUR par content_removed", async () => {
+    mockDeletePost.mockReset().mockResolvedValue({ ...MOCK_POST, authorId: AUTHOR_ID, type: 'REEL', deletedAt: new Date() });
+    mockCreateNotification.mockClear();
+    const app = await buildApp({ role: 'ADMIN', prisma: deletePrisma({ authorId: AUTHOR_ID, type: 'REEL' }) });
+    const res = await app.inject({ method: 'DELETE', url: `/posts/${POST_ID}`, payload: { reason: '  Contenu violent  ' } });
+    await new Promise((resolve) => setImmediate(resolve));
+    await app.close();
+
+    expect(res.statusCode).toBe(200);
+    expect(mockDeletePost).toHaveBeenCalledWith(POST_ID, USER_ID, { actorRole: 'ADMIN', reason: 'Contenu violent' });
+    expect(mockCreateNotification).toHaveBeenCalledTimes(1);
+    expect(mockCreateNotification).toHaveBeenCalledWith(expect.objectContaining({
+      userId: AUTHOR_ID,
+      type: 'content_removed',
+      title: 'Votre réel a été retiré par un administrateur',
+      metadata: { contentType: 'reel', contentId: POST_ID, postId: POST_ID, reason: 'Contenu violent' },
+    }));
+    expect(mockCreateNotification.mock.calls[0][0].actor).toBeUndefined();
   });
 });
 

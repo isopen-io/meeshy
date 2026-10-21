@@ -5,6 +5,47 @@ import { sendNotFound, sendUnauthorized } from '../../../utils/response';
 import { unsetOrNull } from '../../../utils/prisma-unset';
 
 /**
+ * Une participation VIVANTE : active ET non bannie — UNE définition pour
+ * l'invité et pour l'inscrit, sur toutes les portes de lecture (REST et
+ * socket) (#7389).
+ *
+ * `isActive: true` seul ne suffit pas. Un bannissement d'un membre ACTIF écrit
+ * bien `isActive: false`, mais celui d'un membre déjà INACTIF (parti, ou qui a
+ * supprimé la conversation pour lui) n'écrit que `bannedAt`
+ * (`resolveBanWrite`, `services/conversations/conversationBanState.ts`) ; et
+ * `POST /conversations/:id/restore-for-me` (`routes/user-deletions.ts`)
+ * rallumait ensuite `isActive` sans lire `bannedAt` — fermé par #10436, qui
+ * refuse la restauration d'un banni et porte la garde dans le `where` de
+ * l'écriture. (Ce n'est PAS la restauration de compte de
+ * `routes/me/delete-account.ts` : elle écrit `User.isActive`, jamais une
+ * participation.) Les réintégrations (lien, invitation, ajout) passent par
+ * `resolveConversationEntry`, qui refuse un banni ; le débannissement remet
+ * `bannedAt` à `null` dans la même écriture. La garde de lecture reste
+ * porteuse pour les lignes actives ET bannies déjà en base : elle ne vivait
+ * que sur la branche INVITÉ, et l'inscrit concerné relisait le fil, la
+ * recherche et les épinglés, et rejoignait la room à la connexion socket.
+ *
+ * `unsetOrNull` et non `bannedAt: null` : la colonne est ABSENTE du document de
+ * tout participant jamais banni, et l'égalité à `null` fermerait la
+ * conversation à toute la population (`utils/prisma-unset.ts`). Elle porte une
+ * clé `OR` : un `where` qui a déjà le sien passe par `AND`.
+ */
+export const PARTICIPATION_VIVANTE = {
+  isActive: true,
+  ...unsetOrNull('bannedAt')
+} as const;
+
+/**
+ * `PARTICIPATION_VIVANTE` jugée sur une ligne DÉJÀ lue — pour une porte qui
+ * doit distinguer une participation MORTE (désactivée ou bannie) d'une ligne
+ * absente, et ne peut donc pas filtrer dans son `where` (#10449). Même règle :
+ * active (`true`, pas seulement « non fausse ») et `bannedAt` nul ou absent.
+ */
+export function participationEstVivante(row: { readonly isActive?: boolean | null; readonly bannedAt?: Date | null }): boolean {
+  return row.isActive === true && row.bannedAt == null;
+}
+
+/**
  * The two identities an auth context can name a `Participant` row with.
  *
  * `userId` is NOT a `User.id` for everyone: the anonymous branch of
@@ -52,12 +93,7 @@ export async function resolveCallerParticipant(
   const participantId = authContext?.participantId;
   if (participantId) {
     return prisma.participant.findFirst({
-      where: {
-        id: participantId,
-        conversationId,
-        isActive: true,
-        ...unsetOrNull('bannedAt')
-      },
+      where: { id: participantId, conversationId, ...PARTICIPATION_VIVANTE },
       select: { id: true, role: true, joinedAt: true }
     });
   }
@@ -66,7 +102,7 @@ export async function resolveCallerParticipant(
   if (!userId) return null;
 
   return prisma.participant.findFirst({
-    where: { conversationId, userId, isActive: true },
+    where: { conversationId, userId, ...PARTICIPATION_VIVANTE },
     select: { id: true, role: true, joinedAt: true }
   });
 }
@@ -85,11 +121,11 @@ export function callerParticipantWhere(
 ): Prisma.ParticipantWhereInput {
   const participantId = authContext?.participantId;
   if (participantId) {
-    return { id: participantId, isActive: true, ...unsetOrNull('bannedAt') };
+    return { id: participantId, ...PARTICIPATION_VIVANTE };
   }
   const userId = authContext?.userId;
   if (!userId) return { id: { in: [] } };
-  return { userId, isActive: true };
+  return { userId, ...PARTICIPATION_VIVANTE };
 }
 
 /**
@@ -183,7 +219,7 @@ export async function verdictAccesConversation(
       where: {
         conversationId: conversationId,
         userId: authContext.userId,
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       }
     });
 
@@ -200,16 +236,17 @@ export async function verdictAccesConversation(
   // dans leur contexte d'auth — se voyaient refuser l'accès à leur propre
   // conversation. Voir `utils/prisma-unset.ts`.
   //
-  // La garde reste porteuse malgré `isActive: true` : un bannissement écrit bien
-  // `isActive: false`, mais une restauration de compte rallume `isActive` sans
-  // regarder `bannedAt` (`routes/me/delete-account.ts`).
+  // La garde reste porteuse malgré `isActive: true` : une ligne peut être
+  // active ET bannie en base — bannie pendant qu'elle était inactive (seul
+  // `bannedAt` est alors écrit), puis rallumée par `restore-for-me` avant
+  // #10436 (voir `PARTICIPATION_VIVANTE`). Elle vaut pour les branches
+  // INSCRITES ci-dessous aussi (#7389).
   if (authContext.participantId) {
     const participant = await prisma.participant.findFirst({
       where: {
         id: authContext.participantId,
         conversationId: conversationId,
-        isActive: true,
-        ...unsetOrNull('bannedAt')
+        ...PARTICIPATION_VIVANTE
       }
     });
     return participant ? ACCES_ACCORDE : NON_MEMBRE;
@@ -235,7 +272,7 @@ export async function verdictAccesConversation(
         where: {
           conversationId: conversation.id,
           userId: authContext.userId,
-          isActive: true
+          ...PARTICIPATION_VIVANTE
         }
       });
       return participant ? ACCES_ACCORDE : NON_MEMBRE;
@@ -245,7 +282,7 @@ export async function verdictAccesConversation(
       where: {
         conversationId: conversationId,
         userId: authContext.userId,
-        isActive: true
+        ...PARTICIPATION_VIVANTE
       }
     });
     return participant ? ACCES_ACCORDE : NON_MEMBRE;

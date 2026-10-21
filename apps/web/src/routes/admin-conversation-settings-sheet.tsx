@@ -14,7 +14,6 @@ import { AdminInlineNotice } from '@/components/admin/states';
 import { INK2 } from '@/components/admin/tone';
 import { interpretConversationType } from '@/lib/admin/interpret/enums';
 import { conversationLabel } from '@/lib/admin/interpret/labels';
-import { useAdminReach } from '@/lib/admin/use-admin-reach';
 import type { AdminDeps } from '@/lib/api/admin';
 import {
   MOTIF_LONGUEUR_MINIMALE,
@@ -29,6 +28,7 @@ import type { AdminConversation } from '@/lib/api/admin-user-conversations';
 import { apiDeps } from '@/lib/api/deps';
 import type { ApiFailure } from '@/lib/api/http';
 import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@/lib/i18n-admin-catalog';
+import { useAdminMotive } from '@/lib/admin/use-admin-motive';
 
 /**
  * **CONFIGURER UNE CONVERSATION, DEPUIS LA FICHE D'UN MEMBRE** (#7845, #7999).
@@ -203,8 +203,8 @@ export function AdminConversationSettingsSheet({
      revenir à l'état intact sans fermer la feuille. */
   const optionsDeRole = estRoleMembre(roleServi) ? rolesConnus : [{ value: roleServi, label: roleServi || '—' }, ...rolesConnus];
   const roleChange = !createur && role !== roleServi && estRoleMembre(role);
-  const souverain = useAdminReach().isSovereign;
-  const motive = motiveState({ text: motif, minLength: MOTIF_LONGUEUR_MINIMALE, required: true, sovereign: souverain, whenSovereign: 'optional' });
+  const { sovereign: souverain, fallback: motifPropose } = useAdminMotive(language);
+  const motive = motiveState({ text: motif, minLength: MOTIF_LONGUEUR_MINIMALE, required: true, sovereign: souverain, whenSovereign: 'optional', fallback: motifPropose });
   const motifValide = motive.ready;
   /** Le motif qui part : aucun pour le souverain qui n'en a pas écrit. */
   const motifEnvoye = motive.sent;
@@ -383,6 +383,7 @@ export function AdminConversationSettingsSheet({
         required
         sovereign={souverain}
         whenSovereign="optional"
+        fallback={motifPropose}
         data={{ 'data-admin-conv-reason': '' }}
       />
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { AdminGlyph, type AdminGlyphName } from '@/components/admin/admin-glyph';
 import { AdminConfirmSheet } from '@/components/admin/confirm-sheet';
@@ -121,7 +121,18 @@ export function PostMediaSection({ language, media }: { readonly language: Admin
   );
 }
 
-export function PostCommentsSection({ language, fiche, now }: { readonly language: AdminLanguage; readonly fiche: AdminPostFiche; readonly now: Date }) {
+export function PostCommentsSection({
+  language,
+  fiche,
+  now,
+  commentActions,
+}: {
+  readonly language: AdminLanguage;
+  readonly fiche: AdminPostFiche;
+  readonly now: Date;
+  /** Les gestes sur un commentaire (#10394, « Retirer ») — posés par la fiche pour qui modère. */
+  readonly commentActions?: (commentId: string) => ReactNode;
+}) {
   return (
     <AdminFicheSection id="comments" title={translateAdmin(language, 'admin.posts.section.comments')}>
       {fiche.comments.length === 0 ? (
@@ -143,8 +154,9 @@ export function PostCommentsSection({ language, fiche, now }: { readonly languag
                 <li key={comment.id} data-admin-comment={comment.id} className="grid gap-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     {author === null ? null : <AdminEntityChip language={language} entity={author} size="sm" />}
-                    <span className="text-caption" style={{ color: INK2 }}>
+                    <span className="flex items-center gap-2 text-caption" style={{ color: INK2 }}>
                       <AdminMomentText moment={adminMomentOf(comment.createdAt, now, language)} />
+                      {commentActions?.(comment.id) ?? null}
                     </span>
                   </div>
                   <p className="break-words text-body" style={comment.content === null ? { color: INK2 } : undefined}>

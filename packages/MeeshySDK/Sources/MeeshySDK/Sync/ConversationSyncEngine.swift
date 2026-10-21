@@ -112,12 +112,21 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     /// conversation ouverte.
     func noteUnreadRemaining(_ conversationId: String, _ remaining: Int)
 
-    /// The conversation currently forced to unread=0 and excluded from the
-    /// cross-conversation aggregate, or `nil`. Read in
-    /// `ConversationViewModel.deinit` so the gate is relinquished ONLY when it
-    /// still points at this conversation — order-safe across a fast A→B switch
-    /// where `deinit(A)` may run after `start(B)` set the gate to B.
+    /// La conversation ouverte le plus récemment, ou `nil`. Plusieurs peuvent
+    /// l'être (iPad multi-fenêtre) : `openConversationIds` les nomme toutes,
+    /// et c'est lui que lisent les règles de non-lu.
     var currentlyOpenConversationId: String? { get }
+
+    /// **Multi-fenêtre** : une scène affiche cette conversation. Compté par conversation — la même peut être ouverte
+    /// dans deux fenêtres, seule la fermeture de la DERNIÈRE la rend au décompte. Une ouverture, une fermeture.
+    func openConversation(_ conversationId: String)
+
+    /// Une scène quitte cette conversation. Sans effet si elle n'était pas ouverte ; à la dernière fermeture, la ligne
+    /// retrouve ce qui lui reste à lire (#7350), indépendamment des autres conversations ouvertes.
+    func closeConversation(_ conversationId: String)
+
+    /// Toutes les conversations qu'au moins une scène affiche.
+    var openConversationIds: Set<String> { get }
 }
 
 public extension ConversationSyncEngineProviding {
@@ -144,7 +153,7 @@ public extension ConversationSyncEngineProviding {
 public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unchecked Sendable {
     public static let shared = ConversationSyncEngine()
 
-    /* partagé entre les fichiers du moteur (#4172) */ static let logger = Logger(subsystem: "me.meeshy.sdk", category: "sync")
+    /* partagé entre les fichiers du moteur (#4172) */ static let logger = MeeshyLog.logger(.sync, subsystem: .sdk)
 
     // Internal subjects (send-capable)
     /* partagé entre les fichiers du moteur (#4172) */ let _conversationsDidChange = PassthroughSubject<Void, Never>()
@@ -173,28 +182,40 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // State (protected by serial queue)
     /* partagé entre les fichiers du moteur (#4172) */ let stateQueue = DispatchQueue(label: "me.meeshy.sync-engine.state")
+    /// L'état du moteur propre à ce fichier, sous UN verrou : propriétaire de la
+    /// synchro et ses attentes, persisteurs, anti-rafale du delta, rattrapage.
+    ///
     /// Le compte dont une synchronisation est EN VOL — jamais un simple
     /// booléen (#8651). Un booléen confondait « ce compte synchronise déjà »
     /// (coalescer) et « le compte QUITTÉ synchronise encore » (périmé) : au
     /// changement de compte, la synchronisation du compte suivant rendait
     /// `true` sans rien lire, pendant que celle de l'ancien, arrivée en retard,
     /// écrivait SA liste dans le cache fraîchement purgé.
-    private var _syncingOwner: String?
+    private let engineState = Locked(SyncEngineState())
 
     /// Réserve la synchronisation pour `owner`. Refusée seulement quand CE
     /// compte en a déjà une en vol ; celle d'un autre compte est périmée et
     /// cède la place — ses écritures seront refusées par `ownsSession()`.
     /* partagé entre les fichiers du moteur (#4172) */ func claimSync(for owner: String) -> Bool {
-        stateQueue.sync {
-            guard _syncingOwner != owner else { return false }
-            _syncingOwner = owner
-            return true
-        }
+        let outcome = engineState.mutate { $0.ownership.claim(owner) }
+        outcome.released.forEach { $0.resume() }
+        return outcome.claimed
     }
 
     /* partagé entre les fichiers du moteur (#4172) */ func releaseSync(for owner: String) {
-        stateQueue.sync {
-            if _syncingOwner == owner { _syncingOwner = nil }
+        let released = engineState.mutate { $0.ownership.release(owner) }
+        released.forEach { $0.resume() }
+    }
+
+    /// #10927 — rend la main quand `owner` ne tient plus le verrou, tout de
+    /// suite s'il ne le tient déjà plus. L'inscription et le test se font sous
+    /// le même verrou : une libération ne peut pas tomber entre les deux.
+    /// Volontairement NON annulable : `rejoinsLaSynchroEnVol` relance
+    /// `fullSync()` au retour, une tâche annulée bouclerait.
+    /* partagé entre les fichiers du moteur (#10927) */ func awaitSyncRelease(for owner: String) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumesNow = engineState.mutate { $0.ownership.admit(owner, continuation) }
+            if resumesNow { continuation.resume() }
         }
     }
 
@@ -218,21 +239,32 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// Currently-visible conversation. While non-nil the engine forces this
     /// conversation's `unreadCount` to 0 on every server broadcast and
     /// excludes it from the cross-conversation aggregator.
-    /* partagé entre les fichiers du moteur (#4172) */ var _currentlyOpenConversationId: String?
+    /* partagé entre les fichiers du moteur (#4172) */ var _openConversationCounts: [String: Int] = [:]
+    /// Ordre d'ouverture, la plus récente en dernier — `currentlyOpenConversationId` en est la fin.
+    /* partagé entre les fichiers du moteur (#4172) */ var _openConversationOrder: [String] = []
     /// Le compte à REDONNER à la conversation ouverte quand elle se ferme
     /// (#7350, I-2). Semé à l'ouverture par le compte d'avant (rien lu tant que
     /// rien n'est affiché), remplacé par `noteUnreadRemaining` à chaque
     /// lecture partielle, ramené à 0 par une lecture complète. Tant que
     /// l'écran est affiché le moteur montre 0 ; ce compte est ce qui reste
     /// VRAI une fois qu'il ne l'est plus.
-    /* partagé entre les fichiers du moteur (#4172) */ var _unreadToRestoreOnClose: Int?
+    /// PAR conversation ouverte : fermer une fenêtre ne rend que SON compte.
+    /* partagé entre les fichiers du moteur (#4172) */ var _unreadToRestoreOnClose: [String: Int] = [:]
     /// Public for the `ConversationSyncEngineProviding` read requirement (used by
     /// `ConversationViewModel.deinit` for the order-safe, identity-conditional
     /// gate release). `setCurrentlyOpenConversation(_:)` remains the canonical
     /// mutation entry point.
     public var currentlyOpenConversationId: String? {
-        get { stateQueue.sync { _currentlyOpenConversationId } }
-        set { stateQueue.sync { _currentlyOpenConversationId = newValue } }
+        get { stateQueue.sync { _openConversationOrder.last } }
+        set { setCurrentlyOpenConversation(newValue) }
+    }
+
+    public var openConversationIds: Set<String> {
+        stateQueue.sync { Set(_openConversationCounts.keys) }
+    }
+
+    public func isConversationOpen(_ conversationId: String) -> Bool {
+        stateQueue.sync { _openConversationCounts[conversationId] != nil }
     }
     /// Miroir SYNCHRONE du `unreadCount` de chaque conversation en cache,
     /// rafraîchi par `recomputeTotalUnread`. Il n'introduit pas une seconde
@@ -253,10 +285,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// the open conversation until the next REST revalidation completes.
     /// Invoked from `handleNewMessage`, `ensureMessages` and
     /// `fetchOlderMessages` with the exact decoded payloads.
-    private var _apiMessagePersistor: (@Sendable @concurrent ([APIMessage]) async -> Void)?
     public var apiMessagePersistor: (@Sendable @concurrent ([APIMessage]) async -> Void)? {
-        get { stateQueue.sync { _apiMessagePersistor } }
-        set { stateQueue.sync { _apiMessagePersistor = newValue } }
+        get { engineState.read { $0.apiMessagePersistor } }
+        set { engineState.mutate { $0.apiMessagePersistor = newValue } }
     }
 
     /// Sibling of `apiMessagePersistor` for the mutations that carry no
@@ -267,10 +298,9 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// offline the timeline still showed the pre-edit text, the deleted
     /// bubble and the missing reaction. Installed by the host app, which owns
     /// the store; `nil` in tests that only exercise the cache surfaces.
-    private var _realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)?
     public var realtimeMessagePersistor: (@Sendable @concurrent (RealtimeMessageMutation) async -> Void)? {
-        get { stateQueue.sync { _realtimeMessagePersistor } }
-        set { stateQueue.sync { _realtimeMessagePersistor = newValue } }
+        get { engineState.read { $0.realtimeMessagePersistor } }
+        set { engineState.mutate { $0.realtimeMessagePersistor = newValue } }
     }
 
     /// Accusés de RÉCEPTION en attente, par conversation.
@@ -296,12 +326,26 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // a delta sync just ran, skip until the window elapses. Cold-start
     // `fullSync` is unaffected because it runs through the `isSyncing`
     // path, not this guard.
-    private var _lastDeltaSyncAt: Date = .distantPast
     /* partagé entre les fichiers du moteur (#4172) */ var lastDeltaSyncAt: Date {
-        get { stateQueue.sync { _lastDeltaSyncAt } }
-        set { stateQueue.sync { _lastDeltaSyncAt = newValue } }
+        get { engineState.read { $0.lastDeltaSyncAt } }
+        set { engineState.mutate { $0.lastDeltaSyncAt = newValue } }
     }
     /* partagé entre les fichiers du moteur (#4172) */ let deltaSyncCooldown: TimeInterval = 3
+
+    /// Une reconnexion du socket demande un rattrapage qui ne s'absorbe NI dans
+    /// l'anti-rafale NI dans une synchro déjà en vol : celle du retour au
+    /// premier plan part avant que le socket ait rejoint ses salles, et ce qui
+    /// arrive entre son instantané et le retour des salles n'était relu par
+    /// personne. La demande reste posée jusqu'à ce qu'une passe la consomme.
+    /* partagé entre les fichiers du moteur (#4172) */ func requestReconnectCatchUp() {
+        engineState.mutate { $0.reconnectCatchUpPending = true }
+    }
+    /* partagé entre les fichiers du moteur (#4172) */ func takeReconnectCatchUp() -> Bool {
+        engineState.mutate { $0.takeReconnectCatchUp() }
+    }
+    /* partagé entre les fichiers du moteur (#4172) */ var hasReconnectCatchUpPending: Bool {
+        engineState.read { $0.reconnectCatchUpPending }
+    }
 
     // Dependencies
     /* partagé entre les fichiers du moteur (#4172) */ let cache: CacheCoordinator
@@ -479,7 +523,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             reconciled = Self.reconcileUnread(
                 incoming: items,
                 existing: existing,
-                openConversationId: currentlyOpenConversationId
+                openConversationIds: openConversationIds
             )
         } else {
             reconciled = items
@@ -498,47 +542,86 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Currently-open conversation
 
+    /// **Fenêtre unique** (iPhone, tests) : la conversation affichée REMPLACE toutes les autres ; `nil` les ferme
+    /// toutes. Les écrans d'iPad multi-fenêtre passent par `openConversation` / `closeConversation`.
     public func setCurrentlyOpenConversation(_ conversationId: String?) {
-        let (previousId, toRestore) = stateQueue.sync { () -> (String?, Int?) in
-            let previous = (_currentlyOpenConversationId, _unreadToRestoreOnClose)
-            guard previous.0 != conversationId else { return (nil, nil) }
-            _currentlyOpenConversationId = conversationId
-            _unreadToRestoreOnClose = conversationId.flatMap { _unreadByConversation[$0] }
-            return previous
+        let others = stateQueue.sync { () -> [String] in
+            let others = _openConversationOrder.filter { $0 != conversationId }
+            for other in others { _openConversationCounts[other] = 1 }
+            return others
         }
-        if let previousId, let toRestore {
-            restoreUnreadOnClose(previousId, toRestore)
-        }
-        // SYNCHRONE, avant tout `Task` : l'agrégat doit avoir exclu (ou
-        // ré-inclus) cette conversation AVANT que l'écran qui vient de
-        // s'ouvrir s'abonne. Un `CurrentValueSubject` rejoue sa dernière
-        // valeur à l'abonnement — publier depuis le `Task` ci-dessous laissait
-        // donc le premier rendu afficher le total d'AVANT l'ouverture.
-        publishTotalUnread()
+        for other in others { closeConversation(other) }
         guard let id = conversationId else {
-            // Restoring pass-through: recompute from the cache so the
-            // previously-excluded conversation is counted with a fresh value.
+            publishTotalUnread()
             Task { await self.recomputeTotalUnread() }
             return
         }
-        // `unreadCount` local à zéro dans le miroir : la ligne est lue dès
-        // l'ouverture, et l'agrégat ne doit pas la recompter à la fermeture
-        // sur la foi d'une valeur d'avant.
-        stateQueue.sync { _unreadByConversation[id] = 0 }
-        // On entry, defensively zero the unread count of the open
-        // conversation. The cache may carry an inflated value left over
-        // from a stale `conversation:unread-updated` broadcast or from a
-        // REST refresh that ran against the buggy server fallback.
+        if isConversationOpen(id) {
+            publishTotalUnread()
+            zeroOpenRow(id)
+        } else {
+            openConversation(id)
+        }
+    }
+
+    public func openConversation(_ conversationId: String) {
+        let isFirst = stateQueue.sync { () -> Bool in
+            let count = _openConversationCounts[conversationId, default: 0]
+            _openConversationCounts[conversationId] = count + 1
+            _openConversationOrder.removeAll { $0 == conversationId }
+            _openConversationOrder.append(conversationId)
+            guard count == 0 else { return false }
+            _unreadToRestoreOnClose[conversationId] = _unreadByConversation[conversationId]
+            // `unreadCount` local à zéro dans le miroir : la ligne est lue dès
+            // l'ouverture, et l'agrégat ne doit pas la recompter à la fermeture
+            // sur la foi d'une valeur d'avant.
+            _unreadByConversation[conversationId] = 0
+            return true
+        }
+        // SYNCHRONE, avant tout `Task` : l'agrégat doit avoir exclu cette
+        // conversation AVANT que l'écran qui vient de s'ouvrir s'abonne. Un
+        // `CurrentValueSubject` rejoue sa dernière valeur à l'abonnement —
+        // publier depuis le `Task` laissait le premier rendu afficher le total
+        // d'AVANT l'ouverture.
+        publishTotalUnread()
+        guard isFirst else { return }
+        zeroOpenRow(conversationId)
+    }
+
+    public func closeConversation(_ conversationId: String) {
+        let outcome = stateQueue.sync { () -> (closed: Bool, restore: Int?) in
+            guard let count = _openConversationCounts[conversationId] else { return (false, nil) }
+            guard count == 1 else {
+                _openConversationCounts[conversationId] = count - 1
+                return (false, nil)
+            }
+            _openConversationCounts.removeValue(forKey: conversationId)
+            _openConversationOrder.removeAll { $0 == conversationId }
+            return (true, _unreadToRestoreOnClose.removeValue(forKey: conversationId))
+        }
+        guard outcome.closed else { return }
+        if let toRestore = outcome.restore {
+            restoreUnreadOnClose(conversationId, toRestore)
+        }
+        publishTotalUnread()
+        // Restoring pass-through: recompute from the cache so the closed
+        // conversation is counted with a fresh value.
+        Task { await self.recomputeTotalUnread() }
+    }
+
+    /// On entry, defensively zero the unread count of the open
+    /// conversation. The cache may carry an inflated value left over
+    /// from a stale `conversation:unread-updated` broadcast or from a
+    /// REST refresh that ran against the buggy server fallback.
+    private func zeroOpenRow(_ id: String) {
         Task {
-            // Re-check the conversation is STILL the open one before applying the
-            // defensive zero. A rapid open→close
-            // (setCurrentlyOpenConversation("x") then (nil)) could otherwise let
-            // this deferred zero-write land after — and clobber — a fresh
+            // Re-check the conversation is STILL open before applying the
+            // defensive zero. A rapid open→close could otherwise let this
+            // deferred zero-write land after — and clobber — a fresh
             // `conversation:unread-updated` that legitimately arrived once the
-            // conversation was no longer open. Guarding here keeps the
-            // pass-through restore correct (see ConversationSyncEngineTests
+            // conversation was no longer open (see ConversationSyncEngineTests
             // .test_setCurrentlyOpenConversation_nil_restoresNormalPassThrough).
-            guard self.currentlyOpenConversationId == id else {
+            guard self.isConversationOpen(id) else {
                 await self.recomputeTotalUnread()
                 return
             }

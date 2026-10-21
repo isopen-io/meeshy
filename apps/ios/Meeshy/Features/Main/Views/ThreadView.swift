@@ -59,7 +59,7 @@ struct ThreadView: View {
 
             Spacer()
 
-            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -84,13 +84,16 @@ struct ThreadView: View {
     private var parentMessageView: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.sm) {
             HStack(spacing: MeeshySpacing.sm) {
-                MeeshyAvatar(
+                LivePresence { MeeshyAvatar(
                     name: parentMessage.senderName ?? "?",
                     context: .messageBubble,
                     accentColor: accentColor,
-                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.senderId)?.moodEmoji,
-                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.senderId)
-                )
+                    avatarURL: parentMessage.senderAvatarURL,
+                    moodEmoji: statusViewModel.statusForUser(userId: parentMessage.viewingKey)?.moodEmoji,
+                    presenceState: parentMessage.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: parentMessage),
+                    ring: parentMessage.senderRing,
+                    onMoodTap: statusViewModel.moodTapHandler(for: parentMessage.viewingKey)
+                ) }
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main))
@@ -128,7 +131,7 @@ struct ThreadView: View {
                 .fill(Color(hex: accentColor).opacity(MeeshyOpacity.medium))
                 .frame(height: 1)
 
-            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) réponses", bundle: .main))
                 .font(.caption2.weight(.bold))
                 .foregroundColor(Color(hex: accentColor))
                 .padding(.horizontal, MeeshySpacing.sm)
@@ -151,13 +154,16 @@ struct ThreadView: View {
 
     private func replyRow(_ message: MeeshyMessage) -> some View {
         HStack(alignment: .top, spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            LivePresence { MeeshyAvatar(
                 name: message.senderName ?? "?",
                 context: .postComment,
                 accentColor: message.senderColor ?? accentColor,
-                moodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
-                onMoodTap: statusViewModel.moodTapHandler(for: message.senderId)
-            )
+                avatarURL: message.senderAvatarURL,
+                moodEmoji: statusViewModel.statusForUser(userId: message.viewingKey)?.moodEmoji,
+                presenceState: message.isMe ? nil : PresenceManager.shared.presenceState(forSenderOf: message),
+                ring: message.senderRing,
+                onMoodTap: statusViewModel.moodTapHandler(for: message.viewingKey)
+            ) }
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 HStack {

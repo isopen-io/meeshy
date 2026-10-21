@@ -3,8 +3,9 @@ import { PushNotifications } from '@capacitor/push-notifications';
 
 import { httpTransport } from '@/lib/api/client';
 import { sessionStore } from '@/lib/api/session';
+import { openNotificationTarget } from '@/lib/notifications/open-target';
 import type { PushTapTarget } from '@/lib/notifications/target';
-import { href, navigate } from '@/routes/route-table';
+import { href } from '@/routes/route-table';
 
 import { devicePushControl, type DevicePushControl, type NotificationSettingsBridge } from './device-permission';
 import { withFcmGuard } from './fcm-guard';
@@ -13,6 +14,7 @@ import { startShellPush, type ShellPushPlugin } from './shell-push';
 /** Le pont de la coque : l'écran système des notifications, et l'état de FCM (#8477). */
 type ShellNotificationBridge = NotificationSettingsBridge & {
   fcmStatus(): Promise<{ readonly configured: boolean }>;
+  deviceIdentity(): Promise<unknown>;
 };
 
 const notificationBridge = (): ShellNotificationBridge =>
@@ -40,7 +42,10 @@ export function shellPushUrl(target: PushTapTarget): string {
     case 'story':
       return href('story', target.params);
     case 'post':
-      return href('post', target.params);
+      /* `?from=notification` (#10483, #11097) — la vue du détail compte en `notification`, comme `sw-push.js`. */
+      return href('post', target.params, { from: 'notification' });
+    case 'mood':
+      return href('mood', target.params);
     case 'discover':
       return href('discover', undefined, target.search);
     case 'userProfile':
@@ -72,9 +77,13 @@ export async function startShellPushInShell(): Promise<void> {
     plugin: shellPushPlugin(),
     sessionStore,
     transport: httpTransport,
-    navigate: (url) => navigate(url),
+    navigate: openNotificationTarget,
     urlOf: shellPushUrl,
     appVersion: __APP_VERSION__,
+    deviceIdentity: () => notificationBridge().deviceIdentity(),
+    record: (event) => {
+      void import('@/lib/view/reading-telemetry').then(({ readingTelemetry }) => readingTelemetry.recordV2(event));
+    },
   });
 }
 

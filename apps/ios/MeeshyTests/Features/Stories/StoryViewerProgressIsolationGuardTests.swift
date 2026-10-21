@@ -15,7 +15,8 @@ final class StoryViewerProgressIsolationGuardTests: XCTestCase {
     private static let viewerPath = "Meeshy/Features/Main/Views/StoryViewerView.swift"
 
     private static func viewerUnit() throws -> String {
-        AppSourceGuard.stripComments(try AppSourceGuard.unit(viewerPath))
+        // L'unité ET les types que la découpe par cohésion a rangés sous leur nom (`StoryViewerSources`).
+        AppSourceGuard.stripComments(try StoryViewerSources.unit())
     }
 
     private static func matches(_ pattern: String, in source: String) throws -> [String] {

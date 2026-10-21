@@ -2,6 +2,7 @@ import { ENGAGEMENT_ACHIEVEMENT_KEYS, isEngagementAxisKey, type EngagementAchiev
 import { isGameNotificationType } from '@meeshy/shared/utils/game/notifications';
 import { engagementAchievementCondition, engagementAchievementTitle, engagementAxisLabel } from '@meeshy/shared/utils/engagement-labels';
 
+import { translate } from '@/lib/i18n-catalog';
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { AXIS_GLYPHS, type ProgressionGlyph } from '@/lib/view/progression';
@@ -28,15 +29,21 @@ import { MESSAGE_NOTIFICATION_TYPES, notificationTitle, type NotificationRecord 
  * (`metadata.postPreview` / `commentPreview`) : aucune descente de langue ici.
  */
 
-export type ContentKind = 'story' | 'reel' | 'mood' | 'status' | 'post';
+export type ContentKind = 'story' | 'reel' | 'mood' | 'post';
 
 export type MilestoneGlyph = ProgressionGlyph | 'trophy' | 'star' | 'fire';
 
 /**
  * `game` : la ligne du jeu SANS personne à nommer (résultat de ligue, étape de saison, #9490) — elle porte la
  * Signature de Meeshy à la place d'un avatar. Un duo, lui, a son ami pour acteur : avatar.
+ * `removed` : un contenu retiré par la modération (#11150) — le modérateur n'est jamais nommé, un médaillon
+ * tient la place.
  */
-export type RowLeading = { readonly kind: 'avatar' } | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph } | { readonly kind: 'game' };
+export type RowLeading =
+  | { readonly kind: 'avatar' }
+  | { readonly kind: 'milestone'; readonly glyph: MilestoneGlyph }
+  | { readonly kind: 'game' }
+  | { readonly kind: 'removed' };
 
 /** Où un message a été écrit : un groupe nommé, ou une conversation privée (#9992). */
 export type ConversationScope = 'group' | 'direct';
@@ -67,15 +74,16 @@ const normalized = (text: string): string =>
 
 /**
  * Deux textes « se répètent » quand, dépouillés de leurs guillemets, de leur
- * casse, de leurs espaces et d'une troncature « … », l'un est l'autre ou son
- * début : la passerelle tronque ses citations, l'égalité stricte ne les
- * reconnaîtrait jamais.
+ * casse, de leurs espaces et d'une troncature « … », l'un est l'autre, son
+ * début ou sa FIN : la passerelle tronque ses citations, l'égalité stricte ne
+ * les reconnaîtrait jamais ; et un titre « acteur + action » (« Awa a rejoint
+ * Les Amis ») porte déjà l'action seule que le corps répète (#10299).
  */
 export function repeatsText(candidate: string, other: string): boolean {
   const a = normalized(candidate);
   const b = normalized(other);
   if (a === '' || b === '') return false;
-  return a === b || a.startsWith(b) || b.startsWith(a);
+  return a === b || a.startsWith(b) || b.startsWith(a) || a.endsWith(b) || b.endsWith(a);
 }
 
 /** Garde, dans l'ordre, chaque texte qui ne répète aucun des précédents — les autres deviennent `null`. */
@@ -101,14 +109,15 @@ const FRIEND_CONTENT_TYPES = new Set(['friend_new_story', 'friend_new_post', 'fr
 const STORY_TYPES = new Set(['story_reaction', 'story_new_comment', 'friend_story_comment', 'story_thread_reply', 'friend_new_story']);
 const MOOD_TYPES = new Set(['status_reaction', 'friend_new_mood']);
 
-const KIND_BY_POST_TYPE: Readonly<Record<string, ContentKind>> = { STORY: 'story', REEL: 'reel', MOOD: 'mood', STATUS: 'status', POST: 'post' };
+/** Un STATUS se nomme comme le titre servi le nomme — « humeur », quel que soit le geste (#10525, #10526). */
+const KIND_BY_POST_TYPE: Readonly<Record<string, ContentKind>> = { STORY: 'story', REEL: 'reel', MOOD: 'mood', STATUS: 'mood', POST: 'post' };
 
 function contentKindOf(notification: NotificationRecord): ContentKind {
   const declared = (notification.metadata.postType ?? notification.metadata.contentType)?.toUpperCase();
   const kind = declared === undefined ? undefined : KIND_BY_POST_TYPE[declared];
   if (kind !== undefined) return kind;
   if (STORY_TYPES.has(notification.type)) return 'story';
-  if (MOOD_TYPES.has(notification.type)) return notification.type === 'status_reaction' ? 'status' : 'mood';
+  if (MOOD_TYPES.has(notification.type)) return 'mood';
   return 'post';
 }
 
@@ -217,8 +226,10 @@ const MILESTONE_GLYPHS: Readonly<Record<Exclude<Milestone['kind'], 'badge'>, Mil
 
 function milestonePresentation(notification: NotificationRecord, milestone: Milestone, language: InterfaceLanguage): NotificationRowPresentation {
   const glyph = milestone.kind === 'badge' ? AXIS_GLYPHS[milestone.axis] : MILESTONE_GLYPHS[milestone.kind];
-  const name = milestoneName(milestone, language) ?? notificationTitle(notification);
-  const reason = milestoneReason(notification, milestone, language) ?? firstFilled(notification.content);
+  // #10298 — un palier qui porte `tierRank` a son titre (le palier) et son corps (l'exploit) composés par le serveur.
+  const served = notification.metadata.tierRank !== undefined;
+  const name = (served ? firstFilled(notification.title ?? undefined) : null) ?? milestoneName(milestone, language) ?? notificationTitle(notification);
+  const reason = (served ? firstFilled(notification.content) : null) ?? milestoneReason(notification, milestone, language) ?? firstFilled(notification.content);
   const [, body] = distinctTexts([name, reason]);
   return { leading: { kind: 'milestone', glyph }, title: name, body: body ?? null, quote: null, footer: null };
 }
@@ -248,7 +259,22 @@ function milestoneReason(notification: NotificationRecord, milestone: Milestone,
 
 // --- La ligne -----------------------------------------------------------------
 
+/**
+ * **UN CONTENU RETIRÉ** (#11150) — titre et corps composés par la passerelle
+ * dans la langue du destinataire ; le MOTIF (`metadata.reason`) en citation,
+ * sauf quand le corps le porte déjà.
+ */
+function removedPresentation(notification: NotificationRecord, options: Options): NotificationRowPresentation {
+  const title = notificationTitle(notification);
+  const [, body = null] = distinctTexts([title, firstFilled(notification.content)]);
+  const reason = firstFilled(notification.metadata.reason);
+  const quote = reason === null || (body ?? '').includes(reason) ? null : translate(options.language, 'moderation.remove.notification.reason', { reason });
+  const shown = [title, body, quote].filter((text): text is string => text !== null);
+  return { leading: { kind: 'removed' }, title, body, quote, footer: conversationOrPlainFooter(notification, shown, options.language) };
+}
+
 export function notificationRowPresentation(notification: NotificationRecord, options: Options): NotificationRowPresentation {
+  if (notification.type === 'content_removed') return removedPresentation(notification, options);
   const milestone = milestoneOf(notification);
   if (milestone !== null) return milestonePresentation(notification, milestone, options.language);
   const title = notificationTitle(notification);

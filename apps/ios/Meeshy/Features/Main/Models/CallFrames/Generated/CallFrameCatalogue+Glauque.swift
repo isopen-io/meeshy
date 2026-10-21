@@ -27,7 +27,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .typewriter, color: "#D9D4C0", fill: nil),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#D9D4C0", place: .bottom, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .names, font: .typewriter, color: "#C8C27A", place: .bottom, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.vhs.comite",
@@ -50,7 +51,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .caption, font: .typewriter, color: "#D9D4C0", fill: nil),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#D9D4C0", place: .bottom, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .group, font: .typewriter, color: "#C8C27A", place: .bottom, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.vhs.groupe",
@@ -73,7 +75,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .plate, font: .typewriter, color: "#D9D4C0", fill: "#0D0D10CC"),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#D9D4C0", place: .bottom, size: .m, effect: CallFrameTextEffect.shadow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .group, font: .typewriter, color: "#C8C27A", place: .bottom, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.duo",
@@ -96,7 +99,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .typewriter, color: "#B5E3A0", fill: "#0C0F0BD9"),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#B5E3A0", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.comite",
@@ -119,7 +123,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .plate, font: .typewriter, color: "#B5E3A0", fill: "#0C0F0BD9"),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#B5E3A0", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.groupe",
@@ -142,7 +147,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .typewriter, color: "#B5E3A0", fill: "#0C0F0BD9"),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#B5E3A0", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.videosurveillance.tablee",
@@ -164,7 +170,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .typewriter, color: "#B5E3A0", fill: "#0C0F0BD9"),
                 title: CallFrameTitle(source: .date, font: .typewriter, color: "#B5E3A0", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.sous-sol.duo",
@@ -187,7 +194,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .note, color: "#2A2418", fill: "#C9C3A6"),
                 title: CallFrameTitle(source: .names, font: .retro, color: "#C8C27A", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#9A9680", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.sous-sol.comite",
@@ -210,7 +218,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .note, color: "#2A2418", fill: "#C9C3A6"),
                 title: CallFrameTitle(source: .group, font: .retro, color: "#C8C27A", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#9A9680", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.sous-sol.groupe",
@@ -233,7 +242,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .tag, font: .note, color: "#2A2418", fill: "#C9C3A6"),
                 title: CallFrameTitle(source: .group, font: .retro, color: "#C8C27A", place: .top, size: .m, effect: CallFrameTextEffect.shadow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#9A9680", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "glauque.disparus.comite",
@@ -255,7 +265,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .typewriter, color: "#1A1A1A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .retro, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#6B4A2B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture]
         ),
         CallFrameDesign(
             id: "glauque.disparus.groupe",
@@ -277,7 +288,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .caption, font: .typewriter, color: "#1A1A1A", fill: nil),
                 title: CallFrameTitle(source: .group, font: .retro, color: "#1A1A1A", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#6B4A2B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture]
         )
     ]
 }

@@ -109,6 +109,58 @@ export const DEFAULT_ALLOWED_ORIGINS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * Les origines des COQUES Capacitor — acceptées par TOUT rang, sans réglage d'hôte.
+ *
+ * - `https://localhost` : la WebView Android (`androidScheme: 'https'`,
+ *   `apps/web/capacitor.config.ts`, hôte par défaut de `Bridge.java`) ;
+ * - `capacitor://localhost` : la WebView iOS (`CAPInstanceDescriptor.m`).
+ *
+ * ## Pourquoi ici et pas dans `CORS_ORIGINS`
+ *
+ * Mesuré le 2026-10-14 : la 2.13.0 Android publiée en test interne ne joignait
+ * AUCUNE route de `gate.meeshy.me` — prévol `OPTIONS /api/v1/world` en 403, sans
+ * `Access-Control-Allow-Origin`. Le staging déclarait les deux coques dans son
+ * compose (#5815) ; la production les attendait d'un `.env` d'hôte qui ne les
+ * portait pas. Une origine dont dépend un binaire PUBLIÉ ne peut pas tenir à une
+ * ligne qu'un opérateur doit penser à recopier sur chaque hôte.
+ *
+ * ## Pourquoi ce n'est pas une porte ouverte
+ *
+ * Aucun site web ne peut se présenter avec ces origines : `capacitor://` n'est
+ * pas un schéma de navigateur, et `https://localhost` SANS port n'est servi que
+ * par la WebView d'une appli installée — une page de développement locale porte
+ * `http://` ou un port (`https://localhost:3100` reste refusée). Une appli
+ * installée, elle, joint déjà la passerelle SANS en-tête `Origin` (servie plus
+ * bas, comme curl) : l'accepter avec son origine ne lui donne rien de plus, et
+ * l'autorisation reste portée par le jeton, jamais par l'origine.
+ */
+export const NATIVE_SHELL_ORIGINS: readonly string[] = Object.freeze([
+  'https://localhost',
+  'capacitor://localhost',
+]);
+
+/**
+ * Les SCHÉMAS d'origine que seul un client WebSocket natif peut poser (#10838).
+ *
+ * Starscream — le transport du client Socket.IO d'iOS — pose
+ * `Origin: wss://<hôte>` sur la demande de passage en WebSocket. Mesuré en
+ * production le 2026-10-16 : cette origine refusée (526 fois en 6 h) faisait
+ * échouer chaque upgrade en 400, laissait iOS en long-polling, et la plupart de
+ * ses sessions tombaient dans la minute — la pastille « Reconnexion » permanente.
+ *
+ * Aucun navigateur ne peut porter ces schémas : une origine est celle d'un
+ * DOCUMENT, et aucun document n'est servi en `ws:` ou `wss:`. L'accepter ne
+ * donne rien de plus que l'absence d'en-tête, déjà servie plus bas ;
+ * l'autorisation reste portée par le jeton.
+ */
+export const NATIVE_WEBSOCKET_ORIGIN_SCHEMES: readonly string[] = Object.freeze(['ws:', 'wss:']);
+
+function isNativeWebSocketOrigin(origin: string): boolean {
+  const scheme = /^[a-z][a-z0-9+.-]*:/i.exec(origin)?.[0].toLowerCase();
+  return scheme !== undefined && NATIVE_WEBSOCKET_ORIGIN_SCHEMES.includes(scheme) && origin.startsWith(`${scheme}//`);
+}
+
+/**
  * Le court-circuit de développement — `true` fait servir TOUTE origine.
  *
  * L'égalité est stricte et sans normalisation : `'Development'`, `' development '`
@@ -148,6 +200,8 @@ export function originIsAllowed(
 ): boolean {
   if (everyOriginIsAllowed(env)) return true;
   if (!origin) return true;
+  if (NATIVE_SHELL_ORIGINS.includes(origin)) return true;
+  if (isNativeWebSocketOrigin(origin)) return true;
   return resolveAllowedOrigins(env).includes(origin);
 }
 
@@ -275,6 +329,17 @@ export const PORTES_HORS_REGLE: readonly PorteHorsRegle[] = Object.freeze([
       "au rechargement). Inerte pour une requête créditée — pas d'`…-Credentials` — et l'accès aux octets " +
       "est jugé par `resolveAttachmentReadVerdict` (participation à la conversation + cycle de vie du " +
       "message porteur), jamais par l'origine.",
+  },
+  {
+    fichier: 'routes/pack-assets.ts',
+    forme: 'litterale',
+    entete: 'Access-Control-Allow-Origin',
+    valeur: '*',
+    pourquoi:
+      "Les fichiers des packs officiels (#10157) sont lus par le web depuis meeshy.me sur gate.meeshy.me en " +
+      "`fetch(url, { mode: 'cors' })` puis `createImageBitmap` : sans `*`, le décor teinterait le canvas et " +
+      "`toBlob` lèverait `SecurityError`. Inerte pour une requête créditée — pas d'`…-Credentials` — et la " +
+      "route est PUBLIQUE par conception : liste blanche d'empreintes calculée au démarrage, aucune identité lue.",
   },
   // `routes/uploads/tus-handler.ts` a rejoint la règle (#5298) : `new Server({…})`
   // passe désormais `allowedOrigins: (origin) => originIsAllowed(origin)`. Les

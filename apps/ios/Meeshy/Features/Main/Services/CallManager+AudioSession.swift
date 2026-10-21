@@ -53,6 +53,7 @@ extension CallManager {
         }
         configuration.categoryOptions = categoryOptions
         let activation = CallAudioSessionPolicy.activation(usesCallKit: callUsesCallKit)
+        if activation == true { audioSessionSelfActivated = true }
 
         audioSessionQueue.sync {
             CallManager.isAudioSessionExpectedActive = true
@@ -224,6 +225,7 @@ extension CallManager {
                 isAudioEnabled: RTCAudioSession.sharedInstance().isAudioEnabled,
                 callIsActive: self.callState.isActive
             ) else { return }
+            self.audioSessionSelfActivated = true
             Logger.calls.fault("[AUDIO_FALLBACK] CallKit didActivate never fired \(Int(QualityThresholds.stuckMutedFallbackDelaySeconds))s after connect — forcing RTCAudioSession activation")
             self.audioSessionQueue.async {
                 // Mirror of the interruption-end recovery: activate the system
@@ -267,7 +269,10 @@ extension CallManager {
         // `.playAndRecord` + `.duckOthers` auto-activée restait active après
         // raccrochage — l'audio des autres apps restait ducké jusqu'à une
         // reconfiguration fortuite. Désactivation explicite symétrique.
-        if !callUsesCallKit {
+        let releaseSession = CallAudioSessionPolicy.shouldDeactivateOnEnd(
+            usesCallKit: callUsesCallKit, sessionSelfActivated: audioSessionSelfActivated)
+        audioSessionSelfActivated = false
+        if releaseSession {
             do {
                 try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             } catch {
@@ -279,5 +284,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

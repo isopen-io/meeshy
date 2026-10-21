@@ -6,6 +6,7 @@ import MeeshySDK
 /// niveau, rang, trésor et aperçu de frappe se déduisent des mêmes faits que ceux
 /// que la passerelle sert. Chaque témoin décrit l'état qu'il veut par quelques
 /// paramètres nommés.
+@MainActor
 enum GameFixture {
 
     static func mission(
@@ -75,6 +76,24 @@ enum GameFixture {
             boosts: GameBlock.Boosts(tailwind: GameBoosts.tailwind(level: shown.level, levelRecord: shown.record), prismHour: nil),
             guideSeen: guideSeen
         )
+    }
+
+    /// Le même bloc, tel qu'une passerelle des étincelles le sert (#10846, #10848) : la poche porte le niveau (servi en
+    /// entier par la loi du fil), le cycle, le total à vie, la dette et le niveau max à vie voyagent à côté, et le trésor
+    /// porte ses réserves lues sur la Gloire du bloc.
+    static func sparked(_ game: GameBlock, pocket: Int, cycle: Int? = nil, lifetime: Int? = nil, debt: Int = 0,
+                        levelRecord: Int? = nil, levelMaxLifetime: Int? = nil) -> GameBlock {
+        let ledger = GameSparks.Ledger(pocket: pocket, cycle: max(pocket, cycle ?? pocket),
+                                       lifetime: max(pocket, cycle ?? pocket, lifetime ?? 0), debt: debt)
+        let level = GameLevelWire.level(
+            score: pocket, levelCap: GameGlory.levelCap(forRank: game.glory.rank), levelRecord: levelRecord ?? game.level.shown.record,
+            prestige: game.level.prestige, steps: game.levelStepFacts, sparks: ledger, levelMaxLifetime: levelMaxLifetime
+        )
+        let treasury = TreasuryStanding(
+            held: game.treasury.held, tier: game.treasury.tier, next: game.treasury.next,
+            access: GameTreasury.reserveAccess(glory: game.glory.glory, mythic: game.glory.rank == .mythe)
+        )
+        return game.replacing(level: level, treasury: treasury)
     }
 
     /// Le solde, lu à l'endroit où l'écran le lit en second.

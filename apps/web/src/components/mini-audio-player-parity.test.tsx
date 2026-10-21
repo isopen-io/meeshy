@@ -272,7 +272,7 @@ describe('La bulle du vocal reprend la main (#9279)', () => {
 
   test('la bulle reflète la lecture du mini-lecteur et la commande, sans ouvrir un second son', async () => {
     mount(<Attachments attachments={[voice]} languages={['fr']} fallbackLanguage="fr" mediaFrame="box" />);
-    expect(bubbleToggle()?.getAttribute('aria-label')).toBe("Lire l'audio");
+    expect(bubbleToggle()?.getAttribute('aria-label')).toBe('Lire l’audio');
 
     let toggled = 0;
     act(() =>
@@ -298,7 +298,7 @@ describe('La bulle du vocal reprend la main (#9279)', () => {
     expect(calls.play).toBe(0);
 
     act(() => dropCarriedAudio());
-    expect(bubbleToggle()?.getAttribute('aria-label')).toBe("Lire l'audio");
+    expect(bubbleToggle()?.getAttribute('aria-label')).toBe('Lire l’audio');
   });
 
   test('une autre bulle garde sa propre lecture', async () => {
@@ -318,7 +318,7 @@ describe('La bulle du vocal reprend la main (#9279)', () => {
       }),
     );
 
-    expect(bubbleToggle()?.getAttribute('aria-label')).toBe("Lire l'audio");
+    expect(bubbleToggle()?.getAttribute('aria-label')).toBe('Lire l’audio');
   });
 });
 

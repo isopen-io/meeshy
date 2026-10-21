@@ -1,9 +1,15 @@
-"""Moteurs mesurés : NLLB (production actuelle) et tout serveur compatible OpenAI.
+"""Moteurs mesurés : NLLB (production actuelle), tout serveur compatible OpenAI, et le
+moteur des clients.
 
 Le second adaptateur sert à la fois llama.cpp (`llama-server`, chemin CPU) et vLLM
 (chemin GPU) : un candidat se mesure avec le même code sur les deux matériels.
+
+Le troisième mesure le moteur que le web et la coque Android exécutent sur l'appareil
+(#9897) : `apps/web/scripts/device-translation-bench-server.ts` sert le code même de
+`apps/web/src/lib/device-translation`, avec les poids que les clients téléchargent.
 """
 
+import re
 from collections.abc import Callable, Mapping
 from typing import Any, Protocol
 
@@ -37,6 +43,8 @@ LANGUAGE_NAMES = {
 }
 
 NLLB_MAX_TOKENS = 256
+
+REASONING_BLOCK = re.compile(r"<think>.*?</think>", re.DOTALL)
 
 
 class Translator(Protocol):
@@ -91,7 +99,26 @@ class OpenAICompatibleTranslator:
             "messages": [{"role": "user", "content": self._prompt(text, source_lang, target_lang)}],
         }
         answer = self._post(self._url, payload)
-        return answer["choices"][0]["message"]["content"].strip()
+        content = answer["choices"][0]["message"]["content"]
+        return REASONING_BLOCK.sub("", content).strip()
+
+
+class DeviceEngineTranslator:
+    def __init__(
+        self,
+        base_url: str,
+        name: str,
+        post: Callable[[str, Mapping[str, Any]], Mapping[str, Any]] = _http_post,
+    ):
+        self.name = f"device:{name}"
+        self._url = f"{base_url.rstrip('/')}/translate"
+        self._post = post
+
+    def translate(self, text: str, source_lang: str, target_lang: str) -> str:
+        answer = self._post(self._url, {"text": text, "source": source_lang, "target": target_lang})
+        if "error" in answer:
+            raise RuntimeError(str(answer["error"]))
+        return str(answer["text"])
 
 
 def _load_nllb(model_id: str) -> tuple[Any, Any]:

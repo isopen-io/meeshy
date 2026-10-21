@@ -7,7 +7,8 @@ import type { LinksGlyphName } from '@/components/glyphs-links';
 import { RowIcon, SECTION_BRAND_INK, SECTION_CARD_STYLE, SECTION_INK, SECTION_INK_2 } from '@/components/grouped-section';
 import { Sheet, SheetEmpty } from '@/components/sheet';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type ShareLinkDraft, type ShareLinkExpiration } from '@/lib/api/links';
-import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { translate } from '@/lib/i18n-catalog';
+import { translateLinkFamilies, type LinkFamiliesCatalogKey } from '@/lib/i18n-link-families-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { initialsOf } from '@/lib/view/conversation';
 import { BRAND_BUTTON_STYLE, LinksGlyph, SHARE_TINT } from '@/routes/links-parts';
@@ -43,7 +44,7 @@ export type RuleKey = Extract<
   keyof ShareLinkDraft,
   'requireAccount' | 'requireNickname' | 'requireEmail' | 'requireBirthday' | 'allowAnonymousMessages' | 'allowAnonymousImages' | 'allowAnonymousFiles' | 'allowViewHistory'
 >;
-type RuleTextKey = Extract<InterfaceCatalogKey, `links.create.access.${string}` | `links.create.permission.${string}`>;
+type RuleTextKey = Extract<LinkFamiliesCatalogKey, `links.create.access.${string}` | `links.create.permission.${string}`>;
 type RuleGlyph = { readonly set: 'socle'; readonly name: GlyphName } | { readonly set: 'links'; readonly name: LinksGlyphName };
 type RuleSpec = { readonly key: RuleKey; readonly label: RuleTextKey; readonly caption: RuleTextKey; readonly glyph: RuleGlyph; readonly tint: string };
 
@@ -61,7 +62,7 @@ export const PERMISSION_RULES: readonly RuleSpec[] = [
   { key: 'allowViewHistory', label: 'links.create.permission.history', caption: 'links.create.permission.history.caption', glyph: { set: 'links', name: 'clockCounterClockwise' }, tint: 'var(--color-warning)' },
 ];
 
-const EXPIRATION_KEY: Readonly<Record<ShareLinkExpiration, Extract<InterfaceCatalogKey, `links.create.expiration.${string}`>>> = {
+const EXPIRATION_KEY: Readonly<Record<ShareLinkExpiration, Extract<LinkFamiliesCatalogKey, `links.create.expiration.${string}`>>> = {
   never: 'links.create.expiration.never',
   h24: 'links.create.expiration.h24',
   d7: 'links.create.expiration.d7',
@@ -202,8 +203,8 @@ export function RulesSection({
           <RuleToggle
             key={rule.key}
             id={rule.key}
-            label={translate(language, rule.label)}
-            caption={translate(language, rule.caption)}
+            label={translateLinkFamilies(language, rule.label)}
+            caption={translateLinkFamilies(language, rule.caption)}
             icon={<RuleIcon glyph={rule.glyph} />}
             tint={rule.tint}
             checked={draft[rule.key] && !overridden}
@@ -284,7 +285,7 @@ export function ConversationChoice({
         </span>
       )}
       <span className="min-w-0 flex-1 truncate text-body" style={{ color: conversation === null ? INK_2 : INK, fontWeight: conversation === null ? 400 : 600 }}>
-        {conversation?.title ?? translate(language, 'links.create.choose')}
+        {conversation?.title ?? translateLinkFamilies(language, 'links.create.choose')}
       </span>
       <span aria-hidden="true" style={{ color: INK_2 }}>
         <LinksGlyph name="caretRight" size={14} />
@@ -306,9 +307,9 @@ export function ConversationPicker({
   readonly onClose: () => void;
 }) {
   return (
-    <Sheet title={translate(language, 'links.create.picker.title')} onClose={onClose}>
+    <Sheet title={translateLinkFamilies(language, 'links.create.picker.title')} onClose={onClose}>
       {conversations.length === 0 ? (
-        <SheetEmpty label={translate(language, 'links.create.picker.empty')} />
+        <SheetEmpty label={translateLinkFamilies(language, 'links.create.picker.empty')} />
       ) : (
         conversations.map((conversation) => (
           <li key={conversation.id}>
@@ -356,13 +357,13 @@ export function LimitsFields({
 }) {
   const count = new Intl.NumberFormat(language).format(draft.maxUses);
   const caption = draft.limitUses
-    ? translate(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: Number.isFinite(draft.maxUses) ? count : '—' })
+    ? translateLinkFamilies(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: Number.isFinite(draft.maxUses) ? count : '—' })
     : translate(language, 'links.unlimited');
   return (
     <>
       <RuleToggle
         id="limitUses"
-        label={translate(language, 'links.create.limit.uses')}
+        label={translateLinkFamilies(language, 'links.create.limit.uses')}
         caption={caption}
         icon={<Glyph name="users" size={15} />}
         tint={SHARE_TINT}
@@ -374,7 +375,7 @@ export function LimitsFields({
         <div className="grid">
           <label htmlFor="link-max-uses" className="flex items-center gap-3 px-3.5 py-1.5 focus-within:outline-2 focus-within:-outline-offset-2" style={{ outlineColor: BRAND }}>
             <span className="min-w-0 flex-1 text-body" style={{ color: INK }}>
-              {translate(language, 'links.create.limit.count')}
+              {translateLinkFamilies(language, 'links.create.limit.count')}
             </span>
             <input
               id="link-max-uses"
@@ -393,7 +394,7 @@ export function LimitsFields({
           </label>
           {maxUsesInvalid ? (
             <p id="link-max-uses-error" role="alert" className="px-3.5 pb-2 text-caption font-medium" style={{ color: 'var(--color-error)' }}>
-              {translate(language, 'links.create.limit.invalid', { max: new Intl.NumberFormat(language).format(MAX_USES_CEILING) })}
+              {translateLinkFamilies(language, 'links.create.limit.invalid', { max: new Intl.NumberFormat(language).format(MAX_USES_CEILING) })}
             </p>
           ) : null}
         </div>
@@ -403,7 +404,7 @@ export function LimitsFields({
           <LinksGlyph name="hourglass" size={15} />
         </RowIcon>
         <span className="min-w-0 flex-1 text-body font-medium" style={{ color: INK }}>
-          {translate(language, 'links.create.expiration')}
+          {translateLinkFamilies(language, 'links.create.expiration')}
         </span>
         <select
           id="link-expiration"
@@ -414,7 +415,7 @@ export function LimitsFields({
         >
           {SHARE_LINK_EXPIRATIONS.map((option) => (
             <option key={option} value={option}>
-              {translate(language, EXPIRATION_KEY[option])}
+              {translateLinkFamilies(language, EXPIRATION_KEY[option])}
             </option>
           ))}
         </select>
@@ -434,7 +435,7 @@ export function CreateLinkButton({ language, submitting, disabled }: { readonly 
       style={{ ...BRAND_BUTTON_STYLE, minHeight: 50, opacity: disabled ? 0.55 : 1 }}
     >
       <LinksGlyph name="link" size={18} />
-      {translate(language, submitting ? 'links.create.inprogress' : 'links.create.button')}
+      {translateLinkFamilies(language, submitting ? 'links.create.inprogress' : 'links.create.button')}
     </button>
   );
 }

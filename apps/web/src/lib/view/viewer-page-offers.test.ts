@@ -1,3 +1,4 @@
+import { publishOffered } from '@/lib/send/send-sheet-plan';
 import { describe, expect, test } from 'bun:test';
 
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -154,33 +155,36 @@ describe('mediaPageOffers — nature × action', () => {
 describe('attachmentSendRequest — la pièce d’un message, telle que la feuille d’envoi la reçoit (#8884)', () => {
   const sent = { id: MESSAGE_ID, conversationId: 'c-1' };
 
-  test('la pièce voyage par ses identifiants (jamais par son fichier), et « mine » dit si le lecteur en est l’auteur', () => {
-    const mine = attachmentSendRequest({ attachment: piece({ thumbnailUrl: '/t.jpg' }), message: sent, mine: true, now: NOW });
-    expect(mine.intent).toBe('share');
-    expect(mine.payload).toEqual({
+  test('la pièce voyage par ses identifiants (jamais par son fichier), avec ce que la loi lit d’elle et de son message', () => {
+    const request = attachmentSendRequest({ attachment: piece({ thumbnailUrl: '/t.jpg' }), message: sent, now: NOW });
+    expect(request.intent).toBe('forward');
+    expect(request.payload).toMatchObject({
       kind: 'attachment',
       conversationId: 'c-1',
       messageId: MESSAGE_ID,
       attachmentId: PIECE_ID,
       mime: 'image/jpeg',
       previewUrl: attachmentSrc('/t.jpg'),
-      mine: true,
-      protected: false,
+      exit: { id: MESSAGE_ID, pieces: [{ id: PIECE_ID, mimeType: 'image/jpeg' }] },
     });
-    const theirs = attachmentSendRequest({ attachment: piece(), message: sent, mine: false, now: NOW });
-    expect(theirs.payload).toMatchObject({ mine: false });
   });
 
-  test('la pièce d’un message ÉPHÉMÈRE se transfère mais ne se publie pas : la passerelle refuse le média éphémère en publication', () => {
+  test('la pièce d’un message ÉPHÉMÈRE se transfère mais ne se publie pas', () => {
     const ephemeral = { ...sent, expiresAt: new Date(NOW + 60_000) };
-    const request = attachmentSendRequest({ attachment: piece(), message: ephemeral, mine: true, now: NOW });
-    expect(request.payload).toMatchObject({ kind: 'attachment', protected: true });
-    const lasting = attachmentSendRequest({ attachment: piece(), message: sent, mine: true, now: NOW });
-    expect(lasting.payload).toMatchObject({ protected: false });
+    expect(publishOffered(attachmentSendRequest({ attachment: piece(), message: ephemeral, now: NOW }).payload)).toEqual([]);
+    expect(publishOffered(attachmentSendRequest({ attachment: piece(), message: sent, now: NOW }).payload)).toEqual(['STORY', 'POST']);
+  });
+
+  test('une citation dont la nature n’est pas déclarée est jugée fermée : elle ne se publie pas', () => {
+    expect(publishOffered(attachmentSendRequest({ attachment: piece(), message: sent, now: NOW, quoted: true }).payload)).toEqual([]);
+  });
+
+  test('une source chiffrée ne part pas du web : rien n’est offert', () => {
+    expect(publishOffered(attachmentSendRequest({ attachment: piece(), message: sent, now: NOW, sourceEncrypted: true }).payload)).toEqual([]);
   });
 
   test('sans vignette, l’aperçu est le fichier lui-même', () => {
-    const request = attachmentSendRequest({ attachment: piece(), message: sent, mine: true, now: NOW });
+    const request = attachmentSendRequest({ attachment: piece(), message: sent, now: NOW });
     expect(request.payload).toMatchObject({ previewUrl: attachmentSrc('/api/v1/attachments/file/p.jpg') });
   });
 });

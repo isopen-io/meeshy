@@ -32,9 +32,13 @@ final class StoryComposingFocusTests: XCTestCase {
 
     // MARK: - Le câblage du lecteur
 
+    /// L'UNITÉ du canvas (couches + cadrage) : ses couches vivent dans `+Canvas+Layers`, son cadrage
+    /// dans `StoryReaderCanvasLayout` — les comptes ci-dessous se font sur l'ensemble.
     private func source(_ chemin: String) throws -> String {
-        AppSourceGuard.stripComments(try String(
-            contentsOf: AppSourceGuard.unitURLs(chemin)[0], encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            chemin,
+            alsoIncluding: chemin.hasSuffix("StoryViewerView+Canvas.swift")
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     private var canvas: String {
@@ -188,9 +192,13 @@ final class StorySceneFocusTests: XCTestCase {
 
     // MARK: - Le câblage
 
+    /// L'UNITÉ du canvas (couches + cadrage) : ses couches vivent dans `+Canvas+Layers`, son cadrage
+    /// dans `StoryReaderCanvasLayout` — les comptes ci-dessous se font sur l'ensemble.
     private func source(_ chemin: String) throws -> String {
-        AppSourceGuard.stripComments(try String(
-            contentsOf: AppSourceGuard.unitURLs(chemin)[0], encoding: .utf8))
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            chemin,
+            alsoIncluding: chemin.hasSuffix("StoryViewerView+Canvas.swift")
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
     }
 
     func test_leLecteur_consulteLaLoi() throws {
@@ -207,11 +215,113 @@ final class StorySceneFocusTests: XCTestCase {
     func test_laCarte_animeSonRecadrage() throws {
         let code = try source("Meeshy/Features/Main/Views/StoryViewerView+ReaderCard.swift")
         XCTAssertTrue(code.contains("StorySceneFocus.reframeAnimation(reduceMotion:"))
-        XCTAssertTrue(code.contains("value: framing"))
+        XCTAssertTrue(code.contains("value: resting ?? framing"),
+                      "le ressort ne couvre que le cadrage de REPOS : ce que le clavier déplace suit sa transaction (#10544)")
     }
 
     func test_lesDecorations_lisentLesCommentairesOuverts() throws {
         let code = try source("Meeshy/Features/Main/Views/StoryComposingFocus.swift")
         XCTAssertTrue(code.contains("StorySceneFocus.showsContentDecorations(isComposing: isComposerEngaged, commentsOpen: showCommentsOverlay)"))
+    }
+}
+
+/// **La scène d'une story ne bouge que si le composeur est RÉELLEMENT soulevé**
+/// (#10544, décision porteur du 2026-10-13).
+///
+/// Le focus seul réduisait la scène et la remontait de 64 pt : avec un clavier
+/// matériel, rien ne montait et le contenu se déplaçait quand même. La
+/// réduction dérive désormais de ce qui soulève la plaque — clavier ou panneau
+/// d'émojis — et le silence du chrome (#8601) reste, lui, sur le focus.
+final class StoryKeyboardLiftTests: XCTestCase {
+
+    private let iPhone = CGSize(width: 430, height: 932)
+    private let topInset: CGFloat = 59
+    /// Zone sûre (34) + respiration (20) : le retrait de la plaque au repos.
+    private let repos: CGFloat = 54
+    private let plaque: CGFloat = 104
+
+    private func cadrageDeLecture() -> StoryCanvasFraming.Input {
+        StoryCanvasFraming.Input(viewport: iPhone, headerInset: topInset + 72, bottomInset: 64,
+                                 sideInset: 8, state: .carded,
+                                 cardedCornerRadius: SceneShape.cardedCornerRadius,
+                                 verticalAlignment: .center, canvasRatio: SceneShape.aspect)
+    }
+
+    // MARK: - Ce qui soulève
+
+    func test_leClavier_souleveDeSaHauteur() {
+        XCTAssertEqual(StoryKeyboardLift.lift(keyboardHeight: 336, emojiPanelHeight: 0, restingPadding: 336), 336)
+    }
+
+    /// Le panneau d'émojis prend la place du clavier : il soulève de sa hauteur
+    /// plus le retrait sous lui.
+    func test_lePanneauDEmojis_souleveCommeLeClavier() {
+        XCTAssertEqual(StoryKeyboardLift.lift(keyboardHeight: 0, emojiPanelHeight: 302, restingPadding: 34), 336)
+    }
+
+    func test_sansClavierNiPanneau_rienNeSouleve() {
+        XCTAssertEqual(StoryKeyboardLift.lift(keyboardHeight: 0, emojiPanelHeight: 0, restingPadding: repos), 0)
+    }
+
+    // MARK: - La réserve de la scène
+
+    /// LE DÉFAUT : champ touché, clavier matériel — rien ne monte, la scène
+    /// garde son cadrage de lecture.
+    func test_focusSansClavier_laSceneGardeSonCadrageDeLecture() {
+        let reserve = StoryKeyboardLift.sceneReserve(lift: 0, bottomPadding: repos, blockHeight: plaque)
+        XCTAssertNil(reserve, "sans soulèvement, aucune réserve : le focus seul ne déplace pas la scène")
+        XCTAssertEqual(
+            StorySceneFocus.framingInput(resting: cadrageDeLecture(), topInset: topInset, composerReserve: reserve),
+            cadrageDeLecture())
+    }
+
+    func test_clavierLeve_laSceneReserveLeClavierEtLaPlaque() {
+        XCTAssertEqual(StoryKeyboardLift.sceneReserve(lift: 336, bottomPadding: 336, blockHeight: plaque), 440)
+    }
+
+    /// Sans composeur mesuré (sa propre story), le clavier d'une autre surface
+    /// ne réduit rien.
+    func test_sansPlaqueMesuree_aucuneReserve() {
+        XCTAssertNil(StoryKeyboardLift.sceneReserve(lift: 336, bottomPadding: 336, blockHeight: nil))
+        XCTAssertNil(StoryKeyboardLift.sceneReserve(lift: 336, bottomPadding: 336, blockHeight: 0))
+    }
+
+    // MARK: - Le câblage
+
+    private func source(_ nom: String) throws -> String {
+        AppSourceGuard.stripComments(try AppSourceGuard.unit(
+            "Meeshy/Features/Main/Views/" + nom,
+            alsoIncluding: nom == "StoryViewerView+Canvas.swift"
+                ? ["Meeshy/Features/Main/Views/StoryReaderCanvasLayout.swift"] : []))
+    }
+
+    /// La réserve de la scène et la zone des commentaires lisent le MÊME
+    /// soulèvement, et plus le focus.
+    func test_laCarte_deriveSaReserveDuSoulevement() throws {
+        let focus = try source("StoryComposingFocus.swift")
+        XCTAssertTrue(focus.contains("StoryKeyboardLift.sceneReserve(lift: composerLift(geometry: geometry)"))
+        XCTAssertFalse(focus.contains("guard isComposerEngaged, let block"),
+                       "le focus ne décide plus de la réduction de la scène")
+        let couche = try source("StoryViewerView+CanvasComposerLayer.swift")
+        XCTAssertTrue(couche.contains("StoryKeyboardLift.lift("))
+        XCTAssertTrue(couche.contains("let lift = composerLift(geometry: geometry)"),
+                      "la liste des commentaires suit le même soulèvement que la scène")
+    }
+
+    /// En session plein écran, c'est le soulèvement — pas le focus — qui fait
+    /// de la scène une carte.
+    func test_laPresentation_suitLeSoulevement_pasLeFocus() throws {
+        let canvas = try source("StoryViewerView+Canvas.swift")
+        XCTAssertFalse(canvas.contains("isComposing: isComposerEngaged)"))
+        XCTAssertTrue(canvas.contains("isComposing: lifted)"))
+        XCTAssertEqual(canvas.components(separatedBy: "resting: readerRestingFraming").count - 1, 3,
+                       "les trois couches de la carte donnent leur cadrage de repos au ressort")
+    }
+
+    /// Une seule source par écran de story : la barre reçoit l'observateur du
+    /// lecteur.
+    func test_laBarreDeLaStory_recoitLObservateurDuLecteur() throws {
+        XCTAssertTrue(try source("StoryViewerView+CanvasComposerLayer.swift")
+            .contains(".environment(\\.composerHostKeyboard, keyboard)"))
     }
 }

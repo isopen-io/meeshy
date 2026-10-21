@@ -44,9 +44,13 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     private let api: APIClientProviding
 
     @Published public private(set) var blockedUserIds: Set<String> = []
+    /// #10503 — un blocage ABOUTI est un signal négatif (`block`) ; la file
+    /// durable émet les siens à l'envoi.
+    private let socialEvents: SocialEventsV2Hub
 
-    init(api: APIClientProviding = APIClient.shared) {
+    init(api: APIClientProviding = APIClient.shared, socialEvents: SocialEventsV2Hub = .shared) {
         self.api = api
+        self.socialEvents = socialEvents
     }
 
     // MARK: - Block
@@ -66,6 +70,7 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
             queryItems: nil
         )
         await MainActor.run { _ = blockedUserIds.insert(userId) }
+        socialEvents.emit(SocialInteractionEvents.negative(.block, on: SocialTarget(kind: .profile, id: userId)))
     }
 
     // MARK: - Unblock

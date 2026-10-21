@@ -56,6 +56,15 @@ const row = (id: string) => document.querySelector(`[data-admin-ban="${id}"]`);
 const textOf = (element: Element | null) => (element?.textContent ?? '').replace(/[  ]/g, ' ').replace(/\s+/g, ' ').trim();
 
 describe('l’historique des bannissements', () => {
+  test('l’historique est TITRÉ, et « Annuler » vit à côté de « Bannir » — une seule rangée de gestes (#11410)', async () => {
+    await open();
+    expect(textOf(document.querySelector('[data-admin-ban-history] h3'))).toBe('Historique des bannissements');
+    const rangees = [...document.querySelectorAll('[data-admin-form-actions]')];
+    expect(rangees).toHaveLength(1);
+    expect(rangees[0]?.querySelector('[data-admin-form-cancel]')).not.toBeNull();
+    expect(textOf(rangees[0] ?? null)).toContain('Bannir');
+  });
+
   test('qui a banni se dit par son nom, l’échéance ou « permanent » aussi', async () => {
     await open();
     const active = textOf(row('b-active'));
@@ -267,8 +276,17 @@ describe('le motif du bannissement, selon le rang (spec 2026-10-04 § 4)', () =>
     expect(post?.body).toEqual({});
   });
 
-  test('ADMIN : le motif reste obligatoire', async () => {
-    const { apply } = await openAs('ADMIN');
+  test('ADMIN : le motif est proposé — facultatif, et un champ vide envoie le motif proposé (#10562)', async () => {
+    const { apply, calls } = await openAs('ADMIN');
+    expect(textOf(document.body)).toContain('Motif (facultatif)');
+    expect(document.querySelector('[data-admin-ban-reason]')?.getAttribute('placeholder')).toBe('Contrôle aléatoire, test de fonctionnalité et suivi client');
+    expect(apply?.disabled).toBe(false);
+    await mounter.click(apply ?? null);
+    expect(calls().find((call) => call.method === 'POST')?.body).toEqual({ reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' });
+  });
+
+  test('MODERATOR : rien n’est proposé, le motif reste obligatoire', async () => {
+    const { apply } = await openAs('MODERATOR');
     expect(textOf(document.body)).toContain('Motif (obligatoire)');
     expect(apply?.disabled).toBe(true);
   });

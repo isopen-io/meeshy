@@ -35,7 +35,7 @@ struct CachedConversationMediaHubStore: ConversationMediaHubIndexStoring {
         let key = kind.indexKey(conversationId: conversationId)
         let existing = await CacheCoordinator.shared.conversationMedia.load(for: key).snapshot() ?? []
         let merged = ConversationMediaHubViewModel.union(existing, carriers)
-        try? await CacheCoordinator.shared.conversationMedia.save(merged, for: key)
+        await bestEffort("conversationMediaHubViewModel.conversationMedia.save", category: .cache) { try await CacheCoordinator.shared.conversationMedia.save(merged, for: key) }
     }
 
     func isComplete(conversationId: String, kind: ConversationMediaKind) async -> Bool {
@@ -99,7 +99,7 @@ final class ConversationMediaHubViewModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var searchTask: Task<Void, Never>?
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "media-hub")
+    private static let logger = MeeshyLog.logger(.mediaHub)
 
     private enum Cursor: Equatable {
         case head(before: String?)

@@ -137,3 +137,97 @@ final class CrossCatalogFrenchConsistencyGuardTests: XCTestCase {
         XCTAssertTrue(Self.divergences(app: app, sdk: sdk).isEmpty)
     }
 }
+
+/// **Aucune chaîne affichée ne nomme une marque tierce de chiffrement (#8853).**
+///
+/// La feuille de chiffrement disait « Bout en bout (Signal) » dans les sept
+/// langues. La règle de marque interdit de nommer Signal, et l'implémentation
+/// du protocole Signal côté passerelle n'est branchée à aucune route : le
+/// libellé promettait une marque et un protocole que la chaîne réelle ne
+/// garantit pas. Le libellé dit désormais ce que fait le chiffrement.
+///
+/// La garde balaie les DEUX catalogues, toutes langues, et les `defaultValue`
+/// des sources : un retour par l'un ou l'autre chemin rougit.
+final class EncryptionBrandWordingGuardTests: XCTestCase {
+
+    private static func racineDepot() -> URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // ios
+            .deletingLastPathComponent()   // apps
+            .deletingLastPathComponent()   // racine
+    }
+
+    private static let catalogues = [
+        "apps/ios/Meeshy/Localizable.xcstrings",
+        "packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings",
+    ]
+
+    private static let sources = [
+        "apps/ios/Meeshy",
+        "packages/MeeshySDK/Sources",
+    ]
+
+    /// « (Signal) », « Signal Protocol », « protocole Signal »… — jamais le mot
+    /// commun : « Signal faible » (qualité d'appel) et « Signaler » restent.
+    static func nommeUneMarqueDeChiffrement(_ texte: String) -> Bool {
+        texte.range(
+            of: #"\(\s*Signal\s*\)|Signal[ -]?Proto(col|koll)|[Pp]roto[ck]oll?[oe]? Signal|بروتوكول Signal"#,
+            options: .regularExpression
+        ) != nil
+    }
+
+    private static func valeursAffichees(_ url: URL) throws -> [String] {
+        let data = try Data(contentsOf: url)
+        guard let racine = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let chaines = racine["strings"] as? [String: [String: Any]] else {
+            throw NSError(domain: "catalogue", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "`strings` introuvable dans \(url.lastPathComponent)"
+            ])
+        }
+        return chaines.flatMap { cle, entree -> [String] in
+            let localisations = entree["localizations"] as? [String: Any] ?? [:]
+            return localisations.compactMap { langue, valeur -> String? in
+                guard let unite = (valeur as? [String: Any])?["stringUnit"] as? [String: Any],
+                      let texte = unite["value"] as? String,
+                      nommeUneMarqueDeChiffrement(texte) else { return nil }
+                return "\(cle) [\(langue)] « \(texte) »"
+            }
+        }
+    }
+
+    func test_aucunCatalogueNeNommeUneMarqueTierceDeChiffrement() throws {
+        let fautes = try Self.catalogues.flatMap {
+            try Self.valeursAffichees(Self.racineDepot().appendingPathComponent($0))
+        }.sorted()
+        XCTAssertTrue(fautes.isEmpty, "marque tierce de chiffrement nommée :\n" + fautes.joined(separator: "\n"))
+    }
+
+    func test_aucunDefaultValueNeNommeUneMarqueTierceDeChiffrement() throws {
+        var fautes: [String] = []
+        for dossier in Self.sources {
+            let racine = Self.racineDepot().appendingPathComponent(dossier)
+            guard let parcours = FileManager.default.enumerator(at: racine, includingPropertiesForKeys: nil) else { continue }
+            for case let fichier as URL in parcours where fichier.pathExtension == "swift" {
+                let texte = (try? String(contentsOf: fichier, encoding: .utf8)) ?? ""
+                for (index, ligne) in texte.components(separatedBy: .newlines).enumerated()
+                where ligne.contains("defaultValue") && Self.nommeUneMarqueDeChiffrement(ligne) {
+                    fautes.append("\(fichier.lastPathComponent):\(index + 1)")
+                }
+            }
+        }
+        XCTAssertTrue(fautes.isEmpty, "marque tierce de chiffrement dans un defaultValue :\n" + fautes.joined(separator: "\n"))
+    }
+
+    func test_leMotifReconnaitLaMarqueEtEpargneLeMotCommun() {
+        XCTAssertTrue(Self.nommeUneMarqueDeChiffrement("Bout en bout (Signal)"))
+        XCTAssertTrue(Self.nommeUneMarqueDeChiffrement("End-to-end (Signal)"))
+        XCTAssertTrue(Self.nommeUneMarqueDeChiffrement("Signal Protocol"))
+        XCTAssertTrue(Self.nommeUneMarqueDeChiffrement("protocole Signal"))
+        XCTAssertFalse(Self.nommeUneMarqueDeChiffrement("Signal faible"))
+        XCTAssertFalse(Self.nommeUneMarqueDeChiffrement("Schwaches Signal"))
+        XCTAssertFalse(Self.nommeUneMarqueDeChiffrement("Signaler ce message ?"))
+        XCTAssertFalse(Self.nommeUneMarqueDeChiffrement("Bout en bout (sur vos appareils)"))
+    }
+}

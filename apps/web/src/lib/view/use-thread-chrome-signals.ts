@@ -10,7 +10,7 @@ import { createDayPillRevealSubscriber, useDayPillReveal } from '@/lib/view/day-
 import { composerKeyboard, createScrollerGestureSubscriber, useThreadChrome } from '@/lib/view/use-thread-chrome';
 import { isNearBottom, stickyDayOf, type VirtualRowSpan } from '@/lib/view/thread-chrome';
 import { initialUnreadBelowState, reduceUnreadBelow } from '@/lib/view/unread-below';
-import { SCROLL_TO_BOTTOM_FRAMES, pinToBottom } from '@/lib/view/pin-to-bottom';
+import { SCROLL_TO_BOTTOM_FRAMES, pinToBottom, type PinToBottomHandle } from '@/lib/view/pin-to-bottom';
 
 /**
  * LE CHROME DU FIL, EN UN SEUL SIGNAL (#5774, travail 3/3) — extrait de
@@ -144,12 +144,29 @@ export function useThreadChromeSignals(input: {
    * DÉFILEUR (`scrollHeight − clientHeight`, clampé par le navigateur), pas
    * la fin du dernier item — `main` porte encore un `padding-bottom` qu'un
    * `scrollToIndex(align: 'end')` laissait sous la fenêtre.
+   *
+   * L'ANCRAGE NE SURVIT PAS AU FIL. `pinToBottom` rend son `cancel` : il est
+   * GARDÉ, invoqué par un second toucher (un seul ancrage à la fois, jamais
+   * deux boucles d'images qui écrivent le même `scrollTop`) et au DÉMONTAGE
+   * — sans quoi les images restantes écrivaient encore `scrollTop` dans un
+   * défileur quitté (mesuré : la boucle levait, HORS de tout témoin, dans
+   * le journal de « Test web », run 38119734883 — la même que celle d'un fil
+   * fermé en plein ancrage).
    */
+  const pinning = useRef<PinToBottomHandle | null>(null);
+  useEffect(
+    () => () => {
+      pinning.current?.();
+      pinning.current = null;
+    },
+    [],
+  );
   const onScrollToBottom = useCallback(() => {
     if (detached) onReturnToPresent?.();
     const element = scroller.current;
     if (element === null) return;
-    pinToBottom(element, { frames: SCROLL_TO_BOTTOM_FRAMES, onFirstFrame: noteProgrammaticScroll });
+    pinning.current?.();
+    pinning.current = pinToBottom(element, { frames: SCROLL_TO_BOTTOM_FRAMES, onFirstFrame: noteProgrammaticScroll });
     dispatchUnreadBelow({ type: 'reset' });
   }, [scroller, noteProgrammaticScroll, detached, onReturnToPresent]);
 

@@ -24,11 +24,14 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
             .appendingPathComponent(relativePath)
-        return try String(contentsOf: url, encoding: .utf8)
+        return try AppSourceGuard.text(at: url)
     }
 
     private func stripped(_ relativePath: String) throws -> String {
-        AppSourceGuard.stripComments(try source(relativePath))
+        let chrome = relativePath == rowPath
+            ? "\n" + (try source("Meeshy/Features/Main/Focal/Row/FocalFocusChrome.swift"))
+            : ""
+        return AppSourceGuard.stripComments(try source(relativePath) + chrome)
     }
 
     private var hostPath: String { "Meeshy/Features/Main/Views/MessageListViewController.swift" }
@@ -138,7 +141,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "drapeau et réactions partagent une HStack — jamais deux lignes empilées"
         )
         guard let textBlockStart = code.range(of: "private var textBlock"),
-              let textBlockEnd = code.range(of: "private var headerTimeString")
+              let textBlockEnd = code.range(of: "private var expansion:")
         else { return XCTFail("bornes du textBlock introuvables") }
         let textBlockBody = code[textBlockStart.lowerBound..<textBlockEnd.lowerBound]
         XCTAssertFalse(
@@ -218,7 +221,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
         )
         XCTAssertTrue(
             block.contains("activeAudioLanguage: activeAudioLanguage"),
-            "le carrousel audio doit recevoir la même bascule — plus jamais un nil en dur"
+            "la liste audio doit recevoir la même bascule — plus jamais un nil en dur"
         )
         let host = try stripped(hostPath)
         XCTAssertTrue(
@@ -261,9 +264,18 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             return XCTFail("scrollToBottom introuvable dans l'hôte")
         }
         let body = String(code[start.lowerBound...].prefix(600))
+        // La déclaration passe par UN geste partagé, qui annule aussi la
+        // libération différée d'un saut précédent.
         XCTAssertTrue(
-            body.contains("isIntentionalProgrammaticScroll = true"),
+            body.contains("beginIntentionalProgrammaticScroll()"),
             "scrollToBottom doit se déclarer INTENTIONNEL — sans ce drapeau, le verrou de scène annule chaque frame de l'animation et le bouton « aller au dernier message » ne fait rien"
+        )
+        guard let geste = code.range(of: "func beginIntentionalProgrammaticScroll() {") else {
+            return XCTFail("beginIntentionalProgrammaticScroll introuvable dans l'hôte")
+        }
+        XCTAssertTrue(
+            String(code[geste.upperBound...].prefix(200)).contains("isIntentionalProgrammaticScroll = true"),
+            "le geste partagé pose le drapeau que le verrou de scène lit"
         )
     }
 
@@ -280,7 +292,7 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
 
     func test_targetedReconfigure_isDeferredDuringGesture() throws {
         let code = try stripped(hostPath)
-        guard let start = code.range(of: "private func reconfigureMessages(serverIds: Set<String>) {") else {
+        guard let start = code.range(of: "func reconfigureMessages(serverIds: Set<String>) {") else {
             return XCTFail("reconfigureMessages introuvable")
         }
         let body = String(code[start.lowerBound...].prefix(1200))
@@ -320,20 +332,20 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             "le chemin GLOBAL ne retient que les conditions de MOUVEMENT"
         )
 
-        let targeted = try Self.block(after: "private func reconfigureMessages(serverIds: Set<String>) {", in: host)
+        let targeted = try Self.block(after: "func reconfigureMessages(serverIds: Set<String>) {", in: host)
         XCTAssertTrue(
             Self.deferralIsModeAgnostic(targeted),
             "volet CIBLÉ : le report doit se décider sur le geste seul. Corps lu : \(targeted.prefix(240))"
         )
 
-        let global = try Self.block(after: "private func reconfigureVisibleCells() {", in: host)
+        let global = try Self.block(after: "func reconfigureVisibleCells() {", in: host)
         XCTAssertTrue(
             Self.deferralIsModeAgnostic(global),
             "chemin des cellules visibles : inchangé, et toujours mode-agnostique. Corps lu : \(global.prefix(240))"
         )
 
         // Ce qui REND le report sûr : la reprise ne connaît aucun mode.
-        let settle = try Self.block(after: "private func settleAtRest() {", in: host)
+        let settle = try Self.block(after: "func settleAtRest() {", in: host)
         XCTAssertTrue(
             settle.contains("flushDeferredReconfigureAtSettle()"),
             "la pose rejoue le report — inconditionnellement"
@@ -449,6 +461,33 @@ final class FocalMatrixWiringGuardTests: XCTestCase {
             code.contains("let typingFlat = self.readingMode != .bubbles"),
             "la tenue plate du typing est décidée par readingMode — la capsule reste le rendu bulles"
         )
+    }
+
+    // MARK: - Humeur de l'auteur (#10528)
+
+    /// La pastille d'humeur se peignait sur l'avatar de l'auteur sans aucun
+    /// gestionnaire : elle prenait le toucher et n'ouvrait rien.
+    func test_host_feedsTheMoodTapToTheRowActions() throws {
+        XCTAssertTrue(
+            try stripped(hostPath).contains("FocalRowActions(onMoodTap: statuses.moodTapHandler(for: senderId))"),
+            "l'hôte doit remettre à la rangée le toucher de l'humeur de l'auteur — la bulle d'humeur (StatusBubbleController) s'ouvre par lui"
+        )
+    }
+
+    func test_focalRow_forwardsTheMoodTapToBothIdentityHeaders() throws {
+        let code = try stripped(rowPath)
+        XCTAssertEqual(
+            code.components(separatedBy: "onMoodTap: actions.onMoodTap").count - 1, 2,
+            "l'en-tête d'identité de la rangée ET la chip du focus transmettent le toucher de l'humeur"
+        )
+    }
+
+    /// Dans la liste des messages, l'humeur ne s'anime pas : ni respiration
+    /// (le contexte `.custom` n'en a pas), ni pulse.
+    func test_identityHeader_keepsTheMoodStillAndTappable() throws {
+        let code = try stripped("Meeshy/Features/Main/Focal/Row/FocalIdentityHeader.swift")
+        XCTAssertTrue(code.contains("enablePulse: false"), "aucun pulse sur la pastille d'une rangée de message")
+        XCTAssertTrue(code.contains("onMoodTap: onMoodTap"), "l'avatar de l'auteur reçoit le toucher de l'humeur")
     }
 
 }

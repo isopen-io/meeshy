@@ -89,6 +89,20 @@ const deComposerAttach = {
   'composer.effects.entrance': 'Eingangsanimation',
   'composer.effects.permanent': 'Dauerhafter Effekt',
   'composer.effects.clearAll': 'Alles löschen',
+  'composer.guest.kind.text': 'Textdatei (.txt)',
+  'composer.guest.kind.audio': 'Audio',
+  'composer.guest.kind.image': 'Bild',
+  'composer.guest.kind.pdf': 'PDF',
+  'composer.guest.inline.text': 'Textdateien (.txt)',
+  'composer.guest.inline.audio': 'Audio',
+  'composer.guest.inline.image': 'Bilder',
+  'composer.guest.inline.pdf': 'PDFs',
+  'composer.guest.note': 'Ohne Konto nimmt {title} deine Nachrichten, deine Sprachnachrichten und außerdem {kinds} an.',
+  'composer.guest.createAccount': 'Erstelle ein Konto, um alles andere zu teilen.',
+  'composer.guest.refused.kind': '„{name}“ wird hier nicht angenommen: nur {kinds} gehen durch.',
+  'composer.guest.refused.size': '„{name}“ ist zu groß: höchstens {max}.',
+  'send.failure.guestKind': 'Diese Datei wird hier nicht angenommen',
+  'send.failure.guestTooLarge': 'Diese Datei ist hier zu groß (höchstens {max})',
 } satisfies ComposerAttachCatalogSlice;
 
 export default deComposerAttach;

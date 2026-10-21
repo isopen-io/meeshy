@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import os
 
 // Extrait de `MessagePersistenceActor.swift` (hors budget 1000-1200 — un
 // fichier hors budget est interdit d'ajout) pour #7927 : une modification et
@@ -21,12 +22,36 @@ extension MessagePersistenceActor {
     /// (#8633) : le contenu et l'horloge d'ordre suivent, `isEdited` reste tel
     /// quel. `editedAt` n'est ici que l'horloge de la garde d'ordre ; ce qui
     /// dit « modifié » est `isEdited`.
-    public func markEdited(localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true) throws {
-        let affectedConversationId: String? = try dbWriter.write { db -> String? in
-            guard let existing = try MessageRecord
-                .filter(Column("localId") == localId || Column("serverId") == localId)
-                .fetchOne(db)
-            else { return nil }
+    /// `arrivalsNotice` — la ligne d'arrivées complétée (#7759) : sa
+    /// métadonnée suit son contenu, sans quoi la bulle composée chez le
+    /// lecteur dirait l'ancien compte sous le nouveau repli.
+    public func markEdited(
+        localId: String, newContent: String, editedAt: Date, marksEdited: Bool = true,
+        arrivalsNotice: ArrivalsNoticeMetadata? = nil
+    ) throws {
+        let noticeJson = arrivalsNotice.flatMap {
+            JSONEncoder().encodeOrLog($0, field: "joinNoticeJson", id: localId)
+        }
+        // Une modification arrivée avant son message (encore dans le flux
+        // d'écriture) est gardée et rejouée à l'arrivée de la ligne.
+        guard try rowExists(localId) else {
+            rememberPendingRowEvent(localId) { events in
+                let edit = PendingEdit(newContent: newContent, editedAt: editedAt,
+                                       marksEdited: marksEdited, noticeJson: noticeJson)
+                if let kept = events.edit, kept.editedAt > edit.editedAt { return }
+                events.edit = edit
+            }
+            return
+        }
+        try applyServerEdit(localId: localId, newContent: newContent, editedAt: editedAt,
+                            marksEdited: marksEdited, noticeJson: noticeJson)
+    }
+
+    /// Une modification servie, sous la garde d'ordre.
+    private func applyServerEdit(
+        localId: String, newContent: String, editedAt: Date, marksEdited: Bool, noticeJson: Data?
+    ) throws {
+        try applyEdit(localId: localId, newContent: newContent, marksEdited: marksEdited, noticeJson: noticeJson) { stored in
             // Ordering guard: `message:edited` carries no monotonic sequence, so a
             // delayed/duplicate socket delivery can arrive after a newer edit was
             // already applied. Comparing against the stored `editedAt` stops a
@@ -40,28 +65,67 @@ extension MessagePersistenceActor {
             // from what was passed in — enough to misfire a strict comparison.
             // Genuine out-of-order deliveries differ by network-delay magnitudes
             // (well beyond this), so the tolerance doesn't weaken the guard.
-            if let currentEditedAt = existing.editedAt,
-               editedAt.timeIntervalSince(currentEditedAt) < -Self.editOrderingTolerance {
+            if let stored, editedAt.timeIntervalSince(stored) < -Self.editOrderingTolerance {
                 return nil
             }
+            return editedAt
+        }
+    }
+
+    /// Édition de l'APPAREIL (optimiste, ou retour arrière d'une édition hors
+    /// ligne abandonnée). Elle s'applique toujours : c'est l'utilisateur qui
+    /// vient d'écrire. Mais la date stockée peut venir du SERVEUR (#9997 —
+    /// chemin REST et socket), et l'horloge de l'appareil peut retarder sur
+    /// lui : dater l'édition de `now` la ferait refuser par la garde d'ordre.
+    /// Elle est donc datée juste après la date stockée quand celle-ci est en
+    /// avance. Rend la date posée — un retour arrière la réutilise pour passer
+    /// la garde — ou `nil` si le message est inconnu.
+    @discardableResult
+    public func markEditedLocally(localId: String, newContent: String, now: Date = Date()) throws -> Date? {
+        try applyEdit(localId: localId, newContent: newContent, marksEdited: true) { stored in
+            Self.localEditStamp(now: now, after: stored)
+        }
+    }
+
+    nonisolated static func localEditStamp(now: Date, after stored: Date?) -> Date {
+        guard let stored, stored >= now else { return now }
+        return stored.addingTimeInterval(Self.localEditStep)
+    }
+
+    private static let localEditStep: TimeInterval = 0.001
+
+    /// `stamp` lit la date stockée et rend celle de l'édition, ou `nil` pour
+    /// la refuser. Rend la date posée.
+    @discardableResult
+    private func applyEdit(
+        localId: String, newContent: String, marksEdited: Bool, noticeJson: Data? = nil,
+        stamp: @Sendable (Date?) -> Date?
+    ) throws -> Date? {
+        let applied: (conversationId: String, editedAt: Date)? = try dbWriter.write { db in
+            guard let existing = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db),
+                  let editedAt = stamp(existing.editedAt)
+            else { return nil }
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = (isEdited OR ?), editedAt = ?,
+                    joinNoticeJson = COALESCE(?, joinNoticeJson),
                     updatedAt = ?, changeVersion = changeVersion + 1
                     WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [newContent, marksEdited, editedAt, Date(), localId, localId]
+                arguments: [newContent, marksEdited, editedAt, noticeJson, Date(), localId, localId]
             )
             if !Self.holdsProtectedContent(existing) {
                 try Self.followQuotes(of: existing, in: db) { quote in
                     quote.followsParentEdits ? quote.withPreviewText(newContent) : nil
                 }
             }
-            return existing.conversationId
+            return (existing.conversationId, editedAt)
         }
-        if let convId = affectedConversationId {
-            postMessageStoreRefresh(conversationIds: [convId])
-        }
+        guard let applied else { return nil }
+        postMessageStoreRefresh(conversationIds: [applied.conversationId])
+        return applied.editedAt
     }
 
     /// - Parameter sparingOpenedViewOnce: `true` pour une suppression annoncée
@@ -78,6 +142,13 @@ extension MessagePersistenceActor {
     ///   (`message:expired`) : les citations se scellent alors « expirées »
     ///   et se lisent « Message éphémère expiré », pas « supprimé » (#8631).
     public func markDeleted(localId: String, deletedAt: Date, sparingOpenedViewOnce: Bool = false, expired: Bool = false) throws {
+        guard try rowExists(localId) else {
+            rememberPendingRowEvent(localId) { events in
+                events.tombstone = PendingTombstone(
+                    deletedAt: deletedAt, sparingOpenedViewOnce: sparingOpenedViewOnce, expired: expired)
+            }
+            return
+        }
         let affectedConversationId: String? = try dbWriter.write { db -> String? in
             guard var record = try MessageRecord
                 .filter(Column("localId") == localId || Column("serverId") == localId)
@@ -104,6 +175,52 @@ extension MessagePersistenceActor {
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    // MARK: - Événements arrivés avant leur message
+    //
+    // Un `message:new` passe par le flux d'écriture ; `message:deleted`,
+    // `message:edited` et `reaction:*` s'écrivent tout de suite. Ils trouvaient
+    // la table sans la ligne, ne faisaient rien, puis l'insertion posait le
+    // message intact : « supprimé pour tous », il restait lisible ; modifié,
+    // il gardait l'ancien texte ; la réaction n'apparaissait jamais. Ces
+    // événements sont gardés et rejoués quand la ligne arrive. Bornés en
+    // NOMBRE (le plus ancien part) et en DURÉE : ceux d'un message qu'on ne
+    // recevra jamais — hors de la fenêtre chargée — ne s'accumulent pas.
+
+    func rowExists(_ localId: String) throws -> Bool {
+        try dbWriter.read { db in
+            try MessageRecord.filter(Column("localId") == localId || Column("serverId") == localId).fetchCount(db) > 0
+        }
+    }
+
+    func rememberPendingRowEvent(_ id: String, now: Date = Date(), _ update: (inout PendingRowEvents) -> Void) {
+        pendingRowEvents.remember(id, now: now, update)
+    }
+
+    /// Les messages visés viennent d'être écrits : ce qui leur est arrivé
+    /// avant eux s'applique.
+    func replayPendingRowEvents(for ids: [String], now: Date = Date()) {
+        guard !pendingRowEvents.isEmpty else { return }
+        pendingRowEvents.dropExpired(now: now)
+        for id in ids {
+            guard let events = pendingRowEvents.take(id) else { continue }
+            do {
+                if let edit = events.edit {
+                    try applyServerEdit(localId: id, newContent: edit.newContent, editedAt: edit.editedAt,
+                                        marksEdited: edit.marksEdited, noticeJson: edit.noticeJson)
+                }
+                for change in events.reactions {
+                    try mutateReactions(localId: id, change: change)
+                }
+                if let tombstone = events.tombstone {
+                    try markDeleted(localId: id, deletedAt: tombstone.deletedAt,
+                                    sparingOpenedViewOnce: tombstone.sparingOpenedViewOnce, expired: tombstone.expired)
+                }
+            } catch {
+                Logger.messages.error("replayPendingRowEvents failed for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

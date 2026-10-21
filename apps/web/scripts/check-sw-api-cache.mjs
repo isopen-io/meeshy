@@ -716,7 +716,7 @@ async function mesureNavigateur(dist) {
 
   try {
     const page = await browser.newPage();
-    await page.goto(`${baseOrigine}/`, { waitUntil: 'load' });
+    await page.goto(`${baseOrigine}/chats`, { waitUntil: 'load' });
     await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 30_000 });
 
     const chargements = await page.evaluate(async (gate) => {

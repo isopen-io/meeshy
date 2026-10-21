@@ -332,18 +332,48 @@ final class RequestsViewModelTests: XCTestCase {
     // contract on the primitive: outcome-stream + publishOutcome must
     // round-trip the terminal event exactly once.
 
+    /// `OfflineQueue.shared` est partagé par toute la suite : un identifiant FIXE pouvait croiser l'issue mémorisée
+    /// d'un autre passage, et un `for await` sans borne attendait à vie — la tranche CI dépassait ses 3 minutes au
+    /// lieu d'échouer. Identifiant unique, attente bornée.
     func test_acceptReject_outcomeStream_exhaustedFires_rollbackContract() async {
-        let cmid = "requests-rollback-001"
+        let cmid = "requests-rollback-\(UUID().uuidString)"
         let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
         await OfflineQueue.shared.publishOutcome(.exhausted(cmid: cmid))
 
-        var collected: [OutboxOutcome] = []
-        for await event in stream {
-            collected.append(event)
+        let collected = await withTaskGroup(of: [OutboxOutcome]?.self) { group -> [OutboxOutcome]? in
+            group.addTask {
+                var events: [OutboxOutcome] = []
+                for await event in stream { events.append(event) }
+                return events
+            }
+            group.addTask {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
         }
 
-        XCTAssertEqual(collected.count, 1)
-        XCTAssertEqual(collected.first, .exhausted(cmid: cmid))
+        XCTAssertNotNil(collected, "le flux d'issue doit se terminer après l'issue terminale — jamais attendre à vie")
+        XCTAssertEqual(collected, [.exhausted(cmid: cmid)])
+    }
+
+    /// Accepter A puis B ; la file refuse A plus tard. L'instantané pris avant
+    /// A ramenait B — déjà acceptée — à côté de A.
+    func test_accept_lateExhaustedOutcome_restoresOnlyThatRequest() async throws {
+        let (sut, _, queue) = makeSUTWithQueue()
+        sut.receivedRequests = ["A", "B", "C"].map { FriendRequestFixture.make(id: $0, status: "pending") }
+
+        await sut.accept(requestId: "A")
+        let cmidA = try XCTUnwrap((queue.lastPayload as? RespondFriendRequestPayload)?.clientMutationId)
+        await sut.accept(requestId: "B")
+        try await waitForCondition(timeout: 2) { queue.outcomeContinuations[cmidA] != nil }
+
+        queue.emitOutcome(.exhausted(cmid: cmidA), for: cmidA)
+        try await waitForCondition(timeout: 2) { sut.receivedRequests.contains { $0.id == "A" } }
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["A", "C"])
     }
 
     // MARK: - Pagination
@@ -365,6 +395,95 @@ final class RequestsViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.receivedRequests.map(\.id), ["r1", "r2"])
         XCTAssertFalse(sut.receivedHasMore, "hasMore must reflect the last page's pagination flag")
+    }
+
+    // MARK: - Pagination atteinte par le bas de la liste (#8026)
+
+    private func pendingRequests(_ prefix: String, count: Int, from start: Int = 0) -> [FriendRequest] {
+        (start..<(start + count)).map { FriendRequestFixture.make(id: "\(prefix)-\($0)", status: "pending") }
+    }
+
+    func test_received_31RequestsServedInTwoPages_make31Rows() async {
+        let (sut, mock) = makeSUT()
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("r", count: 30), total: 31, hasMore: true))
+        await sut.loadReceived()
+        XCTAssertEqual(sut.receivedRequests.count, 30)
+
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("r", count: 1, from: 30), total: 31, hasMore: false, offset: 30))
+        await sut.receivedRowAppeared(id: "r-29")
+
+        XCTAssertEqual(sut.receivedRequests.count, 31, "le bas de la liste charge la page suivante")
+        XCTAssertEqual(mock.lastReceivedOffset, 30)
+        XCTAssertEqual(Set(sut.receivedRequests.map(\.id)).count, 31, "aucun doublon")
+
+        await sut.receivedRowAppeared(id: "r-30")
+        XCTAssertEqual(mock.receivedRequestsCallCount, 2, "le serveur n'en rend plus : on s'arrête")
+    }
+
+    func test_received_aRowThatIsNotTheLast_loadsNothing() async {
+        let (sut, mock) = makeSUT()
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("r", count: 30), total: 31, hasMore: true))
+        await sut.loadReceived()
+
+        await sut.receivedRowAppeared(id: "r-12")
+
+        XCTAssertEqual(mock.receivedRequestsCallCount, 1)
+    }
+
+    func test_received_aPageRepeatingShownRequests_addsNoDuplicate() async {
+        let (sut, mock) = makeSUT()
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("r", count: 30), total: 31, hasMore: true))
+        await sut.loadReceived()
+
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("r", count: 2, from: 29), total: 31, hasMore: false, offset: 30))
+        await sut.receivedRowAppeared(id: "r-29")
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id).suffix(2), ["r-29", "r-30"])
+        XCTAssertEqual(sut.receivedRequests.count, 31)
+    }
+
+    func test_sent_31RequestsServedInTwoPages_make31Rows() async {
+        let (sut, mock) = makeSUT()
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("s", count: 30), total: 31, hasMore: true))
+        await sut.loadSent()
+        XCTAssertEqual(sut.sentRequests.count, 30)
+
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("s", count: 1, from: 30), total: 31, hasMore: false, offset: 30))
+        await sut.sentRowAppeared(id: "s-29")
+
+        XCTAssertEqual(sut.sentRequests.count, 31, "le bas de la liste charge la page suivante")
+        XCTAssertEqual(mock.lastSentOffset, 30)
+
+        await sut.sentRowAppeared(id: "s-30")
+        XCTAssertEqual(mock.sentRequestsCallCount, 2, "le serveur n'en rend plus : on s'arrête")
+    }
+
+    /// La route des demandes ENVOYÉES rend tous les statuts, et la liste ne
+    /// garde que celles en attente : la page suivante se demande au rang
+    /// SERVEUR (30), jamais au nombre de lignes affichées.
+    func test_sent_nextPageOffsetCountsServedRequests_notShownOnes() async {
+        let (sut, mock) = makeSUT()
+        let firstPage = pendingRequests("s", count: 28)
+            + [FriendRequestFixture.make(id: "acc-1", status: "accepted"),
+               FriendRequestFixture.make(id: "acc-2", status: "accepted")]
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: firstPage, total: 31, hasMore: true))
+        await sut.loadSent()
+        XCTAssertEqual(sut.sentRequests.count, 28)
+
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(
+            requests: pendingRequests("s", count: 1, from: 28), total: 31, hasMore: false, offset: 30))
+        await sut.sentRowAppeared(id: "s-27")
+
+        XCTAssertEqual(mock.lastSentOffset, 30)
+        XCTAssertEqual(sut.sentRequests.count, 29)
     }
 
     // MARK: - Cache-First Behavior

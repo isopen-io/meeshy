@@ -174,6 +174,26 @@ describe('publishStory — POST /api/v1/posts (core.ts:370-462)', () => {
   });
 });
 
+describe('publishStory — la clé d’idempotence (#10316)', () => {
+  const effects = () => buildStoryCanvasEffects({ texts: texts('Bonjour'), background: { source: BACKGROUND, mediaType: 'image' } })!;
+
+  test('`clientMutationId` part en X-Client-Mutation-Id, à côté de X-Canvas-Caps', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    const clientMutationId = 'cmid_0f8b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
+    await publishStory({ source: 'gateway', transport, storyEffects: effects(), mediaIds: ['pm-bg'], clientMutationId });
+    expect(headerOf(calls[0]!.init, 'X-Client-Mutation-Id')).toBe(clientMutationId);
+    expect(headerOf(calls[0]!.init, 'X-Canvas-Caps')).toBe('3');
+  });
+
+  test('sans clé, aucun en-tête X-Client-Mutation-Id', async () => {
+    const { impl, calls } = fakeFetch({ status: 201, body: { success: true, data: { id: 'post-1' } } });
+    const transport = createHttpTransport({ base: '', fetchImpl: impl });
+    await publishStory({ source: 'gateway', transport, storyEffects: effects(), mediaIds: ['pm-bg'] });
+    expect(headerOf(calls[0]!.init, 'X-Client-Mutation-Id')).toBeNull();
+  });
+});
+
 describe('publishStory — la source fixtures ne touche jamais le réseau', () => {
   test('source fixtures ⇒ un identifiant simulé, aucun fetch, le document toujours VALIDÉ', async () => {
     const effects = buildStoryCanvasEffects({ texts: texts('Bonjour') })!;

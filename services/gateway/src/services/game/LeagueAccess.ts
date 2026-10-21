@@ -17,7 +17,7 @@
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isAdult } from '@meeshy/shared/utils/age';
-import { levelForUnlocks } from '@meeshy/shared/utils/game/levels';
+import { SPARKS_USER_SELECT, unlockLevelOf } from './SparksFacts';
 import { leagueAccess, type LeagueAccess } from '@meeshy/shared/utils/game/league';
 import { loadPrivacyPreferencesCached } from '../preferences/privacy-cache';
 
@@ -32,8 +32,7 @@ export type LeagueFacts = {
 };
 
 export const LEAGUE_FACTS_SELECT = {
-  engagementScore: true,
-  levelRecord: true,
+  ...SPARKS_USER_SELECT,
   birthDate: true,
   publicLeagueConsentAt: true,
   timezone: true,
@@ -49,7 +48,7 @@ type LeagueFactsRow = {
 
 export function leagueFactsOf(row: LeagueFactsRow | null | undefined, now: Date = new Date()): LeagueFacts {
   return {
-    levelRecord: Math.max(levelForUnlocks({ score: row?.engagementScore ?? 0, levelRecord: row?.levelRecord ?? null }), row?.levelRecord ?? 0),
+    levelRecord: unlockLevelOf(row),
     adultVerified: adultVerifiedOf(row ?? {}, now),
     consented: row?.publicLeagueConsentAt != null,
     timezone: row?.timezone ?? null,

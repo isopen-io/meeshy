@@ -181,7 +181,7 @@ describe('#9607 — la dernière activité avance sur le `sid`, échantillonnée
 
   it("l'écriture ne retient pas la requête : une base qui ne répond jamais n'empêche pas l'admission", async () => {
     const pendante = {
-      findFirst: jest.fn(async () => ({ isValid: true })),
+      findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })),
       updateMany: jest.fn(() => new Promise<never>(() => undefined)),
     };
     const auth = middlewareFor(pendante as never, new SessionActivitySampler({ now: clock(T0).now }));
@@ -198,7 +198,7 @@ describe('#9607 — la dernière activité avance sur le `sid`, échantillonnée
     process.on('unhandledRejection', ecoute);
     try {
       const enPanne = {
-        findFirst: jest.fn(async () => ({ isValid: true })),
+        findFirst: jest.fn(async () => ({ isValid: true, expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000) })),
         updateMany: jest.fn(async () => { throw new Error('mongo indisponible'); }),
       };
       const auth = middlewareFor(enPanne as never, new SessionActivitySampler({ now: clock(T0).now }));

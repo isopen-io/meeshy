@@ -31,8 +31,21 @@ const mockRepostPost = jest.fn<any>();
 // Rejeu (onDuplicate) : refetch par id. Sans elle, `withMutationLog` ne
 // retrouve rien et retombe sur son filet de sécurité « rejoue op() » —
 // masquant exactement le défaut que ce fichier existe pour prouver.
-const mockGetPostById = jest.fn<any>((id: string) => Promise.resolve({ id, repostOfId: POST_ID, type: 'POST', authorId: USER_ID }));
+// #10525 — l'ORIGINAL a son propre auteur : un repost de SON propre contenu ne
+// notifie personne, et le témoin « notifie une fois » ne le compterait plus.
+const ORIGINAL_AUTHOR_ID = '507f1f77bcf86cd799439033';
+const readPost = (id: string) =>
+  Promise.resolve({ id, repostOfId: POST_ID, type: 'POST', authorId: id === POST_ID ? ORIGINAL_AUTHOR_ID : USER_ID });
+const mockGetPostById = jest.fn<any>(readPost);
 const mockRepublishStory = jest.fn<any>();
+
+// #10315 — la porte de republication et le verdict d'audience ont leurs propres témoins
+// (`services/posts/__tests__/moderationHold.test.ts`) ; cette suite parle d'autre chose.
+jest.mock('../../../../services/posts/moderationHold', () => ({
+  ...(jest.requireActual('../../../../services/posts/moderationHold') as object),
+  mayRepostSource: async () => true,
+  audienceChangeVerdict: async () => ({ refusal: null, clearsPriorVisibility: false }),
+}));
 
 jest.mock('../../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
@@ -168,7 +181,7 @@ beforeEach(() => {
   mockRepublishStory.mockReset();
   mockRepublishStory.mockImplementation(async (postId: string) => ({ id: postId, type: 'STORY', authorId: USER_ID }));
   mockGetPostById.mockReset();
-  mockGetPostById.mockImplementation((id: string) => Promise.resolve({ id, repostOfId: POST_ID, type: 'POST', authorId: USER_ID }));
+  mockGetPostById.mockImplementation(readPost);
   mockRepostPost.mockReset();
   mockRepostPost.mockImplementation(async (postId: string, userId: string) => {
     repostCounter += 1;
@@ -314,7 +327,7 @@ describe('POST /posts/:postId/repost — idempotence via clientMutationId', () =
     // L'auteur supprime son repost : `getPostById(repost-1)` ne rend plus rien
     // (`deletedAt: NOT_DELETED` le filtre). L'ORIGINAL, lui, reste lisible.
     mockGetPostById.mockImplementation((id: string) =>
-      Promise.resolve(id === POST_ID ? { id, repostOfId: null, type: 'POST', authorId: USER_ID } : null),
+      Promise.resolve(id === POST_ID ? { id, repostOfId: null, type: 'POST', authorId: ORIGINAL_AUTHOR_ID } : null),
     );
 
     const res2 = await repost(app, CMID_A);

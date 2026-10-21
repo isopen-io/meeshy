@@ -125,6 +125,28 @@ final class ShareLinkServiceTests: XCTestCase {
         XCTAssertTrue(result.isActive)
     }
 
+    /// #10381 — l'expiration choisie dans la feuille de création voyage dans le corps de `POST /links`, sous le nom
+    /// que la passerelle lit (`createLinkSchema.expiresAt`, ISO 8601) ; « Jamais » OMET la clé — un `null` serait
+    /// refusé par `z.iso.datetime().optional()`.
+    func test_createShareLink_carriesTheChosenExpiry_andOmitsItWhenNever() async throws {
+        let rawResponse = CreateShareLinkResponse(
+            linkId: "lk_new",
+            conversationId: "conv1",
+            shareLink: CreateShareLinkResponse.ShareLinkDetail(
+                id: "sl_new", linkId: "lk_new", name: nil,
+                description: nil, expiresAt: nil, isActive: true
+            )
+        )
+        mock.stub("/links", result: APIResponse<CreateShareLinkResponse>(success: true, data: rawResponse, error: nil))
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1", expiresAt: "2026-10-19T20:55:52Z"))
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["expiresAt"] as? String, "2026-10-19T20:55:52Z")
+
+        _ = try await service.createShareLink(request: CreateShareLinkRequest(conversationId: "conv1"))
+        XCTAssertNotNil(mock.lastRequest?.bodyJSON)
+        XCTAssertFalse(mock.lastRequest?.bodyJSON?.keys.contains("expiresAt") ?? true, "« Jamais » n'écrit pas expiresAt: null")
+    }
+
     // MARK: - toggleLink
 
     func test_toggleLink_callsCorrectEndpoint() async throws {

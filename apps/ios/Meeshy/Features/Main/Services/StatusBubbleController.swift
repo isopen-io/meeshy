@@ -14,7 +14,17 @@ final class StatusBubbleController: ObservableObject {
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {}
     static let shared = StatusBubbleController()
-    private init() {}
+
+    private let postService: PostServiceProviding
+    private let currentUserId: @MainActor () -> String?
+
+    init(
+        postService: PostServiceProviding = PostService.shared,
+        currentUserId: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
+    ) {
+        self.postService = postService
+        self.currentUserId = currentUserId
+    }
 
     @Published var currentEntry: StatusEntry?
     @Published var anchor: CGPoint = .zero
@@ -42,11 +52,17 @@ final class StatusBubbleController: ObservableObject {
         // que la notification « X a publié un statut » (friend_new_mood) ne reste
         // pas non lue. Le gateway marque alors les notifications liées à ce post
         // et ré-émet `notification:counts`. Fire-and-forget.
-        guard entry.userId != AuthManager.shared.currentUser?.id else { return }
+        //
+        // #10483 — CHAQUE ouverture est une vue (`viewCount` est le total) ;
+        // c'est le site UNIQUE de la vue d'une humeur, quel que soit l'hôte.
+        guard entry.userId != currentUserId() else { return }
         let statusId = entry.id
-        Task {
+        Task { [postService] in
             do {
-                try await PostService.shared.viewPost(postId: statusId)
+                _ = try await postService.recordSocialEvents(
+                    [.view(postId: statusId, durationMs: nil, surface: .moodAvatar)],
+                    credential: .account
+                )
             } catch {
                 // Compteur de vue perdu — sans impact sur l'affichage.
                 Logger.statusBubble.error("Status view not registered: \(error.localizedDescription, privacy: .public)")
@@ -288,5 +304,5 @@ extension View {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let statusBubble = Logger(subsystem: "me.meeshy.app", category: "status-bubble")
+    nonisolated static let statusBubble = MeeshyLog.logger(.statusBubble)
 }

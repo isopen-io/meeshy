@@ -47,7 +47,8 @@ import {
   type LeagueGroup,
   type LeagueKey,
 } from '@meeshy/shared/utils/game/league';
-import { seasonAt, seasonCalendar } from '@meeshy/shared/utils/game/season';
+import { scheduledSeasonAt, scheduledSeasonCalendar } from '@meeshy/shared/utils/game/season-schedule';
+import { currentSeasonSchedule, seasonScheduleForWrite } from './SeasonScheduleService';
 import { leagueCupTrophy } from '@meeshy/shared/utils/game/trophies';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { GameNotifier, type GameNotificationEvent } from './GameNotifier';
@@ -66,6 +67,22 @@ const ACTIVITY_WEEKS = 3;
 const PAGE = 500;
 /** La conservation : 4 semaines après la fin de la saison. */
 export const LEAGUE_RETENTION_DAYS = 28;
+
+/**
+ * L'horizon de la purge (#9947) : les semaines d'avant ce lundi n'ont plus ni
+ * groupe, ni appartenance, ni points. `null` tant que rien n'est à purger. La
+ * purge et la lecture d'une semaine passée (`GameArchiveService`) le partagent.
+ */
+export function leagueRetentionHorizon(now: Date, schedule = currentSeasonSchedule()): string | null {
+  const day = addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS);
+  const season = scheduledSeasonAt(schedule, day);
+  if (season !== null) return scheduledSeasonCalendar(schedule, season)?.startDay ?? null;
+  // Hors saison (#10016 : intervalle ou pause programmés) : les ligues, hebdomadaires, ont continué ;
+  // ce qui précède la semaine d'il y a 28 jours est déjà plus vieux que la conservation — dès qu'une
+  // saison a existé avant. Avant la toute première saison, rien n'est à purger (comportement inchangé).
+  const first = scheduledSeasonCalendar(schedule, 1);
+  return first !== null && day > first.endDay ? leagueWeekKey(day) : null;
+}
 /** Combien de temps, après sa fermeture, un groupe non réglé retient le placement de la semaine suivante. */
 export const SETTLEMENT_GRACE_MS = 6 * 3_600_000;
 
@@ -414,9 +431,15 @@ export class LeagueSettlement {
    * 2026-12-20, avec le premier horizon de saison.
    */
   async purgeOld(now: Date = new Date()): Promise<number> {
-    const cutoffDay = addDays(dayKeyOf(now, 'UTC'), -LEAGUE_RETENTION_DAYS);
-    const season = seasonAt(cutoffDay);
-    const horizon = season === null ? null : seasonCalendar(season)?.startDay ?? null;
+    // Une purge DÉTRUIT : jamais sur la constante faute de calendrier lu (audit #10016) — on la diffère.
+    let schedule;
+    try {
+      schedule = await seasonScheduleForWrite(this.prisma);
+    } catch {
+      log.warn('calendrier des saisons illisible : purge des ligues différée');
+      return 0;
+    }
+    const horizon = leagueRetentionHorizon(now, schedule);
     if (horizon === null) return 0;
     const where = { weekKey: { lt: horizon } };
     const [groups, memberships, points] = await Promise.all([

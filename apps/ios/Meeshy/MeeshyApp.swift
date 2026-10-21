@@ -5,7 +5,6 @@ import MeeshySDK
 import MeeshyUI
 import os
 
-@main
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let dependencies = DependencyContainer.shared
@@ -15,25 +14,20 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
-    /// #8089 — la célébration de l'arrivée, au-dessus de la racine connectée.
+    /// La célébration de l'arrivée, au-dessus de la racine connectée.
     @StateObject private var arrivalCelebration = ArrivalCelebrationController.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    /// Le splash et sa loi de vie (#6744) : il tombe dès que la session et la
+    /// Le splash et sa loi de vie : il tombe dès que la session et la
     /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
     @StateObject private var launchSplash = LaunchSplashController()
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
-    /// #9171 — le contenu d'un lien ouvert sans session, au-dessus de la connexion.
+    /// Le contenu d'un lien ouvert sans session, au-dessus de la connexion.
     @StateObject private var visitorPresenter = VisitorContentPresenter.shared
     @State private var crashReportsToShow: [CrashDiagnostic] = []
     @State private var showCrashSheet = false
     @State private var hasSurfacedCrashReports = false
-    /// True once we've actually reached `.background` (socket suspended), so the
-    /// next `.active` knows to rearm. A transient `.inactive→.active` leaves it
-    /// false → no needless socket churn (#11).
-    @State private var didEnterBackground = false
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.scenePhase) private var scenePhase
 
     private var shouldShowOnboarding: Bool {
         !hasCompletedOnboarding && !authManager.isAuthenticated
@@ -44,36 +38,27 @@ struct MeeshyApp: App {
     private static var nearCapacityCancellable: AnyCancellable?
 
     init() {
-        // Prisme Linguistique — l'utilisateur consomme TOUT dans sa langue
-        // préférée, y compris le chrome de l'app (menus, boutons, libellés
-        // système). Applique l'override de langue UI (mis en cache au dernier
-        // login/refresh) le plus TÔT possible, avant la 1re vue. iOS lit
-        // `AppleLanguages` une SEULE fois au démarrage du process → l'override
-        // prend effet au (re)lancement, ce qui est acceptable (l'app est
-        // relancée aux tests). Garde-fous stricts dans `applyIfNeeded` : no-op
-        // si le cache est nil/vide/non-supporté (iOS garde alors la locale
-        // appareil), ne crashe jamais.
-        UILanguageOverride.applyIfNeeded()
+        // Prisme Linguistique — l'override de langue UI est écrit AVANT
+        // `UIApplicationMain`, par `MeeshyLaunch.main()` : le bundle fige sa
+        // localisation au lancement, un override tardif ne l'atteindrait pas.
 
-        // #8951 — les extensions de notification tournent dans leur propre
+        // Les extensions de notification tournent dans leur propre
         // processus : elles lisent cette langue dans le groupe d'app, et les
         // catégories que l'AppDelegate enregistre juste après aussi.
         UILanguageOverride.publishInterfaceLanguage()
 
-        // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste
-        // (#6921). Posé APRÈS `applyIfNeeded()`, jamais avant : c'est cette
-        // ligne-là qui décide dans quelle langue le catalogue va répondre, et
-        // lire la chaîne plus tôt la figerait dans la locale appareil.
+        // Le mot qui me désigne dans le préfixe d'auteur d'une ligne de liste.
+        // Lu APRÈS l'override de `MeeshyLaunch.main()` : c'est lui
+        // qui décide dans quelle langue le catalogue va répondre.
         //
         // Le SDK ne lit pas le catalogue de l'app ; il reçoit ce mot une fois,
         // et ses chemins (pont socket, moteur de synchro) le relaient.
         ConversationListAuthor.configureReaderLabel(ConversationListViewModel.youAuthorLabel)
 
-        // Sortie de bêta (2026-09-14, #6482) : la préférence « Activer les
-        // bêta » ne gouverne plus rien — sa clé est retirée de l'appareil.
+        // Sortie de bêta : la clé de la préférence « Activer les bêta » est effacée de l'appareil.
         LentilleFeatureFlag.removeRetiredBetaPreference()
 
-        // #8365 — publier, inviter par e-mail ou créer un lien sans adresse
+        // Publier, inviter par e-mail ou créer un lien sans adresse
         // prouvée ouvre la validation, puis la requête repart (`APIClient`).
         EmailVerificationGate.current = EmailVerificationGateController.shared
 
@@ -94,7 +79,7 @@ struct MeeshyApp: App {
         // submits the request later, when `willTerminate` fires.
         CacheBackgroundFlushTask().register()
 
-        // CALL-FIX 2026-06-05 — wire the "is a call active?" guard into both socket
+        // Wire the "is a call active?" guard into both socket
         // managers. While a call is active, `forceReconnect()` (token rotation,
         // re-auth, lifecycle) is suppressed so the realtime socket carrying the
         // WebRTC signaling is never torn down mid-call (which strands the call on
@@ -107,9 +92,15 @@ struct MeeshyApp: App {
         // 500-item capacity. removeDuplicates() in nearCapacityPublisher ensures
         // the toast fires exactly once per true→false→true crossing, not on
         // every new enqueue while near capacity.
+        //
+        // Le saut sur le main PRÉCÈDE le filter : `OfflineQueue` est un actor
+        // et émet depuis son exécuteur. Une fermeture écrite ici est isolée au
+        // MainActor ; reçue hors du main, elle trappe
+        // (`_dispatch_assert_queue_fail`) — même forme que le plantage
+        // TestFlight 1915/1916. Garde : OffMainCombineHopSourceGuardTests.
         Self.nearCapacityCancellable = OfflineQueue.shared.nearCapacityPublisher
-            .filter { $0 }
             .receive(on: DispatchQueue.main)
+            .filter { $0 }
             .sink { _ in
                 Task { @MainActor in
                     FeedbackToastManager.shared.showError(
@@ -119,12 +110,17 @@ struct MeeshyApp: App {
                     )
                 }
             }
+
+        // Arrière-plan, retour et ouverture/fermeture de session : une fois par
+        // transition de l'APPLICATION, même quand l'iPad a fermé la fenêtre
+        // principale (`AppLifecycleHooks`).
+        Self.installApplicationLifecycleHooks()
     }
 
     /// L'aperçu DEBUG de l'onboarding REMPLACE l'écran de connexion au lieu de
     /// s'y superposer : un frère de `ZStack` est proposé la taille du plus
     /// grand, et `LoginView` en arabe sur iPhone SE en annonce 666 pour 647 —
-    /// le calque débordait alors de 19 pt, coupant son bouton au bord (#7729).
+    /// le calque débordait alors de 19 pt, coupant son bouton au bord.
     private static var onboardingPreviewReplacesLogin: Bool {
         #if DEBUG
         OnboardingPreviewLaunch.isActive
@@ -135,27 +131,29 @@ struct MeeshyApp: App {
 
     var body: some Scene {
         WindowGroup {
+            // UNE fenêtre principale : une seconde copie ouverte par le système renvoie vers la première
+            // (`MainWindowGate`, AdaptiveRootView.swift).
+            MainWindowGate {
             SystemThemeDetector {
                 ZStack {
                     Group {
                         if authManager.isAuthenticated {
                             AdaptiveRootView()
-                                // #7847 — les listes `@` du SDK servent les
+                                // Les listes `@` du SDK servent les
                                 // mêmes contacts que celles de l'app, réchauffés
                                 // de la même façon.
                                 .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
-                                // #9481 — la vitrine de trophées d'un AUTRE membre, dans son profil : ce que SA
-                                // visibilité autorise, rien sinon. Une seule injection, toutes les feuilles de profil la reçoivent.
-                                .environment(\.profileGameSection, ProfileGameSection { userId, name in
-                                    AnyView(GameProfileVisitorCard(userId: userId, name: name))
-                                })
+                                .modifier(ProfileSheetEnvironment())
                         } else if hasCheckedSession && !Self.onboardingPreviewReplacesLogin && !authManager.isSwitchingAccount {
                             LoginView()
                                 .safeAreaInset(edge: .top, spacing: 0) {
                                     PendingLinkNotice(isVisible: deepLinkRouter.pendingDeepLink?.opensAfterSignIn == true)
                                 }
                                 .animation(.easeOut(duration: 0.25), value: deepLinkRouter.pendingDeepLink)
-                                // #9612 — la fermeture prononcée par le serveur s'explique AVANT la reconnexion.
+                                // Un lien d'appel reçu avant que la session soit relue
+                                // n'attend pas la connexion : se connecter ne relance rien.
+                                .onAppear { deepLinkRouter.discardPendingCallRequest() }
+                                // La fermeture prononcée par le serveur s'explique AVANT la reconnexion.
                                 .sheet(item: Binding(
                                     get: { authManager.sessionRevocationNotice },
                                     set: { if $0 == nil { authManager.acknowledgeSessionRevocationNotice() } }
@@ -165,9 +163,9 @@ struct MeeshyApp: App {
                         }
                     }
                     .opacity(launchSplash.phase == .covering ? 0 : 1)
-                    .accessibilityHidden(arrivalCelebration.isShowing)
+                    .accessibilityHidden(arrivalCelebration.isShowing).modifier(ComposerRetoucheRecetteCover())
 
-                    // #8089 — l'adresse prouvée vient d'ouvrir la session : la
+                    // L'adresse prouvée vient d'ouvrir la session : la
                     // fête passe AVANT l'onboarding, qui l'attend
                     // (`OnboardingHost`), pendant que la racine, montée
                     // dessous, et `ArrivalPrefetcher` remplissent les caches.
@@ -177,7 +175,7 @@ struct MeeshyApp: App {
                             .zIndex(3)
                     }
 
-                    // #4363 / #6744 — il s'efface d'abord (`fullScreenGate`
+                    // Il s'efface d'abord (`fullScreenGate`
                     // coupe touches et VoiceOver), puis quitte l'arbre SANS
                     // transition. Son plafond vit dans SA tâche : aucune attente
                     // du démarrage ne peut le retenir. Voir `LaunchSplashController`.
@@ -189,13 +187,22 @@ struct MeeshyApp: App {
                     }
 
                     #if DEBUG
-                    // Aperçu de l'onboarding (#7729) pour la vérification au
+                    // Aperçu de l'onboarding pour la vérification au
                     // simulateur — voir `OnboardingPreviewLaunch`.
                     if OnboardingPreviewLaunch.isActive {
                         OnboardingPreviewScreen().zIndex(2)
                     }
                     if ConversationLinkCardPreviewLaunch.isActive {
                         ConversationLinkCardPreviewScreen().zIndex(2)
+                    }
+                    if ResetPasswordPreviewLaunch.isActive {
+                        ResetPasswordPreviewScreen().zIndex(2)
+                    }
+                    if ForgotPasswordPreviewLaunch.isActive {
+                        ForgotPasswordPreviewScreen().zIndex(2)
+                    }
+                    if LinkSignInConfirmationPreviewLaunch.isActive {
+                        LinkSignInConfirmationPreviewScreen().zIndex(2)
                     }
                     #endif
                 }
@@ -221,16 +228,22 @@ struct MeeshyApp: App {
                                 activeGuestSession = GuestSession(
                                     identifier: guestSession.identifier,
                                     context: ctx,
-                                    isDeliberate: guestSession.isDeliberate
+                                    isDeliberate: guestSession.isDeliberate,
+                                    origin: guestSession.origin
                                 )
                             },
                             onAccountRequest: { entry in
                                 deepLinkRouter.requestAccount(entry, forShareLink: guestSession.identifier)
                                 dismissGuestSession()
+                            },
+                            onNewLink: { identifier in
+                                activeGuestSession = GuestSession(identifier: identifier, context: AnonymousSessionStore.load(linkId: identifier), isDeliberate: guestSession.isDeliberate)
                             }
                         )
                     }
                 }
+                // Posté par le transport, hors du fil principal : la session se termine sur lui.
+                .onReceive(NotificationCenter.default.publisher(for: .meeshyGuestSessionEnded).receive(on: DispatchQueue.main)) { endGuestSession($0) }
                 .visitorContentCover(
                     presenter: visitorPresenter,
                     isEligible: !authManager.isAuthenticated && activeGuestSession == nil && launchSplash.phase != .covering
@@ -241,11 +254,10 @@ struct MeeshyApp: App {
                 )) {
                     WelcomeView(hasCompletedOnboarding: $hasCompletedOnboarding)
                 }
-                // **L'hôte des toasts est un modificateur depuis #4872.** Il
-                // vivait ici, et ici SEULEMENT : un `fullScreenCover` — le
-                // composer — le couvrait, donc tout toast levé de là-haut était
-                // invisible. La forme n'a pas changé ; sa PLACE peut désormais
-                // se répéter sans se recopier.
+                // **L'hôte des toasts est un modificateur.** Un `fullScreenCover` — le
+                // composer — couvrirait un hôte posé à la seule racine : tout toast levé
+                // de là-haut serait invisible. Sa PLACE peut donc se répéter sans se
+                // recopier.
                 .feedbackToastOverlay()
                 .ageGateOverlay()
                 .sheet(isPresented: $showCrashSheet) {
@@ -256,7 +268,7 @@ struct MeeshyApp: App {
                 .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .onOpenURL { url in
-                    // **#5056 — `meeshy://compose-share` n'est pas une
+                    // **`meeshy://compose-share` n'est pas une
                     // DESTINATION.** Il ne navigue nulle part : il demande de
                     // reprendre une fiche que l'extension vient de déposer, et
                     // c'est le cover racine qui la présente. Le faire passer par
@@ -266,6 +278,13 @@ struct MeeshyApp: App {
                     // L'identifiant est PASSÉ, pas deviné : deux partages
                     // rapides se suivent, et reprendre « la plus ancienne »
                     // ouvrirait la première pièce sur le geste de la seconde.
+                    // Même principe pour un partage RELAYÉ par
+                    // l'extension : la fiche est déjà sur le disque, l'écran de
+                    // partage de la racine la présente.
+                    if let relayId = ShareRelayHandoff.shareId(from: url) {
+                        ShareRelayConsumer.shared.consumeNext(id: relayId)
+                        return
+                    }
                     if ShareComposeLink.shareId(from: url) != nil {
                         let identifiant = ShareComposeLink.shareId(from: url)
                         Task { await ShareComposeHandoffConsumer.shared.consumeNext(id: identifiant) }
@@ -294,7 +313,7 @@ struct MeeshyApp: App {
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     #if DEBUG
-                    // Vitrine App Store (#8855) : session fictive et lien fixé AVANT la
+                    // Vitrine App Store : session fictive et lien fixé AVANT la
                     // restauration de l'environnement et de la session — voir `VitrineStage`.
                     VitrineStage.preparer()
                     #endif
@@ -316,7 +335,7 @@ struct MeeshyApp: App {
                     NotificationToastManager.shared.hapticPlayer = {
                         HapticFeedback.light()
                     }
-                    // #6999 — un fil consommé quitte le centre iOS. Le SDK sait
+                    // Un fil consommé quitte le centre iOS. Le SDK sait
                     // CE QUI est consommé ; la couture `UNUserNotificationCenter`
                     // et le budget d'arrière-plan qui l'entoure vivent
                     // app-side, dans `NotificationActionHandler`.
@@ -327,7 +346,7 @@ struct MeeshyApp: App {
                     // bannière déjà livrée suit la suppression — même atome de
                     // retrait que le push de contrôle `notification_revoked`.
                     NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
-                    // #7453 — le balayage des bannières éphémères échues, au
+                    // Le balayage des bannières éphémères échues, au
                     // démarrage puis à chaque retour au premier plan. C'est le
                     // seul des trois chemins qui tourne quand l'utilisateur
                     // REGARDE : la NSE nettoie plus souvent, mais elle ne
@@ -335,14 +354,14 @@ struct MeeshyApp: App {
                     await NotificationActionHandler.sweepExpiredEphemeralBanners()
                     NotificationActionHandler.shared.observeForegroundSweep()
                     launchSplash.reach(.cache)
-                    // #8674 — le cache vivant est-il bien celui du compte qui
+                    // Le cache vivant est-il bien celui du compte qui
                     // s'ouvre ? Sans effet dans le cas nominal ; après une
                     // bascule interrompue, il est rendu ou effacé AVANT la
                     // première lecture.
                     await CacheAccountBinder.shared.bind(DependencyContainer.activeAccountStoreKey()).value
                     await CacheCoordinator.shared.start()
                     #if DEBUG
-                    // Vitrine (#8855, #8922) : le fil et les médias sont rangés AVANT que la
+                    // Vitrine : le fil et les médias sont rangés AVANT que la
                     // restauration de la session ne monte les racines qui les lisent.
                     await VitrineStage.remplirLesCaches()
                     #endif
@@ -389,7 +408,7 @@ struct MeeshyApp: App {
                     // disque pour la reprise en avant-plan.
                     Task { await SharePendingSendConsumer.shared.consumeAll() }
 
-                    // **L'entrée externe** (#5056, vue `2a`) — jumelle du
+                    // **L'entrée externe** (vue `2a`) — jumelle du
                     // balayage ci-dessus, et pour la même raison. L'extension
                     // tente d'ouvrir `meeshy://compose-share` après avoir déposé
                     // sa fiche, mais `extensionContext.open` peut échouer sans
@@ -397,6 +416,7 @@ struct MeeshyApp: App {
                     // pièce serait perdue. Un raccourci ne doit jamais être le
                     // seul chemin.
                     Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
+                    ShareRelayConsumer.shared.consumeNext()
 
                     // Wire preference mutations to flush the outbox immediately after
                     // enqueue so changes don't get stuck `.pending` until boot/foreground
@@ -460,17 +480,15 @@ struct MeeshyApp: App {
                             // Le chemin vient d'un enregistrement PERSISTÉ, écrit
                             // par une version possiblement antérieure de l'app :
                             // aucun type ne lui survit. C'est le seul appelant
-                            // légitime de cette entrée, et son nom le dit (#4282).
+                            // légitime de cette entrée, et son nom le dit.
                             //
-                            // L'ENVELOPPE SEULE, et rien de `data`. Ce site exigeait
-                            // `APIResponse<MeeshyUser>` ; `PATCH /users/me` sert
-                            // `data: { user, message }` (profile-updates.ts), donc le
-                            // décodage tombait TOUJOURS — après une écriture réussie,
-                            // dans le catch générique, action gardée en file, rejouée
-                            // à chaque retour en ligne, compteur jamais redescendu.
-                            // Un rejeu ne veut rien de la réponse sinon son acceptation :
-                            // exiger une forme de `data` est un pari sur une route qu'on
-                            // ne connaît pas (`SettingsReplayEnvelopeTests`).
+                            // L'ENVELOPPE SEULE, et rien de `data`. `PATCH /users/me` sert
+                            // `data: { user, message }` (profile-updates.ts) : exiger
+                            // `APIResponse<MeeshyUser>` ferait échouer le décodage après une
+                            // écriture réussie, et l'action resterait en file, rejouée à chaque
+                            // retour en ligne. Un rejeu ne veut rien de la réponse sinon son
+                            // acceptation : exiger une forme de `data` est un pari sur une route
+                            // qu'on ne connaît pas (`SettingsReplayEnvelopeTests`).
                             let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
                                 persistedPath: action.endpoint,
                                 method: action.httpMethod,
@@ -534,15 +552,15 @@ struct MeeshyApp: App {
                         // `.inflight` state by a prior crash mid-dispatch. Without
                         // this, those rows are invisible to flush() (which only
                         // selects `.pending`) until the next background/foreground
-                        // cycle triggers BackgroundTransitionCoordinator which also
+                        // transition triggers BackgroundTransitionCoordinator which also
                         // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
                         // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start. P2 — do/catch + log
+                        // path is skipped on cold start. do/catch + log
                         // instead of a silent `try?`: BackgroundTransitionCoordinator's
                         // own `resumeFromBackground()` call to `bootRecovery()`
                         // (on the next foreground) is an independent retry
                         // path, so a failure here is not fatal, but it MUST
-                        // be visible — a silent failure here previously left
+                        // be visible — a silent failure would leave
                         // crash-orphaned `.inflight` rows invisible to
                         // flush() for the rest of THIS cold start with zero
                         // trace in the logs.
@@ -566,16 +584,19 @@ struct MeeshyApp: App {
                         )
                         let nextRetry = await flusher.flush()
                         await OutboxRetryScheduler.shared.schedule(at: nextRetry)
-                        // T10 — wake the outbox flusher on every network
+                        // Wake the outbox flusher on every network
                         // reconnect: a mutation enqueued offline leaves no
                         // backoff timer armed, so without this it waits for an
                         // incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
-                        // outbox-04 — wake the flusher immediately after any
+                        // Wake the flusher immediately after any
                         // social mutation is enqueued online (like/post/
                         // comment), instead of leaving it `.pending` until the
                         // next incidental lifecycle event.
                         await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
+                        // Reprise du socket sans changement réseau : le flusher,
+                        // seul émetteur de l'outbox, repart aussi.
+                        await OutboxRetryScheduler.shared.startObservingSocketReconnect()
                     }
 
                     // Engagement outbox boot: recover orphan .open sessions
@@ -589,11 +610,11 @@ struct MeeshyApp: App {
                         EngagementRetryScheduler.shared.startObservingNetworkReconnect()
                     }
 
-                    // #9680 — un envoi long (média, story, publication) se suit
+                    // Un envoi long (média, story, publication) se suit
                     // dans la Dynamic Island et sur l'écran verrouillé.
                     OutboxLiveActivityCoordinator.shared.start()
 
-                    // #9782 · #9783 · #9784 — l'appel, le vocal en lecture et
+                    // L'appel, le vocal en lecture et
                     // l'enregistrement se pilotent depuis l'îlot : les boutons
                     // de leurs activités reviennent ici.
                     LiveActivityCommandBinding.shared.install()
@@ -625,7 +646,7 @@ struct MeeshyApp: App {
                         // with no userId to scope its Keychain wipe against.
                         Task { await SessionManager.shared.migrateKeychainIfNeeded() }
                         #if DEBUG
-                        // Vitrine (#8855) : les vraies bases se remplissent avant le
+                        // Vitrine : les vraies bases se remplissent avant le
                         // préchargement de la liste ; l'écran de la scène s'ouvre une fois
                         // le voile du lancement parti.
                         await VitrineStage.remplir()
@@ -636,6 +657,13 @@ struct MeeshyApp: App {
                         // le splash attend pour tomber : la liste se montre
                         // servie, jamais vide puis remplie.
                         launchSplash.reach(.conversationList)
+                        // La liste se lit DÈS la session restaurée : le `.task` de la racine
+                        // arriverait 0,6 à 2,2 s plus tard, et le voile tomberait sur une liste
+                        // vide. La racine rejoint ce chargement
+                        // (`ConversationListVMOwner.loadAtLaunch`). Lancé AVANT de rendre la
+                        // main : le premier rendu de la racine tient le fil principal 0,8 à
+                        // 1,9 s (Debug), et la lecture du cache le chevauche au lieu de le suivre.
+                        ConversationListVMOwner.prewarm(userId: authManager.currentUser?.id ?? "")
                         _ = await CacheCoordinator.shared.conversations.load(for: "list")
 
                         // Détacher TOUS les bootstraps réseau (push, VoIP,
@@ -657,11 +685,10 @@ struct MeeshyApp: App {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
 
-                    // **Plus d'attente des sockets derrière un cache prêt**
-                    // (#6223, arbitré le 2026-09-15 : « Dès que prêt »). Elle
-                    // retenait le splash jusqu'à 1,5 s pour que présences et
-                    // non-lus ne se mettent pas à jour sous les yeux — ce que
-                    // Cache-First demande justement de laisser voir.
+                    // **Pas d'attente des sockets derrière un cache prêt** : le splash tombe
+                    // dès que le cache est prêt. Attendre les sockets le retiendrait jusqu'à
+                    // 1,5 s pour que présences et non-lus ne se mettent pas à jour sous les
+                    // yeux — ce que Cache-First demande justement de laisser voir.
                     await launchSplash.markReady()
                     // Surface any crash/hang reports captured since the last
                     // foreground. Done after the splash + session work so the
@@ -693,213 +720,11 @@ struct MeeshyApp: App {
                         }
                     }
                 }
-                .adaptiveOnChange(of: scenePhase) { _, newPhase in
-                    switch newPhase {
-                    case .active:
-                        // #7000 — ici vivait `removeAllDeliveredNotifications()` :
-                        // TOUTES les bannières livrées effacées à chaque retour au
-                        // premier plan, celles d'autres conversations comprises,
-                        // même sans session, et sans rien rafraîchir derrière. On
-                        // vidait le seul endroit où l'utilisateur pouvait lire ce
-                        // qu'il avait manqué, en laissant cloche et badge périmés.
-                        // Le geste juste est l'inverse : relire (liste + compteur).
-                        // Les bannières ne partent plus qu'à la consommation de ce
-                        // qu'elles annoncent.
-                        NotificationGapResyncCoordinator.shared.refreshOnForeground()
-                        // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
-                        // incoming calls use the in-app banner (socket) instead of a
-                        // VoIP push / CallKit.
-                        MessageSocketManager.shared.emitAppForeground(true)
-                        ConversationViewingReporter.shared.setForeground(true)
-                        Task { await AuthManager.shared.refreshCurrentUserProfile() }
-                        // Only rearm the socket + backfill if we ACTUALLY backgrounded.
-                        // A transient .inactive→.active (Control Center, notification
-                        // banner, app-switcher peek, Face ID) never suspended the
-                        // socket, so force-reconnecting a healthy socket here is pure
-                        // churn — disconnect/reconnect + the presence-refresh loop (#11).
-                        // Cold launch also lands here with the flag false: RootView's
-                        // own connect() handles the initial connection.
-                        if didEnterBackground {
-                            didEnterBackground = false
-                            Task { await handleForegroundTransition() }
-                        }
-                        // Drain any mark-as-read actions the user tapped from the
-                        // widget while the app was suspended.
-                        Task { await WidgetActionFlusher.shared.flush() }
-                    case .background:
-                        didEnterBackground = true
-                        // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
-                        // FIRST (while the socket is still alive, before the
-                        // coordinator may suspend it) so incoming calls fall back to
-                        // a VoIP push (CallKit) — a suspended socket can't ring.
-                        MessageSocketManager.shared.emitAppForeground(false)
-                        ConversationViewingReporter.shared.setForeground(false)
-                        // Delegate the whole background entry to a single
-                        // coordinator guarded by a beginBackgroundTask. The
-                        // coordinator owns the order (stop players → flush
-                        // caches → ack pushes → stop heartbeats → schedule
-                        // BGTasks → sync widgets) and guarantees the task id
-                        // is ended even if a step throws.
-                        Task { await BackgroundTransitionCoordinator.shared.enterBackground() }
-                        // Persist current dwell/watch into the open engagement
-                        // rows so an OS kill while suspended is recovered as a
-                        // truncated session at next boot (no network flush here —
-                        // background time is too scarce, the resume/boot paths flush).
-                        Task { await EngagementTracker.shared.checkpointAll() }
-                    case .inactive:
-                        break
-                    @unknown default:
-                        break
-                    }
-                }
+                // La session elle-même (sockets, clés, notifications) se règle dans
+                // `MeeshyApp+Lifecycle.swift`, hors de toute fenêtre : ici, seulement
+                // l'état de CETTE vue.
                 .adaptiveOnChange(of: authManager.isAuthenticated) { _, isAuth in
-                    // Tag every subsequent crash report with the active user
-                    // so we can filter the Crashlytics dashboard per account.
-                    // Cleared on logout to prevent the next user inheriting
-                    // the previous identity.
-                    CrashDiagnosticsManager.shared.setUserID(
-                        isAuth ? authManager.currentUser?.id : nil
-                    )
-                    if isAuth {
-                        activeGuestSession = nil
-                        deepLinkRouter.replayShareLinkAwaitingAccount()
-                        // Re-arm every coordinator after a logout/login cycle.
-                        // `start()` is idempotent-guarded, so without the
-                        // matching `reset()` on the logout branch below the
-                        // second login would be a silent no-op and socket
-                        // publishers would be left without subscribers.
-                        NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
-                        NotificationCoordinator.shared.start()
-                        // A5.3 — resync notifications quand SyncSeqTracker
-                        // détecte un trou de séquence (_seq) sur notification:new.
-                        NotificationGapResyncCoordinator.shared.start()
-                        Task { await CacheCoordinator.shared.start() }
-                        // SOTA audit Pilier 22 V2 — register the publish-queue
-                        // handler + listeners so any pending stories from a
-                        // previous session start surfacing to the UI as soon
-                        // as the user authenticates.
-                        StoryPublishService.shared.configure()
-                        // Re-hydrate the friendship cache for the now-active
-                        // user. `MeeshyApp.task` only hydrates once per view
-                        // lifecycle, so without this call an account switch
-                        // (logout A → login B) would leave B with A's friend
-                        // graph until the next cold start.
-                        if !FriendshipCache.shared.isHydrated {
-                            Task { await FriendshipCache.shared.hydrate() }
-                        }
-                        // `MeeshyApp.task` only runs once per view lifecycle;
-                        // force a fresh socket connection so we don't rely on
-                        // any stale state carried over from a prior session.
-                        MessageSocketManager.shared.forceReconnect()
-                        SocialSocketManager.shared.forceReconnect()
-                        // Route conversation/category socket events (deleted,
-                        // reordered, category:×4) into ConversationStore /
-                        // UserCategoryStore. Idempotent (re-wires cleanly) and
-                        // the 6 publishers live on the socket singleton, so a
-                        // single activation after login survives reconnects.
-                        //
-                        // `onReadingModePreferenceChanged` — G-124, volet
-                        // « préférence serveur » de P7. Le SDK relaie la
-                        // valeur BRUTE reçue sur `user:preferences-updated`
-                        // (scope conversation) ; ici, et ici seulement, elle
-                        // devient un `ReadingModePreference` typé et atterrit
-                        // dans le MÊME magasin scopé que les trois autres
-                        // points d'entrée (encoche liste, sous-menu, fil
-                        // ouvert — `LentilleReadingModePreferenceCenter`,
-                        // `Lentille/Mode/LentilleReadingModeContext.swift`) :
-                        // ce n'est PAS un second canal, c'est une quatrième
-                        // écriture dans le magasin optimiste existant, qui
-                        // devient cache devant ce canal serveur (contrat
-                        // LWS-2bis, en-tête de `ReadingModePreferenceStoring`).
-                        // Gate sur le MÊME drapeau que ces trois surfaces —
-                        // écrire sous drapeau OFF n'aurait aucun lecteur, mais
-                        // couper la garde ferait dépendre R19 d'une future
-                        // purge plutôt que d'un simple gate au point d'écriture.
-                        // Une valeur brute hors des 5 cas gelés (`rawValue:`
-                        // échoue) est ignorée — jamais une préférence
-                        // fabriquée depuis une chaîne inconnue.
-                        ConversationStoreSocketBridge.shared.activate(
-                            onReadingModePreferenceChanged: { conversationId, rawReadingMode in
-                                guard LentilleFeatureFlag.isReadingModesEnabled,
-                                      let value = ReadingModePreference(rawValue: rawReadingMode)
-                                else { return }
-                                Task {
-                                    await LentilleReadingModePreferenceCenter.shared.set(
-                                        conversationId: conversationId, value: value, optimistic: false
-                                    )
-                                }
-                            }
-                        )
-                        Task { await PushPermissionPrompt.onSessionOpened(origin: authManager.sessionOrigin) }
-                        Task { await NotificationToastManager.shared.refreshUnreadCount() }
-                        pushManager.reRegisterTokenIfNeeded()
-                        // Force a PushKit re-registration on every login so the
-                        // gateway UPSERT-by-(userId,token,type) flips back to
-                        // isActive=true any device row deactivated during a
-                        // previous BadDeviceToken burst. register() alone is a
-                        // no-op when voipRegistry is already set.
-                        VoIPPushManager.shared.forceReregister()
-                        Task {
-                            do {
-                                let bundle = try E2EEService.shared.generatePublicBundle()
-                                try await E2EAPI.shared.uploadBundle(bundle: bundle)
-                            } catch {
-                                Logger.e2ee.error("E2EE bundle upload failed: \(error)")
-                            }
-                        }
-                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-                        // A push tapped from the login screen leaves a pending
-                        // payload on `PushNotificationManager`; the root view
-                        // mounted by this login transition consumes it directly
-                        // via its `$pendingNotificationPayload` subscription
-                        // (the published value is replayed to that late
-                        // subscriber), so no manual hop is needed here.
-                    } else {
-                        NotificationToastManager.shared.reset()
-                        NotificationCoordinator.shared.reset()
-                        // Clear the in-memory friendship graph BEFORE the
-                        // cache purge so any view that re-renders during the
-                        // transition can't read user A's friend list.
-                        FriendshipCache.shared.clear()
-                        // Wipe the Signal/E2EE material — IdentityKey,
-                        // SignedPreKey, per-peer SymmetricKeys, peer list.
-                        // Without this, user B logging in next would
-                        // generate a public bundle from user A's leftover
-                        // IdentityKey and upload it under their own
-                        // account — a hard cross-account identity leak.
-                        Task { await SessionManager.shared.clearSessions() }
-                        // #8674 — le cache n'est plus vidé ici : la sortie de
-                        // session le lie à « personne », en mettant de côté
-                        // celui d'un compte gardé et en effaçant celui d'un
-                        // compte déconnecté. Sans effet quand c'est déjà fait ;
-                        // le coordinateur est seulement démonté pour que le
-                        // `start()` suivant réarme.
-                        CacheAccountBinder.shared.bind(nil)
-                        Task { await CacheCoordinator.shared.stop() }
-                        // Purge the device's VoIP registration (PushKit +
-                        // keychain-backed token record) — without this, a
-                        // different user logging in on this device inherits
-                        // user A's VoIP push registration until the
-                        // registration cooldown naturally expires.
-                        Task { await VoIPPushManager.shared.unregisterAndClearToken() }
-                        // End any active call before the sockets go down —
-                        // otherwise the call is orphaned locally: the peer
-                        // keeps ringing/connecting to a device that vanished
-                        // without sending a hangup signal.
-                        if CallManagerHost.shared.manager?.callState.isActive == true {
-                            CallManager.shared.endCall()
-                        }
-                        MessageSocketManager.shared.disconnect()
-                        SocialSocketManager.shared.disconnect()
-                        // Drop the store subscriptions so an event from user A
-                        // can't mutate the store after logout.
-                        ConversationStoreSocketBridge.shared.deactivate()
-                        // startup-08 — une BGTask soumise avant le logout ne
-                        // doit pas survivre pour réveiller un appareil
-                        // déconnecté (delta sync 401 en boucle, prefetch sur
-                        // cache vidé).
-                        BackgroundTaskManager.shared.cancelAllScheduled()
-                    }
+                    if isAuth { activeGuestSession = nil }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
@@ -919,6 +744,18 @@ struct MeeshyApp: App {
                         isDeliberate: true
                     )
                 }
+                // « Entrer dans World Wide » depuis l'écran de
+                // connexion : la session invitée s'ouvre sur la clé SERVIE
+                // par `GET /world`, et reprend celle que cet appareil y a déjà.
+                .adaptiveOnChange(of: deepLinkRouter.requestedWorldEntry) { _, entry in
+                    guard let entry else { return }
+                    deepLinkRouter.requestedWorldEntry = nil
+                    activeGuestSession = GuestSession(
+                        identifier: entry.shareLinkIdentifier,
+                        context: AnonymousSessionStore.load(linkId: entry.shareLinkIdentifier),
+                        origin: .world(entry)
+                    )
+                }
                 // Prisme Linguistique — dès que la langue principale de
                 // l'utilisateur change (login, changement de préférence), on la
                 // met en cache pour l'override de langue UI appliqué au prochain
@@ -928,7 +765,31 @@ struct MeeshyApp: App {
                     UILanguageOverride.refreshNotificationLanguage()
                 }
             }
+            }
+            // La taille de CETTE fenêtre (Stage Manager, Split View), publiée au-dessus de tout ce qu'elle porte :
+            // feuilles, couvertures, toasts et barrière d'âge la lisent aussi.
+            .publishingSceneWindowSize()
         }
+        .commands { MeeshyCommands() }
+        detachedWindows
+    }
+
+    @SceneBuilder
+    private var detachedWindows: some Scene {
+        // Les fenêtres DÉTACHÉES (iPad) : une conversation, ou le fil de réels, à côté de la fenêtre principale.
+        WindowGroup(id: DetachedWindowOpener.sceneId, for: DetachedWindowContent.self) { $content in
+            DetachedWindowView(content: content)
+                .environment(\.mentionContactsProvider, MentionContactsAudienceBridge())
+                .feedbackToastOverlay()
+                // Mêmes barrière d'âge et préférence d'animation que la fenêtre principale.
+                .ageGateOverlay()
+                .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
+                .environmentObject(authManager)
+                .environmentObject(deepLinkRouter)
+                .preferredColorScheme(theme.preferredColorScheme)
+                .publishingSceneWindowSize()
+        }
+        .handlesExternalEvents(matching: [DetachedWindowOpener.activityIdentifier])
     }
 
     // MARK: - Test seam (DEBUG)
@@ -955,9 +816,9 @@ struct MeeshyApp: App {
     // MARK: - Push Notifications
 
     /// Un RELAIS vers le site unique (`PushPermissionPrompt`), jamais une
-    /// seconde copie : le fil d'envoi la déclenche aussi (#5218). Au démarrage
+    /// seconde copie : le fil d'envoi la déclenche aussi. Au démarrage
     /// à froid, le report de l'inscription et la carte 5 de l'onboarding
-    /// passent d'abord (#7915).
+    /// passent d'abord.
     private func requestPushPermissionIfNeeded() async {
         await PushPermissionPrompt.onColdStart(request: { await PushPermissionPrompt.requestIfNeeded(using: pushManager) })
     }
@@ -1021,19 +882,6 @@ struct MeeshyApp: App {
         }
     }
 
-    // MARK: - App Lifecycle Transitions
-
-    private func handleForegroundTransition() async {
-        guard authManager.isAuthenticated else { return }
-        // Coordinator rearms the sockets (force reconnect), flushes pending
-        // delivery receipts and drives the conversation sync. We do NOT
-        // check `isConnected` here — that flag is unreliable after iOS
-        // suspension because the Socket.IO `disconnect` callback may not
-        // fire when the OS kills the WebSocket. The coordinator forces a
-        // fresh disconnect + connect cycle regardless of the flag state.
-        await BackgroundTransitionCoordinator.shared.resumeFromBackground()
-    }
-
     // MARK: - Guest Session Lifecycle
 
     private func dismissGuestSession() {
@@ -1044,6 +892,18 @@ struct MeeshyApp: App {
             AnonymousSessionStore.delete(linkId: id)
         }
         activeGuestSession = nil
+    }
+
+    /// La passerelle a terminé la session (lien échu, accès retiré) :
+    /// l'appareil l'oublie (trousseau, jeton, socket et ses reconnexions) et
+    /// le fil laisse place à l'écran qui le dit.
+    private func endGuestSession(_ notification: Notification) {
+        guard let session = activeGuestSession, let end = GuestSessionEnd(notification: notification),
+              session.isEnded(byRefusedToken: GuestSessionEnd.refusedSessionToken(in: notification)) else { return }
+        session.storedSessionKeys.forEach { AnonymousSessionStore.delete(linkId: $0) }
+        APIClient.shared.anonymousSessionToken = nil
+        MessageSocketManager.shared.disconnect()
+        activeGuestSession = session.ended(by: end)
     }
 
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)
@@ -1081,7 +941,7 @@ struct MeeshyApp: App {
             deepLinkRouter.consumePendingDeepLink()
             UIApplication.shared.open(url)
         default:
-            // #9171 — une publication ou un réel s'affiche au visiteur, SANS
+            // Une publication ou un réel s'affiche au visiteur, SANS
             // consommer le lien : il s'ouvrira encore après la connexion.
             visitorPresenter.present(link)
         }
@@ -1106,5 +966,20 @@ struct SystemThemeDetector<Content: View>: View {
             .onAppear {
                 ThemeManager.shared.syncWithSystem(systemScheme)
             }
+    }
+}
+
+// MARK: - Profile sheet environment
+
+private struct ProfileSheetEnvironment: ViewModifier {
+    /// Le niveau et le rang d'un membre, sur la BANNIÈRE de sa fiche : ce que SA visibilité autorise,
+    /// rien sinon. Le chargeur de profil (cache, conversations partagées) est posé au même endroit : une seule
+    /// injection, toutes les feuilles de profil la reçoivent.
+    func body(content: Content) -> some View {
+        content
+            .environment(\.profileGameSection, ProfileGameSection { userId, _ in
+                AnyView(GameBannerBadge(userId: userId))
+            })
+            .environment(\.profileLoading, LiveProfileLoading())
     }
 }

@@ -79,8 +79,12 @@ extension MeeshyComposerHost {
     /// même raison qu'eux le premier plan reste `textPrimary(isDark: true)` :
     /// `glassControlForeground()` rendrait `indigo950` en thème clair, sur un
     /// plateau qui est sombre en permanence.
+    ///
+    /// Il se monte par `ComposerTopBarMenu` (#10542), qui décide si ce visage
+    /// est le libellé du `Menu` ou se peint hors de lui : c'est ce qui le tient
+    /// sur l'axe de la croix et du `(+)` sous iOS 16 → 25.
     var overflowMenu: some View {
-        Menu {
+        ComposerTopBarMenu(label: ComposerOverflowCopy.menu) {
             ForEach(Array(documentOverflowEntries.enumerated()), id: \.offset) { entry in
                 let item = entry.element
                 Button(role: item == .clearAll ? .destructive : nil) {
@@ -90,16 +94,15 @@ extension MeeshyComposerHost {
                           systemImage: ComposerOverflowCopy.icon(item))
                 }
             }
-        } label: {
+        } face: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: ComposerControlMetrics.visualDiameter,
                        height: ComposerControlMetrics.visualDiameter)
                 // Teinté du plateau, comme la croix qu'il encadre (#8370).
                 .adaptiveLiquidGlass(in: Circle(), tint: tint.color.opacity(0.55), interactive: true)
         }
-        .accessibilityLabel(Text(ComposerOverflowCopy.menu))
     }
 
     /// **Ce que chaque entrée FAIT.** Séparé de ce qui les OFFRE : la règle dit

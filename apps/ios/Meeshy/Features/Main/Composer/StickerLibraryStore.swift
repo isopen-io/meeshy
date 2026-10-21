@@ -33,7 +33,7 @@ actor StickerLibraryStore {
     private let baseDirectory: URL
     private let budgetBytes: Int
     private let fileManager = FileManager.default
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "sticker-library")
+    private let logger = MeeshyLog.logger(.stickerLibrary)
 
     private var entries: [Entry] = []
     private var indexLoaded = false

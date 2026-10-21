@@ -48,7 +48,7 @@ import { LONG_PRESS_MS, pressReducer, type PressState } from './long-press';
  *
  * iOS y ajoute `LongPressGesture(minimumDuration: 0.5)`
  * (`FloatingButtons.swift:380-385`). Ici, c'est la machine PURE de
- * `long-press.ts` (`pressReducer` : 500 ms, 6 px) qui le décide — la même que
+ * `long-press.ts` (`pressReducer` : `LONG_PRESS_MS`, 6 px) qui le décide — la même que
  * le menu d'un message, et le même seuil que le glisser : au-delà de 6 px,
  * l'appui long est annulé ET le glisser commence, jamais l'un sans l'autre.
  * Déclenché, il abandonne la course (le disque ne bouge plus) et avale le clic

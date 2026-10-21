@@ -119,6 +119,7 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   'conversations/messages-read-status.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'conversations/messages-view-once.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'conversations/receipts.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
+  'conversations/shared-translations.ts': { kind: 'exempt', reads: 3, why: DOES_NOT_SELECT_SENDER },
   'me/export.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'mentions.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   'reactions.ts': { kind: 'exempt', reads: 5, why: DOES_NOT_SELECT_SENDER },
@@ -183,6 +184,9 @@ const SERVICE_SURFACES: Record<string, Classification> = {
   // n'entre dans aucune de leurs branches.
   'AttachmentReactionService.ts': { kind: 'exempt', reads: 2, why: DOES_NOT_SELECT_SENDER },
   'attachments/attachmentReadVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
+  // #10726 — le mode de chiffrement du porteur et de sa conversation, pour
+  // savoir si la passerelle lit le vocal. Jamais `sender`.
+  'attachments/attachmentCarrierServerReadable.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9315 — même nature que son voisin : l'état des messages porteurs d'un fichier, sans `sender`.
   'attachments/fileRouteVerdict.ts': { kind: 'exempt', reads: 1, why: DOES_NOT_SELECT_SENDER },
   // #9646 — les cinq colonnes de protection des porteurs d'une page de pièces

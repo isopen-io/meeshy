@@ -208,13 +208,16 @@ async function syncParticipantDepartures(opts: {
   sinceDate: Date;
   cap: number;
   cursor?: CursorKey;
+  /** #10205 — un invité ne voit que SA ligne : ses propres départs, jamais ceux des autres. */
+  onlyParticipantId?: string;
 }): Promise<{ tombstones: Array<{ id: string; conversationId: string; deletedAt: Date }>; truncated: boolean; nextKey: CursorKey | undefined }> {
-  const { prisma, conversationIds, sinceDate, cap, cursor } = opts;
+  const { prisma, conversationIds, sinceDate, cap, cursor, onlyParticipantId } = opts;
   const floor = cursor ? new Date(cursor.u) : sinceDate;
 
   const rows = await prisma.participant.findMany({
     where: {
       conversationId: { in: [...conversationIds] },
+      ...(onlyParticipantId ? { id: onlyParticipantId } : {}),
       OR: [
         { leftAt: { gt: floor } },
         { bannedAt: { gt: floor } },
@@ -266,8 +269,10 @@ export async function syncParticipants(opts: {
   }
   const { conversationIds } = membership;
 
+  // #10205 — un invité (sans compte) ne lit pas le roster : sa SEULE ligne.
+  const onlyParticipantId = identity.kind === 'anonymous' ? identity.participantId : undefined;
   const departures = await syncParticipantDepartures({
-    prisma, conversationIds, sinceDate, cap, cursor: cursor?.d,
+    prisma, conversationIds, sinceDate, cap, cursor: cursor?.d, onlyParticipantId,
   });
 
   // Roster ACTUEL — `joinedAt` joue le rôle de `createdAt`, seule horloge que
@@ -277,6 +282,7 @@ export async function syncParticipants(opts: {
     where: {
       conversationId: { in: [...conversationIds] },
       isActive: true,
+      ...(onlyParticipantId ? { id: onlyParticipantId } : {}),
       ...(cursor?.c
         ? {
             OR: [

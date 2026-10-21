@@ -85,5 +85,6 @@ extension StickerPickerView {
         .buttonStyle(.plain)
         .stickerFavoriteMenu(.mee(sticker), usage: usage)
         .accessibilityLabel(sticker.title)
+        .accessibilityIdentifier(StickerAccessibilityID.mee(sticker.id))
     }
 }

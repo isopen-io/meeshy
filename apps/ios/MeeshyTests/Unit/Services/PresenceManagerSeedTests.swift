@@ -110,7 +110,7 @@ final class PresenceManagerSeedTests: XCTestCase {
             sut.presenceState(for: "typer"), PresenceState.online,
             "typing:start reçu = preuve d'activité ; une page REST plus ancienne ne doit pas la dégrader"
         )
-        XCTAssertEqual(sut.presenceMap["typer"]?.isOnline, true)
+        XCTAssertEqual(sut.presenceMap["typer"]?.isOnline, false, "l'activité date le pair, elle ne le déclare pas connecté (#11412)")
         XCTAssertEqual(sut.presenceMap["typer"]?.lastActiveAt, fresh)
     }
 
@@ -142,6 +142,16 @@ final class PresenceManagerSeedTests: XCTestCase {
     }
 
     // MARK: - Fabriques
+
+    // MARK: - Un instantané serveur qui répète un utilisateur ne plante pas
+
+    func test_ingestSnapshot_duplicateUser_keepsTheLatestEntry() {
+        sut.ingestSnapshot([
+            masked("dup"),
+            UserStatusEvent(userId: "dup", username: "dup", isOnline: true, lastActiveAt: nil)
+        ])
+        XCTAssertEqual(sut.presenceMap["dup"]?.isOnline, true, "le dernier relevé d'un même utilisateur l'emporte")
+    }
 
     private func masked(_ userId: String) -> UserStatusEvent {
         UserStatusEvent(userId: userId, username: userId, isOnline: false, lastActiveAt: nil)

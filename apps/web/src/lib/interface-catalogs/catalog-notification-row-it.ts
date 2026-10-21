@@ -6,7 +6,6 @@ const itNotificationRow = {
   'notifications.row.kind.story': 'Storia',
   'notifications.row.kind.reel': 'Reel',
   'notifications.row.kind.mood': 'Stato d’animo',
-  'notifications.row.kind.status': 'Stato',
   'notifications.row.kind.post': 'Post',
   'notifications.row.media.photo': '📷 Foto',
   'notifications.row.media.video': '🎥 Video',

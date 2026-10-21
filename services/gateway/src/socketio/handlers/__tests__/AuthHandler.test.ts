@@ -5,6 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import { AuthHandler } from '../AuthHandler';
+import { LIVE_SID, liveSession } from '../../../services/auth/__tests__/live-session-double';
 import type { Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { CallEndReason } from '@meeshy/shared/prisma/client';
@@ -36,9 +37,8 @@ const createMockPrisma = (): PrismaClient => ({
     findUnique: jest.fn(),
     findMany: jest.fn().mockResolvedValue([])
   },
-  callParticipant: {
-    findMany: jest.fn().mockResolvedValue([])
-  }
+  userSession: { findFirst: jest.fn(async () => liveSession()) },
+  callParticipant: { findMany: jest.fn().mockResolvedValue([]) }
 } as unknown as PrismaClient);
 
 describe('AuthHandler', () => {
@@ -87,7 +87,7 @@ describe('AuthHandler', () => {
     });
 
     // Mock jwt.verify to return a valid decoded token
-    jest.spyOn(jwt, 'verify').mockReturnValue({ userId: 'user-123' } as any);
+    jest.spyOn(jwt, 'verify').mockReturnValue({ sid: LIVE_SID, userId: 'aaaaaaaaaaaaaaaaaaaa0123' } as any);
   });
 
   afterEach(() => {
@@ -105,18 +105,18 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en'
       } as any);
 
       await authHandler.handleTokenAuthentication(mockSocket);
 
       expect(connectedUsers.size).toBe(1);
-      expect(socketToUser.get('socket-123')).toBe('user-123');
+      expect(socketToUser.get('socket-123')).toBe('aaaaaaaaaaaaaaaaaaaa0123');
       expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({
         success: true,
         user: expect.objectContaining({
-          id: 'user-123',
+          id: 'aaaaaaaaaaaaaaaaaaaa0123',
           isAnonymous: false
         })
       }));
@@ -132,7 +132,7 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -163,7 +163,7 @@ describe('AuthHandler', () => {
       });
 
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -243,14 +243,14 @@ describe('AuthHandler', () => {
   describe('handleDisconnection', () => {
     it('should cleanup user data on disconnect', async () => {
       // Setup connected user
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('aaaaaaaaaaaaaaaaaaaa0123', new Set(['socket-123']));
 
       const mockSocket = createMockSocket();
 
@@ -263,41 +263,41 @@ describe('AuthHandler', () => {
 
     it('should handle multi-device disconnect correctly', async () => {
       // User with 2 devices
-      socketToUser.set('socket-123', 'user-123');
-      socketToUser.set('socket-456', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      socketToUser.set('socket-456', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123', 'socket-456']));
+      userSockets.set('aaaaaaaaaaaaaaaaaaaa0123', new Set(['socket-123', 'socket-456']));
 
       const mockSocket = createMockSocket({ id: 'socket-123' });
 
       await authHandler.handleDisconnection(mockSocket);
 
       // User should still have 1 socket active
-      expect(userSockets.get('user-123')?.size).toBe(1);
-      expect(userSockets.get('user-123')?.has('socket-456')).toBe(true);
+      expect(userSockets.get('aaaaaaaaaaaaaaaaaaaa0123')?.size).toBe(1);
+      expect(userSockets.get('aaaaaaaaaaaaaaaaaaaa0123')?.has('socket-456')).toBe(true);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
 
     it('should update connectedUsers with remaining socketId on multi-device disconnect', async () => {
-      socketToUser.set('socket-123', 'user-123');
-      socketToUser.set('socket-456', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      socketToUser.set('socket-456', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123', 'socket-456']));
+      userSockets.set('aaaaaaaaaaaaaaaaaaaa0123', new Set(['socket-123', 'socket-456']));
 
       await authHandler.handleDisconnection(createMockSocket({ id: 'socket-123' }));
 
       // connectedUsers must point to the surviving socket so presence lookups stay valid
-      expect(connectedUsers.get('user-123')?.socketId).toBe('socket-456');
+      expect(connectedUsers.get('aaaaaaaaaaaaaaaaaaaa0123')?.socketId).toBe('socket-456');
     });
 
     /**
@@ -403,23 +403,23 @@ describe('AuthHandler', () => {
         }
       ]);
 
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('aaaaaaaaaaaaaaaaaaaa0123', new Set(['socket-123']));
 
       await authHandler.handleDisconnection(createMockSocket());
 
       expect(mockCallService.leaveCall).not.toHaveBeenCalled();
       expect(mockPrisma.callParticipant.findMany).not.toHaveBeenCalled();
       // Presence cleanup still fully applied
-      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(connectedUsers.has('aaaaaaaaaaaaaaaaaaaa0123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
-      expect(userSockets.has('user-123')).toBe(false);
+      expect(userSockets.has('aaaaaaaaaaaaaaaaaaaa0123')).toBe(false);
     });
 
     it('should still delete from connectedUsers when call leaveCall throws (anonymous)', async () => {
@@ -490,7 +490,7 @@ describe('AuthHandler', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { id: 'anon-123' }
+            participantId: 'anon-123'
           })
         })
       );
@@ -690,19 +690,19 @@ describe('AuthHandler', () => {
     it('should not call leaveCall when there are no active call participations', async () => {
       (mockPrisma.callParticipant.findMany as jest.Mock).mockResolvedValue([]);
 
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('aaaaaaaaaaaaaaaaaaaa0123', new Set(['socket-123']));
 
       await authHandler.handleDisconnection(createMockSocket());
 
       expect(mockCallService.leaveCall).not.toHaveBeenCalled();
-      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(connectedUsers.has('aaaaaaaaaaaaaaaaaaaa0123')).toBe(false);
     });
 
     it('should call updateAnonymousOnlineStatus for anonymous user on disconnect', async () => {
@@ -757,19 +757,19 @@ describe('AuthHandler', () => {
     });
 
     it('should still clean maps when updateUserOnlineStatus throws', async () => {
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
       });
-      userSockets.set('user-123', new Set(['socket-123']));
+      userSockets.set('aaaaaaaaaaaaaaaaaaaa0123', new Set(['socket-123']));
       mockMaintenanceService.updateUserOnlineStatus.mockRejectedValue(new Error('service down'));
 
       await authHandler.handleDisconnection(createMockSocket());
 
-      expect(connectedUsers.has('user-123')).toBe(false);
+      expect(connectedUsers.has('aaaaaaaaaaaaaaaaaaaa0123')).toBe(false);
       expect(socketToUser.has('socket-123')).toBe(false);
     });
   });
@@ -780,7 +780,7 @@ describe('AuthHandler', () => {
         handshake: { auth: { token: 'valid-jwt-token' } }
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
@@ -817,7 +817,7 @@ describe('AuthHandler', () => {
         join: flakyJoin,
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123', systemLanguage: 'en',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
         regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
       } as any);
       jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
@@ -847,7 +847,7 @@ describe('AuthHandler', () => {
         join: alwaysFailingJoin,
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123', systemLanguage: 'en',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
         regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
       } as any);
       jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
@@ -875,7 +875,7 @@ describe('AuthHandler', () => {
         join: asyncJoin,
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123', systemLanguage: 'en',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
         regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
       } as any);
       jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
@@ -906,7 +906,7 @@ describe('AuthHandler', () => {
         join: asyncJoin,
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123', systemLanguage: 'en',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
         regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
       } as any);
       jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
@@ -937,7 +937,7 @@ describe('AuthHandler', () => {
         join: asyncJoin,
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -961,7 +961,7 @@ describe('AuthHandler', () => {
         handshake: { auth: { token: 'valid-jwt-token' } }
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
@@ -991,7 +991,7 @@ describe('AuthHandler', () => {
         handshake: { auth: { token: 'valid-jwt-token' } }
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
@@ -1001,7 +1001,7 @@ describe('AuthHandler', () => {
       await handlerWithSnapshot.handleTokenAuthentication(mockSocket);
       await Promise.resolve();
 
-      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'user-123', false);
+      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'aaaaaaaaaaaaaaaaaaaa0123', false);
     });
 
     it('should invoke emitPresenceSnapshot after anonymous token auth', async () => {
@@ -1021,7 +1021,7 @@ describe('AuthHandler', () => {
         handshake: { auth: { sessionToken: 'anon-session-token' } }
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId: 'conv-123'
@@ -1079,29 +1079,29 @@ describe('AuthHandler', () => {
     it('should authenticate registered user with valid JWT token', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
         deviceLocale: null
       } as any);
 
-      // jwt.verify is mocked in beforeEach to decode to { userId: 'user-123' }
+      // jwt.verify is mocked in beforeEach to decode to { userId: 'aaaaaaaaaaaaaaaaaaaa0123' }
       await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
       expect(connectedUsers.size).toBe(1);
-      expect(socketToUser.get('socket-123')).toBe('user-123');
+      expect(socketToUser.get('socket-123')).toBe('aaaaaaaaaaaaaaaaaaaa0123');
       expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({
         success: true,
-        user: expect.objectContaining({ id: 'user-123', isAnonymous: false })
+        user: expect.objectContaining({ id: 'aaaaaaaaaaaaaaaaaaaa0123', isAnonymous: false })
       }));
-      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('user-123', true, true);
+      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaa0123', true, true);
     });
 
     it('should authenticate anonymous user with sessionToken', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'fr',
         conversationId: 'conv-456'
@@ -1172,7 +1172,7 @@ describe('AuthHandler', () => {
     it('should resolve registered user language from systemLanguage on JWT auth, ignoring client-supplied language', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
@@ -1186,7 +1186,7 @@ describe('AuthHandler', () => {
       // systemLanguage is the highest-priority source in resolveUserLanguage, so
       // the resolved language is 'en' (the user's systemLanguage), NOT the
       // client-supplied 'fr'.
-      expect(connectedUsers.get('user-123')?.language).toBe('en');
+      expect(connectedUsers.get('aaaaaaaaaaaaaaaaaaaa0123')?.language).toBe('en');
     });
 
     // Cycle 125 — le témoin ci-dessus ne pouvait pas tomber. Son commentaire
@@ -1199,7 +1199,7 @@ describe('AuthHandler', () => {
     it('résout la langue au rang 2 quand le rang 1 est vide', async () => {
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: null,
         regionalLanguage: 'es',
         customDestinationLanguage: null,
@@ -1208,7 +1208,7 @@ describe('AuthHandler', () => {
 
       await authHandler.handleManualAuthentication(mockSocket, { token: 'valid-jwt-token' } as any);
 
-      const registered = connectedUsers.get('user-123');
+      const registered = connectedUsers.get('aaaaaaaaaaaaaaaaaaaa0123');
       expect(registered?.language).toBe('es');
       // La langue de cadrage est la TÊTE du prisme ordonné, jamais une seconde
       // lecture qui pourrait en diverger.
@@ -1230,7 +1230,7 @@ describe('AuthHandler', () => {
 
       const mockSocket = createMockSocket();
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
@@ -1241,7 +1241,7 @@ describe('AuthHandler', () => {
 
       // emitPresenceSnapshot is fire-and-forget (.catch) — flush microtasks
       await Promise.resolve();
-      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'user-123', false);
+      expect(mockEmitPresenceSnapshot).toHaveBeenCalledWith(mockSocket, 'aaaaaaaaaaaaaaaaaaaa0123', false);
     });
   });
 
@@ -1256,7 +1256,7 @@ describe('AuthHandler', () => {
     });
 
     it('should return early when user is not in connectedUsers map', async () => {
-      socketToUser.set('socket-123', 'user-123');
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
       // connectedUsers intentionally empty
 
       await authHandler.handleHeartbeat(createMockSocket());
@@ -1265,9 +1265,9 @@ describe('AuthHandler', () => {
     });
 
     it('should refresh presence via the throttled heartbeat path for a registered user (no per-beat DB write)', async () => {
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1275,7 +1275,7 @@ describe('AuthHandler', () => {
 
       await authHandler.handleHeartbeat(createMockSocket());
 
-      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaa0123', false);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -1295,9 +1295,9 @@ describe('AuthHandler', () => {
     });
 
     it('should not throw when noteHeartbeat throws (best-effort)', async () => {
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1307,14 +1307,14 @@ describe('AuthHandler', () => {
       });
 
       await expect(authHandler.handleHeartbeat(createMockSocket())).resolves.toBeUndefined();
-      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaa0123', false);
     });
 
     it('should emit heartbeat:ack immediately with serverTime', async () => {
       const mockSocket = createMockSocket();
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1330,9 +1330,9 @@ describe('AuthHandler', () => {
 
     it('should include latencyHintMs in heartbeat:ack when clientTime provided', async () => {
       const mockSocket = createMockSocket();
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1352,9 +1352,9 @@ describe('AuthHandler', () => {
 
     it('should not include latencyHintMs when clientTime not provided', async () => {
       const mockSocket = createMockSocket();
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1372,9 +1372,9 @@ describe('AuthHandler', () => {
 
   describe('handleEnginePong', () => {
     it('should refresh presence via the throttled heartbeat path (clients with no applicative heartbeat)', () => {
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1382,7 +1382,7 @@ describe('AuthHandler', () => {
 
       authHandler.handleEnginePong(createMockSocket());
 
-      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('user-123', false);
+      expect(mockStatusService.noteHeartbeat).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaa0123', false);
       expect(mockPrisma.user.update).not.toHaveBeenCalled();
     });
 
@@ -1407,9 +1407,9 @@ describe('AuthHandler', () => {
     });
 
     it('should not throw when noteHeartbeat throws (best-effort)', () => {
-      socketToUser.set('socket-123', 'user-123');
-      connectedUsers.set('user-123', {
-        id: 'user-123',
+      socketToUser.set('socket-123', 'aaaaaaaaaaaaaaaaaaaa0123');
+      connectedUsers.set('aaaaaaaaaaaaaaaaaaaa0123', {
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         socketId: 'socket-123',
         isAnonymous: false,
         language: 'en'
@@ -1447,7 +1447,7 @@ describe('AuthHandler', () => {
         join,
       });
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'en',
         conversationId,
@@ -1462,7 +1462,7 @@ describe('AuthHandler', () => {
         join,
       });
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123', systemLanguage: 'en',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123', systemLanguage: 'en',
         regionalLanguage: null, customDestinationLanguage: null, deviceLocale: null,
       } as any);
       jest.spyOn((mockPrisma as any).participant, 'findMany').mockResolvedValue([
@@ -1541,7 +1541,7 @@ describe('AuthHandler', () => {
   describe('présence — transitions premier/dernier socket', () => {
     const authRegisteredSocket = async (socketId: string) => {
       jest.spyOn(mockPrisma.user, 'findUnique').mockResolvedValue({
-        id: 'user-123',
+        id: 'aaaaaaaaaaaaaaaaaaaa0123',
         systemLanguage: 'en',
         regionalLanguage: null,
         customDestinationLanguage: null,
@@ -1557,7 +1557,7 @@ describe('AuthHandler', () => {
 
     const authAnonymousSocket = async (socketId: string) => {
       jest.spyOn((mockPrisma as any).participant, 'findFirst').mockResolvedValue({
-        id: 'anon-123',
+        id: 'anon-123', isActive: true,
         displayName: 'Anonymous',
         language: 'fr',
         conversationId: 'conv-1'
@@ -1575,7 +1575,7 @@ describe('AuthHandler', () => {
       await authRegisteredSocket('socket-b');
 
       expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledTimes(1);
-      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('user-123', true, true);
+      expect(mockMaintenanceService.updateUserOnlineStatus).toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaa0123', true, true);
     });
 
     it('does not rewrite online when the SAME socket re-authenticates (token auth then manual auth)', async () => {
@@ -1599,7 +1599,7 @@ describe('AuthHandler', () => {
 
       await authHandler.handleDisconnection(createMockSocket({ id: 'socket-a' }));
 
-      expect(mockMaintenanceService.updateUserOnlineStatus).not.toHaveBeenCalledWith('user-123', false, true);
+      expect(mockMaintenanceService.updateUserOnlineStatus).not.toHaveBeenCalledWith('aaaaaaaaaaaaaaaaaaaa0123', false, true);
     });
 
     it('writes offline exactly once, on the LAST socket disconnect', async () => {
@@ -1611,7 +1611,7 @@ describe('AuthHandler', () => {
 
       const offlineWrites = mockMaintenanceService.updateUserOnlineStatus.mock.calls
         .filter(([, isOnline]: [string, boolean]) => isOnline === false);
-      expect(offlineWrites).toEqual([['user-123', false, true]]);
+      expect(offlineWrites).toEqual([['aaaaaaaaaaaaaaaaaaaa0123', false, true]]);
     });
 
     it('goes back online after a full offline cycle — the counter re-crosses 0→1', async () => {
@@ -1620,9 +1620,9 @@ describe('AuthHandler', () => {
       await authRegisteredSocket('socket-b');
 
       expect(mockMaintenanceService.updateUserOnlineStatus.mock.calls).toEqual([
-        ['user-123', true, true],
-        ['user-123', false, true],
-        ['user-123', true, true],
+        ['aaaaaaaaaaaaaaaaaaaa0123', true, true],
+        ['aaaaaaaaaaaaaaaaaaaa0123', false, true],
+        ['aaaaaaaaaaaaaaaaaaaa0123', true, true],
       ]);
     });
 
@@ -1637,9 +1637,9 @@ describe('AuthHandler', () => {
       await authHandler.handleDisconnection(createMockSocket({ id: 'socket-a' }));
 
       expect(mockMaintenanceService.updateUserOnlineStatus.mock.calls).toEqual([
-        ['user-123', true, true],
+        ['aaaaaaaaaaaaaaaaaaaa0123', true, true],
       ]);
-      expect(connectedUsers.has('user-123')).toBe(true);
+      expect(connectedUsers.has('aaaaaaaaaaaaaaaaaaaa0123')).toBe(true);
     });
   });
 });

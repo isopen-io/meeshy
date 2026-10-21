@@ -170,3 +170,28 @@ export function karaokeTone(index: number, active: number | null): KaraokeTone {
   if (index === active) return 'active';
   return index < active ? 'past' : 'upcoming';
 }
+
+/**
+ * LE FOCUS ITINÉRANT DES PAROLES (#10701) — le mot qui prend le focus après
+ * une touche, ou `null` quand la touche ne parcourt pas les paroles (elle
+ * reste alors à la visionneuse : Échap, Tab…). Les flèches suivent le SENS
+ * de lecture (`rtl` inverse gauche et droite), haut et bas suivent l'ordre
+ * du texte ; Début et Fin vont aux bornes ; on ne boucle jamais.
+ */
+export function rovingSegmentIndex(params: {
+  readonly key: string;
+  readonly index: number;
+  readonly count: number;
+  readonly rtl: boolean;
+}): number | null {
+  const { key, index, count, rtl } = params;
+  if (count === 0) return null;
+  const last = count - 1;
+  const forward = rtl ? 'ArrowLeft' : 'ArrowRight';
+  const backward = rtl ? 'ArrowRight' : 'ArrowLeft';
+  if (key === forward || key === 'ArrowDown') return Math.min(last, index + 1);
+  if (key === backward || key === 'ArrowUp') return Math.max(0, index - 1);
+  if (key === 'Home') return 0;
+  if (key === 'End') return last;
+  return null;
+}

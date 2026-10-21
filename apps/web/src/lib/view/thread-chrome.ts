@@ -2,6 +2,8 @@ import type { ConversationReadingMode } from '@meeshy/shared/types/reading-modes
 
 import type { PlacedMessage } from '@/lib/grouping';
 import { usesFlatRow } from '@/lib/reading-mode/decision';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE CHROME DU FIL (#5774, travail 3/3) — trois lois pures, MIROIR d'
@@ -178,12 +180,13 @@ export function stickyDayOf(input: StickyDayInput): string | null {
 //    `ConversationScrollControlsView.swift:311-322`.
 // ---------------------------------------------------------------------------
 
-/** `'Défiler vers le bas'` / `'N message(s) non lu(s), Défiler vers le bas'`. */
-export function scrollToBottomLabel(unreadCount: number): string {
-  const action = 'Défiler vers le bas';
-  if (unreadCount <= 0) return action;
-  const plural = unreadCount > 1 ? 's' : '';
-  return `${unreadCount} message${plural} non lu${plural}, ${action}`;
+/** `'Défiler vers le bas'` / `'N message(s) non lu(s), Défiler vers le bas'` —
+ *  dans la langue d'INTERFACE (catalogue `thread.scrollToBottom*`). */
+export function scrollToBottomLabel(unreadCount: number, language: InterfaceLanguage = currentInterfaceLanguage()): string {
+  if (unreadCount <= 0) return translate(language, 'thread.scrollToBottom');
+  return translate(language, unreadCount === 1 ? 'thread.scrollToBottom.unread.one' : 'thread.scrollToBottom.unread.other', {
+    count: String(unreadCount),
+  });
 }
 
 /** Le format condensé « N messages non lus » n'apparaît qu'au-delà de 5 (#3921). */

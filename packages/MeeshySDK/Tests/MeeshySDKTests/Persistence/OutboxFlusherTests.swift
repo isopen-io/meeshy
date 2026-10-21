@@ -276,6 +276,33 @@ final class OutboxFlusherTests: XCTestCase {
             "Row must be deferred for a later retry once the session is refreshed")
     }
 
+    func test_flush_refreshAbandonedBySessionExit_doesNotConsumeRetryBudget_norExhaust() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "abandoned", kind: .sendReaction, conversationId: "c1",
+                clientMessageId: "cid_abandoned",
+                payload: Data(), status: .pending, attempts: 4, lastError: nil,
+                createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(failure: CancellationError()))
+        await flusher.flush()
+
+        let after = try await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: "abandoned")!
+        }
+        XCTAssertEqual(after.status, .pending,
+            "A refresh abandoned by an account switch must leave the row pending")
+        XCTAssertEqual(after.attempts, 4,
+            "A refresh abandoned by an account switch must NOT consume the retry budget")
+        XCTAssertGreaterThan(after.nextAttemptAt, now)
+    }
+
     func test_flush_networkTransportError_doesNotConsumeRetryBudget_norExhaust() async throws {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)

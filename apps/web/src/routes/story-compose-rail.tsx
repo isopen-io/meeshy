@@ -22,6 +22,7 @@ export function StudioLeadingRail({
   onPlace,
   onAddText,
   onImport,
+  onCamera,
   sound = true,
   hidden = false,
   children,
@@ -34,6 +35,9 @@ export function StudioLeadingRail({
   /** L'IMPORT MULTIPLE de la porte du fond (#8533) — absent d'une retouche,
    * qui ne travaille qu'une image. */
   readonly onImport?: (files: readonly File[]) => void;
+  /** LA CAMÉRA, PAR L'APPUI LONG SUR LA PHOTOTHÈQUE (#10306) — la seconde
+   * entrée, là où la scène a déjà du contenu. */
+  readonly onCamera?: () => void;
   /** La porte du SON — absente d'une retouche d'image (#8416). */
   readonly sound?: boolean;
   /** UN OUTIL OUVERT (#8654) — les portes et leurs (+) cèdent en fondu. */
@@ -56,6 +60,7 @@ export function StudioLeadingRail({
         accept="image/*,video/*"
         onSelect={(file) => onPlace('visual', file)}
         {...(onImport !== undefined ? { onSelectMany: onImport } : {})}
+        {...(onCamera !== undefined ? { onHold: onCamera, holdHint: translate(lang, 'story.studio.background.cameraHold') } : {})}
         disabled={locked}
       />
       <StudioDoorButton

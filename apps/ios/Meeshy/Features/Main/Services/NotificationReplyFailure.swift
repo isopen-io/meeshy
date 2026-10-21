@@ -15,6 +15,18 @@ enum NotificationReplyFailure {
     /// (elle s'adressait à un compte qui n'est plus le compte actif). Une
     /// charge qui ne nomme pas son destinataire ne peut pas être vérifiée sur
     /// ce point : le jeton fait alors seul foi.
+    /// La notification s'adresse-t-elle au compte actif ? Une charge qui ne
+    /// nomme pas son destinataire ne peut pas être vérifiée : le compte actif
+    /// fait alors foi. Plusieurs comptes sur l'appareil : un push du compte A
+    /// touché pendant que B est actif ne doit rien faire au nom de B.
+    static func isAddressed(to userId: String?, userInfo: [AnyHashable: Any]) -> Bool {
+        let recipient = recipientKeys.lazy
+            .compactMap { userInfo[$0] as? String }
+            .compactMap(CommentOwnership.identity).first
+        guard let recipient else { return true }
+        return recipient == CommentOwnership.identity(userId)
+    }
+
     static func author(token: String?, userInfo: [AnyHashable: Any]) -> String? {
         guard let owner = CommentOwnership.userId(inToken: token) else { return nil }
         let recipient = recipientKeys.lazy

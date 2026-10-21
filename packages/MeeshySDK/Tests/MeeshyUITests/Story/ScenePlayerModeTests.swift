@@ -80,6 +80,38 @@ final class ScenePlayerModeTests: XCTestCase {
         XCTAssertEqual(ticks, [2.5])
     }
 
+    func test_theReel_resetsItsPublishedPosition_whenTheSceneLoops() {
+        var ticks: [Double] = []
+        let reel = Self.player(document: Self.textDocument(), mode: .reel)
+            .onPlaybackTime { ticks.append($0) }
+        reel.host.onPlaybackTime?(6)
+
+        reel.host.onCompletion?()
+
+        XCTAssertEqual(ticks, [6, 0],
+                       "le tour de boucle remet la position publiée à zéro : la barre de l'hôte ne reste pas pleine")
+    }
+
+    func test_theCard_loopsWithoutPublishingAnyPosition() {
+        var ticks: [Double] = []
+        let card = Self.player(document: Self.textDocument(), mode: .card)
+            .onPlaybackTime { ticks.append($0) }
+
+        card.host.onCompletion?()
+
+        XCTAssertEqual(ticks, [], "sans chrome, la carte ne paie aucun fil de position, tour de boucle compris")
+    }
+
+    func test_playedDuration_isTheDurationOfTheSlideTheHostMounts() {
+        let document = Self.textDocument()
+        let mounted = Self.player(document: document, mode: .reel).host.storyItem
+            .toRenderableSlide(preferredLanguages: [])
+            .computedTotalDuration()
+
+        XCTAssertEqual(MeeshyScenePlayer.playedDuration(document: document), mounted, accuracy: 1e-9)
+        XCTAssertGreaterThan(mounted, 0)
+    }
+
     // MARK: - Le player monte l'hôte existant, nourri par le pont v3
 
     func test_player_mountsTheExistingReaderHost_fedByTheBridge() {

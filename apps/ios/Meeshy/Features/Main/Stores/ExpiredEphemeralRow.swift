@@ -22,6 +22,20 @@ enum ExpiredEphemeralRow {
                expiresAt: record.expiresAt, ephemeralDuration: record.ephemeralDuration, ledger: ledger, now: now)
     }
 
+    /// **Le fil SANS ses lignes mortes, citations comprises** (#10433) — une
+    /// réponse part au même instant que ce qu'elle cite (`QuoteCascade`), chaque
+    /// maillon lu dans CES lignes et dans la citation gravée.
+    static func living(_ records: [MessageRecord],
+                       ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
+                       now: Date = Date()) -> [MessageRecord] {
+        let thread = QuoteCascade.RecordThread(records, ledger: ledger, now: now)
+        return records.filter { record in
+            guard !isGone(record, ledger: ledger, now: now) else { return false }
+            guard let inherited = thread.inheritedDeath(of: record) else { return true }
+            return inherited > now
+        }
+    }
+
     static func isGone(id: String, flags: MessageEffectFlags, expiresAt: Date?, ephemeralDuration: Int?,
                        ledger: EphemeralReceiptRecording, now: Date) -> Bool {
         guard flags.contains(.ephemeral) || expiresAt != nil || (ephemeralDuration ?? 0) > 0 else { return false }
@@ -50,7 +64,8 @@ enum CachedThreadSurfacing {
                      present: Set<String>,
                      ledger: EphemeralReceiptRecording = EphemeralReceiptLedger.shared,
                      now: Date = Date()) -> [MessagePersistenceActor.IncomingMessageData] {
-        cached
+        let thread = QuoteCascade.MessageThread(cached, ledger: ledger, now: now)
+        return cached
             .filter { !present.contains($0.id) }
             .filter { message in
                 !ExpiredEphemeralRow.isGone(id: message.id, flags: message.protectionFlags,
@@ -58,6 +73,8 @@ enum CachedThreadSurfacing {
                                             ephemeralDuration: message.effects.ephemeralDuration,
                                             ledger: ledger, now: now)
             }
+            // #10433 — la réponse d'un mort ne remonte pas non plus.
+            .filter { message in thread.inheritedDeath(of: message).map { $0 > now } ?? true }
             .map { message in
                 MessagePersistenceActor.IncomingMessageData(
                     id: message.id,

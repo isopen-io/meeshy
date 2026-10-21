@@ -31,8 +31,9 @@ import { describe, expect, test } from 'bun:test';
 
 const ROUTES = dirname(fileURLToPath(import.meta.url));
 
-/** La marque d'un écran plein-cadre : il occupe la hauteur visible entière. */
-const FULL_FRAME = /\b(?:min-)?h-dvh\b/;
+/** La marque d'un écran plein-cadre : il occupe la hauteur visible entière —
+ * `h-app` compris, la même hauteur moins le clavier qui la recouvre (#10005). */
+const FULL_FRAME = /\b(?:min-)?h-(?:dvh|app)\b/;
 
 /**
  * Les racines plein-cadre qui n'ont PAS à porter l'inset, et pourquoi. Une
@@ -40,6 +41,19 @@ const FULL_FRAME = /\b(?:min-)?h-dvh\b/;
  * vraies (même discipline que `ALLOWED` dans `check-utilities.mjs`).
  */
 const EXEMPT = new Map<string, string>([
+  [
+    'download.tsx',
+    "la page /download porte l'en-tête PARTAGÉ de meeshy.me (#10071, `landing/site-chrome.tsx`) : " +
+      "c'est `.ld-header` qui pose `padding-top: env(safe-area-inset-top)` (`styles/site-chrome.css`), " +
+      "collant en tête du défileur — un `pt-safe` sur la racine doublerait l'encoche.",
+  ],
+  [
+    'split-frame.tsx',
+    "le CADRE SCINDÉ du grand écran (#10073) n'est pas un écran : il pose côte à côte " +
+      "la liste (`conversations.tsx`, racine `h-dvh pt-safe`) et le fil (`thread.tsx`, exempté " +
+      "ci-dessous) qui portent CHACUN leur encoche — un `pt-safe` sur le cadre la doublerait. " +
+      "Sa racine est `h-dvh overflow-hidden` et ses deux volets ne font que la hauteur du cadre.",
+  ],
   [
     'thread.tsx',
     "le FIL, et c'est une exception MESURÉE (#6213) : sa racine `h-dvh` ne " +

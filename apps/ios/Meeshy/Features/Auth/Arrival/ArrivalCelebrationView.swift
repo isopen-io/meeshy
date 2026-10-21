@@ -35,10 +35,16 @@ nonisolated enum ArrivalFireworks {
     static let showDuration = Double(burstCount - 1) * burstInterval + burstLife
     static let paletteCount = 5
 
+    /// Le spectacle est fini : plus aucune étincelle ne sera dessinée. C'est
+    /// l'instant où l'horloge d'affichage se met en PAUSE (#9883).
+    static func isOver(at time: Double) -> Bool {
+        time >= showDuration
+    }
+
     static func sparks(at time: Double, burstCount: Int = burstCount, sparksPerBurst: Int = sparksPerBurst) -> [Spark] {
         (0..<burstCount).flatMap { burst -> [Spark] in
             let progress = (time - Double(burst) * burstInterval) / burstLife
-            guard progress >= 0, progress <= 1 else { return [] }
+            guard progress >= 0, progress < 1 else { return [] }
             return burstSparks(burst: burst, progress: progress, count: sparksPerBurst)
         }
     }
@@ -151,12 +157,12 @@ struct ArrivalCelebrationView: View {
 /// carte de l'inscription, où le code juste le déclenche (#8288). La loi du
 /// temps est `ArrivalFireworks` ; ce dessin n'en garde aucun état.
 ///
-/// `stopsAfterShow` : la carte le retire une fois la dernière gerbe éteinte —
-/// l'écran de l'inscription reste ouvert, et un `TimelineView` qui ne dessine
-/// plus rien ne doit pas continuer à battre à 120 Hz.
+/// **L'horloge se met en PAUSE à la dernière gerbe** (`paused: isOver`, #9883) :
+/// l'écran de l'inscription comme celui de l'arrivée restent ouverts, et un
+/// `TimelineView` qui ne dessine plus rien ne doit pas continuer à battre à
+/// 120 Hz. L'image figée est celle de `showDuration` — vide par construction.
 struct ArrivalFireworksCanvas: View {
     let startDate: Date
-    var stopsAfterShow = false
     @State private var isOver = false
 
     private static let palette: [Color] = [
@@ -164,27 +170,28 @@ struct ArrivalFireworksCanvas: View {
     ]
 
     var body: some View {
-        if !isOver {
-            TimelineView(.animation) { timeline in
-                Canvas { context, size in
-                    let elapsed = timeline.date.timeIntervalSince(startDate)
-                    for spark in ArrivalFireworks.sparks(at: elapsed) {
-                        let radius = spark.radius
-                        let rect = CGRect(x: spark.x * size.width - radius, y: spark.y * size.height - radius,
-                                          width: radius * 2, height: radius * 2)
-                        context.fill(Path(ellipseIn: rect),
-                                     with: .color(Self.palette[spark.colorIndex % Self.palette.count].opacity(spark.opacity)))
-                    }
+        TimelineView(.animation(paused: isOver)) { timeline in
+            Canvas { context, size in
+                let elapsed = timeline.date.timeIntervalSince(startDate)
+                for spark in ArrivalFireworks.sparks(at: isOver ? ArrivalFireworks.showDuration : elapsed) {
+                    let radius = spark.radius
+                    let rect = CGRect(x: spark.x * size.width - radius, y: spark.y * size.height - radius,
+                                      width: radius * 2, height: radius * 2)
+                    context.fill(Path(ellipseIn: rect),
+                                 with: .color(Self.palette[spark.colorIndex % Self.palette.count].opacity(spark.opacity)))
                 }
             }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-            .task {
-                guard stopsAfterShow else { return }
-                try? await Task.sleep(for: .seconds(ArrivalFireworks.showDuration))
-                guard !Task.isCancelled else { return }
-                isOver = true
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .task(id: startDate) {
+            isOver = false
+            let elapsed = Date().timeIntervalSince(startDate)
+            if !ArrivalFireworks.isOver(at: elapsed) {
+                try? await Task.sleep(for: .seconds(ArrivalFireworks.showDuration - elapsed))
             }
+            guard !Task.isCancelled else { return }
+            isOver = true
         }
     }
 }

@@ -94,26 +94,39 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
     // MARK: - 2. `ConversationView` CAPTURE la mise à jour
 
     /// #8103 — le montage de la feuille a quitté `ConversationView.body` pour
-    /// `ConversationInfoSheetLayer` (`ConversationView+InfoSheet.swift`). La
-    /// garde suit le MONTAGE : l'hôte remet la conversation VIVANTE et
-    /// l'écrivain de l'override au calque, qui les remet tels quels à la feuille.
+    /// `ConversationInfoSheetLayer` (`ConversationView+InfoSheet.swift`) ; #11074
+    /// (6210570236) l'a ensuite posé dans le `ViewModifier` nominal
+    /// `ConversationBodySheets` (`ConversationLayers/ConversationBodyPresentations.swift`).
+    /// La garde suit le MONTAGE, maillon par maillon : l'hôte remet la conversation
+    /// VIVANTE et l'écrivain de l'override aux feuilles du tronc, qui les remettent
+    /// tels quels au calque, qui les remet tels quels à la feuille.
     func test_conversationView_capturesTheUpdate_whenItMountsTheInfoSheet() throws {
         let view = try code(conversationViewPath)
+        let sheets = try code(bodyPresentationsPath)
         let layer = try code(infoSheetLayerPath)
 
-        let nearLayer = try vicinity(after: "ConversationInfoSheetLayer(", in: view, span: 400)
+        let nearSheets = try vicinity(after: "ConversationBodySheets(", in: view, span: 400)
         XCTAssertTrue(
-            nearLayer.contains("conversation: liveConversation"),
+            nearSheets.contains("conversation: liveConversation"),
             "La feuille d'info doit être montée sur la conversation VIVANTE : montée sur la valeur " +
             "figée, elle rouvrirait sur le titre d'avant l'édition qu'elle vient elle-même de faire " +
             "enregistrer."
         )
         XCTAssertTrue(
-            nearLayer.contains("onConversationUpdated: { conversationOverride = $0 }"),
-            "Le site de montage doit stocker la conversation confirmée dans `conversationOverride` " +
-            "— avec `admitPeerUpdate` (le pair d'un direct repeint à `user:updated`, #9359), c'est " +
-            "l'un des deux seuls écrivains de cet état, les deux moments où le serveur dit ce que " +
-            "l'écran doit désormais afficher."
+            nearSheets.contains("onConversationUpdated: { admitRepainted($0) }"),
+            "Le site de montage remet la conversation confirmée à `admitRepainted` — depuis #10751 le " +
+            "SEUL écrivain de `conversationOverride` (`ConversationViewRepaintRevisionGuardTests`), " +
+            "qui avance aussi la révision : un second enregistrement, même id, ne redessinait rien."
+        )
+
+        let nearLayer = try vicinity(after: "ConversationInfoSheetLayer(", in: sheets, span: 400)
+        XCTAssertTrue(
+            nearLayer.contains("conversation: conversation,"),
+            "Les feuilles du tronc remettent au calque la conversation qu'on leur remet, telle quelle."
+        )
+        XCTAssertTrue(
+            nearLayer.contains("onConversationUpdated: onConversationUpdated"),
+            "Les feuilles du tronc remettent au calque l'écrivain de l'override, tel quel."
         )
 
         let nearSheet = try vicinity(after: "ConversationInfoSheet(", in: layer, span: 300)
@@ -124,6 +137,9 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
         )
     }
 
+    private var bodyPresentationsPath: String {
+        "Features/Main/Views/ConversationLayers/ConversationBodyPresentations.swift"
+    }
     private var infoSheetLayerPath: String { "Features/Main/Views/ConversationView+InfoSheet.swift" }
 
     func test_conversationView_resolvesLiveConversation_overrideBeforeFrozenValue() throws {
@@ -135,7 +151,8 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
             "d'un écran dont le paramètre `conversation` est figé à la navigation."
         )
         XCTAssertTrue(
-            view.contains("var liveConversation: Conversation? { conversationOverride ?? conversation }"),
+            view.contains("var liveConversation: Conversation? {")
+                && view.contains("return conversationOverride ?? conversation }"),
             "`liveConversation` résout l'override D'ABORD, la valeur figée ensuite, et reste " +
             "`internal` : l'extension `ConversationView+Header` vit dans un autre fichier, où un " +
             "`private` serait inaccessible."
@@ -181,10 +198,12 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
         )
     }
 
+    /// La barre de frappe a quitté `ConversationView.swift` (hors budget) pour
+    /// `ConversationView+Header.swift`, et y est devenue `internal`.
     func test_typingHeaderBar_readsTheLiveConversation() throws {
-        let view = try code(conversationViewPath)
+        let header = try code(headerPath)
         let nearTypingHeader = try vicinity(
-            after: "private var typingHeaderBar: some View {", in: view, span: 600
+            after: "var typingHeaderBar: some View {", in: header, span: 1400
         )
 
         XCTAssertTrue(
@@ -193,9 +212,10 @@ final class ConversationInfoSheetLiveConversationTests: XCTestCase {
             "sinon l'édition ne serait visible qu'une fois le clavier refermé."
         )
         XCTAssertTrue(
-            nearTypingHeader.contains(
-                "avatarURL: liveConversation?.type == .direct ? liveConversation?.participantAvatarURL : liveConversation?.avatar"
-            ),
+            nearTypingHeader.contains("let isDirect = liveConversation?.type == .direct")
+                && nearTypingHeader.contains(
+                    "avatarURL: isDirect ? liveConversation?.participantAvatarURL : liveConversation?.avatar"
+                ),
             "Même règle pour l'avatar de l'en-tête réduit : une seule source, la conversation vivante."
         )
     }

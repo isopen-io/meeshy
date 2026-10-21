@@ -1,6 +1,7 @@
 import { MOSAIC_MAX_VISIBLE, mosaicAspectRatio, mosaicTiles, type TiledLayoutMode } from '@/lib/feed/mosaic-layout';
 
 import type { CardMedia, CardVisualMedia } from './message-card-media';
+import { isStickerMedia, stickerFrame } from './message-card-sticker';
 
 /**
  * **OÙ ET COMMENT LES MÉDIAS SE POSENT SUR UNE CARTE** (#9236, jumelle web de
@@ -40,6 +41,8 @@ export type CardMediaDisposition = {
   readonly arrangement: CardMediaArrangement;
   /** Le rang, dans les médias de la carte, du visuel que « une seule » et « en fond » montrent — `null` : le premier. */
   readonly featured: number | null;
+  /** Le rang du visuel qui ouvre la carte en HÉROS (le média du support) : il n'est pas un visuel de la réponse. */
+  readonly hero?: number | null;
 };
 
 export const isBeside = (layout: CardMediaLayout): layout is 'left' | 'right' => layout === 'left' || layout === 'right';
@@ -48,7 +51,7 @@ const isVisual = (media: CardMedia): media is CardVisualMedia => media.kind !== 
 
 /** Les rangs des visuels PEINTS, dans l'ordre où la carte les pose. */
 export function paintedVisualIndexes(media: readonly CardMedia[], disposition: CardMediaDisposition): readonly number[] {
-  const visuals = media.flatMap((item, index) => (isVisual(item) ? [index] : []));
+  const visuals = media.flatMap((item, index) => (isVisual(item) && index !== disposition.hero ? [index] : []));
   const [first] = visuals;
   if (first === undefined || visuals.length === 1) return visuals;
   if (disposition.layout === 'backdrop' || disposition.arrangement === 'single') {
@@ -61,7 +64,8 @@ export function paintedVisualIndexes(media: readonly CardMedia[], disposition: C
 /** Ce que la carte montre ET fait entendre : ses visuels peints, puis son premier son. */
 export function paintedMediaIndexes(media: readonly CardMedia[], disposition: CardMediaDisposition): readonly number[] {
   const audio = media.findIndex((item) => item.kind === 'audio');
-  return [...paintedVisualIndexes(media, disposition), ...(audio === -1 ? [] : [audio])];
+  const hero = disposition.hero !== undefined && disposition.hero !== null && media[disposition.hero] !== undefined ? [disposition.hero] : [];
+  return [...hero, ...paintedVisualIndexes(media, disposition), ...(audio === -1 ? [] : [audio])];
 }
 
 /** La position qui s'applique vraiment : sans visuel, ni fond ni colonne — le son se pose au-dessus de la réponse. */
@@ -151,6 +155,10 @@ export function arrangeVisuals(params: {
   const [first] = painted;
   const firstMedia = first === undefined ? undefined : media[first];
   if (first === undefined || firstMedia === undefined || firstMedia.kind === 'audio' || cap <= 0) return { slots: [], height: 0 };
+  if (painted.length === 1 && isStickerMedia(firstMedia)) {
+    const frame = stickerFrame(firstMedia, width, cap);
+    return { slots: [slot(first, frame.x, 0, frame.width, frame.height)], height: frame.height };
+  }
   if (painted.length === 1) {
     const height = Math.min(cap, Math.round(width * ratioOf(firstMedia)));
     return { slots: [slot(first, 0, 0, width, height)], height };

@@ -160,37 +160,31 @@ extension MessageSocketManager: CallControlsSocketProviding {
     }
 
     public func inviteCallParticipant(callId: String, userId: String) async throws {
-        try await emitCallControl("call:invite-participant", ["callId": callId, "userId": userId])
+        try await emitCallControl(.callInviteParticipant, ["callId": callId, "userId": userId])
     }
 
     public func muteCallParticipant(callId: String, targetUserId: String) async throws {
-        try await emitCallControl("call:mute-participant", ["callId": callId, "targetUserId": targetUserId])
+        try await emitCallControl(.callMuteParticipant, ["callId": callId, "targetUserId": targetUserId])
     }
 
     public func sendCallReaction(callId: String, emoji: CallReactionEmoji) async throws {
-        try await emitCallControl("call:reaction", ["callId": callId, "emoji": emoji.rawValue])
+        try await emitCallControl(.callReaction, ["callId": callId, "emoji": emoji.rawValue])
     }
 
-    private func emitCallControl(_ event: String, _ payload: [String: Any]) async throws {
+    private func emitCallControl(_ event: SocketEvent, _ payload: [String: Any]) async throws {
         guard let socket else { throw CallControlRefusal(code: "NO_SOCKET") }
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            socket.emitWithAck(event, payload).timingOut(after: 10) { items in
-                if let refusal = Self.callControlRefusal(items.first) {
-                    continuation.resume(throwing: refusal)
-                } else {
-                    continuation.resume()
-                }
-            }
-        }
+        let ack = await socket.emitWithAck(event, payload, as: SocketAckNoPayload.self, payloadAt: .none, timingOutAfter: 10)
+        if let refusal = Self.callControlRefusal(ack) { throw refusal }
     }
 
     /// `nil` pour `{ success: true }` ; tout le reste (dont l'échéance, que
     /// Socket.IO rend en `"NO ACK"`) est un refus.
-    static func callControlRefusal(_ item: Any?) -> CallControlRefusal? {
-        guard let response = item as? [String: Any] else { return CallControlRefusal(code: "TIMEOUT") }
-        guard response["success"] as? Bool == true else {
-            return CallControlRefusal(code: response["code"] as? String ?? "MALFORMED_ACK")
+    static func callControlRefusal(_ ack: SocketAck<SocketAckNoPayload>) -> CallControlRefusal? {
+        switch ack {
+        case .accepted: return nil
+        case .timedOut: return CallControlRefusal(code: "TIMEOUT")
+        case .refused(let refusal): return CallControlRefusal(code: refusal.code ?? "MALFORMED_ACK")
+        case .acceptedWithoutPayload, .undecodable: return CallControlRefusal(code: "MALFORMED_ACK")
         }
-        return nil
     }
 }

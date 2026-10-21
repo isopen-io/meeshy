@@ -101,10 +101,15 @@ const settle = async (path) => {
   return new URL(page.url());
 };
 
+/* #10002 — `/` est la landing PUBLIQUE, prérendue ; la liste vit sur `/chats`. */
 const root = await settle('/');
+const landing = await page.locator('[data-landing]').count();
+check(root.pathname === '/' && landing === 1, `/ sans session sert la landing, sans redirection (obtenu : ${root.pathname}, landing : ${landing})`);
+
+const chats = await settle('/chats');
 check(
-  ['/welcome', '/login'].includes(root.pathname),
-  `/ sans session mène à l'accueil ou à la connexion (obtenu : ${root.pathname})`,
+  ['/welcome', '/login'].includes(chats.pathname),
+  `/chats sans session mène à l'accueil ou à la connexion (obtenu : ${chats.pathname})`,
 );
 
 const privateNew = await settle('/conversations/new');

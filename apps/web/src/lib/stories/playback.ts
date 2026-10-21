@@ -173,6 +173,8 @@ export type StoryPlaybackStory = {
    * jamais la longueur de sa propre page (`PublicationViewersSheet`, note
    * C4 — miroir `StoryViewersSheet:1381`). */
   readonly viewCount?: number | null;
+  /** Les vues SANS compte (#10483), un agrégat — « et N visiteurs » sous la liste. */
+  readonly anonymousViewCount?: number | null;
   readonly currentUserReactions?: readonly string[] | null;
   /** La carte des adresses suivies (#9074), lue par `trackingLinksOf` — jamais un champ direct. */
   readonly metadata?: unknown;
@@ -186,7 +188,27 @@ export type StoryRepostSource = {
   readonly id: string;
   readonly storyEffects?: unknown;
   readonly media?: readonly StoryPlaybackMedia[] | null;
+  /** L'auteur de la source (`authorSelect`) : le crédit de l'en-tête le nomme. */
+  readonly author?: { readonly username?: string | null; readonly displayName?: string | null } | null;
 };
+
+/**
+ * LE CRÉDIT D'UNE STORY REPUBLIÉE (#10524) — il vit dans l'EN-TÊTE, après la
+ * date, jamais dans le canvas : la passerelle ne sert plus la puce « Reposté
+ * de @auteur ». Miroir de `StoryViewerView+Header.swift` (icône + « @handle »,
+ * pseudo sinon nom). `null` ⇒ pas une republication, ou une source que la
+ * passerelle ne sert pas ; `handle: null` ⇒ l'icône seule.
+ */
+export function storyRepostCredit(
+  story: Pick<StoryPlaybackStory, 'repostOf'>,
+): { readonly handle: string | null } | null {
+  const source = story.repostOf;
+  if (source === undefined || source === null) return null;
+  const named = [source.author?.username, source.author?.displayName].find(
+    (value): value is string => typeof value === 'string' && value.trim() !== '',
+  );
+  return { handle: named ?? null };
+}
 
 /**
  * LA SCÈNE QU'UNE STORY JOUE (#9678) — son propre document, sinon, pour une
@@ -410,6 +432,40 @@ export function previousPosition(
   const previousGroup = groups[position.groupIndex - 1];
   if (previousGroup === undefined) return null;
   return { groupIndex: position.groupIndex - 1, storyIndex: previousGroup.stories.length - 1 };
+}
+
+/**
+ * **LE GLISSÉ CHANGE D'AUTEUR** (#11198, miroir `landOnNextGroup` iOS) — le
+ * cube passe au groupe VOISIN depuis n'importe quelle story du groupe
+ * courant, et y entre à son {@link entryIndexFor} : première non vue non
+ * expirée, sinon première non expirée. `null` ⇒ aucun voisin dans ce sens
+ * (bord de la liste, portée « un seul groupe ») : la carte résiste.
+ *
+ * Le RECUL se pose sur la DERNIÈRE story de l'auteur d'avant — exactement
+ * `landOnPreviousGroup` d'iOS (`StoryViewerPosition.previousGroupLanding`) : le
+ * même lecteur, le même geste, la même arrivée sur les deux plateformes.
+ */
+export function nextGroupPosition(
+  groups: readonly StoryPlaybackGroup[],
+  position: StoryPlaybackPosition,
+  now: number,
+): StoryPlaybackPosition | null {
+  return groupEntryAt(groups, position.groupIndex + 1, now);
+}
+
+export function previousGroupPosition(
+  groups: readonly StoryPlaybackGroup[],
+  position: StoryPlaybackPosition,
+): StoryPlaybackPosition | null {
+  const groupIndex = position.groupIndex - 1;
+  const group = groupIndex >= 0 ? groups[groupIndex] : undefined;
+  if (group === undefined) return null;
+  return { groupIndex, storyIndex: Math.max(0, group.stories.length - 1) };
+}
+
+function groupEntryAt(groups: readonly StoryPlaybackGroup[], groupIndex: number, now: number): StoryPlaybackPosition | null {
+  const group = groupIndex >= 0 ? groups[groupIndex] : undefined;
+  return group === undefined ? null : { groupIndex, storyIndex: entryIndexFor(group, now) };
 }
 
 /**

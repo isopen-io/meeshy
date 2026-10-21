@@ -15,6 +15,8 @@ import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-pac
 
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
+import { packQueryKeys } from './pack-query-keys';
+import { listOf, loadCatalogueOf, loadDetailOf, loadInstalledOf, setInstalledOf, type PackPort } from './packs';
 
 /**
  * **LE PORT DES PACKS DE STICKERS** (#9141) — `stickerPacks`
@@ -27,10 +29,11 @@ import type { ApiResult } from './http';
  * (`DEFAULT_INSTALLED_PACKS`) — jamais une feuille vide qui attend.
  */
 
-export const INSTALLED_PACKS_QUERY_KEY = ['me', 'sticker-packs', 'installed'] as const;
-export const PACK_CATALOGUE_QUERY_KEY = ['me', 'sticker-packs', 'catalogue'] as const;
+const STICKER_KEYS = packQueryKeys('sticker');
+export const INSTALLED_PACKS_QUERY_KEY = STICKER_KEYS.installed;
+export const PACK_CATALOGUE_QUERY_KEY = STICKER_KEYS.catalogue;
 export const PACK_SUBMISSIONS_QUERY_KEY = ['me', 'sticker-packs', 'submissions'] as const;
-export const packQueryKey = (slug: string) => ['sticker-pack', slug] as const;
+export const packQueryKey = STICKER_KEYS.detail;
 
 /** Cinq minutes : l'utilisateur change ses packs depuis l'écran qui écrit déjà le cache au geste. */
 export const PACKS_STALE_TIME = 5 * 60 * 1000;
@@ -73,6 +76,8 @@ const WireSummary = z.object({
   coverUrl: z.optional(z.nullable(z.string())),
   installed: z.boolean(),
   installCount: z.number(),
+  price: z.optional(z.nullable(z.number())),
+  owned: z.optional(z.boolean()),
 });
 
 const WireDetail = z.extend(WireSummary, {
@@ -80,29 +85,44 @@ const WireDetail = z.extend(WireSummary, {
   reviewNote: z.optional(z.nullable(z.string())),
 });
 
+type WireSummaryData = z.infer<typeof WireSummary>;
+
+/** `price` et `owned` sont additifs : absents du fil, ils restent absents du résumé (jamais `undefined` posé). */
+const summaryOf = ({ price, owned, coverUrl, ...rest }: WireSummaryData): StickerPackSummary => ({
+  ...rest,
+  coverUrl: coverUrl ?? null,
+  ...(price === undefined ? {} : { price }),
+  ...(owned === undefined ? {} : { owned }),
+});
+
 export function decodePackSummary(raw: unknown): StickerPackSummary | null {
   const parsed = WireSummary.safeParse(raw);
-  return parsed.success ? { ...parsed.data, coverUrl: parsed.data.coverUrl ?? null } : null;
+  return parsed.success ? summaryOf(parsed.data) : null;
 }
 
 /** Un pack malformé tombe SEUL ; un sticker malformé aussi, le pack reste. */
 export function decodePackDetail(raw: unknown): StickerPackDetail | null {
   const parsed = WireDetail.safeParse(raw);
   if (!parsed.success) return null;
-  const { reviewNote, items, ...summary } = parsed.data;
+  const { reviewNote, items, ...wire } = parsed.data;
   return {
-    ...summary,
-    coverUrl: summary.coverUrl ?? null,
+    ...summaryOf(wire),
     items: (items ?? []).map((item) => ({ ...item, zones: item.zones ?? [] })),
     ...(reviewNote !== undefined ? { reviewNote } : {}),
   };
 }
 
-const listOf = <T,>(raw: unknown, decode: (row: unknown) => T | null): readonly T[] =>
-  (Array.isArray(raw) ? raw : []).flatMap((row) => {
-    const value = decode(row);
-    return value === null ? [] : [value];
-  });
+/** Le domaine `sticker` du port générique — adresses `/sticker-packs` et formes inchangées à l'octet. */
+export const stickerPackPort: PackPort<StickerPackSummary, StickerPackDetail, StickerPackDetail> = {
+  catalogue: stickerPacksEndpoints.root,
+  installed: stickerPacksEndpoints.installed,
+  bySlug: stickerPacksEndpoints.bySlug,
+  install: stickerPacksEndpoints.bySlugInstall,
+  decodeSummary: decodePackSummary,
+  decodeInstalled: decodePackDetail,
+  decodeDetail: decodePackDetail,
+  absentMeansEmpty: false,
+};
 
 /** Un pack intégré, tel que le serveur le servirait — ses stickers, le client les dessine. */
 export const builtinPackDetail = (slug: string, installed: boolean): StickerPackDetail | null => {
@@ -149,16 +169,14 @@ export async function loadInstalledPacks(deps: Deps): Promise<ApiResult<readonly
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return { ok: true, data: BUILTIN_STICKER_PACKS.flatMap((pack) => (fixtureInstalled(pack.slug) ? [builtinPackDetail(pack.slug, true)!] : [])) };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: stickerPacksEndpoints.installed, ...signalOf(deps) });
-  return result.ok ? { ok: true, data: listOf(result.data, decodePackDetail) } : result;
+  return loadInstalledOf(stickerPackPort, deps);
 }
 
 export async function loadPackCatalogue(deps: Deps): Promise<ApiResult<readonly StickerPackSummary[]>> {
   if (__FIXTURES__ && deps.source === 'fixtures') {
     return { ok: true, data: BUILTIN_STICKER_PACKS.map((pack) => builtinPackDetail(pack.slug, fixtureInstalled(pack.slug))!) };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: stickerPacksEndpoints.root, ...signalOf(deps) });
-  return result.ok ? { ok: true, data: listOf(result.data, decodePackSummary) } : result;
+  return loadCatalogueOf(stickerPackPort, deps);
 }
 
 export async function loadPack(deps: Deps, slug: string): Promise<ApiResult<StickerPackDetail>> {
@@ -166,10 +184,7 @@ export async function loadPack(deps: Deps, slug: string): Promise<ApiResult<Stic
     const known = fixtureSubmissions.find((pack) => pack.slug === slug) ?? builtinPackDetail(slug, fixtureInstalled(slug));
     return known === null || known === undefined ? { ok: false, status: 404, error: 'Not found', code: 'STICKER_PACK_NOT_FOUND' } : { ok: true, data: known };
   }
-  const result = await deps.transport.request<unknown>({ method: 'GET', path: stickerPacksEndpoints.bySlug(slug), ...signalOf(deps) });
-  if (!result.ok) return result;
-  const pack = decodePackDetail(result.data);
-  return pack === null ? { ok: false, status: 0, error: 'Invalid sticker pack', code: 'DECODE' } : { ok: true, data: pack };
+  return loadDetailOf(stickerPackPort, deps, slug);
 }
 
 export async function setPackInstalled(deps: ConversationsDeps, slug: string, installed: boolean): Promise<ApiResult<StickerPackSummary>> {
@@ -178,10 +193,7 @@ export async function setPackInstalled(deps: ConversationsDeps, slug: string, in
     const pack = builtinPackDetail(slug, installed);
     return pack === null ? { ok: false, status: 404, error: 'Not found' } : { ok: true, data: pack };
   }
-  const result = await deps.transport.request<unknown>({ method: installed ? 'PUT' : 'DELETE', path: stickerPacksEndpoints.bySlugInstall(slug) });
-  if (!result.ok) return result;
-  const pack = decodePackSummary(result.data);
-  return pack === null ? { ok: false, status: 0, error: 'Invalid sticker pack', code: 'DECODE' } : { ok: true, data: pack };
+  return setInstalledOf(stickerPackPort, deps, slug, installed);
 }
 
 export async function loadMySubmissions(deps: Deps): Promise<ApiResult<readonly StickerPackDetail[]>> {

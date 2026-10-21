@@ -321,7 +321,7 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
             "le couloir bas du plateau EST la pellicule."
         )
         XCTAssertTrue(
-            couloir.contains("if allAttachments.count > 1 {"),
+            couloir.contains("if allAttachments.count > 1,") || couloir.contains("if allAttachments.count > 1 {"),
             "un média seul n'a pas de pellicule à parcourir."
         )
         XCTAssertFalse(
@@ -340,6 +340,18 @@ final class ConversationMediaGalleryScrollTests: XCTestCase {
     func test_filmstrip_measuresTheWindow_notTheDisplay() throws {
         let code = AppSourceGuard.stripComments(try source(Self.filmstrip))
         XCTAssertFalse(code.contains("UIScreen.main"))
-        XCTAssertTrue(code.contains("DeviceLayout.windowSize"))
+        // La largeur de SA fenêtre, publiée par la racine et connue dès le premier rendu (cycle 8) : ni l'écran, ni
+        // la fenêtre clé (fausse sous Stage Manager), ni une mesure corrigée après coup (vignette décalée d'un pas).
+        XCTAssertTrue(code.contains("containerWidth ?? SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).width"),
+                      "la largeur MESURÉE de la galerie d'abord, la fenêtre seulement à défaut")
+        XCTAssertFalse(code.contains("onGeometryChange"), "une largeur mesurée après coup décale la bande déjà calée")
+    }
+
+    /// La galerie ne monte la pellicule qu'une fois son conteneur MESURÉ, et lui remet cette largeur : la bande naît
+    /// avec sa largeur définitive — une largeur corrigée après son ancrage la décalait d'un pas (cycle 8).
+    func test_theGallery_mountsTheStripOnceMeasured_withItsWidth() throws {
+        let code = AppSourceGuard.stripComments(try source("Meeshy/Features/Main/Views/ConversationMediaGalleryView+Geometry.swift"))
+        XCTAssertTrue(code.contains("if allAttachments.count > 1, measuredViewport.width > 0 {"))
+        XCTAssertTrue(code.contains("containerWidth: measuredViewport.width"))
     }
 }

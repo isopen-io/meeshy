@@ -13,7 +13,7 @@ import sys
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
-from .engines import NllbTranslator, OpenAICompatibleTranslator, Translator
+from .engines import DeviceEngineTranslator, NllbTranslator, OpenAICompatibleTranslator, Translator
 from .gate import find_regressions
 from .golden import GoldenSetError, flores_pairs, load_golden
 from .report import render_markdown, report_from_dict, report_to_dict
@@ -26,6 +26,7 @@ EngineFactory = Callable[[argparse.Namespace], Translator]
 DEFAULT_ENGINES: Mapping[str, EngineFactory] = {
     "nllb": lambda args: NllbTranslator(model_id=args.model),
     "openai": lambda args: OpenAICompatibleTranslator(base_url=args.base_url, model=args.model),
+    "device": lambda args: DeviceEngineTranslator(base_url=args.base_url, name=args.model),
 }
 
 

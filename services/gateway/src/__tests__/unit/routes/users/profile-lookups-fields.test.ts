@@ -57,18 +57,20 @@ jest.mock('../../../../utils/logger-enhanced.js', () => ({
 
 jest.mock('../../../../utils/logger', () => ({ logError: jest.fn() }));
 
-// Seul `getOptionalAuth` est substitué : il pose directement un authContext
-// ANONYME, sans construire le vrai middleware JWT/session. `gateProfilePresence`
+// Seul `getOptionalAuth` est substitué : il pose directement l'authContext d'un
+// lecteur INSCRIT sans rôle (#10205 : un lecteur sans compte ne lit plus aucun
+// profil), sans construire le vrai middleware JWT/session. `gateProfilePresence`
 // reste le VRAI code — c'est la loi de présence du 2026-08-25 que ces charges
 // traversent, exactement comme dans `sparse-fieldset-wiring.test.ts`.
 jest.mock('../../../../routes/users/presence-gate', () => ({
   ...(jest.requireActual('../../../../routes/users/presence-gate') as object),
   getOptionalAuth: () => async (req: { authContext?: unknown }) => {
     req.authContext = {
-      isAuthenticated: false,
-      isAnonymous: true,
-      type: 'anonymous',
-      userId: 'anonymous',
+      isAuthenticated: true,
+      isAnonymous: false,
+      type: 'user',
+      userId: '507f1f77bcf86cd7994390ff',
+      registeredUser: { id: '507f1f77bcf86cd7994390ff', role: 'USER' },
     };
   },
 }));
@@ -83,7 +85,9 @@ const USERNAME = 'cible';
 function prismaProfil() {
   return {
     user: {
-      findFirst: jest.fn<any>(async () => ({
+      // La question du blocage (`where.blockedUserIds`) n'a pas de ligne :
+      // personne n'a bloqué personne.
+      findFirst: jest.fn<any>(async (args?: any) => (args?.where?.blockedUserIds ? null : {
         id: CIBLE,
         username: USERNAME,
         firstName: 'Ada',
@@ -100,8 +104,7 @@ function prismaProfil() {
         voiceModel: null,
       })),
     },
-    // Non exercé par un viewer anonyme (`resolveForTarget` court-circuite sur
-    // `!viewer`) — présent par défensivité, comme dans le harnais de #4356.
+    // Lu par la loi de présence pour un lecteur inscrit : aucune amitié.
     friendRequest: { findFirst: jest.fn<any>(async () => null) },
   };
 }
@@ -124,11 +127,12 @@ async function monterAlias(
  * jamais déclaré par `publicProfileSchema`), plus les trois clés FABRIQUÉES
  * par `buildPublicProfile` — `voicePublic`, `isAnonymous`, `isMeeshyer`.
  * Identiques, clé pour clé, aux quinze clés mesurées sur staging par #4449
- * pour ces deux adresses (voir le corps de l'issue).
+ * pour ces deux adresses (voir le corps de l'issue), plus `profileDecor` (#10632,
+ * additif : le contour et la bannière équipés).
  */
 const CLES_PROFIL_ID = [
   'avatar', 'banner', 'bio', 'createdAt', 'displayName', 'firstName', 'id',
-  'isAnonymous', 'isMeeshyer', 'isOnline', 'lastActiveAt', 'lastName', 'role',
+  'isAnonymous', 'isMeeshyer', 'isOnline', 'lastActiveAt', 'lastName', 'profileDecor', 'role',
   'username', 'voicePublic',
 ].sort();
 

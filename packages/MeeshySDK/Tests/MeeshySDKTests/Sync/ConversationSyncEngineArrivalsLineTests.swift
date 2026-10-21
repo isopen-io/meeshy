@@ -183,6 +183,33 @@ final class ConversationSyncEngineArrivalsLineTests: XCTestCase {
         XCTAssertEqual(row?.isEdited, true)
     }
 
+    // MARK: - #7759 — la métadonnée suit le contenu complété
+
+    func test_markEdited_withArrivalsNotice_persistsTheNoticeTheBubbleComposes() async throws {
+        let (db, actor) = try makeStore()
+        let completed = try XCTUnwrap(try completion(names: ["Tom", "Léa", "Aïcha"]).arrivalsNotice)
+
+        try await actor.markEdited(localId: "m-arrivals", newContent: "Tom, Léa et Aïcha",
+                                   editedAt: now, marksEdited: false, arrivalsNotice: completed)
+
+        let row = try await db.read { try MessageRecord.fetchOne($0, key: "m-arrivals") }
+        let relu = SystemNoticeColumn.decode(row?.joinNoticeJson, decoder: JSONDecoder(), id: "m-arrivals")
+        XCTAssertEqual(relu.arrivals?.count, 3, "la bulle relit le nouveau compte, pas l'ancien")
+        XCTAssertEqual(relu.arrivals?.arrivals.first?.displayName, "Tom")
+    }
+
+    func test_markEdited_withoutNotice_keepsTheStoredNotice() async throws {
+        let (db, actor) = try makeStore()
+        let first = try XCTUnwrap(try completion(names: ["Tom", "Aïcha"]).arrivalsNotice)
+        try await actor.markEdited(localId: "m-arrivals", newContent: "Tom et Aïcha",
+                                   editedAt: now, marksEdited: false, arrivalsNotice: first)
+
+        try await actor.markEdited(localId: "m-arrivals", newContent: "corrigé", editedAt: now.addingTimeInterval(1))
+
+        let row = try await db.read { try MessageRecord.fetchOne($0, key: "m-arrivals") }
+        XCTAssertEqual(SystemNoticeColumn.decode(row?.joinNoticeJson, decoder: JSONDecoder(), id: "x").arrivals, first)
+    }
+
     private func makeStore() throws -> (DatabaseQueue, MessagePersistenceActor) {
         let db = try DatabaseQueue()
         try MessageDatabaseMigrations.runAll(on: db)

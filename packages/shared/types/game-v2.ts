@@ -40,6 +40,7 @@ import {
   nonNegativeInt,
   writeRequest,
 } from './game-schema-kit.js';
+import { gamePhotoBlockSchema } from './game-photo.js';
 
 const leagueKeys = enumOf(LEAGUE_KEYS);
 const cupKeys = z.enum(['gold', 'silver', 'bronze']);
@@ -137,6 +138,8 @@ export const gameSeasonBlockSchema = z.object({
   nextReward: z.object({ step: z.number().int().min(1).max(SEASON_STEPS), reward: seasonRewardSchema }).nullable(),
   sealOwned: z.boolean(),
   sealPrice: nonNegativeInt,
+  /** Les points d'une étape ordinaire de CETTE saison (calendrier servi, #10016) ; absent, la loi (100). */
+  stepPoints: z.number().int().min(1).optional(),
 });
 
 /**
@@ -211,6 +214,8 @@ export const gameBlockExtensionShape = {
   prestige: gamePrestigeBlockSchema.optional().catch(undefined),
   visibility: gameVisibilitySchema.optional().catch(undefined),
   achievementRarities: gameAchievementRaritiesSchema.optional().catch(undefined),
+  /** Les réglages et le registre des moments photo (#10162). */
+  photo: gamePhotoBlockSchema.optional().catch(undefined),
 };
 
 // --- La ligue ---
@@ -332,6 +337,12 @@ export const userShowcaseResponseSchema = z.object({
   visible: z.boolean(),
   items: z.array(gameVisitorTrophyItemSchema).max(500),
   order: z.array(trophyKeySchema).max(500),
+  /**
+   * La constellation du membre (#10053) — servie avec une vitrine VISIBLE, absente d'un refus (et d'un ancien
+   * serveur). Ses seules étoiles allumées : jamais le total de fragments, qui avancerait d'un coffre du jour et
+   * dirait les journées de présence. Les cosmétiques se déduisent des étoiles (`constellationStarCosmetic`).
+   */
+  constellation: z.object({ stars: z.number().int().min(0).max(1_000_000) }).optional(),
 });
 
 // --- « Jeu masqué » et l'opposition à la ligue Amis ---
@@ -357,7 +368,7 @@ export const gameSettingsResponseSchema = z.object({
 /**
  * Ce qu'un lecteur apprend du jeu d'un autre (#9481) — jamais un compte exact : le niveau et son
  * palier, les étoiles de Prestige, la FORME de la Flamme (jamais ses jours), le rang de Gloire et sa
- * division (jamais la Gloire), le PALIER du trésor (jamais les Meeshes). Aucune présence, aucune
+ * division (la Gloire aux seuls amis), le PALIER du trésor (jamais les Meeshes). Aucune présence, aucune
  * date. `standing` suit le réglage `rank`, `treasury` le réglage `treasury` : un refus (réglage,
  * blocage, « Jeu masqué », caché de la recherche, compte inconnu) rend `visible: false` et deux
  * blocs nuls — la MÊME réponse pour un compte qui n'existe pas.
@@ -368,7 +379,9 @@ export const gameStandingSchema = z.object({
   /** Ancienne loi : l'un des dix premiers paliers. */
   tier: enumOf(LEGACY_LEVEL_TIER_KEYS),
   /** Le niveau et le palier ouverts par le rang (#9688) — absents devant un serveur antérieur. */
-  ladder: z.object({ level: z.number().int().min(1), tier: enumOf(LEVEL_TIER_KEYS) }).optional(),
+  ladder: z.object({ level: z.number().int().min(1), tier: enumOf(LEVEL_TIER_KEYS), levelMaxLifetime: z.number().int().min(1).optional() }).optional(),
+  /** Le niveau max à vie (#10846) — suit le réglage « rang », comme le niveau. Absent devant un serveur antérieur. */
+  levelMaxLifetime: z.number().int().min(1).optional(),
   prestige: z.number().int().min(0).max(5),
   /** `null` : pas de Flamme allumée — ou celle-ci n'est pas à montrer. */
   flame: enumOf(FLAME_FORMS.map((form) => form.key)).nullable(),
@@ -385,6 +398,14 @@ export const gameStandingSchema = z.object({
    */
   points: z.number().int().min(0).optional(),
   trophyCount: z.number().int().min(0).optional(),
+  /**
+   * Ses étincelles (#10846) — la même visibilité que `points` (soi et les amis) : la poche, et le total accumulé à vie.
+   * `points` reste servi, aligné sur la poche. Des nombres JSON entiers, jamais une chaîne.
+   */
+  sparks: z.number().int().min(0).optional(),
+  sparksLifetime: z.number().int().min(0).optional(),
+  /** Sa Gloire totale (#10913) — la même visibilité que `points` (soi et les amis). Absente devant un serveur antérieur. */
+  glory: z.number().int().min(0).optional(),
 });
 
 export const gameShownTreasurySchema = z.object({ tier: enumOf(TREASURY_TIERS.map((tier) => tier.key)).nullable() });

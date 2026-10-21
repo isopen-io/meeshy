@@ -82,13 +82,14 @@ ssh $REMOTE_HOST "
     fi
 "
 
-# Config Nginx (depuis prod si existe)
-echo "   → config/nginx/static-files.conf..."
-ssh $REMOTE_HOST "
-    if [ -f /opt/meeshy/docker/nginx/static-files.conf ]; then
-        cp /opt/meeshy/docker/nginx/static-files.conf $STAGING_DIR/config/nginx/
-    fi
-"
+# Config Nginx du domaine statique : celle de STAGING, depuis le dépôt (#11419).
+# Jamais celle de production (/opt/meeshy/docker/nginx/) : staging et production
+# partagent l'hôte, pas la configuration (#9232). Garde :
+# static-nginx-config-per-environment.test.ts.
+echo "   → config/nginx/static-files.conf (staging)..."
+ssh $REMOTE_HOST "mkdir -p $STAGING_DIR/config/nginx"
+scp infrastructure/docker/nginx/static-files.staging.conf \
+    $REMOTE_HOST:$STAGING_DIR/config/nginx/static-files.conf
 
 # Secrets Firebase (depuis prod)
 echo "   → secrets/firebase-admin-sdk.json..."

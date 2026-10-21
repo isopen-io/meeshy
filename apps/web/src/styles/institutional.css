@@ -26,6 +26,8 @@
 
 @import '@meeshy/design-tokens/tokens.css';
 @import './ios.css';
+/* L'en-tête et le pied de meeshy.me, ceux de la landing (#10071). */
+@import './site-chrome.css';
 
 @custom-variant light (&:where(:root.light, :root.light *));
 

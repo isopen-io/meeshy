@@ -118,15 +118,29 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     func test_theFlatCitation_standsDownWhenTheSceneCardTookIt() throws {
         let host = try source(Self.host)
 
-        XCTAssertTrue(
-            host.contains("if let reply = content.reply, detachedStoryCitation == nil {"),
-            "La citation plate doit se taire quand la carte de scène a pris la story."
+        let flatSites = host.components(separatedBy: "if let reply = content.reply").count - 1
+        let standingDown = host.components(
+            separatedBy: "if let reply = content.reply, detachedStoryCitation == nil {").count - 1
+        XCTAssertGreaterThanOrEqual(
+            standingDown, 2,
+            "La bulle texte ET l'emoji en réponse posent chacun leur citation plate."
         )
         XCTAssertEqual(
-            host.components(separatedBy: "private var detachedStoryCitation: ReplyReference?").count - 1, 1,
+            standingDown, flatSites,
+            "Chaque citation plate doit se taire quand la carte de scène a pris la story."
+        )
+        // Depuis #10628 la décision est produite par `BubbleContent` (ce que la
+        // bulle, la rangée plate et la rivière partagent) ; la bulle la relaie.
+        let card = try source(Self.card)
+        XCTAssertEqual(
+            card.components(separatedBy: "var detachedStoryCitation: ReplyReference? {").count - 1, 1,
             "Un seul producteur de la décision — sinon les deux consommateurs (le " +
             "`body` qui MONTE la carte, le corps de bulle qui RETIRE la plate) " +
             "peuvent répondre différemment sur le même message."
+        )
+        XCTAssertEqual(
+            host.components(separatedBy: "var detachedStoryCitation: ReplyReference? { content.detachedStoryCitation }").count - 1, 1,
+            "La bulle relaie la décision de `BubbleContent`, elle ne la recalcule pas."
         )
         XCTAssertTrue(
             host.contains("BubbleStoryCitationCard("),
@@ -225,8 +239,12 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
             "Libellé « votre story » revenu : aucune donnée ne peut l'atteindre."
         )
 
-        let models = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Models/MessageModels.swift")
-        let persistence = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift")
+        let models = try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Models/APIMessage+MeeshyMessage.swift")
+        let persistence = try [
+            "APIMessageUpsert.swift",
+            "APIMessageUpsert+Attachments.swift",
+            "APIMessageUpsert+Merge.swift",
+        ].map { try sdkSource("packages/MeeshySDK/Sources/MeeshySDK/Persistence/\($0)") }.joined()
         XCTAssertGreaterThan(models.count, 10_000)
         XCTAssertGreaterThan(persistence.count, 10_000)
         XCTAssertTrue(
@@ -332,7 +350,8 @@ final class BubbleStoryCitationGuardTests: XCTestCase {
     /// Témoin POSITIF exprès : en négatif il serait passé au vert le jour où
     /// quelqu'un renomme la closure, en ne décrivant plus rien.
     func test_aStoryThatCannotBeOpened_saysSo() throws {
-        let view = try source(Self.conversation)
+        // Le tap sur la citation d'une story est câblé dans la couche de la liste (`onStoryReplyTap`).
+        let view = try source("Meeshy/Features/Main/Views/ConversationView+MessageListLayer.swift")
 
         XCTAssertTrue(
             view.contains("guard let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) else {"),

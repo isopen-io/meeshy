@@ -103,7 +103,7 @@ async function openList(context) {
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector(CELL, { timeout: 8000 });
   return { page, errors };
 }
@@ -266,6 +266,11 @@ async function runScheme({ colorScheme, locale, dir }) {
   check(true, `${tag} : le réseau revenu, Publier se rallume`);
 
   await page.click('[data-mood-publish]');
+  /* Une humeur SANS mot demande confirmation (#10527) : la question prend la
+     place du bouton Publier, et « Publier sans mot » la confirme. */
+  await page.waitForSelector('[data-mood-bare]', { timeout: 8000 });
+  check(true, `${tag} : sans mot, la question de confirmation se pose avant de publier`);
+  await page.click('[data-mood-bare-publish]');
 
   await page.waitForSelector(`${MOOD}[data-mood]`, { timeout: 8000 });
   const apres = await page.evaluate(
@@ -321,7 +326,7 @@ async function runScheme({ colorScheme, locale, dir }) {
      `hasMyStory` ni `hasAnyStory`. Le rail lit le MÊME cache que le listing
      (`useStoryTray`) : revenir sur « / » après la suppression doit donc
      montrer une cellule dont le centre n'est plus INERTE. */
-  await page.goto(`${BASE}/`, { waitUntil: 'load' });
+  await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await page.waitForSelector(CELL, { timeout: 8000 });
   const apresSuppression = await page.evaluate(
     (cell) => ({

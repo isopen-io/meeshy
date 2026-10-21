@@ -5,126 +5,6 @@ import GRDB
 import UIKit
 #endif
 
-// MARK: - Story Draft Summary
-
-/// Ce qu'il faut pour dresser la liste des brouillons sans en charger aucun :
-/// la vue « Mes stories » n'a besoin ni des effets ni des médias pour rendre
-/// une ligne.
-public struct StoryDraftSummary: Identifiable, Sendable, Equatable {
-    public let id: String
-    public let updatedAt: Date
-    public let slideCount: Int
-    /// Premier texte non vide de la story, s'il y en a un — sinon la vue
-    /// retombe sur un libellé dérivé du nombre de diapositives.
-    public let title: String?
-    /// Première image du brouillon encore présente sur disque, pour la vignette.
-    /// Chemin LOCAL : à lire directement, pas à résoudre comme une URL distante.
-    public let coverFileURL: URL?
-    /// Fond de la première slide (hex ou `gradient:…`). Toujours présent, là où
-    /// un brouillon n'a ni image ni `thumbHash` — celui-ci n'est composé qu'à
-    /// la publication. C'est donc la seule chose que TOUT brouillon peut montrer.
-    public let backgroundHex: String?
-    /// Composite de toutes les couches, pose des le PREMIER enregistrement du
-    /// brouillon par le composer — meme producteur qu'a la publication.
-    public let thumbHash: String?
-    /// Non-nil : une publication est EN COURS pour ce brouillon (gelé —
-    /// exclu des reprises tant que la file/l'upload travaille). Levé au
-    /// succès (le brouillon disparaît), à l'échec permanent (il redevient
-    /// éditable, avec `lastPublishError`) ou à l'annulation.
-    public let pendingPublishAt: Date?
-    /// Dernier échec PERMANENT de publication : la story est revenue en
-    /// brouillon pour amélioration, l'erreur reste affichable jusqu'à la
-    /// prochaine tentative (`markPendingPublish` la supplante).
-    public let lastPublishError: String?
-    /// Non-nil : ce brouillon ÉDITE une story déjà publiée — la réouverture
-    /// doit rouvrir le mode édition (`PUT /posts/:id`), jamais la création.
-    public let editingPostId: String?
-
-    public init(id: String, updatedAt: Date, slideCount: Int,
-                title: String?, coverFileURL: URL?, backgroundHex: String?,
-                thumbHash: String?,
-                pendingPublishAt: Date? = nil,
-                lastPublishError: String? = nil,
-                editingPostId: String? = nil) {
-        self.id = id
-        self.updatedAt = updatedAt
-        self.slideCount = slideCount
-        self.title = title
-        self.coverFileURL = coverFileURL
-        self.backgroundHex = backgroundHex
-        self.thumbHash = thumbHash
-        self.pendingPublishAt = pendingPublishAt
-        self.lastPublishError = lastPublishError
-        self.editingPostId = editingPostId
-    }
-}
-
-// MARK: - Story Draft Accessibility
-
-/// Ce qu'un brouillon retient de la collecte d'accessibilité du composer : le
-/// texte alternatif PAR MÉDIA et l'opt-in d'extraction de son.
-///
-/// Le transport portait déjà les deux jusqu'au gateway
-/// (`CreatePostSchema.mediaAlt` / `.allowSoundExtraction`) ; le brouillon, lui,
-/// ne les portait pas — refermer le composer perdait chaque texte saisi (F2).
-///
-/// Les deux champs se décodent par `decodeIfPresent` : un brouillon écrit avant
-/// ce lot n'a pas la clé du tout, et doit continuer de se relire — un brouillon
-/// perdu, c'est le travail de l'utilisateur perdu.
-public struct StoryDraftAccessibility: Codable, Equatable, Sendable {
-
-    /// Keyé par ID D'ÉLÉMENT DU COMPOSER, comme la collecte : la traduction
-    /// vers les ids de `PostMedia` n'a lieu qu'après l'upload, à la publication
-    /// (`StoryMediaAltMapping.serverKeyed`).
-    public let mediaAlt: [String: String]
-
-    /// La LÉGENDE par média (`PostMedia.caption`, #4055) — keyée comme
-    /// `mediaAlt` ci-dessus, par id d'élément du COMPOSER.
-    ///
-    /// Champ SÉPARÉ, et pas une seconde entrée d'un dictionnaire commun : ce
-    /// qui les distingue est leur sens (`PostMediaText`), et un brouillon doit
-    /// pouvoir porter l'un sans l'autre.
-    public let mediaCaption: [String: String]
-
-    /// `nil` tant que l'auteur n'a pas touché l'interrupteur — distinct d'un
-    /// `false`, que le transport lit comme un refus posé.
-    public let allowSoundExtraction: Bool?
-
-    public static let empty = StoryDraftAccessibility()
-
-    /// Une LÉGENDE seule suffit à rendre le brouillon non vide : sans cela
-    /// elle serait perdue à la fermeture d'un composer où rien d'autre n'a été
-    /// saisi — le cas nominal du profil Post, où la légende est le premier
-    /// texte écrit.
-    public var isEmpty: Bool {
-        mediaAlt.isEmpty && mediaCaption.isEmpty && allowSoundExtraction == nil
-    }
-
-    public init(mediaAlt: [String: String] = [:],
-                mediaCaption: [String: String] = [:],
-                allowSoundExtraction: Bool? = nil) {
-        self.mediaAlt = mediaAlt
-        self.mediaCaption = mediaCaption
-        self.allowSoundExtraction = allowSoundExtraction
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case mediaAlt
-        case mediaCaption
-        case allowSoundExtraction
-    }
-
-    public init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        mediaAlt = try container.decodeIfPresent([String: String].self, forKey: .mediaAlt) ?? [:]
-        // Un brouillon écrit AVANT #4055 n'a pas la clé : il se relit sans
-        // légende, il n'échoue pas. Un décodeur strict perdrait le brouillon
-        // ENTIER — son texte alternatif et son choix d'extraction avec.
-        mediaCaption = try container.decodeIfPresent([String: String].self, forKey: .mediaCaption) ?? [:]
-        allowSoundExtraction = try container.decodeIfPresent(Bool.self, forKey: .allowSoundExtraction)
-    }
-}
-
 // MARK: - Story Draft Store (GRDB / SQLite)
 
 /// Persistance locale des brouillons Story via SQLite (GRDB).
@@ -151,7 +31,13 @@ public final class StoryDraftStore: @unchecked Sendable {
         }
     }
 
-    private let db: DatabaseQueue
+    private let storage: DatabaseQueue?
+    private var db: DatabaseQueue {
+        get throws {
+            guard let storage else { throw DatabaseStorageUnavailable() }
+            return storage
+        }
+    }
     /// RACINE des médias. Chaque brouillon a son sous-répertoire : deux
     /// brouillons peuvent porter le même `element_id` (duplication, reprise
     /// d'un échec de publication) et écraseraient sinon leurs fichiers.
@@ -179,193 +65,47 @@ public final class StoryDraftStore: @unchecked Sendable {
         storedFailure = PersistFailure(operation: operation, message: message, occurredAt: Date())
     }
 
-    private init() {
+    private convenience init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let path = dir.appendingPathComponent("meeshy_story_draft.db").path
-        mediaRoot = dir.appendingPathComponent("meeshy_draft_media")
-        let opened = Self.makeQueue(path: path)
-        db = opened.queue
-        storedFailure = opened.failure
-        createSchemaOrLog()
+        self.init(dbPath: dir.appendingPathComponent("meeshy_story_draft.db").path,
+                  mediaDirectory: dir.appendingPathComponent("meeshy_draft_media"))
     }
 
-    public init(dbPath: String, mediaDirectory: URL) {
+    public convenience init(dbPath: String, mediaDirectory: URL) {
+        self.init(storage: ResilientDatabaseQueue.open(path: dbPath), mediaDirectory: mediaDirectory)
+    }
+
+    init(storage opened: OpenedDatabaseQueue, mediaDirectory: URL) {
         mediaRoot = mediaDirectory
-        let opened = Self.makeQueue(path: dbPath)
-        db = opened.queue
-        storedFailure = opened.failure
+        storage = opened.queue
+        storedFailure = Self.openFailure(of: opened)
         createSchemaOrLog()
     }
 
     /// Schema creation is best-effort at init (no throwing initializer), but a
     /// failure disables every draft read/write that follows — it must be visible.
     private func createSchemaOrLog() {
+        guard let storage else { return }
         do {
-            try createSchema()
+            try StoryDraftSchema.create(in: storage, mediaRoot: mediaRoot)
         } catch {
             Logger.cache.fault("[StoryDraftStore] Schema creation failed — drafts cannot be saved or restored: \(error.localizedDescription, privacy: .public)")
             recordFailure("create-schema", message: error.localizedDescription)
         }
     }
 
-    /// Never-throwing queue builder. Falls back to an in-memory queue if the
-    /// requested file cannot be opened — drafts are ephemeral in that case,
-    /// but the app is not crashed. An OOM on in-memory creation would be
-    /// handled by the OS anyway. Le repli est RENDU au constructeur : muet, il
-    /// laissait croire à une persistance qui n'existait pas.
-    private static func makeQueue(path: String) -> (queue: DatabaseQueue, failure: PersistFailure?) {
-        do {
-            return (try DatabaseQueue(path: path), nil)
-        } catch {
-            Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory: \(error.localizedDescription, privacy: .public)")
-            do {
-                let failure = PersistFailure(operation: "open-database",
-                                             message: error.localizedDescription,
-                                             occurredAt: Date())
-                return (try DatabaseQueue(), failure)
-            } catch {
-                fatalError("[StoryDraftStore] Cannot create in-memory GRDB queue — out of memory: \(error)")
-            }
-        }
-    }
-
-    private func createSchema() throws {
-        try migrateLegacySingleDraftIfNeeded()
-        try db.write { db in
-            try db.create(table: "story_draft", ifNotExists: true) { t in
-                t.column("id", .text).primaryKey()
-                t.column("visibility", .text).notNull()
-                t.column("created_at", .double).notNull()
-                t.column("updated_at", .double).notNull()
-            }
-            try db.create(table: "story_draft_slide", ifNotExists: true) { t in
-                t.column("draft_id", .text).notNull()
-                t.column("id", .text).notNull()
-                t.column("order_index", .integer).notNull()
-                t.column("content", .text)
-                t.column("effects_json", .text).notNull()
-                t.column("media_url", .text)
-                t.column("duration", .double).notNull()
-                t.column("updated_at", .double).notNull()
-                t.primaryKey(["draft_id", "id"])
-            }
-            try db.create(table: "story_draft_meta", ifNotExists: true) { t in
-                t.column("draft_id", .text).notNull()
-                t.column("key", .text).notNull()
-                t.column("value", .text).notNull()
-                t.primaryKey(["draft_id", "key"])
-            }
-            try db.create(table: "story_draft_media", ifNotExists: true) { t in
-                t.column("draft_id", .text).notNull()
-                t.column("element_id", .text).notNull()
-                t.column("media_type", .text).notNull()
-                t.column("file_name", .text).notNull()
-                t.primaryKey(["draft_id", "element_id"])
-            }
-        }
-    }
-
-    /// Fait passer une base au schéma MONO vers le schéma partitionné, en
-    /// préservant le brouillon en cours : le perdre à la mise à jour serait
-    /// exactement le grief que le multi-brouillon vient traiter.
-    ///
-    /// SQLite ne sait pas changer une clé primaire par `ALTER TABLE` — et il
-    /// FAUT la changer : deux brouillons peuvent légitimement partager un
-    /// `id` de slide ou un `element_id`. D'où la reconstruction des trois
-    /// tables. Idempotent : la présence de la colonne `draft_id` suffit à
-    /// reconnaître une base déjà migrée.
-    private func migrateLegacySingleDraftIfNeeded() throws {
-        let legacyId = UUID().uuidString
-        var migrated = false
-
-        try db.write { db in
-            guard try db.tableExists("story_draft_slide") else { return }
-            let columns = try db.columns(in: "story_draft_slide")
-            guard !columns.contains(where: { $0.name == "draft_id" }) else { return }
-            migrated = true
-
-            let visibility = try String.fetchOne(
-                db, sql: "SELECT value FROM story_draft_meta WHERE key = 'visibility'") ?? "PUBLIC"
-            let updatedAt = try Double.fetchOne(
-                db, sql: "SELECT MAX(updated_at) FROM story_draft_slide")
-                ?? Date().timeIntervalSince1970
-
-            try db.execute(sql: """
-                CREATE TABLE story_draft_slide_v2 (
-                  draft_id TEXT NOT NULL, id TEXT NOT NULL, order_index INTEGER NOT NULL,
-                  content TEXT, effects_json TEXT NOT NULL, media_url TEXT,
-                  duration DOUBLE NOT NULL, updated_at DOUBLE NOT NULL,
-                  PRIMARY KEY (draft_id, id))
-                """)
-            try db.execute(sql: """
-                INSERT INTO story_draft_slide_v2
-                SELECT ?, id, order_index, content, effects_json, media_url, duration, updated_at
-                FROM story_draft_slide
-                """, arguments: [legacyId])
-            try db.execute(sql: "DROP TABLE story_draft_slide")
-            try db.execute(sql: "ALTER TABLE story_draft_slide_v2 RENAME TO story_draft_slide")
-
-            try db.execute(sql: """
-                CREATE TABLE story_draft_meta_v2 (
-                  draft_id TEXT NOT NULL, key TEXT NOT NULL, value TEXT NOT NULL,
-                  PRIMARY KEY (draft_id, key))
-                """)
-            try db.execute(sql: "INSERT INTO story_draft_meta_v2 SELECT ?, key, value FROM story_draft_meta",
-                           arguments: [legacyId])
-            try db.execute(sql: "DROP TABLE story_draft_meta")
-            try db.execute(sql: "ALTER TABLE story_draft_meta_v2 RENAME TO story_draft_meta")
-
-            try db.execute(sql: """
-                CREATE TABLE story_draft_media_v2 (
-                  draft_id TEXT NOT NULL, element_id TEXT NOT NULL,
-                  media_type TEXT NOT NULL, file_name TEXT NOT NULL,
-                  PRIMARY KEY (draft_id, element_id))
-                """)
-            try db.execute(sql: "INSERT INTO story_draft_media_v2 SELECT ?, element_id, media_type, file_name FROM story_draft_media",
-                           arguments: [legacyId])
-            try db.execute(sql: "DROP TABLE story_draft_media")
-            try db.execute(sql: "ALTER TABLE story_draft_media_v2 RENAME TO story_draft_media")
-
-            try db.execute(sql: """
-                CREATE TABLE IF NOT EXISTS story_draft (
-                  id TEXT PRIMARY KEY, visibility TEXT NOT NULL,
-                  created_at DOUBLE NOT NULL, updated_at DOUBLE NOT NULL)
-                """)
-            let slideCount = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM story_draft_slide") ?? 0
-            if slideCount > 0 {
-                try db.execute(
-                    sql: "INSERT OR REPLACE INTO story_draft (id, visibility, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                    arguments: [legacyId, visibility, updatedAt, updatedAt])
-            }
-        }
-
-        guard migrated else { return }
-        relocateLegacyMediaFiles(into: legacyId)
-    }
-
-    /// Déplace les fichiers posés à plat sous la racine vers le
-    /// sous-répertoire du brouillon migré. Sans ce déplacement, la base
-    /// pointerait des noms de fichiers introuvables et le brouillon repris
-    /// serait amputé de ses images.
-    private func relocateLegacyMediaFiles(into draftId: String) {
-        let fm = FileManager.default
-        guard let entries = try? fm.contentsOfDirectory(
-            at: mediaRoot, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
-        let destination = mediaRoot.appendingPathComponent(draftId)
-        do {
-            try fm.createDirectory(at: destination, withIntermediateDirectories: true)
-        } catch {
-            Logger.cache.error("[StoryDraftStore] Migration media dir unavailable, legacy draft loses its media: \(error.localizedDescription, privacy: .public)")
-            return
-        }
-        for entry in entries {
-            let isDirectory = (try? entry.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            guard !isDirectory else { continue }
-            do {
-                try fm.moveItem(at: entry, to: destination.appendingPathComponent(entry.lastPathComponent))
-            } catch {
-                Logger.cache.error("[StoryDraftStore] Legacy media not relocated (\(entry.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
-            }
+    /// Le repli est RENDU au constructeur : muet, il laissait croire à une
+    /// persistance qui n'existait pas.
+    private static func openFailure(of opened: OpenedDatabaseQueue) -> PersistFailure? {
+        switch opened {
+        case .persistent:
+            return nil
+        case .memoryFallback(_, let diskError):
+            Logger.cache.warning("[StoryDraftStore] Disk queue unavailable, falling back to in-memory: \(diskError, privacy: .public)")
+            return PersistFailure(operation: "open-database", message: diskError, occurredAt: Date())
+        case .unavailable(let diskError, let memoryError):
+            Logger.cache.fault("[StoryDraftStore] No database at all, drafts cannot be saved or restored: disk=\(diskError, privacy: .public) memory=\(memoryError, privacy: .public)")
+            return PersistFailure(operation: "open-database", message: "\(diskError) / \(memoryError)", occurredAt: Date())
         }
     }
 
@@ -409,131 +149,9 @@ public final class StoryDraftStore: @unchecked Sendable {
         let now = Date().timeIntervalSince1970
         do {
             try db.write { db in
-                try db.execute(sql: "DELETE FROM story_draft_slide WHERE draft_id = ?",
-                               arguments: [draftId])
-                for (index, slide) in slides.enumerated() {
-                    guard let effectsData = JSONEncoder().encodeOrLog(slide.effects,
-                                                                       field: "story slide effects",
-                                                                       id: slide.id,
-                                                                       logger: Logger.cache),
-                          let effectsJSON = String(data: effectsData, encoding: .utf8) else { continue }
-                    try db.execute(
-                        sql: """
-                        INSERT INTO story_draft_slide (draft_id, id, order_index, content, effects_json, media_url, duration, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        arguments: [
-                            draftId,
-                            slide.id,
-                            index,
-                            slide.content,
-                            effectsJSON,
-                            slide.mediaURL,
-                            slide.duration,
-                            now
-                        ]
-                    )
-                }
-                try db.execute(
-                    sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'visibility', ?)",
-                    arguments: [draftId, visibility]
-                )
-                // Fidélité d'audience et de langue : une valeur absente EFFACE
-                // la clé — un autosave qui revient à « tout le monde » ne doit
-                // pas laisser traîner l'ancienne liste « Seulement… ».
-                if visibilityUserIds.isEmpty {
-                    try db.execute(
-                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'visibilityUserIds'",
-                        arguments: [draftId]
-                    )
-                } else if let idsData = JSONEncoder().encodeOrLog(visibilityUserIds,
-                                                                  field: "story draft visibilityUserIds",
-                                                                  id: draftId,
-                                                                  logger: Logger.cache),
-                          let idsJSON = String(data: idsData, encoding: .utf8) {
-                    try db.execute(
-                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'visibilityUserIds', ?)",
-                        arguments: [draftId, idsJSON]
-                    )
-                }
-                if let originalLanguage {
-                    try db.execute(
-                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'originalLanguage', ?)",
-                        arguments: [draftId, originalLanguage]
-                    )
-                } else {
-                    try db.execute(
-                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'originalLanguage'",
-                        arguments: [draftId]
-                    )
-                }
-                // Lien vers la story publiée qu'une session d'ÉDITION modifie.
-                // Même fidélité que l'audience et la langue : absent = effacé
-                // (un brouillon redevenu création ne garde pas le lien). Les
-                // marqueurs `pendingPublishAt`/`lastPublishError`, eux, ne
-                // passent PAS par `save` — ils ont leurs écrivains dédiés et
-                // survivent aux autosaves.
-                if let editingPostId {
-                    try db.execute(
-                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'editingPostId', ?)",
-                        arguments: [draftId, editingPostId]
-                    )
-                } else {
-                    try db.execute(
-                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'editingPostId'",
-                        arguments: [draftId]
-                    )
-                }
-                // Empreinte de la carte de brouillon. Le canvas v3 — la forme
-                // que `effects_json` persiste — n'a pas de logement pour le
-                // `thumbHash` (métadonnée de slide, pas objet de scène) : sans
-                // cette clé, la carte perdrait sa vignette dès le premier
-                // enregistrement. Absent = effacé, comme les autres méta.
-                if let thumbHash = slides.first?.effects.thumbHash {
-                    try db.execute(
-                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, 'thumbHash', ?)",
-                        arguments: [draftId, thumbHash]
-                    )
-                } else {
-                    try db.execute(
-                        sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key = 'thumbHash'",
-                        arguments: [draftId]
-                    )
-                }
-                // Ratio de canvas — état PAR SLIDE (le composer en écrit un
-                // par slide courante, `StoryComposerViewModel+Elements.swift`
-                // :557/:656/:764, jusqu'à dix slides par brouillon). Le remap
-                // v3 CONSOMME `canvasAspectRatio` pour repositionner les
-                // ancres (le porteur garde son ratio intrinsèque, la scène
-                // letterboxe) mais ne le LOGE nulle part : légitime pour le
-                // fil, pas pour le brouillon local — sans une clé PAR SLIDE,
-                // seule la première rouvrirait dans sa forme et toute slide
-                // suivante rouvrirait en portrait dès le premier autosave.
-                // Balayage puis réécriture : une slide retirée du brouillon
-                // n'y laisse pas de méta orpheline.
-                try db.execute(
-                    sql: "DELETE FROM story_draft_meta WHERE draft_id = ? AND key LIKE 'canvasAspectRatio:%'",
-                    arguments: [draftId]
-                )
-                for slide in slides {
-                    guard let canvasAspectRatio = slide.effects.canvasAspectRatio else { continue }
-                    try db.execute(
-                        sql: "INSERT OR REPLACE INTO story_draft_meta (draft_id, key, value) VALUES (?, ?, ?)",
-                        arguments: [draftId, "canvasAspectRatio:\(slide.id)", String(canvasAspectRatio)]
-                    )
-                }
-                // `created_at` n'est posé qu'à la première écriture : le
-                // `COALESCE` sur la ligne existante évite de rajeunir un
-                // brouillon à chaque autosave.
-                try db.execute(
-                    sql: """
-                    INSERT INTO story_draft (id, visibility, created_at, updated_at)
-                    VALUES (?, ?, ?, ?)
-                    ON CONFLICT(id) DO UPDATE SET visibility = excluded.visibility,
-                                                  updated_at = excluded.updated_at
-                    """,
-                    arguments: [draftId, visibility, now, now]
-                )
+                try StoryDraftRows.write(db, draftId: draftId, slides: slides, visibility: visibility,
+                                         visibilityUserIds: visibilityUserIds, originalLanguage: originalLanguage,
+                                         editingPostId: editingPostId, now: now)
             }
             return true
         } catch {

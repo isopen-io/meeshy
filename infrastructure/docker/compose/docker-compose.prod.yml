@@ -1,4 +1,13 @@
 name: meeshy
+# #10855 — journaux applicatifs dans journald : ils survivent à la recréation
+# du conteneur (chaque promotion recrée la passerelle, et json-file part avec
+# elle). Durée bornée par /etc/systemd/journald.conf.d/meeshy-retention.conf.
+# Lecture : journalctl CONTAINER_NAME=<conteneur> --since "7 days ago"
+x-journald-logging: &journald-logging
+  driver: journald
+  options:
+    tag: "{{.Name}}"
+
 services:
   # Traefik Reverse Proxy with automatic SSL
   traefik:
@@ -28,6 +37,21 @@ services:
       - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
       - "--log.level=INFO"
       - "--accesslog=true"
+      # #10855 — journal d'accès dans un FICHIER JSON tourné chaque jour par
+      # logrotate (infrastructure/config/logging/logrotate-meeshy-traefik),
+      # 14 jours gardés, chaînes de requête secrètes masquées à la compression.
+      # Aucun en-tête journalisé sauf User-Agent : Authorization, Cookie et
+      # X-Session-Token ne quittent jamais la requête.
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.format=json"
+      - "--accesslog.fields.defaultmode=keep"
+      - "--accesslog.fields.names.StartLocal=drop"
+      - "--accesslog.fields.names.ClientUsername=drop"
+      - "--accesslog.fields.headers.defaultmode=drop"
+      - "--accesslog.fields.headers.names.User-Agent=keep"
+      - "--accesslog.fields.headers.names.Authorization=drop"
+      - "--accesslog.fields.headers.names.Cookie=drop"
+      - "--accesslog.fields.headers.names.X-Session-Token=drop"
     ports:
       - "80:80"
       - "443:443"
@@ -38,6 +62,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - traefik_certs:/letsencrypt
       - ./config/dynamic.yaml:/dynamic.yaml:ro
+      - /var/log/meeshy/traefik:/var/log/traefik
     networks:
       - meeshy-network
     labels:
@@ -68,6 +93,8 @@ services:
       - ./shared/init-postgresql.sql:/docker-entrypoint-initdb.d/init-postgresql.sql:ro
     networks:
       - meeshy-network
+      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD-SHELL", "echo 'db.runCommand(\"ping\").ok' | mongosh mongodb://localhost:27017/${MONGODB_DATABASE:-meeshy} --quiet || exit 1"]
       interval: 30s
@@ -110,6 +137,8 @@ services:
       - redis_data:/data
     networks:
       - meeshy-network
+      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -148,6 +177,7 @@ services:
     image: ${TRANSLATOR_IMAGE:-isopen/meeshy-translator:latest}
     container_name: meeshy-translator
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=${DATABASE_URL}
@@ -219,6 +249,7 @@ services:
     image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:latest}
     container_name: meeshy-gateway
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_TYPE=${DATABASE_TYPE:-MONGODB}
       - DATABASE_URL=${DATABASE_URL}
@@ -238,6 +269,12 @@ services:
       # PRODUCTION : la première passe efface l'arriéré — feu vert du porteur et
       # sauvegarde vérifiée AVANT de poser RETENTION_PURGE_ENABLED=true sur l'hôte.
       - RETENTION_PURGE_ENABLED=${RETENTION_PURGE_ENABLED:-false}
+      # #10175 (L19) — le push d'une étape du jeu franchie app fermée : détection, ligne de
+      # base et UNE notification groupée par jour au plus. ARMÉ par la seule valeur exacte on ;
+      # toute autre valeur, absence comprise, le laisse éteint (relu à chaque passage du job).
+      # PRODUCTION : livré ÉTEINT ; il s'allume après la recette de staging, par la seule
+      # valeur exacte on sur l'hôte puis un redémarrage de la passerelle (aucun code à redéployer).
+      - GAME_PHOTO_PUSH=${GAME_PHOTO_PUSH:-off}
       # #9668 — le verdict de la sauvegarde nocturne (etat.json), lu par la carte
       # « Sauvegardes » de la supervision et contrôlé chaque jour à 5 h, heure de Paris :
       # un échec, une sauvegarde de plus de 26 h ou un verdict absent notifient les
@@ -252,8 +289,9 @@ services:
       - JWT_EXPIRES_IN=${JWT_EXPIRES_IN}
       - UPLOAD_PATH=/app/uploads
       # Volume DÉDIÉ à la bibliothèque de sons. Surtout PAS sous UPLOAD_PATH :
-      # ce dernier est monté en lecture seule par nginx (static.<domaine>) et
-      # servi sans authentification — les sons ne le sont que par la route JWT.
+      # ce dernier a été servi sans authentification par nginx (static.<domaine>)
+      # jusqu'à #11256 ; les sons ne le sont que par la route JWT, et rester
+      # hors de l'arbre des uploads les garde d'un remontage futur.
       - UPLOAD_DIR=/app/sounds
       # Capture de sons OUVERTE (décision produit du 2026-07-31). Alimentée par
       # les contenus PUBLIC **et COMMUNITY** — cf. `soundEligibility.ts`.
@@ -276,6 +314,9 @@ services:
       # (les stories gardent tout leur historique). La fixer à la date de
       # PROMOTION EN PRODUCTION. Illisible => rien du passé n'est montré.
       - VIEWER_ACTIVITY_DISCLOSED_SINCE=${VIEWER_ACTIVITY_DISCLOSED_SINCE:-2026-10-10T00:00:00.000Z}
+      # Conservation du brut de lecture (PostImpression, PostEngagement), en
+      # jours — décision porteur #10510 : 25 mois par défaut. Illisible => défaut.
+      - RAW_READING_RETENTION_DAYS=${RAW_READING_RETENTION_DAYS:-760}
       # Variables d'initialisation des utilisateurs
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:?ADMIN_PASSWORD absente sur l hote. Vide, le compte ADMIN naitrait avec le mot de passe public admin123}
@@ -329,7 +370,19 @@ services:
       - ATTACHMENT_URL_SIGNING_KEY=${ATTACHMENT_URL_SIGNING_KEY:-}
       - ATTACHMENT_URL_SIGNING_KEY_PREVIOUS=${ATTACHMENT_URL_SIGNING_KEY_PREVIOUS:-}
       - ATTACHMENT_URL_SIGNATURE_ENFORCE=${ATTACHMENT_URL_SIGNATURE_ENFORCE:-false}
+      # #10483 — clé HMAC des lecteurs SANS compte (vues et impressions anonymes) :
+      # seule l'empreinte du jeton est stockée. PROPRE à cet environnement ; sans
+      # elle la passerelle refuse de démarrer (fail-closed). La changer recompte
+      # chaque lecteur anonyme : ne pas la faire tourner.
+      - READER_KEY_HMAC_SECRET=${READER_KEY_HMAC_SECRET:?READER_KEY_HMAC_SECRET absente sur l hote. Generer avec openssl rand -hex 32}
+      # #10499 — clé des EMPREINTES de recherche (searchId scellé AES-256-GCM, clés
+      # dérivées par HKDF). PROPRE à cet environnement. Absente : la passerelle
+      # démarre, la recherche répond, mais aucune empreinte n'est calculée — d'où
+      # `:-` et non `:?`, pour ne pas bloquer un déploiement avant qu'elle soit
+      # posée sur l'hôte. La faire tourner rend les anciennes empreintes muettes.
+      - SEARCH_FINGERPRINT_SECRET=${SEARCH_FINGERPRINT_SECRET:-}
       - AGENT_HOST=agent
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - TURN_SECRET=${TURN_SECRET}
       - TURN_SERVERS=${TURN_SERVERS:-meeshy.me:3478}
       - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
@@ -358,6 +411,8 @@ services:
         condition: service_healthy
     networks:
       - meeshy-network
+      # #10289 — réseau privé de l'agent : seuls la passerelle, la base et Redis le partagent.
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -366,6 +421,10 @@ services:
       start_period: 30s
     labels:
       - "traefik.enable=true"
+      # #10323 — la passerelle a DEUX réseaux (#10289) : Traefik la joint par le réseau d'entrée,
+      # sous son nom RÉEL (préfixé par le projet compose `meeshy`). Sans ce label, il a pris
+      # l'IP du réseau de l'agent, qu'il ne joint pas : gate.meeshy.me en 504 (2026-10-12).
+      - "traefik.docker.network=meeshy_meeshy-network"
       # API Gateway sur gate.${DOMAIN}
       - "traefik.http.routers.gateway.rule=Host(`gate.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
@@ -397,6 +456,30 @@ services:
       - "traefik.http.routers.frontend-unfurl.service=gateway"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.regex=^/chat/([A-Za-z0-9_.-]{1,100})/?$$"
       - "traefik.http.middlewares.chat-unfurl-path.replacepathregex.replacement=/api/v1/links/$$1/og"
+      # #10192 — les mêmes robots qui déplient un lien SUIVI /l/<jeton> reçoivent
+      # l'aperçu de sa cible publique (GET /api/v1/tracking-links/<jeton>/og) : une
+      # adresse web extérieure d'un lien actif les y renvoie, une invitation ouverte
+      # se déplie, tout le reste rend l'aperçu générique. Sans ce routeur, nginx sert
+      # l'aperçu générique de la famille `link` (apps/web/nginx.conf, D-199).
+      - "traefik.http.routers.frontend-track-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/l/[A-Za-z0-9_-]{2,50}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-track-unfurl.priority=100"
+      - "traefik.http.routers.frontend-track-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-track-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-track-unfurl.middlewares=track-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-track-unfurl.service=gateway"
+      - "traefik.http.middlewares.track-unfurl-path.replacepathregex.regex=^/l/([A-Za-z0-9_-]{2,50})/?$$"
+      - "traefik.http.middlewares.track-unfurl-path.replacepathregex.replacement=/api/v1/tracking-links/$$1/og"
+      # #10559 — les mêmes robots qui déplient un lien d'AFFILIATION /signup/affiliate/<jeton>
+      # reçoivent l'aperçu de celui qui invite (GET /api/v1/affiliate/<jeton>/og) : son nom,
+      # son pseudo, sa bannière sinon son avatar ; un jeton fermé rend l'aperçu générique.
+      - "traefik.http.routers.frontend-affiliate-unfurl.rule=(Host(`${DOMAIN:-localhost}`) || Host(`www.${DOMAIN:-localhost}`)) && PathRegexp(`^/signup/affiliate/[A-Za-z0-9_-]{2,100}/?$$`) && !Query(`open`, `1`) && HeaderRegexp(`User-Agent`, `(?i)(facebookexternalhit|facebot|whatsapp|twitterbot|slackbot|telegrambot|discordbot|linkedinbot|skypeuripreview|embedly|iframely|redditbot|pinterestbot|vkshare|mastodon|bluesky|cardyb|google-pagerenderer|kakaotalk-scrap|bitlybot|mattermost|synapse)`)"
+      - "traefik.http.routers.frontend-affiliate-unfurl.priority=100"
+      - "traefik.http.routers.frontend-affiliate-unfurl.entrypoints=websecure"
+      - "traefik.http.routers.frontend-affiliate-unfurl.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend-affiliate-unfurl.middlewares=affiliate-unfurl-path,rate-limit@file,compress@file"
+      - "traefik.http.routers.frontend-affiliate-unfurl.service=gateway"
+      - "traefik.http.middlewares.affiliate-unfurl-path.replacepathregex.regex=^/signup/affiliate/([A-Za-z0-9_-]{2,100})/?$$"
+      - "traefik.http.middlewares.affiliate-unfurl-path.replacepathregex.replacement=/api/v1/affiliate/$$1/og"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # Static Files Service - Nginx pour servir les fichiers uploadés sur static.${DOMAIN}
@@ -405,8 +488,11 @@ services:
     container_name: meeshy-static-files
     restart: unless-stopped
     volumes:
+      # Le SEUL magasin servi ici est le legacy (/u/). Les uploads de la
+      # passerelle n'y sont PLUS montés (#11256) : ils passent par la passerelle,
+      # qui applique vue unique, éphémère et lecteur-gate. Garde :
+      # media-uploads-never-public.test.ts.
       - frontend_uploads:/usr/share/nginx/html/u:ro
-      - gateway_uploads:/usr/share/nginx/html/uploads:ro
       - ./docker/nginx/static-files.conf:/etc/nginx/conf.d/default.conf:ro
     networks:
       - meeshy-network
@@ -438,6 +524,7 @@ services:
     image: ${FRONTEND_IMAGE:-isopen/meeshy-webapp:latest}
     container_name: meeshy-frontend
     restart: unless-stopped
+    logging: *journald-logging
     volumes:
       - frontend_uploads:/srv/legacy-uploads/u:ro
     networks:
@@ -463,6 +550,7 @@ services:
     image: ${AGENT_IMAGE:-isopen/meeshy-agent:latest}
     container_name: meeshy-agent
     restart: unless-stopped
+    logging: *journald-logging
     environment:
       - DATABASE_URL=mongodb://database:27017/meeshy?replicaSet=rs0
       - REDIS_URL=redis://redis:6379
@@ -476,11 +564,15 @@ services:
       - ZMQ_PUB_PORT=5561
       - NODE_ENV=production
       - PORT=3200
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
     depends_on:
       - database
       - redis
+    # Réseau PRIVÉ seulement (#10289), comme agent-staging : la passerelle le joint
+    # par son nom de service (HTTP 3200, ZMQ 5560/5561). meeshy-network, partagé avec
+    # Traefik, la webapp, static-files et certs-dumper, ne lui servait à rien.
     networks:
-      - meeshy-network
+      - meeshy-agent-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3200/health"]
       interval: 30s
@@ -657,4 +749,8 @@ volumes:
 
 networks:
   meeshy-network:
+    driver: bridge
+  # #10289 — agent + passerelle + base + Redis. Bridge (pas `internal`) : l'agent
+  # doit joindre son fournisseur LLM.
+  meeshy-agent-network:
     driver: bridge

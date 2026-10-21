@@ -21,7 +21,7 @@ public struct AttachmentDeleteResponse: Decodable, Sendable {
     public let success: Bool
 }
 
-public final class AttachmentService: AttachmentTranslationProviding, @unchecked Sendable {
+public final class AttachmentService: AttachmentTranslationProviding, Sendable {
     public static let shared = AttachmentService()
     private let api: APIClientProviding
 

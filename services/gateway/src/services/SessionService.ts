@@ -13,6 +13,7 @@ import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { SessionLoginMethod } from '@meeshy/shared/utils/client-session';
 import { RequestContext } from './GeoIPService';
+import { adoptionDeadlineOf, openingExpiry } from './auth/session-adoption';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const logger = enhancedLogger.child({ module: 'SessionService' });
@@ -85,6 +86,11 @@ export interface SessionData {
   lastActivityAt: Date;
   isCurrentSession: boolean;
   isTrusted: boolean;
+  /**
+   * L'échéance d'adoption d'une session prouvée par un lien (#10518) — posée
+   * par `createSession` seul, absente quand rien n'attend.
+   */
+  adoptBy?: Date;
 }
 
 export interface CreateSessionInput {
@@ -155,9 +161,12 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
   const sessionToken = hashToken(token);
 
   // Calculate expiry date based on device type
+  const now = new Date();
   const expiryDays = getSessionExpiryDays(deviceInfo);
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + expiryDays);
+  const normalExpiresAt = new Date(now);
+  normalExpiresAt.setDate(normalExpiresAt.getDate() + expiryDays);
+  // #10477 — ouverte par un lien, la session est courte jusqu'à son adoption.
+  const { expiresAt, adoptedExpiresAt } = openingExpiry({ loginMethod: input.loginMethod, expiresAt: normalExpiresAt, now });
 
   // Create the session
   const session = await db.userSession.create({
@@ -165,6 +174,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
       userId,
       sessionToken,
       expiresAt,
+      adoptedExpiresAt,
       // Device info
       deviceType: deviceInfo?.type || null,
       deviceVendor: deviceInfo?.vendor || null,
@@ -198,7 +208,7 @@ export async function createSession(input: CreateSessionInput): Promise<SessionD
   // Enforce session limit - remove oldest sessions if over limit
   await enforceSessionLimit(userId);
 
-  return mapSessionToData(session, true);
+  return { ...mapSessionToData(session, true), ...adoptionDeadlineOf(session) };
 }
 
 /**
@@ -510,7 +520,7 @@ export async function markSessionTrusted(
     // Verify session exists first
     const existingSession = await db.userSession.findUnique({
       where: { id: sessionId },
-      select: { id: true, userId: true, isTrusted: true, isValid: true }
+      select: { id: true, userId: true, isTrusted: true, isValid: true, adoptedExpiresAt: true }
     });
 
     if (!existingSession) {
@@ -532,12 +542,13 @@ export async function markSessionTrusted(
     const newExpiresAt = new Date();
     newExpiresAt.setDate(newExpiresAt.getDate() + SESSION_EXPIRY_TRUSTED_DAYS);
 
+    // #10477 — une session prouvée pas encore adoptée garde sa fenêtre courte :
+    // la confiance porte sur l'échéance qu'elle prendra une fois adoptée.
     await db.userSession.update({
       where: { id: sessionId },
-      data: {
-        isTrusted: true,
-        expiresAt: newExpiresAt
-      },
+      data: existingSession.adoptedExpiresAt
+        ? { isTrusted: true, adoptedExpiresAt: newExpiresAt }
+        : { isTrusted: true, expiresAt: newExpiresAt },
     });
 
     // Log security event to database

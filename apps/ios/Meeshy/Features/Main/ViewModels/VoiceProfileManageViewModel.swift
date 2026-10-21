@@ -51,17 +51,29 @@ final class VoiceProfileManageViewModel: ObservableObject {
         }
     }
 
+    /// Le dernier basculement demandé, par réglage. Trois bascules rapides
+    /// partent ensemble ; la réponse d'un basculement DÉPASSÉ ne décide plus
+    /// rien : son échec tardif ramenait le réglage à une valeur que le serveur
+    /// n'a plus, et son succès tardif écrivait une visibilité périmée dans
+    /// `currentUser`.
+    private var latestVisibilityRequest = 0
+    private var latestCloningRequest = 0
+
     func toggleVoicePublic(enabled: Bool) async {
         let previous = isVoicePublic
         isVoicePublic = enabled
+        latestVisibilityRequest += 1
+        let request = latestVisibilityRequest
 
         do {
             _ = try await userService.updateProfile(UpdateProfileRequest(voicePublic: enabled))
+            guard request == latestVisibilityRequest else { return }
             // Refléter le changement confirmé sur currentUser : sinon une réouverture
             // (loadProfile lit authManager.currentUser?.voicePublic) restaurerait la
             // valeur stale et le toggle « sauterait » en arrière.
             authManager.applyLocalVoicePublicChange(enabled)
         } catch {
+            guard request == latestVisibilityRequest else { return }
             isVoicePublic = previous
             self.error = String(localized: "voice.profile.error.visibility", defaultValue: "Erreur lors du changement de visibilité du profil vocal.", bundle: .main)
         }
@@ -70,23 +82,28 @@ final class VoiceProfileManageViewModel: ObservableObject {
     func toggleCloning(enabled: Bool) async {
         let previous = isCloningEnabled
         isCloningEnabled = enabled
+        latestCloningRequest += 1
+        let request = latestCloningRequest
 
         do {
             try await service.toggleVoiceCloning(enabled: enabled)
         } catch {
+            guard request == latestCloningRequest else { return }
             isCloningEnabled = previous
             self.error = String(localized: "voice.profile.error.cloning", defaultValue: "Erreur lors du changement de statut du clonage.", bundle: .main)
         }
     }
 
     func deleteSample(id: String) async {
-        let snapshot = samples
-        samples.removeAll { $0.id == id }
+        guard let index = samples.firstIndex(where: { $0.id == id }) else { return }
+        let removed = samples.remove(at: index)
 
         do {
             try await service.deleteSample(sampleId: id)
         } catch {
-            samples = snapshot
+            // Défaire CE retrait : un autre échantillon supprimé avec succès
+            // pendant l'attente ne revient pas avec lui.
+            samples = OptimisticRollback.restoring(removed, at: index, into: samples)
             self.error = String(localized: "voice.profile.error.deleteSample", defaultValue: "Erreur lors de la suppression de l'échantillon.", bundle: .main)
         }
     }

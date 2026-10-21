@@ -93,7 +93,10 @@ struct ComposerObjectPlanControls: View {
     /// **Taper une autre piste ouvre CET objet-là** : le plan montre toute la
     /// slide, et le seul geste qu'on attend d'une barre voisine est « celle-ci
     /// maintenant ». Sans ce branchement, le tap serait un contrôle inerte.
-    let onSelectText: (String) -> Void
+    /// Toute famille posée s'y désigne (#9144) ; une piste synthétique (le
+    /// fond image de l'atelier) n'est pas un objet de la slide et ne mène nulle
+    /// part.
+    let onSelectObject: (String) -> Void
     /// **Le plan TIENT le geste, donc le scroller doit lâcher.** L'hôte le lit
     /// pour figer son défilement pendant qu'une barre se rogne.
     @Binding var holdsGesture: Bool
@@ -113,10 +116,8 @@ struct ComposerObjectPlanControls: View {
                 isDark: true,
                 selectedTrackId: objectId,
                 onSelectTrack: { id in
-                    guard id != objectId,
-                          viewModel.currentEffects.textObjects.contains(where: { $0.id == id })
-                    else { return }
-                    onSelectText(id)
+                    guard id != objectId, viewModel.currentSlide.sceneObject(id: id) != nil else { return }
+                    onSelectObject(id)
                 },
                 // Les keyframes s'éditent à l'Inspecteur de l'atelier, que ce
                 // meuble ne monte pas (#4082) : DÉSIGNER un keyframe ici
@@ -181,17 +182,15 @@ enum ComposerObjectTimingStore {
         max(1, viewModel.currentSlide.duration)
     }
 
-    /// **Elle passe par le BINDING du viewModel**, seul site qui sait écrire
-    /// dans `currentEffects` — son setter est privé au SDK, et c'est une bonne
-    /// clôture : une vue qui reconstruirait le tableau d'effets pour changer un
-    /// champ écraserait tout ce qu'un autre chemin y aurait posé entre-temps.
-    /// Seul un TEXTE a ce binding : c'est pourquoi l'édition en place ne sert
-    /// la fenêtre et le plan qu'au texte (`ComposerInlineEditing.sections`).
+    /// **Elle passe par le VERBE du viewModel** (#9144), seul site qui sait
+    /// écrire dans `currentEffects` — son setter est privé au SDK, et c'est une
+    /// bonne clôture : une vue qui reconstruirait le tableau d'effets pour
+    /// changer un champ écraserait tout ce qu'un autre chemin y aurait posé
+    /// entre-temps. Le verbe sert les cinq familles ; le binding du texte, qui
+    /// était le seul chemin, réservait la fenêtre et le plan au texte.
     static func apply(_ nouveau: ComposerObjectTiming, viewModel: StoryComposerViewModel, objectId: String) {
-        guard let binding = viewModel.textObjectBinding(for: objectId) else { return }
-        var objet = binding.wrappedValue
-        objet.startTime = nouveau.storedStartTime
-        objet.duration = nouveau.storedDuration
-        binding.wrappedValue = objet
+        viewModel.setSceneObjectTiming(id: objectId,
+                                       startTime: nouveau.storedStartTime,
+                                       duration: nouveau.storedDuration)
     }
 }

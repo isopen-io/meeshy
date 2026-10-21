@@ -14,14 +14,28 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { MetadataManager } from '../../services/attachments/MetadataManager';
-import { ThumbHashGenerator } from '../../services/attachments/ThumbHashGenerator';
+import { produceMediaRenditions, imageVariantsJson, type MediaRenditions } from '../../services/attachments/media-renditions';
+import { runFfmpeg } from '../../services/attachments/ffmpeg-run';
 import { isPostMediaUploadContext, postMediaUploaderOrNull } from '../../services/posts/mediaOwnership';
 import {
   resolveAnonymousUploadIdentity,
   fetchShareLinkAnonymousFlags,
   readFilePrefix,
+  classifyGuestFileOnDisk,
+  guestRefusalResponse,
+  guestUploadSizeRefusal,
+  shareLinkExpiredTusRefusal,
+  guestAccessRevokedTusRefusal,
+  GuestUploadAccessRevokedError,
 } from '../../services/attachments/AnonymousUploadIdentity';
-import { classifyAnonymousAttachment, verifyDeclaredMimeType, RECOMMENDED_SIGNATURE_PREFIX_BYTES } from '../../services/attachments/ContentSignature';
+import { ShareLinkExpiredError } from '../../services/shareLinkReadGate';
+import { SessionLookupUnavailableError, sessionAdmissionRefusal } from '../../services/auth/session-admission';
+import {
+  classifyAnonymousAttachment,
+  guestAttachmentNeedsFullContent,
+  verifyDeclaredMimeType,
+  RECOMMENDED_SIGNATURE_PREFIX_BYTES,
+} from '../../services/attachments/ContentSignature';
 import { admittedUploadMimeType, audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from '../../services/attachments/uploadMimeType';
 import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
 import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
@@ -154,6 +168,34 @@ function clientDeclaredTranscription(raw: string | undefined): Prisma.InputJsonV
   return { ...verdict.data, source: 'mobile' };
 }
 
+/**
+ * Les colonnes que les rendus fixent, communes à `PostMedia` et à
+ * `MessageAttachment` (#11260).
+ *
+ * #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
+ * hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement, et
+ * une donnée qui les porte devient fausse dès que l'une d'elles change. Les
+ * trois clients posent la route : `buildAttachmentUrl` (web),
+ * `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
+ * (Android). `filePath` et `fileUrl` portent donc la MÊME valeur.
+ *
+ * `imageVariants` est un `Json?` : absent (jamais `null`, que Prisma refuse
+ * pour ce type) quand aucune variante n'existe.
+ */
+function persistedRenditionFields(rendered: MediaRenditions) {
+  return {
+    fileName: path.basename(rendered.storedPath),
+    mimeType: rendered.storedMimeType,
+    fileSize: rendered.storedSize,
+    filePath: rendered.storedPath,
+    fileUrl: rendered.storedPath,
+    thumbnailPath: rendered.thumbnailPath,
+    thumbnailUrl: rendered.thumbnailPath,
+    thumbHash: rendered.thumbHash,
+    ...(rendered.imageVariants ? { imageVariants: imageVariantsJson(rendered.imageVariants) } : {}),
+  };
+}
+
 export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoutesOptions = {}): Promise<void> {
   const prisma = fastify.prisma;
   if (!prisma) {
@@ -194,8 +236,10 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
    * échoue désormais, là où il était rattrapé jusqu'ici. Une signature
    * invalide (jeton forgé) reste, comme avant, refusée sans aucun recours.
    *
-   * Retourne `null` sur tout échec d'authentification — ne lève jamais
-   * elle-même : chaque appelant choisit son propre code HTTP.
+   * Retourne `null` sur tout échec d'authentification — chaque appelant
+   * choisit son propre code HTTP. Une seule exception, levée sous la forme
+   * que `@tus/server` rend telle quelle : l'invité dont le lien a expiré
+   * (403 `SHARE_LINK_EXPIRED`, #10440).
    */
   async function resolveUploadCallerIdentity(headers: unknown): Promise<UploadCallerIdentity | null> {
     const h = headers as any;
@@ -204,9 +248,9 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
     if (authHeader) {
       const token = String(authHeader).replace(/^Bearer\s+/i, '');
-      let jwtPayload: { userId?: string; sub?: string };
+      let jwtPayload: { userId?: string; sub?: string; sid?: unknown; iat?: unknown; action?: unknown; aud?: unknown };
       try {
-        jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as { userId?: string; sub?: string };
+        jwtPayload = jwt.verify(token, process.env.JWT_SECRET!) as typeof jwtPayload;
       } catch (err) {
         logger.warn('[TUS] JWT verification failed — rejecting', {
           reason: err instanceof Error ? err.message : 'unknown',
@@ -215,6 +259,24 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       }
       const userId = jwtPayload.userId || jwtPayload.sub || null;
       if (!userId) return null;
+
+      // #10493 — la loi du REST (#10328) : la session NOMMÉE par le jeton doit
+      // vivre, à la création comme à chaque reprise. Une lecture qui lève ne
+      // prouve rien : 503, que le client rejoue, jamais 401.
+      const refus = await sessionAdmissionRefusal(prisma, {
+        claims: jwtPayload,
+        userId,
+        now: new Date(),
+      }).catch((error: unknown) => {
+        if (error instanceof SessionLookupUnavailableError) {
+          throw { status_code: 503, body: 'Authentication temporarily unavailable\n' };
+        }
+        throw error;
+      });
+      if (refus) {
+        logger.warn('[TUS] Session named by the JWT is not alive — rejecting', { motif: refus });
+        return null;
+      }
       return { userId, isAnonymous: false, anonymousShareLinkId: null };
     }
 
@@ -224,7 +286,15 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       // correspondait à un `Participant` actif ni consulter son lien de
       // partage. Même résolution que `AuthMiddleware.createAnonymousUserContext`
       // (`middleware/auth.ts`) — via `resolveAnonymousUploadIdentity`.
-      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken));
+      // #10440 — un lien échu se refuse en 403 `SHARE_LINK_EXPIRED`, le code
+      // des autres portes, jamais en 401 : le client doit savoir que rejouer
+      // la session ne servira à rien. Toute autre levée remonte (500).
+      const identity = await resolveAnonymousUploadIdentity(prisma, String(sessionToken)).catch((error: unknown) => {
+        if (error instanceof ShareLinkExpiredError) throw shareLinkExpiredTusRefusal();
+        // #10492 — un accès FINI se refuse en 410, comme aux autres portes.
+        if (error instanceof GuestUploadAccessRevokedError) throw guestAccessRevokedTusRefusal();
+        throw error;
+      });
       if (!identity) return null;
       return { userId: identity.participantId, isAnonymous: true, anonymousShareLinkId: identity.shareLinkId };
     }
@@ -346,6 +416,14 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         };
       }
 
+      // #10001 — un invité d'un lien à familles (World Wide) ne téléverse pas
+      // au-delà de `GUEST_ATTACHMENT_MAX_BYTES` : refusé avant le premier
+      // octet quand la taille est annoncée, et de toute façon à la fin.
+      if (isAnonymous && anonymousShareLinkId && upload.size) {
+        const oversized = guestUploadSizeRefusal(await fetchShareLinkAnonymousFlags(prisma, anonymousShareLinkId), upload.size);
+        if (oversized) throw guestRefusalResponse(oversized);
+      }
+
       return {
         metadata: {
           ...upload.metadata,
@@ -425,13 +503,6 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         }
       }
       const relPath = path.join(year, month, userId, storedName);
-      // #4324 — ce qui se PERSISTE est la clé de stockage, jamais une adresse : ni
-      // hôte, ni préfixe d'API, ni version. Ce sont des décisions de déploiement,
-      // et une donnée qui les porte devient fausse dès que l'une d'elles change.
-      // Les trois clients posent la route : `buildAttachmentUrl` (web),
-      // `MeeshyConfig.resolveMediaURL` (iOS), `me.meeshy.sdk.util.resolveMediaUrl`
-      // (Android).
-      const fileUrl = relPath;
 
       let metadata: Record<string, any> = {};
       try {
@@ -446,42 +517,16 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         logger.warn('[TUS] Metadata extraction failed:', err);
       }
 
-      let thumbnailUrl: string | undefined;
-      let thumbnailRelPath: string | undefined;
-      try {
-        if (attachmentType === 'image') {
-          thumbnailRelPath = await metadataManager.generateThumbnail(relPath) ?? undefined;
-        } else if (attachmentType === 'video') {
-          thumbnailRelPath = await metadataManager.generateVideoThumbnail(relPath) ?? undefined;
-        }
-        if (thumbnailRelPath) {
-          thumbnailUrl = thumbnailRelPath;
-        }
-      } catch (err) {
-        logger.warn('[TUS] Thumbnail generation failed:', err);
-      }
-
-      // Generate thumbHash for visual media (images/videos)
-      // Client may provide thumbHash via TUS metadata; backend generates as fallback.
-      // Defense-in-depth length cap: ThumbHash base64 is ~28-33 chars; reject
-      // anything over MAX_THUMBHASH_LENGTH to avoid storing malformed/malicious
-      // blobs in the DB document.
-      const MAX_THUMBHASH_LENGTH = 100;
-      const rawClientThumbHash = upload.metadata?.thumbhash || null;
-      let thumbHash: string | null =
-        (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
-          ? rawClientThumbHash
-          : null;
-      if (rawClientThumbHash && rawClientThumbHash.length > MAX_THUMBHASH_LENGTH) {
-        logger.warn(`[TUS] Rejecting oversized client thumbHash (${rawClientThumbHash.length} chars)`);
-      }
-      if (!thumbHash && (attachmentType === 'image' || attachmentType === 'video')) {
-        try {
-          thumbHash = await ThumbHashGenerator.generate(destPath, mimeType);
-        } catch (err) {
-          logger.warn('[TUS] ThumbHash generation failed:', err);
-        }
-      }
+      // #11260 — les rendus (vignette, variantes WebP, plan de transcodage,
+      // thumbhash) sont décidés par la fabrique que le multipart appelle aussi :
+      // un même fichier laisse la même trace par les deux portes. Appelée
+      // APRÈS les gardes de chaque branche, jamais avant : un upload refusé ne
+      // laisse derrière lui ni variante ni sortie de transcodage.
+      const renderMedia = () =>
+        produceMediaRenditions(
+          { uploadBasePath: UPLOAD_PATH, metadataManager, runFfmpeg },
+          { relPath, mimeType, attachmentType, fileSize, metadata, clientThumbHash: upload.metadata?.thumbhash ?? null },
+        );
 
       const uploadContext = upload.metadata?.uploadcontext;
       // Les commentaires réutilisent PostMedia (FK `commentId`) — même pipeline
@@ -490,6 +535,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
       const isPostMedia = isPostMediaUploadContext(uploadContext);
 
       let recordId: string;
+      let rendered: MediaRenditions;
       if (isPostMedia) {
         // Upload destiné à un post/story/status : créer PostMedia directement (postId=null = pending)
         // Propriétaire de l'upload — la seule chose qui empêchera un tiers de
@@ -509,27 +555,23 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
             body: 'Post media upload requires an identifiable registered account\n',
           };
         }
+        rendered = await renderMedia();
+        metadata = rendered.metadata;
         const postMedia = await prisma.postMedia.create({
           data: {
             postId: null,
             uploaderId,
-            fileName: storedName,
             originalName: filename,
-            mimeType,
-            fileSize,
-            filePath: relPath,
-            fileUrl,
-            thumbnailPath: thumbnailRelPath || null,
-            thumbnailUrl: thumbnailUrl || null,
-            thumbHash,
+            ...persistedRenditionFields(rendered),
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
             codec: metadata.codec || null,
+            videoCodec: metadata.videoCodec || null,
           },
         });
         recordId = postMedia.id;
-        logger.info(`[TUS] PostMedia created: ${storedName} (${fileSize} bytes, postId=null pending)`);
+        logger.info(`[TUS] PostMedia created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes, postId=null pending)`);
       } else {
         // Upload destiné à un message : créer MessageAttachment
         //
@@ -560,15 +602,23 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           }
 
           // Mêmes octets que la vérification globale ci-dessus (#5615) — pas
-          // de second aller-retour disque pour le même préfixe.
-          const verdict = classifyAnonymousAttachment(mimeType, signaturePrefix, shareLinkFlags);
+          // de second aller-retour disque pour le même préfixe… sauf quand le
+          // lien liste ses familles (#10001, World Wide) : un préfixe ne
+          // prouve rien, la garde relit le fichier ENTIER, borné par
+          // `GUEST_ATTACHMENT_MAX_BYTES` avant toute lecture.
+          const verdict = guestAttachmentNeedsFullContent(shareLinkFlags)
+            ? await classifyGuestFileOnDisk({ filePath: destPath, mimeType, fileName: filename, shareLink: shareLinkFlags })
+            : classifyAnonymousAttachment(mimeType, signaturePrefix, shareLinkFlags);
           if (verdict.allowed === false) {
             await fs.unlink(destPath).catch((err) =>
               logger.debug('[TUS] Anonymous message attachment cleanup failed (policy)', { destPath, err }));
             logger.warn(`[TUS] Anonymous message attachment REFUSED — ${verdict.reason} (userId=${userId})`);
-            throw { status_code: 403, body: `${verdict.reason}\n` };
+            throw guestRefusalResponse(verdict);
           }
         }
+
+        rendered = await renderMedia();
+        metadata = rendered.metadata;
 
         // Lue ici, sur la branche MESSAGE et pour un AUDIO seulement :
         // `MessageProcessor` ne la lit que là, ailleurs elle ne serait qu'un
@@ -579,15 +629,8 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
 
         const attachment = await prisma.messageAttachment.create({
           data: {
-            fileName: storedName,
             originalName: filename,
-            mimeType,
-            fileSize,
-            filePath: relPath,
-            fileUrl,
-            thumbnailPath: thumbnailRelPath || null,
-            thumbnailUrl: thumbnailUrl || null,
-            thumbHash,
+            ...persistedRenditionFields(rendered),
             width: metadata.width || null,
             height: metadata.height || null,
             duration: metadata.duration || null,
@@ -618,7 +661,7 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           },
         });
         recordId = attachment.id;
-        logger.info(`[TUS] MessageAttachment created: ${storedName} (${fileSize} bytes)`);
+        logger.info(`[TUS] MessageAttachment created: ${path.basename(rendered.storedPath)} (${rendered.storedSize} bytes)`);
       }
 
       return {
@@ -629,13 +672,13 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
           data: {
             attachment: {
               id: recordId,
-              fileName: storedName,
+              fileName: path.basename(rendered.storedPath),
               originalName: filename,
-              mimeType,
-              fileSize,
-              fileUrl,
-              thumbnailUrl,
-              thumbHash,
+              mimeType: rendered.storedMimeType,
+              fileSize: rendered.storedSize,
+              fileUrl: rendered.storedPath,
+              thumbnailUrl: rendered.thumbnailPath ?? undefined,
+              thumbHash: rendered.thumbHash,
               width: metadata.width,
               height: metadata.height,
               duration: metadata.duration,

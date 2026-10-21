@@ -404,6 +404,7 @@ public struct StickerTemplatePreview: View {
 
     @State private var image: UIImage?
     @Environment(\.stickerSheetDieCut) private var dieCut
+    @Environment(\.displayScale) private var displayScale
 
     public init(template: StickerTemplate, slots: [String: String], side: CGFloat) {
         self.template = template
@@ -443,7 +444,10 @@ public struct StickerTemplatePreview: View {
         }
         // `id:` sur le CONTENU, pas sur le gabarit seul : changer de lieu doit
         // redessiner les trois vignettes de l'onglet.
-        .task(id: "\(cacheKey)|\(dieCut)") { image = render() }
+        .task(id: Self.taskKey(contentKey: cacheKey, dieCut: dieCut, scale: displayScale)) {
+            image = Self.render(templateID: template.id, slots: slots, side: side,
+                                dieCut: dieCut, scale: displayScale)
+        }
     }
 
     private var cacheKey: String {
@@ -451,16 +455,20 @@ public struct StickerTemplatePreview: View {
             .map { "\($0.key)=\($0.value)" }.joined(separator: ",")
     }
 
-    @MainActor
-    private func render() -> UIImage? {
+    static func taskKey(contentKey: String, dieCut: Bool, scale: CGFloat) -> String {
+        "\(contentKey)|\(dieCut)|\(scale)"
+    }
+
+    static func render(templateID: String, slots: [String: String], side: CGFloat,
+                       dieCut: Bool, scale: CGFloat) -> UIImage? {
         let metrics = StickerTemplateMetrics.preview(side: side)
         // La vignette montre ce que l'hôte POSERA : contournée là où le
         // sticker part avec son contour (conversation, #9060), nue là où il
         // rejoint une scène de story.
         return dieCut
-            ? StickerTemplateRenderer.dieCutImage(templateID: template.id, slots: slots,
-                                                  metrics: metrics, screenScale: UIScreen.main.scale)?.0
-            : StickerTemplateRenderer.image(templateID: template.id, slots: slots,
-                                            metrics: metrics, screenScale: UIScreen.main.scale)?.0
+            ? StickerTemplateRenderer.dieCutImage(templateID: templateID, slots: slots,
+                                                  metrics: metrics, screenScale: scale)?.0
+            : StickerTemplateRenderer.image(templateID: templateID, slots: slots,
+                                            metrics: metrics, screenScale: scale)?.0
     }
 }

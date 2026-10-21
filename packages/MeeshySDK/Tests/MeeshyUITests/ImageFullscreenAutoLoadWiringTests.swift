@@ -44,9 +44,22 @@ final class ImageFullscreenAutoLoadWiringTests: XCTestCase {
         let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
         XCTAssertFalse(source.contains("MeeshyImageWatermark"),
                        "Le chemin direct d'ImageFullscreen ne sert que des médias de CONVERSATION : la directive 2026-09-12 leur interdit la marque.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImage(data)"),
-                      "Le chemin nominal écrit les octets REÇUS via saveImage — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
-        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.saveImageFile(at: onDisk)"),
-                      "#9685 — le fichier du cache part d'abord PAR RÉFÉRENCE, sans relecture ni décodage.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.addImage(data, alias: attachmentId)"),
+                      "Le chemin nominal écrit les octets REÇUS via addImage (dédoublonné, #10370) — pas de saveFromURL : ils viennent du cache partagé, pas d'un aller-retour réseau.")
+        XCTAssertTrue(source.contains("PhotoLibraryManager.shared.addImageFile(at: onDisk, alias: attachmentId)"),
+                      "#9685 — le fichier du cache part d'abord PAR RÉFÉRENCE, sans relecture ni décodage ; #10370 — par le point d'écriture dédoublonné.")
+    }
+
+    /// **#10930 — on entre sans chrome, le toucher le pose par-dessus**
+    /// (porteur 2026-10-18 : « les contrôleurs s'affichent par-dessus au toucher
+    /// de l'attachement n'importe où »). Le toucher de l'IMAGE bascule comme
+    /// celui du fond ; le double toucher garde le zoom.
+    func test_imageFullscreen_opensWithoutChrome_andAnyTapTogglesIt() throws {
+        let source = try sdkSource("Sources/MeeshyUI/Media/ImageViewerView.swift")
+        XCTAssertTrue(source.contains("@State private var showControls = false"))
+        let zoom = try XCTUnwrap(source.range(of: ".onTapGesture(count: 2) {"))
+        let suite = source[zoom.upperBound...]
+        XCTAssertTrue(suite.contains(".onTapGesture { toggleControls() }"),
+                      "le toucher simple de l'image montre ou cache le chrome")
     }
 }

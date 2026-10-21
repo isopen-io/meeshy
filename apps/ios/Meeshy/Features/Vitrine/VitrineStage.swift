@@ -17,7 +17,9 @@ enum VitrineStage {
     /// Le temps qu'une transition ou un ressort se pose, une fois le rendu observé.
     static let pose: Duration = .milliseconds(800)
 
-    static var appareil: VitrineAppareil { UIDevice.current.userInterfaceIdiom == .pad ? .ipad : .iphone }
+    static var appareil: VitrineAppareil {
+        VitrineAppareil(sizeClass: DeviceLayout.activeWindowScene?.traitCollection.horizontalSizeClass)
+    }
 
     private static var fixtures: VitrineFixtures?
 
@@ -212,6 +214,12 @@ enum VitrineStage {
         try? await Task.sleep(for: pose)
         try? FileManager.default.createDirectory(at: VitrineLaunch.dossier, withIntermediateDirectories: true)
         try? Data(scene.rawValue.utf8).write(to: VitrineLaunch.marqueurPret)
+    }
+}
+
+extension VitrineAppareil {
+    nonisolated init(sizeClass: UIUserInterfaceSizeClass?) {
+        self = sizeClass == .regular ? .ipad : .iphone
     }
 }
 #endif

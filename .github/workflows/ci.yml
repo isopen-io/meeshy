@@ -128,6 +128,7 @@ jobs:
     outputs:
       translator: ${{ steps.affected.outputs.translator }}
       shell_android: ${{ steps.affected.outputs.shell_android }}
+      glory_frames: ${{ steps.affected.outputs.glory_frames }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -549,12 +550,27 @@ jobs:
       - name: Docker prune & deploy-only-on-dev guard
         run: node scripts/check-docker-prune-noninteractive.mjs --self-test && node scripts/check-docker-prune-noninteractive.mjs
 
+      # #9825, #10048 — un tag `sha-…` épinglé dans le `.env` de l'hôte de
+      # staging faisait tirer et garder une image figée sous un déploiement
+      # vert. Le verdict de `docker.yml` (job deploy-staging) refuse tout
+      # service recréé qui ne tourne pas `:staging` ; son auto-test rejoue
+      # l'état réel du run 38105794544.
+      - name: Staging deploy verdict self-test
+        run: node infrastructure/scripts/staging-deploy-verdict.mjs --self-test
+
       # #9668 — la sauvegarde nocturne publie son verdict (etat.json) en succès
       # ET en échec, y compris hors de tout `|| fail` ; la dernière réussite
       # survit à un échec ; ni chemin d'hôte ni secret. `docker`, `df`, `flock`
       # et `rsync` sont des doubles : aucune base, quelques secondes.
       - name: Nightly backup verdict witness
         run: node --test infrastructure/scripts/production-backup/meeshy-nightly-backup.test.mjs
+
+      # #10385, #11441 — le runner des opérations serveur : liste blanche, délais,
+      # demandes refusées, et la publication des conteneurs de SON environnement
+      # (étiquette revérifiée, aucun secret, sous le plafond de la passerelle),
+      # confrontée au schéma partagé par bun. `docker` et `systemctl` sont des doubles.
+      - name: Ops runner witness
+        run: node --test infrastructure/scripts/ops-runner/meeshy-ops-runner.test.mjs
 
       # Casse de compilation Swift détectable sans compilateur. Ici (ubuntu,
       # quelques secondes) plutôt que sur le runner macOS : `xcodebuild` coûte
@@ -1200,6 +1216,16 @@ jobs:
           cd apps/web
           node scripts/check-rich-text.mjs
 
+      # #11314 — les animations de GÉOMÉTRIE passent sur transform et opacity :
+      # width, height, top, left, grid-template-rows… animés recalculent la
+      # mise en page à chaque image. Cliquet sur les sources : aucun nouveau
+      # site, et les sites tolérés ne font que décroître.
+      - name: Gate animations de géométrie (transform et opacity seulement)
+        if: ${{ !cancelled() }}
+        run: |
+          cd apps/web
+          node scripts/check-animated-properties.mjs
+
       # #6458 — le barreau « Administration » du menu flottant, sur un dist
       # gateway (l'administration n'a pas de fixtures) : sept barreaux dans
       # l'écran aux deux poses (deux schémas, 390×844 et 320×568), parcours
@@ -1355,6 +1381,61 @@ jobs:
           if-no-files-found: error
 
   # ===========================================================================
+  # CADRES DE GLOIRE : Mee et Meo ne recouvrent jamais la photo (lot L2, #10153)
+  # ===========================================================================
+  # La garde d'empiètement du prompt § 5.7 : les SVG des onze ateliers sont
+  # régénérés, puis `lib/overlap.mjs --check` mesure chaque cadre dans Chromium
+  # (fenêtre par différence magenta/vert, oiseaux par `data-layer`) et rougit
+  # dès qu'un cadre dépasse overlap 250 px, depth 6 px ou touche un visage.
+  # Le témoin qui précède prouve qu'elle rougit : un oiseau posé au centre de
+  # la fenêtre (`--mutate bird-in-window`). Playwright est ÉPINGLÉ, donc
+  # Chromium ; seul ce job lit `docs/product/cadres-de-gloire/` (domaine
+  # `glory_frames`, `scripts/ci-affected.mjs`), il n'installe rien du monorepo.
+  glory-frames:
+    name: Cadres de gloire (empiètement)
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.glory_frames == 'true'
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: docs/product/cadres-de-gloire/generateur
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Ateliers (numpy et Pillow, l'atelier poses)
+        run: python -m pip install --disable-pip-version-check numpy==2.5.4 Pillow==12.3.0
+
+      - name: Playwright épinglé (Chromium)
+        run: |
+          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0
+          ./node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Générer les SVG des ateliers
+        run: for atelier in ateliers/*/; do (cd "$atelier" && python -B gen.py > /dev/null); done
+
+      - name: Témoin — la garde rougit sur un empiètement injecté
+        run: |
+          if node lib/overlap.mjs --check --only neon-ambassadeur-1 --mutate bird-in-window; then
+            echo "::error::la garde d'empiètement n'a pas rougi sur un oiseau posé dans la fenêtre"
+            exit 1
+          fi
+
+      - name: Garde d'empiètement (191 cadres)
+        run: node lib/overlap.mjs --check --jobs 2
+
+  # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)
   # Minimum coverage threshold: 90%
   # ===========================================================================
@@ -1372,7 +1453,11 @@ jobs:
   # ci-dessous porte donc le budget RÉEL (celui qu'on veut voir nommé), et
   # `timeoutMinutes` (job) reste un plafond de secours nettement au-dessus —
   # relevé pour `gateway` seul (30 au lieu de 20), les autres paquets gardant
-  # le budget historique.
+  # le budget historique. RELEVÉ À 35/40 le 2026-10-11 (#10058) : même
+  # arbre, 30 616 tests verts, 894 s sur un runner et 1 457 s sur un autre
+  # (chaque suite ~1,6× plus lente — le RUNNER, pas une suite bloquée) ; les
+  # runners lents franchissaient 25 min sans aucun échec. Filet en attendant
+  # l'accélération de ts-jest (isolatedModules, mesurée 584 → 268 s en local).
   test:
     name: Test ${{ matrix.package.name }}
     runs-on: ubuntu-latest
@@ -1390,8 +1475,8 @@ jobs:
           - name: gateway
             path: services/gateway
             filter: '@meeshy/gateway'
-            timeoutMinutes: 30
-            testTimeoutMinutes: 25
+            timeoutMinutes: 40
+            testTimeoutMinutes: 35
           - name: agent
             path: services/agent
             filter: '@meeshy/agent'
@@ -2229,7 +2314,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Upload results
-        uses: github/codeql-action/upload-sarif@v4.38.2
+        uses: github/codeql-action/upload-sarif@v4.39.0
         if: always()
         continue-on-error: true
         with:
@@ -2430,7 +2515,7 @@ jobs:
   summary:
     name: Summary
     runs-on: ubuntu-latest
-    needs: [changes, quality, institutionnel-v3, shell-android, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
+    needs: [changes, quality, institutionnel-v3, shell-android, glory-frames, test, test-python, test-audio-pipeline, test-tts-stt, test-voice-api, test-voice-e2e, prisma, security, build]
     if: always()
     steps:
       - name: Pipeline Summary
@@ -2445,6 +2530,7 @@ jobs:
           echo "| Quality | ${{ needs.quality.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Peaux web (institutionnel + Lentille + fil) | ${{ needs.institutionnel-v3.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Coque Android (shell_android: ${{ needs.changes.outputs.shell_android }}) | ${{ needs.shell-android.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cadres de gloire (glory_frames: ${{ needs.changes.outputs.glory_frames }}) | ${{ needs.glory-frames.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Node.js) | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests (Python) | ${{ needs.test-python.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Audio Pipeline | ${{ needs.test-audio-pipeline.result }} |" >> $GITHUB_STEP_SUMMARY

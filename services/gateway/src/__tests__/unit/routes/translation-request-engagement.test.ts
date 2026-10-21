@@ -16,6 +16,12 @@ jest.mock('../../../services/engagement/EngagementService', () => ({
 }));
 
 const mockGetConsentStatus = jest.fn<any>();
+// Le verdict d'accès a ses propres témoins (attachmentReadVerdict) ; ici l'appelant est membre.
+jest.mock('../../../services/attachments/attachmentReadVerdict', () => ({
+  ...jest.requireActual<object>('../../../services/attachments/attachmentReadVerdict'),
+  resolveAttachmentReadVerdict: async () => 'allow',
+}));
+
 jest.mock('../../../services/ConsentValidationService', () => ({
   ConsentValidationService: jest.fn().mockImplementation(() => ({ getConsentStatus: mockGetConsentStatus })),
 }));
@@ -245,6 +251,10 @@ describe('POST /attachments/:attachmentId/translate', () => {
     const prisma = {
       messageAttachment: {
         findUnique: jest.fn<any>().mockResolvedValue({ id: ATTACHMENT_ID, mimeType: 'audio/mp4', messageId: MESSAGE_ID }),
+      },
+      // #10726 — le message porteur est lu en clair par la passerelle.
+      message: {
+        findUnique: jest.fn<any>().mockResolvedValue({ isEncrypted: false, encryptionMode: null, conversation: { encryptionMode: null } }),
       },
     } as unknown as PrismaClient;
     const translateService = {

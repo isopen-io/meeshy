@@ -440,6 +440,16 @@ const makeMessage = (overrides: any = {}) => ({
   ...overrides,
 });
 
+// #10429 — un résultat de recherche porte les colonnes que lit la loi de sortie.
+const ORDINARY_EXIT_COLUMNS = {
+  isViewOnce: false,
+  isBlurred: false,
+  effectFlags: 0,
+  ephemeralDuration: null,
+  expiresAt: null,
+  attachments: [],
+};
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 let prisma: ReturnType<typeof makePrisma>;
@@ -2006,6 +2016,7 @@ describe('GET /conversations/:id/messages/search', () => {
       [USER_ID, { showOnline: true, showLastSeenTimestamp: true }],
     ]));
     const matchMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: MSG_ID,
       conversationId: CONV_ID,
       content: 'hello world',
@@ -2043,6 +2054,7 @@ describe('GET /conversations/:id/messages/search', () => {
       [USER_ID, { showOnline: false, showLastSeenTimestamp: false }],
     ]));
     const matchMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: MSG_ID,
       conversationId: CONV_ID,
       content: 'hello world',
@@ -2070,6 +2082,7 @@ describe('GET /conversations/:id/messages/search', () => {
 
   it('returns merged content+translation matches', async () => {
     const contentMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: 'msg-content',
       conversationId: CONV_ID,
       content: 'hello world',
@@ -2081,6 +2094,7 @@ describe('GET /conversations/:id/messages/search', () => {
       sender: { id: PART_ID, userId: USER_ID, displayName: 'Alice', avatar: null, type: 'member', user: { id: USER_ID, username: 'alice', displayName: 'Alice', avatar: null, isOnline: false } },
     };
     const transMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: 'msg-trans',
       conversationId: CONV_ID,
       content: 'bonjour',
@@ -2118,6 +2132,7 @@ describe('GET /conversations/:id/messages/search', () => {
 
   it('deduplication: translation match already in content matches is not duplicated', async () => {
     const msg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: MSG_ID,
       conversationId: CONV_ID,
       content: 'hello',
@@ -2143,6 +2158,7 @@ describe('GET /conversations/:id/messages/search', () => {
     mockValidatePagination.mockReturnValue({ offset: 0, limit });
     // Build limit+1 content matches to trigger hasMore
     const msgs = Array.from({ length: limit + 1 }, (_, i) => ({
+      ...ORDINARY_EXIT_COLUMNS,
       id: `msg-${i}`,
       conversationId: CONV_ID,
       content: 'hello world',
@@ -2202,6 +2218,7 @@ describe('GET /conversations/:id/messages/search', () => {
     // Lot 1 : un resultat de recherche est une bulle complete elle aussi —
     // sans le hoist, le message trouve n'affiche jamais sa position.
     const geoMatch = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: MSG_ID,
       conversationId: CONV_ID,
       content: 'hello world',
@@ -3769,6 +3786,7 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
 
   it('translation value is plain string matching query (lines 2430-2434)', async () => {
     const transMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: 'msg-plain',
       conversationId: CONV_ID,
       content: 'unrelated',
@@ -3780,6 +3798,7 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
       sender: null,
     };
     const noMatchMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: 'msg-no-match',
       conversationId: CONV_ID,
       content: 'other',
@@ -3801,6 +3820,7 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
 
   it('translation null: filter returns false (line 2430 true branch — early return false)', async () => {
     const nullTransMsg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: 'msg-null-trans',
       conversationId: CONV_ID,
       content: 'xyz',
@@ -3821,6 +3841,7 @@ describe('GET /conversations/:id/messages/search — extra branch coverage', () 
 
   it('search result with sender=null: sender mapped as null (lines 2461-2464)', async () => {
     const msg = {
+      ...ORDINARY_EXIT_COLUMNS,
       id: MSG_ID, conversationId: CONV_ID, content: 'hello world',
       originalLanguage: 'fr', messageType: 'text', translations: null,
       createdAt: new Date(), senderId: PART_ID, sender: null,
@@ -4262,6 +4283,7 @@ describe('GET /conversations/:id/pinned-messages — présence de l’expéditeu
 describe('GET /conversations/:id/messages/search — présence de l’expéditeur projetée par destinataire', () => {
   const handler = () => fastify._routes['GET']['/conversations/:id/messages/search'];
   const matchOf = (sender: any) => ({
+    ...ORDINARY_EXIT_COLUMNS,
     id: MSG_ID, conversationId: CONV_ID, content: 'hello world', originalLanguage: 'fr',
     messageType: 'text', translations: null, createdAt: new Date(), senderId: sender.id, sender,
   });

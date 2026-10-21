@@ -4036,7 +4036,7 @@ describe('MessageHandler.handleMessageDelete', () => {
   });
 
   it('allows conversation admin to delete another user message', async () => {
-    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData({ reason: 'Propos hors charte' }) });
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket();
     const callback = jest.fn();
@@ -4052,7 +4052,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         update: jest.fn(async () => ({})),
       },
       participant: { findFirst: jest.fn(async () => ({ id: 'participant-deleter', role: 'admin', user: { role: 'USER' } })) },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })), findUnique: jest.fn(async () => ({ type: 'group', title: 'Groupe' })) },
     });
     const io = makeMockIo();
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
@@ -4061,7 +4061,7 @@ describe('MessageHandler.handleMessageDelete', () => {
   });
 
   it('allows global BIGBOSS to delete any message', async () => {
-    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData({ reason: 'Propos hors charte' }) });
     const { connectedUsers, socketToUser } = makeAuthenticatedSetup();
     const socket = makeSocket();
     const callback = jest.fn();
@@ -4076,7 +4076,7 @@ describe('MessageHandler.handleMessageDelete', () => {
       },
       participant: { findFirst: jest.fn(async () => null) },
       user: { findUnique: jest.fn(async () => ({ role: 'BIGBOSS' })) },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })), findUnique: jest.fn(async () => ({ type: 'group', title: 'Groupe' })) },
     });
     const io = makeMockIo();
     const { handler } = makeHandler({ connectedUsers: connectedUsers as any, socketToUser, prisma, io });
@@ -4210,7 +4210,7 @@ describe('MessageHandler.handleMessageDelete', () => {
   // message d'autrui, et c'est l'AUTEUR — hors ligne — qui doit l'apprendre.
   // Ce chemin portait déjà la correction ; il n'avait aucun test pour la tenir.
   it('queues the deletion for the OFFLINE AUTHOR when a conversation admin deletes their message', async () => {
-    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData() });
+    mockValidateSocketEvent.mockReturnValue({ success: true, data: makeDeleteData({ reason: 'Propos hors charte' }) });
     const { socketToUser } = makeAuthenticatedSetup({
       id: 'user-mod',
       userId: 'user-mod',
@@ -4229,7 +4229,7 @@ describe('MessageHandler.handleMessageDelete', () => {
         findFirst: jest.fn().mockResolvedValueOnce(message).mockResolvedValueOnce(null),
         update: jest.fn(async () => ({})),
       },
-      conversation: { updateMany: jest.fn(async () => ({ count: 1 })) },
+      conversation: { updateMany: jest.fn(async () => ({ count: 1 })), findUnique: jest.fn(async () => ({ type: 'group', title: 'Groupe' })) },
       participant: {
         // La ligne du SUPPRIMEUR, lue par `admitMessageDelete` : c'est d'elle
         // que vient le `Participant.id` à exclure de la file. La lire là plutôt

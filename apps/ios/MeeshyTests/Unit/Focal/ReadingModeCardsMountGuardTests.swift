@@ -29,7 +29,7 @@ final class ReadingModeCardsMountGuardTests: XCTestCase {
             .deletingLastPathComponent()   // .../MeeshyTests
             .deletingLastPathComponent()   // .../apps/ios
             .appendingPathComponent("Meeshy/Features/Main/\(relativePath)")
-        return AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+        return AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
     }
 
     private let rowHosts = [

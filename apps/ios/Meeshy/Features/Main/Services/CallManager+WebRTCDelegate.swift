@@ -172,13 +172,12 @@ extension CallManager: WebRTCServiceDelegate {
         Task { @MainActor [weak self] in
             guard let self, case .connected = self.callState, !self.isGroupPrimaryVacated else { return }
             guard UIAccessibility.isReduceMotionEnabled == false else { return }
-            let generator = UINotificationFeedbackGenerator()
             switch level {
             case .poor, .critical:
-                generator.notificationOccurred(.error)
+                HapticFeedback.error()
             case .excellent, .good:
                 if previous <= .fair {
-                    generator.notificationOccurred(.success)
+                    HapticFeedback.success()
                 }
             case .fair:
                 break
@@ -219,31 +218,20 @@ extension CallManager: WebRTCServiceDelegate {
             )
 
             // Accumulate quality distribution and RTT/loss running stats.
-            let now = Date()
-            if let prevDate = self.analyticsLastQualityDate, let prevLevel = self.analyticsCurrentLevel {
-                self.analyticsQualitySeconds[prevLevel, default: 0] += now.timeIntervalSince(prevDate)
-            }
-            self.analyticsLastQualityDate = now
-            self.analyticsCurrentLevel = level
-            self.analyticsRttSum += stats.roundTripTimeMs
-            self.analyticsSampleCount += 1
-            self.analyticsPacketLossSum += packetLossPercent
-            self.analyticsMaxPacketLoss = max(self.analyticsMaxPacketLoss, packetLossPercent)
-            // Mirrors analyticsVideoFiltersUsed's polling above it: analyticsEffectsUsed
-            // was declared and serialized but never populated, so every call silently
-            // reported effectsUsed: []. Record the concrete effects the config exposes.
+            self.analytics.recordSample(
+                level: level,
+                roundTripTimeMs: stats.roundTripTimeMs,
+                packetLossPercent: packetLossPercent,
+                at: Date()
+            )
+            // Record the concrete effects the filter config exposes (effectsUsed).
             let filterConfig = self.webRTCService.videoFilters.config
-            if let face = filterConfig.activeFaceEffect.analyticsName { self.analyticsEffectsUsed.insert(face) }
-            if filterConfig.isEnabled {
-                self.analyticsVideoFiltersUsed = true
-                self.analyticsEffectsUsed.insert("colorFilter")
-            }
-            if filterConfig.backgroundBlurEnabled {
-                self.analyticsEffectsUsed.insert("backgroundBlur")
-            }
-            if filterConfig.skinSmoothingEnabled {
-                self.analyticsEffectsUsed.insert("skinSmoothing")
-            }
+            self.analytics.recordFilterUsage(
+                faceEffectName: filterConfig.activeFaceEffect.analyticsName,
+                colorFilter: filterConfig.isEnabled,
+                backgroundBlur: filterConfig.backgroundBlurEnabled,
+                skinSmoothing: filterConfig.skinSmoothingEnabled
+            )
 
             // Feed the graceful-degradation survival layer. One sample per quality
             // tick; the controller's time-based hysteresis decides if a sustained
@@ -256,5 +244,5 @@ extension CallManager: WebRTCServiceDelegate {
 
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

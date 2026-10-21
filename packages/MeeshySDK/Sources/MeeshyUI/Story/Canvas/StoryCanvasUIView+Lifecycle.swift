@@ -17,6 +17,12 @@ extension StoryCanvasUIView {
         super.didMoveToWindow()
         if window != nil {
             startEditDisplayLinkIfNeeded()
+            // Le canevas sonore d'édition qui arrive à l'écran prend la main
+            // sur le son de la scène, à la phase où elle en était (#10362).
+            if mode == .edit, playsAudioInEditMode {
+                claimEditAudio()
+                resumeEditAudioIfSilenced()
+            }
             // Ré-arme le link de lecture invalidé par `willMove(toWindow: nil)`
             // quand le canvas revient à l'écran sans repasser par `setMode`
             // (cover/sheet présenté au-dessus du viewer puis dismissé).
@@ -50,7 +56,12 @@ extension StoryCanvasUIView {
         super.traitCollectionDidChange(previousTraitCollection)
         // Stage Manager / Split View on iPad can change horizontal/vertical
         // size classes without bounds changing; force a rebuild defensively.
-        rebuildLayers()
+        // La reconstruction part à la passe de MISE EN PAGE (`layoutSubviews`),
+        // jamais ici : UIKit notifie les traits PENDANT la mise à jour SwiftUI
+        // qui insère le canvas, et `rebuildLayers` y relayait
+        // `onContentProgress` — l'hôte écrivait son `@State` en pleine mise à
+        // jour, puis plantait au passage d'un auteur à l'autre (#10803).
+        setNeedsLayout()
     }
 
     // MARK: - App lifecycle (UIScene-aware)
@@ -187,8 +198,15 @@ extension StoryCanvasUIView {
         // AVAudioEngine leakés à chaque fermeture). Ré-armé symétriquement
         // dans `didMoveToWindow` pour le cas re-attach sans `setMode`.
         stopPlayback()
+        // La capture plein cadre du verre (une texture Metal à la taille du
+        // rendu) ne sert qu'à l'écran : hors fenêtre, elle se rend, et la
+        // lecture la refait au retour — sa clé part avec elle (#9864).
+        backdropCapture.invalidate()
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
+        // Rend la main APRÈS s'être tu : le canevas d'en dessous reprend le
+        // son à la phase partagée (#10362).
+        releaseEditAudio()
     }
 }

@@ -55,6 +55,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case broadcastsByIdPreview(id: String)
     case broadcastsByIdSend(id: String)
     case broadcastsByIdSendInapp(id: String)
+    case commentsByCommentIdRemove(commentId: String)
     case communities
     case communitiesByCommunityId(communityId: String)
     case communitiesByCommunityIdMembers(communityId: String)
@@ -67,6 +68,14 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case dashboard
     case dashboardInvalidateCache
     case engagementScale
+    case gameSeasons
+    case gameSeasonsAppEvents
+    case gameSeasonsAppEventsYaml
+    case gameSeasonsByNumber(number: String)
+    case gameSeasonsByNumberProposals(number: String)
+    case gameSeasonsProposals
+    case gameSeasonsProposalsByIdApprove(id: String)
+    case gameSeasonsProposalsByIdReject(id: String)
     case invitations
     case invitationsById(id: String)
     case invitationsStats
@@ -80,13 +89,20 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case messagesStats
     case messagesTrends
     case monitoring
+    case opsByOperation(operation: String)
+    case opsContainers
+    case opsHostMetrics
+    case opsStatus
     case posts
     case postsByPostId(postId: String)
+    case postsByPostIdGestures(postId: String)
+    case postsGestures
     case postsStats
     case ranking
     case reports
     case reportsById(id: String)
     case reportsByIdAssign(id: String)
+    case reportsByReportIdAct(reportId: String)
     case reportsEntityByTypeById(type: String, id: String)
     case reportsModeratorMine
     case reportsRecent
@@ -115,6 +131,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case usersByUserIdPreferencesByCategory(userId: String, category: String)
     case usersByUserIdProfileImageCandidates(userId: String)
     case usersByUserIdProfileImagesByKind(userId: String, kind: String)
+    case usersByUserIdPublications(userId: String)
+    case usersByUserIdPublicationsModeration(userId: String)
     case usersByUserIdReportedMessages(userId: String)
     case usersByUserIdReports(userId: String)
     case usersByUserIdResetPassword(userId: String)
@@ -180,6 +198,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .broadcastsByIdPreview(let id): return "/api/v1/admin/broadcasts/\(id)/preview"
         case .broadcastsByIdSend(let id): return "/api/v1/admin/broadcasts/\(id)/send"
         case .broadcastsByIdSendInapp(let id): return "/api/v1/admin/broadcasts/\(id)/send-inapp"
+        case .commentsByCommentIdRemove(let commentId): return "/api/v1/admin/comments/\(commentId)/remove"
         case .communities: return "/api/v1/admin/communities"
         case .communitiesByCommunityId(let communityId): return "/api/v1/admin/communities/\(communityId)"
         case .communitiesByCommunityIdMembers(let communityId): return "/api/v1/admin/communities/\(communityId)/members"
@@ -192,6 +211,14 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .dashboard: return "/api/v1/admin/dashboard"
         case .dashboardInvalidateCache: return "/api/v1/admin/dashboard/invalidate-cache"
         case .engagementScale: return "/api/v1/admin/engagement-scale"
+        case .gameSeasons: return "/api/v1/admin/game/seasons"
+        case .gameSeasonsAppEvents: return "/api/v1/admin/game/seasons/app-events"
+        case .gameSeasonsAppEventsYaml: return "/api/v1/admin/game/seasons/app-events.yaml"
+        case .gameSeasonsByNumber(let number): return "/api/v1/admin/game/seasons/\(number)"
+        case .gameSeasonsByNumberProposals(let number): return "/api/v1/admin/game/seasons/\(number)/proposals"
+        case .gameSeasonsProposals: return "/api/v1/admin/game/seasons/proposals"
+        case .gameSeasonsProposalsByIdApprove(let id): return "/api/v1/admin/game/seasons/proposals/\(id)/approve"
+        case .gameSeasonsProposalsByIdReject(let id): return "/api/v1/admin/game/seasons/proposals/\(id)/reject"
         case .invitations: return "/api/v1/admin/invitations"
         case .invitationsById(let id): return "/api/v1/admin/invitations/\(id)"
         case .invitationsStats: return "/api/v1/admin/invitations/stats"
@@ -205,13 +232,20 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .messagesStats: return "/api/v1/admin/messages/stats"
         case .messagesTrends: return "/api/v1/admin/messages/trends"
         case .monitoring: return "/api/v1/admin/monitoring"
+        case .opsByOperation(let operation): return "/api/v1/admin/ops/\(operation)"
+        case .opsContainers: return "/api/v1/admin/ops/containers"
+        case .opsHostMetrics: return "/api/v1/admin/ops/host-metrics"
+        case .opsStatus: return "/api/v1/admin/ops/status"
         case .posts: return "/api/v1/admin/posts"
         case .postsByPostId(let postId): return "/api/v1/admin/posts/\(postId)"
+        case .postsByPostIdGestures(let postId): return "/api/v1/admin/posts/\(postId)/gestures"
+        case .postsGestures: return "/api/v1/admin/posts/gestures"
         case .postsStats: return "/api/v1/admin/posts/stats"
         case .ranking: return "/api/v1/admin/ranking"
         case .reports: return "/api/v1/admin/reports"
         case .reportsById(let id): return "/api/v1/admin/reports/\(id)"
         case .reportsByIdAssign(let id): return "/api/v1/admin/reports/\(id)/assign"
+        case .reportsByReportIdAct(let reportId): return "/api/v1/admin/reports/\(reportId)/act"
         case .reportsEntityByTypeById(let type, let id): return "/api/v1/admin/reports/entity/\(type)/\(id)"
         case .reportsModeratorMine: return "/api/v1/admin/reports/moderator/mine"
         case .reportsRecent: return "/api/v1/admin/reports/recent"
@@ -240,6 +274,8 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .usersByUserIdPreferencesByCategory(let userId, let category): return "/api/v1/admin/users/\(userId)/preferences/\(category)"
         case .usersByUserIdProfileImageCandidates(let userId): return "/api/v1/admin/users/\(userId)/profile-image-candidates"
         case .usersByUserIdProfileImagesByKind(let userId, let kind): return "/api/v1/admin/users/\(userId)/profile-images/\(kind)"
+        case .usersByUserIdPublications(let userId): return "/api/v1/admin/users/\(userId)/publications"
+        case .usersByUserIdPublicationsModeration(let userId): return "/api/v1/admin/users/\(userId)/publications/moderation"
         case .usersByUserIdReportedMessages(let userId): return "/api/v1/admin/users/\(userId)/reported-messages"
         case .usersByUserIdReports(let userId): return "/api/v1/admin/users/\(userId)/reports"
         case .usersByUserIdResetPassword(let userId): return "/api/v1/admin/users/\(userId)/reset-password"

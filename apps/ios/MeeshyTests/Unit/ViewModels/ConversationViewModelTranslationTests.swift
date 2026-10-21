@@ -57,8 +57,11 @@ final class ConversationViewModelTranslationTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private func makeSUT() -> ConversationViewModel {
-        let user = MeeshyUser(id: testUserId, username: "test", displayName: "Test")
+    private func makeSUT(
+        systemLanguage: String = "fr",
+        translationSource: (any ConversationTranslationSourcing)? = nil
+    ) -> ConversationViewModel {
+        let user = MeeshyUser(id: testUserId, username: "test", displayName: "Test", systemLanguage: systemLanguage)
         mockAuthManager.simulateLoggedIn(user: user)
         let pool = try! makeInMemoryDBPool()
         let deps = ConversationDependencies(
@@ -75,7 +78,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
             messageSocket: mockMessageSocket,
             dependencies: deps,
             translationService: mockTranslationService,
-            attachmentTranslationService: mockAttachmentTranslationService
+            attachmentTranslationService: mockAttachmentTranslationService,
+            translationSource: translationSource
         )
         sut.start()
         return sut
@@ -98,7 +102,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
         )
 
         await sut.requestTextTranslation(
-            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(sut.messageTranslations[testMessageId]?.first?.translatedContent, "Bonjour")
@@ -113,12 +118,14 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let first = Task { @MainActor in
             await sut.requestTextTranslation(
-                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
         await sut.requestTextTranslation(
-            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
         _ = await first.value
 
@@ -131,7 +138,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let request = Task { @MainActor in
             await sut.requestTextTranslation(
-                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -154,7 +162,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
             .store(in: &cancellables)
 
         await sut.requestTextTranslation(
-            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, content: "Hello", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(received.count, 1)
@@ -183,7 +192,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
         )
 
         await sut.requestAudioTranslation(
-            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(sut.messageTranslatedAudios[testMessageId]?.first?.targetLanguage, "fr")
@@ -198,12 +208,14 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let first = Task { @MainActor in
             await sut.requestAudioTranslation(
-                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
         await sut.requestAudioTranslation(
-            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
         _ = await first.value
 
@@ -216,7 +228,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
 
         let request = Task { @MainActor in
             await sut.requestAudioTranslation(
-                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+                messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
             )
         }
         try? await Task.sleep(nanoseconds: 50_000_000)
@@ -238,7 +251,8 @@ final class ConversationViewModelTranslationTests: XCTestCase {
             .store(in: &cancellables)
 
         await sut.requestAudioTranslation(
-            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr"
+            messageId: testMessageId, attachmentId: "att-1", sourceLanguage: "en", targetLanguage: "fr",
+                conversationEncryptionMode: nil
         )
 
         XCTAssertEqual(received.count, 1)
@@ -248,5 +262,51 @@ final class ConversationViewModelTranslationTests: XCTestCase {
         XCTAssertEqual(received.first?.message, "Consentement requis")
         XCTAssertFalse(sut.translatingAudioLanguages[testMessageId]?.contains("fr") ?? false)
         XCTAssertNil(sut.messageTranslatedAudios[testMessageId])
+    }
+
+    // MARK: - hydrateTranslationsFromCache
+
+    func test_cacheHydration_uncoveredIds_fallBackToPersistedTranslations() async {
+        let source = MockConversationTranslationSource()
+        source.cachedResult = ["covered": [TranslationData(
+            id: "c1", messageId: "covered", sourceLanguage: "en", targetLanguage: "fr",
+            translatedContent: "Depuis le cache", translationModel: "nllb"
+        )]]
+        source.persistedResult = ["uncovered": [TranslationRecord(
+            id: "p1", messageLocalId: "uncovered", messageServerId: nil,
+            targetLanguage: "fr", translatedContent: "Depuis GRDB",
+            translationModel: "nllb", confidenceScore: nil, sourceLanguage: nil, receivedAt: Date()
+        )]]
+        let sut = makeSUT(systemLanguage: "fr", translationSource: source)
+
+        await sut.hydrateTranslationsFromCache(messageIds: ["covered", "uncovered"])
+
+        XCTAssertEqual(sut.messageTranslations["covered"]?.first?.translatedContent, "Depuis le cache")
+        XCTAssertEqual(sut.messageTranslations["uncovered"]?.first?.translatedContent, "Depuis GRDB")
+        XCTAssertEqual(source.persistedRequests, [["uncovered"]])
+    }
+
+    func test_cacheHydration_everyIdCovered_neverReadsPersisted() async {
+        let source = MockConversationTranslationSource()
+        source.cachedResult = ["m1": [TranslationData(
+            id: "c1", messageId: "m1", sourceLanguage: "en", targetLanguage: "fr",
+            translatedContent: "Cache", translationModel: "nllb"
+        )]]
+        let sut = makeSUT(systemLanguage: "fr", translationSource: source)
+
+        await sut.hydrateTranslationsFromCache(messageIds: ["m1"])
+
+        XCTAssertTrue(source.persistedRequests.isEmpty)
+    }
+
+    func test_invalidateTranslations_purgesBothIdSpaces() async {
+        let source = MockConversationTranslationSource()
+        let sut = makeSUT(systemLanguage: "fr", translationSource: source)
+        sut.pendingServerIds["temp_1"] = "srv_1"
+
+        sut.invalidateTranslations(for: "temp_1")
+        for _ in 0..<100 where source.purged.isEmpty { await Task.yield() }
+
+        XCTAssertEqual(source.purged, [["temp_1", "srv_1"]])
     }
 }

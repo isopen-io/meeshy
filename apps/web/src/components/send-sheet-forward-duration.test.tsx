@@ -10,6 +10,7 @@ import { appQueryClient } from '@/lib/api/query-client';
 import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadSendSheetCatalog } from '@/lib/i18n-send-sheet-catalog';
+import { createSendQueue, memorySendQueueStorage } from '@/lib/send/send-queue';
 import type { SendSheetPorts } from '@/lib/send/send-sheet-run';
 import { forwardRequestOf } from '@/lib/view/forward';
 import { createActMounter } from '@/test-support/act-mount';
@@ -73,6 +74,7 @@ const mount = async (messages: readonly Message[], answer: ForwardResult = { ok:
   const ports: SendSheetPorts = {
     online: () => true,
     openDirect: unused,
+    openGroup: unused,
     forward: async (params) => {
       forwarded.push({ ids: params.messages.map((m) => m.id), ephemeralDuration: params.ephemeralDuration });
       return answer;
@@ -90,7 +92,15 @@ const mount = async (messages: readonly Message[], answer: ForwardResult = { ok:
   seedCache();
   const host = await mounter.mount(
     <QueryClientProvider client={appQueryClient}>
-      <SendSheet request={forwardRequestOf({ conversationId: 'c-src', messages, now: NOW })} viewerId={VIEWER_ID} language="fr" contentLanguage="fr" ports={ports} onClose={() => {}} />
+      <SendSheet
+        request={forwardRequestOf({ conversationId: 'c-src', messages, now: NOW })}
+        viewerId={VIEWER_ID}
+        language="fr"
+        contentLanguage="fr"
+        ports={ports}
+        queue={createSendQueue({ activeViewer: () => VIEWER_ID, storage: memorySendQueueStorage(), portsFor: async () => ports })}
+        onClose={() => {}}
+      />
     </QueryClientProvider>,
   );
   return { host, forwarded };
@@ -167,8 +177,6 @@ describe('un refus du serveur se lit comme une explication', () => {
     expect(status?.textContent).toContain('Un message qui disparaît après lecture ne peut pas être transféré');
     expect(host.textContent).not.toContain('L’envoi a été refusé');
     expect(status?.querySelector('button')).toBe(null);
-    const primary = host.querySelector<HTMLButtonElement>('[data-send-sheet-send]');
-    expect(primary?.textContent).not.toContain('Réessayer');
-    expect(primary?.disabled).toBe(true);
+    expect(host.querySelector('[data-send-retry-all]')).toBe(null);
   });
 });

@@ -8,6 +8,7 @@
 
 // Import unified Participant types
 import type { ParticipantType } from '../participant.js';
+import type { PersonProfileDecor } from '../profile-decor.js';
 import type { MessageSticker } from '../message-sticker.js';
 import type { LastMessageSystemEvent } from '../conversation-preview.js';
 
@@ -352,6 +353,8 @@ export interface MessageSendData {
   /** Transfert : le message source, et sa conversation si elle diffère. */
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
+  /** #9914 — les pièces de `forwardedFromId` à recopier, dans l’ordre ; absent : tout le lot. */
+  readonly forwardedAttachmentIds?: readonly string[];
   /**
    * Diffusion à plusieurs destinataires (PAS un transfert) : la passerelle
    * copie CÔTÉ SERVEUR les pièces jointes du message désigné, si bien que
@@ -441,6 +444,8 @@ export interface MessageSendWithAttachmentsData {
   readonly storyReplyToId?: string;
   readonly forwardedFromId?: string;
   readonly forwardedFromConversationId?: string;
+  /** #9914 — les pièces de `forwardedFromId` à recopier, dans l’ordre ; absent : tout le lot. */
+  readonly forwardedAttachmentIds?: readonly string[];
   readonly isBlurred?: boolean;
   /** Voir `MessageSendData.expiresAt` — chemin HÉRITÉ, la durée fait foi. */
   readonly expiresAt?: string;
@@ -477,6 +482,8 @@ export interface MessageEditData {
  */
 export interface MessageDeleteData {
   readonly messageId: string;
+  /** Motif d'un retrait par un TIERS (#11149) — exigé de lui, ignoré pour l'auteur. */
+  readonly reason?: string;
 }
 
 // ===== TYPES DE BASE =====
@@ -502,6 +509,8 @@ export interface SocketIOMessageSender {
   readonly username?: string;
   readonly firstName?: string;
   readonly lastName?: string;
+  /** Le contour d'avatar ÉQUIPÉ (#10713), la forme de `/me` réduite au contour ; absent sans contour ou sans compte. */
+  readonly profileDecor?: PersonProfileDecor;
 }
 
 /**

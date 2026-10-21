@@ -317,6 +317,10 @@ final class ComposerSceneActivationTests: XCTestCase {
     // vue. L'invite servie aujourd'hui est celle du VOLET,
     // `composer.description.placeholder`, et c'est elle qui doit être traduite.
     //
+    // **`composer.description.placeholder` en sort au #10359** : le volet
+    // reçoit désormais l'amorce du calque (« Ajouter une légende »), un seul mot
+    // pour une seule zone. La clé n'avait plus de lecteur.
+    //
     // > Cette liste est un INVENTAIRE de ce qui s'affiche, pas une archive de ce
     // > qui s'est affiché. Une clé y survit à son lecteur sans que rien ne le
     // > dise — sauf ce témoin, qui rougit le jour où le catalogue la perd.
@@ -324,8 +328,7 @@ final class ComposerSceneActivationTests: XCTestCase {
         let catalog = try source("Meeshy/Localizable.xcstrings")
         let json = try JSONSerialization.jsonObject(with: Data(catalog.utf8)) as? [String: Any]
         let strings = json?["strings"] as? [String: Any]
-        for key in ["composer.description.placeholder",
-                    "composer.description.amorce",
+        for key in ["composer.description.amorce",
                     "composer.description.a11y.edit",
                     "composer.description.a11y.done"] {
             guard let entry = strings?[key] as? [String: Any],

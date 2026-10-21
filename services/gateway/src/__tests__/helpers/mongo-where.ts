@@ -97,6 +97,12 @@ function matchesFieldFilter(row: MongoDocument, key: string, filter: MongoDocume
     if (operator === 'notIn') {
       return has(row, key) && !(operand as unknown[]).some((candidate) => sameValue(row[key], candidate));
     }
+    if (operator === 'is') {
+      // Type composite embarqué (`anonymousSession: { is: {...} }`) : un document
+      // ABSENT n'apparie rien, comme partout ailleurs dans ce fichier.
+      const nested = row[key];
+      return has(row, key) && typeof nested === 'object' && nested !== null && matchesMongoWhere(nested as MongoDocument, operand as MongoDocument);
+    }
     if (operator === 'has') {
       // Un tableau ABSENT ne « contient » rien — c'est la même règle que le
       // reste du fichier, appliquée à `has` plutôt qu'à `isSet`/`equals`.

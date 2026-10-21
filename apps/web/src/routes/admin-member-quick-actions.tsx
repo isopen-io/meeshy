@@ -14,6 +14,7 @@ import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@
 
 import { withContactProof } from './admin-member-contact';
 import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, useMemberWrite } from './admin-member-parts';
+import { GESTURE_ROW } from './admin-member-quick-edit';
 
 /**
  * **LES ACTIONS EN UN CLIC** (#8289, demande porteur) — ce qu'un
@@ -51,11 +52,14 @@ export function AdminMemberQuickActions({
   language,
   onAnnounce,
   deps = apiDeps,
+  embedded = false,
 }: {
   readonly membre: AdminUserDetail;
   readonly language: AdminLanguage;
   readonly onAnnounce: (texte: string) => void;
   readonly deps?: AdminDeps;
+  /** Posé DANS la carte d'édition rapide (#10562) : ni carte propre, de GROS boutons. */
+  readonly embedded?: boolean;
 }) {
   const ecriture = useMemberWrite({ userId: membre.id, language, onAnnounce });
   const visibles = ACTIONS.filter((action) => action.visible(membre));
@@ -80,15 +84,16 @@ export function AdminMemberQuickActions({
     <section
       aria-label={translateAdmin(language, 'admin.quick.title')}
       data-admin-quick-actions=""
-      className={`${GLASS_CARD_CLASS} grid gap-3 p-4`}
-      style={GLASS_CARD_EDGE}
+      className={embedded ? GESTURE_ROW : `${GLASS_CARD_CLASS} grid gap-3 p-4`}
+      {...(embedded ? {} : { style: GLASS_CARD_EDGE })}
     >
       {visibles.length === 0 ? null : (
-        <div className="flex flex-wrap gap-2">
+        <div className={embedded ? GESTURE_ROW : 'flex flex-wrap gap-2'}>
           {visibles.map((action) => (
             <AdminButton
               key={action.id}
               tone={action.id === 'activate' ? 'primary' : 'secondary'}
+              size={embedded ? 'lg' : 'md'}
               disabled={etat.phase === 'saving'}
               data={{ 'data-admin-quick': action.id }}
               onClick={() => lancer(action)}

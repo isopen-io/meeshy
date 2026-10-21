@@ -12,6 +12,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { counterWrite, postCounterWritesOf } from './helpers/posts-counter-writes';
 
 jest.mock('../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({})),
@@ -46,7 +47,7 @@ jest.mock('../services/MentionService', () => ({
 const POST_ID = '507f1f77bcf86cd799439011';
 
 const impressionCreateMany = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ count: 1 });
-const postUpdateMany = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ count: 1 });
+const postCounterCommand = jest.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue({ count: 1 });
 // Espion inutilisé côté implémentation : `findUnique` ne doit PLUS être appelé
 // sur ce chemin chaud — garder ce spy prouve l'ABSENCE d'une lecture par post
 // plutôt que de simplement l'omettre.
@@ -103,11 +104,11 @@ const buildAuthMiddleware = (userId?: string) =>
 async function buildApp(authenticated: boolean): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
   const prisma = {
-    postImpression: { createMany: impressionCreateMany },
+    postImpression: { findFirst: async () => null, findMany: async () => [], deleteMany: async () => ({ count: 0 }), createMany: impressionCreateMany },
     // #4146 puis #4150 — la route consulte l'audience du post AVANT de compter
     // une impression, désormais par la passe de LOT (`post.findMany`).
+    $runCommandRaw: postCounterCommand,
     post: {
-      updateMany: postUpdateMany,
       findUnique: postFindUnique,
       findMany: postFindMany,
     },
@@ -138,7 +139,7 @@ describe('POST /posts/:postId/impression', () => {
 
   beforeEach(() => {
     impressionCreateMany.mockClear();
-    postUpdateMany.mockClear();
+    postCounterCommand.mockClear();
     postFindUnique.mockClear();
     postFindMany.mockClear();
   });
@@ -151,17 +152,12 @@ describe('POST /posts/:postId/impression', () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.recorded).toBe(true);
+    // La ligne porte le lecteur quel que soit le statut d'analyse (#10785) et sa fin de conservation (RAW_READING_RETENTION_DAYS, #10510).
     expect(impressionCreateMany).toHaveBeenCalledWith({
-      data: [{ postId: POST_ID, userId: 'u1', source: 'detail' }],
+      data: [{ postId: POST_ID, userId: 'u1', source: 'detail', expiresAt: expect.any(Date) }],
     });
-    expect(postUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: [POST_ID] } },
-      data: { impressionCount: { increment: 1 } },
-    });
-    expect(postUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: [POST_ID] } },
-      data: { postOpenCount: { increment: 1 } },
-    });
+    expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
+    expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { postOpenCount: { increment: 1 } }));
     // L'invariant de coût réénoncé : aucune lecture PAR POST, et une seule
     // résolution de racines pour tout le lot.
     expect(postFindUnique).not.toHaveBeenCalled();
@@ -175,12 +171,9 @@ describe('POST /posts/:postId/impression', () => {
       payload: { source: 'feed' },
     });
     expect(res.statusCode).toBe(200);
-    expect(postUpdateMany).toHaveBeenCalledWith({
-      where: { id: { in: [POST_ID] } },
-      data: { impressionCount: { increment: 1 } },
-    });
-    // Une apparition de fil ne compte AUCUNE ouverture — un seul `updateMany`.
-    expect(postUpdateMany).toHaveBeenCalledTimes(1);
+    expect(postCounterWritesOf(postCounterCommand)).toContainEqual(counterWrite([POST_ID], { impressionCount: { increment: 1 } }));
+    // Une apparition de fil ne compte AUCUNE ouverture — une seule écriture de compteur.
+    expect(postCounterWritesOf(postCounterCommand)).toHaveLength(1);
     expect(postFindUnique).not.toHaveBeenCalled();
     expect(passesRacines()).toHaveLength(1);
   });
@@ -195,10 +188,15 @@ describe('POST /posts/:postId/impression', () => {
       expect(res.statusCode).toBe(200);
     }
     expect(impressionCreateMany).toHaveBeenCalledTimes(3);
-    expect(postUpdateMany).toHaveBeenCalledTimes(6); // 3 appels × (impression + ouverture)
+    expect(postCounterWritesOf(postCounterCommand)).toHaveLength(6); // 3 appels × (impression + ouverture)
     expect(postFindUnique).not.toHaveBeenCalled();
     // Trois appels ⇒ trois lots ⇒ trois résolutions : une PAR LOT, jamais par post.
     expect(passesRacines()).toHaveLength(3);
+  });
+
+  it('#10403 — la route unitaire a son propre seau PAR COMPTE, plus le seau global par adresse', async () => {
+    const { createPostRouteRateLimitConfig } = await import('../middleware/rate-limiter');
+    expect(createPostRouteRateLimitConfig).toHaveBeenCalledWith('impressionUnit');
   });
 
   it('rejects an unknown source with 400', async () => {

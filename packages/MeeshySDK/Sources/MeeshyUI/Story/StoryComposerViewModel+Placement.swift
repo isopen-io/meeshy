@@ -60,4 +60,39 @@ extension StoryComposerViewModel {
 
         currentEffects = effets
     }
+
+    /// **Poser la fenêtre de temps d'un objet de scène** (#9144) — les cinq
+    /// familles, par le même verbe. Seul un TEXTE avait un chemin d'écriture
+    /// (son binding) : la fenêtre et le plan 2D n'étaient donc offerts qu'à
+    /// lui, et un sticker, une image, un lieu ou une puce de son posés duraient
+    /// toute la slide sans recours hors de l'atelier.
+    ///
+    /// Les deux valeurs sont celles que le modèle stocke : `startTime` `nil` ⇒
+    /// dès le début, `duration` `nil` ⇒ jusqu'à la fin de la slide. Le verbe ne
+    /// borne rien — la conversion début/fin et ses bornes sont celles de
+    /// l'appelant. Un id inconnu ne fait rien.
+    public func setSceneObjectTiming(id: String, startTime: Double?, duration: Double?) {
+        var effets = currentEffects
+
+        if let i = effets.textObjects.firstIndex(where: { $0.id == id }) {
+            effets.textObjects[i].startTime = startTime
+            effets.textObjects[i].duration = duration
+        } else if let i = effets.mediaObjects?.firstIndex(where: { $0.id == id }) {
+            effets.mediaObjects?[i].startTime = startTime
+            effets.mediaObjects?[i].duration = duration
+        } else if let i = effets.stickerObjects?.firstIndex(where: { $0.id == id }) {
+            effets.stickerObjects?[i].startTime = startTime
+            effets.stickerObjects?[i].duration = duration
+        } else if let i = effets.locationObjects.firstIndex(where: { $0.id == id }) {
+            effets.locationObjects[i].startTime = startTime
+            effets.locationObjects[i].duration = duration
+        } else if let i = effets.audioPlayerObjects?.firstIndex(where: { $0.id == id }) {
+            effets.audioPlayerObjects?[i].startTime = startTime.map { Float($0) }
+            effets.audioPlayerObjects?[i].duration = duration.map { Float($0) }
+        } else {
+            return
+        }
+
+        currentEffects = effets
+    }
 }

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 
-import { foldedSectionUnread, isLensSectionFoldable, lensSectionAccessibleName } from './folded-unread';
+import { foldedSectionUnread, lensSectionAccessibleName } from './folded-unread';
 
 /**
  * UNE SECTION REPLIÉE DIT CE QU'ELLE CACHE (#8694) — miroir de
@@ -32,18 +32,6 @@ describe('foldedSectionUnread', () => {
   test('aucun plafond dans la loi : « 99+ » est le fait de la pastille, le compte reste exact', () => {
     expect(foldedSectionUnread({ unreadCounts: [80, 70], folded: true })).toBe(150);
   });
-});
-
-describe('isLensSectionFoldable', () => {
-  test('Épingles se replie — même partition que `isSectionCollapsible` iOS', () => {
-    expect(isLensSectionFoldable('pinned')).toBe(true);
-  });
-
-  for (const id of ['lentille.live', 'lentille.today', 'lentille.yesterday', 'lentille.thisWeek', 'lentille.older'] as const) {
-    test(`${id} est une section CALCULÉE : jamais repliable`, () => {
-      expect(isLensSectionFoldable(id)).toBe(false);
-    });
-  }
 });
 
 describe('lensSectionAccessibleName', () => {

@@ -9,6 +9,7 @@ import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentI
 import { conversationActiveMemberCountSelect } from './utils/active-member-count';
 import { PREVIEW_ATTACHMENT_SUMMARY_LIMIT } from './utils/last-message-nature';
 import { withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
+import { AVATAR_RING_COLUMN } from '../../services/appearance/profileDecor';
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -46,7 +47,9 @@ export const conversationListParticipantSelect = {
       avatar: true,
       banner: true,
       isOnline: true,
-      lastActiveAt: true
+      lastActiveAt: true,
+      // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
+      equippedAvatarRing: true
     }
   }
 } as const;
@@ -80,7 +83,12 @@ export const conversationUserPreferencesSelect = {
   // schema wire, donc strippé de la réponse comme `clearHistoryBefore` :
   // aucun client ne lit `readingMode` via CETTE route, `GET
   // /user-preferences/conversations/:id` reste l'unique surface qui l'expose.
-  readingMode: true
+  readingMode: true,
+  // #10631 — le fond et l'accent PERSONNELS du lecteur. Servi au lecteur SEUL
+  // (le `where: { userId: viewerId }, take: 1` de l'appelant), et DÉCLARÉ dans
+  // le schema wire (`userPreferences`, api-schemas/conversation.ts), sinon
+  // fast-json-stringify le retire — même piège que `reaction`.
+  appearance: true
 } as const;
 
 /**
@@ -136,7 +144,9 @@ export const conversationLastMessagePreviewSelect = {
           id: true,
           username: true,
           displayName: true,
-          avatar: true
+          avatar: true,
+          // #10945 — le contour de l'expéditeur, résolu en `profileDecor` par `core-list.ts`.
+          ...AVATAR_RING_COLUMN
         }
       }
     }
@@ -217,7 +227,9 @@ export const conversationDetailInclude = {
           username: true,
           displayName: true,
           firstName: true,
-          lastName: true
+          lastName: true,
+          // #10713 — chargé, jamais servi tel quel : composé en `profileDecor`.
+          equippedAvatarRing: true
         }
       }
     }
@@ -283,6 +295,8 @@ export const conversationListQuerySelect = (viewerId: string) => ({
   isAnnouncementChannel: true,
   slowModeSeconds: true,
   autoTranslateEnabled: true,
+  // #10720 — le chiffrement est optionnel par conversation : la fiche le lit ici.
+  encryptionMode: true,
   // #7545 — ce qui s'est passé DEPUIS le dernier message, résolu en une
   // lecture batchée par page (`loadConversationListActivity`).
   lastReactionId: true,

@@ -38,6 +38,20 @@ describe('un lien externe dans la coque Android (#9858)', () => {
     expect(plugin).toContain('ActivityNotFoundException');
   });
 
+  test('le navigateur des Custom Tabs est préchauffé au chargement, et relâché à la destruction (#10888)', () => {
+    expect(plugin).toMatch(/public void load\(\)/);
+    expect(plugin).toContain('CustomTabsClient.getPackageName(');
+    expect(plugin).toContain('CustomTabsClient.bindCustomTabsService(');
+    expect(plugin).toContain('.warmup(0');
+    expect(plugin).toMatch(/protected void handleOnDestroy\(\)[\s\S]*unbindService\(/);
+  });
+
+  test('Android 11+ voit le service Custom Tabs du navigateur (#10888)', () => {
+    const manifest = readFileSync(join(ANDROID, 'app', 'src', 'main', 'AndroidManifest.xml'), 'utf8');
+    const requetes = /<queries>([\s\S]*?)<\/queries>/.exec(manifest)?.[1] ?? '';
+    expect(requetes).toContain('<action android:name="android.support.customtabs.action.CustomTabsService" />');
+  });
+
   test('la coque embarque androidx.browser, à une version déclarée', () => {
     const app = readFileSync(join(ANDROID, 'app', 'build.gradle'), 'utf8');
     const variables = readFileSync(join(ANDROID, 'variables.gradle'), 'utf8');

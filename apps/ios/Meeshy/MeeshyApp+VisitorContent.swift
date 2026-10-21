@@ -4,7 +4,7 @@ import MeeshySDK
 // MARK: - Le contenu d'un lien ouvert sans session (#9171)
 
 /// L'écran visiteur, présenté AU-DESSUS de `LoginView` quand un lien
-/// universel de publication ou de réel arrive sans session.
+/// universel de publication, de réel ou de story arrive sans session.
 ///
 /// Il ne consomme rien : `pendingDeepLink` reste en attente, et la racine
 /// connectée l'ouvre après la connexion. « Créer un compte » et « Se

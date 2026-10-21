@@ -7,6 +7,8 @@
 
 import { describe, it, expect, jest } from '@jest/globals';
 import { MeeshService } from '../MeeshService';
+import { effectiveMeeshPrice } from '@meeshy/shared/utils/game/sparks';
+import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { fakeGameDb, seedUser, USER, writeConflict, type FakeGameDb } from '../../game/__tests__/fakeGameDb';
 
 jest.mock('../../../utils/logger-enhanced', () => ({
@@ -38,27 +40,29 @@ const richAccount = (db: FakeGameDb, params: { score: number; debitable?: number
 };
 
 describe('MeeshService.mint — le prix monte avec les Meeshes déjà frappées', () => {
-  it('la 11e Meesh coûte 1 294 points, débités au score et au compteur', async () => {
+  it('la 11e Meesh vaut 1 587 de rang (+30 % toutes les dix, #10011) × le facteur du niveau actuel, débités à la seule poche', async () => {
     const db = fakeGameDb();
     richAccount(db, { score: 5000 });
     withMints(db, 10);
 
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-0011');
 
+    // 5 000 étincelles de cycle : niveau 7, facteur 0,535.
     expect(issue.status).toBe('minted');
-    expect(db.user.rows[0]?.engagementScore).toBe(5000 - 1294);
-    expect(db.engagementCounter.rows[0]?.points).toBe(5000 - 1294);
+    expect(db.user.rows[0]?.engagementScore).toBe(5000 - effectiveMeeshPrice(11, 7));
+    expect(effectiveMeeshPrice(11, 7)).toBe(849);
+    expect(db.engagementCounter.rows[0]?.points).toBe(5000);
   });
 
   it('refuse SANS débit quand les points débitables ne couvrent pas le prix du jour', async () => {
     const db = fakeGameDb();
-    richAccount(db, { score: 1250 });
+    richAccount(db, { score: 800 });
     withMints(db, 10);
 
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-trop-chere');
 
     expect(issue.status).toBe('insufficient');
-    expect(db.user.rows[0]?.engagementScore).toBe(1250);
+    expect(db.user.rows[0]?.engagementScore).toBe(800);
     expect(db.meeshLedger.rows).toHaveLength(10);
     expect(db.gloryLedger.rows).toHaveLength(0);
   });
@@ -72,13 +76,14 @@ describe('MeeshService.mint — la Gloire part dans la même transaction', () =>
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-recu-01');
 
     // La première Meesh fait l'étape du niveau 10 (#9706) : retenu à 9, le niveau MONTE d'un coup à 19.
+    // Le niveau 20 (40 000) est retenu à 9 : le facteur se lit sur le niveau SERVI, 9 → 0,545.
     expect(issue).toMatchObject({
       status: 'minted',
-      receipt: { number: 1, edition: 'silver', price: 1221, gloryGained: 1000, levelBefore: 9, levelAfter: 19 },
+      receipt: { number: 1, edition: 'silver', price: effectiveMeeshPrice(1, 9), gloryGained: 1000, levelBefore: 9, levelAfter: 19 },
     });
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'mint')).toHaveLength(1);
     expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')).toMatchObject({ delta: 1000 });
-    expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')?.meta).toMatchObject({ number: 1, edition: 'silver', price: 1221, levelBefore: 9, levelAfter: 19 });
+    expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')?.meta).toMatchObject({ number: 1, edition: 'silver', price: effectiveMeeshPrice(1, 9), levelBefore: 9, levelAfter: 19 });
     expect(db.user.rows[0]?.levelRecord).toBe(19);
   });
 
@@ -86,6 +91,8 @@ describe('MeeshService.mint — la Gloire part dans la même transaction', () =>
     const db = fakeGameDb();
     richAccount(db, { score: 20000, levelRecord: 44 });
     withMints(db, 99);
+    // Le Coffre (100 gardées) ne s'ouvre qu'à partir de Voix I (#10848).
+    db.gloryLedger.rows.push({ id: 'g0', userId: USER, delta: 14_000, reason: 'correction', requestId: 'seed-glory' });
 
     const issue = await new MeeshService(db.prisma).mint(USER, 'frappe-centieme');
 
@@ -127,17 +134,29 @@ describe('MeeshService.mint — la Gloire part dans la même transaction', () =>
   });
 });
 
-describe('MeeshService.mint — le record de niveau est posé AVANT le débit', () => {
-  it('un compte sans record grave le record et la Gloire des niveaux franchis, puis frappe — et la frappe ouvre le niveau 10', async () => {
+describe('MeeshService.mint — la frappe fait baisser le niveau, les niveaux gagnés se gravent', () => {
+  it('un compte sans record grave le record et la Gloire des niveaux de sa poche APRÈS la frappe, qui ouvre le niveau 10', async () => {
     const db = fakeGameDb();
     richAccount(db, { score: 100 * 15 * 15, levelRecord: null });
 
     await new MeeshService(db.prisma).mint(USER, 'frappe-record-1');
 
-    // Avant la frappe, l'étape du 10 manque : le record s'arrête à 9. La frappe la fait, le reste (21 279) lit 14.
+    // La poche (22 500, niveau 15) paie la frappe et retombe au niveau 14 ; l'étape du 10 est faite par la frappe elle-même.
     expect(db.user.rows[0]?.levelRecord).toBe(14);
-    const levels = db.gloryLedger.rows.filter((r) => r.reason === 'level');
-    expect(levels).toHaveLength(13);
+    expect(db.gloryLedger.rows.filter((r) => r.reason === 'level')).toHaveLength(13);
     expect(db.gloryLedger.rows.filter((r) => r.reason === 'mint')).toHaveLength(1);
+    expect(db.gloryLedger.rows.find((r) => r.reason === 'mint')).toMatchObject({ delta: GLORY_POINTS.mint });
+  });
+});
+
+describe('MeeshService.mint — le plus haut palier du trésor (D14, #10162)', () => {
+  it('une frappe qui fait franchir un palier le grave sur GameProfile, sans rien changer en deçà', async () => {
+    const db = fakeGameDb();
+    richAccount(db, { score: 5000 });
+    withMints(db, 9);
+
+    await new MeeshService(db.prisma).mint(USER, 'frappe-0010');
+
+    expect(db.gameProfile.rows.find((row) => row.userId === USER)?.treasuryPeakTier).toBe('escarcelle');
   });
 });

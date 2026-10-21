@@ -1,11 +1,13 @@
 import type { GameSeasonBlock, GameUpcomingSeasonBlock } from '@meeshy/shared/types/game';
-import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, seasonStepReward } from '@meeshy/shared/utils/game/season';
+import type { LeagueMoment } from '@meeshy/shared/utils/game/league';
+import { SEASON_SEAL_EVERY, SEASON_STARS_PER_STEP, SEASON_STEPS, liveSeasonTense, seasonStepReward } from '@meeshy/shared/utils/game/season';
 
 import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { spendPreview } from '@meeshy/shared/utils/game/spend';
 import { formatCount, gameText, meeshCount } from '@/lib/view/game-copy';
 import { dayLabel, seasonThemeName } from '@/lib/view/game-copy-v2';
 import { sealDetail, stepDetail } from '@/lib/view/game-detail';
+import { localMoment } from '@/lib/game/local-moment';
 import { translateGamePlural } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
@@ -32,6 +34,10 @@ export type GameSeasonProps = {
   readonly season: GameSeasonBlock | null;
   /** La saison à venir, servie tant qu'aucune n'est ouverte (#10014). */
   readonly upcoming?: GameUpcomingSeasonBlock | null | undefined;
+  /** La prochaine saison, MISE EN PAUSE par l'administration (calendrier servi, #10232) : sans date, elle se dit. */
+  readonly paused?: { readonly number: number; readonly themeKey: string } | null | undefined;
+  /** L'instant qui juge la saison à venir (#10131) — l'horloge locale par défaut. */
+  readonly moment?: LeagueMoment | undefined;
   readonly held: number;
   readonly online: boolean;
   readonly claimingStep: number | null;
@@ -50,15 +56,15 @@ const stepState = (season: GameSeasonBlock, step: number): StepState =>
 
 const stateLabel = (state: StepState): string => gameText(`game.season.step.${state}`);
 
-function rewardLabel(step: number): string {
-  const reward = seasonStepReward(step);
+function rewardLabel(step: number, stepPoints?: number): string {
+  const reward = seasonStepReward(step, stepPoints);
   if (reward === null) return '';
   return reward.kind === 'points' ? `+${formatCount(reward.amount)}` : gameText(`game.season.reward.${reward.kind}`);
 }
 
 function Step({ season, step, online, busy, onClaim }: { readonly season: GameSeasonBlock; readonly step: number; readonly online: boolean; readonly busy: boolean; readonly onClaim: (step: number) => void }) {
   const state = stepState(season, step);
-  const reward = seasonStepReward(step);
+  const reward = seasonStepReward(step, season.stepPoints);
   const special = reward !== null && reward.kind !== 'points';
   const tint = state === 'claimed' ? GAME_GOOD : state === 'ready' ? GAME_BRAND : GAME_INK_2;
   return (
@@ -71,7 +77,7 @@ function Step({ season, step, online, busy, onClaim }: { readonly season: GameSe
         disabled={state === 'ready' && (!online || busy)}
         aria-busy={busy}
         {...(state === 'ready' ? { onClick: () => onClaim(step) } : touchProps(stepDetail(season, step)))}
-        aria-label={`${gameText('game.season.step', { step: formatCount(step) })}, ${stateLabel(state)}, ${rewardLabel(step)}`}
+        aria-label={`${gameText('game.season.step', { step: formatCount(step) })}, ${stateLabel(state)}, ${rewardLabel(step, season.stepPoints)}`}
         className={`${PRESS} flex flex-col items-center justify-center rounded-chip`}
         style={{
           minHeight: 44,
@@ -92,29 +98,94 @@ function Step({ season, step, online, busy, onClaim }: { readonly season: GameSe
   );
 }
 
+/** La saison à venir (#10014) — et toute saison FUTURE qu'un lien ouvre (#10018) : son numéro, sa date d'ouverture, son thème. */
+/**
+ * Une saison OUVERTE dont le bloc gardé ne porte pas encore le parcours (#10131) : hors ligne, le jour de son
+ * ouverture. Son numéro, son état, son thème et ses dates ; le parcours se lit au retour du réseau.
+ */
+export function GameSeasonOpened({ season }: { readonly season: GameUpcomingSeasonBlock }) {
+  const language = currentInterfaceLanguage();
+  const theme = seasonThemeName(season.themeKey, language);
+  return (
+    <GameCard id="game-season-opened" labelledBy="game-season-opened-title" tint={GAME_BRAND}>
+      <h2 id="game-season-opened-title" data-game-season-opened={season.startDay} className="text-body font-bold" style={{ color: GAME_INK }}>
+        {gameText('game.archive.season.current_title', { number: formatCount(season.number) })}
+      </h2>
+      {theme === null ? null : (
+        <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
+          {gameText('game.season.theme', { theme })}
+        </p>
+      )}
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.archive.season.dates', { start: dayLabel(season.startDay, language), end: dayLabel(season.endDay, language) })}
+      </p>
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.archive.season.opened_note')}
+      </p>
+    </GameCard>
+  );
+}
+
+/**
+ * La saison À VENIR (#10014). Son état se calcule à l'horloge locale (#10131) : le jour de son ouverture, la carte
+ * gardée hors ligne devient celle d'une saison ouverte, sans attendre le réseau.
+ */
+export function GameSeasonUpcoming({ upcoming, moment }: { readonly upcoming: GameUpcomingSeasonBlock; readonly moment?: LeagueMoment | undefined }) {
+  const tense = liveSeasonTense({ served: 'upcoming', startDay: upcoming.startDay, endDay: upcoming.endDay }, moment ?? localMoment());
+  if (tense !== 'upcoming') return <GameSeasonOpened season={upcoming} />;
+  return <GameSeasonUpcomingCard upcoming={upcoming} />;
+}
+
+/**
+ * Une saison MISE EN PAUSE par l'administration (#10232) : son numéro, son état et son thème — aucune date, puisque
+ * l'ouverture sera annoncée à la reprise. Jamais un état vide ni une date inventée.
+ */
+export function GameSeasonPaused({ season }: { readonly season: { readonly number: number; readonly themeKey: string } }) {
+  const language = currentInterfaceLanguage();
+  const theme = seasonThemeName(season.themeKey, language);
+  return (
+    <GameCard id="game-season-paused" labelledBy="game-season-paused-title" tint={GAME_BRAND}>
+      <h2 id="game-season-paused-title" data-game-season-paused={season.number} className="text-body font-bold" style={{ color: GAME_INK }}>
+        {gameText('game.archive.season.paused_title', { number: formatCount(season.number) })}
+      </h2>
+      {theme === null ? null : (
+        <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
+          {gameText('game.season.theme', { theme })}
+        </p>
+      )}
+      <p className="text-caption" style={{ color: GAME_INK_2 }}>
+        {gameText('game.season.paused')}
+      </p>
+    </GameCard>
+  );
+}
+
+function GameSeasonUpcomingCard({ upcoming }: { readonly upcoming: GameUpcomingSeasonBlock }) {
+  const language = currentInterfaceLanguage();
+  const upcomingTheme = seasonThemeName(upcoming.themeKey, language);
+  return (
+    <GameCard id="game-season-upcoming" labelledBy="game-season-upcoming-title" tint={GAME_BRAND}>
+      <h2 id="game-season-upcoming-title" className="text-body font-bold" style={{ color: GAME_INK }}>
+        {gameText('game.season.title')}
+      </h2>
+      <p data-game-season-upcoming={upcoming.startDay} className="text-body font-semibold" style={{ color: GAME_INK }}>
+        {gameText('game.season.upcoming', { number: formatCount(upcoming.number), date: dayLabel(upcoming.startDay, language) })}
+      </p>
+      {upcomingTheme === null ? null : (
+        <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
+          {gameText('game.season.theme', { theme: upcomingTheme })}
+        </p>
+      )}
+    </GameCard>
+  );
+}
+
 export function GameSeason(props: GameSeasonProps) {
   const { season, held, online, claimingStep, buyingSeal, errors, onClaim, onBuySeal } = props;
   const language = currentInterfaceLanguage();
 
-  if (season === null && props.upcoming) {
-    const upcoming = props.upcoming;
-    const upcomingTheme = seasonThemeName(upcoming.themeKey, language);
-    return (
-      <GameCard id="game-season-upcoming" labelledBy="game-season-upcoming-title" tint={GAME_BRAND}>
-        <h2 id="game-season-upcoming-title" className="text-body font-bold" style={{ color: GAME_INK }}>
-          {gameText('game.season.title')}
-        </h2>
-        <p data-game-season-upcoming={upcoming.startDay} className="text-body font-semibold" style={{ color: GAME_INK }}>
-          {gameText('game.season.upcoming', { number: formatCount(upcoming.number), date: dayLabel(upcoming.startDay, language) })}
-        </p>
-        {upcomingTheme === null ? null : (
-          <p className="text-body font-semibold" style={{ color: GAME_BRAND }}>
-            {gameText('game.season.theme', { theme: upcomingTheme })}
-          </p>
-        )}
-      </GameCard>
-    );
-  }
+  if (season === null && props.upcoming) return <GameSeasonUpcoming upcoming={props.upcoming} moment={props.moment} />;
+  if (season === null && props.paused) return <GameSeasonPaused season={props.paused} />;
 
   if (season === null) {
     return (
@@ -188,7 +259,7 @@ export function GameSeason(props: GameSeasonProps) {
             className="rounded-chip px-4 text-body font-bold disabled:opacity-60"
             style={{ minHeight: 44, backgroundColor: GAME_BRAND, color: GAME_ON_WARM }}
           >
-            {gameText('game.season.claim', { step: formatCount(next.step) })} · {rewardLabel(next.step)}
+            {gameText('game.season.claim', { step: formatCount(next.step) })} · {rewardLabel(next.step, season.stepPoints)}
           </button>
         )}
         {errors.claim === undefined ? null : (
@@ -233,7 +304,7 @@ export function GameSeason(props: GameSeasonProps) {
           </p>
         ) : (
           <>
-            <GameSpendLine concept="season" held={held} cost={season.sealPrice} format={meeshCount} />
+            <GameSpendLine concept="season" held={held} cost={season.sealPrice} format={meeshCount} missing={{ fact: 'spend_missing', line: (missing) => gameText('game.spend.missing.seal', { missing }) }} />
             <button
               type="button"
               data-game-seal-buy=""

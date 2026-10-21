@@ -43,11 +43,22 @@ import {
   isEngagementOperationKey,
   type EngagementOperationKey,
 } from './engagement-operations.js';
+import { emptyActTiers, type EngagementStreakTier, type EngagementStreaks } from './engagement-act-streaks.js';
+import {
+  ENGAGEMENT_SCALE_POINTS_CEILING,
+  ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING,
+  ENGAGEMENT_STREAK_TIERS_MAX,
+  legacyStreakBonuses,
+  parseLoyalty,
+  parseStreakTiers,
+  parseStreaks,
+  tierPointsWithinTotal,
+} from './engagement-scale-streaks.js';
+
+export { ENGAGEMENT_SCALE_POINTS_CEILING, ENGAGEMENT_SCALE_TIER_POINTS_TOTAL_CEILING, ENGAGEMENT_STREAK_TIERS_MAX };
 
 /** Plafond DUR du multiplicateur, quel que soit le barème — l'administration règle en dessous. */
 export const ENGAGEMENT_SCALE_FACTOR_CEILING = 10;
-/** Plafond DUR des points d'une opération — une faute de frappe ne distribue pas un million. */
-export const ENGAGEMENT_SCALE_POINTS_CEILING = 1000;
 /** Plafond DUR de la fenêtre glissante de l'élan. */
 export const ENGAGEMENT_SCALE_WINDOW_CEILING_DAYS = 90;
 /** Plafond DUR d'un plafond d'actions. */
@@ -120,7 +131,11 @@ export type EngagementLinkVisitRules = {
   readonly dailyCapPerCreator: number | null;
 };
 
-/** Un bonus de constance : `points` quand la série de jours actifs atteint `days`. */
+/**
+ * Un bonus de constance : `points` quand la série de jours actifs atteint `days`.
+ * La forme d'avant #10388, gardée pour `streakBonuses` ; un palier de série
+ * (`EngagementStreakTier`) lui est assignable.
+ */
 export type EngagementStreakBonus = {
   readonly days: number;
   readonly points: number;
@@ -130,14 +145,15 @@ export type EngagementStreakBonus = {
  * LES GARDE-FOUS DES GROS POIDS. Une opération dont les points de base
  * atteignent `heavyPoints` (post, story, reel aux défauts) :
  * - ne crédite qu'une fois par contenu ;
- * - rend ses points si le contenu est supprimé dans les `clawbackHours` ;
+ * - rend ses points si le contenu est supprimé — la fenêtre n'est pas un réglage :
+ *   c'est la loi des 30 jours (`PUBLICATION_RECLAIM_WINDOW_DAYS`, #11467). L'ancien
+ *   `clawbackHours` (#11491) est accepté en entrée et ignoré ;
  * - vaut au plus `unverifiedMaxPoints` PAR ACTE pour un compte sans e-mail ni
  *   téléphone vérifié — une ferme de comptes jetables ne publie pas au prix
  *   fort. C'est la valeur d'un acte, jamais un total.
  */
 export type EngagementAbuseRules = {
   readonly heavyPoints: number;
-  readonly clawbackHours: number;
   readonly unverifiedMaxPoints: number;
 };
 
@@ -178,10 +194,22 @@ export type EngagementScale = {
   readonly operations: Readonly<Record<EngagementOperationKey, EngagementOperationRule>>;
   readonly multiplier: EngagementMultiplierRules;
   readonly linkVisits: EngagementLinkVisitRules;
+  /**
+   * Les paliers de la série GLOBALE tels qu'une passerelle d'avant #10388 les
+   * lit : la projection de `streaks.global`, points ramenés à 1000. Le crédit
+   * lit `streaks.global`.
+   */
   readonly streakBonuses: readonly EngagementStreakBonus[];
   readonly abuse: EngagementAbuseRules;
   /** Absent dans un barème réglé avant eux : ce sont alors les défauts. */
   readonly pathCaps?: EngagementPathCaps;
+  /**
+   * Les paliers de la série globale et de chaque acte (#10389). Absent ⇒
+   * `global` = `streakBonuses`, aucun palier par acte.
+   */
+  readonly streaks?: EngagementStreaks;
+  /** Les paliers de fidélité, en jours depuis la création du compte (#10390). Absent ⇒ aucun. */
+  readonly loyalty?: readonly EngagementStreakTier[];
 };
 
 /**
@@ -211,7 +239,6 @@ export const DEFAULT_STREAK_BONUSES: readonly EngagementStreakBonus[] = [
 
 export const DEFAULT_ABUSE_RULES: EngagementAbuseRules = {
   heavyPoints: 50,
-  clawbackHours: 24,
   unverifiedMaxPoints: 10,
 };
 
@@ -280,6 +307,8 @@ export const DEFAULT_ENGAGEMENT_SCALE: EngagementScale = {
   streakBonuses: DEFAULT_STREAK_BONUSES,
   abuse: DEFAULT_ABUSE_RULES,
   pathCaps: DEFAULT_PATH_CAPS,
+  streaks: { global: DEFAULT_STREAK_BONUSES, acts: emptyActTiers() },
+  loyalty: [],
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -381,28 +410,13 @@ function parseLinkVisits(value: unknown): EngagementLinkVisitRules | null {
   return { basePoints, firstTier, stepPerDoubling, maxPoints, dedupHours, dailyCapPerCreator };
 }
 
-function parseStreakBonuses(value: unknown): readonly EngagementStreakBonus[] | null {
-  if (value === undefined) return DEFAULT_STREAK_BONUSES;
-  if (!Array.isArray(value)) return null;
-  const bonuses: EngagementStreakBonus[] = [];
-  for (const entry of value) {
-    if (!isRecord(entry)) return null;
-    if (!isIntIn(entry.days, 1, 10_000)) return null;
-    if (!isIntIn(entry.points, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-    bonuses.push({ days: entry.days, points: entry.points });
-  }
-  if (new Set(bonuses.map((bonus) => bonus.days)).size !== bonuses.length) return null;
-  return [...bonuses].sort((a, b) => a.days - b.days);
-}
-
 function parseAbuse(value: unknown): EngagementAbuseRules | null {
   if (value === undefined) return DEFAULT_ABUSE_RULES;
   if (!isRecord(value)) return null;
-  const { heavyPoints, clawbackHours, unverifiedMaxPoints } = value;
+  const { heavyPoints, unverifiedMaxPoints } = value;
   if (!isIntIn(heavyPoints, 1, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-  if (!isIntIn(clawbackHours, 0, 24 * 30)) return null;
   if (!isIntIn(unverifiedMaxPoints, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-  return { heavyPoints, clawbackHours, unverifiedMaxPoints };
+  return { heavyPoints, unverifiedMaxPoints };
 }
 
 function parsePathCaps(value: unknown): EngagementPathCaps | null {
@@ -430,10 +444,14 @@ export function parseEngagementScale(value: unknown): EngagementScale | null {
   if (!isRecord(value) || !isRecord(value.operations)) return null;
   const multiplier = parseMultiplier(value.multiplier);
   const linkVisits = parseLinkVisits(value.linkVisits);
-  const streakBonuses = parseStreakBonuses(value.streakBonuses);
+  const streaks = parseScaleStreaks(value);
+  const loyalty = parseLoyalty(value.loyalty);
   const abuse = parseAbuse(value.abuse);
   const pathCaps = parsePathCaps(value.pathCaps);
-  if (multiplier === null || linkVisits === null || streakBonuses === null || abuse === null || pathCaps === null) return null;
+  if (multiplier === null || linkVisits === null || streaks === null || loyalty === null || abuse === null || pathCaps === null) {
+    return null;
+  }
+  if (!tierPointsWithinTotal(streaks, loyalty)) return null;
 
   const operations: Partial<Record<EngagementOperationKey, EngagementOperationRule>> = {};
   for (const [key, raw] of Object.entries(value.operations)) {
@@ -449,9 +467,48 @@ export function parseEngagementScale(value: unknown): EngagementScale | null {
     operations: operations as Record<EngagementOperationKey, EngagementOperationRule>,
     multiplier,
     linkVisits,
-    streakBonuses,
+    streakBonuses: legacyStreakBonuses(streaks.global),
     abuse,
     pathCaps,
+    streaks,
+    loyalty,
+  };
+}
+
+/**
+ * Les séries d'un barème brut. Quand `streaks.global` est déclaré, il fait foi
+ * et `streakBonuses` (sa projection) n'est pas relu ; sinon `streakBonuses`
+ * — ou les défauts — tient lieu de série globale, comme avant #10389.
+ */
+function parseScaleStreaks(value: Record<string, unknown>): EngagementStreaks | null {
+  const declaresGlobal = isRecord(value.streaks) && value.streaks.global !== undefined;
+  if (declaresGlobal) return parseStreaks(value.streaks, DEFAULT_STREAK_BONUSES);
+  const fallbackGlobal = value.streakBonuses === undefined ? DEFAULT_STREAK_BONUSES : parseStreakTiers(value.streakBonuses);
+  return fallbackGlobal === null ? null : parseStreaks(value.streaks, fallbackGlobal);
+}
+
+/**
+ * Le barème brut qu'un `PUT /admin/engagement-scale` doit faire valider, une
+ * fois FUSIONNÉ avec le barème stocké (#10388) : une section absente du corps
+ * (`streaks`, `loyalty`, `pathCaps`) garde sa valeur stockée — un ancien écran
+ * d'administration, qui ne les connaît pas, ne les efface plus. Un corps qui
+ * porte `streakBonuses` sans `streaks` ne remplace la série globale que si le
+ * stocké ne déclarait pas encore `streaks`.
+ *
+ * `storedRaw` est la configuration telle qu'elle est en base ; illisible ou
+ * absente, il n'y a rien à garder.
+ */
+export function mergeEngagementScaleBody(storedRaw: unknown, body: unknown): unknown {
+  if (!isRecord(body)) return body;
+  const stored = parseEngagementScale(storedRaw);
+  if (stored === null) return body;
+  const storedDeclaresStreaks = isRecord(storedRaw) && storedRaw.streaks !== undefined;
+  const keepStreaks = body.streaks === undefined && (body.streakBonuses === undefined || storedDeclaresStreaks);
+  return {
+    ...body,
+    ...(body.pathCaps === undefined ? { pathCaps: stored.pathCaps } : {}),
+    ...(body.loyalty === undefined ? { loyalty: stored.loyalty } : {}),
+    ...(keepStreaks ? { streaks: stored.streaks } : {}),
   };
 }
 

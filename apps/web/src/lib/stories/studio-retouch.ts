@@ -128,7 +128,8 @@ export async function withMeasuredImages(page: StudioPage, loadImage: StudioReto
 
 /** **LA TAILLE DU RENDU** (#9136, miroir `ComposerRetouchSeries.imageRenderSize`)
  * — le cadre RECADRÉ du fond quand l'auteur l'a recadré (un carré repart
- * carré), grand côté 1920 ; sinon la scène 9:16. */
+ * carré), couché s'il a pivoté d'un quart (#9160), grand côté 1920 ; sinon la
+ * scène 9:16. */
 export function studioRetouchSize(page: StudioPage): { readonly width: number; readonly height: number } {
   const background = page.background;
   if (background === null || background.crop === undefined || background.aspectRatio === undefined || background.aspectRatio <= 0) return STUDIO_RETOUCH_SIZE;

@@ -601,7 +601,7 @@ final class ShareSenderFanoutTests: XCTestCase {
         let mediaRoot = try makeMediaRoot(bytes: 64)
         let heavy = ShareStagedMedia(
             relPath: "cid_abc/0.jpg", ext: "jpg", mime: "image/jpeg",
-            bytes: ShareLimits.opportunisticUploadBudgetBytes + 1)
+            bytes: ShareUploadBudget.opportunisticUploadBudgetBytes + 1)
 
         let result = await ShareSender.send(
             share: makeShare(media: [heavy]), session: makeSession(),

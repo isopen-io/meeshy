@@ -20,8 +20,9 @@ private final class SignupCardConfirmer: EmailVerificationConfirming {
         return try result.get()
     }
 
-    func openSession(_ proven: EmailProvenSession) {
+    func openSession(_ proven: EmailProvenSession) -> Bool {
         opened.append(proven)
+        return true
     }
 }
 

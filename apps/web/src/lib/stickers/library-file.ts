@@ -1,6 +1,7 @@
 import type { StickerDefinition, StickerMimeType } from '@meeshy/shared/types/sticker-definition';
 
 import { attachmentSrc } from '@/lib/api/media-url';
+import { servedMediaFile } from '@/lib/media/served-media';
 
 /**
  * **UN STICKER DE LA BIBLIOTHÈQUE PART COMME L'IMAGE QU'IL EST** (#7938) — le
@@ -24,7 +25,7 @@ export async function stickerFileOf(sticker: StickerDefinition, fetcher: Fetcher
     const response = await fetcher(attachmentSrc(sticker.fileUrl));
     if (!response.ok) return null;
     const bytes = await response.arrayBuffer();
-    return new File([bytes], `sticker-${sticker.id}.${EXTENSION[sticker.mimeType]}`, { type: sticker.mimeType });
+    return servedMediaFile(bytes, `sticker-${sticker.id}.${EXTENSION[sticker.mimeType]}`, { type: sticker.mimeType });
   } catch {
     return null;
   }

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MARK: - Button Position (stored as normalized 0-1 values)
 public struct ButtonPosition: Equatable, Sendable {
@@ -682,8 +683,7 @@ public struct NotificationBadge: View {
                     withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
                         isPulsing = true
                     }
-                    try? await Task.sleep(for: .seconds(Self.announcementPulseDuration))
-                    guard !Task.isCancelled else { return }
+                    guard await cancellableSleep(for: .seconds(Self.announcementPulseDuration)) else { return }
                     // Retour au repos ANIMÉ (une respiration de sortie) — un
                     // arrêt sec au milieu d'un cycle claquerait visuellement.
                     withAnimation(.easeInOut(duration: 1.2)) {

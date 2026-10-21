@@ -20,6 +20,8 @@ import { unsetOrNull } from '../../utils/prisma-unset';
 import { jetonRecherche } from '../../utils/search-tokens';
 import { mentionableScope, scopeRequiresMembership, type MentionableScope } from './mentionableScope';
 import { keepDiscoverable } from '../profile-discoverability';
+import type { PersonProfileDecor } from '@meeshy/shared/types/profile-decor';
+import { AVATAR_RING_COLUMN, authorProfileDecor } from '../appearance/authorProfileDecor';
 
 const logger = enhancedLogger.child({ module: 'MentionSuggestions' });
 
@@ -31,6 +33,8 @@ export interface MentionSuggestion {
   badge: 'conversation' | 'friend' | 'other';
   inConversation: boolean;
   isFriend: boolean;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  profileDecor?: PersonProfileDecor;
 }
 
 export const MAX_SUGGESTIONS = 10;
@@ -51,7 +55,9 @@ const USER_SELECT = {
   firstName: true,
   lastName: true,
   displayName: true,
-  avatar: true
+  avatar: true,
+  // #10945 — le contour équipé, résolu en `profileDecor` par `suggestion()`.
+  ...AVATAR_RING_COLUMN
 } as const;
 
 type SuggestedUser = {
@@ -61,6 +67,7 @@ type SuggestedUser = {
   firstName: string | null;
   lastName: string | null;
   avatar: string | null;
+  equippedAvatarRing?: string | null;
 };
 
 /**
@@ -129,7 +136,8 @@ function suggestion(
     displayName: user.displayName,
     avatar: user.avatar,
     badge,
-    ...flags
+    ...flags,
+    ...authorProfileDecor(user)
   };
 }
 

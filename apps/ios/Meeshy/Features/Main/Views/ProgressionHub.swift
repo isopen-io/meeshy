@@ -5,7 +5,7 @@ import MeeshyUI
 /// LES TROIS HEROS ET LES TROIS PORTES DU HUB (#5838, #5843).
 ///
 /// L'écran empilait badges, défis et succès dans un seul défilement, et
-/// web-v2 empilait les mêmes pièces dans un AUTRE ordre. La séquence est
+/// le web empilait les mêmes pièces dans un AUTRE ordre. La séquence est
 /// désormais déclarée dans `ProgressionLayout` (miroir de `progression-layout.ts`,
 /// gardé par `progression-layout-mirror-parity`) et la vue la PARCOURT.
 ///
@@ -288,7 +288,7 @@ struct ProgressionElansHero: View {
 
     private var titre: String {
         guard let elan = progress.elan, elan.isAccelerated else { return ProgressionCopy.elansTitle }
-        return "Élan ×\(Int(elan.factor))"
+        return ProgressionCopy.elanTitle(factor: elan.factor)
     }
 
     private var explication: String {
@@ -398,7 +398,7 @@ struct ProgressionWrap: View {
 /// Le hub n'annonce qu'un COMPTE ; le détail vit ici, où il a la place de
 /// respirer. Les trois partagent ce cadre : le retour, le titre, et le compte
 /// en haut à droite que le porteur a demandé. Écrit une fois, sinon les trois
-/// dériveraient exactement comme le hub et web-v2 ont dérivé.
+/// dériveraient exactement comme le hub et le web ont dérivé.
 ///
 /// **Aucune requête.** La progression est déjà chargée par le hub et passée
 /// telle quelle : ouvrir une page ne montre ni spinner ni squelette. Un écran
@@ -418,7 +418,7 @@ struct ProgressionSectionPage: View {
     @StateObject private var viewModel = ProgressionViewModel()
 
     /// Lu au seul toucher de « Comprendre les badges » (#9640), jamais dans le corps.
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var progress: EngagementProgress? { viewModel.progress }
@@ -554,7 +554,7 @@ struct ProgressionSectionPage: View {
                         .accessibilityAddTraits(.isButton)
                         .accessibilityHint(Text(String(
                             localized: "progression.achievement.a11y.hint",
-                            defaultValue: "Ouvre le succès en grand",
+                            defaultValue: "Touche pour voir ce haut fait en grand.",
                             bundle: .main)))
                     }
                 }

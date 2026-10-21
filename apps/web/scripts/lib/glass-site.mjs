@@ -27,11 +27,29 @@ export const GLASS_SITE = 'src/styles/glass.css';
 const KINDS = ['blur', 'translucent-tone', 'glass-override'];
 
 export const GLASS_INVENTORY = {
+  'src/styles/site-chrome.css': {
+    blur: {
+      count: 2,
+      reason:
+        "l'en-tête collant des pages PRÉRENDUES de meeshy.me (landing, pages statiques, /download — #10071) : elles ne chargent pas `glass.css`, et la règle `.ld-header` en est la recopie déclarée (80 %, flou 24 px) ; la déclaration préfixée `-webkit-backdrop-filter` compte pour la seconde",
+    },
+    'translucent-tone': {
+      count: 1,
+      reason: "le fond 80 % du même en-tête collant des pages prérendues — même surface que le flou ci-dessus",
+    },
+  },
   'src/styles/thread-menu.css': {
     blur: {
       count: 1,
       reason:
         "le VOILE du menu du message : un scrim qui floute le fil ENTIER derrière le menu ouvert, sans texte ni contrôle — pas une surface de verre",
+    },
+  },
+  'src/styles/conversation-peek.css': {
+    blur: {
+      count: 1,
+      reason:
+        "le VOILE de l'aperçu d'une conversation tenue (#11211) : un scrim qui floute la liste ENTIÈRE derrière la grappe, sans texte ni contrôle — pas une surface de verre, le même que celui du menu du message",
     },
   },
   'src/components/conversation-preview-sheet.tsx': {

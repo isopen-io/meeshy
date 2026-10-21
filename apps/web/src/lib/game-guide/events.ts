@@ -93,7 +93,6 @@ export function transitionGuideEvents(previous: EngagementWithGame, next: Engage
   const after = next.game;
   if (before === undefined || after === undefined) return [];
 
-  const minted = after.mint.number > before.mint.number;
   const events: (GuideEvent | null)[] = [
     levelReading(before.level).level < 2 && levelReading(after.level).level >= 2
       ? { kind: 'first-level', level: levelReading(after.level).level, pointsToNext: levelReading(after.level).pointsToNext }
@@ -101,12 +100,9 @@ export function transitionGuideEvents(previous: EngagementWithGame, next: Engage
     tierIndex(after) > tierIndex(before) ? { kind: 'new-tier', tier: levelReading(after.level).tier, nextTierLevel: nextTierLevel(levelReading(after.level).tier) } : null,
     !before.missions.unlocked && after.missions.unlocked ? { kind: 'missions-unlocked' } : null,
     before.mint.number === 1 && after.mint.number === 2
-      ? { kind: 'first-mint', levelBefore: levelReading(before.level).level, levelAfter: levelReading(after.level).level, tailwindUntilLevel: levelReading(after.level).record }
+      ? { kind: 'first-mint' }
       : null,
     after.mint.price > before.mint.price ? { kind: 'price-rises', nextPrice: after.mint.price } : null,
-    minted && (previous.mintBadgeLoss ?? 0) > 0 && previous.mintBadgeRegain !== undefined
-      ? { kind: 'badge-extinguished', missingActions: previous.mintBadgeRegain }
-      : null,
     standing(after) > standing(before) ? rankEvent(after) : null,
     treasuryIndex(after) > treasuryIndex(before) && after.treasury.tier !== null
       ? { kind: 'treasury-tier', tier: after.treasury.tier, nextTierMissing: after.treasury.next?.missing ?? null }

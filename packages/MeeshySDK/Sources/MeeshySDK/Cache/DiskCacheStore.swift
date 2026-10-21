@@ -9,18 +9,21 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     public let policy: CachePolicy
 
-    nonisolated(unsafe) private let memoryCache: NSCache<NSString, CacheBox>
-    private let baseDirectory: URL
-    private let fileManager = FileManager.default
-    private let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
-    private var inFlightTasks: [String: InFlightDownload] = [:]
-    private var fileTimestamps: [String: Date] = [:]
-    private let urlSession: URLSession
+    nonisolated(unsafe) let memoryCache: NSCache<NSString, CacheBox>
+    let baseDirectory: URL
+    let fileManager = FileManager.default
+    let logger = MeeshyLog.logger(.diskCache, subsystem: .legacySDK)
+    var inFlightTasks: [String: InFlightDownload] = [:]
+    var fileTimestamps: [String: Date] = [:]
+    let readRegistry = CacheReadRegistry()
+    let urlSession: URLSession
+    let networkTransfer: NetworkTransfer
+    let fileDownloader: MediaFileDownloader
 
     /// Clés dont la dernière réponse interdisait le stockage (`no-store` /
     /// `no-cache`, #9478) : leurs octets ne vont ni sur le disque, ni dans le
     /// L1, ni dans le cache d'images décodées.
-    private var transientKeys: Set<String> = []
+    var transientKeys: Set<String> = []
 
     /// Pin registry (R5 offline replay) : fileKey → pin expiry. A file whose
     /// pin is still active is exempt from BOTH `evictOverBudget()` (LRU) and
@@ -28,14 +31,20 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// so a boot-time sweep cannot evict media pinned in a previous launch —
     /// the eviction/sizing enumerators use `.skipsHiddenFiles`, so the sidecar
     /// itself is never a candidate. Loaded lazily on first pin/sweep access.
-    private var pinExpiries: [String: Date] = [:]
-    private var pinsLoaded = false
+    var pinExpiries: [String: Date] = [:]
+    var pinsLoaded = false
 
     /// Wraps an in-flight network task with an identity token so a stale
     /// completion never clears a NEWER entry registered under the same key.
-    private struct InFlightDownload {
+    struct InFlightDownload {
         let id = UUID()
         let task: Task<Data, Error>
+        let profile: MediaTransferProfile
+
+        init(task: Task<Data, Error>, profile: MediaTransferProfile = .standard) {
+            self.task = task
+            self.profile = profile
+        }
     }
 
     /// Budget mémoire du L1 (Data brut par entrée). 80 MB par défaut — les
@@ -58,11 +67,15 @@ public actor DiskCacheStore: ReadableCacheStore {
         policy: CachePolicy,
         baseDirectory: URL? = nil,
         memoryBudgetBytes: Int = 80 * 1024 * 1024,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = .shared,
+        networkTransfer: NetworkTransfer = .inMemory,
+        fileDownloader: MediaFileDownloader? = nil
     ) {
         self.policy = policy
         self.memoryBudgetBytes = memoryBudgetBytes
         self.urlSession = urlSession
+        self.networkTransfer = networkTransfer
+        self.fileDownloader = fileDownloader ?? MediaFileDownloader(configuration: urlSession.configuration)
         let subdir: String
         if case .disk(let sub, _) = policy.storageLocation {
             subdir = sub
@@ -95,6 +108,10 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
     }
 
+    deinit {
+        fileDownloader.invalidate()
+    }
+
     // MARK: - ReadableCacheStore
 
     public func load(for key: String) async -> CacheResult<[Data]> {
@@ -114,7 +131,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         guard fileManager.fileExists(atPath: filePath.path) else { return .empty }
         let data: Data
         do {
-            data = try Data(contentsOf: filePath)
+            data = try Data(contentsOf: filePath, options: .mappedIfSafe)
         } catch {
             // Le fichier EXISTE mais est illisible : corruption ou I/O — c'est
             // un vrai incident, pas un cache miss.
@@ -211,13 +228,14 @@ public actor DiskCacheStore: ReadableCacheStore {
     private var autoEvictionWriteCounter: Int = 0
     private static let autoEvictionEveryNWrites: Int = 32
 
-    private func runBudgetEvictionIfNeeded(latestWriteSize: Int) async {
+    func runBudgetEvictionIfNeeded(latestWriteSize: Int) async {
         guard case .disk(_, let maxBytes) = policy.storageLocation else { return }
         autoEvictionWriteCounter &+= 1
         let bigWrite = latestWriteSize > maxBytes / 10
         let periodic = autoEvictionWriteCounter % Self.autoEvictionEveryNWrites == 0
         guard bigWrite || periodic else { return }
         await evictOverBudget()
+        await evictUnderDiskPressure()
     }
 
     // MARK: - Adoption (PR B — optimistic local file → canonical cache key)
@@ -293,6 +311,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     public func localFileURL(for key: String) -> URL? {
         let fileKey = Self.fileKey(for: key)
         let filePath = diskFilePath(for: fileKey)
+        readRegistry.noteRead(fileKey)
         return fileManager.fileExists(atPath: filePath.path) ? filePath : nil
     }
 
@@ -332,6 +351,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     nonisolated public func cachedFileURL(for key: String) -> URL? {
         let fileKey = Self.fileKey(for: key)
         let filePath = baseDirectory.appendingPathComponent(fileKey)
+        readRegistry.noteRead(fileKey)
         // `attributesOfItem` lève si le fichier n'existe pas : un seul `stat`
         // là où `fileExists` + lecture de la date en auraient fait deux.
         guard let modDate = (try? FileManager.default.attributesOfItem(atPath: filePath.path))?[.modificationDate] as? Date else {
@@ -369,105 +389,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         if let data = result.snapshot()?.first { return data }
 
         // 2. Download from network (coalesced with any in-flight fetch) and cache
-        guard let url = URL(string: urlString),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "https" || scheme == "http" else {
-            throw DiskCacheError.notCached(urlString)
-        }
-        return try await networkData(for: urlString, url: url)
-    }
-
-    /// Single network funnel: every remote fetch for this store goes through
-    /// here so concurrent callers (`data(for:)`, `image(for:)`, prefetchers)
-    /// share ONE URLSession task per media key instead of opening duplicate
-    /// connections. Observed on device: the same voice note fetched 2-3×
-    /// concurrently by independent paths saturated a slow cellular link
-    /// (NSURLError -1001 ×50 → HTTP/2 connection torn down).
-    private func networkData(for urlString: String, url: URL) async throws -> Data {
-        let fileKey = Self.fileKey(for: urlString)
-        if let existing = inFlightTasks[fileKey] {
-            return try await existing.task.value
-        }
-
-        let task = Task<Data, Error> {
-            // Média protégé même-origine (ex. audio de la bibliothèque de sons
-            // servi par `/api/v1/static/:filename`, route JWT) : la requête nue
-            // recevait 401 et la story jouait MUETTE, gelée sur le spinner de
-            // stall (bug prod 2026-08-02, post 6a6ef0b44415c63ff8da7855).
-            let request = Self.networkRequest(
-                for: url,
-                apiOrigin: MeeshyConfig.shared.serverOrigin,
-                authToken: APIClient.shared.authToken,
-                sessionToken: APIClient.shared.anonymousSessionToken
-            )
-            let (data, response) = try await urlSession.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw DiskCacheError.notCached(urlString)
-            }
-            // #9478 — un fichier rappelé, expiré ou consommé rend 404 : la
-            // copie locale échue partirait sinon resservie par
-            // `cachedFileURL(for:)`, qui ne regarde pas la fraîcheur.
-            if MediaCacheDirective.meansGone(statusCode: httpResponse.statusCode) {
-                await evict(urlString)
-                throw DiskCacheError.notCached(urlString)
-            }
-            guard (200...299).contains(httpResponse.statusCode) else {
-                throw DiskCacheError.notCached(urlString)
-            }
-            await store(data, for: urlString, honoring: httpResponse)
-            return data
-        }
-
-        let entry = InFlightDownload(task: task)
-        inFlightTasks[fileKey] = entry
-        defer {
-            if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
-        }
-        return try await task.value
-    }
-
-    /// Construit la requête du funnel réseau. Un média hébergé sur l'ORIGINE
-    /// de l'API Meeshy (même scheme + host + port que `apiOrigin`) reçoit les
-    /// en-têtes d'auth — `Authorization: Bearer` (prioritaire) ou
-    /// `X-Session-Token` (session anonyme), même convention qu'`APIClient` —
-    /// car certaines routes média sont protégées (`/api/v1/static/:filename`,
-    /// audio de la bibliothèque de sons). Toute autre origine (CDN, hôte
-    /// tiers) reste une requête NUE : un token ne doit jamais fuiter hors de
-    /// l'API. Pure et nonisolated pour être testable sans réseau.
-    nonisolated static func networkRequest(
-        for url: URL,
-        apiOrigin: String?,
-        authToken: String?,
-        sessionToken: String?
-    ) -> URLRequest {
-        var request = URLRequest(url: url)
-        guard let apiOrigin,
-              let origin = URL(string: apiOrigin),
-              let originScheme = origin.scheme?.lowercased(),
-              let originHost = origin.host?.lowercased(),
-              let urlScheme = url.scheme?.lowercased(),
-              let urlHost = url.host?.lowercased(),
-              urlScheme == originScheme,
-              urlHost == originHost,
-              normalizedPort(url.port, scheme: urlScheme) == normalizedPort(origin.port, scheme: originScheme)
-        else { return request }
-        if let authToken {
-            request.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
-        } else if let sessionToken {
-            request.setValue(sessionToken, forHTTPHeaderField: "X-Session-Token")
-        }
-        return request
-    }
-
-    /// `https://host` et `https://host:443` sont la même origine — replie le
-    /// port implicite du scheme pour la comparaison.
-    private nonisolated static func normalizedPort(_ port: Int?, scheme: String) -> Int? {
-        if let port { return port }
-        switch scheme {
-        case "https": return 443
-        case "http": return 80
-        default: return nil
-        }
+        return try await networkData(for: urlString, url: Self.remoteURL(urlString))
     }
 
     /// In-flight network download for `key`, if any. Lets an external
@@ -520,8 +442,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     @discardableResult
     public func store(_ data: Data, for key: String, honoring response: URLResponse?) async -> Bool {
         guard MediaCacheDirective(response: response).mayPersist else {
-            await evict(key)
-            transientKeys.insert(Self.fileKey(for: key))
+            await refuseStorage(for: key)
             return false
         }
         await save(data, for: key)
@@ -529,13 +450,10 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     /// Retire une clé de TOUS les niveaux : disque, L1, et variantes décodées.
-    private func evict(_ key: String) async {
+    func evict(_ key: String) async {
         await invalidate(for: key)
         let fileKey = Self.fileKey(for: key)
-        Self._imageCache.removeObject(forKey: fileKey as NSString)
-        for bucket in Self.pixelSizeBuckets {
-            Self._imageCache.removeObject(forKey: Self.imageCacheKey(fileKey: fileKey, bucket: bucket))
-        }
+        DecodedBitmapStore.removeVariants(fileKey: fileKey)
     }
 
     public func remove(for key: String) async {
@@ -633,88 +551,16 @@ public actor DiskCacheStore: ReadableCacheStore {
         logger.debug("Budget eviction: trimmed to \(totalSize) bytes (max \(maxBytes))")
     }
 
-    // MARK: - Pinning (eviction exemption — R5 offline replay)
-
-    /// Marks `key` as non-evictable until `until`. Building block only: the
-    /// store never decides WHAT deserves a pin — the app-side policy does
-    /// (e.g. "media of a viewed story until the story expires"). Pinning a
-    /// key whose download has not landed yet is valid: the exemption applies
-    /// as soon as the file exists.
-    public func pin(_ key: String, until: Date) {
-        loadPinsIfNeeded()
-        pinExpiries[Self.fileKey(for: key)] = until
-        persistPins()
-    }
-
-    public func unpin(_ key: String) {
-        loadPinsIfNeeded()
-        guard pinExpiries.removeValue(forKey: Self.fileKey(for: key)) != nil else { return }
-        persistPins()
-    }
-
-    /// `true` while `key` holds a pin whose expiry is in the future.
-    public func isPinned(_ key: String) -> Bool {
-        loadPinsIfNeeded()
-        return isPinActive(fileKey: Self.fileKey(for: key), now: Date())
-    }
-
-    private func isPinActive(fileKey: String, now: Date) -> Bool {
-        loadPinsIfNeeded()
-        guard let until = pinExpiries[fileKey] else { return false }
-        return until > now
-    }
-
-    /// Drops pins past their expiry so the registry (and sidecar) cannot grow
-    /// unbounded. Called by both eviction sweeps.
-    private func purgeExpiredPins(now: Date) {
-        loadPinsIfNeeded()
-        let before = pinExpiries.count
-        pinExpiries = pinExpiries.filter { $0.value > now }
-        if pinExpiries.count != before { persistPins() }
-    }
-
-    private var pinsSidecarURL: URL {
-        baseDirectory.appendingPathComponent(".pins.json")
-    }
-
-    private func loadPinsIfNeeded() {
-        guard !pinsLoaded else { return }
-        pinsLoaded = true
-        guard fileManager.fileExists(atPath: pinsSidecarURL.path) else { return }
-        do {
-            let data = try Data(contentsOf: pinsSidecarURL)
-            pinExpiries = try JSONDecoder().decode([String: Date].self, from: data)
-        } catch {
-            logger.error("Pin sidecar unreadable, starting empty: \(error.localizedDescription)")
-        }
-    }
-
-    private func persistPins() {
-        do {
-            let data = try JSONEncoder().encode(pinExpiries)
-            try data.write(to: pinsSidecarURL, options: .atomic)
-        } catch {
-            logger.error("Pin sidecar write failed: \(error.localizedDescription)")
-        }
-    }
-
     // MARK: - UIImage Cache
-
-    nonisolated(unsafe) private static let _imageCache: NSCache<NSString, UIImage> = {
-        let cache = NSCache<NSString, UIImage>()
-        cache.countLimit = 150
-        cache.totalCostLimit = 80 * 1024 * 1024
-        return cache
-    }()
 
     @MainActor
     public static func clearImageCache() {
-        _imageCache.removeAllObjects()
+        DecodedBitmapStore.removeAll()
     }
 
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         let key = fileKey(for: urlString) as NSString
-        return _imageCache.object(forKey: key)
+        return DecodedBitmapStore.image(forKey: key)
     }
 
     /// Cold-start synchronous warm : retourne l'image immediatement si elle
@@ -741,7 +587,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         // fil principal). Le plafond couvre la hauteur d'un écran : un poster
         // plein écran (#3871) reste net, une photo d'appareil ne l'est plus en trop.
         guard let fileURL = cachedFileURL(for: urlString),
-              let image = Self.downsampledImage(fileURL: fileURL, maxPixelSize: Self.warmedPixelCap) else {
+              let image = DecodedBitmapStore.downsampledImage(fileURL: fileURL, maxPixelSize: Self.warmedPixelCap) else {
             return nil
         }
         // #3897 — `cacheIfWithinBudget`, pas une insertion `setObject`
@@ -756,50 +602,13 @@ public actor DiskCacheStore: ReadableCacheStore {
         // autres chemins d'insertion (`cacheImageForPreview`, `image(for:
         // maxPixelSize:)`), dont le doc-comment de `cacheIfWithinBudget`
         // affirmait à tort que `warmedImage` le partageait déjà.
-        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: urlString))
+        DecodedBitmapStore.insertWithinBudget(image, key: Self.fileKey(for: urlString))
         return image
     }
 
-    /// Hard cap for the decoded bitmap we will keep resident in the NSCache
-    /// (in bytes). A malicious or accidentally-huge image (e.g. 20K×20K JPEG
-    /// that decodes to >1 GB of pixel data) would otherwise blow the NSCache
-    /// budget and trigger a memory warning, evicting everything else. We
-    /// decode to check dimensions, then refuse to cache anything above the
-    /// threshold — the `UIImage` still returns so the caller can display it
-    /// once, but we won't hold onto it.
-    private static let maxCacheableDecodedBytes: Int = 50 * 1024 * 1024 // 50 MB
-
-    /// **Décode à la taille d'affichage, jamais l'image pleine** (#9685) :
-    /// `CGImageSourceCreateThumbnailAtIndex` borne le plus grand côté à
-    /// `maxPixelSize` (taille affichée × échelle, quantifiée par `pixelBucket`),
-    /// et `kCGImageSourceShouldCacheImmediately` force le décodage ICI — hors du
-    /// fil principal sur le chemin asynchrone de l'acteur —, au lieu de le laisser
-    /// au premier dessin.
+    /// Décodage réduit (#9685) : voir `DecodedBitmapStore.downsampledImage(data:maxPixelSize:)`.
     static func downsampledImage(data: Data, maxPixelSize: CGFloat = 1200) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize))
-        else { return UIImage(data: data) }
-        return UIImage(cgImage: cgImage)
-    }
-
-    /// Même réduction, lue directement depuis le fichier du cache (aucune copie
-    /// des octets en mémoire).
-    static func downsampledImage(fileURL: URL, maxPixelSize: CGFloat) -> UIImage? {
-        let sourceOptions = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, sourceOptions),
-              let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions(maxPixelSize))
-        else { return nil }
-        return UIImage(cgImage: cgImage)
-    }
-
-    private static func thumbnailOptions(_ maxPixelSize: CGFloat) -> CFDictionary {
-        [
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ] as CFDictionary
+        DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: maxPixelSize)
     }
 
     public func image(for urlString: String) async -> UIImage? {
@@ -817,62 +626,30 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// `warmedImage(for:)` have always used.
     public static let fullFormatPixelCap: CGFloat = 1200
 
-    /// Quantized decode ceilings for below-full-format requests. Decoding at
-    /// the bucket ceiling (never the exact requested size) bounds the number
-    /// of resident variants per URL while never serving an under-resolved
-    /// bitmap: the bucket is always >= the request.
-    private static let pixelSizeBuckets: [CGFloat] = [128, 256, 512, 768, 1024]
-
-    /// Bucket ceiling for a requested pixel size — `nil` when the request
-    /// belongs to the canonical full-format slot.
-    private static func pixelBucket(for maxPixelSize: CGFloat) -> CGFloat? {
-        pixelSizeBuckets.first { $0 >= maxPixelSize }
-    }
-
-    /// NSCache key of a decoded variant. Sized variants are suffixed so a
-    /// 128 px avatar decode can never occupy — nor be served from — the slot
-    /// a full-screen surface reads. The bare key remains reserved for the
-    /// full-format decode.
-    private static func imageCacheKey(fileKey: String, bucket: CGFloat?) -> NSString {
-        guard let bucket else { return fileKey as NSString }
-        return "\(fileKey)#px\(Int(bucket))" as NSString
-    }
-
-    /// Sized-slot probe mirroring `cachedImage(for:)` — same bucketing as
-    /// `image(for:maxPixelSize:)`, so a view that loads with a `targetSize`
-    /// can find its own variant synchronously at init.
     nonisolated public static func cachedImage(for urlString: String, maxPixelSize: CGFloat) -> UIImage? {
-        let key = imageCacheKey(fileKey: fileKey(for: urlString), bucket: pixelBucket(for: maxPixelSize))
-        return _imageCache.object(forKey: key)
+        DecodedBitmapStore.image(forKey: DecodedBitmapStore.cacheKey(fileKey: fileKey(for: urlString), bucket: DecodedBitmapStore.bucket(for: maxPixelSize)))
     }
 
-    /// « Une variante décodée, n'importe laquelle, est-elle résidente ? » —
-    /// probe de résidence (badge de téléchargement, gates) qui ne doit pas
-    /// dépendre du bucket sous lequel la surface d'affichage a décodé.
     nonisolated public static func hasAnyCachedImageVariant(for urlString: String) -> Bool {
-        let fileKey = fileKey(for: urlString)
-        if _imageCache.object(forKey: fileKey as NSString) != nil { return true }
-        return pixelSizeBuckets.contains { bucket in
-            _imageCache.object(forKey: imageCacheKey(fileKey: fileKey, bucket: bucket)) != nil
-        }
+        DecodedBitmapStore.hasAnyVariant(fileKey: fileKey(for: urlString))
     }
 
     public func image(for urlString: String, maxPixelSize: CGFloat) async -> UIImage? {
         let fileKey = Self.fileKey(for: urlString)
-        let bucket = Self.pixelBucket(for: maxPixelSize)
-        let cacheKey = Self.imageCacheKey(fileKey: fileKey, bucket: bucket)
+        let bucket = DecodedBitmapStore.bucket(for: maxPixelSize)
+        let cacheKey = DecodedBitmapStore.cacheKey(fileKey: fileKey, bucket: bucket)
         // Hors bucket (> 1024) : décoder à la taille DEMANDÉE, comme avant —
         // une bannière iPad full-bleed peut requérir 2048 px ; la rabattre au
         // cap 1200 la rendrait visiblement plus douce qu'avant ce changement.
         let decodePixelSize = bucket ?? maxPixelSize
 
-        if let cached = Self._imageCache.object(forKey: cacheKey) {
+        if let cached = DecodedBitmapStore.image(forKey: cacheKey) {
             return cached
         }
 
         let result = await load(for: urlString)
-        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
-            Self.cacheIfWithinBudget(image, key: cacheKey as String)
+        if let data = result.snapshot()?.first, let image = DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+            DecodedBitmapStore.insertWithinBudget(image, key: cacheKey as String)
             return image
         }
 
@@ -882,8 +659,8 @@ public actor DiskCacheStore: ReadableCacheStore {
         if url.scheme == "file" {
             do {
                 let data = try Data(contentsOf: url)
-                if let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
-                    Self.cacheIfWithinBudget(image, key: cacheKey as String)
+                if let image = DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: decodePixelSize) {
+                    DecodedBitmapStore.insertWithinBudget(image, key: cacheKey as String)
                     return image
                 }
             } catch {
@@ -898,31 +675,14 @@ public actor DiskCacheStore: ReadableCacheStore {
             // the same key (prefetcher, CachedAsyncImage, another cell) and
             // persists to disk inside the task.
             let data = try await networkData(for: urlString, url: url)
-            guard let image = Self.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
+            guard let image = DecodedBitmapStore.downsampledImage(data: data, maxPixelSize: decodePixelSize) else { return nil }
             if !transientKeys.contains(fileKey) {
-                Self.cacheIfWithinBudget(image, key: cacheKey as String)
+                DecodedBitmapStore.insertWithinBudget(image, key: cacheKey as String)
             }
             return image
         } catch {
             return nil
         }
-    }
-
-    /// Centralised NSCache insertion with a size guard so a single oversized
-    /// image never evicts the rest of the in-memory cache. We compute the
-    /// decoded cost once and skip caching when it blows past
-    /// `maxCacheableDecodedBytes` — the caller still gets the `UIImage`, it
-    /// just won't be kept around for the next scroll.
-    private nonisolated static func cacheIfWithinBudget(_ image: UIImage, key: String) {
-        let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
-        guard cost > 0, cost <= maxCacheableDecodedBytes else { return }
-        // Insert synchronously. `NSCache` mutations are thread-safe, so the
-        // previous `Task { @MainActor … }` deferral bought nothing and created a
-        // race: the image wasn't resident yet when `image(for:)` returned, so a
-        // synchronous `cachedImage(for:)` immediately after still missed (and
-        // the UI showed a thumbHash flash for one extra frame). Matches the
-        // direct insertion already used by `warmedImage(for:)`.
-        Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
     }
 
     /// Configure the in-memory UIImage cache limits at app startup.
@@ -933,7 +693,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     ///   resident. Default at init-time is 80 MB; recommended app-level value
     ///   is 60 MB to leave headroom for UIKit/Metal allocations.
     public nonisolated static func configureImageCache(memoryCostLimitBytes: Int) {
-        _imageCache.totalCostLimit = memoryCostLimitBytes
+        DecodedBitmapStore.configure(memoryCostLimitBytes: memoryCostLimitBytes)
     }
 
     /// Pre-cache an image in the static UIImage NSCache for immediate display
@@ -947,7 +707,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// read on the optimistic-send path, plus skipped the oversized-bitmap
     /// budget guard entirely.
     public nonisolated static func cacheImageForPreview(_ image: UIImage, key: String) {
-        Self.cacheIfWithinBudget(image, key: Self.fileKey(for: key))
+        DecodedBitmapStore.insertWithinBudget(image, key: Self.fileKey(for: key))
     }
 
     // MARK: - File Key
@@ -981,7 +741,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     /// Refreshes the mtime used as the LRU key. A failure does not lose data
     /// but skews eviction order — the entry looks older than it is and gets
     /// evicted early, so it is worth a trace.
-    private func touchModificationDate(atPath path: String) {
+    func touchModificationDate(atPath path: String) {
         do {
             try fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: path)
         } catch {
@@ -989,125 +749,8 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
     }
 
-    private func diskFilePath(for fileKey: String) -> URL {
+    func diskFilePath(for fileKey: String) -> URL {
         baseDirectory.appendingPathComponent(fileKey)
-    }
-
-    // MARK: - Purge sélective (mesure et destruction ciblées)
-    //
-    // Ajouts pour la purge par type × domaine des Réglages. Le store est
-    // indexé par `SHA256(url)` et ne connaît aucun domaine métier : c'est
-    // l'appelant qui fournit la liste d'URLs qu'il a su attribuer (cf.
-    // `CacheMediaAttribution`). Ces primitives ne font donc que deux choses —
-    // MESURER ce que pèsent des clés données, et les DÉTRUIRE.
-
-    /// Octets réellement occupés sur disque par `urlStrings`.
-    ///
-    /// Mesuré fichier par fichier, jamais estimé : une URL dont le fichier
-    /// n'est pas (ou plus) en cache compte pour zéro. C'est ce qui permet à
-    /// l'UI d'annoncer une taille exacte avant purge plutôt qu'un ordre de
-    /// grandeur.
-    public func diskBytes(forURLs urlStrings: Set<String>) async -> Int {
-        var total = 0
-        for urlString in urlStrings {
-            let path = diskFilePath(for: Self.fileKey(for: urlString)).path
-            guard let size = (try? fileManager.attributesOfItem(atPath: path))?[.size] as? Int else { continue }
-            total += size
-        }
-        return total
-    }
-
-    /// Octets occupés par les fichiers que `urlStrings` ne couvre PAS.
-    ///
-    /// C'est le résidu « non attribué » : des médias bien présents sur disque
-    /// dont l'entité porteuse (post, story, message) a quitté le cache GRDB.
-    /// Plus personne ne peut les rattacher à un domaine, mais ils occupent une
-    /// place réelle — les taire donnerait une somme des cases inférieure à la
-    /// taille du cache, ce que l'utilisateur constaterait immédiatement.
-    ///
-    /// Le sidecar `.pins.json` est exclu du décompte via `.skipsHiddenFiles`,
-    /// comme dans `estimatedDiskBytes()`.
-    public func unattributedDiskBytes(excluding urlStrings: Set<String>) async -> Int {
-        let known = Set(urlStrings.map { Self.fileKey(for: $0) })
-        guard let enumerator = fileManager.enumerator(
-            at: baseDirectory,
-            includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else { return 0 }
-        var total = 0
-        while let fileURL = enumerator.nextObject() as? URL {
-            guard !known.contains(fileURL.lastPathComponent) else { continue }
-            if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
-                total += size
-            }
-        }
-        return total
-    }
-
-    /// Détruit les entrées de `urlStrings`, en ANNULANT d'abord tout
-    /// téléchargement en vol pour ces clés.
-    ///
-    /// Sans cette annulation, une purge lancée pendant qu'un média se
-    /// télécharge est silencieusement défaite : la tâche réseau se termine
-    /// après la suppression et son `save()` réécrit le fichier. L'utilisateur
-    /// voit alors le cache regrossir tout seul juste après avoir vidé une
-    /// case — le pire des symptômes, parce qu'il ressemble à un bug de mesure
-    /// et non à une purge incomplète.
-    ///
-    /// L'annulation est coopérative : `URLSession.data(from:)` honore
-    /// l'annulation de la `Task`, et le `save()` qui suit ne s'exécute pas.
-    /// On retire l'entrée du registre AVANT d'annuler pour qu'un appelant
-    /// concurrent ne récupère pas une tâche déjà condamnée.
-    @discardableResult
-    public func purge(urls urlStrings: Set<String>) async -> Int {
-        var freed = 0
-        for urlString in urlStrings {
-            let fileKey = Self.fileKey(for: urlString)
-            if let inFlight = inFlightTasks.removeValue(forKey: fileKey) {
-                inFlight.task.cancel()
-            }
-            let filePath = diskFilePath(for: fileKey)
-            if let size = (try? fileManager.attributesOfItem(atPath: filePath.path))?[.size] as? Int {
-                freed += size
-            }
-            memoryCache.removeObject(forKey: fileKey as NSString)
-            fileTimestamps.removeValue(forKey: fileKey)
-            fileManager.removeItemLogging(at: filePath, context: "purge sélective", logger: logger)
-            // Même raison que dans `invalidate(for:)` : un pin conservé
-            // re-protégerait le futur re-téléchargement de la même clé.
-            loadPinsIfNeeded()
-            if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
-        }
-        return freed
-    }
-
-    /// Détruit tout ce que `urlStrings` ne couvre PAS (le résidu non attribué).
-    @discardableResult
-    public func purgeUnattributed(excluding urlStrings: Set<String>) async -> Int {
-        let known = Set(urlStrings.map { Self.fileKey(for: $0) })
-        guard let enumerator = fileManager.enumerator(
-            at: baseDirectory,
-            includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else { return 0 }
-        var victims: [(url: URL, size: Int)] = []
-        while let fileURL = enumerator.nextObject() as? URL {
-            guard !known.contains(fileURL.lastPathComponent) else { continue }
-            let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-            victims.append((fileURL, size))
-        }
-        var freed = 0
-        for victim in victims {
-            let fileKey = victim.url.lastPathComponent
-            if let inFlight = inFlightTasks.removeValue(forKey: fileKey) {
-                inFlight.task.cancel()
-            }
-            memoryCache.removeObject(forKey: fileKey as NSString)
-            fileTimestamps.removeValue(forKey: fileKey)
-            fileManager.removeItemLogging(at: victim.url, context: "purge résidu non attribué", logger: logger)
-            freed += victim.size
-        }
-        return freed
     }
 
     /// `true` si un téléchargement est en vol pour cette URL. Exposé pour les

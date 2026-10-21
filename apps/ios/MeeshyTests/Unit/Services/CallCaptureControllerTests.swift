@@ -433,7 +433,7 @@ final class CallCaptureControllerTests: XCTestCase {
     }
 }
 
-private final class MockCallFrameGrabber: CallFrameGrabbing, @unchecked Sendable {
+nonisolated private final class MockCallFrameGrabber: CallFrameGrabbing, @unchecked Sendable {
     struct Attachment: Equatable {
         let id: String
         let isMirrored: Bool
@@ -515,7 +515,7 @@ private final class MockCallMontageRecorder: CallMontageRecordingProviding {
     }
 }
 
-private final class MockFaceLocator: CallFaceLocating, @unchecked Sendable {
+nonisolated private final class MockFaceLocator: CallFaceLocating, @unchecked Sendable {
     let rect: CGRect?
 
     init(rect: CGRect?) {

@@ -58,10 +58,11 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
     }
   });
 
-  it('keeps the nested user fields the server needs for default title generation (the wire strips nested user)', () => {
+  it('keeps the nested user fields the server needs for default title generation and the equipped ring (#10713) — the wire strips nested user', () => {
     const userSelect = (participants.select.user as { select: Record<string, unknown> }).select;
     expect(Object.keys(userSelect).sort()).toEqual([
       'displayName',
+      'equippedAvatarRing',
       'firstName',
       'id',
       'lastName',
@@ -88,6 +89,9 @@ describe('conversationDetailInclude (F1 participants cap + F8 strict select)', (
 describe('conversationUserPreferencesSelect (titre DM stable)', () => {
   it('hydrate exactement les préférences que le wire déclare — customName et reaction compris', () => {
     expect(Object.keys(conversationUserPreferencesSelect).sort()).toEqual([
+      // #10631 — le fond et l'accent PERSONNELS du lecteur : sélectionné ET déclaré
+      // dans le wire (`userPreferences[].appearance`), sinon le sérialiseur le retire.
+      'appearance',
       'categoryId',
       // Ajouté pour le masquage personnel de l'aperçu de ligne de liste
       // (`resolveVisibleLastMessages`). Contrairement aux autres clés, il est

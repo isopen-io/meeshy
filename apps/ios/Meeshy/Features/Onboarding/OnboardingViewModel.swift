@@ -24,7 +24,7 @@ import os
 final class OnboardingViewModel: ObservableObject {
     nonisolated deinit {}
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "onboarding")
+    private static let logger = MeeshyLog.logger(.onboarding)
 
     @Published private(set) var isPresented = false
     @Published private(set) var card: OnboardingCard?
@@ -89,6 +89,9 @@ final class OnboardingViewModel: ObservableObject {
     private var isRoutingElsewhere = false
     /// La célébration de l'arrivée (#8089) est à l'écran : elle passe d'abord.
     private var isArrivalCelebrated = false
+    /// Sur iPad, une conversation ou un panneau ouvert (par un push, un deep link) vit dans l'état de la racine,
+    /// jamais dans `Router.path` (#7780) : il passe d'abord, comme un routage.
+    private var isTabletDestinationOpen = false
     private var awaitsRoute = false
     /// Le score serveur relu en dernier : un gain affiché est une DIFFÉRENCE
     /// entre deux lectures, jamais un barème recopié (#7908).
@@ -204,7 +207,14 @@ final class OnboardingViewModel: ObservableObject {
         presentIfNoLongerHeld()
     }
 
-    private var isHeld: Bool { isRoutingElsewhere || isArrivalCelebrated }
+    /// iPad (#7780) : la destination qu'un push ou un deep link a ouverte se referme — le calque attend ce retour
+    /// à la liste, comme il attend le retour du routeur à la racine.
+    func tabletDestinationChanged(isOpen: Bool) {
+        isTabletDestinationOpen = isOpen
+        presentIfNoLongerHeld()
+    }
+
+    private var isHeld: Bool { isRoutingElsewhere || isArrivalCelebrated || isTabletDestinationOpen }
 
     private func presentIfNoLongerHeld() {
         guard !isHeld, awaitsRoute else { return }

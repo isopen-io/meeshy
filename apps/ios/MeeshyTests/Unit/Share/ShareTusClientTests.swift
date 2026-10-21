@@ -106,29 +106,29 @@ final class ShareTusClientTests: XCTestCase {
     // MARK: - Seuil
 
     func test_opportunisticThreshold_isEightMebibytesAndFourFiles() {
-        XCTAssertEqual(ShareLimits.opportunisticUploadBudgetBytes, 8_388_608)
-        XCTAssertEqual(ShareLimits.opportunisticUploadMaxFiles, 4)
+        XCTAssertEqual(ShareUploadBudget.opportunisticUploadBudgetBytes, 8_388_608)
+        XCTAssertEqual(ShareUploadBudget.opportunisticUploadMaxFiles, 4)
     }
 
     func test_isOpportunisticUploadEligible_atTheBudget_isTrue() {
-        XCTAssertTrue(ShareLimits.isOpportunisticUploadEligible(
+        XCTAssertTrue(ShareUploadBudget.isOpportunisticUploadEligible(
             totalBytes: 8_388_608, fileCount: 4))
     }
 
     func test_isOpportunisticUploadEligible_aboveTheByteBudget_isFalse() {
         XCTAssertFalse(
-            ShareLimits.isOpportunisticUploadEligible(totalBytes: 8_388_609, fileCount: 1),
+            ShareUploadBudget.isOpportunisticUploadEligible(totalBytes: 8_388_609, fileCount: 1),
             "au-delà du seuil, rien n'est tenté — la feuille mourrait au milieu"
         )
     }
 
     func test_isOpportunisticUploadEligible_aboveTheFileCount_isFalse() {
-        XCTAssertFalse(ShareLimits.isOpportunisticUploadEligible(
+        XCTAssertFalse(ShareUploadBudget.isOpportunisticUploadEligible(
             totalBytes: 1_000, fileCount: 5))
     }
 
     func test_isOpportunisticUploadEligible_withNoFile_isFalse() {
-        XCTAssertFalse(ShareLimits.isOpportunisticUploadEligible(
+        XCTAssertFalse(ShareUploadBudget.isOpportunisticUploadEligible(
             totalBytes: 0, fileCount: 0))
     }
 

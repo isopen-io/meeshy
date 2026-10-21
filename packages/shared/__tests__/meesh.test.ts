@@ -15,6 +15,7 @@ import {
   type MeeshAxisState,
 } from '../utils/meesh.js';
 import { ENGAGEMENT_AXES, type EngagementAxisKey } from '../types/engagement.js';
+import { ENGAGEMENT_OPERATIONS, EXTRA_ENGAGEMENT_OPERATIONS } from '../types/engagement-operations.js';
 
 const axe = (axisKey: string, count: number, points: number): MeeshAxisState =>
   ({ axisKey, count, points }) as MeeshAxisState;
@@ -223,6 +224,18 @@ describe('la résolution des Meeshes pour l\'écran (#5743)', () => {
   });
 });
 
+
+/**
+ * La distinction « points à convertir » est SUPPRIMÉE (#10846, porteur 2026-10-16) : tout est convertible, la
+ * frappe dépense la poche. `MEESH_OPERATIONS_OUTSIDE_DEBIT` et `operationsNonRangees` n'existent plus.
+ */
+describe('plus de distinction entre points convertibles et inconvertibles', () => {
+  it("n'exporte plus ni la liste hors débit ni sa garde", async () => {
+    const meesh = (await import('../utils/meesh.js')) as Record<string, unknown>;
+    expect(meesh.MEESH_OPERATIONS_OUTSIDE_DEBIT).toBeUndefined();
+    expect(meesh.operationsNonRangees).toBeUndefined();
+  });
+});
 
 describe("l'ordre de débit couvre le catalogue — sinon la frappe fuit", () => {
   it('ne laisse AUCUN axe hors de l\'ordre de débit', () => {

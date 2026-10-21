@@ -215,6 +215,8 @@ public extension APIMessageReplyTo {
         // traduites d'un audio cité pour élire hors fenêtre la piste du
         // vocal d'origine. Jamais les pistes d'un média protégé.
         reference.quotedExpiresAt = expiresAt
+        reference.authorIsAnonymous = sender.map { !$0.hasAccount } ?? true
+        reference.authorRing = sender?.profileDecor?.avatarRing
         // #9573 — la nature de disparition du cité, lue par la loi de sortie
         // sur ce que le fil déclare. Sans `effectFlags`, rien n'est déclaré :
         // la citation reste illisible, et son contenu ne sortira pas.

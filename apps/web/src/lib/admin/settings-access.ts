@@ -26,6 +26,7 @@ export const CAPABILITY_KEYS = [
   'canViewAuditLogs',
   'canManageNotifications',
   'canManageAgent',
+  'canManageGame',
   'canManageTranslations',
 ] as const satisfies readonly AdminPermissionKey[];
 

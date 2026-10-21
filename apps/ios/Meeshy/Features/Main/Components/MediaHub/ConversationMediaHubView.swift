@@ -59,6 +59,7 @@ struct ConversationMediaHubView: View {
                 fallback: model.visualAttachments,
                 accentColor: accentColor
             )
+            .closesForConversationOpening(.mediaGallery)
         }
     }
 
@@ -202,11 +203,11 @@ struct ConversationMediaHubView: View {
     private func visualTile(_ item: ConversationMediaHubItem) -> some View {
         let isVideo = item.attachment?.type == .video
         let label = ConversationMediaHubCopy.tile(isVideo: isVideo, sender: senderName(item), date: dateLabel(item.sentAt))
-        return MediaHubVisualTile(item: item, accessibilityText: label)
-            .equatable()
-            .onTapGesture { open(item) }
-            .accessibilityAction { open(item) }
-            .modifier(GoToMessageAffordance(messageId: item.messageId, goToMessage: actions.goToMessage))
+        return Button { open(item) } label: {
+            MediaHubVisualTile(item: item, accessibilityText: label).equatable()
+        }
+        .buttonStyle(MeeshyPointerButtonStyle(shape: .rectangle))
+        .modifier(GoToMessageAffordance(messageId: item.messageId, goToMessage: actions.goToMessage))
     }
 
     @ViewBuilder

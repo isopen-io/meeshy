@@ -100,16 +100,23 @@ export function composeReelThread(params: {
  * Le réel regardé et ce qui le PRÉCÈDE gardent l'ordre tenu ; ce qui le SUIT
  * prend l'ordre composé. La donnée vient toujours de la composition : un réel
  * tenu qu'elle ne porte plus (supprimé) quitte le fil.
+ *
+ * **Une graine lue APRÈS la page de réels prend la tête** (#10532) : tant
+ * qu'elle se lit, l'écran peint un squelette — rien n'est regardé, et l'ordre
+ * tenu n'est que celui d'une page arrivée la première. Le tenir ouvrait un
+ * lien profond sur un AUTRE réel que celui qu'il nomme.
  */
 export function holdReelThread(params: {
   readonly heldIds: readonly string[];
   readonly activeId: string;
   readonly composed: readonly FeedPost[];
+  readonly entryId?: string;
 }): readonly FeedPost[] {
-  const { heldIds, activeId, composed } = params;
+  const { heldIds, activeId, composed, entryId } = params;
   const activeAt = heldIds.indexOf(activeId);
   if (activeAt < 0) return composed;
   const byId = new Map(composed.map((post) => [post.id, post] as const));
+  if (entryId !== undefined && !heldIds.includes(entryId) && byId.has(entryId)) return composed;
   const head = heldIds.slice(0, activeAt + 1).flatMap((id) => {
     const post = byId.get(id);
     return post !== undefined ? [post] : [];
@@ -117,6 +124,16 @@ export function holdReelThread(params: {
   const kept = new Set(head.map((post) => post.id));
   const thread = [...head, ...composed.filter((post) => !kept.has(post.id))];
   return thread.every((post, index) => post === composed[index]) ? composed : thread;
+}
+
+/**
+ * **UN RÉEL RETIRÉ QUITTE LA PILE SUR-LE-CHAMP** (#11156) — supprimé par son
+ * auteur ou retiré par la modération depuis le menu « … » : l'écran le cache
+ * avant la réponse, et le rend si la passerelle refuse. La même pile revient
+ * quand rien n'est caché.
+ */
+export function withoutHiddenReels(thread: readonly FeedPost[], hidden: ReadonlySet<string>): readonly FeedPost[] {
+  return hidden.size === 0 ? thread : thread.filter((post) => !hidden.has(post.id));
 }
 
 export function activeIndexOf(params: { readonly scrollTop: number; readonly pageHeight: number; readonly count: number }): number {

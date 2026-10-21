@@ -55,6 +55,22 @@ jest.mock('../../../routes/auth/pending-device-trust', () => ({
   rememberPendingDeviceTrust: (...args: unknown[]) => mockRememberPendingDeviceTrust(...args),
 }));
 
+// Ce que la route REMET à la réponse, avant toute sérialisation (#10518) :
+// un champ que seul le schéma retirerait y est encore visible.
+const remis: unknown[] = [];
+jest.mock('../../../utils/response.js', () => {
+  const reel = jest.requireActual('../../../utils/response') as Record<string, unknown> & {
+    sendSuccess: (...args: unknown[]) => unknown;
+  };
+  return {
+    ...reel,
+    sendSuccess: (...args: unknown[]) => {
+      remis.push(args[1]);
+      return reel.sendSuccess(...args);
+    },
+  };
+});
+
 jest.mock('../../../utils/logger-enhanced.js', () => ({
   enhancedLogger: {
     child: () => ({ debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() }),
@@ -176,6 +192,78 @@ describe('POST /magic-link/validate — second facteur (#4534)', () => {
       const response = await validate(app);
 
       expect(response.json().data.rememberDevice).toBeUndefined();
+    });
+  });
+
+  describe('le délai d’adoption servi avec la preuve (#10518)', () => {
+    it('second facteur : le délai du DÉFI, et toujours aucune session à côté', async () => {
+      mockValidateMagicLink.mockResolvedValue(makePendingResult());
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.adoptWithinSeconds).toBe(300);
+      expect(data.token).toBeUndefined();
+      expect(data.sessionToken).toBeUndefined();
+    });
+
+    it('session prouvée : ce qui reste avant l’échéance de la SESSION, à travers le schéma réel', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(makeFullResult({ session: { ...makeFullResult().session, adoptBy } }));
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.adoptWithinSeconds).toBeGreaterThanOrEqual(595);
+      expect(data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+      expect(data.session.adoptBy).toBeUndefined();
+    });
+
+    it('l’échéance d’adoption ne quitte pas la route : absente de ce qu’elle REMET, pas seulement de ce que le schéma laisse passer', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(
+        makeFullResult({ rememberDevice: true, session: { ...makeFullResult().session, adoptBy } })
+      );
+      remis.length = 0;
+
+      await validate(app);
+
+      expect(remis).toHaveLength(1);
+      expect(JSON.stringify(remis[0])).not.toContain('adoptBy');
+      expect(remis[0]).toMatchObject({ session: { id: 'session-1', isTrusted: true }, adoptWithinSeconds: expect.any(Number) });
+    });
+
+    it('« se souvenir de cet appareil » n’allonge pas le délai servi : 365 jours d’`expiresIn`, dix minutes pour adopter', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(
+        makeFullResult({ rememberDevice: true, session: { ...makeFullResult().session, adoptBy } })
+      );
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.expiresIn).toBe(365 * 24 * 60 * 60);
+      expect(data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+    });
+
+    it('le corps du client ne décide de rien', async () => {
+      const adoptBy = new Date(Date.now() + 10 * 60 * 1000);
+      mockValidateMagicLink.mockResolvedValue(makeFullResult({ session: { ...makeFullResult().session, adoptBy } }));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/magic-link/validate',
+        payload: { token: 'raw-token', adoptWithinSeconds: 31536000 },
+      });
+
+      expect(response.json().data.adoptWithinSeconds).toBeLessThanOrEqual(600);
+      expect(JSON.stringify(mockValidateMagicLink.mock.calls)).not.toContain('31536000');
+    });
+
+    it('une session que rien n’attend ne sert aucun délai', async () => {
+      mockValidateMagicLink.mockResolvedValue(makeFullResult());
+
+      const data = (await validate(app)).json().data;
+
+      expect(data.token).toBe('jwt-token-abc');
+      expect(data.adoptWithinSeconds).toBeUndefined();
     });
   });
 

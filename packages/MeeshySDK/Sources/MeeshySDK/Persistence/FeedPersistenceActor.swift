@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let feedPersistenceLog = Logger(subsystem: "com.meeshy.sdk", category: "feed-persistence")
+private let feedPersistenceLog = MeeshyLog.logger(.feedPersistence, subsystem: .legacySDK)
 
 /// Notification posted after FeedPersistenceActor commits a write that may
 /// have changed the feed posts or comments. `FeedStore` and `CommentStore`
@@ -56,8 +56,23 @@ public actor FeedPersistenceActor {
     }
 
     public func insertPost(_ record: PostRecord) throws {
-        try dbWriter.write { db in try record.save(db) }
+        try dbWriter.write { db in try Self.keepingKnownReach(record, db).save(db) }
         postFeedStoreRefresh()
+    }
+
+    /// #10400 — une charge qui ne SERT PAS un compteur de portée (événement
+    /// socket partiel, route qui ne l'augmente pas) n'efface pas celui que le
+    /// cache connaît déjà : `nil` dit « non servi », jamais « zéro ».
+    nonisolated static func keepingKnownReach(_ record: PostRecord, _ db: Database) throws -> PostRecord {
+        guard record.impressionCount == nil || record.postOpenCount == nil
+                || record.playCount == nil || record.qualifiedViewCount == nil,
+              let existing = try PostRecord.fetchOne(db, key: record.id) else { return record }
+        var merged = record
+        merged.impressionCount = record.impressionCount ?? existing.impressionCount
+        merged.postOpenCount = record.postOpenCount ?? existing.postOpenCount
+        merged.playCount = record.playCount ?? existing.playCount
+        merged.qualifiedViewCount = record.qualifiedViewCount ?? existing.qualifiedViewCount
+        return merged
     }
 
     public func insertPosts(_ records: [PostRecord]) throws {
@@ -68,7 +83,7 @@ public actor FeedPersistenceActor {
             // encore en attente d'outbox.
             let protected = Self.pendingProtectedPostIds(db)
             for record in records {
-                var record = record
+                var record = try Self.keepingKnownReach(record, db)
                 if protected.likes.contains(record.id) || protected.comments.contains(record.id),
                    let existing = try PostRecord.fetchOne(db, key: record.id) {
                     if protected.likes.contains(record.id) {

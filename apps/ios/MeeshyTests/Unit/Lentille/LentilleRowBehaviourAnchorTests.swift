@@ -61,8 +61,9 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
         try source(at: "Meeshy/Features/Main/Lentille/Core/LentilleProviders.swift")
     }
 
+    /// Les branches vides de la liste (enum + rendu) vivent dans leur fichier depuis l'extraction.
     private func listViewSource() throws -> String {
-        try source(at: "Meeshy/Features/Main/Views/ConversationListView.swift")
+        try source(at: "Meeshy/Features/Main/Views/ConversationListView+EmptyState.swift")
     }
 
     private func normalizedCode(_ source: String) -> String {
@@ -475,7 +476,7 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
             let createCaseEnd = raw.range(of: "case .createFirstConversation:")?.lowerBound,
             let elseRange = raw.range(of: "} else {", range: createCaseEnd..<raw.endIndex)
         else {
-            XCTFail("Repères de branches vides introuvables dans ConversationListView.swift — cette garde doit être re-pointée.")
+            XCTFail("Repères de branches vides introuvables dans ConversationListView+EmptyState.swift — cette garde doit être re-pointée.")
             return
         }
         let threeNonSkeletonBranches = String(raw[searchCaseStart..<elseRange.lowerBound])

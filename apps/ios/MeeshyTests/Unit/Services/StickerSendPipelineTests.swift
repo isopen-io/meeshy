@@ -50,6 +50,46 @@ final class StickerSendPipelineTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
+    // MARK: - Le fichier d'origine d'un sticker animé (#9210)
+
+    /// Le nom porte l'extension du TYPE : un GIF ou un WebP nommé `.png`
+    /// serait relu comme une image fixe par un client qui se fie au nom.
+    func test_fileName_followsTheMimeType() {
+        XCTAssertEqual(StickerSendPipeline.fileName(for: "a", mimeType: "image/gif"), "sticker_a.gif")
+        XCTAssertEqual(StickerSendPipeline.fileName(for: "a", mimeType: "image/webp"), "sticker_a.webp")
+        XCTAssertEqual(StickerSendPipeline.fileName(for: "a", mimeType: "image/png"), "sticker_a.png")
+        XCTAssertEqual(StickerSendPipeline.fileName(for: "a", mimeType: "application/x-inconnu"), "sticker_a.png")
+        XCTAssertEqual(StickerSendPipeline.fileName(for: "a"), "sticker_a.png", "le chemin PNG d'hier ne change pas")
+    }
+
+    /// **Les octets d'origine partent INTACTS** : aucun réencodage, sinon le
+    /// mouvement se perd et le destinataire reçoit la première image.
+    func test_prepareOriginal_writesTheBytesUnchanged_underTheirExtension() async throws {
+        let dir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let octets = Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x01, 0x00])
+        let original = StickerSendPipeline.OriginalFile(data: octets, mimeType: "image/gif")
+
+        let écrit = try await StickerSendPipeline.prepare(original, id: "abc123", directory: dir)
+
+        XCTAssertEqual(écrit.url, StickerSendPipeline.fileURL(id: "abc123", in: dir, mimeType: "image/gif"))
+        XCTAssertEqual(écrit.url.pathExtension, "gif")
+        XCTAssertEqual(écrit.data, octets)
+        XCTAssertEqual(try Data(contentsOf: écrit.url), octets)
+    }
+
+    /// Le type du fichier voyage jusqu'à l'upload, la bulle optimiste et
+    /// l'outbox : un `image/png` écrit en dur ferait partir un GIF déclaré PNG.
+    func test_sendStickerImage_carriesTheFileType_toUploadBubbleAndOutbox() throws {
+        let src = try stickerSendSource().components(separatedBy: .whitespacesAndNewlines).joined()
+        XCTAssertTrue(src.contains("original:StickerSendPipeline.OriginalFile?=nil"))
+        XCTAssertFalse(src.contains("mimeType:\"image/png\",credential"),
+                       "l'upload doit déclarer le type du fichier envoyé")
+        XCTAssertFalse(src.contains("AttachmentKind(mimeType:\"image/png\")"),
+                       "l'outbox doit ranger le fichier sous son type")
+        XCTAssertTrue(src.contains("uploadFile(fileURL:fileURL,mimeType:mimeType"))
+    }
+
     // MARK: - Encoder
 
     func test_encode_rendersRealPNGBytes() throws {

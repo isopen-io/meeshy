@@ -23,22 +23,62 @@
 
 import { promises as fs } from 'fs';
 import { hashSessionToken } from '../../utils/session-token.js';
-import type { ShareLinkAnonymousFlags } from './ContentSignature.js';
+import { guestAccessEnd } from '../guestAccessEnd';
+import { GUEST_ATTACHMENT_MAX_BYTES, GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
+import {
+  guestShareLinkId,
+  shareLinkHasExpired,
+  ShareLinkExpiredError,
+  SHARE_LINK_EXPIRED_CODE,
+} from '../shareLinkReadGate.js';
+import {
+  classifyAnonymousAttachment,
+  guestAttachmentNeedsFullContent,
+  type AnonymousAttachmentVerdict,
+  type ShareLinkAnonymousFlags,
+} from './ContentSignature.js';
 
 export interface AnonymousUploadIdentityPrisma {
   participant: {
     findFirst(args: {
-      where: { sessionTokenHash: string; type: 'anonymous'; isActive: true };
-      select: { id: true; anonymousSession: true };
-    }): Promise<{ id: string; anonymousSession: { shareLinkId: string } | null } | null>;
+      where: { sessionTokenHash: string; type: 'anonymous'; isActive?: true };
+      select: { id: true; shareLinkId?: true; anonymousSession?: true; joinedAt?: true; bannedAt?: true };
+    }): Promise<{
+      id: string;
+      shareLinkId: string | null;
+      anonymousSession: { shareLinkId: string } | null;
+      joinedAt?: Date | null;
+      bannedAt?: Date | null;
+    } | null>;
   };
   conversationShareLink: {
     findUnique(args: {
       where: { id: string };
-      select: { allowAnonymousFiles: true; allowAnonymousImages: true; conversation: { select: { identifier: true } } };
-    }): Promise<ShareLinkAnonymousFlags | null>;
+      select: typeof GUEST_SHARE_LINK_SELECT;
+    }): Promise<GuestShareLinkRow | null>;
   };
 }
+
+/**
+ * La lecture UNIQUE du lien d'un invité sur ce chemin : ses drapeaux
+ * d'autorisation, et son échéance (#10440) — un seul `select`, pour que la
+ * forme structurelle ci-dessus reste satisfaite par le vrai client Prisma.
+ */
+const GUEST_SHARE_LINK_SELECT = {
+  allowAnonymousFiles: true,
+  allowAnonymousImages: true,
+  allowedAttachmentKinds: true,
+  conversation: { select: { identifier: true } },
+  expiresAt: true,
+  isActive: true,
+  guestRevocationPendingAt: true,
+} as const;
+
+type GuestShareLinkRow = ShareLinkAnonymousFlags & {
+  readonly expiresAt?: Date | null;
+  readonly isActive?: boolean | null;
+  readonly guestRevocationPendingAt?: Date | null;
+};
 
 export type AnonymousUploadIdentity = {
   readonly participantId: string;
@@ -68,15 +108,83 @@ export async function resolveAnonymousUploadIdentity(
       type: 'anonymous',
       isActive: true,
     },
-    select: { id: true, anonymousSession: true },
+    select: { id: true, shareLinkId: true, anonymousSession: true, joinedAt: true, bannedAt: true },
   });
 
-  if (!participant) return null;
+  // #10492 — un jeton que personne ne porte n'a pas d'identité (401) ; celui
+  // d'une participation TERMINÉE porte une cause, la même qu'aux autres portes
+  // (410 `GUEST_ACCESS_REVOKED`) : rejouer la session ne servira à rien.
+  if (!participant) {
+    const ended = await prisma.participant.findFirst({
+      where: { sessionTokenHash: hashSessionToken(sessionToken), type: 'anonymous' },
+      select: { id: true },
+    });
+    if (ended) throw new GuestUploadAccessRevokedError();
+    return null;
+  }
 
-  return {
-    participantId: participant.id,
-    shareLinkId: participant.anonymousSession?.shareLinkId ?? '',
+  // #10440 — la garde du lien échu que `middleware/auth.ts` pose sur toute
+  // requête REST d'un invité (#10437) : ce chemin ne la traverse pas. Même
+  // lecture du lien (colonne, puis session embarquée), même règle, même cause
+  // typée. #10492 — un lien introuvable refuse l'invité qui lui survit.
+  // Une lecture qui échoue PROPAGE — fail-closed, jamais une identité servie.
+  const shareLinkId = guestShareLinkId(participant) ?? '';
+  if (shareLinkId) {
+    const link = await prisma.conversationShareLink.findUnique({
+      where: { id: shareLinkId },
+      select: GUEST_SHARE_LINK_SELECT,
+    });
+    if (shareLinkHasExpired(link)) throw new ShareLinkExpiredError();
+    // #10470 — la garde commune des autres portes : lien fermé, révocation
+    // différée en attente pour un invité entré avant elle, ou invité banni.
+    const end = guestAccessEnd({
+      linkExpiresAt: null,
+      linkIsActive: typeof link?.isActive === 'boolean' ? link.isActive : null,
+      linkRevocationPendingAt: link?.guestRevocationPendingAt ?? null,
+      linkMissing: link === null || link === undefined,
+      participation: { isActive: true, bannedAt: participant.bannedAt ?? null, joinedAt: participant.joinedAt ?? null },
+      now: new Date(),
+    });
+    if (end) throw new GuestUploadAccessRevokedError();
+  }
+
+  return { participantId: participant.id, shareLinkId };
+}
+
+/**
+ * La cause TYPÉE d'un téléversement refusé à un invité dont l'accès est fini
+ * (participation désactivée ou bannie, lien fermé ou disparu, révocation
+ * différée) — traduite en 410 `GUEST_ACCESS_REVOKED`.
+ */
+export class GuestUploadAccessRevokedError extends Error {
+  constructor() {
+    super('Guest access revoked');
+    this.name = 'GuestUploadAccessRevokedError';
+  }
+}
+
+const GUEST_ACCESS_REVOKED_CODE = 'GUEST_ACCESS_REVOKED';
+
+/** Le même refus que la résolution de session REST (`middleware/auth.ts`), tel que `@tus/server` le renvoie. */
+export function guestAccessRevokedTusRefusal(): { readonly status_code: number; readonly body: string } {
+  const envelope = {
+    success: false,
+    error: GUEST_ACCESS_REVOKED_CODE,
+    message: "L'accès de cet invité a été retiré",
+    code: GUEST_ACCESS_REVOKED_CODE,
   };
+  return { status_code: 410, body: `${JSON.stringify(envelope)}\n` };
+}
+
+/**
+ * Le refus d'un invité au lien échu tel que `@tus/server` le renvoie : le 403
+ * `SHARE_LINK_EXPIRED` des autres portes, dans l'enveloppe d'erreur de l'API
+ * (`sendError`), pour que les clients branchent le même code.
+ */
+export function shareLinkExpiredTusRefusal(): { readonly status_code: number; readonly body: string } {
+  const reason = new ShareLinkExpiredError().message;
+  const envelope = { success: false, error: reason, message: reason, code: SHARE_LINK_EXPIRED_CODE };
+  return { status_code: 403, body: `${JSON.stringify(envelope)}\n` };
 }
 
 /**
@@ -92,7 +200,7 @@ export async function fetchShareLinkAnonymousFlags(
   if (!shareLinkId) return null;
   return prisma.conversationShareLink.findUnique({
     where: { id: shareLinkId },
-    select: { allowAnonymousFiles: true, allowAnonymousImages: true, conversation: { select: { identifier: true } } },
+    select: GUEST_SHARE_LINK_SELECT,
   });
 }
 
@@ -116,4 +224,56 @@ export async function readFilePrefix(filePath: string, length: number): Promise<
   } finally {
     await handle.close();
   }
+}
+
+/**
+ * La garde des familles d'un invité (#10001) sur un fichier déjà écrit sur
+ * disque : elle lit le fichier ENTIER — un préfixe ne prouve rien —, après en
+ * avoir borné la taille sans le charger (`GUEST_ATTACHMENT_MAX_BYTES`), puisque
+ * le chemin resumable accepte jusqu'à 4 Go.
+ */
+const guestTooLarge = (): Extract<AnonymousAttachmentVerdict, { allowed: false }> => ({
+  allowed: false,
+  reason: `Guest attachments are limited to ${GUEST_ATTACHMENT_MAX_BYTES} bytes on this conversation`,
+  code: GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE,
+});
+
+/**
+ * Le refus d'un téléversement d'invité ANNONCÉ trop lourd, avant le premier
+ * octet — `null` quand le lien ne restreint pas par famille ou que la taille
+ * tient sous le plafond.
+ */
+export function guestUploadSizeRefusal(
+  shareLink: ShareLinkAnonymousFlags | null,
+  announcedSize: number,
+): Extract<AnonymousAttachmentVerdict, { allowed: false }> | null {
+  if (!shareLink || !guestAttachmentNeedsFullContent(shareLink)) return null;
+  return announcedSize > GUEST_ATTACHMENT_MAX_BYTES ? guestTooLarge() : null;
+}
+
+export async function classifyGuestFileOnDisk(params: {
+  readonly filePath: string;
+  readonly mimeType: string;
+  readonly fileName: string;
+  readonly shareLink: ShareLinkAnonymousFlags;
+}): Promise<AnonymousAttachmentVerdict> {
+  const { size } = await fs.stat(params.filePath);
+  if (size > GUEST_ATTACHMENT_MAX_BYTES) return guestTooLarge();
+  const content = await fs.readFile(params.filePath);
+  return classifyAnonymousAttachment(params.mimeType, content, params.shareLink, { fileName: params.fileName });
+}
+
+/**
+ * Le refus d'un invité tel que `@tus/server` le renvoie : l'enveloppe d'erreur
+ * de l'API (`{ success, error, message, code }`) pour que le client lise le
+ * code stable, 413 pour un fichier trop lourd, 403 sinon. Un refus sans code
+ * (lien sans liste de familles) garde son corps texte d'avant.
+ */
+export function guestRefusalResponse(
+  verdict: Extract<AnonymousAttachmentVerdict, { allowed: false }>,
+): { readonly status_code: number; readonly body: string } {
+  if (!verdict.code) return { status_code: 403, body: `${verdict.reason}\n` };
+  const status = verdict.code === GUEST_ATTACHMENT_REFUSAL_CODES.TOO_LARGE ? 413 : 403;
+  const envelope = { success: false, error: verdict.reason, message: verdict.reason, code: verdict.code };
+  return { status_code: status, body: `${JSON.stringify(envelope)}\n` };
 }

@@ -506,7 +506,7 @@ public struct SyntaxHighlighter {
             var tokens: [SyntaxToken] = []
             var i = line.startIndex
 
-            while i < line.endIndex {
+            scanning: while i < line.endIndex {
                 // Multi-line comment continuation
                 if inMultiLineComment {
                     if let endStr = def.multiLineCommentEnd,
@@ -561,7 +561,9 @@ public struct SyntaxHighlighter {
                                 tokens.append(SyntaxToken(String(remaining), .string))
                                 i = line.endIndex
                             }
-                            continue
+                            // La LIGNE reprend après la chaîne : un `continue` nu relançait la boucle des délimiteurs,
+                            // puis lisait `line[i]` avec `i == endIndex` (plantage).
+                            continue scanning
                         }
                     }
                 }
@@ -603,7 +605,10 @@ public struct SyntaxHighlighter {
                 if let prefix = def.preprocessorPrefix, remaining.hasPrefix(prefix) {
                     let trimmed = String(remaining).trimmingCharacters(in: .whitespaces)
                     if trimmed.hasPrefix(prefix) && (i == line.startIndex || line[line.index(before: i)].isWhitespace) {
-                        let wordEnd = scanWord(from: i, in: line)
+                        // Le mot se lit APRÈS le préfixe : `#` n'est ni lettre ni chiffre, et lu depuis
+                        // lui `scanWord` rendait l'indice de départ — la boucle n'avançait plus jamais.
+                        let afterPrefix = line.index(i, offsetBy: prefix.count, limitedBy: line.endIndex) ?? line.endIndex
+                        let wordEnd = scanWord(from: afterPrefix, in: line)
                         tokens.append(SyntaxToken(String(line[i..<wordEnd]), .preprocessor))
                         i = wordEnd
                         continue
@@ -639,7 +644,10 @@ public struct SyntaxHighlighter {
                 // Words (identifiers, keywords, types)
                 if line[i].isLetter || line[i] == "_" || line[i] == "@" || line[i] == "$" {
                     let start = i
-                    if line[i] == "@" { i = line.index(after: i) }
+                    // `$` ouvre le mot comme `@` (`$HOME`, `$x`, `$(`) : il doit être
+                    // consommé, sinon `i` ne bouge plus et la boucle tourne pour
+                    // toujours sur le fil principal (conversation figée).
+                    if line[i] == "@" || line[i] == "$" { i = line.index(after: i) }
                     while i < line.endIndex && (line[i].isLetter || line[i].isNumber || line[i] == "_" || line[i] == "?" || line[i] == "!") {
                         i = line.index(after: i)
                     }

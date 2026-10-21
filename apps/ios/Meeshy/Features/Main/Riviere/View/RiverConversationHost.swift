@@ -30,13 +30,15 @@ struct RiverConversationHost: View {
     /// R-5 — résolveurs d'identité vivante et ouvertures, DITS par l'appelant
     /// (qui possède `PresenceManager`, `StoryViewModel`, le routeur).
     var presence: (MeeshyMessage) -> PresenceState? = { _ in nil }
+    /// #10956 — l'auteur a l'écran de cette conversation ouvert : le point « ici ».
+    var here: (MeeshyMessage) -> ConversationHere = { _ in .absent }
     var storyRing: (MeeshyMessage) -> StoryRingState = { _ in .none }
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
-    /// Lot 3 — retours au Fil depuis une bulle (appui long), DITS par
-    /// l'appelant qui possède le contrôleur de mode et le composeur.
+    /// « Ouvrir dans le fil » et l'appui long (#11224), DITS par l'appelant
+    /// qui possède le contrôleur de mode et LE menu du message.
     var onOpenInThread: ((String) -> Void)? = nil
-    var onReply: ((String) -> Void)? = nil
+    var onLongPress: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, relayée jusqu'à la bulle.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
@@ -81,11 +83,12 @@ struct RiverConversationHost: View {
         bottomInset: CGFloat = 0,
         typingParticipants: [TypingParticipant] = [],
         presence: @escaping (MeeshyMessage) -> PresenceState? = { _ in nil },
+        here: @escaping (MeeshyMessage) -> ConversationHere = { _ in .absent },
         storyRing: @escaping (MeeshyMessage) -> StoryRingState = { _ in .none },
         onOpenProfile: ((ProfileSheetUser) -> Void)? = nil,
         onViewStory: ((String) -> Void)? = nil,
         onOpenInThread: ((String) -> Void)? = nil,
-        onReply: ((String) -> Void)? = nil,
+        onLongPress: ((String) -> Void)? = nil,
         onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil,
         onMediaTap: ((MessageAttachment) -> Void)? = nil,
         onPlayQuotedAudio: ((ReplyReference) -> Bool)? = nil,
@@ -98,11 +101,12 @@ struct RiverConversationHost: View {
         self.bottomInset = bottomInset
         self.typingParticipants = typingParticipants
         self.presence = presence
+        self.here = here
         self.storyRing = storyRing
         self.onOpenProfile = onOpenProfile
         self.onViewStory = onViewStory
         self.onOpenInThread = onOpenInThread
-        self.onReply = onReply
+        self.onLongPress = onLongPress
         self.onConsumeViewOnce = onConsumeViewOnce
         self.onMediaTap = onMediaTap
         self.onPlayQuotedAudio = onPlayQuotedAudio
@@ -172,6 +176,7 @@ struct RiverConversationHost: View {
             viewerId: viewerId,
             text: text,
             presence: presence,
+            here: here,
             storyRing: storyRing
         )
         return memo.rendering(for: key, geometry: geometry) {
@@ -182,6 +187,7 @@ struct RiverConversationHost: View {
                 text: text,
                 time: { TimeStringCache.shared.format($0) },
                 presence: presence,
+                here: here,
                 storyRing: storyRing
             )
         }
@@ -226,7 +232,7 @@ struct RiverConversationHost: View {
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
-                onReply: onReply,
+                onLongPress: onLongPress,
                 onConsumeViewOnce: onConsumeViewOnce,
                 onOpenQuotedMedia: openQuotedMedia,
                 onMediaTap: onMediaTap,

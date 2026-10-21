@@ -33,7 +33,19 @@ nonisolated enum ComposerTextFormat {
         let end: Int
     }
 
+    /// Les positions rendues sont BORNÉES au texte rendu : retirer une paire de
+    /// marqueurs peut souder les caractères qui l'entouraient en un seul
+    /// graphème (jamo coréen, lettres-drapeaux), et le texte compte alors un
+    /// caractère de moins que l'arithmétique ne le suppose — la sélection
+    /// posée au-delà de la fin plantait.
     static func toggle(text: String, start: Int, end: Int, style: Style) -> Result {
+        let raw = rawToggle(text: text, start: start, end: end, style: style)
+        let count = raw.text.count
+        let lower = min(max(0, raw.start), count)
+        return Result(text: raw.text, start: lower, end: min(max(lower, raw.end), count))
+    }
+
+    private static func rawToggle(text: String, start: Int, end: Int, style: Style) -> Result {
         let chars = Array(text)
         let marker = Array(style.marker)
         let m = marker.count

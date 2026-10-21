@@ -60,6 +60,19 @@ final class QuotedAuthorIdTests: XCTestCase {
 
     // MARK: - Gravé à la réception
 
+    /// #10946 — le contour équipé de l'auteur cité se grave avec son portrait, et survit au blob.
+    func test_toReplyReference_senderServesItsRing_gravesItAndKeepsItThroughTheBlob() throws {
+        let reply = try decode(APIMessageReplyTo.self,
+                               #"{"id":"q1","content":"Salut","sender":{"id":"p-bob","userId":"u-bob","displayName":"Bob","profileDecor":{"avatarRing":{"pack":"contours-essentiels","item":"filet","origin":"builtin"}}}}"#)
+        let filet = ServedProfileDecorItem(pack: "contours-essentiels", item: "filet", origin: .builtin)
+
+        let quote = reply.toReplyReference(currentUserId: "u-alice", preferredLanguages: [])
+        let reread = try decode(ReplyReference.self, String(decoding: try JSONEncoder().encode(quote), as: UTF8.self))
+
+        XCTAssertEqual(quote.authorRing, filet)
+        XCTAssertEqual(reread.authorRing, filet)
+    }
+
     func test_toReplyReference_senderServesItsUserId_gravesIt() throws {
         let reply = try decode(APIMessageReplyTo.self,
                                #"{"id":"q1","content":"Salut","senderId":"p-bob","sender":{"id":"p-bob","userId":"u-bob","displayName":"Bob"}}"#)

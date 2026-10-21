@@ -21,6 +21,7 @@ import { ensureWorldConversation, loadWorldEntry } from '../../../services/world
 import type { WorldReservedIdentities } from '../../../services/world/worldReservedMembers';
 import { inspectWorldSeed, removeWorldSeed } from '../../../services/world/worldSeedOperations';
 import { classifyAnonymousAttachment, type AnonymousAttachmentVerdict } from '../../../services/attachments/ContentSignature';
+import { PLAIN_TEXT, JPEG_PHOTO, PDF_DOCUMENT, m4aVoice, webmVoice } from '../../../services/attachments/__tests__/guest-attachment-fixtures';
 
 type Row = Record<string, unknown> & { id: string };
 
@@ -178,6 +179,7 @@ function guestDoorOf(prisma: ReturnType<typeof makeDb>) {
   return {
     allowAnonymousFiles: link.allowAnonymousFiles as boolean,
     allowAnonymousImages: link.allowAnonymousImages as boolean,
+    allowedAttachmentKinds: link.allowedAttachmentKinds as string[] | undefined,
     conversation: { identifier: conversation?.identifier as string },
   };
 }
@@ -214,6 +216,15 @@ describe('ensureWorldConversation — la conversation World Wide (#10000)', () =
     await seed(prisma);
 
     expect(prisma.participant.rows.find((row) => row.userId === ADMIN.id)?.language).toBe('fr');
+  });
+
+  it('descend le Prisme jusqu’à la locale appareil : un compte sans langue applicative entre dans la sienne', async () => {
+    const localeOnly = { ...JCNM, systemLanguage: null, regionalLanguage: null, customDestinationLanguage: null, deviceLocale: 'es' };
+    const prisma = makeDb({ users: [MEESHY, ADMIN, localeOnly] });
+
+    await seed(prisma);
+
+    expect(prisma.participant.rows.find((row) => row.userId === JCNM.id)?.language).toBe('es');
   });
 
   it('ne crée jamais jcnm : absent, il est journalisé SANS son adresse et le seed continue', async () => {
@@ -424,6 +435,108 @@ describe('ensureWorldConversation — le lien de partage stable', () => {
   });
 });
 
+describe('ensureWorldConversation — le lien semé dit ce qu’un invité peut joindre (#10001)', () => {
+  it('le lien créé liste texte et audio, et rien d’autre', async () => {
+    const prisma = makeDb();
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowedAttachmentKinds).toEqual(['text', 'audio']);
+  });
+
+  it('un invité du lien semé joint un .txt et un vocal ; un PDF et une photo sont refusés', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const door = guestDoorOf(prisma);
+
+    expect(classifyAnonymousAttachment('text/plain', PLAIN_TEXT, door, { fileName: 'notes.txt' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('audio/webm', webmVoice(), door, { fileName: 'voice.webm' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('audio/mp4', m4aVoice(), door, { fileName: 'voice.m4a' })).toEqual({ allowed: true });
+    expect(classifyAnonymousAttachment('application/pdf', PDF_DOCUMENT, door, { fileName: 'doc.pdf' })).toMatchObject({ allowed: false });
+    expect(classifyAnonymousAttachment('image/jpeg', JPEG_PHOTO, door, { fileName: 'photo.jpg' })).toMatchObject({ allowed: false });
+  });
+
+  it('un lien semé AVANT la colonne la reçoit au démarrage suivant, sans que rien d’autre ne change', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const legacy = prisma.conversationShareLink.rows[0];
+    delete legacy.allowedAttachmentKinds;
+    legacy.isActive = false;
+
+    const report = await seed(prisma);
+
+    expect(report.shareLink).toBe('existing');
+    expect(prisma.conversationShareLink.rows[0]).toMatchObject({ allowedAttachmentKinds: ['text', 'audio'], isActive: false });
+  });
+
+  it('un lien dont un administrateur a choisi les familles n’est pas réécrit', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    prisma.conversationShareLink.rows[0].allowedAttachmentKinds = ['audio'];
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowedAttachmentKinds).toEqual(['audio']);
+  });
+
+  it('une fois posées, un démarrage suivant n’écrit plus rien sur le lien', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    const before = prisma.conversationShareLink.update.mock.calls.length + prisma.conversationShareLink.updateMany.mock.calls.length;
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.update.mock.calls.length + prisma.conversationShareLink.updateMany.mock.calls.length).toBe(before);
+  });
+});
+
+describe('ensureWorldConversation — un entrant lit l’historique du salon (#10099, décision porteur 2026-10-11)', () => {
+  const GUEST_PERMISSIONS = {
+    canSendMessages: true,
+    canSendFiles: false,
+    canSendImages: false,
+    canSendVideos: false,
+    canSendAudios: true,
+    canSendLocations: false,
+    canSendLinks: false,
+  };
+
+  function enterWorld(prisma: ReturnType<typeof makeDb>, id: string, permissions: Record<string, boolean>) {
+    const [conversation] = worldConversation(prisma);
+    prisma.participant.rows.push({ id, conversationId: conversation.id, type: 'anonymous', role: 'member', isActive: true, permissions });
+  }
+
+  it('le lien créé ouvre l’historique aux entrants', async () => {
+    const prisma = makeDb();
+
+    await seed(prisma);
+
+    expect(prisma.conversationShareLink.rows[0].allowViewHistory).toBe(true);
+  });
+
+  it('un historique qu’un administrateur a coupé sur le lien n’est pas rouvert par un démarrage suivant', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    prisma.conversationShareLink.rows[0].allowViewHistory = false;
+
+    const report = await seed(prisma);
+
+    expect(report.shareLink).toBe('existing');
+    expect(prisma.conversationShareLink.rows[0].allowViewHistory).toBe(false);
+  });
+
+  it('un entrant à qui l’historique a été coupé ne le retrouve pas au démarrage suivant', async () => {
+    const prisma = makeDb();
+    await seed(prisma);
+    enterWorld(prisma, 'guest-closed', { ...GUEST_PERMISSIONS, canViewHistory: false });
+
+    await seed(prisma);
+
+    expect(prisma.participant.rows.find((row) => row.id === 'guest-closed')?.permissions).toEqual({ ...GUEST_PERMISSIONS, canViewHistory: false });
+    expect(prisma.participant.updateMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('ensureWorldConversation — idempotence', () => {
   it('un double appel ne duplique rien : une conversation, un lien, une participation par compte', async () => {
     const prisma = makeDb();
@@ -451,9 +564,9 @@ describe('ensureWorldConversation — idempotence', () => {
 });
 
 describe('loadWorldEntry — ce que la landing reçoit', () => {
-  it('sert l’identifiant du lien et l’effectif, sans aucun id', async () => {
+  it('sert l’identifiant du lien, l’effectif, l’avatar et la bannière (#10204), sans aucun id', async () => {
     const prisma = makeDb();
-    await seed(prisma);
+    await ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES, appOrigin: 'https://meeshy.me' });
 
     const entry = await loadWorldEntry(prisma as never);
 
@@ -462,6 +575,8 @@ describe('loadWorldEntry — ce que la landing reçoit', () => {
       title: WORLD_CONVERSATION_TITLE,
       shareLinkIdentifier: WORLD_SHARE_LINK_IDENTIFIER,
       memberCount: 3,
+      avatar: 'https://meeshy.me/brand/world-wide/avatar.png',
+      banner: 'https://meeshy.me/brand/world-wide/banner.png',
     });
   });
 
@@ -502,10 +617,11 @@ describe('loadWorldEntry — ce que la landing reçoit', () => {
 });
 
 describe('inspectWorldSeed — le pré-vol en lecture seule avant la production (audit #10000)', () => {
+  const RESIDUAL_RISKS = ['id3v2-arbitrary-payload', 'mpeg-frame-pdf-header', 'mp4-free-box-payload', 'mp4-without-samples'];
   it('rend « prêt » sur une base sans World Wide dont les trois désignés sont légitimes, sans rien écrire', async () => {
     const prisma = makeDb();
 
-    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES);
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(preflight).toMatchObject({ ready: true, conversation: 'absent', shareLink: 'absent', blockers: [] });
     expect(preflight.members).toEqual([
@@ -532,8 +648,8 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const unverified = makeDb({ users: [MEESHY, { ...ADMIN, role: 'USER' }, { ...JCNM, emailVerifiedAt: null }] });
     const unconfigured = makeDb();
 
-    const flawed = await inspectWorldSeed(unverified as never, IDENTITIES);
-    const empty = await inspectWorldSeed(unconfigured as never, { ...IDENTITIES, worldAdminEmails: [] });
+    const flawed = await inspectWorldSeed(unverified as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
+    const empty = await inspectWorldSeed(unconfigured as never, { ...IDENTITIES, worldAdminEmails: [] }, { acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(flawed.ready).toBe(false);
     expect(flawed.blockers).toEqual(['admin:platform-role', 'world-admin-1:email-unverified']);
@@ -545,11 +661,35 @@ describe('inspectWorldSeed — le pré-vol en lecture seule avant la production 
     const audioOpenGuard = (mimeType: string): AnonymousAttachmentVerdict =>
       mimeType.startsWith('audio/') ? { allowed: true } : { allowed: false, reason: 'closed' };
 
-    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard });
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: audioOpenGuard, acceptedResidualRisks: RESIDUAL_RISKS });
 
     expect(preflight.ready).toBe(false);
-    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio']);
+    expect(preflight.blockers).toEqual(['guest-attachments-open:mpeg-sync-html,adts-sync-zip,mp4-video-as-audio,mp3-frames-then-zip']);
     expect(writes(prisma)).toBe(0);
+  });
+
+  it('bloque tant que le porteur n’a pas accepté, un par un, les risques résiduels que la garde laisse passer (audit #10001, #10057)', async () => {
+    const prisma = makeDb();
+
+    const unaccepted = await inspectWorldSeed(prisma as never, IDENTITIES);
+    const partly = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: ['mp4-without-samples'] });
+    const accepted = await inspectWorldSeed(prisma as never, IDENTITIES, { acceptedResidualRisks: RESIDUAL_RISKS });
+
+    expect(unaccepted.ready).toBe(false);
+    expect(unaccepted.residualRisks).toEqual(RESIDUAL_RISKS);
+    expect(unaccepted.blockers).toEqual([`guest-attachments-residual-unaccepted:${RESIDUAL_RISKS.join(',')}`]);
+    expect(partly.blockers).toEqual(['guest-attachments-residual-unaccepted:id3v2-arbitrary-payload,mpeg-frame-pdf-header,mp4-free-box-payload']);
+    expect(accepted).toMatchObject({ ready: true, residualRisks: RESIDUAL_RISKS, blockers: [] });
+    expect(writes(prisma)).toBe(0);
+  });
+
+  it('ne demande plus rien au porteur quand la garde resserrée refuse les risques résiduels', async () => {
+    const prisma = makeDb();
+    const closedGuard = (): AnonymousAttachmentVerdict => ({ allowed: false, reason: 'closed' });
+
+    const preflight = await inspectWorldSeed(prisma as never, IDENTITIES, { guestAttachmentGuard: closedGuard });
+
+    expect(preflight).toMatchObject({ ready: true, residualRisks: [], blockers: [] });
   });
 });
 
@@ -621,5 +761,92 @@ describe('removeWorldSeed — le retrait documenté du seed (audit #10000)', () 
     const report = await removeWorldSeed(makeDb() as never, { mode: 'purge', apply: true });
 
     expect(report.outcome).toBe('nothing-to-do');
+  });
+});
+
+/**
+ * #10204 — World Wide a un avatar et une bannière, servis par l'application web
+ * à `/brand/world-wide/{avatar,banner}.png`. La conversation porte leurs adresses
+ * ABSOLUES, composées depuis l'origine publique du frontend (`FRONTEND_URL`).
+ * Le seed pose ce qui MANQUE et ne remplace jamais une image posée à la main.
+ */
+describe('World Wide porte son avatar et sa bannière (#10204)', () => {
+  const ORIGIN = 'https://staging.meeshy.me';
+  const AVATAR = `${ORIGIN}/brand/world-wide/avatar.png`;
+  const BANNER = `${ORIGIN}/brand/world-wide/banner.png`;
+
+  const seedAt = (prisma: ReturnType<typeof makeDb>, appOrigin = ORIGIN) =>
+    ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES, appOrigin });
+
+  it('une conversation semée naît avec les deux adresses absolues', async () => {
+    const prisma = makeDb();
+
+    await seedAt(prisma);
+
+    expect(worldConversation(prisma)[0]).toMatchObject({ avatar: AVATAR, banner: BANNER });
+  });
+
+  it('une conversation existante sans image reçoit les deux', async () => {
+    const prisma = makeDb({
+      conversations: [{ id: 'conv-world', identifier: WORLD_CONVERSATION_IDENTIFIER, type: 'global', title: 'World Wide', isActive: true }],
+    });
+
+    await seedAt(prisma);
+
+    expect(worldConversation(prisma)[0]).toMatchObject({ avatar: AVATAR, banner: BANNER });
+  });
+
+  it('une image posée à la main n’est jamais remplacée — seule la manquante est posée', async () => {
+    const prisma = makeDb({
+      conversations: [{
+        id: 'conv-world', identifier: WORLD_CONVERSATION_IDENTIFIER, type: 'global', title: 'World Wide', isActive: true,
+        avatar: 'https://static.meeshy.me/choisi-a-la-main.png', banner: null,
+      }],
+    });
+
+    await seedAt(prisma);
+
+    expect(worldConversation(prisma)[0]).toMatchObject({
+      avatar: 'https://static.meeshy.me/choisi-a-la-main.png',
+      banner: BANNER,
+    });
+  });
+
+  it('un second démarrage n’écrit plus rien sur la conversation', async () => {
+    const prisma = makeDb();
+    await seedAt(prisma);
+    prisma.conversation.update.mockClear();
+    prisma.conversation.create.mockClear();
+
+    await seedAt(prisma);
+
+    expect(prisma.conversation.update).not.toHaveBeenCalled();
+    expect(prisma.conversation.create).not.toHaveBeenCalled();
+  });
+
+  it('sans origine configurée (ni appOrigin, ni FRONTEND_URL), ne pose AUCUNE image — jamais une adresse localhost gravée', async () => {
+    const saved = process.env.FRONTEND_URL;
+    delete process.env.FRONTEND_URL;
+    try {
+      const prisma = makeDb();
+
+      await ensureWorldConversation({ prisma: prisma as never, logger: makeLogger(), identities: IDENTITIES });
+
+      expect(worldConversation(prisma)[0].avatar).toBeUndefined();
+      expect(worldConversation(prisma)[0].banner).toBeUndefined();
+    } finally {
+      if (saved !== undefined) process.env.FRONTEND_URL = saved;
+    }
+  });
+
+  it('l’origine se lit sans chemin ni barre finale', async () => {
+    const prisma = makeDb();
+
+    await seedAt(prisma, 'https://meeshy.me/');
+
+    expect(worldConversation(prisma)[0]).toMatchObject({
+      avatar: 'https://meeshy.me/brand/world-wide/avatar.png',
+      banner: 'https://meeshy.me/brand/world-wide/banner.png',
+    });
   });
 });

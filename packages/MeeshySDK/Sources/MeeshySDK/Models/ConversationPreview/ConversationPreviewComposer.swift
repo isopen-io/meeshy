@@ -246,7 +246,9 @@ public enum ConversationPreviewComposer {
     private static func systemKey(_ event: LastMessageSystemEvent) -> ConversationPreviewStringKey {
         switch event.key {
         case "system.member-joined": return .systemMemberJoined
-        case "system.members-arrived": return arrivalsKey(count: event.params["count"]?.rendered)
+        case "system.members-arrived":
+            let rendered: String? = event.params["count"]?.rendered
+            return ArrivalsNoticeMetadata.lineKey(count: rendered.map { Double($0) ?? .nan } ?? 1)
         case "system.encryption-enabled":
             return event.params["mode"]?.rendered == "e2ee" ? .systemEncryptionE2EE : .systemEncryptionEnabled
         case "system.member-added": return .systemMemberAdded
@@ -256,15 +258,6 @@ public enum ConversationPreviewComposer {
         case "system.conversation-image": return .systemConversationImage
         default: return .systemGeneric
         }
-    }
-
-    /// Miroir de `arrivalsLineKey` : trois arrivées au plus se nomment toutes.
-    private static func arrivalsKey(count rendered: String?) -> ConversationPreviewStringKey {
-        let count = rendered.map { Double($0) ?? .nan } ?? 1
-        if count <= 1 { return .systemMembersArrivedOne }
-        if count == 2 { return .systemMembersArrivedTwo }
-        if count == 3 { return .systemMembersArrivedThree }
-        return .systemMembersArrivedMany
     }
 
     /// `system.generic` : le serveur n'a pas su typer l'avis. Son texte est la

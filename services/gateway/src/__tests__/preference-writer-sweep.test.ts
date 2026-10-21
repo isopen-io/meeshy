@@ -36,6 +36,7 @@ import { sweepPreferenceWriteSites, formatSite } from './preference-writer-sweep
  * | `community-preferences.ts` (DELETE) | `USER_PREFERENCES_UPDATED` (`reset: true`) |
  * | `community-preferences.ts` (reorder) | `USER_PREFERENCES_COMMUNITY_REORDERED` — ajouté au cycle 128 |
  * | `conversationPreferencesSync.detachConversationsFromCategory` | `USER_PREFERENCES_UPDATED`, une par conversation détachée — ajouté au cycle 129 |
+ * | `services/packs/PackCatalog.settle` (bascule conditionnelle, contact d'`updatedAt`, création) | `PACK_INSTALLATION_UPDATED` après chaque écriture — #10148 (LP0), témoin `packs-engine.test.ts` |
  *
  * Les trois écrivains de `user-deletions.ts` n'y figurent PAS : ils passent par
  * `writeConversationPreferences`, ce qui est précisément la forme voulue — un
@@ -49,6 +50,11 @@ const FROZEN_WRITE_SITES = [
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/community-preferences.ts|userCommunityPreferences|upsert',
   'routes/conversation-preferences.ts|userConversationPreferences|update',
+  'services/packs/PackCatalog.ts|userStickerPack|create',
+  'services/packs/PackCatalog.ts|userStickerPack|updateMany',
+  'services/packs/PackCatalog.ts|userStickerPack|updateMany',
+  // La purge RGPD d'un compte supprimé (#10151) : aucun appareil à prévenir, le compte n'existe plus.
+  'services/packs/PackPrivacy.ts|userStickerPack|deleteMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|updateMany',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
   'services/conversationPreferencesSync.ts|userConversationPreferences|upsert',
@@ -66,9 +72,15 @@ describe('préférences par utilisateur — inventaire des écrivains', () => {
    * donc qu'il voit bien des sites, et que le dépouillement des commentaires ne
    * les a pas tous emportés avec eux.
    */
-  it('voit réellement les deux tables', () => {
+  it('voit réellement les trois tables', () => {
     const models = new Set(sweepPreferenceWriteSites().map((site) => site.model));
-    expect([...models].sort()).toEqual(['userCommunityPreferences', 'userConversationPreferences']);
+    expect([...models].sort()).toEqual(['userCommunityPreferences', 'userConversationPreferences', 'userStickerPack']);
+  });
+
+  /** Seul le moteur des packs écrit l'installation d'un pack (#10148) : un second écrivain contournerait le compteur atomique et la diffusion. */
+  it('n’écrit userStickerPack que depuis services/packs/', () => {
+    const outside = sweepPreferenceWriteSites().filter((site) => site.model === 'userStickerPack' && !site.file.startsWith('services/packs/'));
+    expect(outside).toEqual([]);
   });
 });
 

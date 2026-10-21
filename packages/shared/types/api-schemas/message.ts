@@ -12,7 +12,7 @@
 import { attachmentSummarySchema, callSummarySchema, systemEventSchema } from './conversation-preview.js';
 import { messageAttachmentSchema, sharedPlaceResponseSchema } from './message-attachment.js';
 import { MESSAGE_STICKER_ANIMATIONS } from '../message-sticker.js';
-import { userMinimalSchema } from './user.js';
+import { participantProfileDecorSchema, userMinimalSchema } from './user.js';
 
 // =============================================================================
 // MESSAGE SCHEMAS
@@ -512,7 +512,15 @@ export const messageSchema = {
     timestamp: { type: 'string', format: 'date-time', description: 'Alias for createdAt' },
 
     // Sender info (populated)
-    sender: { ...userMinimalSchema, nullable: true, description: 'Sender user info' },
+    // Le contour ÉQUIPÉ de l'auteur (#10713) voyage avec lui : un auteur hors
+    // des participants chargés (groupe de plus de 100 membres) a le sien dans
+    // la bulle. Additif — absent sans contour ou sans compte.
+    sender: {
+      ...userMinimalSchema,
+      properties: { ...userMinimalSchema.properties, profileDecor: participantProfileDecorSchema },
+      nullable: true,
+      description: 'Sender user info',
+    },
     anonymousSender: { ...anonymousSenderSchema, nullable: true, description: 'Anonymous sender info' },
 
     // Translations

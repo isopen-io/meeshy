@@ -49,7 +49,7 @@ struct EngagementPlayerBannerSource: PlayerBannerSourcing {
     func fetch() async -> GameBlock? {
         guard let snapshot = try? await service.fetchProgress() else { return nil }
         let store = await CacheCoordinator.shared.engagementProgress
-        try? await store.save([snapshot], for: key)
+        await bestEffort("playerBannerHost.store.save", category: .cache) { try await store.save([snapshot], for: key) }
         return snapshot.game
     }
 }
@@ -239,7 +239,7 @@ struct PlayerBannerSlot: View {
     /// Ni un appel ni un audio n'occupe le haut.
     let isFree: Bool
     let topInset: CGFloat
-    let onTap: () -> Void
+    let onSelect: (GamePlayerBanner.Piece) -> Void
     /// La couleur d'aplat de la bannière À L'ÉCRAN, ou `nil` : la bande de la barre d'état la reprend.
     let onSurfaceChange: (Color?) -> Void
 
@@ -250,13 +250,13 @@ struct PlayerBannerSlot: View {
     @State private var presented: GamePlayerBanner?
     @State private var sheen: Double = 0
 
-    init(isHosted: Bool, isFree: Bool, topInset: CGFloat, onTap: @escaping () -> Void,
+    init(isHosted: Bool, isFree: Bool, topInset: CGFloat, onSelect: @escaping (GamePlayerBanner.Piece) -> Void,
          onSurfaceChange: @escaping (Color?) -> Void, store: PlayerBannerStore? = nil,
          prefs: GameDevicePrefsStore = GameDevicePrefsStore.current()) {
         self.isHosted = isHosted
         self.isFree = isFree
         self.topInset = topInset
-        self.onTap = onTap
+        self.onSelect = onSelect
         self.onSurfaceChange = onSurfaceChange
         self._store = StateObject(wrappedValue: store ?? PlayerBannerStore())
         self._prefs = ObservedObject(wrappedValue: prefs)
@@ -337,21 +337,18 @@ struct PlayerBannerSlot: View {
         }
     }
 
+    /// Chaque pièce est SON bouton (#10846) : la brique les pose, l'hôte dit où chacune mène.
     private func bar(_ banner: GamePlayerBanner) -> some View {
-        let label = PlayerBannerCopy.accessibilityLabel(for: banner)
-        return Button {
-            HapticFeedback.light()
-            onTap()
-        } label: {
-            PlayerBannerView(
-                model: banner, texts: PlayerBannerCopy.texts(for: banner),
-                palette: PlayerBannerStyle.palette(tier: banner.tier, isDark: isDark),
-                sheen: sheen, backdrop: AuthManager.shared.currentUser?.banner, accessibilityLabel: label
-            )
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint(GameText.bannerHint)
+        PlayerBannerView(
+            model: banner, texts: PlayerBannerCopy.texts(for: banner),
+            palette: PlayerBannerStyle.palette(tier: banner.tier, isDark: isDark),
+            sheen: sheen, backdrop: AuthManager.shared.currentUser?.banner,
+            accessibilityLabel: PlayerBannerCopy.accessibilityLabel(for: banner),
+            onSelect: { piece in
+                HapticFeedback.light()
+                onSelect(piece)
+            }
+        )
         .accessibilityIdentifier("game.player_banner")
     }
 }

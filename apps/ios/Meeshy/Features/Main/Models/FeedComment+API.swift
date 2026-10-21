@@ -18,11 +18,18 @@ nonisolated extension FeedComment {
             translatedContent: PostDetailViewModel.resolveCommentTranslation(
                 translations: c.translations, originalLanguage: c.originalLanguage,
                 preferredLanguages: preferredLanguages),
+            // Toutes les traductions servies : un changement de langue re-résout
+            // le commentaire sans re-fetch (`FeedComment.resolved`).
+            translations: c.translations?.mapValues { entry in
+                PostTranslation(text: entry.text, translationModel: entry.translationModel,
+                                confidenceScore: entry.confidenceScore)
+            },
             currentUserReactions: c.currentUserReactions,
             media: (c.media ?? []).map { $0.toFeedMedia() },
             location: c.location,
             quotedMedia: c.quotedCitation,
             trackedLinkMap: c.trackedLinkMap
         )
+        self.authorRing = c.author.avatarRing
     }
 }

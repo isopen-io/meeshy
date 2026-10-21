@@ -24,7 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * Le fichier ne se nomme jamais depuis la page : son nom est un UUID tire ici,
  * son extension vient du type du media, et `discard` l'efface. Ce qu'un arret
- * brutal laisse derriere lui est efface au prochain demarrage.
+ * brutal laisse derriere lui est efface au prochain demarrage, hors du thread
+ * principal (#10547) : un renommage met le dossier a la corbeille, un thread
+ * la vide, et le recepteur repart d'un dossier neuf.
  */
 @CapacitorPlugin(name = "MeeshyFileSink")
 public class MeeshyFileSinkPlugin extends Plugin {
@@ -35,11 +37,10 @@ public class MeeshyFileSinkPlugin extends Plugin {
 
     @Override
     public void load() {
-        File[] leftovers = directory().listFiles();
-        if (leftovers == null) return;
-        for (File leftover : leftovers) {
-            if (!leftover.delete()) leftover.deleteOnExit();
-        }
+        File cache = getContext().getCacheDir();
+        File sink = directory();
+        if (sink.isDirectory()) sink.renameTo(new File(cache, FileSinkRules.TRASH_PREFIX + UUID.randomUUID()));
+        new Thread(() -> FileSinkRules.emptyTrash(cache), "meeshy-file-sink-trash").start();
     }
 
     @PluginMethod

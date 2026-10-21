@@ -1,0 +1,192 @@
+[
+ {
+  "file": "olympe-ambassadeur-5.jpg",
+  "rank": "ambassadeur",
+  "division": 5,
+  "option": "V",
+  "name": "L'Amphore des Panathénées",
+  "story": "La photo devient le panneau réservé d'une grande amphore à figures noires, le vase de prix des Panathénées : chaîne de palmettes sur le col, languettes noires et pourpres à l'épaule, grecque au-dessus de la photo, frise de coureurs et rayons au pied, filets d'or et un vernis noir lustré.",
+  "layout": "perches : Mee (coucou) et Meo (salut) sur les anses de l'amphore",
+  "message": null
+ },
+ {
+  "file": "olympe-ambassadeur-4.jpg",
+  "rank": "ambassadeur",
+  "division": 4,
+  "option": "IV",
+  "name": "Les Îles blanches",
+  "story": "Une fenêtre des Cyclades aux volets bleus ouverts sur la caldeira : de part et d'autre du soleil couchant, deux villages chaulés dévalent la falaise rouge en terrasses, avec leurs coupoles bleues à croix d'or, leurs campaniles et leurs moulins à voiles ; les îles bleuissent à l'horizon et la bougainvillée déborde sur le cadre.",
+  "layout": "cotes : Mee (sourire) et Meo (cool) se penchent sur les volets",
+  "message": "Le voyage continue"
+ },
+ {
+  "file": "olympe-ambassadeur-3.jpg",
+  "rank": "ambassadeur",
+  "division": 3,
+  "option": "III",
+  "name": "La Couronne d'olivier",
+  "story": "La couronne d'olivier des vainqueurs d'Olympie, en or, enserre la photo, nouée d'un ruban de pourpre ; deux amphores panathénaïques à figures noires (coureurs, porteur de flambeau), le prix des athlètes rempli d'huile sacrée, gardent la stèle sur un fond de porphyre et de grecque d'or.",
+  "layout": "perches : Mee (bravo) et Meo (trophée) de part et d'autre du blason",
+  "message": "Pour toi, maman"
+ },
+ {
+  "file": "olympe-ambassadeur-2.jpg",
+  "rank": "ambassadeur",
+  "division": 2,
+  "option": "II",
+  "name": "Le Banquet des Éthiopiens",
+  "story": "Homère fait descendre les dieux de l'Olympe festoyer chez les « Éthiopiens irréprochables », que les Grecs situaient au royaume de Koush : derrière le temple, les pyramides de Méroé et leurs palmiers se découpent sur le couchant du Nil. Le tympan est une toile adinkra estampée d'or, les métopes portent Nsoromma, Dwennimmen, Akoma, Adinkrahene et Sankofa, le kente ashanti ceint la frise et les colonnes, et les cauris pendent en festons.",
+  "layout": "ruban : Mee (lettre) et Meo (bravo) au bord de la stèle",
+  "message": "Merci la famille"
+ },
+ {
+  "file": "olympe-ambassadeur-1.jpg",
+  "rank": "ambassadeur",
+  "division": 1,
+  "option": "I",
+  "name": "L'Acropole d'or",
+  "story": "Le sommet du rang : un portique corinthien au marbre veiné d'or, une frise de palmettes, deux Pégase d'or affrontés dans le fronton autour du soleil, la chouette d'Athéna en acrotère, des festons de laurier et deux trépieds où brûle la flamme, sous un couchant pourpre et or.",
+  "layout": "pied : Mee (fête) et Meo (roi) sur les degrés, près des trépieds",
+  "message": "On l'a fait ensemble"
+ },
+ {
+  "file": "olympe-orateur-a.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "A",
+  "name": "La Lyre d'Apollon",
+  "story": "La photo prend place entre les bras d'une immense lyre d'or rouge dont la stèle est la caisse ; ses sept cordes vibrent de lumière, le blason se lève comme le soleil d'Apollon dans une gloire de rayons, ceint du laurier de Daphné.",
+  "layout": "pied : Mee (danse) et Meo (sérénade) au pied de la lyre",
+  "message": "Ma voix porte loin"
+ },
+ {
+  "file": "olympe-orateur-b.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "B",
+  "name": "Le Phare d'Alexandrie",
+  "story": "Le phare d'Alexandrie, merveille grecque bâtie sur la rive africaine, porte deux longues bandes de kente en bannières, et son faisceau traverse le ciel derrière le blason en allumant comme des néons d'or trois symboles Adinkra des Akan (Adinkrahene, Sankofa, Dwennimmen) ; sur le promontoire, un baobab et des palmiers en contre-jour, une felouque sur la mer, et les étoiles sont des Nsoromma, « l'enfant des cieux ».",
+  "layout": "libre : Mee (coucou) sur le promontoire, Meo (salut) sur la corniche du phare",
+  "message": null
+ },
+ {
+  "file": "olympe-orateur-c.jpg",
+  "rank": "orateur",
+  "division": null,
+  "option": "C",
+  "name": "Le Théâtre d'Épidaure",
+  "story": "Vu de l'orchestre, le théâtre d'Épidaure déploie ses gradins de calcaire en demi-cercles qui deviennent des ondes d'or : dans ce théâtre, un murmure prononcé au centre s'entend jusqu'au dernier rang ; les cyprès et les pins parasols des collines d'Argolide veillent au couchant derrière le blason.",
+  "layout": "pied : Mee (bravo) et Meo (yo) dans l'orchestre",
+  "message": "Merci à vous tous"
+ },
+ {
+  "file": "olympe-oracle-a.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "A",
+  "name": "Les Deux Aigles de Delphes",
+  "story": "Zeus lâcha deux aigles aux deux bouts du monde ; ils se rejoignirent à Delphes, le nombril de la Terre. Ici ils volent en fils d'or vers le blason, portant les étoiles de l'Aigle ; le filet de l'omphalos devient un réseau cristallin et la nuit est semée de flocons fractals, au-dessus des ruines du tholos et du Parnasse.",
+  "layout": "cotes : Mee (montée au ciel) et Meo (love) se penchent par les côtés",
+  "message": null
+ },
+ {
+  "file": "olympe-oracle-b.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "B",
+  "name": "La Chouette d'Athéna",
+  "story": "Comme sur la tétradrachme d'Athènes, la chouette aux yeux d'or, un rameau d'olivier et un croissant de lune entourent la photo ; au ciel, la Grande et la Petite Ourse (Callisto et son fils Arcas) ; derrière le blason une fleur de vie, et des diatomées de verre et des grains de pollen d'olivier flottent comme des étoiles.",
+  "layout": "ruban : Mee (wow) et Meo (cool) au bord de la stèle",
+  "message": "Sous les mêmes étoiles"
+ },
+ {
+  "file": "olympe-oracle-c.jpg",
+  "rank": "oracle",
+  "division": null,
+  "option": "C",
+  "name": "Pégase et la source Hippocrène",
+  "story": "Pégase bondit en fil d'or ; sa constellation, le Grand Carré, mène à Andromède et à sa galaxie, M31, l'objet le plus lointain que l'œil nu puisse voir, ici grossie dans une loupe. D'un coup de sabot il fit jaillir l'Hippocrène, la source des Muses : ses gouttes, sous la loupe, deviennent des molécules d'eau puis un atome d'oxygène, ou un flocon puis le réseau hexagonal de la glace.",
+  "layout": "cotes : Mee (bisou volé) et Meo (feu d'artifice) se penchent par les côtés",
+  "message": null
+ },
+ {
+  "file": "olympe-legende-5.jpg",
+  "rank": "legende",
+  "division": 5,
+  "option": "V",
+  "name": "L'Olympe flottant",
+  "story": "Le mont Olympe s'est arraché à la Terre et flotte dans une nébuleuse rose et turquoise traversée par la Voie lactée : ses deux cimes enneigées encadrent le blason, des temples éclairés sur les épaules ; sous sa roche luisent des cristaux, et de ses racines tombe une poussière d'étoiles ; autour du blason tournent les orbites d'un atome — l'« insécable » de Démocrite.",
+  "layout": "libre : Mee (jackpot) et Meo (champagne) au bord de l'île flottante",
+  "message": null
+ },
+ {
+  "file": "olympe-legende-4.jpg",
+  "rank": "legende",
+  "division": 4,
+  "option": "IV",
+  "name": "La Volute et la Galaxie",
+  "story": "La volute du chapiteau ionique et la galaxie spirale ont la même forme : ici les colonnes de marbre de nuit veiné d'or portent des galaxies en guise de volutes, leurs bases tournent comme des atomes sous des orbitales, et la frise alterne galaxies et atomes sous une immense spirale qui couronne le blason et se reflète dans les degrés.",
+  "layout": "pied : Mee (amoureuse) et Meo (trophée) au pied des colonnes",
+  "message": null
+ },
+ {
+  "file": "olympe-legende-3.jpg",
+  "rank": "legende",
+  "division": 3,
+  "option": "III",
+  "name": "Le Fil d'Ariane",
+  "story": "Le blason est au cœur du labyrinthe de Crète, tracé en fil d'or dans une nébuleuse ; le fil rouge d'Ariane y entre et devient, de chaque côté de la photo, un brin d'une double hélice d'ADN — le plus ancien fil qui nous guide —, avec des cellules, la Voie lactée, une supernova et un amas de galaxies au pied de la stèle.",
+  "layout": "selfie : Meo prend la pose en grand dans la photo",
+  "message": "Merci d'être là"
+ },
+ {
+  "file": "olympe-legende-2.jpg",
+  "rank": "legende",
+  "division": 2,
+  "option": "II",
+  "name": "Mnémosyne",
+  "story": "Mnémosyne, la Mémoire, mère des neuf Muses : deux neurones d'or déploient leurs dendrites comme des oliviers et font descendre leurs axones le long de la photo ; neuf étoiles — les Muses — font une ronde autour du blason posé sur une supernova, avec des cellules, des orbitales, la Voie lactée et deux amas de galaxies.",
+  "layout": "cotes : Mee (bisou volé) et Meo (muscles) se penchent par les côtés",
+  "message": null
+ },
+ {
+  "file": "olympe-legende-1.jpg",
+  "rank": "legende",
+  "division": 1,
+  "option": "I",
+  "name": "La Musique des sphères",
+  "story": "Pythagore entendait les astres chanter : le blason est le feu central autour duquel tournent les orbites et leurs planètes, la Lyre et Véga brillent, et les côtés du cadre deviennent une cithare d'or dont les cordes vibrent sur leurs harmoniques 1, 2, 3 ; sur ses chevalets poussent deux arbres de Pythagore, carrés et triangles 3-4-5 à l'infini ; un trou noir déploie son disque au pied de la stèle entre deux atomes quantiques aux orbitales p, et des paquets d'ondes.",
+  "layout": "ruban : Mee (montée au ciel) et Meo (roi) au bord de la stèle",
+  "message": "Écrit dans les étoiles"
+ },
+ {
+  "file": "olympe-mythe-a.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "A",
+  "name": "Le Char d'Hélios",
+  "story": "Le blason est le soleil que porte le char d'Hélios : son quadrige d'or bondit à travers une galaxie spirale, sous le Cocher (Auriga), en laissant un sillage de feu ; d'un côté la toile cosmique, un amas et un quasar, de l'autre un atome, les quarks d'un proton, les traces d'une collision, une corde qui vibre et la mousse quantique — du quark au quasar.",
+  "layout": "pied : Mee (montée au ciel) et Meo (feu d'artifice) au pied de la photo",
+  "message": null
+ },
+ {
+  "file": "olympe-mythe-b.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "B",
+  "name": "La Foudre-Quasar",
+  "story": "La foudre de Zeus devient un quasar : le blason se tient dans l'ombre d'un trou noir, cerclé de son anneau de photons et du disque d'accrétion que la gravité replie au-dessus de lui ; un jet relativiste monte vers le ciel et des éclairs ramifiés courent jusqu'aux coins, sous l'Aigle de Zeus, porteur de la foudre ; autour, traces de particules, mousse quantique, cordes qui vibrent, toile cosmique, amas et supernova.",
+  "layout": "cotes : Mee (jackpot) et Meo (champagne) se penchent par les côtés",
+  "message": "Jusqu'au bout de l'univers"
+ },
+ {
+  "file": "olympe-mythe-c.jpg",
+  "rank": "mythe",
+  "division": null,
+  "option": "C",
+  "name": "La Colonne des échelles",
+  "story": "Un temple de l'univers entier : la colonne de gauche monte du quark (10⁻¹⁸ m) à l'atome, l'ADN, la cellule, le neurone et l'amphore grecque à hauteur d'homme ; celle de droite, de la Terre au Soleil, au système solaire, à une nébuleuse, une galaxie et un amas ; le fronton est la toile cosmique (10²⁶ m) et le sol la mousse quantique (10⁻³⁵ m).",
+  "layout": "perches : Mee (wow) et Meo (trophée) sur les rampants du fronton cosmique",
+  "message": "Ensemble, plus loin"
+ }
+]

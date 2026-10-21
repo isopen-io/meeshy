@@ -34,6 +34,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { canAccessConversation } from './utils/access-control';
+import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
 import { sendSuccess, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
 import { refusesContentGesture, withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
@@ -439,6 +440,10 @@ export function registerMessagePinRoutes(
       });
       if (!conversationId) {
         return;
+      }
+      // #7388 — la porte d'un lien de partage ÉCHU, la même que sur le fil.
+      if (await readerShareLinkHasExpired(prisma, { conversationId, reader: historyReaderFromAuthContext(authRequest.authContext) })) {
+        return refuseExpiredShareLink(reply);
       }
 
       // Une épingle est posée pour TOUT le monde, mais elle ne rend pas au

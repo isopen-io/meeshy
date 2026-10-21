@@ -124,7 +124,9 @@ final class TrackingLinkServiceTests: XCTestCase {
 
     func test_createLink_success_callsPostEndpoint() async throws {
         let link = makeTrackingLink()
-        let response = APIResponse<TrackingLink>(success: true, data: link, error: nil)
+        let response = APIResponse<CreatedTrackingLink>(
+            success: true, data: CreatedTrackingLink(link: link, existed: false), error: nil
+        )
         mock.stub("/tracking-links", result: response)
 
         let request = CreateTrackingLinkRequest(originalUrl: "https://example.com", campaign: "summer")
@@ -134,6 +136,101 @@ final class TrackingLinkServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.endpoint, "/tracking-links")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
         XCTAssertEqual(result.id, "tl-1")
+    }
+
+    // MARK: - createLink — la VRAIE charge de la passerelle (#9185)
+
+    /// Corps exact de `POST /api/v1/tracking-links` (`creation.ts`) : le lien est
+    /// ENVELOPPÉ sous `data.trackingLink`, enrichi de `fullUrl`, et `existed`
+    /// accompagne un lien déjà créé par l'appelant (200). Les colonnes Prisma
+    /// voyagent toutes, dates à fractions de seconde comprises.
+    private static func gatewayCreateBody(existed: Bool?) -> Data {
+        let existedField = existed.map { ", \"existed\": \($0)" } ?? ""
+        return Data("""
+        {
+          "success": true,
+          "data": {
+            "trackingLink": {
+              "id": "6720f1c2a9b8c7d6e5f40312",
+              "token": "rentree26",
+              "targetType": "EXTERNAL",
+              "targetId": null,
+              "name": "Rentrée",
+              "campaign": "rentree",
+              "source": null,
+              "medium": null,
+              "originalUrl": "https://meeshy.me/",
+              "shortUrl": "https://meeshy.me/l/rentree26",
+              "createdBy": "6720f1c2a9b8c7d6e5f40001",
+              "conversationId": null,
+              "messageId": null,
+              "totalClicks": 0,
+              "uniqueClicks": 0,
+              "isActive": true,
+              "expiresAt": null,
+              "createdAt": "2026-10-13T09:12:45.123Z",
+              "updatedAt": "2026-10-13T09:12:45.123Z",
+              "lastClickedAt": null,
+              "fullUrl": "https://meeshy.me/l/rentree26"
+            }\(existedField)
+          }
+        }
+        """.utf8)
+    }
+
+    func test_createdTrackingLink_gatewayCreatedBody_decodesTheWrappedLink() throws {
+        let response = try APIClient.makeAPIPayloadDecoder().decode(
+            APIResponse<CreatedTrackingLink>.self,
+            from: Self.gatewayCreateBody(existed: nil)
+        )
+
+        XCTAssertEqual(response.data.link.id, "6720f1c2a9b8c7d6e5f40312")
+        XCTAssertEqual(response.data.link.token, "rentree26")
+        XCTAssertEqual(response.data.link.shortUrl, "https://meeshy.me/l/rentree26")
+        XCTAssertFalse(response.data.existed)
+    }
+
+    func test_createdTrackingLink_gatewayExistingBody_reportsExisted() throws {
+        let response = try APIClient.makeAPIPayloadDecoder().decode(
+            APIResponse<CreatedTrackingLink>.self,
+            from: Self.gatewayCreateBody(existed: true)
+        )
+
+        XCTAssertEqual(response.data.link.id, "6720f1c2a9b8c7d6e5f40312")
+        XCTAssertTrue(response.data.existed)
+    }
+
+    func test_createdTrackingLink_flatLegacyBody_stillDecodes() throws {
+        let body = Data("""
+        {"success": true, "data": {
+          "id": "tl-flat", "token": "abc123", "originalUrl": "https://example.com",
+          "shortUrl": "https://meeshy.me/l/abc123", "totalClicks": 1, "uniqueClicks": 1,
+          "isActive": true, "createdAt": "2026-01-01T00:00:00.000Z"
+        }}
+        """.utf8)
+
+        let response = try APIClient.makeAPIPayloadDecoder().decode(
+            APIResponse<CreatedTrackingLink>.self, from: body
+        )
+
+        XCTAssertEqual(response.data.link.id, "tl-flat")
+        XCTAssertFalse(response.data.existed)
+    }
+
+    func test_createLink_customToken_travelsUnderTheKeyTheGatewayDeclares() async throws {
+        let created = try APIClient.makeAPIPayloadDecoder().decode(
+            APIResponse<CreatedTrackingLink>.self,
+            from: Self.gatewayCreateBody(existed: nil)
+        )
+        mock.stub("/tracking-links", result: created)
+
+        let link = try await service.createLink(
+            CreateTrackingLinkRequest(originalUrl: "https://meeshy.me/", token: "rentree26")
+        )
+
+        XCTAssertEqual(link.id, "6720f1c2a9b8c7d6e5f40312")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["customToken"] as? String, "rentree26")
+        XCTAssertNil(mock.lastRequest?.bodyJSON?["token"])
     }
 
     // MARK: - fetchClicks

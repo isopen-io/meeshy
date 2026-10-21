@@ -15,7 +15,8 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ENGAGEMENT_OPERATIONS } from '@meeshy/shared/types/engagement-operations';
-import { parseEngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { mergeEngagementScaleBody, parseEngagementScale, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { ENGAGEMENT_STREAK_ACTS } from '@meeshy/shared/types/engagement-act-streaks';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { requireAdminRank, withAudit } from '../../middleware/authorize';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
@@ -28,6 +29,7 @@ import {
   ENGAGEMENT_SCALE_KEY,
   engagementScaleServiceFor,
 } from '../../services/engagement/EngagementScaleService';
+import { PUBLICATION_RECLAIM_WINDOW_DAYS } from '../../services/posts/postEngagementCredits';
 
 const logger = enhancedLogger.child({ module: 'admin/engagement-scale' });
 
@@ -40,6 +42,14 @@ const operationRuleSchema = {
     variantPoints: { type: 'object', additionalProperties: { type: 'integer' } },
   },
 } as const;
+
+/** Un palier de série ou de fidélité (#10388) — le libellé est facultatif. */
+const streakTierSchema = {
+  type: 'object',
+  properties: { days: { type: 'integer' }, points: { type: 'integer' }, label: { type: 'string' } },
+} as const;
+
+const streakTiersSchema = { type: 'array', items: streakTierSchema } as const;
 
 const engagementScaleSchema = {
   type: 'object',
@@ -102,6 +112,20 @@ const engagementScaleSchema = {
         unverifiedMaxPoints: { type: 'integer' },
       },
     },
+    // #10389 — les paliers de la série globale et de chaque acte. Non déclarés,
+    // fast-json-stringify les retirerait et l'écran ne les verrait jamais.
+    streaks: {
+      type: 'object',
+      properties: {
+        global: streakTiersSchema,
+        acts: {
+          type: 'object',
+          properties: Object.fromEntries(ENGAGEMENT_STREAK_ACTS.map((act) => [act, streakTiersSchema])),
+        },
+      },
+    },
+    // #10390 — les paliers de fidélité, en jours depuis la création du compte.
+    loyalty: streakTiersSchema,
   },
 } as const;
 
@@ -123,6 +147,22 @@ export const engagementScaleDocumentResponseSchema = {
   },
 } as const;
 
+/**
+ * #11525 — `abuse.clawbackHours` ne se règle plus (#11491) et ne s'écrit plus,
+ * mais il reste SERVI, figé à la loi des 30 jours : une console d'avant la
+ * décision (onglet en cache, coque Android) le décode comme un entier 0–720
+ * obligatoire, et sans lui déclare le barème illisible. À retirer quand plus
+ * aucune console d'avant #11491 ne tourne.
+ */
+const LEGACY_CLAWBACK_HOURS = PUBLICATION_RECLAIM_WINDOW_DAYS * 24;
+
+type ServedDocument = { readonly scale: EngagementScale; readonly updatedBy: string | null };
+
+const withLegacyClawbackHours = (scale: EngagementScale) => ({
+  ...scale,
+  abuse: { ...scale.abuse, clawbackHours: LEGACY_CLAWBACK_HOURS },
+});
+
 const refusals = {
   401: errorResponseSchema,
   403: errorResponseSchema,
@@ -133,10 +173,11 @@ export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Prom
   const scaleService = () => engagementScaleServiceFor(fastify.prisma);
 
   /** Le document, avec « réglé par » résolu en personne (côté administration seulement). */
-  async function withUpdatedByPerson<D extends { readonly updatedBy: string | null }>(document: D) {
-    if (!document.updatedBy) return { ...document, updatedByPerson: null };
+  async function withUpdatedByPerson<D extends ServedDocument>(document: D) {
+    const served = { ...document, scale: withLegacyClawbackHours(document.scale) };
+    if (!document.updatedBy) return { ...served, updatedByPerson: null };
     const people = await loadAdminPeople(fastify.prisma, [document.updatedBy]);
-    return { ...document, updatedByPerson: people.get(document.updatedBy) ?? null };
+    return { ...served, updatedByPerson: people.get(document.updatedBy) ?? null };
   }
 
   fastify.get('/engagement-scale', {
@@ -171,16 +212,23 @@ export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Prom
     },
     onRequest: [fastify.authenticate, requireAdminRank()],
   }, async (request, reply) => {
-    const scale = parseEngagementScale(request.body?.scale);
-    if (!scale) {
-      return sendBadRequest(reply, 'Invalid engagement scale', { code: 'INVALID_ENGAGEMENT_SCALE' });
-    }
     const adminId = (request as UnifiedAuthRequest).authContext?.userId;
     if (!adminId) {
       return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     }
 
     try {
+      // #10388 — le corps se FUSIONNE avec le barème stocké : une section qu'un
+      // ancien écran n'envoie pas (séries, fidélité, limites du jour) garde sa
+      // valeur au lieu de retomber sur les défauts.
+      const stored = await fastify.prisma.engagementScaleConfig.findUnique({
+        where: { key: ENGAGEMENT_SCALE_KEY },
+        select: { config: true },
+      });
+      const scale = parseEngagementScale(mergeEngagementScaleBody(stored?.config ?? null, request.body?.scale));
+      if (!scale) {
+        return sendBadRequest(reply, 'Invalid engagement scale', { code: 'INVALID_ENGAGEMENT_SCALE' });
+      }
       const before = await scaleService().document();
       const document = await scaleService().write(scale, adminId);
       await withAudit(request, {

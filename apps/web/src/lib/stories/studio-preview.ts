@@ -26,6 +26,7 @@ export function studioPreviewDocument(page: StudioPage): CanvasDocument | null {
             ...(page.background.trim !== undefined ? { trim: page.background.trim } : {}),
             ...(page.background.muted !== undefined ? { muted: page.background.muted } : {}),
             ...(page.background.crop !== undefined ? { crop: page.background.crop } : {}),
+            ...(page.background.rotation !== undefined ? { rotation: page.background.rotation } : {}),
           },
         }
       : {}),

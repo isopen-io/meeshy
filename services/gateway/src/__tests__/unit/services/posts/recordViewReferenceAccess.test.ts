@@ -66,6 +66,7 @@ function makePrisma(opts: { visible: unknown; stored?: unknown; reference?: unkn
 
   return {
     post,
+    $runCommandRaw: jest.fn<any>().mockResolvedValue({ ok: 1 }),
     postView: {
       findUnique: jest.fn<any>().mockResolvedValue(null),
       create: jest.fn<any>().mockResolvedValue({ id: 'pv-1' }),

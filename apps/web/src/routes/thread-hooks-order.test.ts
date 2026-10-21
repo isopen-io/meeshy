@@ -61,6 +61,7 @@ const HOOK_NAMES = [
   'useStore',
   'useOptionalRoute',
   'useOnline',
+  'useColorScheme',
   'useConversationsSnapshot',
   'useReaderLanguages',
   'useLiveAnnouncer',
@@ -96,6 +97,18 @@ const HOOK_NAMES = [
   'useThreadReadingMode',
   'useThreadCompose',
   'useThreadJump',
+  // #9898, #9899 — la traduction de l'appareil, la lecture de ce que les autres
+  // membres ont traduit, et la photo d'un frappeur (sortie de l'hôte pour le
+  // garder sous son budget) : trois hooks que l'hôte appelle AVANT ses retours
+  // anticipés, donc sous la garde de ce témoin.
+  'useDeviceTranslation',
+  'useSharedTranslations',
+  'useTypistAvatar',
+  // #10003 — ce que le composeur offre : droits du lecteur et familles de l'invité.
+  'useComposerAccess',
+  // #10624 — le fil prête à ses pièces le nom et l'avatar de la conversation.
+  'useThreadMediaValue',
+  'useServedGlobalRole',
 ] as const;
 
 const EARLY_RETURN_MARKERS = [

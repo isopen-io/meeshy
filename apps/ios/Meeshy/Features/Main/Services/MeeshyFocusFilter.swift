@@ -3,7 +3,7 @@ import Foundation
 import MeeshySDK
 import os
 
-nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
+nonisolated private let logger = MeeshyLog.logger(.focusFilter)
 
 /// User-facing knobs exposed when configuring a Focus mode to include Meeshy.
 ///
@@ -165,5 +165,5 @@ public final class MeeshyFocusStore {
 // MARK: - Logger Extension
 
 private extension Logger {
-    nonisolated static let focusFilter = Logger(subsystem: "me.meeshy.app", category: "focus-filter")
+    nonisolated static let focusFilter = MeeshyLog.logger(.focusFilter)
 }

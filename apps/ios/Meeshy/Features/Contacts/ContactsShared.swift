@@ -125,7 +125,7 @@ extension CallDirection {
     var localizedLabel: String {
         switch self {
         case .outgoing: return String(localized: "calls.direction.outgoing", defaultValue: "appel émis", bundle: .main)
-        case .incoming: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
+        case .incoming, .unknown: return String(localized: "calls.direction.incoming", defaultValue: "appel reçu", bundle: .main)
         case .missed: return String(localized: "calls.direction.missed", defaultValue: "appel manqué", bundle: .main)
         }
     }
@@ -391,6 +391,10 @@ struct DirectoryPersonRow: View, Equatable {
     let name: String
     let subtitle: String?
     let avatarURL: String?
+    /// La présence SERVIE de la personne (#10956) — `nil` ⇒ aucun point.
+    var presence: PresenceState? = nil
+    /// Son contour équipé, la référence servie (#10946).
+    var ring: ServedProfileDecorItem? = nil
     let action: Action
     /// Complément lu par VoiceOver après le nom (« sur Meeshy », etc.).
     var accessibilityDetail: String?
@@ -403,6 +407,8 @@ struct DirectoryPersonRow: View, Equatable {
         lhs.name == rhs.name
             && lhs.subtitle == rhs.subtitle
             && lhs.avatarURL == rhs.avatarURL
+            && lhs.presence == rhs.presence
+            && lhs.ring == rhs.ring
             && lhs.action == rhs.action
             && lhs.accessibilityDetail == rhs.accessibilityDetail
             && lhs.isDark == rhs.isDark
@@ -414,7 +420,9 @@ struct DirectoryPersonRow: View, Equatable {
                 name: name,
                 context: .userListItem,
                 accentColor: DynamicColorGenerator.colorForName(name),
-                avatarURL: avatarURL
+                avatarURL: avatarURL,
+                presenceState: presence,
+                ring: ring
             )
 
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {

@@ -32,7 +32,7 @@ extension CallManager {
             Logger.calls.info("Participant joined call \(callId), creating offer")
             // Ancrage négociation côté appelant : l'appelé vient de décrocher,
             // la sonnerie est finie — tout ce qui suit est du setup technique.
-            self.analyticsNegotiationStartDate = Date()
+            self.analytics.negotiationStartDate = Date()
 
             // Update ICE servers with TURN credentials without recreating the peer connection
             if let servers = event.iceServers, !servers.isEmpty {
@@ -316,5 +316,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

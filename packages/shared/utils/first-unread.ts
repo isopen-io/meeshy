@@ -74,8 +74,8 @@
  *   marqué EN MÉMOIRE après un `message:deleted` reste à la charge de
  *   l'appelant, qui est seul à savoir ce qu'il garde dans son tableau.
  *
- * `unreadCountHint` (#7351, V3, web-v2 seulement pour l'instant — dette
- * consignée pour I1, le mirror Swift ne le porte pas encore) — LE REPLI
+ * `unreadCountHint` (#7351, V3 ; porté par le miroir Swift depuis #7427,
+ * mêmes règles, même ordre, mêmes témoins) — LE REPLI
  * SERVEUR quand AUCUN des trois rangs n'existe (`boundaryTime === null`) :
  * un lecteur qui ouvre `GET /conversations/:id` en tout premier (deep link,
  * notification) sur une conversation JAMAIS ouverte n'a ni cursor ni

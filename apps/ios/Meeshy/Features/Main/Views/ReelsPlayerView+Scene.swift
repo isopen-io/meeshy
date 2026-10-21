@@ -58,6 +58,8 @@ final class ReelAudioEngineBox: ObservableObject {
 /// (`ReelMediaAutostart.shouldStart`) : page active, révélation terminée, aucun
 /// appel. Le tap de la page la met en pause ; quitter la page la relâche.
 struct ReelSceneView: View {
+    /// Les marges sûres de la fenêtre qui porte la vue, mesurées par sa racine (hors de `body`).
+    @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets
     let reel: FeedPost
     let document: CanvasV3
     let isActive: Bool
@@ -87,7 +89,14 @@ struct ReelSceneView: View {
     }
 
     var body: some View {
-        let duration = carrier.toRenderableSlide(preferredLanguages: []).computedTotalDuration()
+        // Le Prisme du lecteur, UNE fois : la slide jouée et sa durée en
+        // dépendent toutes deux (un texte long allonge le tour).
+        let languages = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        // La durée du tour que le player JOUE (#10555), pas une seconde
+        // dérivation depuis d'autres effets et sans les langues du lecteur.
+        let duration = MeeshyScenePlayer.playedDuration(document: document,
+                                                        carrier: carrier,
+                                                        preferredContentLanguages: languages)
         // **Un réel qui porte une scène montre LA carte de la story** —
         // le même composant, la même forme, le même fond (directive porteur du
         // 2026-09-17 : « Partir du fait que le composant est déjà fait et le
@@ -132,7 +141,7 @@ struct ReelSceneView: View {
                                       isPlaying: .constant(isPlaying),
                                       accentColorHex: reel.authorColor,
                                       carrier: carrier,
-                                      preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                                      preferredContentLanguages: languages,
                                       isMuted: isMuted,
                                       // Le canvas ne peint jamais son hors-champ :
                                       // la carte le peint, comme aux quatre
@@ -172,7 +181,7 @@ struct ReelSceneView: View {
                 // **Les réels VIDÉO et IMAGE ne sont pas visés par ce lot** : ce
                 // fichier ne porte que le réel à SCÈNE, et le lot #6904 est la
                 // convergence des surfaces de SCÈNE (carte, sol, forme, voile).
-                StoryReaderScrims(topInset: DeviceLayout.safeAreaTop,
+                StoryReaderScrims(topInset: WindowInsets(published: sceneSafeAreaInsets).top,
                                   chromeVisible: true)
             }
             .frame(width: geo.size.width, height: geo.size.height)

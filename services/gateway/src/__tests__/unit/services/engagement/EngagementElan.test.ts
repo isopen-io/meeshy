@@ -11,6 +11,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites, type CounterWrite } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
@@ -27,11 +28,10 @@ const mockGetShared = getSharedNotificationService as jest.MockedFunction<typeof
  * qui porte les trois premiers crans. `milestones` : ce qui décide de l'assise.
  */
 function makePrisma(recentAxes: string[], milestones: Array<{ milestoneType: string; milestoneKey: string }> = []) {
-  const upsert = jest.fn().mockResolvedValue({ count: 2 });
+  const counterWrite = jest.fn().mockResolvedValue({ count: 2 });
   const runCommandRaw = jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: 0 } });
   const prisma = {
     engagementCounter: {
-      upsert,
       findMany: jest.fn().mockResolvedValue(recentAxes.map((axisKey) => ({ axisKey }))),
     },
     engagementMilestone: {
@@ -43,35 +43,35 @@ function makePrisma(recentAxes: string[], milestones: Array<{ milestoneType: str
     engagementQuota: { upsert: jest.fn().mockResolvedValue({ count: 1 }), update: jest.fn().mockResolvedValue({ count: 1 }), updateMany: jest.fn().mockResolvedValue({ count: 0 }), create: jest.fn().mockResolvedValue({}), findUnique: jest.fn().mockResolvedValue(null) },
     conversationEngagement: { findUnique: jest.fn().mockResolvedValue(null), upsert: jest.fn().mockResolvedValue({}) },
     user: { findUnique: jest.fn().mockResolvedValue(null), update: jest.fn().mockResolvedValue({}), updateMany: jest.fn().mockResolvedValue({ count: 1 }) },
-    $runCommandRaw: runCommandRaw,
+    $runCommandRaw: routeCounterWrites(counterWrite, runCommandRaw),
   } as unknown as PrismaClient;
-  return { prisma, upsert, runCommandRaw };
+  return { prisma, counterWrite, runCommandRaw };
 }
 
 /** Les points crédités par la commande brute de score. */
 function pointsDuScore(runCommandRaw: jest.Mock): number {
   const cmd = runCommandRaw.mock.calls[0][0] as {
-    update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+    update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
   };
-  return cmd.update[0].$set.engagementScore.$add[1];
+  return cmd.update[0].$set.sparksSincePrestige.$add[1];
 }
 
 describe('l\'élan multiplie les points crédités', () => {
   it('reste au neutre quand une seule famille est active', async () => {
     mockGetShared.mockReturnValue(undefined as never);
-    const { prisma, upsert, runCommandRaw } = makePrisma(['content.post']);
+    const { prisma, counterWrite, runCommandRaw } = makePrisma(['content.post']);
 
     await new EngagementService(prisma).recordActivity('u-1', 'content.text_message');
 
     const poids = poidsParDefaut('content.text_message');
-    expect((upsert.mock.calls[0][0] as { create: { points: number } }).create.points).toBe(poids);
+    expect((counterWrite.mock.calls[0][0] as CounterWrite).points).toBe(poids);
     expect(pointsDuScore(runCommandRaw)).toBe(poids);
   });
 
   it('multiplie par le nombre de familles tenues en même temps', async () => {
     mockGetShared.mockReturnValue(undefined as never);
     // contenu + commentaire + conversation actives, plus l'outil du geste courant : ×4
-    const { prisma, upsert, runCommandRaw } = makePrisma([
+    const { prisma, counterWrite, runCommandRaw } = makePrisma([
       'content.post',
       'comment.text',
       'conversation.private',
@@ -80,7 +80,7 @@ describe('l\'élan multiplie les points crédités', () => {
     await new EngagementService(prisma).recordActivity('u-2', 'tool.sticker');
 
     const attendu = poidsParDefaut('tool.sticker') * 4;
-    expect((upsert.mock.calls[0][0] as { create: { points: number } }).create.points).toBe(attendu);
+    expect((counterWrite.mock.calls[0][0] as CounterWrite).points).toBe(attendu);
     expect(pointsDuScore(runCommandRaw)).toBe(attendu);
   });
 
@@ -141,17 +141,17 @@ describe('l\'élan multiplie les points crédités', () => {
 
   it('crédite le compteur et le score du MÊME montant — l\'invariant Σ(points)', async () => {
     mockGetShared.mockReturnValue(undefined as never);
-    const { prisma, upsert, runCommandRaw } = makePrisma(['content.post', 'comment.text']);
+    const { prisma, counterWrite, runCommandRaw } = makePrisma(['content.post', 'comment.text']);
 
     await new EngagementService(prisma).recordActivity('u-7', 'conversation.public');
 
-    const auCompteur = (upsert.mock.calls[0][0] as { create: { points: number } }).create.points;
+    const auCompteur = (counterWrite.mock.calls[0][0] as CounterWrite).points;
     expect(pointsDuScore(runCommandRaw)).toBe(auCompteur);
   });
 
   it('n\'altère JAMAIS le compte d\'actions, quel que soit l\'élan', async () => {
     mockGetShared.mockReturnValue(undefined as never);
-    const { prisma, upsert } = makePrisma([
+    const { prisma, counterWrite } = makePrisma([
       'content.post',
       'comment.text',
       'conversation.private',
@@ -161,11 +161,6 @@ describe('l\'élan multiplie les points crédités', () => {
     await new EngagementService(prisma).recordActivity('u-8', 'content.audio_message');
 
     // Un badge « cinquante vocaux » doit vouloir dire cinquante vocaux, même à ×5.
-    const args = upsert.mock.calls[0][0] as {
-      create: { count: number };
-      update: { count: { increment: number } };
-    };
-    expect(args.create.count).toBe(1);
-    expect(args.update.count.increment).toBe(1);
+    expect((counterWrite.mock.calls[0][0] as CounterWrite).count).toBe(1);
   });
 });

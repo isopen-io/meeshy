@@ -3,6 +3,8 @@
  * @module shared/types/mention
  */
 
+import type { PersonProfileDecor } from './profile-decor.js';
+
 import { hasMentions as hasMentionsCore, MENTION_HANDLE_CHARS, NAME_BOUNDARY_LEFT } from '../utils/mention-parser.js';
 
 /**
@@ -28,6 +30,8 @@ export interface MentionSuggestion {
   readonly badge: 'conversation' | 'friend' | 'other';
   readonly inConversation: boolean;
   readonly isFriend: boolean;
+  /** Le contour d'avatar équipé (#10945) ; absent sans contour. */
+  readonly profileDecor?: PersonProfileDecor;
 }
 
 /**

@@ -86,7 +86,7 @@ final class ScrollMotionGeneralizationTests: XCTestCase {
     /// disponible — le relay le porte déjà jusqu'au header.
     func test_conversationListHeader_wiresBothHalvesOfTheLaw() throws {
         try assertWiresBothHalves(
-            "ConversationListView+Overlays.swift",
+            "ConversationListView+HeaderOverlay.swift",
             sourceExpression: ".scrollMotionActive(offset: scrollRelay.offset)"
         )
     }

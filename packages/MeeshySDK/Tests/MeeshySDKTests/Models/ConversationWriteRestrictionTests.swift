@@ -116,4 +116,17 @@ final class ConversationWriteRestrictionTests: XCTestCase {
         XCTAssertNil(ConversationWriteRestriction(refusal: URLError(.notConnectedToInternet)))
         XCTAssertNil(ConversationWriteRestriction(refusal: MeeshyError.forbidden(reason: nil, body: nil)))
     }
+
+    // MARK: - #10720 — le chiffrement se lit du serveur, jamais d'un défaut du type
+
+    func test_toConversation_directWithoutEncryptionMode_isNotEncrypted() throws {
+        let api = try decodeAPIConversation(#"{"id":"c1","type":"direct","createdAt":"2026-09-01T00:00:00Z","encryptionMode":null}"#)
+        XCTAssertNil(api.toConversation(currentUserId: "me").encryptionMode,
+                     "le E2EE est optionnel par conversation : une directe sans mode servi n'est pas chiffrée")
+    }
+
+    func test_toConversation_directServedE2ee_staysEncrypted() throws {
+        let api = try decodeAPIConversation(#"{"id":"c1","type":"direct","createdAt":"2026-09-01T00:00:00Z","encryptionMode":"e2ee"}"#)
+        XCTAssertEqual(api.toConversation(currentUserId: "me").encryptionMode, "e2ee")
+    }
 }

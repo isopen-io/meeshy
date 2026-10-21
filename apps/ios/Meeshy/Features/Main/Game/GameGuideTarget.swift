@@ -33,13 +33,12 @@ enum GameGuideTarget {
         switch action {
         case .startGame, .earnFirstPoints: .conversations
         case .seeLevel, .seeProgress, .seeNextTier, .prestigeOrStay: .scroll(.level)
-        case .seeMissions, .openFirstMission, .regainLevels, .doEasyMissionOrFreeze, .doEasiestMission: .scroll(.missions)
+        case .seeMissions, .openFirstMission, .doEasyMissionOrFreeze, .doEasiestMission: .scroll(.missions)
         case .seeFlame: .scroll(.flame)
         case .seeMeeshes, .keepOrSpend: .scroll(.treasury)
         case .seeRank: .scroll(.rank)
         case .takeStartPhoto, .takePhoto: .photo
         case .mintOrClimb, .seeMintPreview: .scroll(.mint)
-        case .relightBadge: .badges
         case .relightFlame: .scroll(.flamePanel)
         }
     }

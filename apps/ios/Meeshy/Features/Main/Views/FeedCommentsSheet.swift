@@ -45,8 +45,8 @@ struct CommentsSheetView: View {
     @State private var didScrollToTargetComment: Bool = false
     /// Curseur de pagination du GET commentaires — suivi pour la chasse
     /// paginée d'un commentaire notifié hors de la première page.
-    @State private var commentsNextCursor: String?
-    @State private var commentsHasMore: Bool = false
+    @State var commentsNextCursor: String?
+    @State var commentsHasMore: Bool = false
     @State private var isHuntingTargetComment: Bool = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var commentBlurEnabled: Bool = false
@@ -65,12 +65,12 @@ struct CommentsSheetView: View {
     @State private var claimedActivePost: Bool = false
     @State private var didConsumeInitialReplyTarget = false
     @State var repliesMap: [String: [FeedComment]] = [:]
-    @State private var expandedThreads: Set<String> = []
-    @State private var loadingReplies: Set<String> = []
+    @State var expandedThreads: Set<String> = []
+    @State var loadingReplies: Set<String> = []
     /// Pagination des réponses par commentaire racine (endpoint replies paginé
     /// ASC 20/page) — miroir de `PostDetailViewModel.repliesHasMore/NextCursor`.
-    @State private var repliesHasMore: [String: Bool] = [:]
-    @State private var repliesNextCursor: [String: String] = [:]
+    @State var repliesHasMore: [String: Bool] = [:]
+    @State var repliesNextCursor: [String: String] = [:]
 
     /// Hoisted like state — keyed by commentId, seeded from API `currentUserReactions`.
     @State private var likedIds: Set<String> = []
@@ -151,167 +151,45 @@ struct CommentsSheetView: View {
         comments.filter { $0.parentId == nil }
     }
 
-    /// Variante pour les commentaires domaine déjà mappés (`FeedComment`). C'est
-    /// celle réellement branchée dans la sheet : elle sème `likedIds` à partir de
-    /// `post.comments` (et des réponses chargées) qui portent désormais
-    /// `currentUserReactions` (cf. `toFeedPost` / `loadReplies`). Sans ce seeding,
-    /// tout commentaire déjà liké s'affichait cœur vide à l'ouverture.
     static func computeLikedIds(from comments: [FeedComment]) -> Set<String> {
-        StoryViewerView.computeLikedIds(fromCachedComments: comments)
+        CommentSheetRules.computeLikedIds(from: comments)
     }
 
     /// Sème (additif) `likedIds` depuis l'état serveur des commentaires fournis,
     /// sans écraser les toggles optimistic/socket déjà appliqués.
-    private func seedLikedIds(from comments: [FeedComment]) {
+    func seedLikedIds(from comments: [FeedComment]) {
         let seeded = Self.computeLikedIds(from: comments)
         guard !seeded.isEmpty else { return }
         likedIds.formUnion(seeded)
     }
 
-    /// Layers a freshly-fetched comment page over the current in-memory list
-    /// WITHOUT discarding local-only rows the fetch's server snapshot
-    /// couldn't have known about — an unconfirmed optimistic `tmp_` send, or
-    /// a comment reconciled from the `comment:added` socket echo that landed
-    /// while the GET was in flight. A plain `liveComments = fetched`
-    /// overwrite would silently drop those. `fetched` (server-ordered,
-    /// newest first) is the base; any `current` row whose id isn't present
-    /// in `fetched` is kept in front — it's newer than the snapshot, matching
-    /// where the composer/socket handler insert it (`at: 0`).
     static func mergeFetchedComments(current: [FeedComment], fetched: [FeedComment]) -> [FeedComment] {
-        let fetchedIds = Set(fetched.map(\.id))
-        let localOnly = current.filter { !fetchedIds.contains($0.id) }
-        return localOnly + fetched
+        CommentSheetRules.mergeFetchedComments(current: current, fetched: fetched)
     }
 
-    /// Ne JAMAIS persister une ligne optimiste non confirmée (id `cmid_`/`tmp_`) :
-    /// une fois la ligne réconciliée en mémoire par l'écho socket, le fantôme
-    /// resterait en cache pour toujours — `mergeFetchedComments` le garde en
-    /// tête à chaque relecture puisque le serveur ne le renverra jamais.
     static func persistableComments(_ comments: [FeedComment]) -> [FeedComment] {
-        comments.filter { !$0.id.hasPrefix("cmid_") && !$0.id.hasPrefix("tmp_") }
+        CommentSheetRules.persistableComments(comments)
     }
 
-    /// Une réécriture de cache commentaires : la clé et son contenu déjà filtré.
-    struct CommentCacheWrite {
-        let key: String
-        let comments: [FeedComment]
-    }
+    typealias CommentCacheWrite = CommentSheetRules.CacheWrite
 
-    /// Clés à réécrire après une mutation de commentaire DÉJÀ appliquée en
-    /// mémoire. PURE : `CommentsSheetView` est une `View` à `@State`, donc non
-    /// instrumentable — la décision « quelles clés porter, et lesquelles TAIRE »
-    /// vit ici pour être testable.
-    ///
-    /// Deux gardes, reprises telles quelles de `submitCommentEdit` :
-    /// - `post-<postId>` n'est écrit QUE si l'appelant fournit `liveComments`.
-    ///   Un sink peut tirer AVANT que `.task { loadFullCommentsIfNeeded() }`
-    ///   n'ait chargé la page complète : persister le repli `post.comments`
-    ///   (les 3 commentaires que le feed embarque) écraserait la page de 20
-    ///   déjà écrite sous la même clé par `PostDetailViewModel` / `FeedViewModel`.
-    /// - `replies-<parentId>` n'est écrit que pour un fil MONTÉ dans
-    ///   `repliesMap`. La clé orpheline `replies-<commentId>` d'un top-level
-    ///   supprimé n'est jamais écrite : plus rien ne la relira, son parent
-    ///   n'existe plus.
     static func commentCacheWrites(
         postId: String,
         liveComments: [FeedComment]?,
         repliesMap: [String: [FeedComment]],
         touchedThreadIds: [String]
     ) -> [CommentCacheWrite] {
-        let threads = touchedThreadIds.compactMap { parentId -> CommentCacheWrite? in
-            guard let replies = repliesMap[parentId] else { return nil }
-            return CommentCacheWrite(key: "replies-\(parentId)", comments: persistableComments(replies))
-        }
-        guard let current = liveComments else { return threads }
-        return threads + [CommentCacheWrite(key: "post-\(postId)", comments: persistableComments(current))]
-    }
-
-    /// Réécrit le cache après une mutation reçue À DISTANCE — ce que le
-    /// doc-comment de `loadFullCommentsIfNeeded` affirmait déjà (« la
-    /// modification invalide le cache par réécriture ») alors qu'aucun sink ne
-    /// le faisait : seules les écritures LOCALES persistaient.
-    ///
-    /// `topLevelWasLoaded` est capturé AVANT la mutation : les `apply…`
-    /// promeuvent `post.comments` dans `liveComments` dès que la ligne touchée
-    /// s'y trouve, donc relire `liveComments != nil` après coup ne dirait plus
-    /// si la page complète avait été chargée.
-    private func persistCommentCache(touchedThreadIds: [String], topLevelWasLoaded: Bool) {
-        let writes = Self.commentCacheWrites(
-            postId: post.id,
-            liveComments: topLevelWasLoaded ? liveComments : nil,
-            repliesMap: repliesMap,
-            touchedThreadIds: touchedThreadIds
+        CommentSheetRules.cacheWrites(
+            postId: postId, liveComments: liveComments,
+            repliesMap: repliesMap, touchedThreadIds: touchedThreadIds
         )
-        guard !writes.isEmpty else { return }
-        Task {
-            for write in writes {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(write.comments, for: write.key)
-            }
-        }
     }
 
-    /// Réconciliation par l'agrégat absolu d'un événement cœur de commentaire —
-    /// pose `likes = count` (top-level ou réponse), purge le delta optimiste et
-    /// dérive « mon cœur » de la liste des réacteurs. Miroir de
-    /// `PostDetailViewModel.applyCommentReactionAggregate`.
-    private func applyCommentReactionAggregate(commentId: String, count: Int, reactorUserIds: [String], actorUserId: String) {
-        var resolvedCount = count
-        if let myId = AuthManager.shared.currentUser?.id {
-            if reactorUserIds.contains(myId) {
-                likedIds.insert(commentId)
-            } else if actorUserId == myId {
-                // L'événement décrit MA propre action (cet appareil ou un
-                // autre) : l'agrégat est autoritatif pour mon cœur.
-                likedIds.remove(commentId)
-            } else if likedIds.contains(commentId) {
-                // Événement d'un TIERS pendant que MON like est encore en vol :
-                // son agrégat ne me connaît pas — préserver le cœur et compter
-                // le mien par-dessus (l'écho de mon propre like reconfirmera).
-                resolvedCount = count + 1
-            }
-        }
-        likeDelta[commentId] = nil
-        var current = liveComments ?? post.comments
-        if let idx = current.firstIndex(where: { $0.id == commentId }) {
-            current[idx].likes = resolvedCount
-            liveComments = current
-            return
-        }
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx].likes = resolvedCount
-                repliesMap[key] = replies
-                return
-            }
-        }
-    }
 
     // MARK: - Édition de commentaire (auteur)
 
-    /// Bandeau au-dessus du composer pendant une édition — sortie possible
-    /// par la croix (le composer revient en mode création, texte effacé).
     private var editingBanner: some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            Image(systemName: "pencil")
-                .font(MeeshyFont.relative(MeeshyIconSize.xs))
-                .foregroundColor(Color(hex: accentColor))
-            Text(String(localized: "feed.comments.editing", defaultValue: "Modification du commentaire", bundle: .main))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                .foregroundColor(theme.textSecondary)
-            Spacer()
-            Button {
-                cancelEditComment()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                    .foregroundColor(theme.textMuted)
-            }
-            .accessibilityLabel(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-        }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.vertical, MeeshySpacing.xsPlus)
-        .background(theme.inputBackground.opacity(0.6))
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        CommentEditingBanner(accentColor: accentColor, onCancel: { cancelEditComment() })
     }
 
     /// Removes the optimistic `tempId` row (and decrements its parent's reply
@@ -319,28 +197,17 @@ struct CommentsSheetView: View {
     /// enqueue-refusal `catch` and the async `.exhausted` outbox observer,
     /// both of which restore the identical pre-send snapshot.
     func rollbackOptimisticComment(tempId: String, parentId: String?) {
-        if let parentId {
-            var existing = repliesMap[parentId] ?? []
-            existing.removeAll { $0.id == tempId }
-            repliesMap[parentId] = existing
-            var current = liveComments ?? post.comments
-            if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
-                current[idx].replies -= 1
-                liveComments = current
-            }
-        } else {
-            var current = liveComments ?? post.comments
-            current.removeAll { $0.id == tempId }
-            liveComments = current
-        }
-        liveCommentCount = max((liveCommentCount ?? post.comments.count) - 1, 0)
+        CommentSheetRules.rollbackOptimistic(
+            tempId: tempId, parentId: parentId, embeddedComments: post.comments,
+            liveComments: &liveComments, repliesMap: &repliesMap, liveCommentCount: &liveCommentCount
+        )
     }
 
     var body: some View {
         let topLevel = topLevelComments   // filtré UNE fois par rendu (3 lectures avant)
         sheetBody(topLevel)
             // Les médias de TOUS les commentaires du post (racines + réponses chargées) se feuillettent ensemble en plein écran.
-            .commentMediaGallery(topLevel: topLevel, replies: repliesMap)
+            .commentMediaGallery(topLevel: topLevel, replies: repliesMap).closesForConversationOpening(.sheet)
     }
 
     private func sheetBody(_ topLevel: [FeedComment]) -> some View {
@@ -364,7 +231,7 @@ struct CommentsSheetView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(topLevel) { comment in
-                                ThreadedCommentSection(
+                                LivePresence { ThreadedCommentSection(
                                     comment: comment,
                                     replies: repliesMap[comment.id] ?? [],
                                     isExpanded: expandedThreads.contains(comment.id),
@@ -385,26 +252,23 @@ struct CommentsSheetView: View {
                                     onDeleteComment: { target in
                                         Task { await deleteComment(target) }
                                     },
+                                    onRemoveComment: { target, reason in
+                                        Task { await deleteComment(target, reason: reason) }
+                                    },
                                     onEditComment: { target in
                                         beginEditComment(target)
                                     },
-                                    onRequestTranslation: { target in
-                                        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
-                                        Task {
-                                            try? await PostService.shared.requestCommentTranslation(
-                                                postId: post.id, commentId: target.id, targetLanguage: lang)
-                                        }
-                                    },
+                                    onRequestTranslation: { requestTranslation(of: $0) },
                                     moodEmoji: moodEmojiResolver?(comment.authorId),
                                     storyState: storyRingResolver?(comment.authorId) ?? .none,
-                                    presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
+                                    presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
                                     replyMoodResolver: { moodEmojiResolver?($0) },
                                     replyStoryResolver: { storyRingResolver?($0) ?? .none },
-                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+                                    replyPresenceResolver: { PresenceManager.shared.knownPresenceState(for: $0) },
                                     hasMoreReplies: expandedThreads.contains(comment.id) && (repliesHasMore[comment.id] ?? false),
                                     onLoadMoreReplies: { await loadMoreReplies(commentId: comment.id) },
                                     highlightedCommentId: highlightedCommentId
-                                )
+                                ) }
                                 .background(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
@@ -515,189 +379,16 @@ struct CommentsSheetView: View {
                 NotificationToastManager.shared.onPostClosed(post.id)
             }
         }
-        .onReceive(
-            SocialSocketManager.shared.commentAdded
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { data in
-            let parentId = data.comment.parentId
-            // Parité effets + Prisme avec le mapping REST (`mapFetchedComments`) :
-            // sans effectFlags, un commentaire stylé (lueur/pulse) arrivant en
-            // temps réel rendait SANS ses effets dans cette feuille.
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let feedComment = FeedComment(api: data.comment, preferredLanguages: langs)
-            // The echoed event for OUR own just-sent comment: replace the optimistic
-            // placeholder in place instead of duplicating it. Primary key: the
-            // cmid echoed by the gateway matches the optimistic row id exactly.
-            // Fallback: legacy tmp_ rows matched by author + content + parent.
-            func isTwin(_ c: FeedComment) -> Bool {
-                if let cmid = data.clientMutationId, c.id == cmid { return true }
-                return c.id.hasPrefix("tmp_")
-                    && c.authorId == feedComment.authorId
-                    && c.content == feedComment.content
-                    && c.parentId == parentId
-            }
-            if let parentId {
-                var existing = repliesMap[parentId] ?? []
-                if let idx = existing.firstIndex(where: isTwin) {
-                    existing[idx] = feedComment                 // reconcile our temp
-                    repliesMap[parentId] = existing
-                    // Réécriture du cache avec la ligne RÉCONCILIÉE : un cache
-                    // persisté pendant que la ligne optimiste (cmid) était
-                    // encore là garderait le fantôme pour toujours. Scope
-                    // STRICT à la réconciliation — persister sur l'insertion
-                    // d'un TIERS écraserait un fil de réponses caché plus
-                    // complet quand le fil n'a pas (encore) été chargé ici.
-                    let replies = existing
-                    Task {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
-                    }
-                } else if !existing.contains(where: { $0.id == feedComment.id }) {
-                    existing.insert(feedComment, at: 0)
-                    repliesMap[parentId] = existing
-                    var current = liveComments ?? post.comments
-                    if let idx = current.firstIndex(where: { $0.id == parentId }) {
-                        current[idx].replies += 1
-                        liveComments = current
-                    }
-                }
-            } else {
-                var current = liveComments ?? post.comments
-                if let idx = current.firstIndex(where: isTwin) {
-                    current[idx] = feedComment                  // reconcile our temp
-                    // Même réécriture réconciliée pour le fil top-level (clé
-                    // partagée avec le détail de post et l'overlay story) —
-                    // même scope strict que côté réponses.
-                    let snapshot = current
-                    Task {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(snapshot), for: "post-\(post.id)")
-                    }
-                } else if !current.contains(where: { $0.id == feedComment.id }) {
-                    current.insert(feedComment, at: 0)
-                }
-                liveComments = current
-            }
-            liveCommentCount = data.commentCount
-        }
-        // Édition en temps réel : remplace la ligne EN PLACE (contenu, effets,
-        // traductions régénérées) — idempotent avec l'optimiste local.
-        .onReceive(
-            SocialSocketManager.shared.commentUpdated
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { data in
-            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-            let updated = FeedComment(api: data.comment, preferredLanguages: langs)
-            let topLevelWasLoaded = liveComments != nil
-            applyCommentEdit(updated)
-            persistCommentCache(
-                touchedThreadIds: updated.parentId.map { [$0] } ?? [],
-                topLevelWasLoaded: topLevelWasLoaded
-            )
-        }
-        // Traduction de commentaire arrivée (pipeline async ou demande à la
-        // demande) : pose `translatedContent` si la langue est préférée,
-        // qu'aucune traduction n'est déjà affichée, ET que la langue d'origine
-        // du commentaire n'occupe pas déjà un rang au moins aussi prioritaire
-        // dans le Prisme (#6531, règle unique — miroir de
-        // `FeedViewModel.applyCommentTranslation`).
-        .onReceive(
-            SocialSocketManager.shared.commentTranslationUpdated
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { data in
-            let langs = (AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
-                .filter { !$0.isEmpty }.map { $0.lowercased() }
-            guard let incomingRank = langs.firstIndex(where: { $0 == data.language.lowercased() }) else { return }
-            func shouldApply(_ comment: FeedComment) -> Bool {
-                guard comment.translatedContent == nil else { return false }
-                let originalRank = comment.originalLanguage
-                    .map { $0.lowercased() }
-                    .flatMap { orig in langs.firstIndex(where: { $0 == orig }) }
-                if let originalRank, originalRank <= incomingRank { return false }
-                return true
-            }
-            let text = data.translation.text
-            let topLevelWasLoaded = liveComments != nil
-            var current = liveComments ?? post.comments
-            if let idx = current.firstIndex(where: { $0.id == data.commentId }), shouldApply(current[idx]) {
-                current[idx].translatedContent = text
-                liveComments = current
-                persistCommentCache(touchedThreadIds: [], topLevelWasLoaded: topLevelWasLoaded)
-                return
-            }
-            for (key, var replies) in repliesMap {
-                if let idx = replies.firstIndex(where: { $0.id == data.commentId }), shouldApply(replies[idx]) {
-                    replies[idx].translatedContent = text
-                    repliesMap[key] = replies
-                    persistCommentCache(touchedThreadIds: [key], topLevelWasLoaded: topLevelWasLoaded)
-                    return
-                }
-            }
-        }
-        // Réconciliation par l'AGRÉGAT ABSOLU (miroir de
-        // `StoryViewerView.applyCommentReactionEvent`) : l'ancien ±1 ne purgeait
-        // jamais le delta de sa PROPRE réaction — dès que la base était
-        // rafraîchie (loadReplies, refetch), `likes` incluait déjà le like et
-        // l'affichage `likes + delta` comptait DOUBLE. « Mon cœur » dérive de
-        // `aggregation.userIds` (User.id des réacteurs), PAS de `hasCurrentUser`
-        // qui est calculé relativement à l'ACTEUR de l'événement côté gateway.
-        .onReceive(
-            SocialSocketManager.shared.commentReactionAdded
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { event in
-            guard event.emoji == StoryViewerView.heartEmoji else { return }
-            applyCommentReactionAggregate(
-                commentId: event.commentId,
-                count: event.aggregation.count,
-                reactorUserIds: event.aggregation.userIds,
-                actorUserId: event.userId
-            )
-        }
-        .onReceive(
-            SocialSocketManager.shared.commentReactionRemoved
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { event in
-            guard event.emoji == StoryViewerView.heartEmoji else { return }
-            applyCommentReactionAggregate(
-                commentId: event.commentId,
-                count: event.aggregation.count,
-                reactorUserIds: event.aggregation.userIds,
-                actorUserId: event.userId
-            )
-        }
-        // Pipeline audio d'un média de commentaire terminé (transcription / variantes
-        // TTS prêtes) → on remplace le média du commentaire en cache par la version
-        // enrichie. Le drapeau de langue + le player audio Prisme se mettent à jour.
-        .onReceive(
-            SocialSocketManager.shared.commentMediaUpdated
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { data in
-            let media = (data.comment.media ?? []).map { $0.toFeedMedia() }
-            guard !media.isEmpty else { return }
-            let topLevelWasLoaded = liveComments != nil
-            let touchedThreadIds = applyCommentMediaUpdate(
-                commentId: data.commentId, parentId: data.comment.parentId, media: media
-            )
-            persistCommentCache(touchedThreadIds: touchedThreadIds, topLevelWasLoaded: topLevelWasLoaded)
-        }
-        // Suppression en temps réel : retire le commentaire et resynchronise le
-        // compteur sur la valeur autoritative serveur (heale la dérive optimiste).
-        // Idempotent avec le retrait optimiste du client qui supprime.
-        .onReceive(
-            SocialSocketManager.shared.commentDeleted
-                .receive(on: DispatchQueue.main)
-                .filter { [postId = post.id] in $0.postId == postId }
-        ) { data in
-            let topLevelWasLoaded = liveComments != nil
-            let touchedThreadIds = applyCommentDeletion(
-                commentId: data.commentId, commentCount: data.commentCount
-            )
-            persistCommentCache(touchedThreadIds: touchedThreadIds, topLevelWasLoaded: topLevelWasLoaded)
-        }
+        .modifier(CommentsSheetLiveSync(
+            post: post,
+            liveComments: $liveComments,
+            liveCommentCount: $liveCommentCount,
+            repliesMap: $repliesMap,
+            expandedThreads: $expandedThreads,
+            likedIds: $likedIds,
+            likeDelta: $likeDelta,
+            applyEdit: { applyCommentEdit($0) }
+        ))
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -717,108 +408,13 @@ struct CommentsSheetView: View {
         .task {
             // Hydrate repliesMap from cache before hitting the network so
             // auto-preview rows are visible instantly on re-present.
-            let withReplies = topLevelComments.filter { $0.replies > 0 }
-            for comment in withReplies.prefix(5) {
-                let cacheKey = "replies-\(comment.id)"
-                let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
-                if case .fresh(let replies, _) = cached {
-                    repliesMap[comment.id] = replies
-                    seedLikedIds(from: replies)
-                } else if case .stale(let replies, _) = cached {
-                    repliesMap[comment.id] = replies
-                    seedLikedIds(from: replies)
-                }
-                await loadReplies(commentId: comment.id)
-            }
+            await prefetchReplyPreviews(of: topLevelComments)
         }
         .task {
             await loadFullCommentsIfNeeded()
         }
     }
 
-    /// The feed only embeds the top 3 comments per post (gateway
-    /// `postIncludes.ts` `take: 3`) — this sheet used to permanently show
-    /// just those 3 even when the header announces the real total
-    /// (`post.commentCount`), with no fetch and no pagination past what the
-    /// feed page happened to carry. Loads the full first page cache-first
-    /// (mirrors `PostDetailViewModel.loadComments`) whenever the server-known
-    /// total exceeds what's embedded; a no-op for posts with ≤3 comments.
-    private func loadFullCommentsIfNeeded() async {
-        guard post.commentCount > post.comments.count else { return }
-        let cacheKey = "post-\(post.id)"
-        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
-        switch cached {
-        case .fresh(let full, _):
-            // LOCAL-FIRST : un cache FRAIS se sert SANS refetch — changer de
-            // vue (feed → sheet → détail → story) ne recharge pas des
-            // commentaires déjà présents et non modifiés. Le temps réel
-            // (comment:added/updated/deleted/translation-updated) et les
-            // écritures locales maintiennent la fraîcheur ; la modification
-            // invalide le cache par réécriture (savePreservingFreshness).
-            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: full)
-            seedLikedIds(from: full)
-            // La pagination reste possible : cursor nil = page 1 de recovery
-            // quand l'utilisateur atteint le bas (même contrat que le profil).
-            // `post.commentCount` compte TOUTES les lignes (réponses incluses)
-            // alors que `liveComments` n'a que le top-level : le total local
-            // comparable = top-level chargés + réponses qu'ils annoncent.
-            let loaded = liveComments ?? []
-            let knownTotal = loaded.count + loaded.reduce(0) { $0 + $1.replies }
-            commentsHasMore = post.commentCount > knownTotal
-            return
-        case .stale(let full, _):
-            // Merge (not overwrite): the `await` above may have given an
-            // optimistic send or a `comment:added` socket echo enough time
-            // to land in `liveComments` first.
-            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: full)
-            seedLikedIds(from: full)
-        case .expired, .empty:
-            break
-        }
-        do {
-            let response = try await PostService.shared.getComments(postId: post.id, cursor: nil, limit: 20)
-            let fetched = mapFetchedComments(response.data)
-            // Merge, never overwrite: `liveComments` may already carry an
-            // optimistic send or a socket-reconciled comment that landed
-            // while this GET was in flight — the server snapshot the GET
-            // resolved from can't know about either yet.
-            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
-            seedLikedIds(from: fetched)
-            commentsNextCursor = response.pagination?.nextCursor
-            commentsHasMore = response.pagination?.hasMore ?? false
-            try? await CacheCoordinator.shared.comments.save(fetched, for: cacheKey)
-        } catch {
-            // Network failed — keep whatever we already have (embedded top-3
-            // or the cached stale page loaded above). Matches this sheet's
-            // existing silent-fail pattern for supplementary loads (e.g. the
-            // replies prefetch above).
-        }
-    }
-
-    private func mapFetchedComments(_ data: [APIPostComment]) -> [FeedComment] {
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { FeedComment(api: $0, preferredLanguages: langs) }
-    }
-
-    /// Page suivante (plus ancienne) du fil — utilisée par la chasse paginée
-    /// d'un commentaire notifié hors de la première page.
-    private func loadNextCommentsPage() async {
-        guard commentsHasMore else { return }
-        do {
-            let response = try await PostService.shared.getComments(
-                postId: post.id, cursor: commentsNextCursor, limit: 20
-            )
-            let fetched = mapFetchedComments(response.data)
-            liveComments = Self.mergeFetchedComments(current: liveComments ?? post.comments, fetched: fetched)
-            seedLikedIds(from: fetched)
-            commentsNextCursor = response.pagination?.nextCursor
-            commentsHasMore = response.pagination?.hasMore ?? false
-        } catch {
-            // Échec réseau : stopper la chasse proprement (la liste reste
-            // utilisable, le ciblage se désarmera côté appelant).
-            commentsHasMore = false
-        }
-    }
 
     // MARK: - Notification → comment scroll
 
@@ -898,201 +494,34 @@ struct CommentsSheetView: View {
             likedIds.insert(commentId)
             likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
         }
-        // Unification du like de commentaire : la réaction socket ❤️ ci-dessous est la
-        // SOURCE UNIQUE (le gateway synchronise `likeCount = count(CommentReaction)` —
-        // CS1). On NE déclenche PLUS le callback REST `onLikeComment` (double-écriture
-        // qui incrémentait `likeCount` + `reactionSummary` une 2e fois, et n'envoyait
-        // jamais d'unlike : toujours `liked:true`). Aligne le chemin feed sur reels/détail.
+        // Unification du like de commentaire : la réaction socket ❤️ (repli REST,
+        // `CommentHeartTransport`) est la SOURCE UNIQUE (le gateway synchronise
+        // `likeCount = count(CommentReaction)` — CS1). On NE déclenche PLUS le
+        // callback REST `onLikeComment` (double-écriture qui incrémentait
+        // `likeCount` + `reactionSummary` une 2e fois, et n'envoyait jamais
+        // d'unlike : toujours `liked:true`). Aligne le chemin feed sur reels/détail.
 
-        do {
-            // A6 — hard timeout: protects against a hung SocialSocketManager
-            // leaving the heart button locked forever (commentId stuck in
-            // heartInFlightIds because defer only fires on Task completion).
-            try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
-                if wasLiked {
-                    _ = try await SocialSocketManager.shared.removeCommentReaction(
-                        commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
-                    )
-                } else {
-                    _ = try await SocialSocketManager.shared.addCommentReaction(
-                        commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
-                    )
-                }
-            }
-        } catch {
-            // Fallback REST quand le socket échoue (timeout / déconnexion). Le endpoint
-            // REST écrit la MÊME table `CommentReaction` (idempotent, likeCount synchronisé)
-            // → le like persiste. Mutuellement exclusif avec le socket (déclenché SEULEMENT
-            // dans ce catch) : ce n'est PAS la double-écriture retirée. Miroir de
-            // `FeedView.togglePostHeart` (post). Rollback uniquement si le REST échoue aussi.
-            let restOK: Bool
-            do {
-                if wasLiked {
-                    try await PostService.shared.unlikeComment(postId: post.id, commentId: commentId)
-                } else {
-                    try await PostService.shared.likeComment(postId: post.id, commentId: commentId)
-                }
-                restOK = true
-            } catch {
-                restOK = false
-            }
-            if !restOK {
-                if wasLiked {
-                    likedIds.insert(commentId)
-                    likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
-                } else {
-                    likedIds.remove(commentId)
-                    likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
-                }
-            }
-        }
-    }
-
-    // MARK: - Thread Management
-
-    private func toggleThread(_ commentId: String) async {
-        if expandedThreads.contains(commentId) {
-            expandedThreads.remove(commentId)
+        let delivered = await CommentHeartTransport.deliver(wasLiked: wasLiked, commentId: commentId, postId: post.id)
+        guard !delivered else { return }
+        if wasLiked {
+            likedIds.insert(commentId)
+            likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
         } else {
-            expandedThreads.insert(commentId)
-            if repliesMap[commentId] == nil {
-                await loadReplies(commentId: commentId)
-            }
+            likedIds.remove(commentId)
+            likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
         }
-    }
-
-    private func loadReplies(commentId: String) async {
-        guard !loadingReplies.contains(commentId), repliesMap[commentId] == nil else { return }
-        loadingReplies.insert(commentId)
-        defer { loadingReplies.remove(commentId) }
-        do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: post.id, commentId: commentId
-            )
-            let replies = mapFetchedReplies(response.data, parentId: commentId)
-            repliesMap[commentId] = replies
-            repliesNextCursor[commentId] = response.pagination?.nextCursor
-            repliesHasMore[commentId] = response.pagination?.hasMore ?? false
-            // Sème l'état "liké par moi" des réponses chargées (elles portent
-            // `currentUserReactions` depuis `loadReplies`/`getCommentReplies`).
-            seedLikedIds(from: replies)
-            // Persist replies under "replies-{commentId}" so re-presenting the sheet
-            // hydrates the auto-preview rows instantly without a round-trip.
-            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
-        } catch {
-            expandedThreads.remove(commentId)
-        }
-    }
-
-    /// Page suivante des réponses d'un fil (curseur `gt`, tri ASC → APPEND).
-    /// Jamais de remplacement : les réponses arrivées par le socket
-    /// (`comment:added`) pendant la pagination sont préservées (dédup par id).
-    /// NOTE : `repliesHasMore[id] == nil` (fil hydraté du cache par le `.task`,
-    /// pagination jamais enregistrée) n'est PAS bloquant — `cursor: nil`
-    /// signifie « page 1 », ce qu'il faut pour récupérer un vrai curseur
-    /// (même fix documenté que `loadMoreComments` côté VM). Seul `false`
-    /// (fin de fil connue) stoppe.
-    private func loadMoreReplies(commentId: String) async {
-        guard !loadingReplies.contains(commentId), repliesHasMore[commentId] != false else { return }
-        loadingReplies.insert(commentId)
-        defer { loadingReplies.remove(commentId) }
-        do {
-            let response = try await PostService.shared.getCommentReplies(
-                postId: post.id, commentId: commentId,
-                cursor: repliesNextCursor[commentId], limit: 20
-            )
-            let fetched = mapFetchedReplies(response.data, parentId: commentId)
-            let existing = repliesMap[commentId] ?? []
-            let existingIds = Set(existing.map(\.id))
-            let unique = fetched.filter { !existingIds.contains($0.id) }
-            repliesMap[commentId] = existing + unique
-            repliesNextCursor[commentId] = response.pagination?.nextCursor
-            repliesHasMore[commentId] = response.pagination?.hasMore ?? false
-            seedLikedIds(from: unique)
-            try? await CacheCoordinator.shared.comments.save(
-                repliesMap[commentId] ?? [], for: "replies-\(commentId)"
-            )
-        } catch {
-            // Échec réseau : stopper proprement la pagination (et toute chasse
-            // en cours) — le fil garde les pages déjà chargées.
-            repliesHasMore[commentId] = false
-        }
-    }
-
-    /// Chasse paginée bornée d'une RÉPONSE notifiée hors de la première page
-    /// de son fil (miroir de `PostDetailViewModel.loadRepliesUntilPresent`).
-    private func loadRepliesUntilPresent(_ replyId: String, in commentId: String) async -> Bool {
-        if repliesMap[commentId] == nil {
-            await loadReplies(commentId: commentId)
-        }
-        return await CommentTargetHunter.hunt(
-            isPresent: { repliesMap[commentId]?.contains(where: { $0.id == replyId }) ?? false },
-            // `nil` = pagination inconnue (fil hydraté du cache) → tenter la
-            // page 1 pour récupérer un curseur ; seul `false` arrête la chasse.
-            hasMore: { repliesHasMore[commentId] != false },
-            loadNextPage: { await loadMoreReplies(commentId: commentId) }
-        )
-    }
-
-    private func mapFetchedReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-        return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 
     // MARK: - Comment Reply Banner
 
     private func commentReplyBanner(_ reply: FeedComment) -> some View {
-        HStack(spacing: MeeshySpacing.sm) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color(hex: reply.authorColor))
-                .frame(width: 3, height: 36)
-
-            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                Text(reply.author)
-                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(Color(hex: reply.authorColor))
-
-                MessageTextRenderer.render(
-                    reply.displayContent,
-                    fontSize: 12,
-                    color: theme.textSecondary,
-                    mentionColor: MeeshyColors.mentionColor(isDark: isDark),
-                    hashtagColor: MeeshyColors.hashtagColor(isDark: isDark),
-                    accentColor: Color(hex: reply.authorColor),
-                    usesRelativeFont: true, trackedLinks: reply.trackedLinkMap
-                )
-                    .tint(Color(hex: reply.authorColor))
-                    .lineLimit(1)
+        CommentReplyBanner(reply: reply, accentColor: accentColor) {
+            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                replyingTo = nil
             }
-
-            Spacer()
-
-            Button {
-                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    replyingTo = nil
-                }
-            } label: {
-                // Figé : chrome xmark dans un cadre tap fixe 24×24 (doctrine 82i).
-                Image(systemName: "xmark")
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(theme.textMuted)
-                    .frame(width: 24, height: 24)
-                    .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
-            }
-            .accessibilityLabel(String(localized: "a11y.comment.cancel_reply", defaultValue: "Annuler la réponse", bundle: .main))
-            .meeshyTapTarget(MeeshyControlSize.tapTarget)
         }
-        .padding(.horizontal, MeeshySpacing.md)
-        .padding(.vertical, MeeshySpacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .fill(theme.surfaceGradient(tint: accentColor))
-                .overlay(
-                    RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                        .stroke(theme.border(tint: accentColor, intensity: 0.3), lineWidth: 1)
-                )
-        )
     }
+
 
     // MARK: - Comment Composer (UniversalComposerBar)
 
@@ -1153,7 +582,7 @@ struct CommentsSheetView: View {
             isPresented: $showCommentPhotoPicker,
             selection: $commentPhotoItems,
             maxSelectionCount: MAX_POST_MEDIA,
-            matching: .any(of: [.images, .videos]),
+            matching: .any(of: [.images, .videos]), preferredItemEncoding: .current,
             photoLibrary: .shared()
         )
         .fileImporter(
@@ -1440,73 +869,22 @@ struct CommentsSheetView: View {
         }
     }
 
-    /// Remplace le média (enrichi) d'un commentaire en cache, qu'il soit top-level
-    /// (`liveComments`) ou une réponse (`repliesMap`). Déclenché par
-    /// `comment:media-updated` quand la transcription / les variantes TTS arrivent.
-    /// Rend les fils de réponses touchés, pour que l'appelant sache quelle clé
-    /// de cache réécrire (`[]` = la mutation a atterri dans le top-level).
-    private func applyCommentMediaUpdate(commentId: String, parentId: String?, media: [FeedMedia]) -> [String] {
-        if let parentId, var existing = repliesMap[parentId] {
-            if let idx = existing.firstIndex(where: { $0.id == commentId }) {
-                existing[idx].media = media
-                repliesMap[parentId] = existing
-                return [parentId]
-            }
-        }
-        var current = liveComments ?? post.comments
-        if let idx = current.firstIndex(where: { $0.id == commentId }) {
-            current[idx].media = media
-            liveComments = current
-            return []
-        }
-        // Réponse non encore montée dans repliesMap : tente tous les threads chargés.
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies[idx].media = media
-                repliesMap[key] = replies
-                return [key]
-            }
-        }
-        return []
-    }
-
-    /// Retire un commentaire (racine + ses réponses chargées, ou réponse avec
-    /// décrément du compteur de son parent) et resynchronise le total sur la valeur
-    /// autoritative serveur. Déclenché par le socket `comment:deleted` — idempotent
-    /// avec le retrait optimiste local.
-    /// Rend les fils de réponses touchés : une RÉPONSE supprimée sort de
-    /// `replies-<parentId>` ET fait bouger le compteur de son parent dans le
-    /// top-level, donc l'appelant a DEUX clés à réécrire. La clé orpheline
-    /// `replies-<commentId>` d'un top-level supprimé n'est jamais rendue :
-    /// plus rien ne la relira, son parent n'existe plus.
-    private func applyCommentDeletion(commentId: String, commentCount: Int) -> [String] {
-        var current = liveComments ?? post.comments
-        current.removeAll { $0.id == commentId }
-        repliesMap[commentId] = nil
-        expandedThreads.remove(commentId)
-        var touchedThreadIds: [String] = []
-        for (key, var replies) in repliesMap {
-            if let idx = replies.firstIndex(where: { $0.id == commentId }) {
-                replies.remove(at: idx)
-                repliesMap[key] = replies
-                touchedThreadIds.append(key)
-                if let pIdx = current.firstIndex(where: { $0.id == key }), current[pIdx].replies > 0 {
-                    current[pIdx].replies -= 1
-                }
-            }
-        }
-        liveComments = current
-        liveCommentCount = commentCount
-        return touchedThreadIds
-    }
-
     // MARK: - Comment Deletion
 
     /// Supprime un commentaire (auteur uniquement, gated par `CommentRowView`).
     /// Retrait optimiste immédiat (racine + ses réponses chargées, ou réponse
     /// avec décrément du compteur du parent) puis appel API. Rollback complet
     /// du snapshot si l'API échoue. Miroir du flux optimiste d'envoi.
-    private func deleteComment(_ comment: FeedComment) async {
+    /// Demande la traduction d'un commentaire vers la langue préférée du lecteur.
+    private func requestTranslation(of target: FeedComment) {
+        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+        Task {
+            try? await PostService.shared.requestCommentTranslation(
+                postId: post.id, commentId: target.id, targetLanguage: lang)
+        }
+    }
+
+    private func deleteComment(_ comment: FeedComment, reason: String? = nil) async {
         let previousComments = liveComments
         let previousReplies = repliesMap
         let previousExpanded = expandedThreads
@@ -1518,7 +896,7 @@ struct CommentsSheetView: View {
                 repliesMap[parentId] = existing
                 // Met à jour le cache d'aperçu pour ne pas réafficher la réponse
                 // supprimée à la ré-ouverture du post.
-                try? await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)")
+                await bestEffort("feedCommentsSheet.comments.pruneDeletedReply", category: .cache) { try await CacheCoordinator.shared.comments.save(existing, for: "replies-\(parentId)") }
             }
             var current = liveComments ?? post.comments
             if let idx = current.firstIndex(where: { $0.id == parentId }), current[idx].replies > 0 {
@@ -1538,14 +916,14 @@ struct CommentsSheetView: View {
         }
 
         do {
-            try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id)
+            try await PostService.shared.deleteComment(postId: post.id, commentId: comment.id, reason: reason)
             // Invalidation locale par réécriture : sans elle, la version cachée
             // ressuscitait le commentaire supprimé à la prochaine ouverture
             // (sheet, détail, overlay story lisent la même clé).
             if comment.parentId == nil, let current = liveComments {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
+                await bestEffort("feedCommentsSheet.comments.pruneDeletedComment", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)") }
             }
-            FeedbackToastManager.shared.showSuccess(String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(ContentRemovalKind.successText(reason: reason, deleted: String(localized: "feed.comments.deleted", defaultValue: "Commentaire supprimé", bundle: .main)))
         } catch {
             liveComments = previousComments
             repliesMap = previousReplies

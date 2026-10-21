@@ -58,15 +58,22 @@ describe('robots.txt — les robots d’aperçu déplient une invitation, rien d
     });
 
     test(`${bot} reste fermé au reste de l’application`, () => {
-      for (const path of ['/settings', '/conversations', '/api/v1/conversations', '/u/zoe', '/chat']) {
+      for (const path of ['/settings', '/conversations', '/api/v1/conversations', '/u/zoe', '/chat', '/links', '/feeds/post/abc']) {
         expect(allowed(bot, path)).toBe(false);
       }
       expect(allowed(bot, '/about')).toBe(true);
     });
+
+    test(`${bot} déplie les adresses qui ont un aperçu (#10192)`, () => {
+      for (const path of ['/', '/en', '/world', '/login', '/signup', '/chats', '/c/64f0c0ffee0000000000abcd', '/l/Ab3xYz', '/about']) {
+        expect(allowed(bot, path)).toBe(true);
+      }
+    });
   }
 
-  test('les moteurs de recherche, eux, restent hors de /chat', () => {
-    expect(allowed('Googlebot', '/chat/mshy_abc')).toBe(false);
-    expect(allowed('Bingbot', '/chat/mshy_abc')).toBe(false);
+  test('les moteurs de recherche, eux, restent hors de /chat, /chats et /l/', () => {
+    for (const engine of ['Googlebot', 'Bingbot']) {
+      for (const path of ['/chat/mshy_abc', '/chats', '/l/Ab3xYz']) expect(allowed(engine, path)).toBe(false);
+    }
   });
 });

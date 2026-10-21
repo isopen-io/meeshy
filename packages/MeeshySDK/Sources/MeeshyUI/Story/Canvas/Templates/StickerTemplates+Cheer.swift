@@ -13,7 +13,9 @@ import MeeshySDK
 /// La légende vient de `String(localized:)`, avec une clé LITTÉRALE par mot :
 /// le LECTEUR lit « Well done! » là où l'auteur a posé « Bien joué ». Aucun
 /// emplacement, donc rien à remplir et rien à traduire.
-extension StickerTemplateRenderer {
+enum CheerStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .cheer
+
 
     // MARK: Les mots des silhouettes dessinées à part
 
@@ -533,7 +535,7 @@ extension StickerTemplateRenderer {
                   icône: { r, _ in Self.cheerHeart(in: r) }),
     ]
 
-    static let cheerDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.cheerBravo,
             name: { Self.cheerBravoCaption },

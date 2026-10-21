@@ -35,6 +35,10 @@ struct ConversationComposerState {
     /// `endSelectionMode()`-adjacent, posée puis effacée avec
     /// `forwardMessage` par le MÊME `onDismiss` de la feuille.
     var forwardAdditionalMessages: [Message] = []
+    /// **La PIÈCE transférée seule** (#9914, #10947, V2) — posée par le menu
+    /// d'une pièce avec `forwardMessage` ; `nil` = tout le message. Effacée par
+    /// la fermeture de l'écran de partage.
+    var forwardPieceId: String? = nil
     /// La cible de « Composer » — le média reçu que la porte va semer.
     /// Non-nil = la porte est présentée.
     @Indirect var composeMediaTarget: ComposerSeedTarget? = nil
@@ -72,6 +76,9 @@ struct ConversationComposerState {
     var showPhotoPicker = false
     var showCamera = false
     var showFilePicker = false
+    /// #10006 — la feuille « Partager dans … » d'un invité dont le lien
+    /// restreint les familles : elle remplace le sélecteur de fichiers libre.
+    var showGuestAttachmentSheet = false
     var selectedPhotoItems: [PhotosPickerItem] = []
     /// True while `selectedPhotoItems` is being primed with the recent-media
     /// strip's multi-selection before presenting the PhotosPicker. Priming
@@ -140,6 +147,14 @@ extension ConversationComposerState {
     /// navigation se terminer — un focus posé pendant la poussée est perdu.
     static func replyFocusDelay(openingConversation: Bool) -> TimeInterval {
         openingConversation ? 0.45 : 0
+    }
+
+    /// **Ce que la conversation garde comme brouillon** (#10807). En édition, le
+    /// champ porte le message MODIFIÉ, qui n'est pas un brouillon : le persister
+    /// affichait « Brouillon : … » dans la liste. Ce qui se garde alors est ce
+    /// que l'auteur composait avant d'entrer en édition — rien s'il n'avait rien.
+    func persistedDraftText(composing text: String) -> String {
+        editingMessageId == nil ? text : (draftBeforeEdit ?? "")
     }
 
     /// Les pièces de la zone d'attachement, prêtes puis en préparation.

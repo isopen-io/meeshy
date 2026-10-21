@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 
 import { auth } from '@/lib/api/auth';
+import { accountReplacementOf, provenSessionOf, type AccountReplacement, type ProvenSessionGestures } from '@/lib/api/proven-session';
+import { sessionStore } from '@/lib/api/session';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { useOnline } from '@/lib/net/online';
@@ -10,6 +12,7 @@ import { resolveVerifyEmailOutcome, type VerifyEmailOutcome } from '@/lib/view/a
 import { watchVerificationStatus, type VerificationStatusReader } from '@/lib/view/verification-watch';
 import { href, navigate } from '@/routes/route-table';
 
+import { AccountReplacementPrompt } from './account-replacement-prompt';
 import { AuthSubmitButton } from './auth-chrome';
 import { Field } from './field';
 
@@ -105,6 +108,22 @@ export function goToLanding(next: string | null): void {
   navigate(landingAfterSession(next, href('list')), true);
 }
 
+/**
+ * UN COMPTE À SECOND FACTEUR (#10474) — la preuve a ouvert un défi, pas une
+ * session : la saisie du code attend sur l'écran de connexion, jamais la
+ * célébration ni `onSignedIn`. Un défi pour le compte DÉJÀ ouvert ne pose
+ * rien (`admitProvenSession`) : sa session vaut, et l'écran continue comme
+ * après une connexion.
+ */
+export function awaitsSecondFactor(): boolean {
+  return sessionStore.getState().session.status === 'pending2fa';
+}
+
+export function goToSecondFactor(): void {
+  forgetPendingVerification();
+  navigate(href('login'), true);
+}
+
 export function EmailCodeForm({
   email,
   next,
@@ -116,6 +135,7 @@ export function EmailCodeForm({
   pendingSessionToken = null,
   autoFocus = false,
   initialError = null,
+  accountGestures,
 }: {
   readonly email: string;
   readonly next: string | null;
@@ -132,6 +152,9 @@ export function EmailCodeForm({
   readonly pendingSessionToken?: string | null;
   readonly autoFocus?: boolean;
   readonly initialError?: string | null;
+  /** Les gestes de la question « un AUTRE compte » (#10451) — ceux de
+   * l'appareil si absents. */
+  readonly accountGestures?: ProvenSessionGestures;
 }) {
   const online = useOnline();
   const language = currentInterfaceLanguage();
@@ -139,6 +162,7 @@ export function EmailCodeForm({
   const [focused, setFocused] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(initialError);
+  const [replacement, setReplacement] = useState<AccountReplacement | null>(null);
   const provenElsewhere = useAddressProvenElsewhere(pendingSessionToken, verificationStatus, onProvenElsewhere);
 
   const isComplete = code.length === 6;
@@ -151,13 +175,23 @@ export function EmailCodeForm({
     const password = pendingVerificationFor(email)?.password;
     const result = await verifyEmail({ email, code, ...(password !== undefined ? { password } : {}) });
     setVerifying(false);
+    const pending = result.ok ? accountReplacementOf(sessionStore.getState().session, provenSessionOf(result.data)) : null;
+    if (pending !== null) {
+      setReplacement(pending);
+      return;
+    }
     const outcome = resolveVerifyEmailOutcome(result);
-    if (outcome.kind === 'signed-in' && onSignedIn !== undefined) {
+    if (outcome.kind === 'second-factor' && awaitsSecondFactor()) {
+      goToSecondFactor();
+      return;
+    }
+    const signedIn = outcome.kind === 'signed-in' || outcome.kind === 'second-factor';
+    if (signedIn && onSignedIn !== undefined) {
       forgetPendingVerification();
       onSignedIn();
       return;
     }
-    if (outcome.kind === 'signed-in') {
+    if (signedIn) {
       goToLanding(next);
       return;
     }
@@ -167,6 +201,32 @@ export function EmailCodeForm({
       return;
     }
     setError(verifyEmailErrorText(outcome));
+  }
+
+  if (replacement !== null) {
+    return (
+      <AccountReplacementPrompt
+        language={language}
+        replacement={replacement}
+        {...(accountGestures === undefined ? {} : { gestures: accountGestures })}
+        onAdopted={() => {
+          if (replacement.proven.kind === 'second-factor') {
+            goToSecondFactor();
+            return;
+          }
+          if (onSignedIn === undefined) {
+            goToLanding(next);
+            return;
+          }
+          forgetPendingVerification();
+          onSignedIn();
+        }}
+        onDiscarded={() => {
+          forgetPendingVerification();
+          navigate(href('list'), true);
+        }}
+      />
+    );
   }
 
   return (

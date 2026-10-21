@@ -131,6 +131,13 @@ describe('decodeAdminPostFiche — champ par champ', () => {
     }
   });
 
+  test('une scène v3 est gardée LUE pour l’aperçu (#10393), jamais le blob brut', () => {
+    const v3 = decodeAdminPostFiche(served({ storyEffects: { v: 3, scenes: [{ id: 's1', objects: [] }], secret: 'x' } }));
+    expect(v3?.canvas?.scenes.map((scene) => scene.id)).toEqual(['s1']);
+    expect(JSON.stringify(v3)).not.toContain('storyEffects');
+    expect(fiche?.canvas).toBeNull();
+  });
+
   test('ce que la fiche servait sans écran (audit 2026-10-04) : audio, story, réactions, audience', () => {
     expect(fiche?.audio).toEqual({ url: 'https://cdn/a.mp3', durationMs: 8000 });
     expect(fiche?.story).toEqual({

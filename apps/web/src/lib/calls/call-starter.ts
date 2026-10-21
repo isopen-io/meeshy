@@ -33,6 +33,6 @@ export async function startCallWithPerson(params: StartCallWithPersonParams): Pr
   const opened = await params.openDirect(params.person.id).catch(() => null);
   if (opened === null || !opened.ok) return { ok: false };
   const conversationId = opened.data.id;
-  params.start({ conversationId, media: params.media, title: params.person.name, avatar: params.person.avatar, isGroup: false });
+  params.start({ conversationId, media: params.media, title: params.person.name, avatar: params.person.avatar, isGroup: false, peerKey: params.person.id });
   return { ok: true, conversationId };
 }

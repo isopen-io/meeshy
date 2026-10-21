@@ -69,7 +69,7 @@ export const ENUM_FAMILIES = {
     EXCEPT: withExplain(N),
     ONLY: withExplain(N),
   },
-  postState: { published: S, deleted: withExplain(D), expired: withExplain(N) },
+  postState: { published: S, offline: withExplain(D), private: withExplain(N), expired: withExplain(N), deleted: withExplain(D) },
   invitationStatus: { pending: W, accepted: S, rejected: withExplain(N) },
   shareLinkState: { active: S, expired: N, exhausted: withExplain(W), closed: withExplain(D) },
   trackingLinkState: { active: S, inactive: withExplain(N), expired: N },

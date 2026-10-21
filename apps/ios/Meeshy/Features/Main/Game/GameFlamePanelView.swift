@@ -30,20 +30,21 @@ struct GameFlamePanelView: View {
     var relightSpend: SpendPreview { GameSpend.preview(held: held, cost: flame.relightPrice) }
     private var cannotPayRelight: Bool { !relightSpend.affordable }
 
-    private func spendRow(_ spend: SpendPreview, identifier: String) -> some View {
-        GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes), identifier: identifier)
+    /// `missing` : ce qu'il manque, dit avec le geste qu'il vise — acheter un gel, rallumer la Flamme (#10540).
+    private func spendRow(_ spend: SpendPreview, identifier: String, missing: @MainActor (String) -> String) -> some View {
+        GameFactChipRow(concept: .flame, items: GameSpendRows.spend(spend, format: GameCopy.meeshes, missing: missing), identifier: identifier)
     }
 
     var body: some View {
-        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Protéger la Flamme", bundle: .main)) {
+        GameCard(anchor: .flamePanel, title: String(localized: "game.flame_panel.title", defaultValue: "Veiller sur ta Flamme", bundle: .main)) {
             GameNote(text: String(
                 localized: "game.flame_panel.bonus",
-                defaultValue: "+\(GameCopy.formatCount(GameFlame.bonusPercentPerDay)) % par jour de série sur les récompenses de mission, jusqu’à +\(GameCopy.formatCount(GameFlame.bonusPercentMax)) %.",
+                defaultValue: "Chaque jour de Flamme nourrit tes rêves : +\(GameCopy.formatCount(GameFlame.bonusPercentPerDay)) % d’étincelles par acte, jusqu’à +\(GameCopy.formatCount(GameFlame.bonusPercentMax)) %.",
                 bundle: .main
             ))
             Text(String(
                 localized: "game.flame_panel.freezes",
-                defaultValue: "Gels en réserve : \(GameCopy.formatCount(flame.freezes)) / \(GameCopy.formatCount(flame.maxFreezes))",
+                defaultValue: "Veilleuses : \(GameCopy.formatCount(flame.freezes)) / \(GameCopy.formatCount(flame.maxFreezes))",
                 bundle: .main
             ))
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
@@ -54,7 +55,7 @@ struct GameFlamePanelView: View {
             if !online {
                 GameNote(text: String(
                     localized: "game.flame_panel.offline",
-                    defaultValue: "Hors ligne : les gels et le rallumage reprendront avec la connexion.",
+                    defaultValue: "Hors ligne : les Veilleuses et le rallumage reprendront avec la connexion.",
                     bundle: .main
                 ))
             }
@@ -66,15 +67,15 @@ struct GameFlamePanelView: View {
         if flame.freezes >= flame.maxFreezes {
             GameNote(text: String(
                 localized: "game.flame_panel.freeze_full",
-                defaultValue: "Réserve pleine : un gel couvre un jour manqué, tu n’en as pas besoin d’un de plus.",
+                defaultValue: "Tes Veilleuses sont au complet : une Veilleuse garde ta Flamme allumée un jour d’absence, tu n’en as pas besoin d’une de plus.",
                 bundle: .main
             ))
         } else {
-            spendRow(freezeSpend, identifier: "game.flame.freeze.spend")
+            spendRow(freezeSpend, identifier: "game.flame.freeze.spend", missing: { ConceptText.spendMissingFreeze(missing: $0) })
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.freeze_buy",
-                    defaultValue: "Acheter un gel · \(GameCopy.meeshes(flame.freezePrice))",
+                    defaultValue: "Prendre une Veilleuse · \(GameCopy.meeshes(flame.freezePrice))",
                     bundle: .main
                 ),
                 busy: buyingFreeze, disabled: !online || !freezeSpend.affordable, identifier: "game.flame.freeze.buy",
@@ -91,7 +92,7 @@ struct GameFlamePanelView: View {
                 defaultValue: "Ta Flamme s’est éteinte : rallume-la maintenant, elle repart là où elle s’était arrêtée.",
                 bundle: .main
             ))
-            spendRow(relightSpend, identifier: "game.flame.relight.spend")
+            spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })
             GameActionButton(
                 title: String(
                     localized: "game.flame_panel.relight",
@@ -107,7 +108,7 @@ struct GameFlamePanelView: View {
                 defaultValue: "Il te faut \(GameCopy.meeshes(flame.relightPrice)) pour la rallumer, si elle s’est éteinte il y a moins de 48 h.",
                 bundle: .main
             ))
-            spendRow(relightSpend, identifier: "game.flame.relight.spend")
+            spendRow(relightSpend, identifier: "game.flame.relight.spend", missing: { ConceptText.spendMissingRelight(missing: $0) })
         } else if isOut {
             GameNote(
                 text: String(

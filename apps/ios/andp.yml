@@ -155,3 +155,47 @@ store:
       dark_interface: true
     IPAD:
       dark_interface: true
+
+  app_events:
+    - key: saison-1
+      reference_name: "Saison 1"
+      badge: NEW_SEASON
+      purpose: KEEP_ACTIVE_USERS_INFORMED
+      priority: HIGH
+      purchase_requirement: NO_COST_ASSOCIATED
+      deep_link: https://meeshy.me/me/progression/saison/1
+      primary_locale: fr-FR
+      territories: all
+      publish_start: 2026-12-14T00:00:00+01:00
+      event_start: 2026-12-21T00:00:00+01:00
+      event_end: 2027-01-17T20:00:00+01:00
+      submit: true
+      localizations:
+        fr-FR:
+          name: "Voyage 1"
+          short_description: "Huit semaines, 40 haltes"
+          long_description: "Un nouveau voyage en terre de langue dans le Jeu Meeshy : un rêve chaque nuit, des haltes et une coupe au bout."
+        en-US:
+          name: "Journey 1"
+          short_description: "Eight weeks, 40 stops"
+          long_description: "A new journey to the land of a language in the Meeshy Game: a dream each night, strides, stops and a cup at the end."
+        es-ES:
+          name: "Viaje 1"
+          short_description: "Ocho semanas, 40 paradas"
+          long_description: "Un nuevo viaje a tierra de idioma en el Juego Meeshy: un sueño cada noche, pasos, paradas y una copa al final."
+        de-DE:
+          name: "Reise 1"
+          short_description: "Acht Wochen, 40 Rasten"
+          long_description: "Eine neue Reise in ein Sprachland im Meeshy-Spiel: jede Nacht ein Traum, Schritte, Rasten und ein Pokal am Ziel."
+        it:
+          name: "Viaggio 1"
+          short_description: "Otto settimane, 40 soste"
+          long_description: "Un nuovo viaggio in terra di lingua nel Gioco Meeshy: un sogno ogni notte, passi, soste e una coppa alla fine."
+        pt-BR:
+          name: "Viagem 1"
+          short_description: "Oito semanas, 40 paradas"
+          long_description: "Uma nova viagem a uma terra de idioma no Jogo Meeshy: um sonho a cada noite, passos, paradas e uma taça no final."
+        ar-SA:
+          name: "الرحلة 1"
+          short_description: "ثمانية أسابيع و40 محطة"
+          long_description: "رحلة جديدة إلى أرض لغة في لعبة Meeshy: حلم كل ليلة، وخطوات، ومحطات، وكأس في النهاية."

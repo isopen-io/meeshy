@@ -1,6 +1,6 @@
 import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 
-import type { ViewerSwipeBinding } from '@/components/viewer-chrome-gestures';
+import { VIEWER_TAP_SLOP_PX, type ViewerSwipeBinding } from '@/components/viewer-chrome-gestures';
 import { HOLD_THRESHOLD_MS, classifyTapZone, decideTouchDown, decideTouchUp, isDoubleTap, isDrag } from '@/lib/stories/gesture';
 import { screenGestureYields } from '@/lib/view/shortcut-scope';
 
@@ -142,7 +142,14 @@ export function useStoryGestures(params: {
     }
   };
 
+  /* LE DOIGT PARTI À L'HORIZONTALE TOURNE LE CUBE (#11198) : l'appui long ne
+     se déclenche plus sous lui — il figerait la story et masquerait le chrome
+     au milieu de la rotation. Seuil : celui où le balayage fige son axe. */
   const onPointerMove: PointerHandler = (e) => {
+    const g = gestureRef.current;
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
+    if (Math.hypot(dx, dy) > VIEWER_TAP_SLOP_PX && Math.abs(dx) > Math.abs(dy)) clearHoldTimer();
     swipe.onPointerMove(e);
   };
 

@@ -1,13 +1,18 @@
 import SwiftUI
 import UIKit
+import MeeshySDK
+@preconcurrency import Lottie
 
-/// **Un sticker Mee ou Meo, animé** (#9053) — la même vue dans la feuille et
-/// dans la bulle.
+/// **Un sticker Mee ou Meo, animé** (#9053, #10639) — la même vue dans la
+/// feuille et dans la bulle.
 ///
-/// La première image, réduite à la case, puis le film : tous deux décodés
-/// hors du fil principal, le film seulement si la case reste à l'écran. `animates: false` (vignettes de la feuille) ou Reduce
-/// Motion ⇒ l'image reste fixe : le sticker perd son mouvement, pas son
-/// intention — `AnimatedImageView` honore les deux préférences.
+/// La première image, réduite à la case et rendue hors du geste, puis le film
+/// lui-même : le `.lottie` joué par `LottieView` sur le moteur Core Animation
+/// — le mouvement tourne dans le serveur de rendu, à la cadence de l'écran,
+/// sans aucune image à décoder ni à garder en mémoire. Le film ne se monte que
+/// si la case reste à l'écran. `animates: false` (vignettes de la feuille) ou
+/// Reduce Motion ⇒ l'image reste fixe : le sticker perd son mouvement, pas son
+/// intention.
 public struct MeeStickerFilmView: View {
 
     let filmID: String
@@ -19,12 +24,10 @@ public struct MeeStickerFilmView: View {
     @Environment(\.displayScale) private var displayScale
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var still: UIImage?
-    @State private var film: AnimatedImageDecoder.Decoded?
+    @State private var film: LottieFilmSource?
 
-    /// - Parameter pixelCap: la définition maximale du décodage. Jamais
-    ///   au-delà du film tourné (360 px) ; la feuille, qui anime une grille
-    ///   entière, la baisse (`gridPixelCap`) — la mémoire d'un film croît au
-    ///   carré de sa définition.
+    /// - Parameter pixelCap: la définition maximale de l'image fixe. Le film,
+    ///   vectoriel, se dessine net à toute taille.
     public init(sticker: MeeSticker, side: CGFloat, animates: Bool = true, pixelCap: Int = 360) {
         self.init(filmID: sticker.id, animated: sticker.animated, side: side, animates: animates, pixelCap: pixelCap)
     }
@@ -39,15 +42,14 @@ public struct MeeStickerFilmView: View {
         self.pixelCap = pixelCap
     }
 
-    /// Une case de 96 pt décodée à 180 px : 48 images pèsent 6 Mo, quinze
-    /// cases visibles tiennent sous le plafond du cache (96 Mo).
+    /// La définition de l'image fixe d'une case de la feuille.
     public static let gridPixelCap = 180
 
-    /// Le temps qu'une case reste à l'écran avant que son film se décode.
+    /// Le temps qu'une case reste à l'écran avant que son film se monte.
     static let filmDelayMilliseconds = 150
 
     public static func decodePixelSize(side: CGFloat, scale: CGFloat, cap: Int) -> Int {
-        min(cap, 360, Int((side * scale).rounded(.up)))
+        min(cap, MeeStickerCatalog.filmPixelSize, Int((side * scale).rounded(.up)))
     }
 
     private var maxPixelSize: Int {
@@ -60,7 +62,10 @@ public struct MeeStickerFilmView: View {
                 // Transparente aux touchers : un Mee ne change pas la bulle qui
                 // le porte — appui long, double tap, glisser-répondre partent
                 // comme sur un gabarit (retour porteur 2026-10-01).
-                AnimatedImageView(decoded: film)
+                LottieView(animation: film.animation)
+                    .configuration(LottieConfiguration(renderingEngine: .automatic))
+                    .playing(loopMode: .loop)
+                    .resizable()
                     .allowsHitTesting(false)
             } else if let still {
                 Image(uiImage: still).resizable().scaledToFit()
@@ -74,13 +79,12 @@ public struct MeeStickerFilmView: View {
             guard let url = MeeStickerCatalog.fileURL(id: filmID) else { return }
             if still == nil { still = await MeeStickerCatalog.still(at: url, maxPixelSize: maxPixelSize) }
             guard animates, !reduceMotion, filmAnimated else { return }
-            // Une case qui ne fait que PASSER pendant un lancer ne décode rien :
+            // Une case qui ne fait que PASSER pendant un lancer ne monte rien :
             // sa tâche est annulée avant la fin de ce délai.
-            try? await Task.sleep(for: .milliseconds(Self.filmDelayMilliseconds))
-            guard !Task.isCancelled,
-                  let entry = await MeeStickerCatalog.film(at: url, maxPixelSize: maxPixelSize),
+            guard await cancellableSleep(for: .milliseconds(Self.filmDelayMilliseconds)),
+                  let source = await LottieFilm.load(url: url),
                   !Task.isCancelled else { return }
-            film = entry.decoded
+            film = source
         }
         .onDisappear { film = nil }
         .accessibilityHidden(true)

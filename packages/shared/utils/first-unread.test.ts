@@ -230,8 +230,8 @@ describe('firstUnreadBoundary', () => {
  * RÉELLEMENT non lu pour lu (`null`) — l'inverse de D-L2.
  *
  * Additif et RÉTROCOMPATIBLE : omis, le comportement des 13 témoins
- * ci-dessus ne change pas — c'est le point, le mirror Swift qui ne le
- * porte pas encore reste valide pour tout ce qu'il implémente déjà.
+ * ci-dessus ne change pas. Le miroir Swift le porte depuis #7427 et rejoue
+ * ces cas un pour un (`FirstUnreadBoundaryTests.swift`).
  */
 describe('firstUnreadBoundary — unreadCountHint (#7351, V3)', () => {
   it('AUCUN rang chronologique, hint positif ⇒ élit les N DERNIERS candidats, jamais les premiers', () => {
@@ -277,7 +277,7 @@ describe('firstUnreadBoundary — unreadCountHint (#7351, V3)', () => {
     // (confirmé à l'instant de la lecture) ; m2 est arrivé ENSUITE par le
     // socket, qui ne touche que la liste. Le curseur dit la vérité, le compte
     // est périmé : laisser le compte primer effacerait le séparateur de m2
-    // (D-L2) — et le miroir Swift, qui ne lit aucun compte, rend m2 lui aussi.
+    // (D-L2) — et le miroir Swift ignore le compte de la même façon.
     const result = firstUnreadBoundary({
       messages,
       viewerId: VIEWER,

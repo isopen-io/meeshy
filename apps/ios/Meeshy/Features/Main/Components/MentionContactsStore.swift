@@ -42,6 +42,17 @@ final class MentionContactsStore: MentionContactsProviding {
 
     /// Après un échec réseau, la frappe suivante ne relance pas tout de suite :
     /// une route en panne ne doit pas coûter un aller-retour par `@`.
+    /// Déconnexion / changement de compte : la liste d'amis en mémoire
+    /// appartient au compte sortant. Sans ce retrait, le `@` du compte suivant
+    /// servait les amis du précédent jusqu'à dix minutes.
+    func resetForLogout() {
+        inflight?.cancel()
+        inflight = nil
+        snapshot = []
+        freshAt = nil
+        lastFailure = nil
+    }
+
     private static let retryAfterFailure: TimeInterval = 60
     /// Une liste relue il y a moins de dix minutes ne se relit pas à chaque `@`.
     private static let memoryFreshness: TimeInterval = 600
@@ -137,7 +148,7 @@ final class MentionContactsStore: MentionContactsProviding {
         let me = currentUserId()
         return friends
             .filter { $0.id != me }
-            .map { MentionCandidate(id: $0.id, username: $0.username, displayName: $0.name, avatarURL: $0.avatar) }
+            .map { MentionCandidate(id: $0.id, username: $0.username, displayName: $0.name, avatarURL: $0.avatar, ring: $0.avatarRing) }
     }
 
     /// Même magasin et même clé que la liste de contacts et le sélecteur
@@ -150,7 +161,7 @@ final class MentionContactsStore: MentionContactsProviding {
 
     private static func saveFriendsCache(_ friends: [FriendRequestUser]) async {
         let store = await CacheCoordinator.shared.friends
-        try? await store.save(friends, for: FriendshipCache.PersistenceKeys.friendsList)
+        await bestEffort("mentionContactsStore.store.save", category: .cache) { try await store.save(friends, for: FriendshipCache.PersistenceKeys.friendsList) }
     }
 
     /// La même lecture que `ContactsListViewModel.fetchFriendsFromNetwork` :

@@ -141,6 +141,7 @@ export type RawMessageSender = {
     avatar?: string | null;
     isOnline?: boolean | null;
     lastActiveAt?: Date | null;
+    equippedAvatarRing?: string | null;
   } | null;
 };
 

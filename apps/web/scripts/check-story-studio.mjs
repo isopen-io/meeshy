@@ -767,7 +767,7 @@ for (const colorScheme of ['light', 'dark']) {
   const baseline = await myStoryIds();
 
   await page.click('header a');
-  await page.waitForURL((url) => url.pathname === '/', { timeout: 8000 });
+  await page.waitForURL((url) => url.pathname === '/chats', { timeout: 8000 });
   await page.waitForSelector('[data-self-create]', { timeout: 8000 });
   await page.click('[data-self-create]');
   await page.waitForURL((url) => url.pathname === '/stories/new', { timeout: 8000 });
@@ -794,7 +794,7 @@ for (const colorScheme of ['light', 'dark']) {
   // un `page.goto` (rechargement), qui viderait le registre fixtures de
   // l'onglet (`recordFixtureStory`, doc-comment `stories-publish.ts`).
   await page.click('header a');
-  await page.waitForURL((url) => url.pathname === '/', { timeout: 8000 });
+  await page.waitForURL((url) => url.pathname === '/chats', { timeout: 8000 });
   await page.waitForSelector('[data-story-self-open]', { timeout: 8000 });
   await page.click('[data-story-self-open]');
   await page.waitForURL((url) => url.pathname === '/stories/mine', { timeout: 8000 });

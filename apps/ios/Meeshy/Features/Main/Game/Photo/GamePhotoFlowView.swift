@@ -18,7 +18,7 @@ struct GamePhotoFlowView: View {
 
     @State private var pickerItem: PhotosPickerItem?
     @State private var showsShare = false
-    @State private var squareFormat = false
+    private var squareFormat: Bool { session.squareFormat }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -34,7 +34,7 @@ struct GamePhotoFlowView: View {
         .adaptiveOnChange(of: pickerItem) { _, item in
             guard let item else { return }
             Task {
-                if let data = try? await item.loadTransferable(type: Data.self) {
+                if let data = try? await PickedMedia.loadImageData(item) {
                     await session.useGalleryPhoto(data)
                 }
                 pickerItem = nil
@@ -50,6 +50,11 @@ struct GamePhotoFlowView: View {
             bundle: .main
         ))
         .accessibilityAddTraits(.isModal)
+        // Plein écran noir : les contrôles système (sélecteur de format, interrupteurs, feuilles) suivent le
+        // schéma SOMBRE quelle que soit l'apparence de l'appareil, sinon leur texte se perd sur le noir (#10294).
+        .environment(\.colorScheme, .dark)
+        // Une prise en cours ne se perd pas : l'écran RETIENT, la conversation s'ouvre à sa fermeture (#10543).
+        .retainsAgainstConversationOpening(.game)
     }
 
     private var closeButton: some View {
@@ -88,18 +93,28 @@ struct GamePhotoFlowView: View {
 
     // MARK: - 1. La proposition
 
+    /// La plaque d'auteur du moment (#10816) : présente, la proposition pose la carte qui nomme l'auteur.
+    private var plate: AuthorPlate? { GamePhotoAuthorPlate.plate(for: session.moment.emblem, author: session.author) }
+
     private var offer: some View {
         VStack(spacing: MeeshySpacing.lg) {
             Spacer()
-            MeeStickerFilmView(filmID: "duo-mee-selfie", animated: true, side: 120, animates: true, pixelCap: 240)
-                .frame(width: 120, height: 120)
-                .accessibilityHidden(true)
+            if let plate {
+                GameAuthorCardView(moment: session.moment, plate: plate, dateLabel: GamePhotoComposer.dateLabel(Date()))
+            } else {
+                MeeStickerFilmView(filmID: "duo-mee-selfie", animated: true, side: 120, animates: true, pixelCap: 240)
+                    .frame(width: 120, height: 120)
+                    .accessibilityHidden(true)
+            }
             Text(String(localized: "game.photo.offer.title", defaultValue: "On immortalise ?", bundle: .main))
                 .font(MeeshyFont.relative(26, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
-            Text(session.moment.title)
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
-                .foregroundColor(MeeshyColors.indigo200)
+            // La carte posée dit déjà le moment : le titre ne se répète pas sous elle.
+            if plate == nil {
+                Text(session.moment.title)
+                    .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
+                    .foregroundColor(MeeshyColors.indigo200)
+            }
             VStack(spacing: MeeshySpacing.sm) {
                 bigButton(String(localized: "game.photo.selfie", defaultValue: "Selfie avec nous", bundle: .main), "camera.fill", primary: true, id: "game.photo.selfie") {
                     Task { await session.chooseSelfie() }
@@ -133,6 +148,11 @@ struct GamePhotoFlowView: View {
 
     // MARK: - 2. La caméra
 
+    /// LE CADRE EST LE DÉCLENCHEUR (#10284, directive porteur 2026-10-12) — aucun cercle d'enregistrement à
+    /// côté du cadre. La disposition est celle de la caméra du composer (`ComposerLookStrip`, bande repliée) :
+    /// la case du cadre choisi photographie d'un toucher, part dans Photos puis ouvre le résultat ; la scène,
+    /// touchée deux fois, prend hors cadre et la photo reste dans l'app. La table des gestes du composer
+    /// décide (`ComposerCaptureGesture`), la session exécute.
     private func camera(_ phase: PhotoCameraPhase) -> some View {
         VStack(spacing: MeeshySpacing.md) {
             Spacer(minLength: MeeshySpacing.xl)
@@ -148,12 +168,23 @@ struct GamePhotoFlowView: View {
                         Color(white: 0.12)
                     }
                     overlay(size: size, background: .clear)
-                    if case .failed(let failure) = phase {
-                        failureNote(failure)
-                    }
+                }
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    Task { await session.gesture(.doubleTap, on: .scene) }
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel(String(localized: "game.photo.scene.a11y", defaultValue: "Aperçu de la caméra : touche deux fois pour prendre sans enregistrer dans Photos", bundle: .main))
+                .accessibilityIdentifier("game.photo.scene")
+                .composerCaptureAccessibilityActions(zone: .scene, context: session.captureContext) { action in
+                    Task { await session.perform(action) }
                 }
             }
-            HStack(spacing: MeeshySpacing.xl) {
+            // Hors du cadre : posée sur l'aperçu, la note recouvrait le titre et la date du moment (#10295).
+            if case .failed(let failure) = phase {
+                failureNote(failure)
+            }
+            HStack(alignment: .top, spacing: MeeshySpacing.xl) {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
                     Image(systemName: "photo.on.rectangle")
                         .font(MeeshyFont.relative(20, weight: .semibold))
@@ -161,38 +192,74 @@ struct GamePhotoFlowView: View {
                         .frame(width: 52, height: 52)
                         .background(Circle().fill(Color.white.opacity(0.16)))
                 }
+                .frame(height: ComposerLookStripRule.cellSize.height)
                 .accessibilityLabel(String(localized: "game.photo.gallery", defaultValue: "Choisir une photo dans la galerie", bundle: .main))
                 .accessibilityIdentifier("game.photo.gallery")
 
-                Button {
-                    HapticFeedback.medium()
-                    Task { await session.shutter() }
-                } label: {
-                    Circle()
-                        .strokeBorder(Color.white, lineWidth: 4)
-                        .background(Circle().fill(Color.white.opacity(phase == .live ? 0.9 : 0.25)).padding(MeeshySpacing.xsPlus))
-                        .frame(width: 72, height: 72)
-                }
-                .buttonStyle(.plain)
-                .disabled(phase != .live)
-                .accessibilityLabel(String(localized: "game.photo.shutter", defaultValue: "Prendre la photo", bundle: .main))
-                .accessibilityIdentifier("game.photo.shutter")
+                frameTrigger(live: phase == .live)
 
                 Button {
                     HapticFeedback.light()
                     Task { await session.chooseCard() }
                 } label: {
-                    Image(systemName: "rectangle.portrait")
-                        .font(MeeshyFont.relative(20, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(width: 52, height: 52)
-                        .background(Circle().fill(Color.white.opacity(0.16)))
+                    sideGlyph("rectangle.portrait")
                 }
                 .accessibilityLabel(String(localized: "game.photo.card_only", defaultValue: "Carte seule", bundle: .main))
                 .accessibilityIdentifier("game.photo.card_only")
             }
             .padding(.bottom, MeeshySpacing.lg)
         }
+    }
+
+    private func sideGlyph(_ symbol: String) -> some View {
+        Image(systemName: symbol)
+            .font(MeeshyFont.relative(20, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(width: 52, height: 52)
+            .background(Circle().fill(Color.white.opacity(0.16)))
+            .frame(height: ComposerLookStripRule.cellSize.height)
+    }
+
+    /// La case du cadre choisi — celui du moment —, au gabarit de la miniature choisie du composer : le cadre en
+    /// réduction, l'anneau blanc, son nom dessous. C'est elle qui déclenche.
+    private func frameTrigger(live: Bool) -> some View {
+        let cell = ComposerLookStripRule.cellSize
+        let scale = cell.width / PhotoFormat.story.size.width
+        return VStack(spacing: MeeshySpacing.xxs) {
+            GamePhotoCanvasView(
+                moment: session.moment,
+                dateLabel: GamePhotoComposer.dateLabel(Date()),
+                format: .story, background: .card, referral: nil, author: session.author
+            )
+            .frame(width: PhotoFormat.story.size.width, height: PhotoFormat.story.size.height)
+            .scaleEffect(scale, anchor: .topLeading)
+            .frame(width: cell.width, height: cell.height, alignment: .topLeading)
+            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                .strokeBorder(Color.white, lineWidth: 3))
+            .opacity(live ? 1 : 0.4)
+            .shadow(color: .black.opacity(0.35), radius: 4, y: 1)
+            Text(session.moment.title)
+                .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .frame(maxWidth: cell.width + MeeshySpacing.xxl)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            HapticFeedback.medium()
+            Task { await session.gesture(.tap, on: .chosenThumbnail) }
+        }
+        .accessibilityElement()
+        .accessibilityLabel(String(localized: "game.photo.frame_trigger.a11y", defaultValue: "Prendre la photo dans le cadre « \(session.moment.title) »", bundle: .main))
+        .accessibilityHint(String(localized: "game.photo.frame_trigger.hint", defaultValue: "Enregistrée dans Photos, puis le résultat s’ouvre.", bundle: .main))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityIdentifier("game.photo.frame_trigger")
+        .composerCaptureAccessibilityActions(zone: .chosenThumbnail, context: session.captureContext) { action in
+            Task { await session.perform(action) }
+        }
+        .allowsHitTesting(live)
     }
 
     private func failureNote(_ failure: CameraFailure) -> some View {
@@ -209,7 +276,8 @@ struct GamePhotoFlowView: View {
             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
             .foregroundColor(.white)
             .multilineTextAlignment(.center)
-            .padding(MeeshySpacing.lg)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, MeeshySpacing.xl)
             .accessibilityIdentifier("game.photo.camera.failure")
     }
 
@@ -253,7 +321,7 @@ struct GamePhotoFlowView: View {
                     .accessibilityLabel(String(localized: "game.photo.preview", defaultValue: "Aperçu : \(session.moment.title)", bundle: .main))
                     .overlay { referralQRMark(squareFormat ? .square : .story) }
                     .padding(.horizontal, MeeshySpacing.lg)
-                Picker("", selection: $squareFormat) {
+                Picker("", selection: Binding(get: { session.squareFormat }, set: { session.chooseFormat(square: $0) })) {
                     Text(String(localized: "game.photo.format.story", defaultValue: "9:16 · story", bundle: .main)).tag(false)
                     Text(String(localized: "game.photo.format.square", defaultValue: "1:1 · profil", bundle: .main)).tag(true)
                 }
@@ -290,10 +358,27 @@ struct GamePhotoFlowView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .accessibilityIdentifier("game.photo.notice")
+                if notice.action == .saveToLibrary, session.showsSave {
+                    Button {
+                        HapticFeedback.light()
+                        Task { await session.save() }
+                    } label: {
+                        Text(String(localized: "game.photo.notice.no_space_save", defaultValue: "L’enregistrer dans Photos", bundle: .main))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(minHeight: 44)
+                            .padding(.horizontal, MeeshySpacing.lg)
+                            .background(Capsule().fill(MeeshyColors.brandPrimary))
+                    }
+                    .accessibilityIdentifier("game.photo.no_space_save")
+                }
             }
             HStack(spacing: MeeshySpacing.sm) {
-                resultButton(String(localized: "game.photo.save", defaultValue: "Enregistrer", bundle: .main), "square.and.arrow.down", id: "game.photo.save") {
-                    Task { await session.save(square: squareFormat) }
+                // « Enregistrer » n'existe que s'il sert : une prise déjà dans Photos avec ce cadre ne le montre pas (#10284).
+                if session.showsSave {
+                    resultButton(String(localized: "game.photo.save", defaultValue: "Enregistrer", bundle: .main), "square.and.arrow.down", id: "game.photo.save") {
+                        Task { await session.save() }
+                    }
                 }
                 resultButton(String(localized: "game.photo.share", defaultValue: "Partager", bundle: .main), "square.and.arrow.up", id: "game.photo.share") {
                     // Le jeton se crée AU TOUCHER, la carte est recomposée avec le vrai lien, puis la feuille s'ouvre.
@@ -391,7 +476,7 @@ struct GamePhotoFlowView: View {
         return GamePhotoCanvasView(
             moment: session.moment,
             dateLabel: GamePhotoComposer.dateLabel(Date()),
-            format: format, background: background, strike: strike, referral: session.referral
+            format: format, background: background, strike: strike, referral: session.referral, author: session.author
         )
         .frame(width: format.size.width, height: format.size.height)
         .scaleEffect(scale, anchor: .topLeading)

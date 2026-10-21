@@ -1,0 +1,282 @@
+[
+ {
+  "file": "neon-ambassadeur-1",
+  "overlap": 126,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   88,
+   684,
+   429,
+   716
+  ],
+  "windowPx": 155546,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-ambassadeur-2",
+  "overlap": 157,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   109,
+   687,
+   454,
+   716
+  ],
+  "windowPx": 156693,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-ambassadeur-3",
+  "overlap": 107,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   103,
+   708,
+   429,
+   718
+  ],
+  "windowPx": 162092,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-ambassadeur-4",
+  "overlap": 23,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   91,
+   701,
+   95,
+   710
+  ],
+  "windowPx": 159666,
+  "layout": "ruban",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-ambassadeur-5",
+  "overlap": 113,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   96,
+   694,
+   423,
+   708
+  ],
+  "windowPx": 152699,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-legende-1",
+  "overlap": 150,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   95,
+   687,
+   445,
+   709
+  ],
+  "windowPx": 150974,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-legende-2",
+  "overlap": 171,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   93,
+   689,
+   443,
+   711
+  ],
+  "windowPx": 154979,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-legende-3",
+  "overlap": 89,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   112,
+   707,
+   427,
+   711
+  ],
+  "windowPx": 155709,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-legende-4",
+  "overlap": 38,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   406,
+   676,
+   447,
+   711
+  ],
+  "windowPx": 155725,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-legende-5",
+  "overlap": 82,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   111,
+   706,
+   440,
+   711
+  ],
+  "windowPx": 158033,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-mythe-a",
+  "overlap": 62,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   156,
+   704,
+   178,
+   709
+  ],
+  "windowPx": 150718,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-mythe-b",
+  "overlap": 145,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   95,
+   685,
+   423,
+   709
+  ],
+  "windowPx": 151002,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-mythe-c",
+  "overlap": 0,
+  "face": 0,
+  "depth": 0,
+  "bbox": null,
+  "windowPx": 145571,
+  "layout": "duo",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-oracle-a",
+  "overlap": 139,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   129,
+   705,
+   412,
+   709
+  ],
+  "windowPx": 157520,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-oracle-b",
+  "overlap": 2103,
+  "face": 0,
+  "depth": 46,
+  "bbox": [
+   395,
+   648,
+   444,
+   709
+  ],
+  "windowPx": 157015,
+  "layout": "selfie",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-oracle-c",
+  "overlap": 152,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   128,
+   693,
+   449,
+   709
+  ],
+  "windowPx": 157466,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-orateur-a",
+  "overlap": 46,
+  "face": 0,
+  "depth": 3,
+  "bbox": [
+   92,
+   587,
+   449,
+   600
+  ],
+  "windowPx": 153482,
+  "layout": "libre",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-orateur-b",
+  "overlap": 67,
+  "face": 0,
+  "depth": 5,
+  "bbox": [
+   86,
+   702,
+   430,
+   714
+  ],
+  "windowPx": 152668,
+  "layout": "pied",
+  "verdict": "ok"
+ },
+ {
+  "file": "neon-orateur-c",
+  "overlap": 42,
+  "face": 0,
+  "depth": 4,
+  "bbox": [
+   108,
+   706,
+   410,
+   709
+  ],
+  "windowPx": 156714,
+  "layout": "pied",
+  "verdict": "ok"
+ }
+]

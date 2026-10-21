@@ -66,17 +66,17 @@ nonisolated struct CaptureSavePolicy: Equatable, Sendable {
     func savesRenderOnFinish(alreadySaved: Bool) -> Bool {
         renderedMode == .automatic && !alreadySaved
     }
-
-    /// Un rendu identique à l'original (une vidéo sans effet, ni cadrage, ni
-    /// découpe) ne s'écrit que si l'original n'est pas déjà dans Photos.
-    var writesUntouchedTake: Bool { !savesOriginal }
 }
 
-/// Où en est l'enregistrement de la prise retouchée : une fois par prise.
+/// Où en est l'enregistrement de la prise retouchée, PROJETÉ de la loi partagée
+/// (`CaptureSaveLaw`, #10284) pour le cadre courant : `saved` = déjà dans Photos
+/// avec ce cadre — le bouton disparaît ; un autre cadre le fait revenir.
 nonisolated enum ComposerTakeSaveState: Equatable, Sendable {
     case idle
     case saving
     case saved
 
     var offersSave: Bool { self == .idle }
+
+    var showsSave: Bool { self != .saved }
 }

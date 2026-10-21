@@ -45,6 +45,8 @@ SWIFT
   for want in ImplicitlyIsolated ExplicitlyIsolated; do
     grep -q "sample\.${want}\.__isolated_deallocating_deinit" <<<"$out" \
       || { echo "::error::self-test : ${want} non signalée"; printf '%s\n' "$out"; exit 1; }
+    grep -q "^::error title=Deinit isolée (#9694) — classe::.*sample\.${want}\.__isolated_deallocating_deinit" <<<"$out" \
+      || { echo "::error::self-test : ${want} absente des annotations (#9976)"; printf '%s\n' "$out"; exit 1; }
   done
   for clean in NonisolatedDeinit NonisolatedType; do
     ! grep -q "$clean" <<<"$out" \
@@ -81,6 +83,11 @@ done
 
 if [ -n "$offenders" ]; then
   echo "::error title=Deinit isolée (#9694)::$(printf '%s' "$offenders" | grep -c .) classe(s) portent une deinit isolée au MainActor — elles tuent xctest au démontage sur iOS 18.4+/26 (Swift #85663). Ajouter \`nonisolated deinit {}\` (ou \`nonisolated\` sur le type)."
+  # #9976 — chaque classe est NOMMÉE dans sa propre annotation : le verdict se
+  # lit sur le check-run, sans le journal du job (inatteignable hors Actions).
+  printf '%s\n' "$offenders" | grep . | while IFS= read -r offender; do
+    echo "::error title=Deinit isolée (#9694) — classe::${offender}"
+  done
   printf '%s' "$offenders"
   exit 1
 fi

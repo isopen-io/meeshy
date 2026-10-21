@@ -44,6 +44,9 @@ export const NotificationPreferenceSchema = z.object({
   // « Jeu » (#9490) — la RÉCEPTION des notifications du jeu (invitation et acceptation de duo,
   // résultat de la semaine de ligue, étape de saison). Absent d'un document existant ⇒ reçu.
   gameEnabled: z.boolean().default(true),
+  // « Moments à immortaliser » (#10175, D8) — le PUSH d'une étape du jeu franchie app fermée ; « Jeu »
+  // coupé le coupe aussi. Absent d'un document existant ⇒ reçu.
+  gamePhotoEnabled: z.boolean().default(true),
 
   // Do Not Disturb
   dndEnabled: z.boolean().default(false),
@@ -117,6 +120,7 @@ export const NOTIFICATION_PREFERENCE_DEFAULTS: NotificationPreference = {
   friendContentEnabled: true,
   contactActivityEnabled: true,
   gameEnabled: true,
+  gamePhotoEnabled: true,
   dndEnabled: false,
   dndStartTime: '22:00',
   dndEndTime: '08:00',

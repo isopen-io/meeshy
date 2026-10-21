@@ -38,7 +38,7 @@ public struct ContactMatchRequest: Encodable, Sendable {
 /// `Encodable` autant que `Decodable` : le profil rapproché est mis en cache
 /// avec l'entrée de répertoire qui le porte (`DirectoryContact`), pour que le
 /// répertoire s'affiche instantanément au retour sur l'écran.
-public struct MatchedContactUser: Codable, Sendable, Identifiable, Equatable {
+public struct MatchedContactUser: Codable, Sendable, Identifiable, Equatable, ProfileDecorWearer {
     public let id: String
     public let username: String
     public let firstName: String?
@@ -47,6 +47,9 @@ public struct MatchedContactUser: Codable, Sendable, Identifiable, Equatable {
     public let avatar: String?
     public let isOnline: Bool?
     public let lastActiveAt: Date?
+    /// Le contour d'avatar équipé (#10945), servi avec la personne. Additif et tolérant : absent
+    /// (ancien serveur, aucun contour) ⇒ `nil` ; illisible ⇒ aucun contour (`avatarRing == nil`).
+    public let profileDecor: ServedProfileDecor?
 
     public init(
         id: String,
@@ -56,7 +59,8 @@ public struct MatchedContactUser: Codable, Sendable, Identifiable, Equatable {
         displayName: String? = nil,
         avatar: String? = nil,
         isOnline: Bool? = nil,
-        lastActiveAt: Date? = nil
+        lastActiveAt: Date? = nil,
+        profileDecor: ServedProfileDecor? = nil
     ) {
         self.id = id
         self.username = username
@@ -66,6 +70,7 @@ public struct MatchedContactUser: Codable, Sendable, Identifiable, Equatable {
         self.avatar = avatar
         self.isOnline = isOnline
         self.lastActiveAt = lastActiveAt
+        self.profileDecor = profileDecor
     }
 }
 

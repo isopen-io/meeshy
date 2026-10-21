@@ -15,7 +15,7 @@ struct CommunityLinksView: View {
     private var back: PanelBackAction {
         PanelBackAction(isPresented: isPresented, dismiss: dismiss, panelDismiss: panelDismiss)
     }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     private let accent = MeeshyColors.communityAccent
     private let accentHex = MeeshyColors.communityAccentHex
@@ -220,7 +220,7 @@ class CommunityLinksViewModel: ObservableObject {
 
     private func refreshFromAPI() async {
         links = (try? await CommunityLinkService.shared.listCommunityLinks()) ?? []
-        try? await CacheCoordinator.shared.communityLinks.save(links, for: "list")
+        await bestEffort("communityLinksView.communityLinks.save", category: .cache) { try await CacheCoordinator.shared.communityLinks.save(links, for: "list") }
         isLoading = false
     }
 }

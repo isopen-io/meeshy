@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { LensSkeleton } from './lens-skeleton';
 import { ROW_HEIGHT } from './lens-row';
+import { SECTION_TOGGLE_MIN_HEIGHT } from './lens-sticker';
 
 describe('LensSkeleton — F5/§5 étape 9 (#5650)', () => {
   const html = renderToStaticMarkup(<LensSkeleton />);
@@ -32,5 +33,10 @@ describe('LensSkeleton — F5/§5 étape 9 (#5650)', () => {
       .trim();
     expect(withoutTags).toBe('');
     expect(html).toContain('visibility:hidden');
+  });
+
+  test(`le bandeau fantôme a la hauteur du bandeau REPLIABLE (${SECTION_TOGGLE_MIN_HEIGHT}px, #10103) — sinon la première rangée saute quand le contenu remplace le squelette`, () => {
+    expect(html).toContain(`min-height:${SECTION_TOGGLE_MIN_HEIGHT}px`);
+    expect(html).toMatch(/<h2 aria-hidden="true"[^>]*padding:0 /);
   });
 });

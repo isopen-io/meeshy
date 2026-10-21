@@ -19,35 +19,92 @@ import MeeshySDK
 // côté app (`StoryExportPreflight.swift`) : elle dépend de `StoryItem`, un
 // modèle de LISTE, pas du bake.
 
+/// **Ce qu'il faut pour peindre l'identité de QUELQU'UN** (#10536) — des
+/// paramètres opaques : la fabrique ne sait pas si c'est l'utilisateur connecté
+/// ou l'auteur d'une story qu'un lecteur emporte ; l'app le décide
+/// (`StoryExportDressing`).
+public nonisolated struct StoryExportIntroSource: Equatable, Sendable {
+    /// Sert à retrouver le mood ; `nil` ⇒ pas de mood.
+    public let userId: String?
+    public let displayName: String
+    public let username: String
+    public let avatarURL: String?
+    public let bannerURL: String?
+    /// Fond de repli quand la bannière manque : un thumbHash (bannière ou avatar).
+    public let backgroundThumbHash: String?
+
+    public init(userId: String?,
+                displayName: String,
+                username: String,
+                avatarURL: String? = nil,
+                bannerURL: String? = nil,
+                backgroundThumbHash: String? = nil) {
+        self.userId = userId
+        self.displayName = displayName
+        self.username = username
+        self.avatarURL = avatarURL
+        self.bannerURL = bannerURL
+        self.backgroundThumbHash = backgroundThumbHash
+    }
+}
+
 /// Identité peinte sur le préambule de marque de l'export.
 ///
-/// L'export est réservé à l'auteur (`railPlan.showsExport == isOwnStory`) :
-/// l'auteur de la story et celui qui l'exporte sont la même personne, donc
-/// l'utilisateur courant EST l'identité à graver. Résolution `async` : l'avatar
-/// et le fond (bannière ou thumbHash) sont chargés depuis le cache image ; le
-/// bake attend cette résolution (rapide, cache-first) pour un interlude complet.
+/// Deux entrées, une seule peinture : `currentUser()` grave l'utilisateur
+/// connecté (sa propre story, « Mes stories », le composer) ; `content(for:)`
+/// grave l'identité qu'on lui remet — l'auteur d'une story qu'un lecteur
+/// emporte (#10536). Résolution `async` : l'avatar et le fond (bannière ou
+/// thumbHash) sont chargés depuis le cache image ; le bake attend cette
+/// résolution (rapide, cache-first, BORNÉE par l'appelant) pour un interlude
+/// complet.
 public enum StoryExportIntroFactory {
 
     @MainActor
     public static func currentUser() async -> StoryExportIntroContent? {
         guard let user = AuthManager.shared.currentUser else { return nil }
-
-        let avatarImage = await resolveImage(user.avatar)
-        let backgroundImage = await resolveBackground(user: user)
-        let status = await resolveMood(userId: user.id)
-
-        return StoryExportIntroContent(
+        return await content(for: StoryExportIntroSource(
+            userId: user.id,
             displayName: resolveDisplayName(displayName: user.displayName,
                                             firstName: user.firstName,
                                             lastName: user.lastName,
                                             username: user.username),
             username: user.username,
+            avatarURL: user.avatar,
+            bannerURL: user.banner,
+            backgroundThumbHash: user.avatarThumbHash))
+    }
+
+    @MainActor
+    public static func content(for source: StoryExportIntroSource) async -> StoryExportIntroContent {
+        let avatarImage = await resolveImage(source.avatarURL)
+        let backgroundImage = await resolveBackground(bannerURL: source.bannerURL,
+                                                      thumbHash: source.backgroundThumbHash)
+        let status: StatusEntry?
+        if let userId = source.userId {
+            status = await resolveMood(userId: userId)
+        } else {
+            status = nil
+        }
+
+        return StoryExportIntroContent(
+            displayName: source.displayName,
+            username: source.username,
             avatar: avatarImage,
             banner: backgroundImage,
             moodEmoji: status?.moodEmoji,
             moodMessage: status?.content,
-            accentColorHex: DynamicColorGenerator.colorForName(user.username)
+            accentColorHex: DynamicColorGenerator.colorForName(source.username)
         )
+    }
+
+    /// L'interlude SANS image — nom, pseudo, teinte de repli. Ce qu'on peint
+    /// quand l'avatar et la bannière ne sont pas revenus dans la borne de
+    /// temps : un interlude sobre plutôt qu'une story sans prélude.
+    @MainActor
+    public static func unresolvedContent(for source: StoryExportIntroSource) -> StoryExportIntroContent {
+        StoryExportIntroContent(displayName: source.displayName,
+                                username: source.username,
+                                accentColorHex: DynamicColorGenerator.colorForName(source.username))
     }
 
     /// Nom à graver sur l'interlude. Priorité au `displayName` explicite de
@@ -79,14 +136,14 @@ public enum StoryExportIntroFactory {
     }
 
     /// Fond de l'interlude, dans l'ordre demandé : bannière de l'auteur → sinon
-    /// le thumbHash de son avatar (flou une fois agrandi en aspectFill) → sinon
-    /// `nil`, ce qui laisse le SDK peindre un gradient d'accent vibrant.
-    private static func resolveBackground(user: MeeshyUser) async -> CGImage? {
-        if let banner = await resolveImage(user.banner) {
+    /// le thumbHash remis (flou une fois agrandi en aspectFill) → sinon `nil`,
+    /// ce qui laisse le SDK peindre un gradient d'accent vibrant.
+    private static func resolveBackground(bannerURL: String?, thumbHash: String?) async -> CGImage? {
+        if let banner = await resolveImage(bannerURL) {
             return banner
         }
-        if let hash = user.avatarThumbHash, !hash.isEmpty,
-           let thumb = ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage {
+        if let thumbHash, !thumbHash.isEmpty,
+           let thumb = ThumbHashDecoder.decodeIfAvailable(thumbHash)?.cgImage {
             return thumb
         }
         return nil

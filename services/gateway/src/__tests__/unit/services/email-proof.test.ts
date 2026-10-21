@@ -57,7 +57,8 @@ const verifier = async (
   const findMany = jest.fn(async () => []) as jest.Mock<any>;
   const prisma = { user: { findFirst, findMany, updateMany }, emailVerificationWatch: { updateMany: watchUpdateMany } };
   const service = new AuthService(prisma as never, 'secret');
-  const resultat = await service.verifyEmail({ email: 'Marie@Example.com', ...preuve });
+  // Un lien présenté ici est CONFIRMÉ (#10872) : ces témoins gardent la preuve, la liaison à l'appareil a les siens.
+  const resultat = await service.verifyEmail({ email: 'Marie@Example.com', ...preuve, ...(preuve.token ? { confirmed: true } : {}) });
   const ecrit = (updateMany.mock.calls[0] as [{ where: Row; data: Row }] | undefined)?.[0];
   return { resultat, findFirst, updateMany, ecrit, watchUpdateMany };
 };

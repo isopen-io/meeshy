@@ -212,12 +212,19 @@ class KeyboardObserver: ObservableObject {
     @Published var height: CGFloat = 0
     @Published var isVisible = false
 
+    /// Hauteur servie tant qu'aucun clavier n'a été mesuré.
+    static let fallbackHeight: CGFloat = 280
+
     /// Last non-zero keyboard height — useful for sizing emoji panel
-    var lastKnownHeight: CGFloat = 280
+    var lastKnownHeight: CGFloat = KeyboardObserver.fallbackHeight
 
     private var cancellables = Set<AnyCancellable>()
 
-    init() {
+    /// La hauteur de la fenêtre contre laquelle le clavier se mesure — injectable pour les témoins.
+    private let windowHeight: () -> CGFloat
+
+    init(windowHeight: @escaping () -> CGFloat = { DeviceLayout.windowSize.height }) {
+        self.windowHeight = windowHeight
         NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notification in
@@ -232,22 +239,78 @@ class KeyboardObserver: ObservableObject {
                 // A degenerate or floating end frame is not a measurement
                 // (#8869): it docks nothing, and it must never become the
                 // height the attachment panel reopens at.
+                let windowHeight = self.windowHeight()
                 let measured = ComposerPanelHeightLaw.keyboardHeight(
                     endFrame: endFrame,
-                    windowHeight: DeviceLayout.windowSize.height
+                    windowHeight: windowHeight
                 )
-                let newHeight = measured ?? 0
 
                 if let measured, measured > 0 {
                     self.lastKnownHeight = measured
                 }
 
-                withAnimation(.easeInOut(duration: max(duration, 0.15))) {
-                    self.height = newHeight
-                    self.isVisible = newHeight > 0
-                }
+                // Une trame nulle garde la hauteur levée (#10544) ; c'est
+                // `keyboardDidHide`, ci-dessous, qui garantit le retour à zéro.
+                self.publish(
+                    ComposerPanelHeightLaw.liftHeight(
+                        endFrame: endFrame, windowHeight: windowHeight, current: self.height),
+                    duration: duration
+                )
             }
             .store(in: &cancellables)
+
+        NotificationCenter.default.publisher(for: UIResponder.keyboardDidHideNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.publish(0, duration: 0)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func publish(_ newHeight: CGFloat, duration: Double) {
+        guard newHeight != height else { return }
+        withAnimation(.easeInOut(duration: max(duration, 0.15))) {
+            height = newHeight
+            isVisible = newHeight > 0
+        }
+    }
+}
+
+/// **Un écran, un observateur de clavier** (#10544).
+///
+/// Chaque `UniversalComposerBar` créait le sien, en plus de celui de son hôte :
+/// deux par écran de story, chacun rejouant sa transaction animée à chaque
+/// notification. La barre ne lit que la dernière hauteur connue (son panneau
+/// la reprend) : elle la prend chez l'hôte s'il en publie un
+/// (`composerHostKeyboard`), et n'en crée un que sinon.
+final class ComposerKeyboardSource {
+    nonisolated deinit {}
+    private var own: KeyboardObserver?
+
+    var ownsObserver: Bool { own != nil }
+
+    func adopt(host: KeyboardObserver?) {
+        guard host == nil else {
+            own = nil
+            return
+        }
+        if own == nil { own = KeyboardObserver() }
+    }
+
+    func lastKnownHeight(host: KeyboardObserver?) -> CGFloat {
+        (host ?? own)?.lastKnownHeight ?? KeyboardObserver.fallbackHeight
+    }
+}
+
+private struct ComposerHostKeyboardKey: EnvironmentKey {
+    static let defaultValue: KeyboardObserver? = nil
+}
+
+extension EnvironmentValues {
+    /// L'observateur de clavier de l'hôte, quand il en tient déjà un.
+    var composerHostKeyboard: KeyboardObserver? {
+        get { self[ComposerHostKeyboardKey.self] }
+        set { self[ComposerHostKeyboardKey.self] = newValue }
     }
 }
 

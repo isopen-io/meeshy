@@ -10,6 +10,7 @@ import {
   afterChestOpening,
   afterFreeze,
   afterMint,
+  afterMintUnlessServed,
   afterRelight,
   afterReroll,
   withChestReward,
@@ -71,6 +72,57 @@ describe('afterMint — la pièce tombe, le niveau redescend, le trésor monte',
   test('sans bloc game, la progression est rendue telle quelle', () => {
     const legacy = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
     expect(afterMint(legacy)).toBe(legacy);
+  });
+});
+
+describe('afterMint avec les étincelles (#10892) — la poche paie et fait le niveau, le cumul reste', () => {
+  const sparks = { pocket: 40_000, cycle: 90_000, lifetime: 250_000, debt: 0 };
+  const before = view({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks, levelMaxLifetime: 30 });
+  const after = afterMint(before);
+
+  test('la poche perd le prix, le niveau se relit sur elle', () => {
+    expect(gameOf(after).level.sparks).toBe(sparks.pocket - gameOf(before).mint.price);
+    expect(gameOf(after).level.score).toBe(sparks.pocket - gameOf(before).mint.price);
+    expect(gameOf(after).level.ladder?.level).toBeLessThan(gameOf(before).level.ladder?.level ?? 0);
+  });
+
+  test('le cumul depuis le Prestige, le total à vie et le niveau max à vie restent', () => {
+    expect(gameOf(after).level.sparksCycle).toBe(sparks.cycle);
+    expect(gameOf(after).level.sparksLifetime).toBe(sparks.lifetime);
+    expect(gameOf(after).level.levelMaxLifetime).toBe(30);
+  });
+
+  test('le Vent arrière suit la loi des étincelles : 7 niveaux ou plus sous le record (#10896)', () => {
+    const level = gameOf(after).level;
+    const gap = (level.ladder?.record ?? level.record) - (level.ladder?.level ?? level.level);
+    expect(gameOf(after).boosts.tailwind).toBe(gap >= 7 ? 1.25 : 1);
+  });
+
+  test('le prix suivant porte le facteur du niveau d’après, jamais le prix de rang nu (#10898)', () => {
+    const next = gameOf(after).mint;
+    expect(next.basePrice).toBe(1221);
+    expect(next.price).toBeLessThan(1221);
+    expect(next.price).toBe(Math.round((1221 * Math.round((next.costFactor ?? 0) * 1000)) / 1000));
+  });
+
+  test('le compteur de Meeshes lit le même prix suivant que le héro de frappe (#10898)', () => {
+    expect(after.meesh?.mintCost).toBe(gameOf(after).mint.price);
+    expect(after.meesh?.missingPoints).toBe(gameOf(after).mint.missingPoints);
+  });
+});
+
+describe('afterMintUnlessServed — une frappe ne se débite qu’une fois (#10898)', () => {
+  const sparks = { pocket: 40_000, cycle: 40_000, lifetime: 40_000, debt: 0 };
+  const before = view({ score: sparks.pocket, debitablePoints: sparks.pocket, sparks });
+  const numberBefore = gameOf(before).mint.number;
+
+  test('sur la lecture d’avant la frappe, la frappe s’applique', () => {
+    expect(afterMintUnlessServed(before, numberBefore)).toEqual(afterMint(before));
+  });
+
+  test('sur une relecture servie qui la porte déjà, rien ne bouge : la poche ne paie pas deux fois', () => {
+    const served = afterMint(before);
+    expect(afterMintUnlessServed(served, numberBefore)).toBe(served);
   });
 });
 

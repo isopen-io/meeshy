@@ -11,6 +11,7 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { evaluateExpression, findAndModifyLikeMongo, type FindAndModifyCommand } from '../../engagement/__tests__/mongoLikeCounters';
 
 type Row = Record<string, unknown> & { id: string };
 type Where = Record<string, unknown>;
@@ -37,7 +38,9 @@ const matchField = (actual: unknown, expected: unknown): boolean => {
     if (op === 'lt') return typeof actual === 'number' ? actual < (value as number) : actual instanceof Date ? actual < (value as Date) : typeof actual === 'string' && actual < (value as string);
     if (op === 'lte') return typeof actual === 'number' ? actual <= (value as number) : actual instanceof Date && actual <= (value as Date);
     if (op === 'notIn') return !(value as unknown[]).includes(actual);
-    if (op === 'startsWith') return typeof actual === 'string' && actual.startsWith(value as string);
+    // Prisma sur MongoDB traduit `startsWith` en regex `^<valeur>` SANS l'échapper (mesuré sur mongod 8 + Prisma
+    // 6.19, #11467) : un `|` y devient une alternative qui matche tout. Le faux rend la même chose que la base.
+    if (op === 'startsWith') return typeof actual === 'string' && new RegExp(`^${value as string}`).test(actual);
     if (op === 'gt') return typeof actual === 'number' ? actual > (value as number) : actual instanceof Date ? actual > (value as Date) : typeof actual === 'string' && actual > (value as string);
     if (op === 'not') return value === null ? actual !== null && actual !== undefined : !matchField(actual, value);
     if (op === 'has') return Array.isArray(actual) && actual.includes(value);
@@ -71,7 +74,9 @@ const applyData = (row: Row, data: Record<string, unknown>): void => {
       row[key] = before + ((value.increment as number | undefined) ?? 0) - ((value.decrement as number | undefined) ?? 0);
       continue;
     }
-    row[key] = value;
+    // Mongo n'a pas de BigInt : une colonne `long` écrite par Prisma se relit en nombre par les commandes brutes
+    // (`$add`, `$max`) — le faux range donc un BigInt en nombre, comme la base le rend à la couche brute.
+    row[key] = typeof value === 'bigint' ? Number(value) : value;
   }
 };
 
@@ -273,6 +278,9 @@ export type FakeGameDb = {
   readonly communityMember: Model;
   readonly mythicSeat: Model;
   readonly mythicEdition: Model;
+  readonly gamePhotoMoment: Model;
+  readonly userStickerPack: Model;
+  readonly engagementActStreak: Model;
 };
 
 export function fakeGameDb(): FakeGameDb {
@@ -280,7 +288,7 @@ export function fakeGameDb(): FakeGameDb {
   const gloryLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
   const meeshLedger = flattenCompound(new Model({ uniques: [['userId', 'requestId']] }));
   const dailyMission = flattenCompound(new Model({ uniques: [['userId', 'dayKey', 'slot']], defaults: () => ({ progress: 0, seen: [], prism: false, glory: 0 }), optional: ['completedAt', 'paidPoints', 'rerolledAt', 'startsAt', 'endsAt', 'notifiedAt'] }));
-  const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0 }), optional: ['chestClaimedAt', 'chestPoints', 'chestFragment', 'chestFreeze'] }));
+  const gameDay = flattenCompound(new Model({ uniques: [['userId', 'dayKey']], defaults: () => ({ rerollCount: 0 }), optional: ['chestClaimedAt', 'chestPoints', 'chestFragment', 'chestFreeze', 'chestGlory', 'chestBonus', 'chestBonusPoints', 'chestMintBase'] }));
   const engagementCounter = flattenCompound(new Model({ uniques: [['userId', 'axisKey']] }));
   const engagementQuota = flattenCompound(new Model({ uniques: [['userId', 'operationKey', 'bucket']] }));
   const engagementMilestone = flattenCompound(new Model({ uniques: [['userId', 'milestoneType', 'milestoneKey']] }));
@@ -317,6 +325,13 @@ export function fakeGameDb(): FakeGameDb {
   // `_id` dérivé du numéro (`mythicSeatId`, `mythicEditionId`) : l'index `_id` existe toujours, d'où l'unique sur `id`.
   const mythicSeat = flattenCompound(new Model({ uniques: [['id'], ['number'], ['userId'], ['edition']] }));
   const mythicEdition = flattenCompound(new Model({ uniques: [['id'], ['edition']] }));
+  // `_id` dérivé de (userId, stepId) (`photoMomentId`), plus l'unique posé par la migration du registre.
+  const gamePhotoMoment = flattenCompound(new Model({ uniques: [['id'], ['userId', 'stepId']], optional: ['detectedAt', 'presentedAt', 'notifiedAt'] }));
+  const userStickerPack = flattenCompound(new Model({ uniques: [['userId', 'packSlug']], optional: ['installedAt'] }));
+  // La série de chaque acte (#10389).
+  const engagementActStreak = flattenCompound(new Model({ uniques: [['userId', 'act']] }));
+  // Le calendrier des saisons servi (#10016) : vide, la loi rend la constante.
+  const gameSeasonDefinition = flattenCompound(new Model({ uniques: [['number'], ['revision']] }));
   const models = {
     user,
     gloryLedger,
@@ -349,38 +364,25 @@ export function fakeGameDb(): FakeGameDb {
     communityMember,
     mythicSeat,
     mythicEdition,
+    gamePhotoMoment,
+    userStickerPack,
+    gameSeasonDefinition,
+    engagementActStreak,
   };
 
   /**
-   * Les deux commandes brutes que le service émet : `findAndModify` sur `User`
-   * avec un pipeline `$add` / `$ifNull` — l'incrément qui lit l'ABSENCE comme
-   * zéro — et, à la reprise d'un contenu, `$max` / `$subtract` qui retire sans
-   * descendre sous zéro.
+   * Les commandes brutes que les services émettent : le score (`User`) et le
+   * compteur (`EngagementCounter`, #10541), évaluées comme MongoDB les évalue —
+   * `$add` sur un champ absent ou `null` rend `null` (`mongoLikeCounters.ts`).
    */
-  const evaluate = (expression: unknown, row: Row): number => {
-    if (typeof expression === 'number') return expression;
-    if (typeof expression === 'string') return row[expression.slice(1)] as number;
-    const [operator, operands] = Object.entries(expression as Record<string, unknown[]>)[0]!;
-    if (operator === '$ifNull') {
-      const value = evaluate(operands[0], row);
-      return typeof value === 'number' ? value : evaluate(operands[1], row);
+  const $runCommandRaw = async (command: FindAndModifyCommand) => {
+    if (command.findAndModify === 'EngagementCounter') {
+      return findAndModifyLikeMongo(engagementCounter.rows, command, (fields) => ({ id: nextId(), ...fields }));
     }
-    const values = operands.map((operand) => evaluate(operand, row));
-    if (operator === '$add') return values.reduce((sum, value) => sum + value, 0);
-    if (operator === '$subtract') return values[0]! - values[1]!;
-    if (operator === '$max') return Math.max(...values);
-    throw new Error(`opérateur de pipeline non reproduit par le faux : ${operator}`);
-  };
-  const $runCommandRaw = async (command: {
-    findAndModify: string;
-    query: { _id: { $oid: string } };
-    update: { $set: Record<string, unknown> }[];
-    fields?: Record<string, number>;
-  }) => {
-    const row = user.rows.find((r) => r.id === command.query._id.$oid);
+    const row = user.rows.find((r) => r.id === (command.query._id as { $oid: string }).$oid);
     if (!row) return { ok: 1, value: null };
     for (const [key, expression] of Object.entries(command.update[0]!.$set)) {
-      row[key] = evaluate(expression, row);
+      row[key] = evaluateExpression(expression, row);
     }
     const out: Record<string, unknown> = {};
     for (const key of Object.keys(command.fields ?? {})) out[key] = row[key] ?? null;

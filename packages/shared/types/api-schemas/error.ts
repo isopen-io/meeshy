@@ -82,6 +82,10 @@ export const errorResponseSchema = {
     error: { type: 'string', description: 'Error message' },
     message: { type: 'string', description: 'Human-readable error message' },
     code: { type: 'string', description: 'Error code (optional)' },
+    accountId: {
+      type: 'string',
+      description: 'Account the refusal is about — set with code ACCOUNT_DELETED (#10264): the id of the signed token account, so a device purges that account only'
+    },
     violations: {
       type: 'array',
       description: 'Per-field violations, when the route supplies them',

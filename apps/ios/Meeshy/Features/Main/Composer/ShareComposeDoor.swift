@@ -126,7 +126,9 @@ private struct ShareComposeCover: ViewModifier {
     func body(content: Content) -> some View {
         content.fullScreenCover(
             item: Binding(
-                get: { consumer.pending },
+                // `presentable`, jamais `pending` : la pièce servie à un compte
+                // ne s'ouvre pas sous le suivant (#10986).
+                get: { consumer.presentable },
                 // Le `set` ne SOLDE pas la fiche : un balayage à blanc (SwiftUI
                 // repose l'item à `nil` au démontage) l'effacerait sans que
                 // l'auteur ait rien fait. C'est `onFinish` qui solde, et lui

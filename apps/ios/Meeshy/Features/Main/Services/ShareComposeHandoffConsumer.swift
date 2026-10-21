@@ -46,7 +46,7 @@ final class ShareComposeHandoffConsumer: ObservableObject {
 
     static let shared = ShareComposeHandoffConsumer()
 
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "share-compose")
+    private static let logger = MeeshyLog.logger(.shareCompose)
 
     // MARK: - Le contrat, dupliqué
 
@@ -57,7 +57,9 @@ final class ShareComposeHandoffConsumer: ObservableObject {
     nonisolated static let appGroupIdentifier = "group.me.meeshy.apps"
     nonisolated static let directoryName = "share_pending_composes"
     nonisolated static let mediaDirectoryName = "share_pending_media"
-    nonisolated static let currentVersion = 1
+    /// 2 : la fiche nomme son compte (#10986).
+    nonisolated static let currentVersion = 2
+    nonisolated static let ownerAwareVersion = 2
 
     nonisolated struct Media: Codable, Equatable, Sendable {
         let relPath: String
@@ -72,6 +74,20 @@ final class ShareComposeHandoffConsumer: ObservableObject {
         let createdAt: Date
         let text: String?
         let media: [Media]
+        /// Le compte qui a déposé la fiche. Absent des fiches v1 : elles se
+        /// relisent sans lui.
+        let ownerUserId: String?
+
+        /// Une fiche n'est servie qu'à son compte. Sans propriétaire, elle ne
+        /// l'est que si l'extension SAVAIT en nommer un (v2) : elle a alors
+        /// été déposée sans session, par l'utilisateur de l'appareil, et
+        /// attend le premier compte qui se connecte — le wipe de logout purge
+        /// le dossier, donc rien d'un compte précédent n'y survit. Une fiche
+        /// v1 ne dit pas à qui elle était : elle n'est servie à personne.
+        func isServable(to userId: String) -> Bool {
+            guard let ownerUserId else { return version >= ShareComposeHandoffConsumer.ownerAwareVersion }
+            return ownerUserId == userId
+        }
     }
 
     // MARK: - Ce que la porte présente
@@ -82,6 +98,7 @@ final class ShareComposeHandoffConsumer: ObservableObject {
     struct PendingCompose: Identifiable, Equatable {
         let shareId: String
         let seed: StoryComposerSeed
+        let servedTo: String
         var id: String { shareId }
 
         static func == (lhs: PendingCompose, rhs: PendingCompose) -> Bool {
@@ -91,6 +108,33 @@ final class ShareComposeHandoffConsumer: ObservableObject {
 
     @Published private(set) var pending: PendingCompose?
 
+    private let directory: () -> URL?
+    private let mediaRoot: () -> URL?
+    private let currentUserId: () -> String?
+
+    init(
+        directory: @escaping () -> URL? = { ShareComposeHandoffConsumer.directoryURL() },
+        mediaRoot: @escaping () -> URL? = { ShareComposeHandoffConsumer.mediaRootURL() },
+        currentUserId: @escaping () -> String? = { AuthManager.shared.currentUser?.id }
+    ) {
+        self.directory = directory
+        self.mediaRoot = mediaRoot
+        self.currentUserId = currentUserId
+    }
+
+    /// La pièce à présenter MAINTENANT : celle servie au compte connecté. Une
+    /// pièce servie à un compte qui s'est déconnecté depuis ne s'ouvre pas.
+    var presentable: PendingCompose? {
+        guard let pending, pending.servedTo == currentUserId() else { return nil }
+        return pending
+    }
+
+    /// La déconnexion : rien de ce qui a été servi ne survit en mémoire. La
+    /// fiche reste au disque — c'est le wipe de logout qui le purge.
+    func forget() {
+        pending = nil
+    }
+
     // MARK: - Lecture
 
     /// Reprend la fiche demandée, ou la PLUS ANCIENNE quand aucun identifiant
@@ -99,15 +143,19 @@ final class ShareComposeHandoffConsumer: ObservableObject {
     /// La plus ancienne et non la plus récente : deux partages rapides
     /// arriveraient dans l'ordre où l'auteur les a faits, pas dans l'inverse.
     func consumeNext(id: String? = nil, fileManager: FileManager = .default) async {
-        guard pending == nil else { return }
-        guard let fiche = lireFiche(id: id, fileManager: fileManager) else { return }
+        if pending != nil, presentable == nil { forget() }
+        guard pending == nil, let userId = currentUserId(), !userId.isEmpty else { return }
+        guard let fiche = lireFiche(id: id, servableTo: userId, fileManager: fileManager) else { return }
         guard let graine = await materialiser(fiche, fileManager: fileManager) else {
             // La fiche RESTE : un décodage raté peut venir d'un fichier encore
             // en cours de copie. La supprimer ici perdrait la pièce sans trace.
             Self.logger.warning("compose handoff \(fiche.shareId, privacy: .public) non matérialisable — conservée")
             return
         }
-        pending = PendingCompose(shareId: fiche.shareId, seed: graine)
+        // Le compte a pu changer pendant la matérialisation : la pièce n'est
+        // posée que pour celui à qui elle a été lue.
+        guard pending == nil, currentUserId() == userId else { return }
+        pending = PendingCompose(shareId: fiche.shareId, seed: graine, servedTo: userId)
     }
 
     /// L'auteur a fermé le composer : la fiche et ses fichiers partent.
@@ -117,9 +165,9 @@ final class ShareComposeHandoffConsumer: ObservableObject {
     /// un contenu que l'auteur vient de traiter.
     func finish(_ shareId: String, fileManager: FileManager = .default) {
         if pending?.shareId == shareId { pending = nil }
-        guard let dossier = Self.directoryURL(fileManager: fileManager) else { return }
+        guard let dossier = directory() else { return }
         try? fileManager.removeItem(at: dossier.appendingPathComponent("\(shareId).json"))
-        if let medias = Self.mediaRootURL(fileManager: fileManager) {
+        if let medias = mediaRoot() {
             try? fileManager.removeItem(at: medias.appendingPathComponent(shareId, isDirectory: true))
         }
     }
@@ -140,8 +188,8 @@ final class ShareComposeHandoffConsumer: ObservableObject {
 
     // MARK: - Détails
 
-    private func lireFiche(id: String?, fileManager: FileManager) -> Handoff? {
-        guard let dossier = Self.directoryURL(fileManager: fileManager),
+    private func lireFiche(id: String?, servableTo userId: String, fileManager: FileManager) -> Handoff? {
+        guard let dossier = directory(),
               let entrees = try? fileManager.contentsOfDirectory(at: dossier, includingPropertiesForKeys: nil)
         else { return nil }
         let fiches = entrees
@@ -154,6 +202,7 @@ final class ShareComposeHandoffConsumer: ObservableObject {
             // champ qu'on ne sait pas lire peut être celui qui porte la
             // protection du contenu.
             .filter { $0.version <= Self.currentVersion }
+            .filter { $0.isServable(to: userId) }
         if let id { return fiches.first { $0.shareId == id } }
         return fiches.min { $0.createdAt < $1.createdAt }
     }
@@ -168,7 +217,7 @@ final class ShareComposeHandoffConsumer: ObservableObject {
             // fabrique du SDK refuse un texte vide, et ce `nil` remonte tel quel.
             return fiche.text.flatMap(StoryComposerSeed.text)
         }
-        guard let racine = Self.mediaRootURL(fileManager: fileManager),
+        guard let racine = mediaRoot(),
               let forme = ComposableAttachment.form(mimeType: premier.mime)
         else { return nil }
         let fichier = racine.appendingPathComponent(premier.relPath)

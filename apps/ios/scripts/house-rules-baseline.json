@@ -1,0 +1,25 @@
+{
+  "rules": {
+    "anyview": 96,
+    "autocapitalization": 0,
+    "available-floor": 0,
+    "corner-radius-modifier": 0,
+    "disable-autocorrection": 0,
+    "fixed-font": 760,
+    "foreground-color": 3101,
+    "idiom": 0,
+    "logger-subsystem": 5,
+    "nonisolated-unsafe": 150,
+    "nslock": 48,
+    "nslog": 0,
+    "observed-theme-singleton": 16,
+    "onchange-single": 0,
+    "plural-s": 0,
+    "status-bar-hidden": 0,
+    "try-sleep": 218,
+    "uiscreen-main": 1,
+    "unchecked-sendable": 132,
+    "viewmodel-shared": 588
+  },
+  "version": 1
+}

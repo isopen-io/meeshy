@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
+import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { SelectionToolbar } from './selection-toolbar';
 
 /* La barre LIT son catalogue de façon synchrone (#7555) : sans cette charge,
@@ -12,7 +13,7 @@ import { SelectionToolbar } from './selection-toolbar';
    aussi parce que `currentInterfaceLanguage()` lit `document.documentElement.lang`. */
 beforeAll(async () => {
   ensureHappyDomRegistered();
-  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar')]);
+  await Promise.all([loadInterfaceCatalog('fr'), loadInterfaceCatalog('en'), loadInterfaceCatalog('ar'), loadMessagePiecesCatalog('fr'), loadMessagePiecesCatalog('en')]);
 });
 
 afterEach(() => {
@@ -112,6 +113,38 @@ describe('SelectionToolbar — « Transférer », la seconde porte (#5866)', () 
     );
     expect(html).toContain('data-selection-forward');
     expect(html).toContain('Transférer');
+  });
+});
+
+describe('SelectionToolbar — la corbeille (#10582)', () => {
+  test('offerte ⇒ un bouton nommé, à cible de 44 px, qui porte le marqueur des gates', () => {
+    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} onDelete={() => {}} />);
+    expect(html).toContain('data-selection-delete');
+    expect(html).toContain('aria-label="Supprimer"');
+  });
+
+  test('non offerte (`null`, ou absente) ⇒ aucun bouton', () => {
+    expect(renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} onDelete={null} />)).not.toContain('data-selection-delete');
+    expect(renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} />)).not.toContain('data-selection-delete');
+  });
+
+  test('interface EN ⇒ son nom accessible est anglais', () => {
+    document.documentElement.lang = 'en';
+    const html = renderToStaticMarkup(<SelectionToolbar count={2} onEnd={() => {}} onCopy={() => {}} onForward={() => {}} onDelete={() => {}} />);
+    expect(html).toContain('aria-label="Delete"');
+  });
+
+  test('la toucher remet le geste à l’hôte', () => {
+    globals.IS_REACT_ACT_ENVIRONMENT = true;
+    const journal: string[] = [];
+    const host = document.createElement('div');
+    document.body.append(host);
+    const root = createRoot(host);
+    act(() => root.render(<SelectionToolbar count={2} onEnd={() => {}} onCopy={null} onForward={null} onDelete={() => journal.push('delete')} />));
+    act(() => host.querySelector<HTMLButtonElement>('[data-selection-delete]')?.click());
+    expect(journal).toEqual(['delete']);
+    act(() => root.unmount());
+    host.remove();
   });
 });
 

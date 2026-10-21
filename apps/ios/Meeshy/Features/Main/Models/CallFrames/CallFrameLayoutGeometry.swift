@@ -18,6 +18,44 @@ nonisolated struct CallFrameAreas: Equatable, Sendable {
     let bottom: CGRect
 }
 
+/// **LES BANDES QUE DES CONTRÔLES COUVRENT** (#9777) — en part de la hauteur de la toile, en haut et en bas.
+/// Un texte du cadre (titre, sous-titre, signature, noms) ne s'y pose jamais : les réserves de texte
+/// descendent sous la bande haute et remontent au-dessus de la bande basse, la zone des visages se resserre
+/// entre elles. Le fond et la bordure, eux, restent bord à bord. `.none` ⇒ la géométrie canonique (parité web).
+nonisolated struct CallFrameChromeReserve: Equatable, Sendable {
+    let top: CGFloat
+    let bottom: CGFloat
+
+    static let none = CallFrameChromeReserve(top: 0, bottom: 0)
+
+    /// Une bande ne dépasse jamais la moitié de la toile ; au millième SUPÉRIEUR, pour qu'une mesure voisine
+    /// ne repeigne pas le cadre et que l'arrondi ne rende jamais une bande plus courte que le contrôle.
+    init(top: CGFloat, bottom: CGFloat) {
+        func share(_ value: CGFloat) -> CGFloat {
+            guard value.isFinite, value > 0 else { return 0 }
+            return min(0.5, (value * 1000).rounded(.up) / 1000)
+        }
+        self.top = share(top)
+        self.bottom = share(bottom)
+    }
+
+    /// Les bandes de contrôles mesurées en points sur une vue de `height` points.
+    static func covering(top: CGFloat, bottom: CGFloat, height: CGFloat) -> CallFrameChromeReserve {
+        guard height > 0 else { return .none }
+        return CallFrameChromeReserve(top: top / height, bottom: bottom / height)
+    }
+
+    /// Les deux bandes dans une toile de `size`.
+    func bands(in size: CGSize) -> (top: CGRect, bottom: CGRect) {
+        let topHeight = top * size.height
+        let bottomHeight = bottom * size.height
+        return (
+            CGRect(x: 0, y: 0, width: size.width, height: topHeight),
+            CGRect(x: 0, y: size.height - bottomHeight, width: size.width, height: bottomHeight)
+        )
+    }
+}
+
 /// **LA GÉOMÉTRIE CANONIQUE D'UN CADRE** — le portage LITTÉRAL de
 /// `apps/web/src/lib/calls/frames/frame-layout.ts` : mêmes formules, même
 /// graine (`scatter`), même ordre. Repère : origine en haut à gauche, y vers
@@ -60,6 +98,27 @@ nonisolated enum CallFrameLayoutGeometry {
         let bottom = rect(inner.minX, inner.minY + inner.height - bottomHeight, inner.width, bottomHeight)
         let content = rect(inner.minX, inner.minY + topHeight, inner.width, inner.height - topHeight - bottomHeight)
         return CallFrameAreas(unit: unit, inner: inner, top: top, content: content, bottom: bottom)
+    }
+
+    /// La part de la zone des visages qu'aucune bande de contrôles ne prend : au-delà, les réserves ne
+    /// s'écartent plus que d'autant (un contrôle géant ne réduit pas les visages à un timbre).
+    static let reserveContentFloor: CGFloat = 0.5
+
+    /// Les zones d'un cadre posé sous des contrôles (#9777) : la réserve haute descend sous la bande haute,
+    /// la basse remonte au-dessus de la bande basse, le contenu se resserre entre elles.
+    static func areas(_ layout: CallFrameLayout, size: CGSize, reserve: CallFrameChromeReserve) -> CallFrameAreas {
+        let canonical = areas(layout, size: size)
+        guard reserve != .none else { return canonical }
+        let bands = reserve.bands(in: size)
+        let wantTop = max(0, bands.top.maxY - canonical.top.minY)
+        let wantBottom = max(0, canonical.bottom.maxY - bands.bottom.minY)
+        let wanted = wantTop + wantBottom
+        let room = canonical.content.height * (1 - reserveContentFloor)
+        let factor = wanted > room && wanted > 0 ? room / wanted : 1
+        let top = canonical.top.offsetBy(dx: 0, dy: wantTop * factor)
+        let bottom = canonical.bottom.offsetBy(dx: 0, dy: -wantBottom * factor)
+        let content = rect(canonical.content.minX, top.maxY, canonical.content.width, bottom.minY - top.maxY)
+        return CallFrameAreas(unit: canonical.unit, inner: canonical.inner, top: top, content: content, bottom: bottom)
     }
 
     /// La grille équilibrée de `gridRects` : autant de colonnes que la racine, l'orientation de l'aire décidant du sens.
@@ -405,10 +464,11 @@ nonisolated enum CallFrameLayoutGeometry {
     }
 
     /// **UNE CASE PAR PERSONNE** — les `people` cases du cadre dans une toile de `size`, dans l'ordre des personnes.
-    static func slots(layout: CallFrameLayout, slot: CallFrameSlotStyle, people: Int, size: CGSize) -> [CallFrameSlotBox] {
+    static func slots(layout: CallFrameLayout, slot: CallFrameSlotStyle, people: Int, size: CGSize,
+                      reserve: CallFrameChromeReserve = .none) -> [CallFrameSlotBox] {
         let count = max(0, people)
         guard count > 0 else { return [] }
-        let zones = areas(layout, size: size)
+        let zones = areas(layout, size: size, reserve: reserve)
         let gap = CGFloat(layout.gap) * zones.unit
         let shape: CallFrameSlotShape = layout.arrangement == .honeycomb ? .hex : slot.shape
         return arrangementRects(layout, count: count, area: zones.content, gap: gap, portrait: isPortrait(size))
@@ -419,7 +479,45 @@ nonisolated enum CallFrameLayoutGeometry {
             }
     }
 
-    static func slots(for frame: CallFrameDesign, people: Int, size: CGSize) -> [CallFrameSlotBox] {
-        slots(layout: frame.look.layout, slot: frame.look.slot, people: people, size: size)
+    /// Les cases d'un cadre, et sous chacune la place de ses noms quand ils s'y posent (#9780) :
+    /// sans elle, la banderole se replie DANS la case et couvre la moitié d'un visage.
+    static func slots(for frame: CallFrameDesign, people: Int, size: CGSize,
+                      reserve: CallFrameChromeReserve = .none) -> [CallFrameSlotBox] {
+        let boxes = slots(layout: frame.look.layout, slot: frame.look.slot, people: people, size: size, reserve: reserve)
+        let room = CallFrameRenderer.nameRoom(frame.look, unit: min(size.width, size.height))
+        let content = areas(frame.look.layout, size: size, reserve: reserve).content
+        return leavingRoomBelow(boxes, room: room, floor: content.maxY)
+    }
+
+    /// La marge gardée en plus de la place demandée : un texte de la réserve basse peut mordre d'un point sur le contenu.
+    static let nameRoomSlack: CGFloat = 2
+    /// Une case ne cède jamais plus de la moitié de sa hauteur à ses noms : au-delà, ils se replient dans la case.
+    static let nameRoomMaxShare: CGFloat = 0.5
+
+    /// Raccourcit par le bas — le haut de son encombrement ne bouge pas — chaque case qui n'a pas `room` de libre au-dessus de la case suivante (ou de `floor`).
+    /// Tout ou rien : si une case ne peut pas la céder (cases qui se chevauchent, case trop petite), aucune ne change.
+    static func leavingRoomBelow(_ boxes: [CallFrameSlotBox], room: CGFloat, floor: CGFloat) -> [CallFrameSlotBox] {
+        guard room > 0 else { return boxes }
+        let footprints = boxes.map { CallFrameRenderer.footprint(of: $0) }
+        let made = boxes.indices.map { index -> CallFrameSlotBox? in
+            let box = boxes[index]
+            let own = footprints[index]
+            let below = footprints.indices
+                .filter { $0 != index }
+                .map { footprints[$0] }
+                .filter { $0.minX < own.maxX && own.minX < $0.maxX && $0.maxY > own.maxY }
+            guard !below.contains(where: { $0.minY < own.maxY }) else { return nil }
+            let ground = (below.map(\.minY) + [floor]).min() ?? floor
+            let deficit = room + nameRoomSlack - (ground - own.maxY)
+            guard deficit > 0 else { return box }
+            let radians = CGFloat(abs(box.rotation)) * .pi / 180
+            let cut = deficit / cos(radians)
+            guard cut <= box.rect.height * nameRoomMaxShare else { return nil }
+            let lift = cut * (1 - cos(radians)) / 2
+            let rect = CGRect(x: box.rect.minX, y: box.rect.minY + lift, width: box.rect.width, height: box.rect.height - cut)
+            return CallFrameSlotBox(rect: rect, shape: box.shape, rotation: box.rotation, index: box.index)
+        }
+        let all = made.compactMap { $0 }
+        return all.count == boxes.count ? all : boxes
     }
 }

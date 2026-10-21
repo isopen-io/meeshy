@@ -15,12 +15,27 @@ import SwiftUI
 ///
 /// `currentPageID` is a two-way binding to the `id` of the visible page,
 /// matching the call sites' `@State currentPageID: String?`.
+///
+/// **`paging: .selection`** (#11162) uses the page-style `TabView` on every iOS
+/// version. Measured on iOS 27 (`AdaptiveHorizontalPagerPinningTests`), the
+/// `LazyHStack` path keeps its horizontal OFFSET when pages are inserted before
+/// the current one — it then shows another page while the binding still names
+/// the right one — and opening on the 900th page builds the 899 before it. The
+/// `TabView` follows the page by its tag and builds only the visible bodies.
+/// Its price: the page builder runs for EVERY item at each update, so a caller
+/// with a long source keeps that builder cheap for far pages.
+public enum AdaptivePagerPaging: Sendable {
+    case scrollPosition
+    case selection
+}
+
 public struct AdaptiveHorizontalPager<Item: Identifiable, Page: View>: View
 where Item.ID == String {
     private let items: [Item]
     @Binding private var currentPageID: String?
     private let fillVertical: Bool
     private let carouselTransition: Bool
+    private let paging: AdaptivePagerPaging
     private let page: (Int, Item) -> Page
 
     /// - Parameters:
@@ -31,41 +46,65 @@ where Item.ID == String {
     ///     height (e.g. an in-bubble carousel).
     ///   - carouselTransition: when `true`, applies the scale/opacity/blur
     ///     scroll transition to non-centered pages (iOS 17 only).
+    ///   - paging: `.selection` follows the page by identity (see the type).
     ///   - page: builds a page from its index and item.
     public init(
         items: [Item],
         currentPageID: Binding<String?>,
         fillVertical: Bool = true,
         carouselTransition: Bool = false,
+        paging: AdaptivePagerPaging = .scrollPosition,
         @ViewBuilder page: @escaping (Int, Item) -> Page
     ) {
         self.items = items
         self._currentPageID = currentPageID
         self.fillVertical = fillVertical
         self.carouselTransition = carouselTransition
+        self.paging = paging
         self.page = page
     }
 
     public var body: some View {
-        if #available(iOS 17.0, *) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 0) {
-                    ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                        modernPage(index: index, item: item)
+        if paging == .selection {
+            selectionPager
+        } else if #available(iOS 17.0, *) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 0) {
+                        ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                            modernPage(index: index, item: item)
+                        }
                     }
+                    .scrollTargetLayout()
                 }
-                .scrollTargetLayout()
+                .scrollTargetBehavior(.paging)
+                .scrollPosition(id: $currentPageID)
+                // #6686 — `scrollPosition(id:)` n'honore pas toujours la page
+                // posée avant la première mise en page : la galerie s'ouvrait
+                // sur la première pièce, le lien restant sur celle tapée. Une
+                // fois posé, le pager rejoint la page liée.
+                .onAppear { settle(on: currentPageID, with: proxy) }
             }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $currentPageID)
         } else {
-            TabView(selection: $currentPageID) {
-                ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                    page(index, item)
-                        .tag(item.id as String?)
-                }
+            selectionPager
+        }
+    }
+
+    private var selectionPager: some View {
+        TabView(selection: $currentPageID) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                page(index, item)
+                    .tag(item.id as String?)
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+    }
+
+    private func settle(on pageID: String?, with proxy: ScrollViewProxy) {
+        guard let pageID, items.first?.id != pageID else { return }
+        Task { @MainActor in
+            await Task.yield()
+            proxy.scrollTo(pageID, anchor: .center)
         }
     }
 

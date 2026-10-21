@@ -8,9 +8,10 @@ import { initialsOf } from '@/lib/view/conversation';
 import type { ActiveMember } from '@/lib/view/top-active-members';
 import type { StoryRingOf } from '@/lib/view/use-author-story-rings';
 import { AuthorMoodsContext } from '@/lib/view/use-author-moods';
+import { AuthorRingsContext } from '@/lib/profile-decor/author-ring';
 import { ActivePeersContext, FocusedPeersContext, HerePeersContext } from '@/lib/view/use-conversation-viewing';
 
-import { Avatar } from './avatar';
+import { RingedAvatar } from './peer-avatar';
 import { AvatarMenuTrigger } from './avatar-menu';
 
 /**
@@ -45,6 +46,7 @@ export function ActiveMembersStack({
   readonly storyRingOf?: StoryRingOf | undefined;
   readonly onOpenDetails?: (() => void) | undefined;
 }) {
+  const rings = useContext(AuthorRingsContext);
   const herePeers = useContext(HerePeersContext);
   const activePeers = useContext(ActivePeersContext);
   const focusedPeers = useContext(FocusedPeersContext);
@@ -57,6 +59,7 @@ export function ActiveMembersStack({
       {members.map((member, index) => {
         const ring = storyRingOf?.(member.id);
         const mood = moodOf(member.id);
+        const moodPostId = moodOf.postOf?.(member.id);
         const entries = avatarMenuEntries({ username: member.username, storyRing: ring, details: onOpenDetails !== undefined });
         return (
           <li
@@ -66,7 +69,8 @@ export function ActiveMembersStack({
             style={{ marginInlineStart: index === 0 ? 0 : -OVERLAP, zIndex: members.length - index }}
           >
             <AvatarMenuTrigger entries={entries} name={member.name} onOpenDetails={onOpenDetails}>
-              <Avatar
+              <RingedAvatar
+                ringRef={rings.get(member.id)}
                 initials={initialsOf(member.name)}
                 color={accent}
                 size={SIZE}
@@ -78,7 +82,7 @@ export function ActiveMembersStack({
                 {...(member.avatar === undefined ? {} : { src: member.avatar })}
                 {...(member.username === undefined ? {} : { profileUsername: member.username })}
                 {...(ring === undefined ? {} : { storyRing: ring })}
-                {...(mood === undefined ? {} : { mood })}
+                {...(mood === undefined ? {} : { mood, ...(moodPostId === undefined ? {} : { moodPostId }) })}
               />
             </AvatarMenuTrigger>
           </li>

@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type PointerEvent, type ReactNode, type WheelEvent } from 'react';
 
-import { captureIntent, keyIntent, LONG_PRESS_MS, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
+import { CAPTURE_HOLD_MS, captureIntent, keyIntent, PRESS_SLOP_PX, tapGesture, type LastTap, type PressGesture } from '@/lib/calls/call-capture-gesture';
 import { carouselStep, nearestToCenter } from '@/lib/calls/call-mode-carousel';
 
 /**
@@ -52,7 +52,10 @@ export type CarouselCapture = {
   readonly longPressMs?: number;
 };
 
-export type CarouselItem = { readonly id: string; readonly label: string; readonly visual: ReactNode };
+/** `detail` : ce qu'on doit savoir de l'élément avant de le prendre — pour un cadre, où il sert (#10146). */
+export type CarouselItem = { readonly id: string; readonly label: string; readonly visual: ReactNode; readonly detail?: string };
+
+const describedBy = (...ids: readonly (string | null)[]): string | undefined => ids.filter((id) => id !== null).join(' ') || undefined;
 
 type CarouselProps = {
   readonly label: string;
@@ -250,7 +253,7 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       consumed.current = id;
       lastTap.current = null;
       act(id, 'long-press');
-    }, capture.longPressMs ?? LONG_PRESS_MS);
+    }, capture.longPressMs ?? CAPTURE_HOLD_MS);
     press.current = { id, x: event.clientX, y: event.clientY, timer };
   };
 
@@ -304,8 +307,9 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
         style={{ paddingInline: `calc(50% - ${ITEM / 2}px)` }}
         data-call-row-scroll=""
       >
-        {items.map((item) => {
+        {items.map((item, index) => {
           const checked = item.id === selected;
+          const detailId = item.detail === undefined ? null : `${hintId}-detail-${index}`;
           return (
             <button
               key={item.id}
@@ -315,10 +319,11 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
               aria-label={item.label}
               tabIndex={checked ? 0 : -1}
               onClick={() => tap(item.id)}
+              title={item.detail}
+              aria-describedby={describedBy(detailId, capture !== undefined && checked ? hintId : null)}
               {...(capture === undefined
                 ? {}
                 : {
-                    'aria-describedby': checked ? hintId : undefined,
                     onPointerDown: pressStart(item.id),
                     onPointerMove: pressMove,
                     onPointerUp: lift,
@@ -337,6 +342,11 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
               >
                 {item.visual}
               </span>
+              {detailId === null ? null : (
+                <span id={detailId} className="sr-only">
+                  {item.detail}
+                </span>
+              )}
             </button>
           );
         })}
@@ -344,6 +354,11 @@ export function ModeCarousel({ label, items, selected, onSelect, onWheel, captur
       <p aria-hidden className="h-5 w-full truncate px-4 text-center text-mini font-semibold text-on-media [contain:strict] [text-shadow:0_1px_2px_var(--color-scrim)]" style={{ height: '1lh' }} data-call-mode-selected="">
         {current?.label ?? ''}
       </p>
+      {current?.detail === undefined ? null : (
+        <p aria-hidden className="w-full truncate px-4 text-center text-mini text-on-media opacity-80 [text-shadow:0_1px_2px_var(--color-scrim)]" style={{ height: '1lh' }} data-call-mode-detail="">
+          {current.detail}
+        </p>
+      )}
       {capture === undefined ? null : (
         <span id={hintId} className="sr-only">
           {capture.hint}

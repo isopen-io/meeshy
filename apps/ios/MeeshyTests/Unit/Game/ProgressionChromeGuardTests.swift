@@ -162,9 +162,11 @@ final class ProgressionChromeGuardTests: XCTestCase {
         let rendu = RenderedScreen(ProgressionView(viewModel: vm), size: CGSize(width: 402, height: 4200))
         ecran = rendu
 
+        let blason = rendu.frame(of: "progression.rank.entry", borne: 30)
+        let compteur = rendu.frame(of: "progression.meesh.entry", borne: 30)
         let identifiants = rendu.identifiers
-        XCTAssertTrue(identifiants.contains("progression.rank.entry"), "le blason de rang n'est pas dans l'en-tête. Vus : \(identifiants)")
-        XCTAssertTrue(identifiants.contains("progression.meesh.entry"), "le compteur de Meeshes n'est pas dans l'en-tête. Vus : \(identifiants)")
+        XCTAssertNotNil(blason, "le blason de rang n'est pas dans l'en-tête. Vus : \(identifiants)")
+        XCTAssertNotNil(compteur, "le compteur de Meeshes n'est pas dans l'en-tête. Vus : \(identifiants)")
     }
 
     func test_theFrontPageHeader_carriesNothing_whenNothingIsServed() async {
@@ -175,10 +177,17 @@ final class ProgressionChromeGuardTests: XCTestCase {
         let rendu = RenderedScreen(ProgressionView(viewModel: vm), size: CGSize(width: 402, height: 4200))
         ecran = rendu
 
+        // #10693 — `RenderedScreen.init` rend la main dès que N'IMPORTE QUEL nœud parle
+        // (la barre d'en-tête) ; les cartes de la page se posent quelques tours plus tard,
+        // plus tard encore sur le runtime 26.1 de la CI. Lire l'arbre aussitôt rendait la
+        // « preuve de montage » fausse. On ATTEND la carte (plafond, pas durée) avant de
+        // juger l'ABSENCE : le témoin ne dépend plus de la vitesse du runtime.
+        let carte = rendu.frame(of: "progression.concept.level", borne: 30)
+        XCTAssertNotNil(carte, "la page est montée : le témoin d'absence ne prouve rien sans elle")
+
         let identifiants = rendu.identifiers
         XCTAssertFalse(identifiants.contains("progression.rank.entry"), "un blason sans bloc game : \(identifiants)")
         XCTAssertFalse(identifiants.contains("progression.meesh.entry"), "un compteur sans solde servi : \(identifiants)")
-        XCTAssertTrue(identifiants.contains("progression.concept.level"), "la page est montée : le témoin d'absence ne prouve rien sans elle")
     }
 
     /// La frappe a UN site : la fiche des Meeshes. Toucher le solde de l'en-tête ouvre cette fiche (amendement n° 4).

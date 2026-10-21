@@ -103,9 +103,9 @@ final class TopChromeBandGuardTests: XCTestCase {
             "unique qui peint le haut, quelle que soit la barre active."
         )
         XCTAssertTrue(
-            tint.contains("DeviceLayout.safeAreaTop"),
-            "La hauteur de la bande vient de la FENÊTRE : `GeometryProxy." +
-            "safeAreaInsets` rend 0 dans un sous-arbre qui ignore la safe area."
+            tint.contains("private var topInset: CGFloat { WindowInsets(published: sceneSafeAreaInsets).top }"),
+            "La hauteur de la bande vient de la FENÊTRE (publiée par sa racine, la fenêtre clé en repli, bord HAUT " +
+            "seul) : `GeometryProxy.safeAreaInsets` rend 0 dans un sous-arbre qui ignore la safe area."
         )
         XCTAssertTrue(
             tint.contains(".allowsHitTesting(false)"),
@@ -119,7 +119,7 @@ final class TopChromeBandGuardTests: XCTestCase {
     func test_laBandeEstBorneeALaSafeAreaEtNeGagneAucunGeste() throws {
         let tint = try code(tintPath)
         XCTAssertTrue(
-            tint.contains("height: DeviceLayout.safeAreaTop"),
+            tint.contains(".frame(height: topInset)"),
             "La bande se borne à la hauteur de l'encart haut, jamais à une " +
             "hauteur libre : au-delà, elle recouvre le contenu de l'app."
         )
@@ -150,7 +150,7 @@ final class TopChromeBandGuardTests: XCTestCase {
             "(qui ignore la safe area) et ne rend pas un pixel — mesuré."
         )
         XCTAssertTrue(
-            tint.contains(".offset(y: -DeviceLayout.safeAreaTop)"),
+            tint.contains(".offset(y: -topInset)"),
             "…et c'est l'offset d'exactement sa propre hauteur qui la remonte " +
             "dans la bande système : sans lui, l'overlay couvrirait les " +
             "premiers points de la pilule et du mini-lecteur qu'il prolonge."

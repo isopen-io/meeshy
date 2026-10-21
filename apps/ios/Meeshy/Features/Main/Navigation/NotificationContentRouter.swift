@@ -86,6 +86,29 @@ enum NotificationContentRouter {
         }
     }
 
+    /// La route d'une entité ÉPHÉMÈRE (surface `.story`). Une nouvelle humeur
+    /// ouvre SA page plein écran (#10814) ; tout le reste — story, réaction ou
+    /// commentaire sur une humeur — garde l'écran cible des stories, qui sait
+    /// ouvrir commentaires et réactions.
+    static func ephemeralRoute(
+        postId: String,
+        notificationType: MeeshyNotificationType,
+        context: StoryNotificationContext,
+        commentId: String?,
+        parentCommentId: String?
+    ) -> Route {
+        if notificationType == .friendNewMood {
+            return .moodSpotlight(statusId: postId)
+        }
+        return .storyNotificationTarget(
+            storyId: postId,
+            intent: intent(for: notificationType),
+            context: context,
+            commentId: commentId,
+            parentCommentId: parentCommentId
+        )
+    }
+
     /// `true` when the notification is ABOUT a comment — the post detail
     /// surface then opens with its comments sheet already showing.
     static func opensComments(_ notificationType: MeeshyNotificationType) -> Bool {

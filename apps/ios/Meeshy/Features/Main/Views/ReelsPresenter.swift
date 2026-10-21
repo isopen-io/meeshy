@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Reels Presenter
 
@@ -36,9 +37,24 @@ final class ReelsPresenter: ObservableObject {
         static func == (lhs: Launch, rhs: Launch) -> Bool { lhs.id == rhs.id }
     }
 
-    @Published var launch: Launch?
+    @Published var launch: Launch? {
+        didSet { syncSurfaceDeclaration() }
+    }
 
-    private init() {}
+    private let surfaces: PresentedSurfaceRegistryProviding
+    private let stopPlayback: @MainActor () -> Void
+    private var surfaceToken: PresentedSurfaceToken?
+
+    /// `stopPlayback` : le réel-audio est piloté par un moteur que le démontage
+    /// de la page n'arrête pas (cf. `RootView.closeReels`).
+    init(surfaces: PresentedSurfaceRegistryProviding = PresentedSurfaceRegistry.shared,
+         stopPlayback: @escaping @MainActor () -> Void = {
+             SharedAVPlayerManager.shared.pause()
+             PlaybackCoordinator.shared.stopAllAudio()
+         }) {
+        self.surfaces = surfaces
+        self.stopPlayback = stopPlayback
+    }
 
     /// Opens the reels seeded from posts already on screen, starting on `startId`.
     /// `commentId` (optional) opens the comments sheet on the seed reel and scrolls
@@ -73,6 +89,27 @@ final class ReelsPresenter: ObservableObject {
 
     func dismiss() {
         launch = nil
+    }
+
+    /// Le lecteur est une surface présentée tant qu'il a un lancement (#10539) :
+    /// l'ouverture d'une conversation le referme, son lu coupé.
+    private func syncSurfaceDeclaration() {
+        guard launch != nil else {
+            if let token = surfaceToken {
+                surfaceToken = nil
+                surfaces.retire(token)
+            }
+            return
+        }
+        guard surfaceToken == nil else { return }
+        surfaceToken = surfaces.declare(.reels, answer: { .closes }) { [weak self] in
+            self?.closeForConversation()
+        }
+    }
+
+    private func closeForConversation() {
+        stopPlayback()
+        withAnimation(.easeOut(duration: 0.2)) { launch = nil }
     }
 
     /// A reader already open on a failure is FILLED by the retry, never opened a

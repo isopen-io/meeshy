@@ -16,13 +16,14 @@ import { isEmailValid } from '@/lib/signup-form';
 import { useSearch } from '@/lib/router';
 import { landingAfterSession, safeNextPath } from '@/lib/session-guard';
 import { placeLoginFailure } from '@/lib/view/auth-feedback';
+import { useShortViewport } from '@/lib/view/short-viewport';
 import { Link, href, navigate } from '@/routes/route-table';
 import { PasswordInput } from '@/components/password-input';
 import { DeviceAccountList } from '@/components/device-account-list';
 import type { AccountSwitcher, AccountVault, DeviceAccount } from '@/lib/api/accounts';
 import { accountSwitcher, accountVault } from '@/lib/api/device-accounts';
 import { translate } from '@/lib/i18n-catalog';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { PublicHeader, useInterfaceLanguage } from '@/components/public-header';
 
 /**
  * L'ÉCRAN DE CONNEXION (#5555) — anatomie de `LoginView.swift:93-166`.
@@ -191,7 +192,8 @@ export function LoginDoors({
   /* MOINS DE 13 ANS (#9928) : un 403 `AGE_BELOW_MINIMUM` n'est pas un échec à réessayer. */
   const [ageBlocked, setAgeBlocked] = useState(ageBlockedAtArrival);
 
-  const language = currentInterfaceLanguage();
+  const language = useInterfaceLanguage();
+  const shortViewport = useShortViewport();
   const [deviceAccounts, setDeviceAccounts] = useState<readonly DeviceAccount[]>(() => accounts.vault.list());
   /** Proposée au compte SUPPLÉMENTAIRE seulement : le premier est gardé sans
    * question. Lue au montage — la liste ne change pas sous la saisie. */
@@ -301,244 +303,256 @@ export function LoginDoors({
        place avant le contenu — ici `justify-evenly` partage le blanc
        restant, et `gap-2` / `py-2` sont le plancher quand il n'en reste
        plus. Témoin : `scripts/check-phone-frame.mjs`, 375×667. */
-    <AuthColumn className="items-center justify-evenly gap-2 px-6 py-2">
-      {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
-          Directive porteur 2026-09-14 : « à la connexion la page doit être
-          sans titre sauf la baguette magique ». La porte par défaut a la
-          baguette, un titre de champ et un bouton — le blason y disait une
-          seconde fois ce que la page est, à quelqu'un qui vient de cliquer
-          « Se connecter ». Les DEUX autres sections le gardent : la porte du
-          mot de passe n'a pas de baguette, et le second facteur est un écran
-          d'arrêt au milieu d'un parcours, où savoir de QUI vient la demande
-          de code n'est pas un ornement.
+    <AuthColumn className="items-center px-6 py-2">
+      {/* L'EN-TÊTE PUBLIC (#10007) — la langue, posée EN HAUT : la
+          colonne qui suit garde son partage du blanc (`justify-evenly`,
+          #8418) sous lui, au lieu de le faire flotter au milieu du vide. */}
+      <PublicHeader language={language} brand={false} />
+      <div className="flex w-full flex-1 flex-col items-center justify-evenly gap-2">
+        {/* LE BLASON NE PARAÎT QUE LÀ OÙ IL NOMME QUELQUE CHOSE (#6583).
+            Directive porteur 2026-09-14 : « à la connexion la page doit être
+            sans titre sauf la baguette magique ». La porte par défaut a la
+            baguette, un titre de champ et un bouton — le blason y disait une
+            seconde fois ce que la page est, à quelqu'un qui vient de cliquer
+            « Se connecter ». Les DEUX autres sections le gardent : la porte du
+            mot de passe n'a pas de baguette, et le second facteur est un écran
+            d'arrêt au milieu d'un parcours, où savoir de QUI vient la demande
+            de code n'est pas un ornement.
 
-          Ce que cette directive retirait AUSSI — le titre de section du
-          panneau — est revenu par celle du 2026-09-15 (#6626) : « Votre
-          adresse e-mail » y ancre le (i) « Comment ça marche », donc annonce
-          quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
-          plus de prop `heading` : plus personne ne le taisait. */}
-      {method === 'password' || requires2FA ? <AuthTitle gradient="login" /> : null}
+            Ce que cette directive retirait AUSSI — le titre de section du
+            panneau — est revenu par celle du 2026-09-15 (#6626) : « Votre
+            adresse e-mail » y ancre le (i) « Comment ça marche », donc annonce
+            quelque chose au lieu de répéter le champ. `MagicLinkPanel` n'a
+            plus de prop `heading` : plus personne ne le taisait. */}
+        {/* SUR UN TÉLÉPHONE COURT, LE BLASON CÈDE À WORLD WIDE (#10007).
+            La carte et « ou avec votre compte » ajoutent ~120 px à la porte du
+            mot de passe : à 375×667 elle défilait de 163 px. Sous 700 px de
+            haut, le blason se tait — la signature de pied nomme encore
+            Meeshy — et l'écran tient entier (`check-phone-frame.mjs`). Le
+            second facteur, sans carte, le garde. */}
+        {requires2FA || (method === 'password' && !shortViewport) ? <AuthTitle gradient="login" /> : null}
 
-      {requires2FA ? null : (
-        <Suspense fallback={null}>
-          <SessionEndNotice language={language} />
-        </Suspense>
-      )}
+        {requires2FA ? null : (
+          <Suspense fallback={null}>
+            <SessionEndNotice language={language} />
+          </Suspense>
+        )}
 
-      {!online ? (
-        <p className="w-full rounded-field px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
-          Hors ligne — la connexion n’est pas possible pour l’instant.
-        </p>
-      ) : null}
+        {!online ? (
+          <p className="w-full rounded-field px-4 py-2 text-center text-caption" style={{ backgroundColor: 'var(--color-ios-card)', color: 'var(--color-ios-ink-2)' }}>
+            {translate(language, 'login.offline')}
+          </p>
+        ) : null}
 
-      {!requires2FA && deviceAccounts.length > 0 ? (
-        <DeviceAccountList
-          language={language}
-          accounts={deviceAccounts}
-          activeId={null}
-          isPreserved={accounts.vault.hasPreservedSession}
-          onChoose={chooseAccount}
-          onForget={forgetAccount}
-        />
-      ) : null}
-
-      {requires2FA ? (
-        <form onSubmit={handleTwoFactorSubmit} className="grid w-full gap-4" noValidate>
-          <div className="grid gap-1 text-center">
-            <h2 className="text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-              Double authentification
-            </h2>
-            <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
-              Entrez le code de votre application d’authentification.
-            </p>
-          </div>
-
-          <Field id="login-2fa-code" icon="key" tint={FOCUS_TINT} focused={focused === 'code'}>
-            {({ id }) => (
-              <input
-                id={id}
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                aria-label="Code à 6 chiffres"
-                value={twoFactorCode}
-                onChange={(e) => setTwoFactorCode(e.currentTarget.value.replace(/\D/g, ''))}
-                onFocus={() => setFocused('code')}
-                onBlur={() => setFocused(null)}
-                placeholder="Code à 6 chiffres"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
-              />
-            )}
-          </Field>
-
-          {errorMessage !== null ? (
-            <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
-              {errorMessage}
-            </p>
-          ) : null}
-
-          <AuthSubmitButton
-            disabled={twoFactorCode.length < 6 || !online}
-            isSubmitting={isSubmitting}
-            label="Valider"
-            busyLabel="Vérification…"
+        {!requires2FA && deviceAccounts.length > 0 ? (
+          <DeviceAccountList
+            language={language}
+            accounts={deviceAccounts}
+            activeId={null}
+            isPreserved={accounts.vault.hasPreservedSession}
+            onChoose={chooseAccount}
+            onForget={forgetAccount}
           />
+        ) : null}
 
-          <button
-            type="button"
-            onClick={cancelTwoFactor}
-            className="py-2 text-center text-title font-semibold"
-            style={{ color: 'var(--color-ios-ink-2)', minHeight: 44 }}
-          >
-            Annuler
-          </button>
-        </form>
-      ) : method === 'lien' ? (
-        /* LA PORTE PAR DÉFAUT — le MÊME panneau que l'écran plein
-           `/auth/magic-link` (`MagicLinkPanel`), jamais une seconde machine :
-           saisie, envoi, compte à rebours, renvoi et la note sur les
-           indésirables y vivent une seule fois. `autoFocus` est FAUX ici :
-           le panneau partage l'écran avec le titre et les deux liens du bas,
-           et voler le focus au montage déplacerait le défilement sans que
-           personne ne l'ait demandé. */
-        <MagicLinkPanel
-          {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
-          next={next}
-          initialEmail={email ?? ''}
-          footer={
+        {requires2FA ? (
+          <form onSubmit={handleTwoFactorSubmit} className="grid w-full gap-4" noValidate>
+            <div className="grid gap-1 text-center">
+              <h2 className="text-title font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+                {translate(language, 'login.twoFactor.title')}
+              </h2>
+              <p className="text-caption" style={{ color: 'var(--color-ios-ink-2)' }}>
+                {translate(language, 'login.twoFactor.lead')}
+              </p>
+            </div>
+
+            <Field id="login-2fa-code" icon="key" tint={FOCUS_TINT} focused={focused === 'code'}>
+              {({ id }) => (
+                <input
+                  id={id}
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  aria-label={translate(language, 'login.twoFactor.code')}
+                  value={twoFactorCode}
+                  onChange={(e) => setTwoFactorCode(e.currentTarget.value.replace(/\D/g, ''))}
+                  onFocus={() => setFocused('code')}
+                  onBlur={() => setFocused(null)}
+                  placeholder={translate(language, 'login.twoFactor.code')}
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                />
+              )}
+            </Field>
+
+            {errorMessage !== null ? (
+              <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
+                {errorMessage}
+              </p>
+            ) : null}
+
+            <AuthSubmitButton
+              disabled={twoFactorCode.length < 6 || !online}
+              isSubmitting={isSubmitting}
+              label={translate(language, 'login.twoFactor.submit')}
+              busyLabel={translate(language, 'login.twoFactor.busy')}
+            />
+
+            <button
+              type="button"
+              onClick={cancelTwoFactor}
+              className="py-2 text-center text-title font-semibold"
+              style={{ color: 'var(--color-ios-ink-2)', minHeight: 44 }}
+            >
+              {translate(language, 'login.twoFactor.cancel')}
+            </button>
+          </form>
+        ) : method === 'lien' ? (
+          /* LA PORTE PAR DÉFAUT — le MÊME panneau que l'écran plein
+             `/auth/magic-link` (`MagicLinkPanel`), jamais une seconde machine :
+             saisie, envoi, compte à rebours, renvoi et la note sur les
+             indésirables y vivent une seule fois. `autoFocus` est FAUX ici :
+             le panneau partage l'écran avec le titre et les deux liens du bas,
+             et voler le focus au montage déplacerait le défilement sans que
+             personne ne l'ait demandé. */
+          <MagicLinkPanel
+            {...(magicLinkDeps === undefined ? {} : { deps: magicLinkDeps })}
+            next={next}
+            initialEmail={email ?? ''}
+            footer={
+              <div className="mt-1 grid justify-items-center gap-2">
+                <Link
+                  to="login"
+                  search={{ [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }}
+                  replace
+                  className={`inline-flex items-center text-title font-semibold ${INDIGO_LINK}`}
+                  style={{ minHeight: 44 }}
+                >
+                  {translate(language, 'login.passwordDoor')}
+                </Link>
+              </div>
+            }
+          />
+        ) : (
+          <form onSubmit={handleLoginSubmit} className="grid w-full gap-4" noValidate>
+            <Field
+              id="login-username"
+              label={translate(language, 'login.username.label')}
+              icon="user"
+              tint={FOCUS_TINT}
+              focused={focused === 'username'}
+            >
+              {({ id }) => (
+                <input
+                  id={id}
+                  type="text"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  value={username}
+                  onInput={(e) => setUsername(e.currentTarget.value)}
+                  onFocus={() => setFocused('username')}
+                  onBlur={() => setFocused(null)}
+                  placeholder={translate(language, 'login.username.placeholder')}
+                  className="w-full bg-transparent py-3 text-input outline-none"
+                  style={{ color: 'var(--color-ios-ink)' }}
+                />
+              )}
+            </Field>
+
+            <Field id="login-password" label={translate(language, 'login.password.label')} icon="lock" tint={FOCUS_TINT} focused={focused === 'password'}>
+              {({ id }) => (
+                <PasswordInput
+                  id={id}
+                  autoComplete="current-password"
+                  value={password}
+                  onValue={setPassword}
+                  onFocus={() => setFocused('password')}
+                  onBlur={() => setFocused(null)}
+                  placeholder={translate(language, 'login.password.label')}
+                />
+              )}
+            </Field>
+
+            {errorMessage !== null ? (
+              <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
+                {errorMessage}
+              </p>
+            ) : null}
+
+            {offersKeepSignedIn ? (
+              <label data-keep-signed-in className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
+                <input
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={(e) => setKeepSignedIn(e.currentTarget.checked)}
+                  className="size-5 shrink-0"
+                  style={{ accentColor: 'var(--color-ios-brand)' }}
+                />
+                {translate(language, 'accounts.keep_signed_in')}
+              </label>
+            ) : null}
+
+            <AuthSubmitButton
+              disabled={username.trim() === '' || password === '' || !online}
+              isSubmitting={isSubmitting}
+              label={translate(language, 'login.submit')}
+              busyLabel={translate(language, 'login.submit.busy')}
+            />
+
+            {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : la
+                connexion par e-mail EN PREMIER (action mise en avant,
+                l.481-493), « Mot de passe oublié ? » EN DESSOUS (l.495-501) —
+                empilées, jamais côte à côte (doc-comment l.479-480). Ancres,
+                pas des boutons qui naviguent : pas d'`history`, un vrai `href`.
+
+                « Se connecter par e-mail », baguette en tête (#6626) : le mot
+                dit CE QUE l'on fait, la baguette garde l'identité de la porte.
+                Le glyphe porte sa propre teinte — le dégradé du libellé est
+                découpé dans le TEXTE (`background-clip: text`), et un tracé en
+                `currentColor` y serait transparent. */}
             <div className="mt-1 grid justify-items-center gap-2">
+              <Link to="login" search={nextSearch} replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
+                <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
+                <span
+                  style={{
+                    background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
+                    WebkitBackgroundClip: 'text',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                  }}
+                >
+                  {translate(language, 'login.emailDoor')}
+                </span>
+              </Link>
               <Link
-                to="login"
-                search={{ [METHOD_PARAM]: PASSWORD_METHOD, ...nextSearch }}
-                replace
-                className={`inline-flex items-center text-title font-semibold ${INDIGO_LINK}`}
-                style={{ minHeight: 44 }}
+                to="forgotPassword"
+                search={{ [EMAIL_PARAM]: isEmailValid(username) ? username.trim() : undefined }}
+                className="inline-flex items-center font-medium text-title"
+                style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
+                aria-label={translate(language, 'login.forgotPassword.label')}
               >
-                Se connecter avec un identifiant et un mot de passe
+                {translate(language, 'login.forgotPassword')}
               </Link>
             </div>
-          }
-        />
-      ) : (
-        <form onSubmit={handleLoginSubmit} className="grid w-full gap-4" noValidate>
-          <Field
-            id="login-username"
-            label="E-mail, téléphone ou pseudo"
-            icon="user"
-            tint={FOCUS_TINT}
-            focused={focused === 'username'}
-          >
-            {({ id }) => (
-              <input
-                id={id}
-                type="text"
-                autoComplete="username"
-                autoCapitalize="none"
-                autoCorrect="off"
-                value={username}
-                onInput={(e) => setUsername(e.currentTarget.value)}
-                onFocus={() => setFocused('username')}
-                onBlur={() => setFocused(null)}
-                placeholder="Identifiant, e-mail ou téléphone"
-                className="w-full bg-transparent py-3 text-input outline-none"
-                style={{ color: 'var(--color-ios-ink)' }}
-              />
-            )}
-          </Field>
+          </form>
+        )}
 
-          <Field id="login-password" label="Mot de passe" icon="lock" tint={FOCUS_TINT} focused={focused === 'password'}>
-            {({ id }) => (
-              <PasswordInput
-                id={id}
-                autoComplete="current-password"
-                value={password}
-                onValue={setPassword}
-                onFocus={() => setFocused('password')}
-                onBlur={() => setFocused(null)}
-                placeholder="Mot de passe"
-              />
-            )}
-          </Field>
-
-          {errorMessage !== null ? (
-            <p role="alert" className="text-center text-caption" style={{ color: 'var(--ios-error)' }}>
-              {errorMessage}
-            </p>
-          ) : null}
-
-          {offersKeepSignedIn ? (
-            <label data-keep-signed-in className="flex items-center gap-3 text-body" style={{ minHeight: 44, color: 'var(--color-ios-ink)' }}>
-              <input
-                type="checkbox"
-                checked={keepSignedIn}
-                onChange={(e) => setKeepSignedIn(e.currentTarget.checked)}
-                className="size-5 shrink-0"
-                style={{ accentColor: 'var(--color-ios-brand)' }}
-              />
-              {translate(language, 'accounts.keep_signed_in')}
-            </label>
-          ) : null}
-
-          <AuthSubmitButton
-            disabled={username.trim() === '' || password === '' || !online}
-            isSubmitting={isSubmitting}
-            label="Se connecter"
-            busyLabel="Connexion…"
-          />
-
-          {/* LES DEUX PORTES (#5816) — `LoginView.swift:478-503` : la
-              connexion par e-mail EN PREMIER (action mise en avant,
-              l.481-493), « Mot de passe oublié ? » EN DESSOUS (l.495-501) —
-              empilées, jamais côte à côte (doc-comment l.479-480). Ancres,
-              pas des boutons qui naviguent : pas d'`history`, un vrai `href`.
-
-              « Se connecter par e-mail », baguette en tête (#6626) : le mot
-              dit CE QUE l'on fait, la baguette garde l'identité de la porte.
-              Le glyphe porte sa propre teinte — le dégradé du libellé est
-              découpé dans le TEXTE (`background-clip: text`), et un tracé en
-              `currentColor` y serait transparent. */}
-          <div className="mt-1 grid justify-items-center gap-2">
-            <Link to="login" search={nextSearch} replace className="inline-flex items-center gap-2 font-semibold text-title" style={{ minHeight: 44 }}>
-              <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={18} style={{ color: 'var(--ios-purple-500)' }} />
-              <span
-                style={{
-                  background: 'linear-gradient(90deg, var(--ios-purple-500), var(--ios-indigo-400))',
-                  WebkitBackgroundClip: 'text',
-                  backgroundClip: 'text',
-                  color: 'transparent',
-                }}
-              >
-                Se connecter par e-mail
-              </span>
-            </Link>
-            <Link
-              to="forgotPassword"
-              search={{ [EMAIL_PARAM]: isEmailValid(username) ? username.trim() : undefined }}
-              className="inline-flex items-center font-medium text-title"
-              style={{ minHeight: 44, color: 'var(--color-ios-ink-2)' }}
-              aria-label="Mot de passe oublié"
-            >
-              Mot de passe oublié ?
-            </Link>
-          </div>
-        </form>
-      )}
-
-      <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
-        Pas de compte ?{' '}
-        <Link to="signup" search={nextSearch} className="font-semibold" style={{ background: TITLE_GRADIENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
-          Créer un compte
-        </Link>
-      </p>
-
-      {serverLabel === null ? null : (
-        <p data-login-server className="font-mono text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
-          {translate(language, 'login.server_origin', { origin: serverLabel })}
+        <p className="text-title" style={{ color: 'var(--color-ios-ink-2)' }}>
+          {translate(language, 'login.noAccount')}{' '}
+          <Link to="signup" search={nextSearch} className="font-semibold" style={{ background: TITLE_GRADIENT, WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' }}>
+            {translate(language, 'login.createAccount')}
+          </Link>
         </p>
-      )}
 
-      <AuthBrandFooter />
+        {serverLabel === null ? null : (
+          <p data-login-server className="font-mono text-caption" style={{ color: 'var(--color-ios-ink-3)' }}>
+            {translate(language, 'login.server_origin', { origin: serverLabel })}
+          </p>
+        )}
+
+        <AuthBrandFooter />
+      </div>
     </AuthColumn>
   );
 }

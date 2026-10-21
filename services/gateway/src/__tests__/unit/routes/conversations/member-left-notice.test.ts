@@ -48,6 +48,7 @@ function makePrisma(role: string, remaining: Array<Record<string, unknown>>) {
 async function leave(prisma: ReturnType<typeof makePrisma>) {
   const chain: any = { emit: jest.fn<any>() };
   chain.to = jest.fn<any>(() => chain);
+  chain.except = jest.fn<any>(() => chain);
   const broadcastMessage = jest.fn<any>().mockResolvedValue(undefined);
   const app = Fastify({ logger: false });
   app.decorate('socketIOHandler', {

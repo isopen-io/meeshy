@@ -124,8 +124,10 @@ function priseComptee(): PlaybackHold & {
     hold: () => journal.push('hold'),
     release: () => journal.push('release'),
     park: () => journal.push('park'),
+    update: () => {},
     onPauseRequested: abonner(pauses),
     onPlayRequested: abonner(lectures),
+    onSeekRequested: () => () => {},
     demanderPause: () => {
       for (const ecouteur of pauses) ecouteur();
     },

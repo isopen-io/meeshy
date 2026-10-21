@@ -32,8 +32,11 @@ import {
 } from '../../validation/encryption-envelope.js';
 import { MENTIONED_USER_IDS_SHAPE } from '../../validation/mention-list.js';
 import { EPHEMERAL_DURATION_SHAPE } from '../../validation/ephemeral-duration.js';
+import { FORWARDED_ATTACHMENT_IDS_SHAPE } from '../../validation/forwarded-attachments.js';
+import { isForwardRefusalCode } from '@meeshy/shared/types/forward-refusal';
 import { admitAttachmentReply } from '../../services/messaging/attachmentReplySnapshot';
 import { admitMessageAttachments } from '../../services/messaging/attachmentSendAdmission';
+import { GUEST_ATTACHMENT_REFUSAL_CODES } from '@meeshy/shared/types/guest-attachment-kinds';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 import { logger } from './messages-shared';
@@ -73,6 +76,7 @@ export const SendMessageBodySchema = z.object({
   storyReplyToId: z.string().optional(),
   forwardedFromId: z.string().optional(),
   forwardedFromConversationId: z.string().optional(),
+  ...FORWARDED_ATTACHMENT_IDS_SHAPE,
   // Diffusion à plusieurs destinataires (PAS un transfert) : copie SERVEUR
   // des pièces jointes du message désigné vers celui-ci, mêmes fichiers,
   // sans `forwardedFromId` ni marque de transfert sur les copies. Voir
@@ -162,6 +166,13 @@ export function registerSendMessageRoute(
           storyReplyToId: { type: 'string', description: 'ID of story being replied to' },
           forwardedFromId: { type: 'string', description: 'ID of original forwarded message' },
           forwardedFromConversationId: { type: 'string', description: 'ID of source conversation for cross-conversation forwarding' },
+          forwardedAttachmentIds: {
+            type: 'array',
+            items: { type: 'string' },
+            minItems: 1,
+            maxItems: MAX_ATTACHMENTS_PER_MESSAGE,
+            description: 'Pièces de forwardedFromId à recopier, dans l’ordre (#9914). Absent : tout le lot. Une pièce étrangère au message source est REFUSÉE (code forwarded-attachment-not-in-source).'
+          },
           encryptedContent: {
             type: 'string',
             description: 'Ciphertext. Its presence is what makes the message encrypted — a body carrying only this field is a valid message.'
@@ -246,6 +257,7 @@ export function registerSendMessageRoute(
         storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
+        forwardedAttachmentIds,
         copyAttachmentsFromMessageId,
         encryptedContent,
         encryptionMode,
@@ -384,6 +396,7 @@ export function registerSendMessageRoute(
         storyReplyToId,
         forwardedFromId,
         forwardedFromConversationId,
+        forwardedAttachmentIds,
         copyAttachmentsFromMessageId,
         mentionedUserIds,
         attachmentIds,
@@ -445,8 +458,18 @@ export function registerSendMessageRoute(
         if (result.code === GLOBAL_ADULTS_ONLY_CODE) {
           return sendForbidden(reply, result.error || MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
         }
+        // #10001 — la famille d'une pièce fermée aux invités de ce lien : 403,
+        // avec le code stable que les clients localisent.
+        if (result.code === GUEST_ATTACHMENT_REFUSAL_CODES.KIND_NOT_ALLOWED) {
+          return sendForbidden(reply, result.error, { code: result.code });
+        }
         if (result.code === 'WRITE_NOT_PERMITTED' || result.code === 'ATTACHMENT_RIGHT_NOT_PERMITTED') {
           return sendForbidden(reply, result.error || 'Vous n\'êtes pas autorisé à envoyer des messages');
+        }
+        // #9598 — un transfert refusé porte son motif STABLE ; `error` reste
+        // la phrase que les anciens clients affichent.
+        if (isForwardRefusalCode(result.code)) {
+          return sendBadRequest(reply, result.error || 'Invalid message request', { code: result.code });
         }
         return sendBadRequest(reply, result.error || 'Invalid message request');
       }

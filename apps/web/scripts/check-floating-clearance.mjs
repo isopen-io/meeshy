@@ -289,13 +289,13 @@ for (const scheme of ['light', 'dark']) {
     constate(bandeRendue, `${tagFlux} : revenu en haut, la bande ne rend pas la fente au titre`);
 
     // --------------------------------------------------------------- la liste
-    await page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
     await page.waitForSelector('[data-row]');
     await page.waitForSelector('.floating-disc');
     await page.waitForTimeout(300);
 
     const tagListe = `Liste ${gabarit}`;
-    const liste = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]:not([data-story-author]), nav[aria-label="Filtres"] button');
+    const liste = await releve(page, 'header a, header button, section:has([data-rail="grande"]) a[aria-label]:not([data-story-author]), nav[data-list-filters] button');
     exigeRepos(tagListe, liste);
     const grandeListe = await cotes(page, 'grande');
     constate(

@@ -122,12 +122,27 @@ final class IncomingCallWakeGate {
 
     func arm() {
         guard subscription == nil else { return }
-        subscription = offers().sink { [weak self] offer in
+        subscription = offers().sink(receiveValue: Self.delivery(to: self))
+    }
+
+    /// La garde « hors du main → on saute » ne peut vivre que dans une
+    /// fermeture NON isolée : écrite dans ce type `@MainActor`, la fermeture
+    /// du sink serait isolée au MainActor, et le runtime trapperait à son
+    /// ENTRÉE (`_dispatch_assert_queue_fail`) avant que `Thread.isMainThread`
+    /// ne soit lu — la garde était du code mort. Sur le main (le socket livre
+    /// là), la décision reste prise AU MOMENT de l'émission.
+    nonisolated private static func delivery(
+        to gate: IncomingCallWakeGate
+    ) -> (CallOfferData) -> Void {
+        { [weak gate] offer in
+            // Une copie `let` : la capture `weak` est une boîte mutable, qu'on
+            // ne peut pas envoyer telle quelle vers le main.
+            let target = gate
             guard Thread.isMainThread else {
-                DispatchQueue.main.async { self?.receive(offer) }
+                DispatchQueue.main.async { target?.receive(offer) }
                 return
             }
-            MainActor.assumeIsolated { self?.receive(offer) }
+            MainActor.assumeIsolated { target?.receive(offer) }
         }
     }
 

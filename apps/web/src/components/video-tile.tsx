@@ -40,10 +40,10 @@ export function VideoFallback({ attachment }: { readonly attachment: Attachment 
     <div className="flex items-center gap-2 py-1" data-attachment={attachment.id} data-video-fallback>
       <GlyphSvg glyph={THREAD_STATES_GLYPHS.videoCamera} size={24} />
       <span className="min-w-0 flex-1 truncate text-title">
-        {attachment.originalName !== '' ? attachment.originalName : 'Vidéo'}
+        {attachment.originalName !== '' ? attachment.originalName : translate(currentInterfaceLanguage(), 'media.video.fallbackName')}
       </span>
       <span className="shrink-0 text-time opacity-70 tabular-nums">
-        {duration ?? `${Math.round(attachment.fileSize / 1024)} Ko`}
+        {duration ?? translate(currentInterfaceLanguage(), 'media.size.kb', { size: String(Math.round(attachment.fileSize / 1024)) })}
       </span>
     </div>
   );
@@ -283,7 +283,7 @@ export function VideoTile({
             className="text-mini text-on-media underline"
             style={{ minHeight: 44 }}
           >
-            Lecture impossible — Réessayer
+            {translate(currentInterfaceLanguage(), 'media.playback.failed')}
           </button>
         </div>
       ) : null}

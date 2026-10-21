@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { PhotoArt, PhotoPalette } from './compose';
-import { dateLabelOf, fileNameOf, renderPhotoFiles } from './render';
+import { dateLabelOf, fileNameOf, KEPT_STORY_QUALITY, keptStoryOf, renderPhotoFiles } from './render';
 import { rankMoment } from './moments';
 import { PHOTO_FORMATS, photoLayout } from './layout';
 import { referralOf, referralPlaceholder } from './referral';
@@ -158,5 +158,61 @@ describe('les petits noms', () => {
   test('un nom de fichier sans deux-points ni espaces', () => {
     expect(fileNameOf('rank:voix:2', 'story')).toBe('meeshy-rank-voix-2-story.png');
     expect(fileNameOf('meesh:1', 'square')).toBe('meeshy-meesh-1-profil.png');
+  });
+});
+
+describe('le 9:16 gardé au carnet est un JPEG (#10238)', () => {
+  const png = new File(['png'], 'meeshy-rank-voix-2-story.png', { type: 'image/png' });
+
+  function transcoder(overrides: { readonly decode?: (blob: Blob) => Promise<ImageBitmap>; readonly blob?: Blob | null } = {}) {
+    const calls: { drawn: number; type: string | undefined; quality: number | undefined; closed: number; size: number[] } = { drawn: 0, type: undefined, quality: undefined, closed: 0, size: [] };
+    const createCanvas = (width: number, height: number) => {
+      calls.size = [width, height];
+      return {
+        width,
+        height,
+        getContext: () => ({ drawImage: () => void (calls.drawn += 1) }),
+        toBlob: (done: (blob: Blob | null) => void, type?: string, quality?: number) => {
+          calls.type = type;
+          calls.quality = quality;
+          done(overrides.blob === undefined ? new Blob(['jpeg'], { type: type ?? 'image/png' }) : overrides.blob);
+        },
+      } as unknown as HTMLCanvasElement;
+    };
+    const decode = overrides.decode ?? (async () => ({ width: 1080, height: 1920, close: () => void (calls.closed += 1) }) as unknown as ImageBitmap);
+    return { calls, deps: { createCanvas, decode } };
+  }
+
+  test('le PNG composé se garde en JPEG de qualité iOS (0,9), à la même taille, l’image décodée libérée', async () => {
+    const { calls, deps } = transcoder();
+    const kept = await keptStoryOf(png, deps);
+    expect(kept.type).toBe('image/jpeg');
+    expect(KEPT_STORY_QUALITY).toBe(0.9);
+    expect(calls.type).toBe('image/jpeg');
+    expect(calls.quality).toBe(0.9);
+    expect(calls.size).toEqual([1080, 1920]);
+    expect(calls.drawn).toBe(1);
+    expect(calls.closed).toBe(1);
+  });
+
+  test('un navigateur qui ne sait pas ré-encoder garde le PNG : la photo n’est jamais perdue', async () => {
+    const refused = transcoder({ blob: null });
+    expect(await keptStoryOf(png, refused.deps)).toBe(png);
+    expect(refused.calls.closed).toBe(1);
+    const undecodable = transcoder({ decode: async () => Promise.reject(new Error('decode')) });
+    expect(await keptStoryOf(png, undecodable.deps)).toBe(png);
+  });
+
+  test('une image déjà en JPEG ne se ré-encode pas', async () => {
+    const { calls, deps } = transcoder();
+    const jpeg = new Blob(['jpeg'], { type: 'image/jpeg' });
+    expect(await keptStoryOf(jpeg, deps)).toBe(jpeg);
+    expect(calls.drawn).toBe(0);
+  });
+
+  test('le nom d’un fichier suit son format : .jpg pour un JPEG, .png sinon', () => {
+    expect(fileNameOf('rank:voix:2', 'story', 'image/jpeg')).toBe('meeshy-rank-voix-2-story.jpg');
+    expect(fileNameOf('rank:voix:2', 'story', 'image/png')).toBe('meeshy-rank-voix-2-story.png');
+    expect(fileNameOf('rank:voix:2', 'story')).toBe('meeshy-rank-voix-2-story.png');
   });
 });

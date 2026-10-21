@@ -76,13 +76,21 @@ extension CallManager {
                         didAttemptConnectingRestart = false
                         continue
                     }
+                    // Appelé qui attend encore l'offre : l'horloge ne démarre
+                    // qu'à son arrivée, le minuteur d'offre tient cette phase.
+                    if self.isAwaitingRemoteOffer {
+                        connectingSince = nil
+                        didAttemptConnectingRestart = false
+                        break
+                    }
                     let since = connectingSince ?? Date()
                     connectingSince = since
                     let elapsed = Date().timeIntervalSince(since)
                     switch CallReliabilityPolicy.evaluateConnecting(
                         secondsInConnecting: elapsed,
                         didAttemptRestart: didAttemptConnectingRestart,
-                        failAfterSeconds: self.connectingFailBudget
+                        failAfterSeconds: self.connectingFailBudget,
+                        awaitingRemoteOffer: self.isAwaitingRemoteOffer
                     ) {
                     case .waiting:
                         break
@@ -259,7 +267,7 @@ extension CallManager {
             hasExistingStartDate: callStartDate != nil
         ) {
             callStartDate = Date()
-            analyticsConnectedDate = callStartDate
+            analytics.connectedDate = callStartDate
             callDuration = 0
         }
         // Snapshots analytics périodiques — idempotent (les reconnexions
@@ -350,5 +358,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

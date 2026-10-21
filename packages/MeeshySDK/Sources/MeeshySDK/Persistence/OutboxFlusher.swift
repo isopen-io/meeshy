@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 import os
 
-private let outboxFlusherLog = Logger(subsystem: "me.meeshy.sdk", category: "outbox-flusher")
+private let outboxFlusherLog = MeeshyLog.logger(.outboxFlusher, subsystem: .sdk)
 
 public protocol OutboxDispatching: Sendable {
     func dispatch(_ record: OutboxRecord) async throws
@@ -287,9 +287,12 @@ public actor OutboxFlusher {
     /// transitory auth failure, NOT a permanent dispatch error. It must not consume
     /// the retry budget — otherwise a brief session expiry permanently exhausts every
     /// queued row before the app gets a chance to refresh the token.
+    /// `CancellationError` is the same transitory state seen from the other side:
+    /// APIClient rethrows it when a session exit or an account switch abandons the
+    /// token refresh (#10463), where it used to map it to `.auth(.sessionExpired)`.
     private static func isSessionExpiry(_ error: Error) -> Bool {
         if case MeeshyError.auth = error { return true }
-        return false
+        return error is CancellationError
     }
 
     /// P7-7 — codes URLError de TRANSPORT (réseau/serveur injoignable). Liste
@@ -419,6 +422,48 @@ public actor OutboxFlusher {
         }
     }
 
+    /// #10321 — l'envoi tourne dans une `Task` enregistrée par id de ligne,
+    /// pour que `OfflineQueue.cancelPendingPublication` coupe la requête en vol.
+    private func dispatchCancellably(_ record: OutboxRecord) async throws {
+        let dispatcher = self.dispatcher
+        let task = Task { try await dispatcher.dispatch(record) }
+        OutboxInflightDispatches.shared.register(task, for: record.id)
+        defer { OutboxInflightDispatches.shared.unregister(task, for: record.id) }
+        try await withTaskCancellationHandler {
+            try await task.value
+        } onCancel: {
+            task.cancel()
+        }
+    }
+
+    private func wasCancelledByAuthor(_ record: OutboxRecord, error: Error) async -> Bool {
+        if case OutboxCancellationError.cancelledByAuthor = error { return true }
+        guard record.kind == .createPost else { return false }
+        let id = record.id
+        do {
+            return try await pool.read { db in
+                guard let fresh = try OutboxRecord.fetchOne(db, key: id) else { return true }
+                return fresh.cancelRequestedAt != nil
+            }
+        } catch {
+            outboxFlusherLog.error("Cancellation mark unreadable for \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    private func finalizeCancelledPublication(_ record: OutboxRecord) async {
+        let id = record.id
+        do {
+            try await pool.write { db in
+                _ = try OutboxRecord.deleteOne(db, key: id)
+            }
+        } catch {
+            outboxFlusherLog.error("Cancelled publication \(id, privacy: .public) not deleted: \(error.localizedDescription, privacy: .public)")
+        }
+        OfflineQueue.removePublicationFiles(payload: record.payload, context: "outbox cancelled publication")
+        outboxFlusherLog.info("Publication \(id, privacy: .public) retirée par son auteur pendant l'envoi")
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
         // S1 — claim atomically; skip dispatch if another flusher beat us to it.
         guard await claimPending(record) else { return }
@@ -426,9 +471,15 @@ public actor OutboxFlusher {
         current.status = .inflight
         current.updatedAt = Date()
         let attemptStartedAt = Date()
+        // #10321 — une ligne reprise par le reclaim des périmés garde sa marque
+        // d'annulation : elle ne repart pas.
+        guard current.cancelRequestedAt == nil else {
+            await finalizeCancelledPublication(current)
+            return
+        }
 
         do {
-            try await dispatcher.dispatch(current)
+            try await dispatchCancellably(current)
             await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .success, error: nil)
             let idToDelete = current.id
             do {
@@ -447,6 +498,13 @@ public actor OutboxFlusher {
             onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
             await logSendAttempt(for: current, startedAt: attemptStartedAt, outcome: .failure, error: error)
+            // #10321 — l'auteur a retiré la publication pendant l'envoi : ni
+            // rejeu, ni `.exhausted`. Relu AVANT toute réécriture de la ligne,
+            // dont l'instantané d'avant l'envoi effacerait la marque.
+            if await wasCancelledByAuthor(current, error: error) {
+                await finalizeCancelledPublication(current)
+                return
+            }
             // 401 / session-expiry is TRANSITORY — the app's auth flow refreshes the
             // token (AuthManager.checkExistingSession on resume/reconnect). Treating it
             // like a normal failure burns the retry budget and PERMANENTLY exhausts

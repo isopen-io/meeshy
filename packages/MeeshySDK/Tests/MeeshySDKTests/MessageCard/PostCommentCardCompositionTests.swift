@@ -11,9 +11,11 @@ final class PostCommentCardCompositionTests: XCTestCase {
     private static func at(_ minutes: Double) -> Date { t0.addingTimeInterval(minutes * 60) }
 
     private static func makePost(content: String = "Le coucher de soleil à Dakar", type: String? = nil,
-                                 media: [FeedMedia] = []) -> FeedPost {
-        FeedPost(id: "post", author: "Awa", authorId: "awa", authorUsername: "awa", type: type,
-                 content: content, timestamp: at(0), media: media)
+                                 media: [FeedMedia] = [], visibility: String? = "PUBLIC") -> FeedPost {
+        var post = FeedPost(id: "post", author: "Awa", authorId: "awa", authorUsername: "awa", type: type,
+                            content: content, timestamp: at(0), media: media)
+        post.visibility = visibility
+        return post
     }
 
     private static func makeComment(_ id: String, _ author: String, _ text: String, minute: Double,
@@ -151,6 +153,36 @@ final class PostCommentCardCompositionTests: XCTestCase {
         }
     }
 
+    /// #11477 — « Mes stories » ouvre les commentaires d'une story par son `FeedPost` : elle
+    /// compose alors comme dans le lecteur, par son visuel en HERO (jumelle de `composingPostOf`, web).
+    func test_postHead_aPublicStoryOrStatusPost_composesThroughItsVisual_likeTheStoryViewer() throws {
+        for type in ["STORY", "STATUS"] {
+            let post = Self.makePost(content: "Ma story", type: type, media: [Self.photo])
+            let source = PostCommentCardSource(post: post, target: Self.root, thread: [], viewer: Self.viewer, now: Self.at(60))
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.postAndComment, .commentAlone], type)
+            let subject = try XCTUnwrap(Self.subject(source, .postAndComment), type)
+            XCTAssertEqual(subject.heroID, "pic", type)
+            XCTAssertEqual(subject.quoted?.author, "Awa", type)
+            XCTAssertNil(Self.subject(source, .commentAlone)?.heroID, type)
+        }
+    }
+
+    func test_postHead_aStoryPost_keepsTheStoryGuards_audienceExpiryAndCanvas() {
+        let restricted = Self.makePost(type: "STORY", media: [Self.photo], visibility: "FRIENDS")
+        let lapsed = Self.makePost(type: "STORY", media: [Self.photo])
+        var canvas = Self.makePost(type: "STORY", media: [Self.photo])
+        canvas.storyEffects = StoryEffects()
+        let cases: [(String, FeedPost, Date)] = [
+            ("audience", restricted, Self.at(60)),
+            ("échue", lapsed, Self.at(0).addingTimeInterval(StoryItem.defaultExpiryInterval + 1)),
+            ("canvas sans vignette", canvas, Self.at(60)),
+        ]
+        for (label, post, now) in cases {
+            let source = PostCommentCardSource(post: post, target: Self.root, thread: [], viewer: Self.viewer, now: now)
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone], label)
+        }
+    }
+
     func test_postHead_aPostWithOnlyAPhoto_isPutOnTopWithItsThumbnail() throws {
         let photo = FeedMedia(id: "pic", type: .image, url: "https://cdn.test/pic.jpg", width: 400, height: 300)
         let source = Self.source(post: Self.makePost(content: "  ", media: [photo]), target: Self.root)
@@ -244,4 +276,200 @@ final class PostCommentCardCompositionTests: XCTestCase {
         XCTAssertEqual(Self.subject(shown, .commentAlone)?.reply.text, "Beautiful!")
         XCTAssertEqual(Self.subject(served, .commentAlone)?.reply.text, "Magnifique !")
     }
+    // MARK: - Le hero du support (#10915)
+
+    private static let photo = FeedMedia(id: "pic", type: .image, url: "https://cdn.test/pic.jpg", width: 1600, height: 900)
+
+    func test_subject_thePostPhotoIsTheHero_withoutAnAuthor_andTheQuoteBecomesAShortSupportLine() throws {
+        let long = Array(repeating: "mot", count: 120).joined(separator: " ")
+        let source = Self.source(post: Self.makePost(content: long, media: [Self.photo]), target: Self.root)
+        let subject = try XCTUnwrap(Self.subject(source, .postAndComment))
+        XCTAssertEqual(subject.heroID, "pic")
+        XCTAssertNil(subject.media.first { $0.media.id == "pic" }?.author, "le hero est le support : pas de signature de média")
+        let line = try XCTUnwrap(subject.quoted)
+        XCTAssertEqual(line.author, "Awa")
+        XCTAssertLessThanOrEqual(line.text.count, MessageCardHero.excerptCharacters + 1)
+        XCTAssertTrue(line.text.hasSuffix("…"))
+    }
+
+    func test_subject_aPhotoOnlyPost_hasASymbolAsItsSupportLine_soTheAuthorStillShows() throws {
+        let source = Self.source(post: Self.makePost(content: " ", media: [Self.photo]), target: Self.root)
+        let subject = try XCTUnwrap(Self.subject(source, .postAndComment))
+        XCTAssertEqual(subject.quoted, MessageCardPart(author: "Awa", text: "📷", handle: "awa"))
+    }
+
+    func test_subject_withoutHeroSupport_theOldThumbnailBehaviourStays() throws {
+        let source = Self.source(post: Self.makePost(media: [Self.photo]), target: Self.root)
+        let subject = try XCTUnwrap(PostCommentCardComposition.subject(
+            of: source, mode: .postAndComment, showsPost: true, title: "Fil", foldedLabel: { "+\($0)" }, heroSupport: false))
+        XCTAssertNil(subject.heroID)
+        XCTAssertEqual(subject.quoted?.text, "Le coucher de soleil à Dakar")
+    }
+
+    func test_subject_aPostWithoutAVisual_hasNoHero() throws {
+        let subject = try XCTUnwrap(Self.subject(Self.source(target: Self.root), .postAndComment))
+        XCTAssertNil(subject.heroID)
+    }
+
+    func test_subject_theCommentCardInputCarriesTheHeroToTheDisposition() throws {
+        let source = Self.source(post: Self.makePost(media: [Self.photo]), target: Self.root)
+        let subject = try XCTUnwrap(Self.subject(source, .postAndComment))
+        let input = MessageCardInput.of(subject: subject, format: .initial, handle: "moi", conversationTitle: nil, anonymousLabel: "Anonyme",
+                                        formatDate: { _ in "" })
+        XCTAssertEqual(input.disposition.heroMediaID, "pic")
+        XCTAssertEqual(input.disposition.heroVisual(of: input.media)?.id, "pic")
+    }
+
+    // MARK: - L'imbrication (#10915)
+
+    func test_subject_aThreadKeepsItsLevels_theRootAtZeroItsRepliesAtOne() throws {
+        let source = Self.source(target: Self.r2)
+        let subject = try XCTUnwrap(Self.subject(source, .postRootAndReply, showsPost: true))
+        XCTAssertEqual(subject.reply.thread.map(\.level), [0, 1])
+        XCTAssertEqual(subject.reply.thread.map(\.text), ["Bob : Magnifique !", "Bob : Sur la corniche"])
+        XCTAssertEqual(subject.reply.text, subject.reply.thread.map(\.text).joined(separator: "\n"))
+    }
+
+    func test_subject_whenTheRootIsQuoted_itsRepliesAreOneLevelUnderIt() throws {
+        let subject = try XCTUnwrap(Self.subject(Self.source(target: Self.r2), .threadToHere))
+        XCTAssertEqual(subject.quoted?.text, "Magnifique !")
+        XCTAssertEqual(subject.reply.thread.map(\.level), [1, 1])
+    }
+
+    func test_subject_aFoldedThreadLineSitsAtLevelOne() throws {
+        let replies = (1...9).map { Self.makeComment("m\($0)", "U\($0)", "R\($0)", minute: Double($0) + 1, parent: "root") }
+        let source = Self.source(target: replies[8], thread: [Self.root] + replies)
+        let subject = try XCTUnwrap(Self.subject(source, .threadToHere))
+        XCTAssertEqual(subject.reply.thread.first?.text, "+5 réponses")
+        XCTAssertEqual(subject.reply.thread.first?.level, 1)
+    }
+
+    func test_subject_aSingleReplyHasNoThread() throws {
+        let subject = try XCTUnwrap(Self.subject(Self.source(target: Self.root), .postAndComment))
+        XCTAssertTrue(subject.reply.thread.isEmpty)
+    }
+
+    func test_depth_countsKnownAncestors_andStopsOnACycle() {
+        let source = Self.source(target: Self.r2)
+        XCTAssertEqual(PostCommentCardComposition.depth(of: "root", source: source), 0)
+        XCTAssertEqual(PostCommentCardComposition.depth(of: "r2", source: source), 1)
+        let a = Self.makeComment("a", "A", "a", minute: 1, parent: "b")
+        let b = Self.makeComment("b", "B", "b", minute: 2, parent: "a")
+        XCTAssertEqual(PostCommentCardComposition.depth(of: "a", source: Self.source(target: a, thread: [a, b])), 1)
+    }
+
+    // MARK: - La story (#10915)
+
+    private static let now = Date(timeIntervalSince1970: 1_800_100_000)
+
+    private static func storySource(_ story: PostCommentCardStory, target: FeedComment? = nil) -> PostCommentCardSource {
+        PostCommentCardSource(post: nil, target: target ?? root, thread: [], viewer: viewer, story: story, now: now)
+    }
+
+    private static func makeStory(text: String? = "Ma story", media: [FeedMedia] = [], expiresAt: Date? = now.addingTimeInterval(3600), canvas: Bool = false,
+                                  visibility: String? = "PUBLIC") -> PostCommentCardStory {
+        PostCommentCardStory(id: "st", author: "Awa", authorId: "awa", authorUsername: "awa", text: text, media: media,
+                             timestamp: at(0), expiresAt: expiresAt, hasCanvas: canvas, visibility: visibility)
+    }
+
+    private static let restrictedAudiences: [String?] = ["FRIENDS", "COMMUNITY", "PRIVATE", "EXCEPT", "ONLY", "", nil]
+
+    func test_audience_aStoryThatIsNotPublic_isNeverSupportNorHero() {
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(Self.makeStory(media: [Self.photo], visibility: "public"))),
+                       [.postAndComment, .commentAlone])
+        for visibility in Self.restrictedAudiences {
+            let source = Self.storySource(Self.makeStory(media: [Self.photo], visibility: visibility))
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone], "\(visibility ?? "nil")")
+            XCTAssertNil(Self.subject(source, .postAndComment))
+            XCTAssertNil(Self.subject(source, .commentAlone, showsPost: true)?.heroID)
+        }
+    }
+
+    func test_audience_aPostThatIsNotPublic_neverHeadsTheCard() {
+        for visibility in Self.restrictedAudiences {
+            let post = Self.makePost(media: [Self.photo], visibility: visibility)
+            XCTAssertEqual(PostCommentCardComposition.modes(of: Self.source(post: post, target: Self.root)), [.commentAlone])
+            XCTAssertEqual(PostCommentCardComposition.modes(of: Self.source(post: post, target: Self.r2)), [.threadToHere, .chosenReplies])
+            XCTAssertNil(Self.subject(Self.source(post: post, target: Self.root), .commentAlone, showsPost: true)?.heroID)
+        }
+    }
+
+    func test_audience_aStoryItemCarriesItsVisibilityToTheSupport() {
+        let item = StoryItem(id: "st", content: "Ma story", media: [Self.photo], createdAt: Self.now, visibility: "FRIENDS")
+        XCTAssertEqual(PostCommentCardStory(story: item, author: "Awa", authorId: "awa").visibility, "FRIENDS")
+    }
+
+    func test_story_aPlainStoryPutsItsPhotoAsTheHero() throws {
+        let source = Self.storySource(Self.makeStory(media: [Self.photo]))
+        XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.postAndComment, .commentAlone])
+        let subject = try XCTUnwrap(Self.subject(source, .postAndComment))
+        XCTAssertEqual(subject.heroID, "pic")
+        XCTAssertEqual(subject.media.first?.fileURL, "https://cdn.test/pic.jpg")
+        XCTAssertEqual(subject.quoted?.author, "Awa")
+    }
+
+    func test_story_anExpiredStoryIsNeverImaged() {
+        let source = Self.storySource(Self.makeStory(media: [Self.photo], expiresAt: Self.now.addingTimeInterval(-1)))
+        XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone])
+    }
+
+    func test_story_withoutExpiresAt_expiresLikeAStoryItem_afterTheDefaultWindow() {
+        let lapsed = Self.makeStory(media: [Self.photo], expiresAt: nil)
+        XCTAssertTrue(StoryItem(id: "st", createdAt: Self.at(0)).isExpired(at: Self.now))
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(lapsed)), [.commentAlone])
+        let fresh = PostCommentCardStory(id: "st", author: "Awa", authorId: "awa", media: [Self.photo],
+                                         timestamp: Self.now.addingTimeInterval(-60), visibility: "PUBLIC")
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(fresh)), [.postAndComment, .commentAlone])
+    }
+
+    func test_story_aCanvasStoryWithoutAThumbnail_keepsTheOldGuard() {
+        let source = Self.storySource(Self.makeStory(media: [Self.photo], canvas: true))
+        XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.commentAlone])
+    }
+
+    func test_story_aCanvasStoryIsRepresentedByItsThumbnail_asAnImage() throws {
+        let video = FeedMedia(id: "vid", type: .video, url: "https://cdn.test/v.mp4", thumbnailUrl: "https://cdn.test/v.jpg", width: 1080, height: 1920, duration: 8)
+        let source = Self.storySource(Self.makeStory(media: [video], canvas: true))
+        let subject = try XCTUnwrap(Self.subject(source, .postAndComment))
+        XCTAssertEqual(subject.heroID, "vid")
+        XCTAssertEqual(subject.media.first?.media.kind, .image)
+        XCTAssertEqual(subject.media.first?.fileURL, "https://cdn.test/v.jpg")
+    }
+
+    func test_story_aVideoStoryUsesItsThumbnailAsPoster_withoutInventingOne() throws {
+        let noPoster = FeedMedia(id: "vid", type: .video, url: "https://cdn.test/v.mp4", width: 1080, height: 1920)
+        let subject = try XCTUnwrap(Self.subject(Self.storySource(Self.makeStory(media: [noPoster])), .postAndComment))
+        XCTAssertEqual(subject.media.first?.media.kind, .video)
+        XCTAssertNil(subject.media.first?.posterURL)
+    }
+
+    // MARK: - Le repli « commentaire seul »
+
+    func test_fallsBackToCommentAlone_aReplyWhoseRootIsNotLoaded_imagesAlone() {
+        let source = Self.storySource(Self.makeStory(media: [Self.photo]), target: Self.r1)
+        XCTAssertEqual(PostCommentCardComposition.modes(of: source), [])
+        XCTAssertTrue(PostCommentCardComposition.fallsBackToCommentAlone(source))
+    }
+
+    func test_fallsBackToCommentAlone_neverWhenAKnownAncestorIsProtected() {
+        let viewOnce = Self.makeComment("root", "Bob", "Vue unique", minute: 1, flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        let middle = Self.makeComment("mid", "Cleo", "Entre deux", minute: 2, parent: "missing")
+        let target = Self.makeComment("t", "Dan", "Moi", minute: 3, parent: "mid")
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: Self.r1, thread: [viewOnce])))
+        let protectedMiddle = Self.makeComment("mid", "Cleo", "Entre deux", minute: 2, parent: "missing", flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        XCTAssertTrue(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: target, thread: [middle])))
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: target, thread: [protectedMiddle])))
+    }
+
+    func test_fallsBackToCommentAlone_neverWhenAModeComposes_norForAProtectedComment() {
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: Self.r1)))
+        let viewOnce = Self.makeComment("x", "Bob", "Secret", minute: 1, parent: "missing", flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        XCTAssertFalse(PostCommentCardComposition.fallsBackToCommentAlone(Self.source(target: viewOnce, thread: [])))
+    }
+
+    func test_story_aProtectedCommentNeverImages_evenOnAStoryWithAHero() {
+        let viewOnce = Self.makeComment("x", "Bob", "Secret", minute: 1, flags: Int(MessageEffectFlags.viewOnce.rawValue))
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.storySource(Self.makeStory(media: [Self.photo]), target: viewOnce)), [])
+    }
 }
+

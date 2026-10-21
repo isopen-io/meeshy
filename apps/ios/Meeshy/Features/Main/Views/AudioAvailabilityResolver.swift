@@ -36,7 +36,10 @@ struct AudioAvailabilityResolver<Content: View>: View {
     let autoDownload: Bool
     let content: (AudioAvailability, @escaping () -> Void) -> Content
 
-    @State private var resolvedAvailability: AudioAvailability = .needsDownload
+    /// `nil` tant que la tâche n'a pas résolu : le premier rendu lit alors le
+    /// disque en synchrone (`AudioAvailability.atFirstRender`), si bien qu'un
+    /// audio déjà téléchargé ne se dessine jamais « ↓ » (#10370).
+    @State private var resolvedAvailability: AudioAvailability?
     @StateObject private var downloader = AttachmentDownloader()
 
     private var availability: AudioAvailability {
@@ -50,7 +53,7 @@ struct AudioAvailabilityResolver<Content: View>: View {
         if downloader.isCached {
             return .ready
         }
-        return resolvedAvailability
+        return resolvedAvailability ?? AudioAvailability.atFirstRender(for: attachment)
     }
 
     init(
@@ -71,8 +74,9 @@ struct AudioAvailabilityResolver<Content: View>: View {
             // Branché sur le registre partagé : un téléchargement de ce fichier
             // lancé ailleurs s'affiche ici et le rend « prêt » (#7492).
             downloader.observe(attachment)
-            resolvedAvailability = await Self.resolveStatic(attachment)
-            if case .needsDownload = resolvedAvailability,
+            let resting = await Self.resolveStatic(attachment)
+            resolvedAvailability = resting
+            if case .needsDownload = resting,
                !downloader.isDownloading,
                !downloader.isCached {
                 let condition = NetworkConditionMonitor.shared.condition
@@ -108,5 +112,24 @@ struct AudioAvailabilityResolver<Content: View>: View {
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
         let cached = await CacheCoordinator.shared.audio.isCached(resolved)
         return AudioAvailability.resolve(isLocalFile: false, localFileExists: false, isServerCached: cached)
+    }
+}
+
+extension AudioAvailability {
+    /// **La disponibilité au PREMIER rendu se lit sur le disque** (#10370) —
+    /// la règle unique `AttachmentDownloadCenter.isOnDevice`, en synchrone.
+    /// `AudioMediaView.availableOnDeviceAtFirstRender` (#7660) en est la
+    /// projection pour une URL de langue choisie.
+    nonisolated static func atFirstRender(
+        for attachment: MessageAttachment,
+        stat: (String, AttachmentDownloadCenter.CacheStoreKind) -> Bool = {
+            AttachmentDownloadCenter.isInTypedStore(key: $0, kind: $1)
+        },
+        fileExists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0) }
+    ) -> AudioAvailability {
+        let onDevice = AttachmentDownloadCenter.isOnDevice(
+            urlString: attachment.fileUrl, kind: .audio, stat: stat, fileExists: fileExists
+        )
+        return onDevice ? .ready : .needsDownload
     }
 }

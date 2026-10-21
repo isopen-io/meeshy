@@ -36,6 +36,8 @@ export interface AdminPermissions {
    * rend une matrice illisible.
    */
   canManageAgent: boolean;
+  /** Programmer le calendrier des saisons du Jeu (#10016) : BIGBOSS et ADMIN. */
+  canManageGame: boolean;
 }
 
 export class PermissionsService {
@@ -67,7 +69,8 @@ export class PermissionsService {
       canManageNotifications: true,
       canManageTranslations: true,
       canViewPresence: true,
-      canManageAgent: true
+      canManageAgent: true,
+      canManageGame: true
     },
     'ADMIN': {
       canAccessAdmin: true,
@@ -87,7 +90,8 @@ export class PermissionsService {
       canManageNotifications: true,
       canManageTranslations: true,  // ADMIN can now manage translations
       canViewPresence: true,
-      canManageAgent: true
+      canManageAgent: true,
+      canManageGame: true
     },
     'MODERATOR': {
       canAccessAdmin: true,
@@ -107,7 +111,8 @@ export class PermissionsService {
       canManageNotifications: false,
       canManageTranslations: false,
       canViewPresence: false,  // ❌ Modération de contenu ≠ visibilité de présence
-      canManageAgent: false
+      canManageAgent: false,
+      canManageGame: false
     },
     'AUDIT': {
       canAccessAdmin: true,
@@ -127,7 +132,8 @@ export class PermissionsService {
       canManageNotifications: false,
       canManageTranslations: false,
       canViewPresence: false,
-      canManageAgent: false
+      canManageAgent: false,
+      canManageGame: false
     },
     'ANALYST': {
       canAccessAdmin: false,
@@ -147,7 +153,8 @@ export class PermissionsService {
       canManageNotifications: false,
       canManageTranslations: false,
       canViewPresence: false,
-      canManageAgent: false
+      canManageAgent: false,
+      canManageGame: false
     },
     'USER': {
       canAccessAdmin: false,
@@ -167,7 +174,8 @@ export class PermissionsService {
       canManageNotifications: false,
       canManageTranslations: false,
       canViewPresence: false,
-      canManageAgent: false
+      canManageAgent: false,
+      canManageGame: false
     },
     // Aliases are handled by resolveRole method
   };

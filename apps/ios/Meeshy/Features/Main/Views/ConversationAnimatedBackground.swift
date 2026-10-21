@@ -64,7 +64,7 @@ struct ConversationBackgroundConfig {
         self.isE2EEncrypted = conversation.encryptionMode == "e2ee"
         self.memberCount = conversation.memberCount
         self.topLanguages = topLanguages
-        let palette = conversation.colorPalette
+        let palette = conversation.displayPalette(isDark: isDarkMode)
         self.accentHex = palette.primary
         self.secondaryHex = palette.secondary
         self.isDarkMode = isDarkMode
@@ -626,7 +626,7 @@ struct ConversationAnimatedBackground: View {
         return ZStack {
             ForEach(0..<flagCount, id: \.self) { i in
                 Text(flags[i])
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.emoji(24))
                     .shadow(color: .black.opacity(0.15), radius: 2)
                     .offset(
                         x: cos(CGFloat(i) * .pi * 2 / CGFloat(flagCount) + orbitPhase) * (size.width * 0.35),

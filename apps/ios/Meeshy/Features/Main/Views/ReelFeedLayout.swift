@@ -43,6 +43,15 @@ func reelCardHeight(
     return (cardWidth * clamped).rounded()
 }
 
+/// Le rapport largeur / hauteur d'une carte réel — la loi de `reelCardHeight` sans largeur : la carte se mesure à SA
+/// colonne (iPad, fenêtre détachée, Split View). Estimée sur la fenêtre, elle recevait sur iPad une hauteur calculée pour
+/// une largeur trois fois plus grande que la sienne.
+func reelCardAspectRatio(mediaWidth: Int?, mediaHeight: Int?, maxTallRatio: CGFloat = 1.25, minRatio: CGFloat = 0.75) -> CGFloat {
+    let reference: CGFloat = 1000
+    return reference / reelCardHeight(mediaWidth: mediaWidth, mediaHeight: mediaHeight, cardWidth: reference,
+                                      maxTallRatio: maxTallRatio, minRatio: minRatio)
+}
+
 /// Élit l'id du réel dont le centre est le plus proche du centre du viewport,
 /// parmi les réels suffisamment visibles (fraction ≥ `minVisibleFraction`).
 /// `nil` si aucun réel ne franchit le seuil.

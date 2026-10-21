@@ -1,3 +1,4 @@
+import { AdminAnnouncement } from '@/components/admin/announcement';
 import { AdminEntityList, type AdminColumn } from '@/components/admin/entity-list';
 import { AdminListToolbar, type AdminToolbarFilter } from '@/components/admin/list-toolbar';
 import { AdminMomentText } from '@/components/admin/meta';
@@ -27,6 +28,11 @@ import { apiDeps } from '@/lib/api/deps';
 import { currentAdminLanguage, suspendForAdminInterfaceCatalog, translateAdmin, type AdminLanguage } from '@/lib/i18n-admin-catalog';
 import type { AdminOption } from '@/components/admin/list-toolbar';
 
+import { withReportClosed } from '@/lib/admin/report-acts';
+import type { AdminPage } from '@/lib/api/admin-page';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+
+import { AdminReportActBar } from './admin-report-acts';
 import { ReportPerson, ReportReasonBadge, ReportStatusBadge, ReportedElement } from './admin-report-parts';
 import { AdminReportsStats } from './admin-reports-stats';
 
@@ -56,6 +62,7 @@ type ReportsPanelProps = {
 };
 
 export function AdminReportsPanel({ language, deps = apiDeps, now = defaultNow }: ReportsPanelProps) {
+  const announcer = useLiveAnnouncer();
   const list = useAdminList<AdminReport, ReportSortKey, ReportFilterKey, ReportIdFilterKey>({
     spec: REPORT_LIST_SPEC,
     queryKey: adminReportsListKey,
@@ -108,6 +115,20 @@ export function AdminReportsPanel({ language, deps = apiDeps, now = defaultNow }
     { id: 'received', header: translateAdmin(language, 'admin.moderation.col.received'), sortKey: 'createdAt', cell: (row) => moment(row.createdAt) },
     { id: 'resolved', header: translateAdmin(language, 'admin.moderation.col.resolved'), sortKey: 'resolvedAt', priority: 3, cell: (row) => moment(closedAt(row)) },
     { id: 'updated', header: translateAdmin(language, 'admin.moderation.col.updated'), sortKey: 'updatedAt', priority: 3, cell: (row) => moment(row.updatedAt) },
+    {
+      /* TRAITER EN UN GESTE (#10394) : l'action sur le contenu et la clôture du dossier, depuis la ligne. */
+      id: 'acts',
+      header: translateAdmin(language, 'admin.gesture.report.col'),
+      cell: (row) => (
+        <AdminReportActBar
+          language={language}
+          report={row}
+          onAnnounce={announcer.announce}
+          deps={deps}
+          optimistic={{ key: adminReportsListKey(list.address), apply: (before, act) => withReportClosed(before as AdminPage<AdminReport>, row.id, act) }}
+        />
+      ),
+    },
   ];
 
   const total = list.query.data?.total;
@@ -159,6 +180,7 @@ export function AdminReportsPanel({ language, deps = apiDeps, now = defaultNow }
         empty={{ title: translateAdmin(language, 'admin.moderation.list.empty'), hint: translateAdmin(language, 'admin.moderation.list.emptyHint') }}
         filteredEmpty={{ title: translateAdmin(language, 'admin.moderation.list.filteredEmpty') }}
       />
+      <AdminAnnouncement text={announcer.text} />
     </div>
   );
 }

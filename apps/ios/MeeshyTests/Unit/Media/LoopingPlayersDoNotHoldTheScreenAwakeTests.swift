@@ -33,14 +33,9 @@ final class LoopingPlayersDoNotHoldTheScreenAwakeTests: XCTestCase {
 
     /// Les fichiers qui construisent un `AVPlayerLooper` et qui peuvent, en
     /// conscience, garder l'écran allumé. Une liste d'exceptions SANS MOTIF
-    /// redevient un tapis — chaque entrée porte le sien.
-    private static let exemptes: [String: String] = [
-        "StoryVideoPlayerView.swift":
-            "la story en AVANT-PLAN, que l'utilisateur REGARDE. La boucle n'y " +
-            "est pas décorative : elle comble une diapositive plus courte que " +
-            "sa durée d'affichage. Couper la veille ici éteindrait l'écran au " +
-            "milieu d'une story qu'on regarde sans y toucher.",
-    ]
+    /// redevient un tapis — chaque entrée porte le sien. Vide depuis le retrait
+    /// de la story vidéo d'avant-plan, seule exemptée (#9890).
+    private static let exemptes: [String: String] = [:]
 
     private static let racines = ["apps/ios/Meeshy", "packages/MeeshySDK/Sources"]
 
@@ -68,7 +63,7 @@ final class LoopingPlayersDoNotHoldTheScreenAwakeTests: XCTestCase {
     /// LE TÉMOIN DE NON-VACUITÉ, d'abord : un balayage qui ne trouve plus aucun
     /// lecteur bouclant passerait au vert sans rien garder.
     func test_theSweepFindsLoopingPlayers() throws {
-        XCTAssertGreaterThanOrEqual(try fichiersBouclantsCount(), 5,
+        XCTAssertGreaterThanOrEqual(try fichiersBouclantsCount(), 4,
             "le balayage ne trouve presque plus de lecteur en boucle — chemin de recherche cassé ?")
     }
 

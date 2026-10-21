@@ -115,6 +115,9 @@ public struct LanguageUsageTracker {
 /// Full-screen language picker sheet for translation.
 /// Groups language variants under the same flag for future expandability.
 public struct LanguagePickerSheet: View {
+    /// La fenêtre qui porte la vue (Stage Manager, Split View) — la fenêtre clé en repli.
+    @Environment(\.sceneWindowSize) var sceneWindowSize
+    private var hostHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: WindowMetrics.windowSize).height }
     public enum Style { case dark, light }
     public var style: Style
     /// Langues DÉJÀ traduites pour ce contenu. Elles remontent en tête et
@@ -133,7 +136,7 @@ public struct LanguagePickerSheet: View {
     // Cap to a reasonable max so iPad (1024+pt height) doesn't get a sheet
     // that towers across the entire screen. 65% on iPhone, ~520pt on iPad.
     private var maxHeight: CGFloat {
-        min(WindowMetrics.windowSize.height * 0.65, 620)
+        min(hostHeight * 0.65, 620)
     }
 
     public init(
@@ -227,7 +230,7 @@ public struct LanguagePickerSheet: View {
 
             HStack {
                 Text(String(localized: "languagePicker.title", defaultValue: "Langue de traduction", bundle: .module))
-                    .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
                     .foregroundColor(style == .dark ? .white : .primary)
                 Spacer()
                 Button {
@@ -252,7 +255,7 @@ public struct LanguagePickerSheet: View {
                 .font(.system(size: MeeshyIconSize.sm))
 
             TextField(String(localized: "languagePicker.search", defaultValue: "Rechercher une langue…", bundle: .module), text: $searchText)
-                .font(.system(size: MeeshyFont.bodySize))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize))
                 .foregroundColor(style == .dark ? .white : .primary)
                 .tint(MeeshyColors.brandPrimary)
         }
@@ -281,7 +284,7 @@ public struct LanguagePickerSheet: View {
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, 40)
         }
-        .frame(maxHeight: min(WindowMetrics.windowSize.height * 0.52, 460))
+        .frame(maxHeight: min(hostHeight * 0.52, 460))
     }
 
     private func languageCell(_ lang: TranslationLanguage) -> some View {

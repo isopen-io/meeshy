@@ -11,7 +11,7 @@ public struct GlassCard: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .background(.ultraThinMaterial)
-            .cornerRadius(cornerRadius)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(MeeshyColors.glassBorderGradient(isDark: theme.mode.isDark), lineWidth: 1)
@@ -43,22 +43,6 @@ public extension View {
     }
 }
 
-// MARK: - Glowing Border
-
-public struct GlowingBorder: ViewModifier {
-    public let gradient: LinearGradient
-    public var cornerRadius: CGFloat = 20
-    public var lineWidth: CGFloat = 2
-
-    public func body(content: Content) -> some View {
-        content
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(gradient, lineWidth: lineWidth)
-            )
-    }
-}
-
 // MARK: - Pressable Button
 
 public struct PressableButton: ViewModifier {
@@ -79,46 +63,11 @@ public struct PressableButton: ViewModifier {
 
 // MARK: - Shimmer Effect
 
+/// Tenue « voile » du reflet de chargement. Délègue à `LoadingSheen`,
+/// l'unique reflet animé du SDK (#9869).
 public struct ShimmerEffect: ViewModifier {
-    @State private var phase: CGFloat = 0
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
-
     public func body(content: Content) -> some View {
-        content
-            .overlay(
-                GeometryReader { geo in
-                    LinearGradient(
-                        colors: [
-                            Color.white.opacity(0),
-                            Color.white.opacity(0.15),
-                            Color.white.opacity(0)
-                        ],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                    .frame(width: geo.size.width * 0.6)
-                    .offset(x: -geo.size.width * 0.3 + phase * (geo.size.width * 1.6))
-                    .animation(ShimmerCycle.sweep(duration: 2.0, running: phase == 1), value: phase)
-                    .mask(content)
-                }
-            )
-            // **L'animation est PORTÉE par le reflet, jamais par une transaction**
-            // (#7625). Un `withAnimation` à courbe infinie posé dans `onAppear` anime
-            // TOUTE la transaction en cours — dans un fil paresseux, celle qui fait
-            // aussi naître les rangées voisines, qui hériteraient d'une animation sans
-            // fin. `.animation(_:value:)` borne la courbe au seul reflet ; l'état se
-            // pose sans animation.
-            .onAppear {
-                guard !reduceMotion else { return }
-                phase = 1
-            }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    phase = 0
-                }
-            }
+        content.modifier(LoadingSheen(style: .veil))
     }
 }
 
@@ -154,41 +103,6 @@ public struct PulseEffect: ViewModifier {
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isPulsing = false
-                }
-            }
-    }
-}
-
-// MARK: - Breathing Glow Effect
-
-public struct BreathingGlow: ViewModifier {
-    public let color: Color
-    public let intensity: Double
-    @State private var isGlowing = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
-
-    public init(color: Color, intensity: Double = 0.5) {
-        self.color = color
-        self.intensity = intensity
-    }
-
-    public func body(content: Content) -> some View {
-        content
-            .shadow(
-                color: color.opacity(isGlowing ? intensity : intensity * 0.3),
-                radius: isGlowing ? 12 : 6,
-                y: isGlowing ? 6 : 3
-            )
-            .animation(
-                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
-                value: isGlowing
-            )
-            .onAppear { guard !reduceMotion else { return }; isGlowing = true }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    isGlowing = false
                 }
             }
     }
@@ -327,7 +241,7 @@ public struct BounceOnFocus: ViewModifier {
 
 // MARK: - Rounded Corner Shape
 
-public struct RoundedCorner: Shape {
+nonisolated public struct RoundedCorner: Shape {
     public var radius: CGFloat = .infinity
     public var corners: UIRectCorner = .allCorners
 
@@ -349,10 +263,6 @@ extension View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    public func glowingBorder(_ gradient: LinearGradient = MeeshyColors.brandGradient, cornerRadius: CGFloat = 20, lineWidth: CGFloat = 2) -> some View {
-        modifier(GlowingBorder(gradient: gradient, cornerRadius: cornerRadius, lineWidth: lineWidth))
-    }
-
     public func pressable() -> some View {
         modifier(PressableButton())
     }
@@ -363,10 +273,6 @@ extension View {
 
     public func pulse(intensity: CGFloat = 0.04) -> some View {
         modifier(PulseEffect(intensity: intensity))
-    }
-
-    public func breathingGlow(color: Color, intensity: Double = 0.5) -> some View {
-        modifier(BreathingGlow(color: color, intensity: intensity))
     }
 
     public func staggeredAppear(index: Int, baseDelay: Double = 0.05) -> some View {

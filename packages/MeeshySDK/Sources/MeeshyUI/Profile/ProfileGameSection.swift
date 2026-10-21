@@ -1,14 +1,15 @@
 import SwiftUI
 
-// MARK: - L'emplacement du jeu dans le profil d'un autre (#9481)
+// MARK: - L'emplacement du jeu sur la fiche d'un profil (#9481, #10093)
 //
-// Le profil d'un AUTRE membre peut porter une carte de jeu — sa vitrine de trophées, ce que SA visibilité autorise
-// et rien de plus. Le SDK ne sait RIEN du jeu côté produit (lecture serveur, cache, règles de visibilité) : il
-// expose un emplacement OPAQUE, comme `postsContent`. L'app y branche sa carte, une fois, à la racine, et chaque
-// feuille de profil la reçoit par l'environnement — dix sites d'appel n'ont pas à la passer un à un.
+// La fiche d'un membre porte, SUR SA BANNIÈRE, son niveau et son rang — ce que SA visibilité autorise et rien de plus
+// (#10093 : plus de bloc de jeu dans le corps de la fiche). Le SDK ne sait RIEN du jeu côté produit (lecture serveur,
+// cache, règles de visibilité) : il expose un emplacement OPAQUE, comme `postsContent`. L'app y branche sa vue, une
+// fois, à la racine, et chaque feuille de profil la reçoit par l'environnement — dix sites d'appel n'ont pas à la
+// passer un à un.
 
-/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue à montrer — ou une vue
-/// vide quand la visibilité du membre ferme la vitrine à ce lecteur.
+/// Ce que l'app fournit : à partir de l'identifiant et du nom d'affichage du membre, la vue à poser sur la bannière
+/// — ou une vue vide quand la visibilité du membre ferme son jeu à ce lecteur.
 public struct ProfileGameSection {
     public let build: (_ userId: String, _ displayName: String) -> AnyView
 
@@ -22,7 +23,7 @@ private struct ProfileGameSectionKey: EnvironmentKey {
 }
 
 public extension EnvironmentValues {
-    /// L'emplacement du jeu dans le profil d'un autre membre ; `nil` : le profil reste celui d'avant.
+    /// L'emplacement du jeu sur la bannière d'une fiche ; `nil` : la bannière reste nue.
     var profileGameSection: ProfileGameSection? {
         get { self[ProfileGameSectionKey.self] }
         set { self[ProfileGameSectionKey.self] = newValue }

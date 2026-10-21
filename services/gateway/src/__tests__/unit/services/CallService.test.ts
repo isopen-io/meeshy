@@ -102,7 +102,7 @@ const createMockPrisma = () => {
       // race path are unaffected.
       updateMany: jest.fn().mockResolvedValue({ count: 1 }) as MockFn
     },
-    participant: { findFirst: jest.fn() as MockFn, findMany: jest.fn().mockResolvedValue([]) as MockFn },
+    participant: { findFirst: jest.fn() as MockFn, findMany: jest.fn(async (a: any) => (Object.keys(a?.where ?? {}).join() === 'userId' && a?.select?.id ? [{ id: 'participant-123' }] : [])) as MockFn },
     callSession: {
       create: jest.fn() as MockFn,
       findUnique: jest.fn() as MockFn,
@@ -356,7 +356,7 @@ describe('CallService', () => {
         expect.objectContaining({
           where: expect.objectContaining({
             OR: [{ leftAt: null }, { leftAt: { isSet: false } }],
-            participant: { userId: 'user-123' }
+            participantId: { in: ['participant-123'] }
           })
         })
       );
@@ -402,9 +402,9 @@ describe('CallService', () => {
       );
     });
 
-    it('should throw error for PUBLIC conversation type', async () => {
+    it('should throw error for BROADCAST conversation type (public is gated by canStartCall — CallService.startPermission.test.ts)', async () => {
       mockPrisma.conversation.findUnique.mockResolvedValue(
-        createMockConversation({ type: 'public' })
+        createMockConversation({ type: 'broadcast' })
       );
 
       await expect(callService.initiateCall(validInitiateData)).rejects.toThrow(
@@ -2653,7 +2653,7 @@ describe('CallService - Error Code Verification', () => {
 
   it('should use VIDEO_CALLS_NOT_SUPPORTED error code', async () => {
     mockPrisma.conversation.findUnique.mockResolvedValue(
-      createMockConversation({ type: 'public' })
+      createMockConversation({ type: 'global' })
     );
 
     await expect(

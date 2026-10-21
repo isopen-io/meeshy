@@ -49,24 +49,78 @@ extension ComposerCaptureCopy {
     }
 }
 
-/// **Le bouton muet, à DROITE de la barre de trim** (#9754) : il coupe tout le
-/// son de la prise, ou le réactive au gain d'avant. Rebondit au toucher.
-struct ComposerTakeMuteButton: View {
+/// **La lecture et le volume, en haut à droite, sous « Terminé »** (porteur
+/// 2026-10-20 : « le bouton play/pause et volume faut mettre en haut du cadre
+/// en dessous de Terminé […] toujours visibles »). La pause à gauche, le
+/// volume à droite, sur une bande à eux : posés au coin bas de la scène, ils
+/// tombaient sur le rail des outils dès que la vidéo occupait l'écran — et une
+/// scène recadrée commence sous cette bande, ses crochets restent libres.
+nonisolated enum ComposerEditPlaybackLayout {
+    static let spacing: CGFloat = MeeshySpacing.xs
+    static let margin: CGFloat = MeeshySpacing.sm
+
+    /// La hauteur que la bande retient sous la rangée haute.
+    static var band: CGFloat { MeeshyControlSize.tapTarget + ComposerEditScene.gap }
+
+    static func buttonCount(hasAudio: Bool) -> Int {
+        hasAudio ? 2 : 1
+    }
+
+    static func frame(container: CGSize, hasAudio: Bool) -> CGRect {
+        let cote = MeeshyControlSize.tapTarget
+        let nombre = CGFloat(buttonCount(hasAudio: hasAudio))
+        let largeur = nombre * cote + (nombre - 1) * spacing
+        return CGRect(x: container.width - ComposerEditScene.margin - largeur, y: ComposerEditScene.topBand,
+                      width: largeur, height: cote)
+    }
+}
+
+extension ComposerCaptureCopy {
+    /// Le libellé dit l'ACTION du bouton : « Lire » en pause, « Pause » sinon.
+    static func playbackLabel(paused: Bool) -> String {
+        paused
+            ? String(localized: "composer.frise.play", defaultValue: "Lire", bundle: .main)
+            : String(localized: "composer.frise.pause", defaultValue: "Pause", bundle: .main)
+    }
+}
+
+/// Les deux boutons posés sur la vidéo : glyphes BLANCS en relief par leur
+/// ombre, cible de 44 pt, rebond au toucher. Le muet n'existe que si la prise
+/// porte un son.
+struct ComposerEditPlaybackControls: View {
+    let paused: Bool
+    let hasAudio: Bool
     let muted: Bool
-    let onToggle: () -> Void
+    let onTogglePlayback: () -> Void
+    let onToggleMute: () -> Void
 
     var body: some View {
-        Button(action: onToggle) {
-            Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                .foregroundStyle(muted ? MeeshyColors.error : .white)
-                .frame(width: 40, height: 40)
-                .adaptiveLiquidGlass(in: Circle(), interactive: true)
+        HStack(spacing: ComposerEditPlaybackLayout.spacing) {
+            glyphButton(paused ? "play.fill" : "pause.fill",
+                        label: ComposerCaptureCopy.playbackLabel(paused: paused),
+                        action: onTogglePlayback)
+            if hasAudio {
+                glyphButton(muted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                            label: ComposerCaptureCopy.muteLabel(muted: muted),
+                            action: onToggleMute)
+            }
+        }
+        .environment(\.layoutDirection, .leftToRight)
+    }
+
+    private func glyphButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(ComposerFloatingRailInk.shadowOpacity),
+                        radius: ComposerFloatingRailInk.shadowRadius,
+                        y: ComposerFloatingRailInk.shadowY)
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
-                .contentShape(Circle())
+                .contentShape(Rectangle())
         }
         .buttonStyle(ComposerBounceButtonStyle())
-        .accessibilityLabel(ComposerCaptureCopy.muteLabel(muted: muted))
+        .accessibilityLabel(label)
     }
 }
 
@@ -79,6 +133,11 @@ struct ComposerTakeMuteButton: View {
 struct ComposerSoundTrack: View {
     @ObservedObject var session: ComposerCaptureSession
     let url: URL
+    /// **Posé PAR-DESSUS la bande vidéo** (porteur 2026-10-12, #10341) : pas de
+    /// fond, le spectre en transparence, la ligne de volume tirée par sa seule
+    /// prise — le reste de la bande garde ses gestes. Le bouton du son se pose
+    /// à côté, par l'hôte, au bord droit intérieur avant la poignée.
+    var overlaid = false
 
     private static let height: CGFloat = ComposerTrimTrack.height
     private static let samplesCount = 256
@@ -91,16 +150,20 @@ struct ComposerSoundTrack: View {
         GeometryReader { proxy in
             let largeur = proxy.size.width
             ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
-                    .fill(Color.white.opacity(0.1))
+                if !overlaid {
+                    RoundedRectangle(cornerRadius: MeeshyRadius.sm, style: .continuous)
+                        .fill(Color.white.opacity(0.1))
+                }
                 spectrum(width: largeur)
+                    .opacity(overlaid ? 0.75 : 1)
+                    .allowsHitTesting(false)
                 volumeLine(width: largeur)
+                if overlaid { volumeGrip }
             }
             .frame(width: largeur, height: Self.height)
+            .coordinateSpace(name: Self.space)
             .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0).onChanged { valeur in
-                session.setTakeGain(ComposerTakeSound.gain(atY: valeur.location.y, height: Self.height))
-            })
+            .gesture(volumeDrag, including: overlaid ? .subviews : .all)
         }
         .frame(height: Self.height)
         .environment(\.layoutDirection, .leftToRight)
@@ -119,6 +182,24 @@ struct ComposerSoundTrack: View {
         }
     }
 
+    private static let space = "composer.capture.sound"
+
+    private var volumeDrag: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.space)).onChanged { valeur in
+            session.setTakeGain(ComposerTakeSound.gain(atY: valeur.location.y, height: Self.height))
+        }
+    }
+
+    /// La prise de la ligne, seule à se tirer quand la piste est posée sur la vidéo.
+    private var volumeGrip: some View {
+        let y = ComposerTakeSound.lineY(gain: Double(sound.effectiveGain), height: Self.height)
+        return Color.clear
+            .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
+            .contentShape(Rectangle())
+            .offset(x: -MeeshyControlSize.tapTarget / 4, y: y - MeeshyControlSize.tapTarget / 2)
+            .gesture(volumeDrag)
+    }
+
     /// Les barres du spectre, centrées, à la hauteur du gain servi.
     private func spectrum(width: CGFloat) -> some View {
         let releve = samples
@@ -127,7 +208,7 @@ struct ComposerSoundTrack: View {
             guard !releve.isEmpty else { return }
             let pas = width / CGFloat(releve.count)
             for (index, valeur) in releve.enumerated() {
-                let hauteur = max(2, CGFloat(valeur) * Self.height * echelle)
+                let hauteur = max(2, CGFloat(WaveformScale.displayHeight(rms: valeur)) * Self.height * echelle)
                 chemin.addRect(CGRect(x: CGFloat(index) * pas, y: (Self.height - hauteur) / 2,
                                       width: max(1, pas - 1), height: hauteur))
             }

@@ -42,7 +42,9 @@ nonisolated struct ShareComposeHandoff: Codable, Equatable, Sendable {
 
     static let appGroupIdentifier = "group.me.meeshy.apps"
     static let directoryName = "share_pending_composes"
-    static let currentVersion = 1
+    /// 2 : la fiche nomme son compte (`ownerUserId`, #10986). Une fiche v1 n'en
+    /// nommait aucun ; une v2 sans propriétaire a été écrite SANS session.
+    static let currentVersion = 2
 
     let version: Int
     /// Le même identifiant que celui du staging : c'est lui qui nomme le
@@ -54,13 +56,18 @@ nonisolated struct ShareComposeHandoff: Codable, Equatable, Sendable {
     /// obligation. `nil` quand le partage ne portait que des fichiers.
     let text: String?
     let media: [Media]
+    /// Le compte de la session qui a déposé la fiche — le seul à qui l'app la
+    /// présente (#10986). `nil` : déposée sans session, elle attend le premier
+    /// compte qui se connecte, comme une fiche de relais.
+    let ownerUserId: String?
 
-    init(shareId: String, createdAt: Date, text: String?, media: [Media]) {
+    init(shareId: String, createdAt: Date, text: String?, media: [Media], ownerUserId: String?) {
         self.version = Self.currentVersion
         self.shareId = shareId
         self.createdAt = createdAt
         self.text = text
         self.media = media
+        self.ownerUserId = ownerUserId
     }
 
     /// Le répertoire des fiches, dans le conteneur App Group.

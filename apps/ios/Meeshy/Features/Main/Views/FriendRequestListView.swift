@@ -105,6 +105,7 @@ struct FriendRequestListView: View {
                 LazyVStack(spacing: 0) {
                     ForEach(viewModel.receivedRequests) { request in
                         friendRequestRow(request)
+                            .onAppear { Task { await viewModel.receivedRowAppeared(id: request.id) } }
                     }
                 }
                 .padding(.top, MeeshySpacing.sm)
@@ -144,6 +145,7 @@ struct FriendRequestListView: View {
                 accentColor: color,
                 avatarURL: sender?.avatar,
                 moodEmoji: statusViewModel.statusForUser(userId: request.senderId)?.moodEmoji,
+                ring: sender?.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: request.senderId)
             )
 

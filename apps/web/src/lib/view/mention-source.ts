@@ -6,6 +6,7 @@ import { unwrap } from '@/lib/api/client';
 import { apiDeps } from '@/lib/api/deps';
 import { fetchMentionSuggestions, type MentionCandidate, type MentionContext } from '@/lib/api/mention-suggestions';
 import { sessionStore } from '@/lib/api/session';
+import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { Message } from '@/lib/api/types';
 import { searchUsers } from '@/lib/api/users-search';
 import { resolveViewer } from '@/lib/api/viewer';
@@ -49,6 +50,8 @@ const contextSearch =
   async (query: string, signal: AbortSignal): Promise<readonly MentionCandidate[]> =>
     unwrap(await fetchMentionSuggestions(apiDeps, { context, query, signal }));
 
+const noSearch = async (): Promise<readonly MentionCandidate[]> => NO_PARTICIPANTS;
+
 const directorySearch = async (query: string): Promise<readonly MentionCandidate[]> =>
   peopleMentionCandidates(unwrap(await searchUsers(apiDeps, query)), null);
 
@@ -75,9 +78,13 @@ export function usePublishMentionSource(input: {
   const { conversationId, messages } = input;
   const selfId = useSelfId();
   const locals = useMemo(() => localMentionCandidates(messages, selfId), [messages, selfId]);
+  /* UN INVITÉ NE DEMANDE PAS LES MEMBRES (#10205) : la passerelle ne les lui
+     sert plus. Il mentionne les auteurs qu'il LIT déjà dans le fil (`locals`),
+     sans requête. */
+  const speaksAsGuest = useSpeaksAsGuest();
   const search = useMemo(
-    () => (conversationId === undefined ? null : contextSearch({ type: 'conversation', id: conversationId })),
-    [conversationId],
+    () => (conversationId === undefined ? null : speaksAsGuest ? noSearch : contextSearch({ type: 'conversation', id: conversationId })),
+    [conversationId, speaksAsGuest],
   );
 
   useEffect(() => {

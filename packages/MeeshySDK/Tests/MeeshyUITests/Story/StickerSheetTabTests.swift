@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -247,6 +248,40 @@ final class StickerUsageStoreTests: XCTestCase {
         let second = StickerUsageStore(defaults: defaults)
         XCTAssertEqual(second.favorites.map(\.value), ["⭐️"])
         XCTAssertEqual(second.recents.map(\.value), ["🎬"])
+    }
+
+    /// Récents et favoris appartiennent au COMPTE : sous des clés globales, le
+    /// compte suivant voyait les cinquante derniers stickers du précédent.
+    func test_recentsAndFavorites_arePerAccount() {
+        let defaults = UserDefaults(suiteName: "test.\(UUID().uuidString)")!
+        let accounts = PassthroughSubject<String?, Never>()
+        let sut = StickerUsageStore(defaults: defaults, accountChanges: accounts.eraseToAnyPublisher())
+        accounts.send("A")
+        sut.noteUse(.emoji("🎬"))
+        sut.toggleFavorite(.emoji("⭐️"))
+
+        accounts.send("B")
+        XCTAssertTrue(sut.recents.isEmpty)
+        XCTAssertTrue(sut.favorites.isEmpty)
+
+        accounts.send("A")
+        XCTAssertEqual(sut.recents.map(\.value), ["🎬"])
+        XCTAssertEqual(sut.favorites.map(\.value), ["⭐️"])
+    }
+
+    /// Les listes d'avant le correctif (clés globales) reviennent au premier
+    /// compte, et à lui seul.
+    func test_legacyGlobalLists_goToTheFirstAccountOnly() {
+        let defaults = UserDefaults(suiteName: "test.\(UUID().uuidString)")!
+        let legacy = StickerUsageStore(defaults: defaults, accountChanges: Just(nil).eraseToAnyPublisher())
+        legacy.noteUse(.emoji("🎬"))
+
+        let accounts = PassthroughSubject<String?, Never>()
+        let sut = StickerUsageStore(defaults: defaults, accountChanges: accounts.eraseToAnyPublisher())
+        accounts.send("A")
+        XCTAssertEqual(sut.recents.map(\.value), ["🎬"])
+        accounts.send("B")
+        XCTAssertTrue(sut.recents.isEmpty)
     }
 
     /// **Des préférences corrompues coûtent des favoris, jamais un écran.**

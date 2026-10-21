@@ -2,8 +2,12 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useStore } from 'zustand/react';
 
-import { GameProfileOwnSlot } from '@/components/game-profile-slots';
+import type { ServedProfileDecorItem } from '@meeshy/shared/types/profile-decor';
+import { authorAccentColor } from '@meeshy/shared/utils/conversation-colors';
+
+import { GameBannerOwnSlot } from '@/components/game-profile-slots';
 import { LanguageSheet } from '@/components/language-sheet';
+import { ProfileDecorSheet } from '@/components/profile-decor-sheet';
 import { ProfileTabPanel, ProfileTabs, useProfileTab } from '@/components/profile-tabs';
 import { apiDeps } from '@/lib/api/deps';
 import { appProfileActionDeps } from '@/lib/api/profile-action-deps';
@@ -24,14 +28,22 @@ import {
 import { PROFILE_IMAGE_ACCEPT } from '@/lib/profile/image-upload';
 import { appQueryClient } from '@/lib/api/query-client';
 import { sessionStore, type SessionUser } from '@/lib/api/session';
+import { statusMoodsQueryOptions } from '@/lib/api/stories';
 import { translate, type InterfaceCatalogKey } from '@/lib/i18n-catalog';
+import { loadProfileDecorCatalog, translateProfileDecor } from '@/lib/i18n-profile-decor-catalog';
 import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interface-language';
+import { appearanceNames, type AppearanceNames } from '@/lib/profile-decor/catalog';
+import { equipProfileDecor, type DecorSide } from '@/lib/profile-decor/equip';
+import { useDecorDesigns } from '@/lib/profile-decor/use-decor-designs';
 import { useOnline } from '@/lib/net/online';
 import { MY_PROFILE_TABS } from '@/lib/profile/tabs';
 import { usePostGesture } from '@/lib/view/use-post-gesture';
 import { draftOf, draftPatch, type ProfileDraft } from '@/lib/view/profile-draft';
+import { moodsByAuthor } from '@/lib/view/story-tray';
 import {
   ContactSection,
+  DECOR_ACCENT,
+  DecorEntries,
   IdentitySection,
   LanguagesSection,
   MemberSinceSection,
@@ -139,9 +151,17 @@ export default function ProfileScreen() {
   const enabled = apiDeps.source === 'fixtures' || sessionUser !== null;
 
   const profileQuery = useQuery({ ...myProfileQueryOptions(apiDeps), enabled }, appQueryClient);
-  const statsQuery = useQuery({ ...myStatsQueryOptions(apiDeps), enabled }, appQueryClient);
+  /* LES COMPTEURS SE SYNCHRONISENT À CHAQUE OUVERTURE (#10092) — le cache se
+     peint d'abord, la lecture repart même s'il est frais : ils bougent sous les
+     gestes des autres. */
+  const statsQuery = useQuery({ ...myStatsQueryOptions(apiDeps), enabled, refetchOnMount: 'always' }, appQueryClient);
   const receivedRequests = useInfiniteQuery({ ...friendRequestsQueryOptions(apiDeps, 'received'), enabled }, appQueryClient);
   const profile = profileQuery.data;
+  /* MON HUMEUR (#10530) — lue dans le corpus que le rail a déjà demandé (même
+     clé, même fraîcheur que `useStatusMoods`) : rien n'est demandé à part. */
+  const moodsQuery = useQuery({ ...statusMoodsQueryOptions(apiDeps), staleTime: 60_000, enabled }, appQueryClient);
+  const myId = profile?.id ?? sessionUser?.id;
+  const mood = useMemo(() => (myId === undefined ? undefined : moodsByAuthor(moodsQuery.data ?? []).get(myId)), [moodsQuery.data, myId]);
   const [tab, selectTab, tabBase] = useProfileTab({ offered: MY_PROFILE_TABS, fallback: 'details' });
   const { announcement: gestureAnnouncement, onGesture, onShare, onComment, onRepost, repostConfirm, menu } = usePostGesture();
   const gestures = useMemo(() => ({ onGesture, onShare, onComment, onRepost, menu }), [onGesture, onShare, onComment, onRepost, menu]);
@@ -152,6 +172,13 @@ export default function ProfileScreen() {
   const [notice, setNotice] = useState<{ readonly text: string; readonly bytes?: number } | null>(null);
   const [openRank, setOpenRank] = useState<PrismRank | null>(null);
   const [pending, setPending] = useState<PendingImages>({});
+  /* LE DÉCOR (#10632) — les entrées « Bannière » et « Contour » n'existent que si le serveur sert `profileDecor` ;
+     leurs libellés et les noms des choix se chargent à la demande, une fois. */
+  const [decorSide, setDecorSide] = useState<DecorSide | null>(null);
+  const [decorReady, setDecorReady] = useState(false);
+  const [decorNames, setDecorNames] = useState<AppearanceNames | null>(null);
+  const decorServed = profile?.profileDecor !== undefined;
+  const designs = useDecorDesigns(profile?.profileDecor);
   const controllers = useRef<Partial<Record<ProfileImageKind, AbortController>>>({});
   const inputs = useRef<Partial<Record<ProfileImageKind, HTMLInputElement | null>>>({});
 
@@ -161,6 +188,21 @@ export default function ProfileScreen() {
     return () => clearTimeout(handle);
   }, [notice]);
 
+  useEffect(() => {
+    if (!decorServed) return undefined;
+    let live = true;
+    void Promise.all([loadProfileDecorCatalog(language), appearanceNames(language)])
+      .then(([, names]) => {
+        if (!live) return;
+        setDecorNames(names);
+        setDecorReady(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [decorServed, language]);
+
   useEffect(
     () => () => {
       Object.values(controllers.current).forEach((controller) => controller?.abort());
@@ -169,6 +211,8 @@ export default function ProfileScreen() {
   );
 
   const identity = identityOf(profile, sessionUser);
+  /* UNE SEULE COULEUR D'ACCENT DE PROFIL (#10741) : celle que voient les autres. */
+  const accent = myId === undefined ? DECOR_ACCENT : authorAccentColor(myId, identity?.displayName ?? identity?.username ?? '');
   const prism = prismOf(profile, sessionUser);
   const editing = draft !== null;
 
@@ -211,6 +255,17 @@ export default function ProfileScreen() {
     setPending((current) => withoutKind(current, kind));
     setNotice({ text: imageNotice(language, kind, outcome), ...(outcome.status === 'saved' ? { bytes: outcome.bytesSent } : {}) });
   };
+
+  const equipDecor = async (side: DecorSide, choice: ServedProfileDecorItem | null) => {
+    const equipped = profile?.profileDecor?.[side] ?? null;
+    if (equipped?.pack === choice?.pack && equipped?.item === choice?.item) return;
+    const outcome = await equipProfileDecor({ queryClient: appQueryClient, deps: apiDeps, side, choice });
+    if (outcome.status === 'refused') setNotice({ text: translateProfileDecor(language, 'profileDecor.refused') });
+    if (outcome.status === 'error') setNotice({ text: translateProfileDecor(language, 'profileDecor.error') });
+  };
+
+  const decorLabel = (item: ServedProfileDecorItem | null | undefined, table: 'designs' | 'rings' | 'frames'): string | null =>
+    item === null || item === undefined ? null : (decorNames?.[table][item.item] ?? item.item);
 
   const openSheetRank = PRISM_RANKS.find((entry) => entry.rank === openRank);
   const requests = pendingRequestsOf(receivedRequests.data);
@@ -256,11 +311,14 @@ export default function ProfileScreen() {
               pending={pending}
               onPick={(kind) => inputs.current[kind]?.click()}
               onCancelUpload={(kind) => controllers.current[kind]?.abort()}
+              game={<GameBannerOwnSlot enabled={enabled} />}
+              mood={mood}
+              moodAuthorId={myId}
+              decor={designs}
+              accent={accent}
             />
           )}
           <StatsSection language={language} stats={statsQuery.data ?? null} />
-          {/* LE JEU (#9481) — l'anneau de niveau, le rang, le trésor, la Flamme, la vitrine, les médailles ; chargé à la demande, après la première peinture. */}
-          <GameProfileOwnSlot enabled={enabled} />
           <ProfileTabs language={language} tabs={MY_PROFILE_TABS} active={tab} onChange={selectTab} idBase={tabBase} badges={badges} />
           <ProfileTabPanel idBase={tabBase} tab={tab}>
             {tab === 'posts' ? (
@@ -289,6 +347,18 @@ export default function ProfileScreen() {
                   <>
                     <IdentitySection language={language} profile={profile} editing={editing} draft={draft} onDraft={setDraft} />
                     <ContactSection language={language} email={profile.email} phone={profile.phone} />
+                    {decorServed && decorReady ? (
+                      <DecorEntries
+                        language={language}
+                        names={{
+                          banner: decorLabel(profile.profileDecor?.banner, 'designs'),
+                          bannerFrame: decorLabel(profile.profileDecor?.bannerFrame, 'frames'),
+                          avatarRing: decorLabel(profile.profileDecor?.avatarRing, 'rings'),
+                        }}
+                        disabled={!online}
+                        onOpen={setDecorSide}
+                      />
+                    ) : null}
                   </>
                 )}
                 {prism === null ? null : (
@@ -323,6 +393,16 @@ export default function ProfileScreen() {
           onChange={(event) => void uploadImage(kind, event)}
         />
       ))}
+      {decorSide === null || !decorReady ? null : (
+        <ProfileDecorSheet
+          side={decorSide}
+          language={language}
+          current={profile?.profileDecor?.[decorSide] ?? null}
+          accent={accent}
+          onChoose={(choice) => void equipDecor(decorSide, choice)}
+          onClose={() => setDecorSide(null)}
+        />
+      )}
       {openSheetRank === undefined || prism === null ? null : (
         <LanguageSheet
           title={translate(language, openSheetRank.title)}

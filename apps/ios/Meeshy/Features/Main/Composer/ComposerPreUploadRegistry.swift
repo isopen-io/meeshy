@@ -48,8 +48,14 @@ final class ComposerPreUploadRegistry: ObservableObject {
     private var uploader: ComposerPreUploadProviding?
     private var tasks: [URL: Task<Void, Never>] = [:]
     private var waiting: [(url: URL, mimeType: String)] = []
-    private var running = 0
-    private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    /// La montée COURANTE de chaque fichier, et celles qui comptent dans « deux à la fois ». Une montée
+    /// annulée (oubliée, ou arrêtée par la publication) n'écrit plus rien à la place de la suivante : sans
+    /// cette identité, son `defer` effaçait la tâche d'une montée relancée pour le même fichier, son
+    /// `catch` effaçait l'état de celle-ci, et ses décréments — après la remise à zéro de la
+    /// publication — laissaient partir une troisième montée.
+    private var runIds: [URL: UUID] = [:]
+    private var activeRuns: Set<UUID> = []
+    private let logger = MeeshyLog.logger(.media)
 
     /// **L'adoption est remise par l'hôte, pas cherchée par le registre.**
     ///
@@ -121,8 +127,10 @@ final class ComposerPreUploadRegistry: ObservableObject {
     func forget(url: URL) {
         tasks[url]?.cancel()
         tasks[url] = nil
+        if let runId = runIds.removeValue(forKey: url) { activeRuns.remove(runId) }
         waiting.removeAll { $0.url == url }
         states[url] = nil
+        drain()
     }
 
     /// **La publication démarre : plus rien ne part tôt.**
@@ -138,7 +146,8 @@ final class ComposerPreUploadRegistry: ObservableObject {
             if !state(for: url).isReady { states[url] = nil }
         }
         waiting.removeAll()
-        running = 0
+        runIds.removeAll()
+        activeRuns.removeAll()
     }
 
     // MARK: - La file
@@ -148,25 +157,30 @@ final class ComposerPreUploadRegistry: ObservableObject {
     /// PENDANT la montée. Le nombre vient de la règle, jamais d'un littéral
     /// écrit ici.
     private func drain() {
-        while running < ComposerPreUploadPolicy.maximumConcurrent, !waiting.isEmpty {
+        while activeRuns.count < ComposerPreUploadPolicy.maximumConcurrent, !waiting.isEmpty {
             let next = waiting.removeFirst()
-            running += 1
+            let runId = UUID()
+            activeRuns.insert(runId)
+            runIds[next.url] = runId
             tasks[next.url] = Task { [weak self] in
-                await self?.run(url: next.url, mimeType: next.mimeType)
+                await self?.run(url: next.url, mimeType: next.mimeType, runId: runId)
             }
         }
     }
 
-    private func run(url: URL, mimeType: String) async {
+    private func run(url: URL, mimeType: String, runId: UUID) async {
         defer {
-            running = max(0, running - 1)
-            tasks[url] = nil
+            activeRuns.remove(runId)
+            if runIds[url] == runId {
+                runIds[url] = nil
+                tasks[url] = nil
+            }
             drain()
         }
         guard let uploader else { return }
         do {
             let result = try await uploader.upload(fileURL: url, mimeType: mimeType)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled, runIds[url] == runId else { return }
             // **L'adoption décide de l'état final.** Un objet disparu — l'auteur
             // l'a retiré pendant la montée — n'est pas un succès à afficher : le
             // registre l'oublie, et la vue cesse de peindre une progression pour
@@ -179,8 +193,9 @@ final class ComposerPreUploadRegistry: ObservableObject {
                 ? .ready(postMediaId: result.postMediaId, remoteURL: result.remoteURL)
                 : nil
         } catch is CancellationError {
-            states[url] = nil
+            if runIds[url] == runId { states[url] = nil }
         } catch {
+            guard runIds[url] == runId else { return }
             // **L'échec se JOURNALISE, il ne se montre pas.** La publication
             // reprendra l'envoi ; l'auteur n'a rien à faire de cette
             // information, et la lui donner transformerait une optimisation

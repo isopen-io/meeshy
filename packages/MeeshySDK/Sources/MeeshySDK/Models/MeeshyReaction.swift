@@ -46,7 +46,8 @@ public extension MeeshyReaction {
         let mine = Set(currentUserReactions ?? [])
         return summary.flatMap { emoji, count -> [MeeshyReaction] in
             let meReacted = mine.contains(emoji)
-            return (0..<count).map { index in
+            // `reactionSummary` est décodé tel quel : un compte négatif plantait la plage.
+            return (0..<min(max(0, count), 10_000)).map { index in
                 MeeshyReaction(
                     messageId: messageId,
                     participantId: (meReacted && index == 0) ? currentUserId : nil,
@@ -68,8 +69,6 @@ public struct MeeshyReactionSummary: Sendable {
         self.emoji = emoji; self.count = count; self.includesMe = includesMe
     }
 }
-
-public typealias MeeshyMessageReaction = MeeshyReactionSummary
 
 // MARK: - Enriched Reaction Models
 

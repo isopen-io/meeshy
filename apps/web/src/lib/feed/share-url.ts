@@ -17,6 +17,11 @@ import type { ResultatInvitation } from '@/lib/view/invitation';
  */
 const CANONICAL_ORIGIN = 'https://meeshy.me';
 
+/** L'adresse canonique d'un PROFIL (D15) — la route `/u/<pseudo>` que les trois clients ouvrent. */
+export function profileShareUrl(username: string): string {
+  return `${CANONICAL_ORIGIN}/u/${encodeURIComponent(username)}`;
+}
+
 export function publicationShareUrl(postId: string): string {
   return `${CANONICAL_ORIGIN}/feeds/post/${encodeURIComponent(postId)}`;
 }

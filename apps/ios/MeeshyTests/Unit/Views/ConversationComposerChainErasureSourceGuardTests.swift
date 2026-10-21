@@ -1,61 +1,37 @@
 import XCTest
 @testable import Meeshy
 
-/// **Chaque maillon de la chaîne du composer est effacé À SA DÉCLARATION.**
+/// **Chaque maillon de la chaîne du composer est une frontière NOMINALE.**
 ///
-/// Le crash mesuré (`F22F88B0-…`, device iPhone 16 Pro Max, 2026-09-03 17:29,
-/// `appBuildVersion 1800`) est un débordement de pile — `signal 11`,
-/// `exceptionType 1`, `exceptionCode 2`, l'adresse fautive DANS la page de
-/// garde d'une pile de 1008 Ko :
+/// ## Le défaut, et ce qui le fermait mal
 ///
-///     ---> Stack Guard  16f430000-16f434000 [ 16K] ---/rwx
-///          Stack        16f434000-16f530000 [1008K]
+/// `ConversationView.themedComposer` empilait ~13 modificateurs système sur UN
+/// seul `some View`. Chaque modificateur ajoute un niveau de générique
+/// `ModifiedContent<…>` distinct ; à la profondeur atteinte, la résolution
+/// runtime du type opaque (`swift_getTypeByMangledName`, récursive à ~17 Ko de
+/// pile par niveau) dépassait les 1008 Ko du thread principal (device iPhone 16
+/// Pro Max, 2026-09-03, atteint depuis `ConversationFirstRenderWarmup`).
 ///
-/// La pile symbolisée nomme le coupable sans ambiguïté :
+/// > DÉCOUPER DES PROPRIÉTÉS NE DÉCOUPE PAS LE TYPE. Quatre maillons-fonctions
+/// > `(AnyView) -> AnyView` bornaient la profondeur mais détruisaient l'identité
+/// > de la vue à chaque rendu. Une struct `ViewModifier` obtient son PROPRE nœud
+/// > d'attribut et son nom remplace tout le sous-arbre dans les mangled names :
+/// > elle borne la profondeur sans effacer l'identité.
 ///
-///     MeeshyApp.$main()
-///       → ConversationFirstRenderWarmup.performWarmup()        (:136)
-///       → ConversationView.body → bodyWithSheets → bodyWithCovers
-///       → bodyWithLifecycle → bodyContent                     (:2044)
-///       → closure #44 in bodyContent                          (:1983)
-///       → ConversationView.themedComposer.getter
-///       → __swift_instantiateConcreteTypeFromMangledNameV2
-///       → 40 trames du décodeur récursif de métadonnées Swift  → CRASH
-///
-/// **Pourquoi le découpage de 2026-08-16 n'a pas suffi.** Il a scindé la
-/// propriété en quatre maillons — mais les trois fonctions étaient
-/// GÉNÉRIQUES (`<Content: View>(_ content: Content) -> some View`). Composées
-/// en une seule expression,
-///
-///     composerEditingCovers(composerStickerSheet(composerPickersAndSheets(composerCore)))
-///
-/// leurs types opaques se re-nichent intégralement : le mangled name unique et
-/// géant que le découpage prétendait avoir supprimé se reformait dans le
-/// getter de `themedComposer`. **Découper des PROPRIÉTÉS ne découpe pas le
-/// TYPE ; seule la frontière `AnyView` le fait.**
-///
-/// > `AnyView` posé chez l'APPELANT ne borne rien : le getter matérialise
-/// > quand même le type concret de son argument, à sa propre profondeur de
-/// > pile. Ce qui borne est l'effacement à la DÉCLARATION de chaque maillon —
-/// > la leçon payée par six `AnyView` successifs sur la chaîne du header entre
-/// > le 2026-07-30 et le 2026-08-17, qui ont déplacé le crash de maillon en
-/// > maillon sans jamais le faire disparaître.
-///
-/// Cette garde est une garde de SOURCE parce que la grandeur qu'elle protège
-/// est une SIGNATURE. Elle ne remplace pas la vérification sur appareil réel :
-/// le simulateur a 8 Mo de pile contre 1008 Ko sur device, il est
-/// structurellement aveugle à cette classe de défaut.
+/// Cette garde est une garde de SOURCE parce que la grandeur qu'elle protège est
+/// une SIGNATURE. Elle ne remplace pas la vérification sur appareil réel : le
+/// simulateur a 8 Mo de pile contre 1008 Ko sur device.
 final class ConversationComposerChainErasureSourceGuardTests: XCTestCase {
 
-    private static let chainPath =
-        "Meeshy/Features/Main/Views/ConversationView+Composer.swift"
+    /// L'unité de l'écran : la vue, ses extensions, et `ConversationLayers/`.
+    private static let chainPath = AppSourceGuard.conversationViewPath
 
     /// Les maillons de la chaîne, dans l'ordre où `themedComposer` les compose.
-    private static let links = [
-        "composerCore",
-        "composerPickersAndSheets",
-        "composerStickerSheet",
-        "composerEditingCovers",
+    private static let modifierLinks = [
+        "ConversationComposerPickers",
+        "ConversationComposerGuestSheet",
+        "ConversationComposerStickerSheet",
+        "ConversationComposerEditingCovers",
     ]
 
     private func chainSource() throws -> String {
@@ -64,45 +40,53 @@ final class ConversationComposerChainErasureSourceGuardTests: XCTestCase {
         return AppSourceGuard.stripComments(source)
     }
 
-    func test_themedComposer_estEffacee() throws {
+    func test_themedComposer_estUneVueOpaqueSansEffacement() throws {
         let source = try chainSource()
-        XCTAssertTrue(
-            source.contains("var themedComposer: AnyView"),
-            "`themedComposer` doit être déclarée `AnyView` — c'est la frontière que voit `bodyContent`."
-        )
+        XCTAssertTrue(source.contains("var themedComposer: some View"))
+        XCTAssertFalse(source.contains("var themedComposer: AnyView"),
+                       "`themedComposer` ne se déclare plus effacée : ses maillons sont nominaux.")
     }
 
-    func test_chaqueMaillon_rendAnyView() throws {
+    func test_chaqueMaillon_estUneStructNominale() throws {
         let source = try chainSource()
-        for link in Self.links {
-            let asProperty = source.contains("var \(link): AnyView")
-            let asFunction = source.contains("func \(link)(_ content: AnyView) -> AnyView")
+        XCTAssertTrue(source.contains("struct ConversationComposerCore: View"),
+                      "le coeur du composeur est une vue nominale")
+        for link in Self.modifierLinks {
             XCTAssertTrue(
-                asProperty || asFunction,
-                """
-                Le maillon `\(link)` n'est pas effacé à sa déclaration. Il doit être \
-                soit `var \(link): AnyView`, soit \
-                `func \(link)(_ content: AnyView) -> AnyView`. Sans cette frontière, \
-                son type opaque se niche dans celui de son appelant et le getter de \
-                `themedComposer` matérialise à nouveau le type COMPOSÉ des quatre \
-                maillons — le débordement de pile de 1008 Ko mesuré sur device.
-                """
+                source.contains("struct \(link): ViewModifier"),
+                "Le maillon `\(link)` doit être une `struct … : ViewModifier` : une propriété calculée `some View` se niche dans le type de son appelant."
+            )
+            XCTAssertFalse(
+                source.contains("var \(link):") || source.contains("func \(link)("),
+                "Le maillon `\(link)` est redevenu une propriété ou une fonction — le type composé se reforme dans le getter de `themedComposer`."
             )
         }
     }
 
-    func test_aucunMaillon_nEstGeneriqueSurSonContenu() throws {
+    func test_themedComposer_composeLesMaillonsDansLOrdre() throws {
         let source = try chainSource()
-        for link in Self.links {
-            XCTAssertFalse(
-                source.contains("func \(link)<"),
-                """
-                Le maillon `\(link)` est GÉNÉRIQUE sur son contenu. C'est \
-                précisément ce qui laisse les types opaques se re-nicher quand les \
-                maillons sont composés en une expression : le paramètre doit être \
-                `AnyView`, pas `Content: View`.
-                """
-            )
+        guard let start = source.range(of: "var themedComposer: some View") else {
+            XCTFail("themedComposer introuvable"); return
         }
+        var cursor = start.upperBound
+        for link in ["ConversationComposerCore("] + Self.modifierLinks.map({ ".modifier(\($0)(" }) {
+            guard let found = source.range(of: link, range: cursor..<source.endIndex) else {
+                XCTFail("`\(link)` doit être posé dans `themedComposer`, dans l'ordre de la chaîne.")
+                return
+            }
+            cursor = found.upperBound
+        }
+    }
+
+    func test_aucunMaillon_nEstUneFonctionSurAnyView() throws {
+        let source = try chainSource()
+        XCTAssertFalse(source.contains("_ content: AnyView"),
+                       "un maillon `(AnyView) -> AnyView` détruit l'identité de la vue à chaque rendu.")
+    }
+
+    func test_composerCore_nePossedeQueLesAbonnesDuVumetreEtDuTexte() throws {
+        let core = try chainSource()
+        XCTAssertTrue(core.contains("ComposerAudioHost(recorder: recorder)"))
+        XCTAssertTrue(core.contains("ComposerTextHost(model: composerText)"))
     }
 }

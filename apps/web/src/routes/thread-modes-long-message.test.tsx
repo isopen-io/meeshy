@@ -140,7 +140,6 @@ const monte = (mode: ConversationReadingMode, messages: readonly Message[] = THR
     <ThreadModes
       mode={mode}
       viewer={VIEWER}
-      readerLocale="fr"
       placed={messages.map(placeOf)}
       virtualizer={virtualizerOf(messages.length)}
       scene={SCENE}
@@ -225,11 +224,11 @@ for (const mode of ROW_MODES) {
       expect(host.querySelectorAll('[data-unfold-glass]')).toHaveLength(1);
     });
 
-    test('le dépliage anime la HAUTEUR, au tempo partagé ; sous Réduire le mouvement, rien ne bouge', async () => {
+    test('le dépliage se joue en opacity, jamais en hauteur (#11314), au tempo partagé ; sous Réduire le mouvement, rien ne bouge', async () => {
       const host = await monte(mode);
       await press(toggleOf(host, 'm-long'));
-      expect(played.some((entry) => entry.keyframes.some((frame) => frame.height !== undefined))).toBe(true);
-      expect(played.some((entry) => entry.keyframes.some((frame) => frame.transform !== undefined))).toBe(false);
+      expect(played.some((entry) => entry.keyframes.some((frame) => frame.opacity !== undefined))).toBe(true);
+      expect(played.some((entry) => entry.keyframes.some((frame) => frame.height !== undefined))).toBe(false);
 
       played = [];
       reduceMotion = true;
@@ -237,13 +236,13 @@ for (const mode of ROW_MODES) {
       expect(played).toHaveLength(0);
     });
 
-    test('déplier et replier jouent la MÊME hauteur, à la durée et à la courbe partagées avec iOS (#8232)', async () => {
+    test('déplier et replier jouent le MÊME fondu, à la durée et à la courbe partagées avec iOS (#8232)', async () => {
       const host = await monte(mode);
       await press(toggleOf(host, 'm-long'));
       await press(toggleOf(host, 'm-long'));
-      const heights = played.filter((entry) => entry.keyframes.some((frame) => frame.height !== undefined));
-      expect(heights).toHaveLength(2);
-      for (const entry of heights) {
+      const fades = played.filter((entry) => entry.keyframes.some((frame) => frame.opacity !== undefined));
+      expect(fades).toHaveLength(2);
+      for (const entry of fades) {
         expect(entry.options).toEqual({ duration: FOCAL_METRICS.expandDurationMs, easing: focalExpandEasingCss() });
       }
     });

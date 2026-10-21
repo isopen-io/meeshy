@@ -6,6 +6,7 @@ import { endonymOf } from '@/components/language-share-bar';
 import { MAX_USES_CEILING, SHARE_LINK_EXPIRATIONS, type MyShareLink, type ShareLinkPatch, type ShareLinkPolicy } from '@/lib/api/links';
 import type { ShareLinkUpdateOutcome } from '@/lib/api/link-actions';
 import { translate } from '@/lib/i18n-catalog';
+import { translateLinkFamilies } from '@/lib/i18n-link-families-catalog';
 import { translateInvite } from '@/lib/i18n-invite-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
 import { editDraftOf, validateEditDraft, type EditDraftField, type ShareLinkEditDraft, type ShareLinkExpirationChoice } from '@/lib/links/edit-draft';
@@ -271,7 +272,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
               )}
               {SHARE_LINK_EXPIRATIONS.map((option) => (
                 <option key={option} value={option}>
-                  {translate(language, EXPIRATION_KEY[option])}
+                  {translateLinkFamilies(language, EXPIRATION_KEY[option])}
                 </option>
               ))}
             </select>
@@ -281,7 +282,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
             label={translateInvite(language, 'linkDetail.edit.maxUses')}
             caption={
               draft.limitUses && Number.isFinite(draft.maxUses)
-                ? translate(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: format.format(draft.maxUses) })
+                ? translateLinkFamilies(language, draft.maxUses === 1 ? 'links.create.limit.max.one' : 'links.create.limit.max.other', { count: format.format(draft.maxUses) })
                 : translate(language, 'links.unlimited')
             }
             icon={<Glyph name="users" size={15} />}
@@ -330,7 +331,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           language={language}
           id="link-edit-entry"
           title={translateInvite(language, 'linkDetail.edit.entry')}
-          subtitle={translate(language, 'links.create.section.access.subtitle')}
+          subtitle={translateLinkFamilies(language, 'links.create.section.access.subtitle')}
           icon={<LinksGlyph name="userCheck" size={13} />}
           rules={ACCESS_RULES}
           draft={draft}
@@ -351,7 +352,7 @@ export function EditLinkForm({ language, link, policy, now, onSave, onToggleActi
           language={language}
           id="link-edit-rights"
           title={translateInvite(language, 'linkDetail.edit.rights')}
-          subtitle={translate(language, 'links.create.section.permissions.subtitle')}
+          subtitle={translateLinkFamilies(language, 'links.create.section.permissions.subtitle')}
           icon={<LinksGlyph name="chatCircle" size={13} />}
           rules={PERMISSION_RULES}
           draft={draft}

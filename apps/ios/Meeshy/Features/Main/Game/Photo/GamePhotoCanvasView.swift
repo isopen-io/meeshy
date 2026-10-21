@@ -36,6 +36,10 @@ struct GamePhotoCanvasView: View {
     /// Le bandeau se retourne en arabe (#9554) : le carré QR reste en fin de ligne. Le reste de la carte
     /// se dessine toujours de gauche à droite — à l'écran comme dans l'image, qui n'hérite d'aucun sens.
     var rightToLeft: Bool = GamePhotoLayout.readsRightToLeft()
+    /// L'auteur (#10816) : son pseudo se grave sur la plaque d'un succès, d'un rang ou d'une fin de mission ;
+    /// `nil` (invité, ou moment sans plaque) : pas de plaque. L'image garde le monogramme — `ImageRenderer` ne
+    /// rend pas une photo de profil qui se charge.
+    var author: PhotoAuthor?
 
     private var layout: PhotoLayout { GamePhotoLayout.layout(format, referral: referral != nil, rightToLeft: rightToLeft) }
 
@@ -43,7 +47,7 @@ struct GamePhotoCanvasView: View {
         let l = layout
         ZStack(alignment: .topLeading) {
             backgroundLayer(l)
-            emblem
+            GamePhotoEmblem(moment: moment)
                 .frame(width: l.emblem.width, height: l.emblem.height)
                 .scaleEffect(0.82 + 0.18 * strike)
                 .opacity(0.25 + 0.75 * strike)
@@ -51,6 +55,10 @@ struct GamePhotoCanvasView: View {
             text(l.kicker, text: moment.kicker.uppercased(), weight: UIFont.Weight.semibold, color: MeeshyColors.indigo200)
             text(l.title, text: moment.title, weight: UIFont.Weight.bold, color: .white)
             text(l.date, text: dateLabel, weight: UIFont.Weight.medium, color: MeeshyColors.indigo200)
+            if let plate = GamePhotoAuthorPlate.plate(for: moment.emblem, author: author) {
+                GameAuthorPlateView(plate: plate, width: l.author.width)
+                    .offset(x: l.author.minX, y: l.author.minY)
+            }
             figure(id: "mee-sourire", rect: l.mee, mirrored: false)
             figure(id: "meo-salut", rect: l.meo, mirrored: true)
             if let banner = l.banner, let referral {
@@ -114,41 +122,6 @@ struct GamePhotoCanvasView: View {
         .frame(width: l.width, height: l.height)
     }
 
-    @ViewBuilder
-    private var emblem: some View {
-        switch moment.emblem {
-        case .start:
-            SignatureMark(style: .struck, color: .white)
-        case .rank(let rank, let division):
-            RankBlasonView(rank: rank, division5: division, title: GameCopy.rankName(rank), figures: nil)
-        case .tier(let tier, let level):
-            LevelRingView(level: level, progress: 1, tier: tier)
-        case .levelHundred(let prestige):
-            LevelRingView(level: 100, progress: 1, tier: .galaxie, prestige: prestige)
-        case .meesh(let number, let edition):
-            MeeshCoinView(face: .reverse(number: number, year: Calendar.current.component(.year, from: Date())),
-                          edition: edition, figures: nil)
-        case .treasury:
-            MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
-        case .flame(let form, _):
-            FlameView(form: form, flickers: false)
-        case .achievement:
-            TrophyView(material: .gold, label: moment.kicker.uppercased())
-        case .trophy(let key):
-            if let view = GameTrophyPresentation.of(key: key) {
-                TrophyView(material: view.material, label: view.plate, figures: view.kind == .prestige ? GameFigures.standard : nil)
-            } else {
-                TrophyView(material: .gold, label: moment.kicker.uppercased())
-            }
-        case .leagueUp(let league):
-            LeagueGemView(league: league)
-        case .season(let season):
-            TrophyView(material: .platinum, label: GameText.trophyPlateSeason(number: GameCopy.formatCount(season)))
-        case .prestige(let number):
-            TrophyView(material: .prism, label: GameText.trophyPlatePrestige(number: GameCopy.formatCount(number)), figures: GameFigures.standard)
-        }
-    }
-
     private func text(_ line: PhotoTextLine, text value: String, weight: UIFont.Weight, color: Color) -> some View {
         Text(value)
             .font(Self.fixedFont(line.size, weight))
@@ -178,6 +151,54 @@ struct GamePhotoCanvasView: View {
                 .scaleEffect(x: mirrored ? -1 : 1, y: 1)
                 .frame(width: rect.width, height: rect.height)
                 .offset(x: rect.minX, y: rect.minY)
+        }
+    }
+}
+
+/// L'EMBLÈME d'un moment (#9382) : le dessin du haut du cadre, et celui de la carte posée (#10816). Une coupe
+/// de succès ou de fin de mission prend le métal de sa plaque ; la plaque neutre (indigo) garde l'or d'avant.
+struct GamePhotoEmblem: View {
+    let moment: PhotoMoment
+
+    private var trophyMaterial: GameMaterial {
+        GamePhotoAuthorPlate.style(of: moment.emblem).flatMap { GameMaterial(rawValue: $0.metal.rawValue) } ?? .gold
+    }
+
+    var body: some View {
+        switch moment.emblem {
+        case .start:
+            SignatureMark(style: .struck, color: .white)
+        case .rank(let rank, let division):
+            RankBlasonView(rank: rank, division5: division, title: GameCopy.rankName(rank), figures: nil)
+        case .tier(let tier, let level):
+            LevelRingView(level: level, progress: 1, tier: tier)
+        case .levelHundred(let prestige):
+            LevelRingView(level: 100, progress: 1, tier: .galaxie, prestige: prestige)
+        case .meesh(let number, _):
+            // La pièce se dessine dans son édition d'AFFICHAGE (#11483) : le n° 247, frappé après le n° 100, est d'or.
+            MeeshCoinView(face: .reverse(number: number, year: Calendar.current.component(.year, from: Date())),
+                          edition: GameMint.displayEdition(forNumber: number), figures: nil)
+        case .treasury:
+            MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
+        case .flame(let form, _):
+            FlameView(form: form, flickers: false)
+        case .achievement:
+            TrophyView(material: trophyMaterial, label: moment.kicker.uppercased())
+        case .mission:
+            // La plaque de la coupe est courte (≈ 12 signes) : « Mission accomplie » n'y tient pas.
+            TrophyView(material: trophyMaterial, label: String(localized: "game.photo.trophy.mission", defaultValue: "Rêve", bundle: .main).uppercased())
+        case .trophy(let key):
+            if let view = GameTrophyPresentation.of(key: key) {
+                TrophyView(material: view.material, label: view.plate, figures: view.kind == .prestige ? GameFigures.standard : nil)
+            } else {
+                TrophyView(material: .gold, label: moment.kicker.uppercased())
+            }
+        case .leagueUp(let league):
+            LeagueGemView(league: league)
+        case .season(let season):
+            TrophyView(material: .platinum, label: GameText.trophyPlateSeason(number: GameCopy.formatCount(season)))
+        case .prestige(let number):
+            TrophyView(material: .prism, label: GameText.trophyPlatePrestige(number: GameCopy.formatCount(number)), figures: GameFigures.standard)
         }
     }
 }

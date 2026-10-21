@@ -14,6 +14,10 @@
  * édition, écrasant le mode que l'auteur a choisi. `referenceUserId` est
  * exactement ce qui distingue un badge d'une phrase.
  *
+ * La puce « Reposté de @auteur » (texte VERROUILLÉ) l'est aussi (#10524) : elle
+ * n'est jamais servie, et un ancien client qui la renvoie à la création ou à
+ * l'édition ne doit pas en tirer une mention ni une notification.
+ *
  * `storyEffects` arrive en `unknown` : c'est un Json Prisma, validé par un
  * schéma `passthrough()` qui n'en garantit pas la forme. Tout ce qui n'est pas
  * lisible est ignoré plutôt que de faire échouer une publication.
@@ -35,6 +39,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readableText(entry: unknown): string | null {
   if (!isRecord(entry)) return null;
   if (typeof entry.referenceUserId === 'string' && entry.referenceUserId.length > 0) return null;
+  if (entry.isLocked === true) return null;
   const text = entry.text;
   return typeof text === 'string' && text.length > 0 ? text : null;
 }

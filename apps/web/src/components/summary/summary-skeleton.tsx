@@ -7,6 +7,8 @@
  * avant même que `SummaryHost` (lazy) ne monte le reste.
  */
 import '@/styles/summary.css';
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
 
 /**
  * LE SQUELETTE DU RÉSUMÉ VIVANT (#5695) — trois barres, miroir
@@ -18,7 +20,7 @@ import '@/styles/summary.css';
  */
 export function SummarySkeleton() {
   return (
-    <div className="flex flex-col gap-4 px-0.5 pt-5 pb-4" role="status" aria-label="Chargement du résumé">
+    <div className="flex flex-col gap-4 px-0.5 pt-5 pb-4" role="status" aria-label={translate(currentInterfaceLanguage(), 'summary.loading')}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}

@@ -76,6 +76,99 @@ final class ComposerTrimTrackTests: XCTestCase {
         XCTAssertEqual(lecteur.seeks.last, 3, "toucher la piste y place la tête")
     }
 
+    // MARK: - #10356 — lecture, pause, tête au doigt, retour au début
+
+    private func videoSession() async -> (ComposerCaptureSession, MockComposerLoopPlayer) {
+        let lecteur = MockComposerLoopPlayer(duration: 6)
+        let session = ComposerCaptureSession(stage: .armed, loopPlayerFactory: { _ in lecteur })
+        await session.beginEditing(video: Self.clip())
+        return (session, lecteur)
+    }
+
+    func test_10356_pause_stopsWhereItIs_andPlayResumesFromThere() async {
+        let (session, lecteur) = await videoSession()
+        XCTAssertTrue(session.offersEditPlayback)
+        XCTAssertFalse(session.editPaused, "la retouche s'ouvre en lecture")
+        let lectures = lecteur.playCount
+        session.toggleEditPlayback()
+        XCTAssertTrue(session.editPaused)
+        XCTAssertEqual(lecteur.pauseCount, 1)
+        XCTAssertFalse(lecteur.isPlaying)
+        session.toggleEditPlayback()
+        XCTAssertFalse(session.editPaused)
+        XCTAssertEqual(lecteur.playCount, lectures + 1)
+        XCTAssertTrue(lecteur.isPlaying)
+        XCTAssertTrue(lecteur.seeks.isEmpty, "pause et reprise ne déplacent pas la tête")
+    }
+
+    func test_10356_playheadDrag_scrubsInsideTheKeptRange_andTheReleaseResumesFromThere() async {
+        let (session, lecteur) = await videoSession()
+        session.setTrim(1...4, committed: true)
+        let boucles = lecteur.ranges.count
+        session.scrubPlayhead(to: 2.5)
+        session.scrubPlayhead(to: 9)
+        XCTAssertEqual(lecteur.scrubs, [2.5, 4], "l'image suit le doigt, bornée à la plage gardée")
+        session.endPlayheadScrub(at: 9)
+        XCTAssertEqual(lecteur.ranges.count, boucles + 1, "la boucle repart")
+        XCTAssertEqual(lecteur.ranges.last, 1...4, "sur la plage gardée")
+        XCTAssertEqual(lecteur.seeks.last, 4, "depuis l'endroit où la tête est lâchée")
+        XCTAssertTrue(lecteur.isPlaying)
+    }
+
+    func test_10356_playheadRelease_whilePaused_staysPausedThere() async {
+        let (session, lecteur) = await videoSession()
+        session.toggleEditPlayback()
+        session.scrubPlayhead(to: 2)
+        session.endPlayheadScrub(at: 2)
+        XCTAssertEqual(lecteur.seeks.last, 2)
+        XCTAssertFalse(lecteur.isPlaying, "en pause, la tête se pose sans relancer la lecture")
+        XCTAssertTrue(session.editPaused)
+    }
+
+    func test_10356_aCommittedTrim_bringsThePlayheadBackToTheStartOfTheKeptRange() async {
+        let (session, lecteur) = await videoSession()
+        session.setTrim(1.5...4, committed: true)
+        XCTAssertEqual(lecteur.seeks.last, 1.5, "la tête revient au début du segment gardé")
+        XCTAssertTrue(lecteur.isPlaying)
+        session.toggleEditPlayback()
+        session.setTrim(2...4, committed: true)
+        XCTAssertEqual(lecteur.seeks.last, 2, "en pause aussi, au début")
+        XCTAssertFalse(lecteur.isPlaying, "et elle y reste en pause")
+    }
+
+    func test_10356_playback_isOfferedOnlyToAVideo_andResetsWithTheEdit() async {
+        let (session, lecteur) = await videoSession()
+        session.toggleEditPlayback()
+        session.isRenderingLook = true
+        session.toggleEditPlayback()
+        XCTAssertTrue(session.editPaused, "pendant le rendu, plus rien ne bouge")
+        session.isRenderingLook = false
+        session.cancelEditing()
+        XCTAssertFalse(session.editPaused, "la retouche suivante repart en lecture")
+        XCTAssertFalse(session.offersEditPlayback)
+        XCTAssertEqual(lecteur.pauseCount, 1)
+        XCTAssertFalse(ComposerCaptureSession(stage: .armed).offersEditPlayback, "hors vidéo, pas de lecture")
+    }
+
+    func test_10356_theTrack_letsThePlayheadBeDragged_underTheHandles() throws {
+        let vue = try ComposerCaptureTakesTests.code("Meeshy/Features/Main/Composer/ComposerTrimTrack.swift")
+        guard let debut = vue.range(of: "private func playheadLine("),
+              let fin = vue.range(of: "private func releasePlayhead()", range: debut.upperBound..<vue.endIndex) else {
+            return XCTFail("la tête de lecture est introuvable — la garde ne mesurerait rien")
+        }
+        let tete = vue[debut.upperBound..<fin.lowerBound]
+        XCTAssertFalse(tete.contains(".allowsHitTesting(false)"), "la tête se prend au doigt")
+        XCTAssertTrue(tete.contains(".frame(width: cible, height: Self.height)"), "cible de 44 pt")
+        XCTAssertTrue(tete.contains("session.scrubPlayhead(to: temps)"), "l'image suit pendant le glissé")
+        XCTAssertTrue(vue.contains("session.endPlayheadScrub(at: temps)"), "au lâcher, elle se pose")
+        guard let ligne = vue.range(of: "playheadLine(piste)"),
+              let poignee = vue.range(of: "handle(.start, piste)") else {
+            return XCTFail("le montage de la piste a changé")
+        }
+        XCTAssertLessThan(ligne.lowerBound, poignee.lowerBound,
+                          "les poignées sont montées PAR-DESSUS la tête : dans leur zone, elles gardent le geste")
+    }
+
     // MARK: - Le montage
 
     func test_track_sitsAboveTheRailAndTheBand_andCarriesThePrecisionLaw() throws {

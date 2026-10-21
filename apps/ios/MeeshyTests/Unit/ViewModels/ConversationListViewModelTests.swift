@@ -274,6 +274,24 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.count, 1)
     }
 
+    /// #7631 — un cache de moins de 5 min peint sans attendre, mais ne dispense
+    /// pas de la revalidation : une réaction ou un appel terminé app fermée
+    /// n'y figurent pas.
+    func test_loadConversations_freshCache_revalidatesByDeltaInBackground() async {
+        let conversation = makeConversation(id: "000000000000000000000001")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        let revalidated = expectation(description: "le delta part au démarrage sur un cache frais")
+        syncEngine.onSyncSinceLastCheckpoint = { revalidated.fulfill() }
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+
+        XCTAssertEqual(sut.conversations.count, 1, "le cache peint avant tout réseau")
+        await fulfillment(of: [revalidated], timeout: 2)
+        XCTAssertEqual(syncEngine.fullSyncCallCount, 0, "une revalidation, pas un plein")
+    }
+
     func test_loadConversations_refetchesAfterCacheInvalidation() async {
         // Pre-populate cache
         let conversation = makeConversation(id: "000000000000000000000001")
@@ -579,6 +597,36 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.conversations.first(where: { $0.id == "conv1" })?.userState.deletedForUserAt,
                         "conv1 must be soft-deleted in the store")
         XCTAssertNil(sut.conversations.first(where: { $0.id == "conv2" })?.userState.deletedForUserAt)
+    }
+
+    // MARK: - deleteConversation : la conversation QUITTE la liste (colonne de détail iPad)
+
+    func test_deleteConversation_success_announcesTheRemoval() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1"), makeConversation(id: "conv2")])
+        await sut.storeHydrationTask?.value
+        var removed: [String] = []
+        let token = sut.conversationLeavesDetail.sink { removed.append($0) }
+        defer { token.cancel() }
+
+        await sut.deleteConversation(conversationId: "conv1")
+
+        XCTAssertEqual(removed, ["conv1"], "l'iPad referme la colonne de détail qui montrait conv1")
+    }
+
+    func test_deleteConversation_permanentFailure_announcesNothing() async throws {
+        let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
+        var removed: [String] = []
+        let token = sut.conversationLeavesDetail.sink { removed.append($0) }
+        defer { token.cancel() }
+
+        await sut.deleteConversation(conversationId: "conv1")
+
+        XCTAssertEqual(removed, [], "la ligne est rétablie : la conversation reste ouverte")
     }
 
     // MARK: - deleteConversation: Failure (restore)
@@ -1276,6 +1324,27 @@ final class ConversationListViewModelTests: XCTestCase {
         await drainMainQueue()
 
         XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 1)
+    }
+
+    /// Choix du porteur : « Marquer non lu » sur la conversation OUVERTE sur iPad
+    /// la désélectionne — la colonne de détail revient vide, la pastille reste,
+    /// comme Mail ou Messages. Restée ouverte, la règle « conversation ouverte ⇒
+    /// 0 non lu » effaçait la pastille aussitôt.
+    func test_markAsUnread_deselectsTheConversation_andKeepsItUnreadAcrossTheExit() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 0)])
+        await sut.storeHydrationTask?.value
+        var leaving: [String] = []
+        let token = sut.conversationLeavesDetail.sink { leaving.append($0) }
+        defer { token.cancel() }
+
+        await sut.markAsUnread(conversationId: "conv1")
+
+        XCTAssertEqual(leaving, ["conv1"], "la colonne de détail se referme")
+        XCTAssertTrue(ExplicitUnreadMarks.consume("conv1"),
+                      "la sortie du Résumé ne rattrape pas une conversation qu'on vient de marquer non lue")
+        XCTAssertFalse(ExplicitUnreadMarks.consume("conv1"), "la marque ne sert qu'une fois")
     }
 
     func test_markAsUnread_rollsBackOnPermanentFailure() async throws {
@@ -4143,6 +4212,107 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.typingUsers, ["conv1": "alice", "conv2": "bob"])
     }
+
+    // MARK: - Aperçu d'appui long : relu à chaque appui
+
+    private func previewPage(conversationId: String, content: String) -> MessagesAPIResponse {
+        JSONStub.decode("""
+        {"success":true,"data":[{"id":"aa00000000000000000000\(content.count)","conversationId":"\(conversationId)","senderId":"u-other","content":"\(content)","createdAt":"2026-10-18T08:00:00.000Z"}],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    }
+
+    /// L'aperçu ne se chargeait qu'UNE fois par conversation pour toute la vie du VM (des heures) : un message
+    /// modifié — ou supprimé pour tous — restait lisible à chaque appui long suivant.
+    func test_aLongPress_refreshesAPreviewLoadedEarlier() async {
+        let conversationId = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24)).lowercased()
+        let service = MockMessageService()
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "avant"))
+        let (sut, _, _, _, _, _, _) = makeSUT(messageService: service)
+
+        await sut.loadPreviewMessages(for: conversationId)
+        XCTAssertEqual(sut.previewMessages[conversationId]?.map(\.content), ["avant"], "précondition")
+
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "corrigé"))
+        await sut.loadPreviewMessages(for: conversationId, refresh: true)
+
+        XCTAssertEqual(sut.previewMessages[conversationId]?.map(\.content), ["corrigé"])
+    }
+
+    func test_anAutoPreviewLoad_doesNotRefetchAPreviewAlreadyLoaded() async {
+        let conversationId = String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(24)).lowercased()
+        let service = MockMessageService()
+        service.listResult = .success(previewPage(conversationId: conversationId, content: "avant"))
+        let (sut, _, _, _, _, _, _) = makeSUT(messageService: service)
+
+        await sut.loadPreviewMessages(for: conversationId)
+        await sut.loadPreviewMessages(for: conversationId)
+
+        XCTAssertEqual(service.listCallCount, 1, "le préchargement opportuniste reste idempotent")
+    }
+
+    // MARK: - Une seule liste vivante, partagée par ses fenêtres
+
+    /// iPad : une fenêtre détachée, ou la racine qui remplace l'autre au passage compact ↔ regular (Stage
+    /// Manager, Split View), créait un SECOND `ConversationListViewModel` complet — abonnements socket, push et
+    /// lus doublés, un GET par push pour une conversation absente de sa liste vide. Un propriétaire réutilise
+    /// la liste déjà vivante.
+    func test_aSecondOwner_sharesTheLiveListViewModel() {
+        let (made, _, _, _, _, _, _) = makeSUT()
+        let first = ConversationListVMOwner(make: { made })
+        let second = ConversationListVMOwner(make: {
+            XCTFail("une liste vivante existe : aucune seconde ne doit naître")
+            return made
+        })
+
+        XCTAssertTrue(first.viewModel === second.viewModel)
+    }
+
+    // MARK: - Widget : une liste jamais chargée ne s'y publie pas
+
+    /// iPad multi-fenêtre : `DetachedWindowView` possède son propre `ConversationListViewModel`, qui ne
+    /// charge JAMAIS la liste. Son `[]` initial traversait le debounce et partait vers
+    /// `NotificationCoordinator.registerConversations([])` : widget, destinations de l'extension de
+    /// partage et noms locaux des notifications effacés 200 ms après chaque fenêtre détachée.
+    func test_aListThatNeverLoaded_publishesNothingToTheWidget() async throws {
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertEqual(sut.loadState, .idle, "précondition : la liste n'a jamais été chargée")
+        XCTAssertFalse(spy.publishedConversations.contains { $0.isEmpty },
+                       "un VM qui n'a rien chargé ne doit pas vider le widget")
+    }
+
+    func test_aLoadedList_isPublishedToTheWidget() async throws {
+        let conversation = makeConversation(id: "000000000000000000000077")
+        try await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        let spy = ConvListWidgetSinkSpy()
+        let previous = NotificationCoordinator.shared.widgetSink
+        NotificationCoordinator.shared.widgetSink = spy
+        defer { NotificationCoordinator.shared.widgetSink = previous }
+        let syncEngine = MockConversationSyncEngine()
+        syncEngine.fullSyncResult = true
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        await sut.loadConversations()
+        try await Task.sleep(nanoseconds: 450_000_000)
+
+        XCTAssertTrue(spy.publishedConversations.contains { $0.map(\.id).contains(conversation.id) },
+                      "une liste chargée doit toujours atteindre le widget")
+    }
+}
+
+private final class ConvListWidgetSinkSpy: NotificationWidgetSink {
+    var publishedConversations: [[MeeshyConversation]] = []
+    func publishConversations(_ conversations: [MeeshyConversation]) { publishedConversations.append(conversations) }
+    func publishUnreadCount(_ count: Int) {}
+    func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {}
+    func reloadTimelines() {}
+    func wipeAll() {}
 }
 
 // MARK: - ConversationUpdatedEvent factory

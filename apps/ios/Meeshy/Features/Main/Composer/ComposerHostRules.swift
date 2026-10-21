@@ -5,15 +5,13 @@ import MeeshySDK
 import MeeshyUI
 
 // Les RÈGLES pures du meuble — éprouvables sans monter la moindre vue, et
-// c'est pourquoi elles vivent hors du type qui les lit (#4102).
+// c'est pourquoi elles vivent hors du type qui les lit.
 
 
-/// Le gate du réel, en UN seul endroit — **et nourri de la composition RÉELLE
-/// depuis V1**.
+/// Le gate du réel, en UN seul endroit — **nourri de la composition RÉELLE**.
 ///
-/// Il fut une constante `false`, lue aux deux seuls sites qui construisent un
-/// profil : l'éventail était écrit, testé, et débranché. Ce qu'il lit
-/// maintenant est la composition que l'auteur a posée.
+/// Il lit la composition que l'auteur a posée, et l'éventail offert s'en
+/// déduit.
 ///
 /// **Aucun second prédicat n'est fabriqué ici.** `ReelComposition` reste
 /// l'unique juge — miroir du gateway (`reelComposition.ts`) et du web. Ce type
@@ -76,14 +74,13 @@ nonisolated enum ComposerReelGate {
     }
 }
 
-/// **Ce que le socle MONTRE quand le texte grossit (#4057).**
+/// **Ce que le socle MONTRE quand le texte grossit.**
 ///
 /// Ses deux zones nommées portent un pictogramme ET un mot. Aux paliers
-/// d'ACCESSIBILITÉ, le mot ne tient plus : mesuré au simulateur le 2026-08-28,
-/// en allemand à `accessibility-XXXL`, « Veröffentlichen » se cassait en
-/// syllabes EMPILÉES — « Ver- / öf- / fent- / li- » — et « Öffentlich » se
-/// tronquait en « Öffe… ». Le socle, qui est une RANGÉE, devenait une colonne
-/// de fragments.
+/// d'ACCESSIBILITÉ, le mot ne tient plus : en allemand à `accessibility-XXXL`,
+/// « Veröffentlichen » se casse en syllabes EMPILÉES — « Ver- / öf- / fent- /
+/// li- » — et « Öffentlich » se tronque en « Öffe… ». Le socle, qui est une
+/// RANGÉE, deviendrait une colonne de fragments.
 ///
 /// Au-delà de ce seuil, les libellés se réduisent donc à leur ICÔNE. C'est la
 /// forme qui préserve la loi 5 (« le socle ne bouge jamais ») : les zones ne se
@@ -91,24 +88,16 @@ nonisolated enum ComposerReelGate {
 /// endroit.
 ///
 /// **Ce que la réduction ne touche PAS** : le nom accessible. Un contrôle qui
-/// perd son nom en devenant compact est le défaut que `StatusComposerView` a dû
-/// corriger, et que la flèche de publication évite déjà en refusant d'échanger
-/// son libellé contre un `ProgressView`. VoiceOver et Voice Control lisent le
+/// perd son nom en devenant compact est un défaut que la flèche de publication
+/// évite en refusant d'échanger son libellé contre un `ProgressView`.
+/// VoiceOver et Voice Control lisent le
 /// même mot à toutes les tailles ; seul l'ŒIL en est privé, et seulement quand
 /// le montrer le rendrait illisible.
 ///
 /// Le seuil est `isAccessibilitySize` et non un palier choisi à la main : c'est
 /// la frontière que le système lui-même trace entre « plus grand » et « conçu
 /// pour l'accessibilité », et la recopier en dur la ferait diverger.
-/// **Le rail qui FLOTTE sur la scène — quatre gestes, bord droit, DEDANS
-/// (#4072, arbitrage du 2026-08-28 sur #4061).**
-///
-/// L'arbitrage a écarté la disposition « deux rails latéraux encastrant la
-/// scène » au motif qu'aucune capture ne la montre. Ce que la planche `1b`
-/// montre est UN rail, flottant sur le bord DROIT, à quatre actions
-/// (✎ ☺ ♫ #) — **et la rangée d'outils basse conservée**.
-///
-/// **Deux places, deux NIVEAUX** (directive porteur 2026-08-31, #4561).
+/// **Deux places, deux NIVEAUX.**
 ///
 /// > « On exploite la place du plateau sans encombrer le canvas. […] Sur la
 /// > rangée à gauche, ce sont les features qui apparaissent sur le canvas
@@ -121,37 +110,35 @@ nonisolated enum ComposerReelGate {
 /// - la LIGNE CANONIQUE porte ce qui appartient à l'**envoi ou à la slide** —
 ///   description, mention, lieu de la publication.
 ///
-/// **L'axe précédent était « agit sur la scène » contre « fait entrer de la
-/// matière ».** Il classait le dessin en bas (un tracé ENTRE dans la scène) et
-/// la mention à gauche (elle agit sur ce qui est là) — deux rangements
-/// défendables qui ne disaient rien à l'auteur, parce qu'ils décrivent le VERBE
-/// de la porte et non l'endroit où son résultat apparaît. La main, elle, suit
-/// le résultat : le geste part de la colonne et atterrit sur la scène.
+/// **L'axe est l'endroit où le résultat apparaît**, pas le VERBE de la porte
+/// (« agit sur la scène » contre « fait entrer de la matière »). Ce second axe
+/// classerait le dessin en bas (un tracé ENTRE dans la scène) et la mention à
+/// gauche (elle agit sur ce qui est là) — deux rangements défendables qui ne
+/// disent rien à l'auteur. La main suit le résultat : le geste part de la
+/// colonne et atterrit sur la scène.
 ///
-/// **Aucun rail ne se pose SUR la scène** (même directive). Un contrôle
-/// flottant vole les touches de la bande qu'il couvre, et l'auteur découvre la
-/// zone morte en essayant d'y traîner quelque chose. Le plateau est de la place
-/// disponible — la scène est figée en 9:16, l'écran ne l'est pas.
+/// **Aucun rail ne se pose SUR la scène.** Un contrôle flottant vole les
+/// touches de la bande qu'il couvre, et l'auteur découvre la zone morte en
+/// essayant d'y traîner quelque chose. Le plateau est de la place disponible —
+/// la scène est figée en 9:16, l'écran ne l'est pas.
 nonisolated enum ComposerSceneFloatingRail {
 
     /// **La rangée de GAUCHE — ce qui apparaît visuellement sur la scène.**
     ///
-    /// Elle se DÉDUIT du niveau de chaque porte, jamais d'une liste. Le
-    /// littéral qui vivait ici — `[.text, .sticker, .sound, .mention]` — rangeait
-    /// `.mention` parmi ce qui vit sur la scène, alors que `ComposerRailDoor`
-    /// la déclare `.publication` deux fichiers plus loin. Deux répartitions
-    /// coexistaient : l'une raisonnée, l'autre recopiée, et seule la recopiée
-    /// était appelée.
+    /// Elle se DÉDUIT du niveau de chaque porte, jamais d'une liste. Un littéral
+    /// — `[.text, .sticker, .sound, .mention]` — rangerait `.mention` parmi ce
+    /// qui vit sur la scène, alors que `ComposerRailDoor` la déclare
+    /// `.publication`. Deux répartitions coexisteraient : l'une raisonnée, l'autre
+    /// recopiée, et seule la recopiée serait appelée.
     ///
     /// > Une liste écrite à la main À CÔTÉ d'une règle qui décide déjà la même
     /// > chose ne se fait contredire par rien : les deux compilent, et le
     /// > doc-comment de la règle continue d'énoncer une classification juste que
     /// > le produit n'applique pas.
-    /// **Le format est un paramètre, pas un détail** (#4893) : depuis la
-    /// directive du 2026-09-02, lieu, hashtag, mention et corpus de texte ne
-    /// sont du niveau OBJET qu'en Story. Prendre le niveau sans dire pour quel
-    /// format rendrait une répartition figée — celle d'avant la bascule — sans
-    /// qu'aucun appelant ne rougisse.
+    /// **Le format est un paramètre, pas un détail** : lieu, hashtag, mention et
+    /// corpus de texte ne sont du niveau OBJET qu'en Story. Prendre le niveau sans
+    /// dire pour quel format rendrait une répartition figée, sans qu'aucun
+    /// appelant ne rougisse.
     static func sideRow(from served: [ComposerRailDoor],
                         format: ComposerFormat) -> [ComposerRailDoor] {
         served.filter { $0.level(for: format).appearsOnCanvas }
@@ -167,9 +154,8 @@ nonisolated enum ComposerSceneFloatingRail {
     /// négation du même prédicat, donc aucune porte ne peut se perdre ni
     /// apparaître deux fois. Deux filtres écrits séparément l'auraient permis.
     ///
-    /// **Le corps du post n'y est plus (#8370)** : sa porte vit au SOCLE, à la
-    /// place de l'œil (directive porteur 2026-09-27). Elle reste dans le jeu
-    /// SERVI — c'est la rangée basse qui ne la peint plus, pour qu'elle ne
+    /// **Le corps du post n'y est pas** : sa porte vit au SOCLE. Elle reste dans
+    /// le jeu SERVI — c'est la rangée basse qui ne la peint pas, pour qu'elle ne
     /// soit pas deux fois à l'écran.
     static func lowRow(from served: [ComposerRailDoor],
                        format: ComposerFormat) -> [ComposerRailDoor] {
@@ -187,19 +173,19 @@ nonisolated enum ComposerSocleDensity {
     }
 }
 
-/// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne (#4035).**
+/// **Ce qu'un tap sur le FOND de la scène incrustée sélectionne.**
 ///
 /// Règle PURE, hors de tout `body` : une condition posée dans une vue est
 /// invisible aux tests, et celle-ci gouverne l'existence même de la zone
 /// contextuelle.
 ///
-/// **Pourquoi elle existe.** L'inspecteur était câblé de bout en bout — la
+/// **Pourquoi elle existe.** L'inspecteur est câblé de bout en bout — la
 /// scène transmet `onItemTapped`, l'hôte retient la sélection, la surface monte
-/// la zone — et pourtant INATTEIGNABLE sur l'écran document. En profil Post une
-/// slide ne porte qu'UN média, et la règle 4 en fait son FOND (#4038) ; or le
+/// la zone — et serait pourtant INATTEIGNABLE sur l'écran document. En profil
+/// Post une slide ne porte qu'UN média, et la règle 4 en fait son FOND ; or le
 /// hit-test du canvas n'itère que le conteneur des ITEMS, où un fond ne vit
-/// pas. Le tap retombait donc sur `onBackgroundTapped`, qui effaçait la
-/// sélection : écran identique au bit près, mesuré au simulateur le 2026-08-28.
+/// pas. Le tap retomberait donc sur `onBackgroundTapped`, qui efface la
+/// sélection : écran identique au bit près.
 ///
 /// **Elle vit côté APP, pas dans le geste du SDK.** Rendre le fond
 /// « hit-testable » côté canvas changerait la manipulation de l'atelier plein
@@ -217,15 +203,15 @@ nonisolated enum ComposerSceneBackgroundTapPolicy {
         return .media
     }
 
-    /// **Sur la SCÈNE, le même toucher ouvre les outils du FOND** (#9521).
+    /// **Sur la SCÈNE, le même toucher ouvre les outils du FOND.**
     ///
     /// Le fond est l'objet du plan `bg` (vue `1c` : trois plans, un seul objet
-    /// à la fois) et se sélectionne comme les autres, au toucher — #9138 veut
-    /// que toucher un objet mène à son édition en place. La règle ci-dessus ne
-    /// posait qu'un `kind` sans identifiant, que seule la surface document lit :
-    /// sur la scène, rien ne bougeait, et « Réglages » du fond (#9496) restait
-    /// inatteignable. Mêmes conditions que `selection`, plus une : un carrousel
-    /// d'effets ouvert, que ce toucher referme (#8712), garde son geste.
+    /// à la fois) et se sélectionne comme les autres, au toucher : toucher un
+    /// objet mène à son édition en place. La règle ci-dessus ne pose qu'un `kind`
+    /// sans identifiant, que seule la surface document lit : sur la scène, rien ne
+    /// bougerait, et « Réglages » du fond resterait inatteignable. Mêmes
+    /// conditions que `selection`, plus une : un carrousel d'effets ouvert, que ce
+    /// toucher referme, garde son geste.
     static func backgroundToEdit(currentSelection: StoryCanvasUIView.CanvasItemKind?,
                                  effectIsOpen: Bool,
                                  backgroundMediaId: String?) -> String? {
@@ -237,14 +223,14 @@ nonisolated enum ComposerSceneBackgroundTapPolicy {
     }
 }
 
-/// **Le gate du MOOD — la jumelle de `ComposerReelGate` (#4030).**
+/// **Le gate du MOOD — la jumelle de `ComposerReelGate`.**
 ///
-/// Le fan du fil offrait `[.post, .story]` et, quand la composition qualifiait,
-/// `.reel`. Le quatrième format n'était atteignable que par sa PORTE
-/// (`.moodChip`) : un auteur qui venait d'écrire deux lignes dans le composer
-/// du fil devait fermer, revenir par le chip mood et retaper — la loi 9 (le
-/// contenu est PRÉSERVÉ à travers les formats) tombait sur le seul format
-/// qu'aucune bascule n'atteignait.
+/// Le fan du fil offre `[.post, .story]` et, quand la composition qualifie,
+/// `.reel`. Le quatrième format ne serait atteignable que par sa PORTE
+/// (`.moodChip`) : un auteur qui vient d'écrire deux lignes dans le composer
+/// du fil devrait fermer, revenir par le chip mood et retaper — la loi 9 (le
+/// contenu est PRÉSERVÉ à travers les formats) tomberait sur le seul format
+/// qu'aucune bascule n'atteindrait.
 ///
 /// **Les deux gates sont MUTUELLEMENT EXCLUSIFS par construction** : le réel
 /// exige un média, le mood exige qu'il n'y en ait AUCUN. Aucun `if` ne l'écrit
@@ -282,7 +268,7 @@ nonisolated enum ComposerMoodGate {
     }
 }
 
-/// **Le meuble** du composer unifié (C2) — plateau, scène, socle permanent.
+/// **Le meuble** du composer unifié — plateau, scène, socle permanent.
 ///
 /// Ce que ce type est, et surtout ce qu'il n'est PAS :
 ///
@@ -293,11 +279,11 @@ nonisolated enum ComposerMoodGate {
 /// - il **ne construit aucun aperçu**. Loi 6 de la doctrine — « le lecteur EST
 ///   l'aperçu » : composer et viewers partagent un seul registre de rendu, et un
 ///   quatrième chemin d'aperçu casserait le WYSIWYG par construction. Le socle
-///   ne peint plus d'œil du tout depuis le lot 4.9 : aucune de ses deux surfaces
-///   n'a de canvas à lire, et un aperçu VIDE ment autant qu'un aperçu maison.
-///   L'œil de l'atelier, lui, est intact — c'est l'atelier qui le peint ;
+///   ne peint pas d'œil : aucune de ses surfaces n'a de canvas à lire, et un
+///   aperçu VIDE ment autant qu'un aperçu maison. L'aperçu est servi par le
+///   `⋯`, et c'est l'atelier qui l'exécute ;
 /// - il **ne décide de rien** : ce qu'il montre est fonction du
-///   `ComposerProfile` que `ComposerIntent` lui donne (C1). Le host lit la
+///   `ComposerProfile` que `ComposerIntent` lui donne. Le host lit la
 ///   table, il ne la double pas ;
 /// - il **n'ouvre aucun chemin de publication**. L'unique publieur est la barre
 ///   du SDK (`StoryComposerView+TopBar.publishButton` → `publishAllSlides()`),
@@ -309,7 +295,7 @@ nonisolated enum ComposerMoodGate {
 /// interdit n'est pas qu'une zone manque, c'est qu'elle manque SELON LA PORTE.
 /// Les zones peintes suivent la SURFACE montée, par une règle pure
 /// (`ComposerChromeOwnership.socleZones`), et gardent partout le même ordre de
-/// lecture : audience, œil, publication. C'est le point fixe qui fait qu'un
+/// lecture : audience, publication. C'est le point fixe qui fait qu'un
 /// composer reste le même objet vu de neuf endroits différents.
 /// `MeeshyComposerHostGuardTests` le verrouille par garde de source, faute d'une
 /// sortie observable.
@@ -317,7 +303,7 @@ nonisolated enum ComposerMoodGate {
 /// **Aucune UI morte** : une capacité refusée par le profil n'est pas montée
 /// puis désactivée, elle est ABSENTE (loi 4 — « rien à l'écran sans raison »).
 ///
-/// ## Équivalence avec le cover de création (C3)
+/// ## Équivalence avec le cover de création
 ///
 /// Trois choses que `StoryComposerCover` donne à l'atelier, et qu'un host les
 /// perdant rendrait silencieusement moins bon que ce qu'il remplace :
@@ -335,9 +321,9 @@ nonisolated enum ComposerMoodGate {
 ///    les amorces de page blanche et la bibliothèque de stickers
 ///    disparaissent — sans le moindre signal.
 ///
-/// Depuis V3-2, ce n'est plus une équivalence à tenir « au cas où » : le cover
-/// de création MONTE ce host, et a cessé de poser lui-même ce que le host pose.
-/// Une des trois qui manquerait ici manquerait désormais à l'écran.
+/// Ce n'est pas une équivalence à tenir « au cas où » : le cover de création
+/// MONTE ce host, et ne pose pas lui-même ce que le host pose. Une des trois
+/// qui manquerait ici manquerait à l'écran.
 /// Les deux libellés d'ÉTAT de la flèche du socle — ceux que VoiceOver annonce
 /// quand la publication est en vol ou refusée.
 ///
@@ -345,18 +331,16 @@ nonisolated enum ComposerMoodGate {
 /// de complétude et n'est jamais traduit. Même idiome que `ComposerDocumentCopy`
 /// et `ComposerMoodCopy`.
 ///
-/// **Zéro clé neuve.** Les deux MIGRENT depuis `StatusComposerView`, où elles
-/// n'avaient qu'un lecteur, et elles sont traduites dans les sept locales
-/// livrées. Le socle est leur second lecteur : c'est ce qui les empêche de
-/// devenir orphelines le jour du retrait (lot 4.8).
+/// **Zéro clé neuve.** Les deux sont déjà traduites dans les sept locales
+/// livrées, et le socle est leur lecteur : c'est ce qui les empêche de devenir
+/// orphelines.
 ///
-/// **Ce que ce déménagement n'avait pas réglé, et que le lot 4.8 a tranché** :
-/// `status.composer.publish` n'était lue que par `StatusComposerView`. Le socle
-/// garde `composer.socle.publish`, qui n'est pas la même phrase — « Publish »
-/// contre « Post » en anglais — et fondre les deux aurait été une édition de
-/// catalogue qu'aucun de ces lots ne possède. La clé a donc été RETIRÉE des sept
-/// locales avec l'écran qui la lisait : la laisser aurait fait rougir la garde
-/// des clés mortes (`LocalizationConsistencyTests`).
+/// **Pourquoi `composer.socle.publish` et `status.composer.publish` ne sont
+/// pas fondues.** Le socle garde `composer.socle.publish`, qui n'est pas la
+/// même phrase — « Publish » contre « Post » en anglais — et fondre les deux
+/// serait une édition de catalogue. La clé `status.composer.publish` est
+/// absente des sept locales : la laisser ferait rougir la garde des clés
+/// mortes (`LocalizationConsistencyTests`).
 nonisolated enum ComposerSocleCopy {
 
     /// L'état TRANSITOIRE, porté par `accessibilityValue` et non par le libellé.
@@ -370,18 +354,13 @@ nonisolated enum ComposerSocleCopy {
 
     /// Ce qui MANQUE pour publier.
     ///
-    /// **Chaque surface dit ce qui lui manque, depuis le 2026-09-05.**
+    /// **Chaque surface dit ce qui lui manque.**
     ///
-    /// Cette règle a rendu `nil` hors du mood pendant tout le lot 4, et c'était
-    /// une lacune ASSUMÉE, pas un oubli : la seule phrase alors traduite disait
-    /// « choisissez un emoji », ce qui est faux d'un document. Écrire une phrase
-    /// coûtait une clé en sept langues, et **un indice FAUX coûte plus qu'un
-    /// indice absent** — l'arbitrage était juste.
-    ///
-    /// Il a expiré le jour où le porteur a rencontré le refus : « corrige le
-    /// refus muet ». Le prix de la clé n'a pas changé ; ce qui a changé est ce
-    /// qu'on achète avec. Les trois phrases sont désormais au catalogue dans les
-    /// sept langues, et chacune est VRAIE de son gate :
+    /// Une règle qui rendrait `nil` hors du mood laisserait la flèche grise sans
+    /// un mot sur le document et sur la scène. La phrase du mood — « choisissez
+    /// un emoji » — est fausse d'un document, et **un indice FAUX coûte plus qu'un
+    /// indice absent** : chaque surface porte donc une phrase VRAIE de son gate.
+    /// Les trois sont au catalogue dans les sept langues :
     ///
     /// | surface | ce que le gate exige | ce que la phrase dit |
     /// |---|---|---|
@@ -402,10 +381,9 @@ nonisolated enum ComposerSocleCopy {
         case .scene:
             return sceneHint
         case .document:
-            // **Le FORMAT tranche ici, pas la seule surface** (2026-09-05,
-            // seconde passe). Une STORY et un RÉEL montent `.document` par le
-            // routage (#4751, pour se composer dans le meuble) alors que leur
-            // matière entre par le CANVAS : `hasMedia` reçoit
+            // **Le FORMAT tranche ici, pas la seule surface.** Une STORY et un RÉEL
+            // montent `.document` par le routage (ils se composent dans le meuble) alors
+            // que leur matière entre par le CANVAS : `hasMedia` reçoit
             // `ComposerStoryCanvas.hasMatter(...)`.
             //
             // Leur servir « ajoutez du texte, une photo ou un lieu » nommerait
@@ -483,13 +461,12 @@ nonisolated extension ComposerIntent {
 ///
 /// ## Pourquoi une règle, et pas deux littéraux dans le corps de la vue
 ///
-/// Les deux ensembles vécurent en `Set` littéraux, écrits à la volée dans
-/// l'expression `sceneSurface`. Un littéral posé là est INÉPROUVABLE autrement
-/// que par une garde de source — et une garde de source sur un littéral est
-/// exactement le témoin qui passe au vert le jour où quelqu'un réécrit la liste
-/// autrement. Sortis ici, les deux ensembles s'interrogent directement : un test
-/// demande « la porte sticker est-elle servie ? » et obtient une réponse, pas
-/// une sous-chaîne.
+/// Deux `Set` littéraux écrits à la volée dans l'expression `sceneSurface`
+/// seraient INÉPROUVABLES autrement que par une garde de source — et une garde
+/// de source sur un littéral est exactement le témoin qui passe au vert le
+/// jour où quelqu'un réécrit la liste autrement. Posés ici, les deux ensembles
+/// s'interrogent directement : un test demande « la porte sticker est-elle
+/// servie ? » et obtient une réponse, pas une sous-chaîne.
 ///
 /// ## La loi 4, et ce qu'elle exige VRAIMENT d'une capacité
 ///
@@ -498,83 +475,61 @@ nonisolated extension ComposerIntent {
 /// ouvrir le portail et poser le résultat. C'est la seule question à se poser
 /// avant d'ajouter une ligne — pas « la maquette la dessine-t-elle ? ».
 ///
-/// ## Ce que l'absence de `sticker` cachait, et qui vaut d'être dit
+/// ## Ce que le niveau d'accès d'une primitive peut cacher
 ///
-/// La porte `sticker` fut retenue au motif qu'« aucun chemin ne pose un objet de
-/// ce kind ». Le motif était faux : `StoryComposerViewModel.addSticker(emoji:)`
-/// existe depuis C13, `StickerPickerView` est publique depuis C8, et le meuble
-/// injecte déjà « Mes stickers » (`storyStickerLibraryProvided`). Ce qui
-/// manquait n'était pas le chemin, c'était le niveau d'ACCÈS de la primitive —
-/// et un `internal` ressemble, vu du site d'appel, à une règle produit.
+/// La porte `sticker` est servie : `StoryComposerViewModel.addSticker(emoji:)`
+/// existe, `StickerPickerView` est publique, et le meuble injecte « Mes
+/// stickers » (`storyStickerLibraryProvided`). Un chemin qui manque se
+/// distingue mal du niveau d'ACCÈS de la primitive : un `internal` ressemble,
+/// vu du site d'appel, à une règle produit.
 ///
-/// Même histoire pour l'empilement : `bringForward` / `sendBackward` vivent sur
-/// le MODÈLE, pas sur la vue UIKit, et l'auraient toujours pu.
+/// Même remarque pour l'empilement : `bringForward` / `sendBackward` vivent sur
+/// le MODÈLE, pas sur la vue UIKit.
 ///
 /// ## Ce qui n'y est PAS, et pourquoi
 ///
-/// - `edit` — l'inspecteur par kind est la vue `1c`, pas encore montée (#4073) ;
+/// - `edit` — l'inspecteur par kind est la vue `1c`, pas encore montée ;
 ///   servir l'action ouvrirait un éditeur qui n'existe pas.
 /// - `leaveScene` — sortir un objet de la scène demande de décider ce qu'il
-///   devient dehors, ce qu'aucune règle du dépôt ne tranche encore (#4038).
+///   devient dehors, ce qu'aucune règle du dépôt ne tranche encore.
 nonisolated enum ComposerSceneCapabilities {
 
     /// Les portes du rail *leading*. Passées à `ComposerRailDoor.offered`, qui
     /// leur applique ensuite la règle du FORMAT — une porte de niveau objet
     /// disparaît d'un `status`, qui n'a pas de scène.
-    /// **La porte SON est REVENUE le 2026-09-01** (#4722, directive porteur :
-    /// « lorsqu'on a posé une scène on puisse TOUJOURS ajouter un son sur la
-    /// scène, en son de fond de la scène ou en chip resizable sur la scène »).
+    /// **La porte SON est servie** : la scène doit TOUJOURS pouvoir recevoir un
+    /// son — en son de fond de la scène, ou en chip redimensionnable posée
+    /// dessus. Aucune autre entrée ne le garantit : la palette de constructions
+    /// porte cinq onglets — `emoji`, `love`, `time`, `place`, `library` — et pas de
+    /// son, et la pastille d'avatar affiche un CRÉDIT, donc ne se peint que s'il y
+    /// a déjà un son.
     ///
-    /// Elle en était partie la veille, et le motif était juste :
+    /// > **Deux retraits justifiés, chacun renvoyant vers un chemin que l'autre ne
+    /// > fournit pas, fermeraient la porte par leur SOMME** — et une somme n'a pas
+    /// > de site où rougir. Le témoin qui l'attrape ne peut donc pas interroger un
+    /// > retrait : il demande que la scène serve AU MOINS UN chemin vers le son,
+    /// > quel qu'il soit.
     ///
-    /// > « Retire la porte son de la rangée, car on n'aura ici qu'une
-    /// > possibilité d'ajouter un son sur LE CANVAS, en tant que sticker /
-    /// > chip redimensionnable, déplaçable. »
+    /// La porte ne coûte aucune capacité neuve : `handleRailDoor(.sound)` appelle
+    /// `presentSoundSources()`, et la feuille qui s'ouvre porte déjà le CHOIX des
+    /// deux destinations (`chosenSoundPlacement` : fond de la scène, ou puce posée
+    /// dessus). Ce n'est pas une capacité qui manque, c'est son entrée.
     ///
-    /// Le retrait s'appuyait sur DEUX destinations de remplacement, nommées
-    /// dans ce doc-comment même : « le son POSÉ revient par la palette de
-    /// constructions (#4579) ; le son de FOND reste au socle, où il porte son
-    /// crédit ». **Aucune des deux n'existe plus.** La palette porte cinq
-    /// onglets — `emoji`, `love`, `time`, `place`, `library` — et pas de son,
-    /// #4579 étant ouvert ; et la pastille du socle est partie le lendemain
-    /// (« on n'a plus besoin du bouton ajouter un son en bas »), remplacée par
-    /// une pastille d'avatar qui affiche un CRÉDIT — donc qui ne se peint que
-    /// s'il y a déjà un son. La scène n'avait plus aucun chemin vers le son.
-    ///
-    /// > **Deux retraits justifiés, chacun renvoyant vers un chemin que
-    /// > l'autre ne fournit pas.** Ni l'un ni l'autre commit n'était faux ;
-    /// > c'est leur SOMME qui a fermé la porte — et une somme n'a pas de site
-    /// > où rougir. Le témoin qui l'attrape ne peut donc pas interroger un
-    /// > retrait : il demande que la scène serve AU MOINS UN chemin vers le
-    /// > son, quel qu'il soit.
-    ///
-    /// Ce qui rendait le retrait sûr reste vrai — la porte ne coûte aucune
-    /// capacité neuve : `handleRailDoor(.sound)` appelle `presentSoundSources()`,
-    /// et la feuille qui s'ouvre porte déjà le CHOIX des deux destinations
-    /// (`chosenSoundPlacement` : fond de la scène, ou puce posée dessus). La
-    /// directive d'aujourd'hui est donc servie par cette seule ligne : ce
-    /// n'était pas une capacité qui manquait, c'était son entrée.
-    ///
-    /// **`.hashtag` y entre le 2026-08-31** (#4636, directive porteur : « mettre
-    /// l'outil hashtag dans la liste des outils d'un slide ou d'une
-    /// publication »). Elle est servie parce que le meuble possède le chemin
-    /// complet — le texte de la publication est à lui (`documentText`), et
+    /// **`.hashtag` est servie** parce que le meuble possède le chemin complet — le
+    /// texte de la publication est à lui (`documentText`), et
     /// `ComposerHashtags.inserting` y écrit. Une porte servie sans son chemin
     /// d'ingestion ouvrirait un sélecteur dont le résultat n'irait nulle part.
     ///
-    /// **`.content` y entre le 2026-09-04** (#4890, directive porteur : « affiche
-    /// dans la rangée canonique de quoi modifier LE CONTENU du poste »). Servie
-    /// pour la même raison que `.hashtag` : le meuble possède le chemin
+    /// **`.content` est servie** pour la même raison : le meuble possède le chemin
     /// COMPLET — `documentText` est à lui, `postContentEditor` l'écrit, et
-    /// `ComposerDocumentDraft.document(text:)` le poste. Une porte servie sans
-    /// son chemin ouvrirait un champ dont le texte n'irait nulle part, ce qui
-    /// est exactement le défaut que ce lot referme sur les légendes.
+    /// `ComposerDocumentDraft.document(text:)` le poste. Une porte servie sans son
+    /// chemin ouvrirait un champ dont le texte n'irait nulle part, le défaut que
+    /// referment les légendes.
     ///
-    /// > **La déclarer ici est le pas qu'on oublie**, et il ne rougit nulle
-    /// > part : `offered` filtre sur `served.contains`, si bien qu'une porte
-    /// > entièrement écrite — case, niveau, glyphe, libellé, geste, pastille —
-    /// > reste INVISIBLE tant que ce jeu ne la nomme pas. Mesuré au simulateur
-    /// > le 2026-09-04 : la rangée montrait toujours ses cinq entrées.
+    /// > **La déclarer ici est le pas qu'on oublie**, et il ne rougit nulle part :
+    /// > `offered` filtre sur `served.contains`, si bien qu'une porte entièrement
+    /// > écrite — case, niveau, glyphe, libellé, geste, pastille — reste INVISIBLE
+    /// > tant que ce jeu ne la nomme pas.
     static let doors: Set<ComposerRailDoor> = [
         .description, .content, .media, .sound, .text, .background, .drawing,
         .sticker, .mention, .hashtag, .place
@@ -583,7 +538,7 @@ nonisolated enum ComposerSceneCapabilities {
     /// Les contrôleurs du rail *trailing*. Passés à
     /// `ComposerTrailingRailPolicy.actions`, qui leur applique ensuite ce que
     /// l'OBJET admet (verrouillé, fond, seul de son plan).
-    /// `.trim` y est entrée au #4082 : le meuble sait désormais ouvrir la bande
+    /// `.trim` y figure : le meuble sait ouvrir la bande
     /// de rognage sous la scène. Ce jeu dit ce que CE meuble sait faire ; ce
     /// qu'un OBJET admet reste à la règle du SDK, qui n'offre le rognage qu'à
     /// une vidéo ou un son (`hasTrimmableSource`).
@@ -595,32 +550,25 @@ nonisolated enum ComposerSceneCapabilities {
     /// Les bandes contextuelles du bas de scène. Passées à
     /// `ComposerSceneBand.opened`, qui n'ouvre JAMAIS une bande demandée mais
     /// non servie — sans quoi un contexte déclaré avant d'avoir son contenu
-    /// occuperait les ≈ 170 pt que l'encastrement des rails vient de libérer.
+    /// occuperait les ≈ 170 pt que l'encastrement des rails libère.
     ///
-    /// **Une seule, et le jeu ne dépend plus d'un état** (directive porteur
-    /// 2026-09-05). `bands(canTrimSelection:canStyleSelection:)` ajoutait
-    /// `timeline` quand l'objet sélectionné avait une source à rogner, et
-    /// `textStyles` quand c'était un texte. Les deux bandes ÉDITAIENT un objet
-    /// déjà posé ; la première vue n'édite plus, et elles ont quitté le type
-    /// `ComposerSceneBand` avec leurs contenus.
+    /// **Une seule, et le jeu ne dépend d'aucun état.** Les bandes qui éditent un
+    /// objet déjà posé (rognage d'une source, styles d'un texte) ne sont pas
+    /// servies : la première vue n'édite pas.
     ///
-    /// Ce qui disparaît avec la fonction est une question devenue sans objet —
-    /// « cette bande a-t-elle de quoi se remplir ? » — et non la loi qu'elle
-    /// tenait : `opened(_:served:)` refuse toujours une bande hors de ce jeu.
-    /// La ligne de partage entre ce que la première vue sert et ce qui part à
-    /// l'éditeur vit dans `ComposerFirstView`.
+    /// `opened(_:served:)` refuse toute bande hors de ce jeu. La ligne de partage
+    /// entre ce que la première vue sert et ce qui part à l'éditeur vit dans
+    /// `ComposerFirstView`.
     static let bands: Set<ComposerSceneBand> = [.palette, .frame]
 }
 
 
-/// **La porte média du rail ouvre la PHOTOTHÈQUE, directement** (#8680,
-/// directive porteur 2026-09-29 : « lorsqu'on touche le premier outil image,
-/// ça doit ouvrir directement la photothèque »).
+/// **La porte média du rail ouvre la PHOTOTHÈQUE, directement.**
 ///
-/// Elle ouvrait une feuille de choix — photothèque, caméra, fichier — qui
-/// coûtait un geste pour une décision que l'écran a désormais prise
-/// ailleurs : la CAMÉRA vit sur la scène elle-même (toucher une scène vide
-/// prend une photo, la maintenir filme — #8653), et c'est la photothèque que
+/// Une feuille de choix — photothèque, caméra, fichier — coûterait un geste
+/// pour une décision que l'écran a prise ailleurs : la CAMÉRA vit sur la scène
+/// elle-même (toucher une scène vide prend une photo, la maintenir filme), et
+/// c'est la photothèque que
 /// l'auteur vient chercher en touchant l'image. Une feuille de choix entre
 /// une source attendue et deux autres déjà servies ailleurs est un geste de
 /// plus pour zéro décision (loi 7, chemin nominal ≤ 2 gestes).
@@ -637,20 +585,15 @@ nonisolated enum ComposerMediaSourcePolicy {
 }
 
 
-/// **D'où vient un son posé sur la scène** — et pourquoi la porte n'en servait
-/// qu'une provenance.
+/// **D'où vient un son posé sur la scène** — et pourquoi la porte en sert
+/// plusieurs provenances.
 ///
-/// La porte `sound` du rail routait vers `handleDocumentTool(.microphone)` :
-/// elle n'ENREGISTRAIT que. Emprunter un son à l'étagère était impossible
-/// depuis le composer unifié — aucune occurrence de `SoundLibraryPicker` ni
-/// d'`addBorrowedSound` dans tout le meuble — alors que le socle de la vue `1b`
-/// affiche déjà un crédit de son (« ♫ NUITS BLANCHES · @lume · 0:28 »).
-///
-/// **Troisième fois sur le même écran** qu'une porte unique ne sert qu'une de
-/// ses sources, après le média (caméra et fichier perdus) et les capacités de
-/// la scène (sticker, empilement). Le motif se répète parce que rien n'oppose
-/// une porte à ce qu'elle PROMET : le rail dit « Ajouter un son », le handler
-/// en sert un seul type.
+/// La porte `sound` du rail ouvre une feuille qui sert toutes les provenances :
+/// enregistrer, emprunter à l'étagère, importer un fichier. Une porte qui n'en
+/// servirait qu'une ferait mentir le rail, qui dit « Ajouter un son » : rien
+/// n'oppose une porte à ce qu'elle PROMET. Le socle de la vue `1b` affiche
+/// d'ailleurs un crédit de son (« ♫ NUITS BLANCHES · @lume · 0:28 »), que seul
+/// l'emprunt à l'étagère peut produire.
 ///
 /// ## Les deux provenances ne posent pas le même objet, et c'est la doctrine
 ///
@@ -661,28 +604,26 @@ nonisolated enum ComposerMediaSourcePolicy {
 /// | étagère | `addBorrowedSound` → objet audio `isBackground` | allume le crédit et le 🔇 des surfaces de lecture |
 /// | micro | une note vocale | **n'est JAMAIS un fond audio** |
 ///
-/// ## Ce que cette doctrine confondait, et que le porteur a tranché (#4483)
+/// ## Ce que la doctrine « la provenance gouverne l'affichage » ne dit PAS
 ///
-/// Elle concluait « les fondre en un seul geste ferait d'une note vocale la
-/// bande-son de la publication ». La conclusion ne suivait pas de sa prémisse :
-/// elle mêlait deux champs ORTHOGONAUX de `StoryAudioPlayerObject`.
+/// Elle ne dit pas que fondre les provenances en un seul geste ferait d'une
+/// note vocale la bande-son de la publication : le CRÉDIT et le MIXAGE sont
+/// deux champs ORTHOGONAUX de `StoryAudioPlayerObject`.
 ///
 /// | ce qui est en jeu | le champ qui le porte | qui l'écrit |
 /// |---|---|---|
 /// | le CRÉDIT (« ♫ NUITS BLANCHES · @lume ») | `soundId` + `soundAuthorUsername` | `addBorrowedSound`, et lui seul |
 /// | le rôle de MIXAGE | `isBackground` | n'importe quel son |
 ///
-/// Un vocal mis en fond porte donc `isBackground = true` et `soundId = nil` : le
-/// bon mixage, sans ligne de crédit mensongère. Ce que la doctrine protégeait
-/// vraiment — qu'un enregistrement personnel ne s'attribue pas le crédit d'une
-/// piste empruntée — reste protégé, et l'auteur gagne le choix que le porteur a
-/// demandé le 2026-08-30 : « les mettre en background ou en foreground ».
+/// Un vocal mis en fond porte donc `isBackground = true` et `soundId = nil` :
+/// le bon mixage, sans ligne de crédit mensongère. Un enregistrement personnel
+/// ne s'attribue pas le crédit d'une piste empruntée, et l'auteur choisit :
+/// « les mettre en background ou en foreground ».
 ///
-/// L'ORDRE change avec elle. La doctrine rangeait l'étagère en premier, au motif
-/// qu'emprunter est le geste nominal. Le porteur a demandé que la porte « ouvre
-/// directement l'enregistrement audio » : le micro passe donc devant, et les
-/// deux autres provenances deviennent des entrées SOUS lui, dans la même
-/// feuille — plus un choix préalable qui coûtait un geste pour rien.
+/// L'ORDRE suit : la porte « ouvre directement l'enregistrement audio ». Le
+/// micro passe devant, et les deux autres provenances sont des entrées SOUS
+/// lui, dans la même feuille — pas de choix préalable qui coûterait un geste
+/// pour rien.
 ///
 /// ## Aucun gate, et c'est mesuré
 ///
@@ -693,13 +634,13 @@ nonisolated enum ComposerMediaSourcePolicy {
 nonisolated enum ComposerSoundSource: Equatable, Hashable, CaseIterable {
     /// L'étagère — un son EMPRUNTÉ, qui devient le fond de la scène.
     case library
-    /// Le micro — la surface PRINCIPALE de la feuille depuis #4483.
+    /// Le micro — la surface PRINCIPALE de la feuille.
     case record
     /// Un fichier audio du disque.
     case files
 }
 
-/// Les mots du rôle de mixage (#4483).
+/// Les mots du rôle de mixage.
 ///
 /// « Fond » et « premier plan » sont les deux mots du DOMAINE — le modèle les
 /// porte déjà sous `isBackground`. On ne dit ni « musique » ni « voix » : le
@@ -711,7 +652,7 @@ nonisolated enum ComposerSoundRoleCopy {
                defaultValue: "Place du son", bundle: .main)
     }
 
-    /// **Le libellé dépend de la DESTINATION, pas du seul rôle** (#4722).
+    /// **Le libellé dépend de la DESTINATION, pas du seul rôle**.
     ///
     /// « Contenu de publication · Pièce jointe du post, avec son lecteur » est
     /// juste sur un post texte, et FAUX sur une scène : là, le même choix pose
@@ -723,7 +664,7 @@ nonisolated enum ComposerSoundRoleCopy {
     /// > est pire qu'un libellé vague : il est vérifiable, et il est faux.
     /// > L'auteur qui le lit choisit sciemment autre chose que ce qu'il obtient.
     ///
-    /// Le paramètre a un DÉFAUT — `.contentCard`, le cas historique — parce que
+    /// Le paramètre a un DÉFAUT — `.contentCard`, le cas nominal — parce que
     /// deux appelants (`FeedView`) n'offrent aucun placement du tout et n'ont
     /// donc rien à dire là-dessus. Le défaut sert ceux qui ne posent pas la
     /// question, jamais ceux qui la posent : le meuble, lui, passe la
@@ -735,17 +676,14 @@ nonisolated enum ComposerSoundRoleCopy {
                           defaultValue: "Puce sur la scène", bundle: .main)
         }
         switch role {
-        // **Ce que le son EST**, pas où il se place géométriquement (directive
-        // porteur 2026-09-01). « En fond » et « au premier plan » décrivaient
-        // une position ; ce que l'auteur choisit est une NATURE — la slide
-        // porte ce son, ou la publication EST ce son.
+        // **Ce que le son EST**, pas où il se place géométriquement. « En fond » et
+        // « au premier plan » décriraient une position ; ce que l'auteur choisit est
+        // une NATURE — la slide porte ce son, ou la publication EST ce son.
         //
-        // **Et le fond appartient à la SLIDE, pas à la publication** (arbitrage
-        // porteur 2026-09-01, #4673 : « clairement à un Slide ! »). Le modèle le
-        // portait déjà — `StorySlide.effects.audioPlayerObjects` est par slide —
-        // et le mot disait le contraire. Un libellé qui désigne le mauvais
-        // propriétaire est exactement ce qui a permis à la question de rester
-        // ouverte : chaque relecteur y lisait la réponse qu'il avait en tête.
+        // **Et le fond appartient à la SLIDE, pas à la publication.** Le modèle le
+        // porte déjà — `StorySlide.effects.audioPlayerObjects` est par slide — et un
+        // mot qui dirait le contraire désignerait le mauvais propriétaire : chaque
+        // relecteur y lirait la réponse qu'il a en tête.
         case .background:
             return String(localized: "composer.sound.role.background",
                           defaultValue: "Fond de la slide", bundle: .main)
@@ -755,19 +693,18 @@ nonisolated enum ComposerSoundRoleCopy {
         }
     }
 
-    /// **Ce que le placement VEUT DIRE sur une publication** (directive porteur
-    /// 2026-09-01).
+    /// **Ce que le placement VEUT DIRE sur une publication.**
     ///
     /// Deux mots — « fond », « premier plan » — décrivent une géométrie, et le
     /// choix n'en est pas une : c'est un choix de NATURE. Le dire sous chaque
-    /// option coûte deux lignes et retire la seule question que l'auteur ne
-    /// pouvait pas trancher à l'œil.
+    /// option coûte deux lignes et lève la seule question que l'auteur ne pourrait
+    /// pas trancher à l'œil.
     ///
     /// | placement | ce que le lecteur voit et entend |
     /// |---|---|
     /// | fond | le son se joue pendant la lecture ; **aucun lecteur** n'apparaît |
     /// | premier plan | le son devient une **pièce jointe** du post, avec son lecteur — un post audio |
-    /// **Et sa définition suit la même destination** (#4722) — c'est elle qui
+    /// **Et sa définition suit la même destination** — c'est elle qui
     /// porte le mot « redimensionnable », donc la promesse que la directive
     /// fait à l'auteur.
     static func description(_ role: ComposerAudioRole,
@@ -808,11 +745,10 @@ nonisolated enum ComposerSoundRoleCopy {
 
 nonisolated enum ComposerSoundSourcePolicy {
 
-    /// L'ordre n'est pas décoratif : **enregistrer d'abord** depuis #4483. La
-    /// porte ouvre directement le micro (directive porteur), et les deux autres
-    /// provenances sont des entrées offertes SOUS lui, dans la même feuille.
-    /// Auparavant l'étagère venait en tête, au motif qu'emprunter est le geste
-    /// nominal — c'était vrai d'un CHOIX préalable, qui n'existe plus.
+    /// L'ordre n'est pas décoratif : **enregistrer d'abord**. La porte ouvre
+    /// directement le micro, et les deux autres provenances sont des entrées
+    /// offertes SOUS lui, dans la même feuille. L'étagère ne vient pas en tête :
+    /// emprunter serait le geste nominal d'un CHOIX préalable, qui n'existe pas.
     static let offered: [ComposerSoundSource] = [.record, .library, .files]
 
     static func label(_ source: ComposerSoundSource) -> String {
@@ -838,7 +774,7 @@ nonisolated enum ComposerSoundSourcePolicy {
 }
 
 
-/// **Les libellés de l'historique** (#4402).
+/// **Les libellés de l'historique**.
 ///
 /// Ils sont ici, avec les autres règles pures du meuble, et pas dans la barre
 /// haute : c'est la barre qui les AFFICHE, mais c'est le meuble qui décide que
@@ -858,7 +794,7 @@ nonisolated enum ComposerHistoryCopy {
 }
 
 
-/// **Qui sert l'historique, et pourquoi pas tout le monde** (#4402).
+/// **Qui sert l'historique, et pourquoi pas tout le monde**.
 ///
 /// L'historique du composer photographie `slides` — la SCÈNE et ses objets.
 /// Sur l'écran DOCUMENT, ce que l'auteur vient de faire est presque toujours du
@@ -870,18 +806,18 @@ nonisolated enum ComposerHistoryCopy {
 /// La scène, elle, accumule des gestes qui ne se défont par rien d'autre :
 /// poser un sticker, avancer un objet d'un plan, changer le fond.
 ///
-/// ## Le défaut que la vérification simulateur a trouvé (2026-08-30)
+/// ## Le piège de deux énumérations au même nom
 ///
-/// Ce prédicat prenait un `ComposerSurfaceKind`. Il compilait, il était testé,
-/// et il ne pouvait JAMAIS rendre `true` là où il comptait : la scène incrustée
-/// est un `ComposerSurfaceKind.document` **qui a une scène** — c'est
+/// Un prédicat qui prendrait un `ComposerSurfaceKind` compilerait, serait
+/// testé, et ne pourrait JAMAIS rendre `true` là où il compte : la scène
+/// incrustée est un `ComposerSurfaceKind.document` **qui a une scène** — c'est
 /// `ComposerMountedView.scene` qui la nomme, et seul lui. Le `.scene` du KIND
 /// désigne l'ATELIER, une surface que ce meuble ne monte pas sur ce chemin.
 ///
 /// > **Deux énumérations dont un cas porte le même nom décrivent deux niveaux
 /// > différents, et le compilateur ne peut pas dire laquelle on voulait.** Le
-/// > témoin qui l'aurait attrapé n'est pas un test de plus sur le prédicat —
-/// > il en avait trois, tous verts — mais un test qui part de l'ÉTAT réel :
+/// > témoin qui l'attrape n'est pas un test de plus sur le prédicat — trois
+/// > tests verts n'y suffiraient pas — mais un test qui part de l'ÉTAT réel :
 /// > « un document AVEC une scène sert-il l'historique ? »
 nonisolated enum ComposerHistoryService {
 
@@ -893,7 +829,7 @@ nonisolated enum ComposerHistoryService {
     }
 }
 
-/// **Ce qu'une provenance de son EXIGE de la présentation** (#4632).
+/// **Ce qu'une provenance de son EXIGE de la présentation**.
 ///
 /// ## Le défaut que ce type ferme
 ///
@@ -902,17 +838,17 @@ nonisolated enum ComposerHistoryService {
 /// règle a tenu — pour les feuilles. **Elle ne dit rien des présentations qui
 /// n'en sont pas.**
 ///
-/// Le bouton « Fichiers » de la feuille du son posait `showsFileImporter = true`
-/// en laissant `presentedPortal = .sound` monté. Les deux présentations sont
-/// attachées au MÊME corps de vue ; iOS n'en présente pas une seconde depuis un
-/// présentateur déjà occupé. **Le bouton était INERTE** — aucun crash, aucune
-/// trace, rien à l'écran.
+/// Le bouton « Fichiers » de la feuille du son qui poserait
+/// `showsFileImporter = true` en laissant `presentedPortal = .sound` monté
+/// ferait deux présentations attachées au MÊME corps de vue ; iOS n'en présente
+/// pas une seconde depuis un présentateur déjà occupé. **Le bouton serait
+/// INERTE** — aucun crash, aucune trace, rien à l'écran.
 ///
-/// Sa voisine `.library` n'avait pas ce défaut, et c'est ce qui a caché le
-/// défaut un mois : elle REMPLACE le portail (`.soundLibrary`), donc elle passe
-/// par la propriété structurelle du type somme. Les deux branches se
-/// ressemblaient au point d'être lues comme équivalentes ; elles empruntent deux
-/// mécanismes de présentation différents, dont un seul est protégé.
+/// Sa voisine `.library` n'a pas ce défaut, et c'est ce qui le cacherait :
+/// elle REMPLACE le portail (`.soundLibrary`), donc elle passe par la propriété
+/// structurelle du type somme. Les deux branches se ressemblent au point d'être
+/// lues comme équivalentes ; elles empruntent deux mécanismes de présentation
+/// différents, dont un seul est protégé.
 ///
 /// > **Une garantie STRUCTURELLE ne protège que ce qu'elle représente.** Un
 /// > `ComposerPortal?` rend impossibles deux FEUILLES concurrentes ; il ne peut
@@ -941,7 +877,7 @@ nonisolated enum ComposerSoundHandoff: Equatable {
     }
 }
 
-/// **Ce que l'importateur de fichiers va RAPPORTER** (#4632).
+/// **Ce que l'importateur de fichiers va RAPPORTER**.
 ///
 /// Le meuble n'a qu'UN `.fileImporter`, et c'est voulu : deux sélecteurs frères
 /// rejoueraient exactement le conflit de présentation que `ComposerSoundHandoff`
@@ -949,14 +885,15 @@ nonisolated enum ComposerSoundHandoff: Equatable {
 /// mais ce qu'on lui demande — et ce qu'on fait du résultat.
 ///
 /// **La destination est le VRAI correctif.** Même l'importateur ouvert, tout
-/// fichier partait dans `documentLocalMedia`, la liste média du DOCUMENT : un
-/// audio choisi pour la scène n'y arrivait jamais comme son. C'est le défaut que
-/// #4483 avait fermé pour l'enregistrement (« le résultat va sur la SCÈNE,
-/// jamais dans la liste média ») et que la branche fichier n'avait pas suivi.
+/// fichier irait dans `documentLocalMedia`, la liste média du DOCUMENT : un
+/// audio choisi pour la scène n'y arriverait jamais comme son. L'enregistrement
+/// suit la règle inverse (« le résultat va sur la SCÈNE, jamais dans la liste
+/// média »), et la branche fichier la suit aussi.
 nonisolated enum ComposerFileImportIntent: Equatable {
 
     /// La rangée du document et la porte média — tout ce qui compose la
-    /// publication.
+    /// publication. Un fichier AUDIO choisi ici devient un son posé sur la
+    /// scène (`ComposerImportedFileRoute`).
     case media
 
     /// La porte SON : un fichier audio, posé sur la scène avec son rôle.

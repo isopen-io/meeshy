@@ -51,8 +51,6 @@ public enum GuideAction: String, CaseIterable, Codable, Sendable, Hashable {
     case seeNextTier = "see-next-tier"
     case openFirstMission = "open-first-mission"
     case mintOrClimb = "mint-or-climb"
-    case regainLevels = "regain-levels"
-    case relightBadge = "relight-badge"
     case seeMintPreview = "see-mint-preview"
     case takePhoto = "take-photo"
     case keepOrSpend = "keep-or-spend"
@@ -89,14 +87,13 @@ public struct OnboardingStep: Sendable, Equatable {
     }
 }
 
-/// Les treize moments, par leur clé stable.
+/// Les douze moments, par leur clé stable.
 public enum GuideMomentKey: String, CaseIterable, Codable, Sendable, Hashable {
     case firstLevel = "first-level"
     case newTier = "new-tier"
     case missionsUnlocked = "missions-unlocked"
     case firstMintPossible = "first-mint-possible"
     case firstMint = "first-mint"
-    case badgeExtinguished = "badge-extinguished"
     case priceRises = "price-rises"
     case newRank = "new-rank"
     case treasuryTier = "treasury-tier"
@@ -112,8 +109,9 @@ public enum GuideEvent: Sendable, Equatable {
     case newTier(tier: LevelTierKey, nextTierLevel: Int?)
     case missionsUnlocked
     case firstMintPossible(price: Int, levelsLost: Int, gloryGain: Int)
-    case firstMint(levelBefore: Int, levelAfter: Int, tailwindUntilLevel: Int)
-    case badgeExtinguished(missingActions: Int)
+    /// La première frappe (#10892) : elle fait baisser le niveau du montant dépensé et n'ouvre aucun Vent arrière — le
+    /// moment ne cite pas de niveaux.
+    case firstMint
     case priceRises(nextPrice: Int)
     case newRank(rank: GloryRank, division: GloryDivision5?, glory: Int, gloryMissing: Int?)
     case treasuryTier(tier: TreasuryTierKey, nextTierMissing: Int?)
@@ -129,7 +127,6 @@ public enum GuideEvent: Sendable, Equatable {
         case .missionsUnlocked: .missionsUnlocked
         case .firstMintPossible: .firstMintPossible
         case .firstMint: .firstMint
-        case .badgeExtinguished: .badgeExtinguished
         case .priceRises: .priceRises
         case .newRank: .newRank
         case .treasuryTier: .treasuryTier
@@ -212,8 +209,7 @@ public enum GameGuide {
         case .newTier: Persona(speaker: .duo, mood: .cheer, action: .seeNextTier)
         case .missionsUnlocked: Persona(speaker: .mee, mood: .guide, action: .openFirstMission)
         case .firstMintPossible: Persona(speaker: .meo, mood: .ready, action: .mintOrClimb)
-        case .firstMint: Persona(speaker: .duo, mood: .minting, action: .regainLevels)
-        case .badgeExtinguished: Persona(speaker: .meo, mood: .calm, action: .relightBadge)
+        case .firstMint: Persona(speaker: .duo, mood: .minting, action: .seeProgress)
         case .priceRises: Persona(speaker: .meo, mood: .calm, action: .seeMintPreview)
         case .newRank: Persona(speaker: .duo, mood: .proud, action: .takePhoto)
         case .treasuryTier: Persona(speaker: .mee, mood: .cheer, action: .keepOrSpend)
@@ -228,7 +224,7 @@ public enum GameGuide {
     /// Flamme passe avant.
     public static let momentPriority: [GuideMomentKey] = [
         .newRank, .level100, .firstMint, .flameOut, .flameAtRisk, .newTier, .treasuryTier,
-        .badgeExtinguished, .priceRises, .firstMintPossible, .missionsUnlocked, .firstLevel,
+        .priceRises, .firstMintPossible, .missionsUnlocked, .firstLevel,
         .returnAfterAbsence,
     ]
 

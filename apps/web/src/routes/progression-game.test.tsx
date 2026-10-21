@@ -104,7 +104,7 @@ describe('le détail de ligue vit dans la fiche de la ligue (#9541)', () => {
     const locked: EngagementWithGame = { ...withExtras, game: { ...withExtras.game!, league: { ...withExtras.game!.league!, access: 'locked', current: null } } };
     const league = fiche('league', locked);
     expect(league).not.toContain('data-game-league-summary');
-    expect(league).toContain('Niveau 10');
+    expect(league).toContain('Dès le niveau 10');
   });
 });
 
@@ -114,8 +114,8 @@ describe('les gestes se branchent sur les actions du crochet', () => {
   });
 
   test('l’échec de la frappe se lit dans l’aperçu', () => {
-    const page = fiche('meesh', withGame(), { actions: { ...idle, errors: { mint: 'Pas assez de points convertibles pour frapper une Meesh.' } } });
-    expect(page).toContain('Pas assez de points convertibles');
+    const page = fiche('meesh', withGame(), { actions: { ...idle, errors: { mint: 'Pas assez de points à convertir pour frapper une Meesh.' } } });
+    expect(page).toContain('Pas assez de points à convertir');
   });
 
   test('hors ligne : la frappe se tait', () => {

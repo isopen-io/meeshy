@@ -158,7 +158,7 @@ final class ConversationMediaGalleryMenuTests: XCTestCase {
             return XCTFail("catalogue illisible")
         }
 
-        for key in ["gallery.menu.share", "gallery.menu.more",
+        for key in ["gallery.menu.share",
                     "gallery.menu.brand.none", "gallery.menu.brand.meeshy"] {
             let localizations = ((strings[key] as? [String: Any])?["localizations"] as? [String: Any]) ?? [:]
             let missing = Self.shippedLocales.filter { localizations[$0] == nil }

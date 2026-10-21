@@ -54,7 +54,6 @@ extension LocalizationConsistencyTests {
         /// though both already pass both rules. `test_everyPerTargetCatalogIsMapped` is the
         /// witness that keeps the next extension from repeating it.
         static let catalogByTargetFragment: [String: String] = [
-            "/MeeshyShareExtension/": "apps/ios/MeeshyShareExtension/Localizable.xcstrings",
             "/MeeshyNotificationExtension/": "apps/ios/MeeshyNotificationExtension/Localizable.xcstrings",
             "/MeeshyNotificationContentExtension/": "apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings",
             "/MeeshyWidgets/": "apps/ios/MeeshyWidgets/Localizable.xcstrings",

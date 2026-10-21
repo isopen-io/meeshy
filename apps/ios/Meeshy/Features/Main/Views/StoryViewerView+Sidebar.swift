@@ -42,6 +42,10 @@ nonisolated struct StoryActionRailPlan: Equatable {
     let showsSound: Bool
     let showsComments: Bool
     let showsTranslations: Bool
+    /// « Composer » au rail sur la story d'une AUTRE personne (#9953) — le même
+    /// geste que l'entrée « Composer » du menu « … », qui reste. Sur sa propre
+    /// story, le rail ne change pas.
+    let showsCompose: Bool
 
     static func resolve(
         isOwnStory: Bool,
@@ -49,7 +53,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
         isPublicStory: Bool,
         hasAudibleSound: Bool,
         commentCount: Int,
-        hasTranslatableContent: Bool
+        hasTranslatableContent: Bool,
+        canCompose: Bool = false
     ) -> StoryActionRailPlan {
         StoryActionRailPlan(
             showsReact: !isOwnStory,
@@ -71,7 +76,8 @@ nonisolated struct StoryActionRailPlan: Equatable {
             // 2026-07-25) : l'auteur explore les langues de sa propre story
             // comme il choisit déjà sa langue d'export. Le Prisme est un outil
             // de lecture, pas une permission.
-            showsTranslations: hasTranslatableContent
+            showsTranslations: hasTranslatableContent,
+            showsCompose: !isOwnStory && canCompose
         )
     }
 }
@@ -94,6 +100,72 @@ nonisolated struct StoryExportRailButtons: Equatable {
             showsSaveButton: showsExport && saveProgress == nil,
             showsSaveProgressRing: showsExport && saveProgress != nil
         )
+    }
+}
+
+// MARK: - Republier une story d'un tap (#9953)
+
+/// **Où part une republication directe depuis le lecteur.** Le rail republie
+/// en STORY ; le menu « … » offre le post et le réel. La même mécanique pour
+/// les trois — `RepostIntent.simple` remis à `RepostPublisher` (jeton
+/// d'idempotence, file hors ligne, verrou par cible) — seule la cible change.
+nonisolated enum StoryRepostDestination: Hashable, CaseIterable {
+    case story
+    case post
+    case reel
+
+    var targetType: PostType {
+        switch self {
+        case .story: return .story
+        case .post: return .post
+        case .reel: return .reel
+        }
+    }
+}
+
+enum StoryDirectRepost {
+
+    /// Republication SÈCHE (`isQuote: false`) : le serveur hérite de
+    /// l'audience de l'original et fige le contenu d'une source éphémère. Les
+    /// refus NOMMÉS passent par `RepostFailure` : 404 = la source a disparu,
+    /// 403 = l'audience élargirait celle de l'original.
+    static func publish(_ story: StoryItem, as destination: StoryRepostDestination) {
+        HapticFeedback.light()
+        Task {
+            do {
+                try await RepostPublisher.shared.publish(
+                    .simple(postId: story.id, targetType: destination.targetType, visibility: nil)
+                )
+                await MainActor.run {
+                    StoryViewerParticipationStore.shared.note(.reposted, storyId: story.id)
+                    HapticFeedback.success()
+                    FeedbackToastManager.shared.show(successMessage(for: destination))
+                }
+            } catch {
+                let verdict = RepostFailure.classify(error)
+                await MainActor.run {
+                    switch verdict {
+                    case .sourceGone:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.unavailable", defaultValue: "La story n'est plus disponible", bundle: .main))
+                    case .audienceWidening:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.forbidden", defaultValue: "Cette story ne peut pas être repartagée", bundle: .main))
+                    case .other:
+                        FeedbackToastManager.shared.showError(String(localized: "story.repost.error.generic", defaultValue: "Échec de la republication", bundle: .main))
+                    }
+                }
+            }
+        }
+    }
+
+    static func successMessage(for destination: StoryRepostDestination) -> String {
+        switch destination {
+        case .story:
+            return String(localized: "story.mine.repost.success", defaultValue: "Story republiée", bundle: .main)
+        case .post:
+            return String(localized: "story.repost.success", defaultValue: "Republié dans ton feed", bundle: .main)
+        case .reel:
+            return String(localized: "story.repost.success.reel", defaultValue: "Republié dans tes réels", bundle: .main)
+        }
     }
 }
 
@@ -160,9 +232,6 @@ struct StoryActionSidebarView: View {
     @Binding var showViewersSheet: Bool
     @Binding var isGlobalMutedBinding: Bool
     @Binding var sharedContentWrapper: SharedContentWrapper?
-    /// Republication en STORY : ouvre le composeur prérempli au lieu de
-    /// l'ancien repost un-tap côté serveur.
-    @Binding var republishStorySource: RepostPostSourceWrapper?
     @Binding var isPresented: Bool
     /// **La barre de réactions revendique le glissé en cours.** Écrit ici,
     /// lu par `unifiedDragGesture` (`StoryViewerView+Content.swift`), qui sort
@@ -218,11 +287,27 @@ struct StoryActionSidebarView: View {
             isPublicStory: currentStory?.isPublic == true,
             hasAudibleSound: storyHasAudibleSound,
             commentCount: currentStory?.commentCount ?? 0,
-            hasTranslatableContent: storyHasTranslatableContent
+            hasTranslatableContent: storyHasTranslatableContent,
+            canCompose: composeTarget != nil
         )
     }
 
     private var railPlan: StoryActionRailPlan { frozenRailPlan ?? liveRailPlan }
+
+    /// La porte « Composer » de l'hôte (#6085) : le rail DEMANDE, le conteneur
+    /// présente. `nil` hors du lecteur (aperçu du composer) : aucun bouton.
+    @Environment(\.meeshyComposeSeedRequest) private var demanderComposer: ((ComposerSeedTarget) -> Void)?
+
+    /// La cible de « Composer » pour la slide COURANTE, par la même règle d'offre
+    /// que le menu « … ». Lue au gel du rail et au tap seulement — jamais à
+    /// chaque passe de rendu.
+    private var composeTarget: ComposerSeedTarget? {
+        guard demanderComposer != nil, !isOwnStory, let story = currentStory else { return nil }
+        return ComposerSeedTarget(
+            story: story,
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        )
+    }
 
     /// Les gestes du lecteur que la passerelle ne sert pas sur une story (commentaire,
     /// envoi, republication) — mémoire de session, `StoryViewerParticipation.swift`.
@@ -472,7 +557,8 @@ struct StoryActionSidebarView: View {
                 isPublicStory: currentStory?.isPublic == true,
                 hasAudibleSound: storyHasAudibleSound,
                 commentCount: storyCommentCount,
-                hasTranslatableContent: storyHasTranslatableContent
+                hasTranslatableContent: storyHasTranslatableContent,
+                canCompose: railPlan.showsCompose
             )
         }
     }
@@ -652,52 +738,22 @@ struct StoryActionSidebarView: View {
                 HapticFeedback.light()
                 if let story = currentStory, let group = currentGroup {
                     EngagementTracker.shared.recordAction(.shared, surface: .storyViewer)
-                    sharedContentWrapper = SharedContentWrapper(content: .story(item: story, authorName: group.username))
+                    sharedContentWrapper = SharedContentWrapper(subject: .story(id: story.id, authorName: group.username))
                 }
             }
 
-            // Republier la story — non-auteur, TOUTE audience (D1,
-            // 2026-08-19). La mention « story publique » qui figurait ici
-            // décrivait le gate `isPublicStory` retiré de `railPlan` : c'est
-            // désormais la loi d'audience qui borne le RÉSULTAT
-            // (`StoryRepostAudience`), plus l'appartenance au rail.
-            // Réintroduit 2026-06-18 après finalisation du flux serveur : route
-            // via le snapshot de repost (`PostService.repost`). Le gateway
-            // duplique le média + l'audio source et copie storyEffects dans le
-            // repost, self-contenu, lié via repostOfId — ce qui remplace
-            // l'ancien chemin composer qui produisait une story VIDE (il forçait
-            // repostOfId: nil et ne dupliquait jamais le média source).
-            // Le repost ainsi créé est un POST, pas une story : cette ligne a
-            // longtemps annoncé `targetType .story`, ce que le bouton ne fait
-            // plus depuis qu'il ouvre le composeur (`.post` explicite, cf.
-            // `StoryViewerView`).
+            // Republier la story EN STORY, d'un tap (#9953, porteur 2026-10-10) —
+            // non-auteur, TOUTE audience : la loi d'audience du serveur borne le
+            // résultat (403 `REPOST_AUDIENCE_WIDENING`). Le menu « … » offre
+            // le post et le réel sous « Partager ▸ ».
             if railPlan.showsRepost {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
                     label: storyRepostCount > 0 ? "\(storyRepostCount)" : String(localized: "story.viewer.action.repost", defaultValue: "Republier", bundle: .main),
                     outlineTint: outlineTint(.repost)
                 ) {
-                    // Republication : ouvre le COMPOSEUR prérempli au lieu de
-                    // republier d'un tap côté serveur.
-                    //
-                    // L'ancien chemin appelait `PostService.repost` directement :
-                    // la story repartait à l'identique, sans possibilité d'ajouter
-                    // du texte ni de choisir l'audience — et son libellé annonçait
-                    // « Partager », ce qui achevait la confusion. La demande
-                    // produit (2026-08-19) est explicite : « ça ouvre la story
-                    // composeur permettant d'ajouter plus du texte ».
-                    //
-                    // Le composeur porte la chaîne de repost (`repostOfId`) et un
-                    // badge d'attribution VERROUILLÉ ; son sélecteur d'audience est
-                    // plafonné par `StoryRepostAudience`. La présentation vit dans
-                    // `StoryViewerView` (`republishStorySource`).
-                    guard let story = currentStory, let group = currentGroup else { return }
-                    HapticFeedback.light()
-                    pauseTimer()
-                    republishStorySource = RepostPostSourceWrapper(
-                        story: story,
-                        authorHandle: group.username
-                    )
+                    guard let story = currentStory else { return }
+                    StoryDirectRepost.publish(story, as: .story)
                 }
             } else if railPlan.showsViews {
                 StoryActionButton(
@@ -706,6 +762,20 @@ struct StoryActionSidebarView: View {
                 ) {
                     HapticFeedback.light()
                     showViewersSheet = true
+                }
+            }
+
+            // « Composer » au rail sur la story d'une AUTRE personne (#9953) :
+            // le même geste que l'entrée du menu « … » — la porte du conteneur.
+            if railPlan.showsCompose {
+                StoryActionButton(
+                    icon: "wand.and.stars",
+                    label: String(localized: "message.compose.title", defaultValue: "Composer", bundle: .main)
+                ) {
+                    guard let cible = composeTarget, let demanderComposer else { return }
+                    HapticFeedback.light()
+                    pauseTimer()
+                    demanderComposer(cible)
                 }
             }
 

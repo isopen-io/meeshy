@@ -139,7 +139,7 @@ const apparence = (page) =>
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await context.newPage();
 await page.clock.setFixedTime(INSTANT);
-await page.goto(`${BASE}/`, { waitUntil: 'load' });
+await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await page.waitForSelector('[data-row]');
 await page.waitForTimeout(300);
 
@@ -374,7 +374,7 @@ await context.close();
 const stickyContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const stickyPage = await stickyContext.newPage();
 await stickyPage.clock.setFixedTime(INSTANT);
-await stickyPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await stickyPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await stickyPage.waitForSelector('[data-sticker]');
 await stickyPage.waitForTimeout(200);
 
@@ -571,7 +571,7 @@ await stickyContext.close();
 const layoutContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const layoutPage = await layoutContext.newPage();
 await layoutPage.clock.setFixedTime(INSTANT);
-await layoutPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await layoutPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await layoutPage.waitForSelector('[data-row]');
 await layoutPage.waitForTimeout(200);
 
@@ -648,7 +648,7 @@ await layoutContext.close();
 const headerContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const headerPage = await headerContext.newPage();
 await headerPage.clock.setFixedTime(INSTANT);
-await headerPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await headerPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await headerPage.waitForSelector('[data-row]');
 await headerPage.waitForTimeout(200);
 
@@ -805,7 +805,7 @@ await headerContext.close();
 const kbdContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const kbdPage = await kbdContext.newPage();
 await kbdPage.clock.setFixedTime(INSTANT);
-await kbdPage.goto(`${BASE}/`, { waitUntil: 'load' });
+await kbdPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await kbdPage.waitForSelector('[data-row]');
 await kbdPage.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
 await kbdPage.waitForTimeout(400);
@@ -883,7 +883,7 @@ const contexteReduit = await browser.newContext({
 });
 const pageReduite = await contexteReduit.newPage();
 await pageReduite.clock.setFixedTime(INSTANT);
-await pageReduite.goto(`${BASE}/`, { waitUntil: 'load' });
+await pageReduite.goto(`${BASE}/chats`, { waitUntil: 'load' });
 await pageReduite.waitForSelector('[data-row]');
 await pageReduite.evaluate(() => document.getElementById('contenu')?.scrollTo({ top: 600 }));
 await pageReduite.waitForTimeout(300);
@@ -936,7 +936,7 @@ for (const colorScheme of ['light', 'dark']) {
   const pgContext = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme });
   const pgPage = await pgContext.newPage();
   await pgPage.clock.setFixedTime(INSTANT);
-  await pgPage.goto(`${BASE}/`, { waitUntil: 'load' });
+  await pgPage.goto(`${BASE}/chats`, { waitUntil: 'load' });
   await pgPage.waitForSelector('[data-row]');
   await pgPage.waitForTimeout(300);
 

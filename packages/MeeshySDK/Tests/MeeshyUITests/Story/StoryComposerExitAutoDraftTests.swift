@@ -86,6 +86,49 @@ final class StoryComposerExitAutoDraftTests: XCTestCase {
         )
     }
 
+    // MARK: - La sortie demandée de l'extérieur est la croix (#10543)
+
+    func test_requestExit_armedAtelier_runsItsExit() {
+        let trigger = ComposerPublishTrigger()
+        var exits = 0
+        trigger.armExit { exits += 1 }
+
+        XCTAssertTrue(trigger.offersExit)
+        XCTAssertTrue(trigger.requestExit())
+        XCTAssertEqual(exits, 1)
+    }
+
+    func test_requestExit_noAtelierArmed_writesAndClosesNothing() {
+        let trigger = ComposerPublishTrigger()
+
+        XCTAssertFalse(trigger.offersExit)
+        XCTAssertFalse(trigger.requestExit())
+    }
+
+    func test_disarm_unmountedAtelier_forgetsItsExit() {
+        let trigger = ComposerPublishTrigger()
+        var exits = 0
+        trigger.armExit { exits += 1 }
+
+        trigger.disarm()
+
+        XCTAssertFalse(trigger.offersExit)
+        XCTAssertFalse(trigger.requestExit())
+        XCTAssertEqual(exits, 0)
+    }
+
+    /// Une conversation qui s'ouvre referme l'atelier par SA sortie : celle qui
+    /// écrit le brouillon avant `onDismiss`. Un second chemin de fermeture
+    /// perdrait les dernières secondes de travail.
+    func test_theExternalExitIsArmedWithTheCross() throws {
+        let view = try ComposerSourceGuard.source("StoryComposerView.swift")
+
+        XCTAssertEqual(
+            ComposerSourceGuard.occurrences(of: "publishTrigger?.armExit { handleDismiss() }", in: view), 1,
+            "La sortie armée est la croix : elle enregistre, puis referme."
+        )
+    }
+
     // MARK: - L'accroche 426
 
     /// La sentinelle a une raison d'être précise : sans elle, un binaire
@@ -118,8 +161,9 @@ final class StoryComposerExitAutoDraftTests: XCTestCase {
         let view = try ComposerSourceGuard.source("StoryComposerView.swift")
 
         XCTAssertEqual(
-            ComposerSourceGuard.occurrences(of: "autoSaveDraftOnInterruption()", in: view), 2,
-            "Deux entrées — le background (D1) et le 426 (C6b) — un seul appel chacune."
+            ComposerSourceGuard.occurrences(of: "autoSaveDraftOnInterruption()", in: view), 3,
+            "Trois entrées — le background (D1), le 426 (C6b) et le démontage sans sortie demandée "
+            + "(fenêtre d'iPad compact ↔ regular, `teardownKeepsDraft`) — un seul appel chacune."
         )
         for bypass in ["persistDraft()", "saveDraft()", "StoryDraftStore"] {
             XCTAssertEqual(

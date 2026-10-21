@@ -80,12 +80,24 @@ extension StoryCardView {
         StorySceneFocus.showsContentDecorations(isComposing: isComposerEngaged, commentsOpen: showCommentsOverlay)
     }
 
-    /// Ce que le composeur occupe depuis le bas de l'écran — clavier ou zone
-    /// sûre, plus la plaque mesurée. `nil` hors saisie : la scène garde alors
-    /// son cadrage de lecture (#8642).
+    /// Ce que le composeur occupe depuis le bas de l'écran quand il est
+    /// SOULEVÉ — clavier ou panneau d'émojis, plus la plaque mesurée. `nil`
+    /// sinon : la scène garde son cadrage de lecture (#8642, #10544).
     var composingSceneReserve: CGFloat? {
-        guard isComposerEngaged, let block = composerBlockHeight else { return nil }
-        return composerBottomPadding(geometry) + block
+        StoryKeyboardLift.sceneReserve(lift: composerLift(geometry: geometry),
+                                       bottomPadding: composerBottomPadding(geometry),
+                                       blockHeight: composerBlockHeight)
+    }
+
+    /// Le cadrage de la carte, réduit quand le composeur est soulevé.
+    var readerCanvasFraming: StoryCanvasFraming.Result {
+        readerFraming(reserve: composingSceneReserve)
+    }
+
+    /// Le cadrage de REPOS : la clé du ressort de la carte. Ce que le clavier
+    /// déplace n'y figure pas et suit donc la transaction du clavier.
+    var readerRestingFraming: StoryCanvasFraming.Result {
+        readerFraming(reserve: nil)
     }
 }
 
@@ -180,5 +192,36 @@ extension View {
     /// qu'elle est rendue, coins compris.
     func storyCommentsReadingBlur(_ commentsOpen: Bool) -> some View {
         modifier(StoryCommentsReadingBlur(commentsOpen: commentsOpen))
+    }
+}
+
+// MARK: - Ce qui SOULÈVE le composeur d'une story (#10544)
+
+// Constat porteur du 2026-10-13 (iPhone 15 Pro Max, iOS 17.5) : toucher le
+// champ de commentaire remontait la scène alors qu'aucun clavier ne montait.
+// La réduction de la scène (#8642) se lisait sur le FOCUS : avec un clavier
+// matériel, la scène se réduisait et s'ancrait 64 pt plus haut pour rien.
+//
+// La scène, la plaque et la liste des commentaires lisent désormais UNE
+// valeur — ce qui soulève réellement la plaque — et la suivent dans UNE
+// transaction, celle de `KeyboardObserver`. Le silence du chrome (#8601)
+// reste sur le focus : on écrit, clavier ou pas.
+
+/// **Ce qui soulève le composeur d'une story — la règle, sans vue.**
+nonisolated enum StoryKeyboardLift {
+
+    /// La hauteur qui soulève la plaque depuis le bas de l'écran : le panneau
+    /// d'émojis (plus le retrait sous lui), sinon le clavier. 0 quand rien ne
+    /// la soulève — clavier matériel compris.
+    static func lift(keyboardHeight: CGFloat, emojiPanelHeight: CGFloat, restingPadding: CGFloat) -> CGFloat {
+        emojiPanelHeight > 0 ? restingPadding + emojiPanelHeight : max(0, keyboardHeight)
+    }
+
+    /// Ce que la scène réserve en bas pour tenir entière au-dessus de la
+    /// plaque. `nil` sans soulèvement ou sans plaque mesurée : la scène garde
+    /// son cadrage de lecture.
+    static func sceneReserve(lift: CGFloat, bottomPadding: CGFloat, blockHeight: CGFloat?) -> CGFloat? {
+        guard lift > 0, let block = blockHeight, block > 0 else { return nil }
+        return bottomPadding + block
     }
 }

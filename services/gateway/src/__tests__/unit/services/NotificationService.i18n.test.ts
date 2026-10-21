@@ -141,7 +141,7 @@ describe('contenu localisé par destinataire', () => {
       commentAuthorId: 'r', reactorUserId: 'a', commentId: 'c', postId: 'p',
       reactionEmoji: '🔥', postAuthorName: 'Bob', postType: 'STATUS',
     });
-    expect(created[0].content).toBe('Sur le statut de Bob');
+    expect(created[0].content).toBe('Sur l’humeur de Bob');
     expect(created[0].metadata.postType).toBe('STATUS');
   });
   it('comment_reaction : le corps est l’extrait du commentaire, jamais la phrase d’action répétée (#9049)', async () => {

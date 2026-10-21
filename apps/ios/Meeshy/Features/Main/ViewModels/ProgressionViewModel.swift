@@ -44,6 +44,8 @@ final class ProgressionViewModel: ObservableObject {
     @Published var gameErrors = GameErrors()
     /// La dernière pièce frappée, pour la scène ; `nil` tant qu'aucune n'a été frappée depuis l'ouverture.
     @Published var celebration: MintCelebration?
+    /// La dernière frappe RÉGLÉE par la passerelle — pièce ou refus —, pour la cérémonie de la frappe (#11177).
+    @Published private(set) var mintSettlement: GameMintSettlement?
     /// En ligne ou non, tel que la coupure le dit — les gestes d'écriture se taisent hors ligne.
     @Published private(set) var isOnline = true
     /// Une frappe est en vol (#5743) — le bouton reste affiché, avec son état
@@ -70,6 +72,8 @@ final class ProgressionViewModel: ObservableObject {
     private let userId: String
     private var revalidationTask: Task<Void, Never>?
     private var connectivity: AnyCancellable?
+    /// `game:updated` (#10900) — l'état du Jeu changé ailleurs.
+    private var gameUpdates: AnyCancellable?
 
     /// La charge servie, telle que le cache la garde : c'est sur elle que les
     /// mises à jour optimistes travaillent, `progress` et `game` en sont dérivés.
@@ -89,9 +93,22 @@ final class ProgressionViewModel: ObservableObject {
     /// affiché alors est l'optimiste, et le cache ne garde jamais une valeur que le geste,
     /// s'il échoue, rendra fausse (#9383).
     private var persistDeferred = false
+    /// Un geste a échoué pendant qu'un autre était en vol : son instantané
+    /// « d'avant » portait déjà l'optimiste de l'autre (ou l'autre portait le
+    /// sien). Défaire l'un effaçait l'autre ; défaire l'autre, dans le désordre,
+    /// ressuscitait le premier échec à côté de son message d'erreur. Aucun
+    /// défait local alors : la lecture du serveur, une fois tout posé.
+    private var reconcilesWhenSettled = false
     /// Incrémenté à chaque lecture SERVIE qui remplace la charge : un retour arrière ne
     /// défait que ce que son geste a changé, jamais une lecture arrivée entre-temps.
     private var snapshotGeneration = 0
+    /// L'ORDRE DES LECTURES (#10898) : chaque lecture reçoit son ticket au DÉPART, et ne pose jamais une charge plus
+    /// ancienne que celle déjà posée, ni une charge partie avant le dernier geste.
+    private var readOrder = GameReadOrder()
+    /// Ce que la passerelle a CONFIRMÉ (révision de l'état du jeu, Meeshes frappées), par clé de cache et pour tout le
+    /// processus : une page poussée et celle d'en dessous lisent la même charge, et aucune ne repeint un état d'avant une
+    /// frappe que l'autre a vue confirmée.
+    private static var confirmed: [String: GameReadOrder.Confirmed] = [:]
     var celebrations = 0
     /// Une clé d'idempotence par INTENTION (frappe, coffre, gel, rallumage, changement de mission) ;
     /// elle ne se renouvelle qu'après un SUCCÈS.
@@ -130,6 +147,10 @@ final class ProgressionViewModel: ObservableObject {
         self.connectivity = networkMonitor.isOfflinePublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] offline in self?.isOnline = !offline }
+        self.gameUpdates = NotificationCenter.default.publisher(for: .gameStateUpdated)
+            .compactMap { $0.object as? GameUpdatedEvent }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in self?.receive(event) }
         if let known = Self.lastKnown[cacheKey] { _ = adopt(known) }
     }
 
@@ -154,6 +175,7 @@ final class ProgressionViewModel: ObservableObject {
         revalidationTask?.cancel()
 
         let fetch: @Sendable () async throws -> [APIEngagementProgress] = { [try await service.fetchProgress()] }
+        let ticket = readOrder.issue()
         let setLoadState: @MainActor @Sendable (LoadState) -> Void = { [weak self] state in
             guard let self else { return }
             switch state {
@@ -166,7 +188,8 @@ final class ProgressionViewModel: ObservableObject {
             }
         }
         let apply: @MainActor @Sendable ([APIEngagementProgress]) -> Void = { [weak self] snapshots in
-            guard let self, let snapshot = snapshots.first else { return }
+            guard let self, let snapshot = snapshots.first, self.admits(snapshot, ticket: ticket) else { return }
+            self.confirm(revision: snapshot.gameRevision, minted: snapshot.meesh?.mintedLifetime)
             let resolu = self.adopt(snapshot)
             self.observeGame()
             // Les rappels de série se REPLANIFIENT à chaque lecture de la
@@ -207,21 +230,29 @@ final class ProgressionViewModel: ObservableObject {
         let preview = game?.mint
         let before = beginGesture(GameOptimistic.afterMint)
         do {
-            let result = try await service.mintMeesh(requestId: mintRequestId)
+            // Le prix que l'écran montrait part avec la frappe (#10903) : au-delà, la passerelle refuse sans débiter.
+            let result = try await service.mintMeesh(requestId: mintRequestId, maxPrice: preview?.price)
             mintRequestId = UUID().uuidString
+            confirm(revision: result.gameRevision, minted: result.mintedLifetime)
             celebrate(result, preview: preview)
+            settle(GameMintSettlement.outcome(of: result, preview: preview))
             await load(forceNetwork: true)
         } catch {
             restore(before)
-            if GameService.refusal(of: error) == .requestIdConflict { mintRequestId = UUID().uuidString }
-            mintError = String(
-                localized: "progression.meesh.mint_error",
-                defaultValue: "La frappe n'a pas abouti — réessayez",
-                bundle: .main
-            )
+            let refusal = GameService.refusal(of: error)
+            if refusal == .requestIdConflict { mintRequestId = UUID().uuidString }
+            settle(.refused(code: GameMintSettlement.refusalCode(for: error)))
+            // La dette (ffbc396c92) et la réserve fermée se DISENT ; la relecture montre ensuite le blocage à l'écran.
+            mintError = GameMintCostCopy.mintFailureMessage(code: refusal, debt: game?.mint.sparksDebt ?? game?.level.sparksDebt)
+            // Un refus d'ÉTAT dit que l'écran était périmé : il se relit — le nouveau prix, la dette, la réserve fermée.
+            if refusal == .mintBlockedByDebt || refusal == .treasuryLocked || refusal == .priceChanged { await load(forceNetwork: true) }
         }
         endGesture()
         isMinting = false
+    }
+
+    private func settle(_ outcome: GameMintSettlement.Outcome) {
+        mintSettlement = GameMintSettlement(outcome: outcome, key: (mintSettlement?.key ?? 0) + 1)
     }
 
     private func celebrate(_ result: APIMeeshMintResult, preview: GameMintPreview?) {
@@ -238,6 +269,7 @@ final class ProgressionViewModel: ObservableObject {
     /// Rend l'instantané À RESTAURER — `nil` quand il n'y a pas de bloc `game` (ancien serveur).
     func beginGesture(_ apply: (GameState) -> GameState) -> GestureUndo? {
         gesturesInFlight += 1
+        readOrder.beginGesture()
         guard let snapshot, let game = snapshot.game else { return nil }
         commit(apply(GameState(game: game, meesh: snapshot.meesh)), over: snapshot)
         return GestureUndo(before: snapshot, generation: snapshotGeneration)
@@ -245,10 +277,58 @@ final class ProgressionViewModel: ObservableObject {
 
     func endGesture() {
         gesturesInFlight = max(0, gesturesInFlight - 1)
+        if isSettled, reconcilesWhenSettled {
+            reconcilesWhenSettled = false
+            Task { [weak self] in await self?.load(forceNetwork: true) }
+        }
         observeGame()
         guard isSettled, persistDeferred else { return }
         persistDeferred = false
         persistSnapshot()
+    }
+
+    /// Une lecture servie se pose si elle n'est ni DÉPASSÉE (une lecture partie après elle, ou un geste commencé après
+    /// son départ) ni EN RETARD sur une frappe confirmée (#10898).
+    private func admits(_ served: APIEngagementProgress, ticket: GameReadOrder.Ticket) -> Bool {
+        guard readOrder.admits(ticket) else { return false }
+        return GameReadOrder.isCurrent(
+            servedRevision: served.gameRevision, servedMinted: served.meesh?.mintedLifetime,
+            confirmed: Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()
+        )
+    }
+
+    /// `game:updated` (#10900) — une frappe, un gain, une reprise faits AILLEURS. Un état plus ancien que ce qui est
+    /// confirmé ne se pose pas ; sinon il relève le plancher, se pose aussitôt quand aucun geste n'est en vol (un geste en vol
+    /// relit lui-même), et la progression entière (solde, compteurs) se relit derrière, en silence.
+    ///
+    /// Le plancher est celui du PROCESSUS : la passerelle date l'événement d'une frappe AVANT de relire le bloc, la frappe
+    /// APRÈS — l'événement arrive donc plus ancien que la frappe confirmée par une autre page. La page restée dessous, qui
+    /// montre encore l'état d'avant, se relit quand même : sinon elle le garderait jusqu'à sa prochaine lecture.
+    func receive(_ event: GameUpdatedEvent) {
+        let floor = Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()
+        guard GameReadOrder.isCurrent(servedRevision: event.gameRevision, servedMinted: nil, confirmed: floor) else {
+            if showsAnOlderStateThan(floor) { Task { await load(forceNetwork: true) } }
+            return
+        }
+        confirm(revision: event.gameRevision, minted: nil)
+        if isSettled, let game = event.game, let snapshot {
+            commit(GameState(game: game, meesh: snapshot.meesh), over: snapshot)
+        }
+        Task { await load(forceNetwork: true) }
+    }
+
+    /// Vrai si la charge affichée est EN RETARD sur ce que le processus a confirmé — une frappe confirmée ailleurs. Une
+    /// charge optimiste (geste en vol) n'est jamais en retard : son geste relit lui-même.
+    private func showsAnOlderStateThan(_ floor: GameReadOrder.Confirmed) -> Bool {
+        guard isSettled, let snapshot else { return false }
+        return !GameReadOrder.isCurrent(
+            servedRevision: snapshot.gameRevision, servedMinted: snapshot.meesh?.mintedLifetime, confirmed: floor
+        )
+    }
+
+    /// Ce que la passerelle confirme — une frappe, une lecture posée — relève le plancher : rien d'antérieur ne le défait.
+    private func confirm(revision: Int?, minted: Int?) {
+        Self.confirmed[cacheKey] = (Self.confirmed[cacheKey] ?? GameReadOrder.Confirmed()).raised(revision: revision, minted: minted)
     }
 
     /// Pose une lecture SERVIE (réseau ou cache) comme la charge affichée.
@@ -276,23 +356,20 @@ final class ProgressionViewModel: ObservableObject {
     /// (elles ne dépendent pas du geste).
     func restore(_ undo: GestureUndo?) {
         guard let undo, undo.generation == snapshotGeneration else { return }
+        guard gesturesInFlight <= 1, !reconcilesWhenSettled else {
+            reconcilesWhenSettled = true
+            return
+        }
         let seenSince = snapshot?.game?.guideSeen ?? []
         guard let game = undo.before.game else { return }
         let state = GameOptimistic.withGuideSeen(GameState(game: game, meesh: undo.before.meesh), keys: seenSince)
         commit(state, over: undo.before)
     }
 
-    /// Ce que la prochaine frappe éteindrait, calculé sur les compteurs servis avec le prix de CETTE
-    /// frappe ; `nil` quand le serveur ne sert pas les points par axe — « inconnu » ne se dit pas « aucun ».
-    var mintBadgeImpact: MintBadgeImpact? {
-        guard let snapshot, let game else { return nil }
-        return GameMintBadgeImpact.impact(counters: snapshot.counters, price: game.mint.price)
-    }
-
     /// Le guide et les propositions de photo lisent le jeu, mais seulement RÉGLÉ.
     func observeGame() {
         guard let game else { return }
-        guide.observe(game: game, settled: isSettled, badgeImpact: mintBadgeImpact)
+        guide.observe(game: game, settled: isSettled)
         photos.observe(game: game, settled: isSettled)
     }
 
@@ -326,7 +403,7 @@ final class ProgressionViewModel: ObservableObject {
         let key = cacheKey
         Task {
             let store = await CacheCoordinator.shared.engagementProgress
-            try? await store.save([snapshot], for: key)
+            await bestEffort("progressionViewModel.store.save", category: .cache) { try await store.save([snapshot], for: key) }
             // La bannière du joueur (#9494) relit ce cache : elle montre le niveau, les Meeshes et la Flamme que
             // Progression vient d'écrire, sans attendre une revalidation.
             NotificationCenter.default.post(name: .engagementSnapshotPersisted, object: nil)

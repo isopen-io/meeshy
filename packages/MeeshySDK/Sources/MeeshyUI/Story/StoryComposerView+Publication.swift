@@ -140,7 +140,9 @@ public final class ComposerPublishTrigger: ObservableObject {
     public func disarm() {
         handler = nil
         previewHandler = nil
+        exitHandler = nil
         isArmed = false
+        offersExit = false
         offersPreview = false
         canPublish = false
         requestedTargetType = nil
@@ -236,6 +238,33 @@ public final class ComposerPublishTrigger: ObservableObject {
 
     public func requestPreview() {
         previewHandler?()
+    }
+
+    /// **La SORTIE, armée par l'atelier avec sa propre croix** (#10543).
+    ///
+    /// Une fermeture venue de l'extérieur (une conversation qui s'ouvre depuis
+    /// une notification) ne doit pas démonter l'atelier par-dessous : son
+    /// brouillon ne s'écrivait qu'à l'accalmie, et les dernières secondes de
+    /// travail partaient avec la vue. Le meuble presse donc la MÊME sortie que
+    /// la croix — elle écrit le brouillon, puis referme.
+    private var exitHandler: (() -> Void)?
+
+    /// Lu AU MOMENT de la demande : sans atelier armé, le meuble referme par
+    /// son propre chemin, ou retient.
+    public private(set) var offersExit = false
+
+    public func armExit(_ handler: @escaping () -> Void) {
+        exitHandler = handler
+        offersExit = true
+    }
+
+    /// Rend `false` quand aucun atelier n'est armé : rien n'a été écrit, rien
+    /// n'a été refermé.
+    @discardableResult
+    public func requestExit() -> Bool {
+        guard let exitHandler else { return false }
+        exitHandler()
+        return true
     }
 
     /// **L'audience SERVIE** — celle sous laquelle la publication part.
@@ -767,6 +796,7 @@ extension StoryComposerView {
     /// Le terme lu reste `exitPrompt`, pas `composerHasContent` : la story
     /// « fond + musique » n'a rien de visuel et partait sinon en silence.
     func handleDismiss() {
+        didRequestExit = true
         switch Self.exitAction(exitPrompt) {
         case .saveDraft:
             saveDraftAndDismiss()
@@ -776,7 +806,14 @@ extension StoryComposerView {
         }
     }
 
+    /// Un démontage garde le brouillon — et le composer se rouvre dessus — sauf si l'auteur a demandé la
+    /// sortie (la croix a déjà écrit, et il ne veut plus du composer) ou si la story est partie.
+    nonisolated static func teardownKeepsDraft(didRequestExit: Bool, didHandOffPublish: Bool) -> Bool {
+        !didRequestExit && !didHandOffPublish
+    }
+
     func saveDraftAndDismiss() {
+        didRequestExit = true
         saveDraft()
         onDismiss()
     }

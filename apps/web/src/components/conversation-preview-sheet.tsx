@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { translateNotificationRow } from '@/lib/i18n-notification-row-catalog';
@@ -21,12 +21,24 @@ import { GLYPHS } from './glyphs';
  * dans l'en-tête du fil à la place de la loupe (#9031), ouvre la conversation
  * complète.
  *
+ * Sur un ordinateur (≥ 768 px, #10070), elle ne prend plus toute la hauteur :
+ * 85 % de l'écran, centrée, l'écran courant visible au-dessus et au-dessous.
+ *
  * POSÉE SUR `document.body`, et `#root` rendu INERTE tant qu'elle vit : le
  * clavier ne s'échappe pas vers l'écran recouvert. Pas de `<dialog>` modal :
  * la couche supérieure du navigateur recouvrirait les menus que le fil pose
  * lui-même sur `document.body` (menu du message, actions d'une rangée). À
  * `z-index` 30 — celui des menus flottants de la coquille, qu'elle recouvre
  * par l'ordre du document —, ces menus, montés APRÈS elle, restent au-dessus.
+ *
+ * **ET `#root` DEVIENT SON PROPRE CONTEXTE D'EMPILEMENT tant qu'elle vit**
+ * (#10539). Le lecteur de stories est une ROUTE peinte à `z-index` 200 dans
+ * `#root` : l'aperçu, à 30, s'ouvrait DESSOUS. Le monter au-dessus de 200 le
+ * ferait passer devant les menus que son propre fil pose sur `<body>` (40, 50).
+ * `isolation: isolate` enferme les étages de l'écran recouvert dans `#root`,
+ * qui se peint alors tout entier sous l'aperçu — sans toucher à un seul
+ * `z-index`. Les couches posées sur `<body>` (visionneuse, feuilles), elles,
+ * sont refermées avant l'ouverture (`previewNotificationConversation`).
  */
 
 /** Au-delà de 96 px tirés vers le bas, la poignée ferme l'aperçu ; en deçà, la feuille revient. */
@@ -34,17 +46,28 @@ export const previewSheetDragOutcome = (translationY: number): 'close' | 'none' 
 
 const CORNER = 22;
 
+/* EFFETS DE MISE EN PAGE (#11108, jumelle de #11100) : Preact diffère le
+   nettoyage d'un `useEffect` démonté à l'après-peinture — la feuille quittait
+   le DOM en laissant `#root` INERTE et isolé, le focus au `<body>`. L'inertie
+   et le focus se posent et se lèvent dans le commit qui insère et retire la
+   feuille. `useInertBackdrop` est appelé AVANT `useFocusInside` : au démontage,
+   l'inertie tombe d'abord, et le focus peut revenir sur ce qui a ouvert. */
 function useInertBackdrop(): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.getElementById('root');
-    if (root === null || root.hasAttribute('inert')) return;
-    root.setAttribute('inert', '');
-    return () => root.removeAttribute('inert');
+    if (root === null) return;
+    const held = root.hasAttribute('inert');
+    root.style.isolation = 'isolate';
+    if (!held) root.setAttribute('inert', '');
+    return () => {
+      root.style.isolation = '';
+      if (!held) root.removeAttribute('inert');
+    };
   }, []);
 }
 
 function useFocusInside(body: { readonly current: HTMLElement | null }): void {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     body.current?.focus({ preventScroll: true });
     return () => previous?.focus({ preventScroll: true });
@@ -137,9 +160,9 @@ export function ConversationPreviewSheet({
       />
       <div
         ref={panel}
-        className="absolute inset-x-0 bottom-0 mx-auto flex w-full flex-col sm:bottom-4"
+        className="absolute inset-x-0 bottom-0 mx-auto flex w-full flex-col sm:bottom-4 md:bottom-[7.5dvh]"
         style={{
-          top: 'calc(var(--safe-top) + 6px)',
+          top: 'var(--preview-top, calc(var(--safe-top) + 6px))',
           maxWidth: 640,
           transform: dragY === 0 ? undefined : `translateY(${dragY}px)`,
         }}

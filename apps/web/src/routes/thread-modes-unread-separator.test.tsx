@@ -122,7 +122,6 @@ const monte = async (mode: ConversationReadingMode, unreadSeparatorMessageId: st
     <ThreadModes
       mode={mode}
       viewer={VIEWER}
-      readerLocale="fr"
       placed={PLACED}
       virtualizer={virtualizerOf(PLACED.length)}
       scene={SCENE}

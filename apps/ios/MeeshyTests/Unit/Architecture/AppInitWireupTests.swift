@@ -388,9 +388,13 @@ final class AppInitWireupTests: XCTestCase {
                      "Meeshy/Features/Main/Views/RootViewComponents.swift",
                      "Meeshy/Features/Main/Views/FeedView.swift",
                      "Meeshy/Features/Main/Views/ConversationListView.swift"] {
+            // L'UNITÉ du type (`Foo.swift` + `Foo+*.swift`) : le rail de stories de la
+            // liste vit dans `ConversationListView+StoryRail.swift`, et un balayage
+            // négatif du seul fichier-tête verdirait en lisant la moitié sans l'interdit.
+            let unit = AppSourceGuard.stripComments(try AppSourceGuard.unit(path))
             XCTAssertEqual(
-                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: try appSource(path))
-                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: try appSource(path)),
+                occurrences(of: "isPresented: $viewModel.showStoryComposer", in: unit)
+                    + occurrences(of: "isPresented: $storyViewModel.showStoryComposer", in: unit),
                 0,
                 "\(path) : les hôtes DÉCLENCHENT le composer, ils ne le présentent plus."
             )
@@ -435,6 +439,21 @@ final class AppInitWireupTests: XCTestCase {
                 return line[line.startIndex..<comment.lowerBound]
             }
             .joined(separator: "\n")
+    }
+
+    /// Un push silencieux qui réveille l'app tuée passe par un lancement en
+    /// arrière-plan sans `checkExistingSession` : `APIClient.shared.authToken`
+    /// reste nil malgré un jeton Keychain valide. Seule la branche « révocation »
+    /// l'amorçait — la synchro, l'accusé de réception et le préchargement du
+    /// message partaient sans jeton (401), ce qui annulait le réveil.
+    func test_silentMessagePush_primesTheAPITokenBeforeItsNetworkCalls() throws {
+        let source = try appSource("Meeshy/AppDelegate.swift")
+        let start = try XCTUnwrap(source.range(of: "\"meeshy.silent-push\""))
+        let sync = try XCTUnwrap(source.range(of: "NotificationCoordinator.shared.syncNow()",
+                                              range: start.upperBound..<source.endIndex))
+        let window = String(source[start.upperBound..<sync.lowerBound])
+        XCTAssertTrue(window.contains("primeAPITokenFromSession()"),
+                      "le jeton doit être amorcé avant la synchro du réveil silencieux")
     }
 
     func test_reelSwitchIntervals_reachMetricKit() throws {

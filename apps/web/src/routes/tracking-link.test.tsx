@@ -108,7 +108,7 @@ describe('/l/:token — le clic compté, puis la cible', () => {
     await mount(<TrackingLinkRedirect token="abc123" language="fr" deps={script.deps} />);
     expect(script.recorded).toHaveLength(1);
     expect(script.left).toEqual([]);
-    expect(script.went).toEqual([{ url: `/reel/${id}?via=abc123`, replace: true }]);
+    expect(script.went).toEqual([{ url: `/reel/${id}?via=abc123&from=tracking_link`, replace: true }]);
   });
 
   test('un jeton hors forme ne consulte pas la passerelle', async () => {

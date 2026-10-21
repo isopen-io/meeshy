@@ -190,6 +190,8 @@ const isCapability = (v) => v == null || /_[0-9a-f]{16}$/.test(v);
  * champ qui n'est ni traité par l'inventaire ni nommé ici le fait échouer.
  */
 export const SECRET_EXEMPTIONS = Object.freeze({
+  'PostImpression.readerKey': 'empreinte HMAC-SHA256 du compte à clé secrète de l’environnement source (READER_KEY_HMAC_SECRET, #10773) : ni recalculable ni rapprochable du compte sans ce secret, que la copie ne reçoit pas',
+  'PostEngagement.readerKey': 'empreinte HMAC-SHA256 du compte à clé secrète de l’environnement source (READER_KEY_HMAC_SECRET, #10771) : ni recalculable ni rapprochable du compte sans ce secret, que la copie ne reçoit pas',
   'AnonymousSession.shareLinkId': 'identifiant Mongo du lien de partage (pas le lien lui-même, dont linkId et identifier sont régénérés)',
   'User.referralCode': 'code de parrainage public, partagé par son titulaire ; il attribue une inscription et n’ouvre aucune session',
   'Conversation.lastReactionTargetKey': 'clé composée d’identifiants de la dernière cible de réaction, ni secret ni donnée personnelle',
@@ -561,4 +563,5 @@ export const INVENTORY = Object.freeze([
   { model: 'AgentAnalysisSnapshot', collection: 'AgentAnalysisSnapshot', action: 'purge', fields: t(['participantSnapshots', 'topTopics']) },
   { model: 'AgentScanLog', collection: 'AgentScanLog', action: 'purge', fields: t(['nodeResults', 'configSnapshot']) },
   { model: 'OrphanMediaCleanup', collection: 'OrphanMediaCleanup', action: 'purge', fields: t(['fileUrl']) },
+  { model: 'SharedTranslation', collection: 'SharedTranslation', action: 'purge', fields: t(['payload']) },
 ]);

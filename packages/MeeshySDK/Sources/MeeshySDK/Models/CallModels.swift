@@ -1,20 +1,5 @@
 import Foundation
 
-// MARK: - Call Direction
-
-/// From the current user's vantage point. The gateway derives and sends this;
-/// the client trusts it. `init(raw:)` degrades unknown values to `.incoming`
-/// rather than failing to decode the whole record.
-public enum CallDirection: String, Sendable, Equatable {
-    case incoming
-    case outgoing
-    case missed
-
-    public init(raw: String) {
-        self = CallDirection(rawValue: raw) ?? .incoming
-    }
-}
-
 // MARK: - Peer
 
 /// The other party of a P2P/direct call. `nil` for group calls (the

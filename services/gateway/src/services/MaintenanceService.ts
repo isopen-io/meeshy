@@ -3,9 +3,9 @@
  * Gestion des tâches de maintenance automatiques
  */
 
-import { apiPath } from '@meeshy/shared/api/prefix';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
+import { buildDeletionPageUrl } from '../utils/email-secret-link';
 import { AttachmentService } from './attachments';
 import { EmailService } from './EmailService';
 import { recomputeConversationLastMessageAt } from './messaging/messageRemovalEffects';
@@ -18,7 +18,7 @@ import type { SessionRevoker } from './admin/user-management.service';
 import { purgeAccountIsolatedData, anonymizeUserIdentity } from './AccountPurgeService';
 import { purgeMediaOfDeletedAccount } from './purgeDeletedAccountMedia';
 import { deactivateCommunityMembershipsOfDeletedAccount } from './deactivateDeletedAccountCommunityMemberships';
-import { cleanupExpiredData as sweepExpiredData } from './cleanupExpiredData';
+import { cleanupExpiredData as sweepExpiredData, type ShareLinkRevocationLive } from './cleanupExpiredData';
 import {
   RECIPIENT_LANG_SELECT,
   recipientDateLocale,
@@ -50,6 +50,11 @@ export class MaintenanceService {
    * injecté par le manager, résolu à l'appel, best-effort.
    */
   private sessionRevoker: SessionRevoker | null = null;
+  /**
+   * Le vivant qu'éteint la révocation des invités d'un lien expiré au
+   * balayage journalier (#10440). Injecté par le manager, résolu à l'appel.
+   */
+  private shareLinkRevocationLive: ShareLinkRevocationLive = {};
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
@@ -96,6 +101,16 @@ export class MaintenanceService {
    */
   setSessionRevoker(revoker: SessionRevoker): void {
     this.sessionRevoker = revoker;
+  }
+
+  /**
+   * Injecter le vivant (`io`, manager) dont `revokeShareLinkGuests` a besoin
+   * pour annoncer le départ des invités d'un lien expiré et couper leurs
+   * sockets (#10440) — même origine et même raison que les trois capacités
+   * ci-dessus.
+   */
+  setShareLinkRevocationLive(live: ShareLinkRevocationLive): void {
+    this.shareLinkRevocationLive = live;
   }
 
   /**
@@ -675,7 +690,7 @@ export class MaintenanceService {
    * Nettoyer les sessions expirées et les données temporaires
    */
   async cleanupExpiredData(): Promise<void> {
-    await sweepExpiredData(this.prisma);
+    await sweepExpiredData(this.prisma, this.shareLinkRevocationLive);
   }
 
   /**
@@ -700,9 +715,15 @@ export class MaintenanceService {
    * Motif commun aux cinq catégories de purge/anonymisation d'un compte
    * expiré, ci-dessous : un appel best-effort, après l'écriture qui a déjà
    * fait passer la ligne en `GRACE_PERIOD_EXPIRED` — un échec ne doit jamais
-   * faire compter l'expiration elle-même comme ratée par l'appelant, la
-   * prochaine passe horaire rejouera l'étape (chacune est idempotente par
-   * construction, cf. son propre module).
+   * faire compter l'expiration elle-même comme ratée par l'appelant.
+   *
+   * L'échec est JOURNALISÉ, il n'est PAS rejoué : la passe n'élit que les
+   * demandes `CONFIRMED` (`processAccountDeletionRequests`), et celle-ci ne
+   * l'est plus — la prochaine passe horaire ne revient pas sur l'étape. Chacune
+   * est idempotente par construction (cf. son propre module), ce qui PERMET un
+   * rejeu sans le faire exister ; rejouer jusqu'au succès est #10021. Le seul
+   * rejeu actuel est le second appel de la route « supprimer maintenant » (au
+   * clic de la personne, erreurs avalées), pour deux de ces étapes seulement.
    */
   private async bestEffortDeletionStep(userId: string, label: string, step: () => Promise<unknown>): Promise<void> {
     try {
@@ -720,7 +741,7 @@ export class MaintenanceService {
    * action que l'utilisateur doit encore déclencher lui-même.
    */
   private purgeIsolatedDataOfExpiredAccount(userId: string): Promise<void> {
-    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId));
+    return this.bestEffortDeletionStep(userId, 'Isolated-data purge', () => purgeAccountIsolatedData(this.prisma, userId, { shareLinkLive: this.shareLinkRevocationLive }));
   }
 
   /**
@@ -841,7 +862,6 @@ export class MaintenanceService {
             if (!user?.email) continue;
 
             const name = user.displayName || user.firstName || 'Utilisateur';
-            const baseUrl = process.env.GATEWAY_URL || process.env.API_URL || 'https://gate.meeshy.me';
 
             // We need the raw tokens to build links, but we only store hashes.
             // The reminder email uses confirmTokenHash for delete-now and cancelTokenHash for cancel.
@@ -864,8 +884,11 @@ export class MaintenanceService {
               }
             });
 
-            const deleteNowLink = `${baseUrl}${apiPath('/me/delete-account/delete-now')}?token=${newConfirmToken}`;
-            const cancelLink = `${baseUrl}${apiPath('/me/delete-account/cancel')}?token=${newCancelToken}`;
+            // #10859 — la page web, jeton dans le fragment : les anciennes
+            // adresses `GET` de la passerelle (`delete-now`, `cancel`) ne font
+            // plus que rediriger vers elle, et journalisaient le jeton.
+            const deleteNowLink = buildDeletionPageUrl('purge', newConfirmToken);
+            const cancelLink = buildDeletionPageUrl('cancel', newCancelToken);
             // La date se lit DANS l'e-mail, donc dans la langue de l'e-mail :
             // un `'fr-FR'` en dur datait « à la française » un courrier
             // allemand ou espagnol.

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- #10626 — pastille de non-lus et bouton « Repondre ». -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/widget_brand" />
+    <corners android:radius="999dp" />
+</shape>

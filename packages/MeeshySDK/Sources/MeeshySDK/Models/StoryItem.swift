@@ -69,6 +69,10 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     /// `nil` for anonymous reads or legacy payloads/caches.
     public var impressionCount: Int?
 
+    /// Part ANONYME de `viewCount` (#10483) : la liste « vu par » ajoute « et N
+    /// visiteurs ». `nil` d'un serveur antérieur — aucune ligne.
+    public var anonymousViewCount: Int? = nil
+
     /// Count of reposts that pointed back to this story (Partager label).
     /// `nil` when not yet enriched.
     public var repostCount: Int?
@@ -208,10 +212,17 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public static let defaultExpiryInterval: TimeInterval = 20 * 60 * 60
 
     public func isExpired(at now: Date = Date()) -> Bool {
+        Self.isExpired(createdAt: createdAt, expiresAt: expiresAt, at: now)
+    }
+
+    /// La loi d'expiration elle-même, pour qui tient une story sans `StoryItem`
+    /// (le support d'une carte, `PostCommentCardStory`) — l'échéance explicite,
+    /// sinon `defaultExpiryInterval` après la création.
+    public static func isExpired(createdAt: Date, expiresAt: Date?, at now: Date) -> Bool {
         if let explicit = expiresAt {
             return explicit <= now
         }
-        return createdAt.addingTimeInterval(Self.defaultExpiryInterval) <= now
+        return createdAt.addingTimeInterval(defaultExpiryInterval) <= now
     }
 
     /// Prisme realtime : traduction du CONTENU de la story (sa légende), que le
@@ -230,7 +241,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         guard !code.isEmpty, !content.isEmpty else { return self }
         var merged = (translations ?? []).filter { $0.language.lowercased() != code }
         merged.append(StoryTranslation(language: code, content: content))
-        return StoryItem(
+        var copy = StoryItem(
             id: id, content: self.content, media: media, storyEffects: storyEffects,
             createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
@@ -244,6 +255,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             currentUserReactions: currentUserReactions, referenceAccess: referenceAccess,
             mentions: mentions, trackingLinks: trackingLinks
         )
+        copy.anonymousViewCount = anonymousViewCount
+        return copy
     }
 
     /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
@@ -261,7 +274,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         for (language, text) in translations { merged[language] = text }
         object.translations = merged
         effects.textObjects[index] = object
-        return StoryItem(
+        var copy = StoryItem(
             id: id, content: content, media: media, storyEffects: effects,
             createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
             originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
@@ -275,6 +288,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
             currentUserReactions: currentUserReactions, referenceAccess: referenceAccess,
             mentions: mentions, trackingLinks: trackingLinks
         )
+        copy.anonymousViewCount = anonymousViewCount
+        return copy
     }
 }
 
@@ -343,7 +358,7 @@ extension Array where Element == APIPost {
             let effectiveExpiresAt = post.expiresAt
                 ?? post.createdAt.addingTimeInterval(StoryItem.defaultExpiryInterval)
             let totalReactions = post.reactionSummary?.values.reduce(0, +) ?? 0
-            let item = StoryItem(id: post.id, content: post.content, media: media,
+            var item = StoryItem(id: post.id, content: post.content, media: media,
                                  storyEffects: StoryEffects.played(own: post.storyEffects,
                                                                    ownMediaIsEmpty: ownMedia.isEmpty,
                                                                    source: repostSource?.storyEffects),
@@ -368,6 +383,7 @@ extension Array where Element == APIPost {
                                  referenceAccess: post.referenceAccess,
                                  mentions: post.mentions,
                                  trackingLinks: post.trackingLinks)
+            item.anonymousViewCount = post.anonymousViewCount
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {
@@ -384,7 +400,8 @@ extension Array where Element == APIPost {
                        // payloads/caches antérieurs à l'enrichissement gateway).
                        authorPresence: data.author.isOnline.map {
                            UserPresence(isOnline: $0, lastActiveAt: data.author.lastActiveAt)
-                       })
+                       },
+                       authorRing: data.author.avatarRing)
         }
         groups.sort { a, b in
             if let uid = currentUserId {

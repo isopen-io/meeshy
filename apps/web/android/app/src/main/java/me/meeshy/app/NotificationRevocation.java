@@ -51,6 +51,21 @@ final class NotificationRevocation {
         return new ArrayList<>(tags);
     }
 
+    /**
+     * #11032 — la banniere MARQUEE d'une notification revoquee
+     * ({@link NotificationCorrectionRules#EXTRA_NOTIFICATION_ID}) part quel que
+     * soit son tag, comme sur le web (`banner-revocation.ts`) : une reaction
+     * a un message est affichee sous le tag de sa CONVERSATION, que l'annulation
+     * par identifiant manquait. Celle d'une autre notification du fil reste.
+     */
+    static boolean closesMarked(Map<String, String> data, String marked) {
+        if (!TYPE.equals(data.get("type")) || marked == null || marked.trim().isEmpty()) return false;
+        for (String id : split(data.get("notificationIds"))) {
+            if (id.trim().equals(marked.trim())) return true;
+        }
+        return false;
+    }
+
     private static List<String> split(String joined) {
         return joined == null ? Collections.emptyList() : Arrays.asList(joined.split(",", -1));
     }

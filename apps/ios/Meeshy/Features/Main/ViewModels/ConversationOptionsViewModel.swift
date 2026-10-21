@@ -22,7 +22,7 @@ final class ConversationOptionsViewModel: ObservableObject {
     private var conversationId: String { conversation.id }
     private let store: ConversationStore
     private let preferenceService: PreferenceServiceProviding
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "conv-options")
+    private static let logger = MeeshyLog.logger(.convOptions)
 
     private let customNameSubject = PassthroughSubject<String, Never>()
     private var cancellables = Set<AnyCancellable>()

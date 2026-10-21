@@ -16,8 +16,11 @@ import UIKit
 /// en bas d'un cadre pleine hauteur se pose derrière le clavier.
 ///
 /// D'où une règle EXPLICITE plutôt qu'une délégation : la hauteur vient de
-/// `KeyboardTransition` — le décodeur que la conversation utilise déjà, seul
-/// site qui lit `keyboardWillShow`/`Hide` — et la vue l'APPLIQUE. Pure et
+/// `KeyboardTransition` — le décodeur que la conversation utilise déjà — et
+/// la vue l'APPLIQUE. Ce décodeur n'est PAS le seul lecteur du clavier de
+/// l'app (#10544) : `KeyboardObserver` (composeurs, lecteur de stories),
+/// `KeyboardFirstScroll` et le composeur de story du SDK lisent aussi ses
+/// notifications. Pure et
 /// `nonisolated` : elle s'éprouve sans monter d'écran ni clavier.
 nonisolated enum MediaReplyKeyboardInset {
 

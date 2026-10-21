@@ -15,6 +15,7 @@ import { enhancedLogger } from '../utils/logger-enhanced.js';
 import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response';
 import { writeConversationPreferences } from '../services/conversationPreferencesSync';
 import { depreciee, dateDeRetrait } from '../utils/deprecation';
+import { deletedConversationsSchema } from './user-deletions-schemas';
 import { apiPath } from '@meeshy/shared/api/prefix';
 import { retractNotificationsForClearedHistory } from '../services/messaging/retractHiddenMessageNotifications';
 import {
@@ -23,6 +24,7 @@ import {
 } from '../services/personalMessageVisibilitySync';
 import { refreshPersonalConversationPreview } from '../services/messaging/personalPreviewRefresh';
 import { invalidateParticipantLookup } from '../utils/participant-lookup-cache';
+import { unsetOrNull } from '../utils/prisma-unset';
 import { SERVER_EVENTS, type ConversationRestoredEventData } from '@meeshy/shared/types/socketio-events';
 import { broadcastToUser } from '../utils/socket-broadcast';
 import { announceConversationLanguageChange } from '../services/message-translation/conversationLanguageChanges';
@@ -152,6 +154,10 @@ const ALIAS_SUPPRESSION_DELETED_CONVERSATIONS = {
 export type UserDeletionsRoutesOptions = {
   readonly basePath?: string;
 };
+
+function refuseBannedRestore(reply: FastifyReply): void {
+  return sendForbidden(reply, 'You are banned from this conversation', { code: 'BANNED' });
+}
 
 /**
  * Base absolue des sept routes ci-dessous (#4277, critère 3). AVANT ce lot,
@@ -330,22 +336,8 @@ export default async function userDeletionsRoutes(
     }
   );
 
-  /**
-   * POST /api/conversations/:conversationId/restore-for-me
-   * Restore a previously deleted conversation for the user.
-   *
-   * #4332 — lisait AUPARAVANT `UserConversationPreferences.deletedForUserAt`,
-   * une colonne qu'AUCUN appelant réel n'écrivait (le seul écrivain était le
-   * DELETE ci-dessus, avant qu'il ne délègue lui aussi à
-   * `performConversationDeleteForMe`) : cette route répondait donc TOUJOURS
-   * 400 « Conversation is not deleted », y compris pour une conversation que
-   * l'utilisateur venait réellement de supprimer via la route canonique, qui
-   * écrit `Participant.deletedForMe`. Elle lit désormais CETTE colonne — la
-   * même que le DELETE ci-dessus écrit, canonique comme alias.
-   *
-   * Pas de filtre `isActive` sur le `findFirst` : c'est justement l'inverse
-   * qu'on cherche — un participant que « supprimer pour moi » a désactivé.
-   */
+  // Déclaré AVANT son handler, comme les schémas voisins : le balayage
+  // response-payload-mismatch rattache un handler au bloc `response:` qui le précède.
   const restoreConversationForMeSchema = {
     description: 'Restore a previously deleted conversation to the authenticated user\'s view. Only works if the conversation was previously deleted by the user AND the conversation itself was not closed for everyone in the process.',
     tags: ['users', 'conversations'],
@@ -371,10 +363,28 @@ export default async function userDeletionsRoutes(
         }
       },
       400: errorResponseSchema,
+      403: errorResponseSchema,
+      404: errorResponseSchema,
       500: errorResponseSchema
     }
   } as const;
 
+  /**
+   * POST /api/conversations/:conversationId/restore-for-me
+   * Restore a previously deleted conversation for the user.
+   *
+   * #4332 — lisait AUPARAVANT `UserConversationPreferences.deletedForUserAt`,
+   * une colonne qu'AUCUN appelant réel n'écrivait (le seul écrivain était le
+   * DELETE ci-dessus, avant qu'il ne délègue lui aussi à
+   * `performConversationDeleteForMe`) : cette route répondait donc TOUJOURS
+   * 400 « Conversation is not deleted », y compris pour une conversation que
+   * l'utilisateur venait réellement de supprimer via la route canonique, qui
+   * écrit `Participant.deletedForMe`. Elle lit désormais CETTE colonne — la
+   * même que le DELETE ci-dessus écrit, canonique comme alias.
+   *
+   * Pas de filtre `isActive` sur le `findFirst` : c'est justement l'inverse
+   * qu'on cherche — un participant que « supprimer pour moi » a désactivé.
+   */
   const restoreConversationForMeHandler = async (request: FastifyRequest<{ Params: ConversationIdParams }>, reply: FastifyReply) => {
       try {
         const { conversationId } = request.params;
@@ -386,6 +396,7 @@ export default async function userDeletionsRoutes(
           select: {
             id: true,
             deletedForMe: true,
+            bannedAt: true,
             language: true,
             conversation: { select: { isActive: true } },
           },
@@ -393,6 +404,16 @@ export default async function userDeletionsRoutes(
 
         if (!participant || !participant.deletedForMe) {
           return sendBadRequest(reply, 'Conversation is not deleted');
+        }
+
+        // #10436 — un banni ne se restaure pas. Supprimer pour soi désactive la
+        // ligne ; un bannissement posé ENSUITE n'écrit que `bannedAt`
+        // (`resolveBanWrite`, la ligne étant déjà inactive). Rallumer
+        // `isActive` ici rendait la ligne active ET bannie, lue comme vivante
+        // par toute lecture `userId + isActive: true` (liste, envoi, push).
+        // Même refus que l'entrée par lien (`linkAdmission.ts`, code BANNED).
+        if (participant.bannedAt) {
+          return refuseBannedRestore(reply);
         }
 
         // Restaurer un participant dont la conversation a été CLOSE (dernier
@@ -406,10 +427,27 @@ export default async function userDeletionsRoutes(
           return sendBadRequest(reply, 'Conversation is closed and cannot be restored');
         }
 
-        await prisma.participant.update({
-          where: { id: participant.id },
-          data: { deletedForMe: null, isActive: true },
-        });
+        // La garde est AUSSI dans le `where` : un bannissement tombé entre la
+        // lecture ci-dessus et cette écriture ne doit pas être rallumé. La
+        // ligne ne s'apparie plus, Prisma lève P2025, et la route refuse.
+        // #10443 — P2025 dit seulement « plus d'appariement » : bannie, OU
+        // disparue. La route relit la ligne pour rendre la vraie cause.
+        try {
+          await prisma.participant.update({
+            where: { id: participant.id, ...unsetOrNull('bannedAt') },
+            data: { deletedForMe: null, isActive: true },
+          });
+        } catch (error) {
+          if ((error as { code?: unknown } | null)?.code === 'P2025') {
+            const current = await prisma.participant.findFirst({
+              where: { id: participant.id },
+              select: { bannedAt: true },
+            });
+            if (current?.bannedAt) return refuseBannedRestore(reply);
+            return sendNotFound(reply, 'Participation not found', { code: 'NOT_FOUND' });
+          }
+          throw error;
+        }
         // Miroir exact du DELETE ci-dessus : sans cette invalidation, le
         // cache de lookup continuerait de répondre "inactif" pour CE
         // participant jusqu'à l'expiration de son TTL, alors que la ligne
@@ -893,42 +931,6 @@ export default async function userDeletionsRoutes(
    * GET /api/user/deleted-conversations
    * Get list of conversations the user has deleted (for potential restoration)
    */
-  const deletedConversationsSchema = {
-    description: 'Get a list of all conversations the authenticated user has deleted from their view. Returns conversation details and deletion timestamps. These conversations can be restored.',
-    tags: ['users', 'conversations'],
-    summary: 'Get user deleted conversations',
-    response: {
-      200: {
-        type: 'object',
-        properties: {
-          success: { type: 'boolean', example: true },
-          data: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                conversationId: { type: 'string', description: 'Conversation ID' },
-                conversation: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    identifier: { type: 'string' },
-                    title: { type: 'string', nullable: true },
-                    type: { type: 'string', enum: ['direct', 'group'] },
-                    avatar: { type: 'string', nullable: true },
-                    lastMessageAt: { type: 'string', format: 'date-time', nullable: true }
-                  }
-                },
-                deletedAt: { type: 'string', format: 'date-time', nullable: true, description: 'When the user deleted this conversation' }
-              }
-            }
-          }
-        }
-      },
-      500: errorResponseSchema
-    }
-  } as const;
-
   const deletedConversationsHandler = async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;

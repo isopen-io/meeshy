@@ -43,6 +43,8 @@ export type CallDetail = {
   readonly live: boolean;
   /** Les réactions de l'appel (#8439), dans l'ordre de la palette, les absentes omises. */
   readonly reactions: readonly CallReactionTally[];
+  /** LA CLÉ DE PRÉSENCE DU PAIR d'un appel direct (#10956) — son compte ; `null` pour un groupe ou un pair inconnu. */
+  readonly peerKey: string | null;
 };
 
 export type CallReactionTally = { readonly emoji: CallReactionEmoji; readonly count: number };
@@ -69,6 +71,7 @@ export function callDetailFromRecord(record: CallRecord, unknown: string): CallD
     participants: record.participants.map((participant) => participant.displayName),
     live: false,
     reactions: reactionTallies(record.reactionCounts),
+    peerKey: record.conversationType === 'direct' ? (record.peer?.userId ?? null) : null,
   };
 }
 
@@ -103,6 +106,7 @@ export function callDetailFromSession(
     participants: isGroup ? others.map((member) => member.name).filter((name) => name !== '') : [],
     live: session.live,
     reactions: reactionTallies(session.reactionCounts),
+    peerKey: isGroup ? null : (first?.userId ?? null),
   };
 }
 

@@ -120,6 +120,28 @@ extension CallManager {
         }
     }
 
+    /// Arms the callee-side cutoff (`incomingRingTimeoutTask`). The margin over the ring budget leaves the
+    /// gateway's own timeout and its `call:ended` the first word; this only closes a call nobody will close.
+    @MainActor
+    func startIncomingRingTimeout() {
+        incomingRingTimeoutTask?.cancel()
+        let timeout = QualityThresholds.outgoingRingTimeoutSeconds + 30
+        incomingRingTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard let self, !Task.isCancelled else { return }
+            guard case .ringing(isOutgoing: false) = self.callState else { return }
+            Logger.calls.warning("Incoming call still ringing after \(timeout)s — its end was lost; closing as missed")
+            if let callId = self.currentCallId {
+                self.handleRemoteEnd(callId: callId, rawReason: "missed")
+            } else {
+                if let uuid = self.activeCallUUID {
+                    self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                }
+                self.endCallInternal(reason: .missed)
+            }
+        }
+    }
+
     @MainActor
     func cancelOutgoingRingTimeout() {
         outgoingRingTimeoutTask?.cancel()
@@ -139,5 +161,5 @@ extension CallManager {
 }
 
 private extension Logger {
-    nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+    nonisolated static let calls = MeeshyLog.logger(.calls)
 }

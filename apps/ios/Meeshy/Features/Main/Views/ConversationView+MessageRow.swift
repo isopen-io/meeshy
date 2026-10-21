@@ -3,7 +3,25 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
+/// Le debounce de la recherche dans la conversation, tenu par une RÉFÉRENCE que la vue garde en `@State`.
+///
+/// Il était rangé en objet associé sur `self` — or `ConversationView` est une struct : chaque accès
+/// emballait une copie neuve, le getter rendait toujours nil, et ni la frappe suivante ni la fermeture
+/// de la recherche n'annulaient rien. Chaque frappe lançait sa recherche, dans le désordre, et une
+/// recherche fermée dans les 400 ms filtrait quand même la conversation, interface de recherche partie.
+final class SearchDebounceBox {
+    private(set) var task: Task<Void, Never>?
+
+    /// Remplace la recherche en attente, en annulant la précédente.
+    func replace(with task: Task<Void, Never>?) {
+        self.task?.cancel()
+        self.task = task
+    }
+
+    func cancel() { replace(with: nil) }
+
+    nonisolated deinit { task?.cancel() }
+}
 
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
@@ -18,8 +36,7 @@ extension ConversationView {
     /// suppression locale part IMMÉDIATEMENT, sans `confirmationDialog`.
     /// Tout autre message garde la confirmation habituelle.
     func requestDeleteMessage(_ messageId: String) {
-        if let idx = viewModel.messageIndex(for: messageId),
-           viewModel.messages[idx].deliveryStatus == .failed {
+        if viewModel.outgoingState(of: messageId)?.isFailed == true {
             Task { await viewModel.deleteMessage(messageId: messageId, mode: .everyone) }
             return
         }
@@ -210,19 +227,28 @@ extension ConversationView {
 
     // MARK: - Search Actions
 
+    /// Ouverture depuis le bouton Recherche de l'aperçu long-press : active la barre de recherche.
+    ///
+    /// Consommée à l'ouverture ET à chaud : sur iPad, la liste reste à côté de la conversation ouverte,
+    /// et choisir « Rechercher » sur CELLE-CI ne recrée pas la vue (même `.id`) — le drapeau, lu par le
+    /// seul `.task` initial, restait levé et ouvrait la recherche dans la conversation suivante.
+    func consumePendingOpenSearch() async {
+        guard router.pendingOpenSearch else { return }
+        router.pendingOpenSearch = false
+        try? await Task.sleep(for: .milliseconds(250))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            headerState.showSearch = true
+        }
+    }
+
     func triggerBackendSearch() {
         Task { await viewModel.searchMessages(query: headerState.searchQuery) }
     }
 
-    private var searchDebounceTask: Task<Void, Never>? {
-        get { objc_getAssociatedObject(self, &searchDebounceKey) as? Task<Void, Never> }
-        nonmutating set { objc_setAssociatedObject(self, &searchDebounceKey, newValue, .OBJC_ASSOCIATION_RETAIN) }
-    }
-
     func debounceSearch() {
-        searchDebounceTask?.cancel()
         let query = headerState.searchQuery
-        searchDebounceTask = Task {
+        searchDebounce.replace(with: Task {
             try? await Task.sleep(nanoseconds: 400_000_000)
             guard !Task.isCancelled else { return }
             if query.count >= 2 {
@@ -232,13 +258,13 @@ extension ConversationView {
                 // full conversation comes back.
                 await viewModel.endSearch()
             }
-        }
+        })
     }
 
     func dismissSearch() {
         // Cancel any pending debounce so a stale `endSearch` / `searchMessages`
         // can't fire after the search UI has been dismissed.
-        searchDebounceTask?.cancel()
+        searchDebounce.cancel()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             headerState.showSearch = false
             headerState.searchQuery = ""
@@ -321,7 +347,7 @@ extension ConversationView {
 
     private func quickReactionActionsRow(messageId: String) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
-            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Répondre"), color: MeeshyColors.indigo300Hex) {
+            messageActionButton(icon: MessageActionVerb.reply.filledSymbol, label: MessageActionVerb.reply.label, color: MeeshyColors.indigo300Hex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                     triggerReply(for: msg)
                 }
@@ -330,12 +356,10 @@ extension ConversationView {
             // La loi de sortie décide (#9573) : un contenu qui disparaît, ou
             // flouté, ne se copie pas — le bouton n'est pas rendu.
             if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].exitOffer.offers(.copy) }) ?? false {
-                messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
+                messageActionButton(icon: MessageActionVerb.copy.filledSymbol, label: MessageActionVerb.copy.label, color: MeeshyColors.trackingAccentHex) {
                     if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
-                        // Prisme: copy what's actually DISPLAYED (the preferred
-                        // translation when one is showing), never blindly the
-                        // original — matches the long-press menu's Copier below.
-                        MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg)
+                        // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
+                        MessageExitTransport.copyDisplayed(msg, in: viewModel)
                     }
                     closeReactionBar()
                 }
@@ -343,12 +367,12 @@ extension ConversationView {
             // Le bouton disparaît plutôt que d'offrir une action condamnée
             // (`Message.isForwardable`, projection de la loi de sortie).
             if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? false {
-                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transférer"), color: MeeshyColors.warningHex) {
+                messageActionButton(icon: MessageActionVerb.forward.filledSymbol, label: MessageActionVerb.forward.label, color: MeeshyColors.warningHex) {
                     composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
                     closeReactionBar()
                 }
             }
-            messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: MeeshyColors.errorHex) {
+            messageActionButton(icon: MessageActionVerb.delete.filledSymbol, label: MessageActionVerb.delete.label, color: MeeshyColors.errorHex) {
                 requestDeleteMessage(messageId)
                 closeReactionBar()
             }

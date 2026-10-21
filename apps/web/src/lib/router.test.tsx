@@ -205,3 +205,90 @@ describe('createRouter(…, { screenPrerequisite }) — l’écran attend son pr
 });
 
 const sortedCopy = (values: readonly string[]): readonly string[] => [...values].sort();
+
+/**
+ * LE REGISTRE DES ÉCRANS (#10636) — préchargement et rendu partagent UNE
+ * promesse par écran ; un écran déjà chargé s'ouvre dans le MÊME rendu que la
+ * navigation, sans jamais passer par l'attente.
+ */
+describe('createRouter().preload — un écran préchargé s’ouvre sans attente', () => {
+  const settle = async () => {
+    await act(async () => {
+      for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    });
+  };
+
+  const tableCounting = (counts: Record<string, number>, fail = { first: false }) =>
+    ({
+      list: { pattern: '/', screen: () => Promise.resolve({ default: () => <p data-list>Liste</p> }) },
+      target: {
+        pattern: '/target',
+        screen: () => {
+          counts.target = (counts.target ?? 0) + 1;
+          if (fail.first) {
+            fail.first = false;
+            return Promise.reject(new Error('réseau coupé'));
+          }
+          return Promise.resolve({ default: () => <p data-target>Cible</p> });
+        },
+      },
+    }) as const;
+
+  test('précharger deux fois puis ouvrir l’écran n’importe son module qu’UNE fois', async () => {
+    const counts: Record<string, number> = {};
+    const { Router, navigate: go, preload } = createRouter(tableCounting(counts), NotFound, { screenPrerequisite: () => Promise.resolve() });
+    act(() => go('/', true));
+    mount(<Router wrap={(screen) => screen} skeleton={<p data-skeleton>Attente</p>} />);
+    await preload('target');
+    await preload('target');
+    act(() => go('/target'));
+    await settle();
+    expect(counts.target).toBe(1);
+  });
+
+  test('un écran préchargé se rend dans le rendu même de la navigation — l’attente ne paraît jamais', async () => {
+    const counts: Record<string, number> = {};
+    const { Router, navigate: go, preload } = createRouter(tableCounting(counts), NotFound, { screenPrerequisite: () => Promise.resolve() });
+    act(() => go('/', true));
+    const el = mount(<Router wrap={(screen) => screen} skeleton={<p data-skeleton>Attente</p>} />);
+    await settle();
+    await preload('target');
+    act(() => go('/target'));
+    expect(el.querySelector('[data-skeleton]')).toBeNull();
+    expect(el.querySelector('[data-target]')).not.toBeNull();
+  });
+
+  test('un préchargement raté s’oublie : l’ouverture suivante réessaie', async () => {
+    const counts: Record<string, number> = {};
+    const { Router, navigate: go, preload } = createRouter(tableCounting(counts, { first: true }), NotFound);
+    act(() => go('/', true));
+    const el = mount(<Router wrap={(screen) => screen} skeleton={<p data-skeleton>Attente</p>} />);
+    await preload('target').catch(() => undefined);
+    act(() => go('/target'));
+    await settle();
+    expect(counts.target).toBe(2);
+    expect(el.querySelector('[data-target]')).not.toBeNull();
+  });
+
+  test('toucher un lien charge son écran sur-le-champ, sans attendre l’intention de survol', async () => {
+    const counts: Record<string, number> = {};
+    const { Router, Link, navigate: go } = createRouter(tableCounting(counts), NotFound);
+    act(() => go('/', true));
+    const el = mount(
+      <Router
+        wrap={() => (
+          <Link to="target" data-link>
+            Aller
+          </Link>
+        )}
+        skeleton={null}
+      />,
+    );
+    const anchor = el.querySelector('[data-link]');
+    if (anchor === null) throw new Error('lien absent');
+    act(() => {
+      anchor.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+    });
+    expect(counts.target).toBe(1);
+  });
+});

@@ -6,6 +6,7 @@ import type { Conversation } from '@/lib/api/types';
 import type { ConversationFlags } from '@/lib/api/preferences';
 import { CONVERSATIONS_QUERY_KEY } from '@/lib/api/conversations';
 import { applyConversationUpdated } from '@/lib/api/realtime-apply';
+import { presenceStore } from '@/lib/api/presence-store';
 
 import { LensRow, sameRowProps, type LensRowProps } from './lens-row';
 
@@ -363,6 +364,28 @@ describe('la rangée de la Lentille — « X écrit » (#5793)', () => {
     const typing = renderToStaticMarkup(<LensRow {...baseProps({ conversation: offline, typists: ['Amina Diallo'] })} />);
     expect(atRest).not.toContain('data-presence');
     expect(typing).toMatch(/data-presence="online"/);
+  });
+
+  /** LA PRÉSENCE VIVANTE PRIME SUR LA CHARGE (#10571) : un pair servi hors
+   * ligne par le REST, mais annoncé en ligne par `user:status`, porte le point
+   * vert — et l'inverse l'éteint. */
+  test('la présence vivante du pair prime sur la charge REST figée', () => {
+    const served = (isOnline: boolean) =>
+      conversation({
+        participants: [
+          { id: 'p1', userId: 'u-viewer' },
+          { id: 'p2', userId: 'u-amina', user: { id: 'u-amina', isOnline } },
+        ] as never,
+      });
+    try {
+      presenceStore.getState().put('u-amina', { isOnline: true, lastActiveAt: new Date().toISOString() });
+      expect(renderToStaticMarkup(<LensRow {...baseProps({ conversation: served(false) })} />)).toMatch(/data-presence="online"/);
+
+      presenceStore.getState().put('u-amina', { isOnline: false, lastActiveAt: null });
+      expect(renderToStaticMarkup(<LensRow {...baseProps({ conversation: served(true) })} />)).not.toContain('data-presence');
+    } finally {
+      presenceStore.getState().clear();
+    }
   });
 
   test('sameRowProps distingue DEUX rangées qui ne diffèrent que par leur frappeur', () => {

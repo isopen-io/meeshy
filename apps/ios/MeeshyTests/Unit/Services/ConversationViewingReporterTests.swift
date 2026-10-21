@@ -426,6 +426,30 @@ final class ConversationViewingReporterTests: XCTestCase {
         XCTAssertEqual(emitter.calls, [.start("conv-a"), .focus("conv-a"), .activity("conv-a")])
     }
 
+    func test_lastConversationClosed_underAnOrphanCover_releasesTheCover() {
+        let (sut, emitter, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.coverBegan()
+
+        sut.conversationClosed("conv-a")
+
+        XCTAssertFalse(sut.isCovered, "plus aucun écran de conversation : aucune couverture ne peut subsister")
+        sut.conversationOpened("conv-b")
+        sut.coverBegan()
+        XCTAssertEqual(emitter.calls.last, .focus("conv-b"), "la couverture suivante repart de zéro")
+    }
+
+    func test_conversationClosed_whileAnotherStaysOpen_keepsItsCover() {
+        let (sut, _, _) = makeSUT()
+        sut.conversationOpened("conv-a")
+        sut.conversationOpened("conv-b")
+        sut.coverBegan()
+
+        sut.conversationClosed("conv-a")
+
+        XCTAssertTrue(sut.isCovered)
+    }
+
     func test_coverEnded_withoutBegan_neverGoesBelowZero() {
         let (sut, emitter, _) = makeSUT()
         sut.coverEnded()
@@ -489,8 +513,13 @@ final class ConversationViewingReporterTests: XCTestCase {
             .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Views")
+        // Les couches nominales de l'écran (`ConversationLayers/`, LOT-10, #11074)
+        // portent désormais la plupart des plein écrans de la conversation.
         let hosts = try FileManager.default.contentsOfDirectory(atPath: views.path)
             .filter { ($0.hasPrefix("ConversationView") || $0 == "ConversationMediaViews.swift") && $0.hasSuffix(".swift") }
+            + FileManager.default.contentsOfDirectory(atPath: views.appendingPathComponent("ConversationLayers").path)
+            .filter { $0.hasSuffix(".swift") }
+            .map { "ConversationLayers/" + $0 }
         XCTAssertGreaterThan(hosts.count, 3)
         var covers = 0
         for host in hosts {
@@ -498,12 +527,28 @@ final class ConversationViewingReporterTests: XCTestCase {
             XCTAssertFalse(source.contains(".fullScreenCover("), "\(host) présente un plein écran sans .conversationCover")
             covers += source.components(separatedBy: ".conversationCover(").count - 1
         }
+        // Le lecteur de stories ouvert depuis la conversation : ses DEUX
+        // couvertures (en-tête, bulle) n'en font plus qu'UNE, le couvercle
+        // partagé `StoryReaderCover` (#11197, 4119d758c7), que la conversation
+        // monte avec `coversConversation: true` — et qui passe alors par
+        // `.conversationCover`.
+        let storyCovers = AppSourceGuard.stripComments(try String(
+            contentsOf: views.appendingPathComponent("ConversationView+StoryCovers.swift"), encoding: .utf8))
+        XCTAssertTrue(storyCovers.contains("StoryReaderCover(") && storyCovers.contains("coversConversation: true"),
+                      "le lecteur de stories de la conversation la couvre")
+        let reader = AppSourceGuard.stripComments(try String(
+            contentsOf: views.appendingPathComponent("StoryViewerContainer.swift"), encoding: .utf8))
+        XCTAssertTrue(reader.contains("if coversConversation {\n            content.conversationCover(item: $request)"),
+                      "le couvercle partagé passe par .conversationCover quand il couvre une conversation")
         // 13 → 12 (#9126, ca74b0279d) : la retouche d'une image en attente et
         // celle d'une vidéo en attente avaient chacune leur couverture ; elles
         // n'en font plus qu'UNE, la série de scènes de toutes les pièces du
-        // message (`ConversationRetouchSeriesEditor`). Aucun plein écran n'a
+        // message (`ConversationRetouchSeriesEditor`). 12 → 11 (#11197) : les
+        // deux couvertures du lecteur de stories deviennent le couvercle
+        // partagé, compté ci-dessus hors de ce balayage. Aucun plein écran n'a
         // quitté `.conversationCover` — l'assertion ci-dessus le tient.
-        XCTAssertGreaterThanOrEqual(covers, 12)
+        let storyReaderCover = 1
+        XCTAssertGreaterThanOrEqual(covers + storyReaderCover, 11)
     }
 
     /// Le mood remplace le point mais porte la présence en CONTOUR (#9065) :

@@ -64,6 +64,8 @@ public struct AvatarConfig {
     public let moodEmoji: String?
     public let presenceState: PresenceState?
     public let storyRingState: StoryRingState
+    /// Le contour équipé de la personne, la référence servie (#10946).
+    public let ring: ServedProfileDecorItem?
     public let onTap: (() -> Void)?
     public let onViewProfile: (() -> Void)?
     public let onViewStory: (() -> Void)?
@@ -76,6 +78,7 @@ public struct AvatarConfig {
         moodEmoji: String? = nil,
         presenceState: PresenceState? = nil,
         storyRingState: StoryRingState = .none,
+        ring: ServedProfileDecorItem? = nil,
         onTap: (() -> Void)? = nil,
         onViewProfile: (() -> Void)? = nil,
         onViewStory: (() -> Void)? = nil,
@@ -87,6 +90,7 @@ public struct AvatarConfig {
         self.moodEmoji = moodEmoji
         self.presenceState = presenceState
         self.storyRingState = storyRingState
+        self.ring = ring
         self.onTap = onTap
         self.onViewProfile = onViewProfile
         self.onViewStory = onViewStory
@@ -141,6 +145,7 @@ public struct UserIdentityBar: View {
                     storyState: avatar.storyRingState,
                     moodEmoji: avatar.moodEmoji,
                     presenceState: avatar.presenceState,
+                    ring: avatar.ring,
                     enablePulse: false,
                     onTap: avatar.onTap,
                     onViewProfile: avatar.onViewProfile,
@@ -218,11 +223,7 @@ public struct UserIdentityBar: View {
             flagsView(codes: codes, active: active, onTap: onTap)
 
         case .translateButton(let action):
-            Image(systemName: "translate")
-                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
-                .foregroundColor(MeeshyColors.brandPrimary)
-                .onTapGesture { action() }
-                .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
+            translateButton(action)
 
         case .presence(let state):
             // Couleurs + libellé via le mapping central (PresenceStyle) :
@@ -372,6 +373,16 @@ public struct UserIdentityBar: View {
         }
     }
 
+    private func translateButton(_ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "translate")
+                .font(.system(size: MeeshyIconSize.xxs, weight: .medium))
+                .foregroundColor(MeeshyColors.brandPrimary)
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
+        .accessibilityLabel(String(localized: "userIdentity.translation.available", defaultValue: "Traduction disponible", bundle: .module))
+    }
+
     // MARK: - Flags View
 
     @ViewBuilder
@@ -395,6 +406,11 @@ public struct UserIdentityBar: View {
                 .onTapGesture {
                     onTap?(code)
                 }
+                .accessibilityLabel(String(
+                    format: String(localized: "userIdentity.language.show.a11y", bundle: .module),
+                    display?.name ?? code))
+                .accessibilityAddTraits(onTap == nil ? [] : .isButton)
+                .accessibilityAction { onTap?(code) }
             }
         }
     }

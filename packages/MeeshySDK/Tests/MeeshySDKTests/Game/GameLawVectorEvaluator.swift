@@ -153,6 +153,7 @@ enum GameLawVectorEvaluator {
         case "missions-draw": return missionsDraw(input)
         case "mission-reroll": return missionReroll(input)
         case "chest": return chest(input)
+        case "star-fragments": return starFragments(input)
         case "guide": return try guide(input)
         default: return try evaluateWave2(law: law, input: input)
         }
@@ -402,8 +403,17 @@ enum GameLawVectorEvaluator {
     }
 
     private static func chest(_ input: GameJSON) -> GameJSON {
-        let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"))
-        return object(["points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze)])
+        let chest = GameChest.daily(userId: string(input, "userId"), dayKey: string(input, "dayKey"), effort: int(input, "effort"),
+                                    nextMeeshPrice: int(input, "nextMeeshPrice"))
+        return object([
+            "points": .int(chest.points), "fragment": .bool(chest.fragment), "freeze": .bool(chest.freeze),
+            "glory": .int(chest.glory), "bonus": .string((chest.bonus ?? .noBonus).rawValue), "bonusPoints": .int(chest.bonusPoints),
+        ])
+    }
+
+    private static func starFragments(_ input: GameJSON) -> GameJSON {
+        let seasons = input["seasons"].arrayValue.map { $0.arrayValue.compactMap(\.intValue) }
+        return object(["collected": .int(GameStarFragments.collected(chestDays: int(input, "chestDays"), seasons: seasons))])
     }
 
     // MARK: Guide
@@ -419,10 +429,7 @@ enum GameLawVectorEvaluator {
         case "missions-unlocked": return .missionsUnlocked
         case "first-mint-possible":
             return .firstMintPossible(price: int(json, "price"), levelsLost: int(json, "levelsLost"), gloryGain: int(json, "gloryGain"))
-        case "first-mint":
-            return .firstMint(levelBefore: int(json, "levelBefore"), levelAfter: int(json, "levelAfter"),
-                              tailwindUntilLevel: int(json, "tailwindUntilLevel"))
-        case "badge-extinguished": return .badgeExtinguished(missingActions: int(json, "missingActions"))
+        case "first-mint": return .firstMint
         case "price-rises": return .priceRises(nextPrice: int(json, "nextPrice"))
         case "new-rank":
             guard let rank = GloryRank(rawValue: string(json, "rank")) else { throw GameLawVectorError.malformed("rang") }
@@ -451,11 +458,8 @@ enum GameLawVectorEvaluator {
             object([:])
         case .firstMintPossible(let price, let levelsLost, let gloryGain):
             object(["price": .int(price), "levelsLost": .int(levelsLost), "gloryGain": .int(gloryGain)])
-        case .firstMint(let levelBefore, let levelAfter, let tailwindUntilLevel):
-            object(["levelBefore": .int(levelBefore), "levelAfter": .int(levelAfter),
-                    "tailwindUntilLevel": .int(tailwindUntilLevel)])
-        case .badgeExtinguished(let missingActions):
-            object(["missingActions": .int(missingActions)])
+        case .firstMint:
+            object([:])
         case .priceRises(let nextPrice):
             object(["nextPrice": .int(nextPrice)])
         case .newRank(let rank, let division, let glory, let gloryMissing):

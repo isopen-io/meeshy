@@ -2,7 +2,7 @@ import BackgroundTasks
 import MeeshySDK
 import os
 
-private let logger = Logger(subsystem: "me.meeshy.app", category: "background")
+private let logger = MeeshyLog.logger(.background)
 
 /// startup-08 — enveloppe `BGTaskScheduler.cancel` pour rendre le chemin de
 /// logout testable : l'API réelle n'offre aucun moyen d'observer un cancel
@@ -182,6 +182,8 @@ final class BackgroundTaskManager {
             await DatabaseSuspension.duringBackgroundWake {
                 // Pull : récupère les nouveautés depuis le dernier checkpoint.
                 let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+                // Le système a repris son temps : ne pas entamer le drainage.
+                guard !Task.isCancelled else { return synced }
                 // Push : draine l'outbox. Le BGAppRefreshTask est le seul moment où
                 // les messages/réactions mis en file hors-ligne peuvent partir sans
                 // que l'utilisateur ait à rouvrir l'app — sans ça, un envoi fait
@@ -195,8 +197,15 @@ final class BackgroundTaskManager {
         // @Sendable: the system may invoke the expiration handler off the
         // registration queue; a @Sendable closure carries no actor isolation,
         // so there is no runtime queue assertion to trip.
+        // L'expiration REND la tâche tout de suite : attendre que le travail
+        // annulé s'arrête de lui-même laissait le système tuer l'app pour une
+        // tâche non rendue. Une seule complétion, quel que soit le premier.
+        // `setTaskCompleted` est sûr depuis n'importe quel fil (BackgroundTasks).
+        nonisolated(unsafe) let systemTask = task
+        let completion = BackgroundTaskCompletion { systemTask.setTaskCompleted(success: $0) }
         task.expirationHandler = { @Sendable in
             syncTask.cancel()
+            completion.complete(success: false)
         }
 
         let succeeded = await syncTask.value && !syncTask.isCancelled
@@ -207,7 +216,7 @@ final class BackgroundTaskManager {
         let delay = nextSyncDelay(succeeded: succeeded)
         scheduleConversationSync(after: delay)
 
-        task.setTaskCompleted(success: succeeded)
+        completion.complete(success: succeeded)
         logger.info("Background conversation sync completed: success=\(succeeded), nextIn=\(Int(delay))s")
     }
 
@@ -249,13 +258,38 @@ final class BackgroundTaskManager {
         }
         activePrefetchTask = prefetchTask
 
+        // `setTaskCompleted` est sûr depuis n'importe quel fil (BackgroundTasks).
+        nonisolated(unsafe) let systemTask = task
+        let completion = BackgroundTaskCompletion { systemTask.setTaskCompleted(success: $0) }
         task.expirationHandler = { @Sendable in
             prefetchTask.cancel()
+            completion.complete(success: false)
         }
 
         await prefetchTask.value
         activePrefetchTask = nil
-        task.setTaskCompleted(success: !prefetchTask.isCancelled)
+        completion.complete(success: !prefetchTask.isCancelled)
         logger.info("Background message prefetch completed")
     }
 }
+
+/// `setTaskCompleted` rendu UNE fois : par l'expiration (tout de suite) ou par
+/// la fin du travail, le premier des deux. Le second appel ne fait rien.
+nonisolated final class BackgroundTaskCompletion: @unchecked Sendable {
+    private let lock = NSLock()
+    private var done = false
+    private let deliver: @Sendable (Bool) -> Void
+
+    init(_ deliver: @escaping @Sendable (Bool) -> Void) {
+        self.deliver = deliver
+    }
+
+    func complete(success: Bool) {
+        lock.lock()
+        let first = !done
+        done = true
+        lock.unlock()
+        if first { deliver(success) }
+    }
+}
+

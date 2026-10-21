@@ -77,6 +77,8 @@ export interface ConversationPreferencesDefaults {
   reaction: string | null;
   /** `ReadingModePreference` (`@meeshy/shared/types/reading-modes`) : `auto` rend la main à l'orchestrateur. */
   readingMode: string;
+  /** #10631 — fond et accent personnels ; `null` = Signature + accent calculé. Le reset l'efface comme le reste. */
+  appearance: null;
 }
 
 export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults = {
@@ -91,6 +93,7 @@ export const CONVERSATION_PREFERENCES_DEFAULTS: ConversationPreferencesDefaults 
   customName: null,
   reaction: null,
   readingMode: 'auto',
+  appearance: null,
 };
 
 // ========== COMMUNITY PREFERENCES DEFAULTS ==========

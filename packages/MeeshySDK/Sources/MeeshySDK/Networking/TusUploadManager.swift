@@ -36,6 +36,14 @@ public struct TusResumeRetriableError: Error {
     public init() {}
 }
 
+/// Le système a retiré le temps d'arrière-plan avant la fin du téléversement
+/// (#9875). La tâche est terminée, le PATCH en vol abandonné ; le point de
+/// reprise (URL de session, dernier offset accepté) reste en base, et la
+/// prochaine tentative repart de cet offset au lieu de tout renvoyer.
+public struct TusUploadSuspendedError: Error {
+    public init() {}
+}
+
 public struct TusUploadResult: Decodable, Sendable {
     public let id: String
     public let fileName: String
@@ -126,12 +134,62 @@ public struct TusUploadTranscriptionMetadata: Codable, Sendable, Equatable {
     }
 }
 
+/// Les envois TUS EN VOL dans ce processus, par clé de checkpoint. Un manager naît par envoi : sans ce
+/// registre commun, deux envois des mêmes octets reprenaient la même session et croisaient leurs PATCH.
+final class TusUploadLeases: Sendable {
+    static let shared = TusUploadLeases()
+    private let held = Locked(Set<String>())
+
+    /// Vrai si la clé était libre — l'appelant la tient jusqu'à `release`.
+    func claim(_ key: String) -> Bool {
+        held.mutate { $0.insert(key).inserted }
+    }
+
+    func release(_ key: String) {
+        held.mutate { _ = $0.remove(key) }
+    }
+}
+
+private struct PendingTusUpload: Sendable {
+    let fileId: String
+    let fileURL: URL
+    let mimeType: String
+    let credential: MeeshyRequestCredential
+    let uploadContext: String?
+    let thumbHash: String?
+    let transcription: TusUploadTranscriptionMetadata?
+    let capturedInApp: Bool
+    let continuation: CheckedContinuation<TusUploadResult, Error>
+}
+
 public actor TusUploadManager {
+    /// Les contextes qui créent un `PostMedia` côté serveur — miroir de `POST_MEDIA_UPLOAD_CONTEXTS`
+    /// (`packages/shared/types/attachment.ts`). Le contexte précis ne s'y conserve pas.
+    static let postMediaUploadContexts: Set<String> = ["post", "story", "status", "comment"]
+
+    /// Une session TUS naît avec ce que son POST déclare : l'OBJET serveur qu'elle créera (`PostMedia` pour
+    /// story/post/statut/commentaire, `MessageAttachment` sans contexte) et ses métadonnées (aperçu flou,
+    /// transcription, capture dans l'app). Elle ne se reprend que par un envoi qui la créerait identique : une
+    /// pré-montée « story » sert un post des mêmes octets, une pièce de message jamais, et un vocal ne perd plus sa
+    /// transcription dans une session ouverte sans elle. Sans contexte ni métadonnée, la clé reste l'empreinte seule.
+    static func checkpointKey(digest: String, uploadContext: String?, thumbHash: String? = nil,
+                              transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) -> String {
+        let kind = uploadContext.map { postMediaUploadContexts.contains($0) ? "postMedia" : $0 }
+        let metadata = [thumbHash ?? "", transcription?.uploadMetadataValue() ?? "", capturedInApp ? "inApp" : ""]
+        let fingerprint: String? = metadata.allSatisfy(\.isEmpty) ? nil
+            : SHA256.hash(data: Data(metadata.joined(separator: "\u{1F}").utf8)).prefix(8)
+                .map { String(format: "%02x", $0) }.joined()
+        guard kind != nil || fingerprint != nil else { return digest }
+        return "\(digest)|\(kind ?? "-")|\(fingerprint ?? "-")"
+    }
+
     private let baseURL: URL
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    nonisolated(unsafe) private var queue: [(URL, String, MeeshyRequestCredential, String?, String?, TusUploadTranscriptionMetadata?, Bool, CheckedContinuation<TusUploadResult, Error>)] = []
+    private var queue: [PendingTusUpload] = []
+    /// Les envois en cours, par `fileId` : l'annulation de l'appelant les atteint (`cancelUpload`).
+    private var activeTasks: [String: Task<Void, Never>] = [:]
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
     private let urlSession: URLSession
@@ -142,7 +200,14 @@ public actor TusUploadManager {
     /// (`AuthManager.refreshSession(force:)`) rather than reimplementing it —
     /// injectable so tests can stub success/failure without touching the
     /// real `AuthManager.shared` singleton.
-    private let refreshAuthSession: @Sendable @concurrent (_ force: Bool) async throws -> String
+    ///
+    /// #10904 — il reçoit le jeton PRÉSENTÉ par la montée : la session
+    /// rafraîchie est la sienne, ou rien. Un compte devenu actif entre-temps
+    /// n'est jamais rafraîchi pour elle, et la montée est abandonnée
+    /// (`CancellationError`).
+    private let refreshAuthSession: @Sendable @concurrent (_ presentedToken: String) async throws -> String
+    private let backgroundTasks: any BackgroundTaskProviding
+    private let digestMemo: FileDigestMemo
 
     public nonisolated var progressPublisher: AnyPublisher<UploadQueueProgress, Never> {
         progressSubject.eraseToAnyPublisher()
@@ -152,19 +217,41 @@ public actor TusUploadManager {
         baseURL: URL,
         urlSession: URLSession = .shared,
         checkpointStore: TusUploadCheckpointStore = .shared,
-        refreshAuthSession: @escaping @Sendable (_ force: Bool) async throws -> String = { force in
-            try await AuthManager.shared.refreshSession(force: force)
-        }
+        refreshAuthSession: @escaping @Sendable (_ presentedToken: String) async throws -> String = { presentedToken in
+            try await AuthManager.shared.refreshSession(
+                presentedToken: presentedToken,
+                stillInstalled: APIClient.shared.authToken == presentedToken,
+                force: true
+            )
+        },
+        backgroundTasks: any BackgroundTaskProviding = UIApplicationBackgroundTaskProvider()
+    ) {
+        self.init(
+            baseURL: baseURL, urlSession: urlSession, checkpointStore: checkpointStore,
+            refreshAuthSession: refreshAuthSession, backgroundTasks: backgroundTasks,
+            digestMemo: .shared
+        )
+    }
+
+    init(
+        baseURL: URL,
+        urlSession: URLSession,
+        checkpointStore: TusUploadCheckpointStore,
+        refreshAuthSession: @escaping @Sendable (_ presentedToken: String) async throws -> String,
+        backgroundTasks: any BackgroundTaskProviding,
+        digestMemo: FileDigestMemo
     ) {
         self.baseURL = baseURL
         self.urlSession = urlSession
         self.checkpointStore = checkpointStore
         self.refreshAuthSession = refreshAuthSession
+        self.backgroundTasks = backgroundTasks
+        self.digestMemo = digestMemo
     }
 
     deinit {
-        for (_, _, _, _, _, _, _, continuation) in queue {
-            continuation.resume(throwing: CancellationError())
+        for pending in queue {
+            pending.continuation.resume(throwing: CancellationError())
         }
     }
 
@@ -194,10 +281,35 @@ public actor TusUploadManager {
         )
         emitProgress()
 
-        return try await withCheckedThrowingContinuation { continuation in
-            queue.append((fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation))
-            processQueue()
+        // L'annulation de l'appelant atteint l'envoi : la file le retire s'il attend, sa tâche est annulée s'il
+        // tourne. Sans ce relais, `Task.checkCancellation()` ne voyait jamais rien — une pré-montée abandonnée ou
+        // une publication annulée continuait de monter le fichier en entier.
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                queue.append(PendingTusUpload(
+                    fileId: fileId, fileURL: fileURL, mimeType: mimeType, credential: credential,
+                    uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription,
+                    capturedInApp: capturedInApp, continuation: continuation
+                ))
+                processQueue()
+            }
+        } onCancel: {
+            Task { await self.cancelUpload(fileId: fileId) }
         }
+    }
+
+    private func cancelUpload(fileId: String) {
+        if let index = queue.firstIndex(where: { $0.fileId == fileId }) {
+            let pending = queue.remove(at: index)
+            markFileFailed(fileId: fileId, error: CancellationError())
+            pending.continuation.resume(throwing: CancellationError())
+            return
+        }
+        activeTasks[fileId]?.cancel()
     }
 
     public func uploadFiles(fileURLs: [(url: URL, mimeType: String)], credential: MeeshyRequestCredential) async throws -> [TusUploadResult] {
@@ -217,28 +329,33 @@ public actor TusUploadManager {
 
     private func processQueue() {
         while activeCount < maxConcurrent, !queue.isEmpty {
-            let (fileURL, mimeType, credential, uploadContext, thumbHash, transcription, capturedInApp, continuation) = queue.removeFirst()
+            let next = queue.removeFirst()
+            let (fileId, fileURL, mimeType, credential) = (next.fileId, next.fileURL, next.mimeType, next.credential)
+            let (uploadContext, thumbHash, transcription) = (next.uploadContext, next.thumbHash, next.transcription)
+            let (capturedInApp, continuation) = (next.capturedInApp, next.continuation)
             activeCount += 1
-            Task {
+            activeTasks[fileId] = Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
-                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp)
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp, progressFileId: fileId)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
-                    // cache média typé, keyé par l'URL canonique serveur. L'auteur
+                    // cache média typé, sous la clé de rendu (`renderCacheKey`). L'auteur
                     // relit ses propres médias (story, pièce jointe) depuis le disque
                     // — offline, jamais re-téléchargés. Idempotent (no-op si déjà
                     // caché, ex. via MessagePersistenceActor.adoptSDKLevel).
                     await Self.seedMediaCache(localFile: fileURL, result: result)
                     activeCount -= 1
+                    activeTasks[fileId] = nil
                     continuation.resume(returning: result)
                     processQueue()
                 } catch {
                     activeCount -= 1
+                    activeTasks[fileId] = nil
                     // Mark the failed file `.error` so it stops being surfaced as an
                     // in-flight `.uploading` file forever (stale "Envoi…" indicator)
                     // and is excluded from the batch aggregates by `emitProgress`.
-                    markFileFailed(fileName: fileURL.lastPathComponent, error: error)
+                    markFileFailed(fileId: fileId, error: error)
                     continuation.resume(throwing: error)
                     processQueue()
                 }
@@ -247,13 +364,14 @@ public actor TusUploadManager {
     }
 
     /// Local-first cache seed : copie le fichier source qu'on vient d'uploader
-    /// dans le `DiskCacheStore` typé (image/vidéo/audio) selon le MIME, keyé par
-    /// l'URL canonique serveur (`result.fileUrl` — exactement la clé que le
-    /// reader résout). Non-destructif (la source reste pour le caller, ex. un
-    /// asset encore référencé par la preview live). Idempotent. Un MIME non-média
-    /// (document…) est ignoré. C'est ce qui garantit que l'auteur joue ses
-    /// propres stories / pièces jointes depuis le disque, offline, sans jamais
-    /// re-télécharger un média qu'il possède déjà localement.
+    /// dans le `DiskCacheStore` typé (image/vidéo/audio) selon le MIME, sous la
+    /// clé de RENDU (`renderCacheKey`). Non-destructif (la source reste pour le
+    /// caller, ex. un asset encore référencé par la preview live). Idempotent.
+    /// Un MIME non-média (document…) est ignoré. C'est ce qui garantit que
+    /// l'auteur joue ses propres stories / pièces jointes depuis le disque,
+    /// offline, sans jamais re-télécharger un média qu'il possède déjà
+    /// localement. C'est l'UNIQUE ensemencement après upload (#9875) : une copie
+    /// de fichier (un clone sur APFS), jamais une relecture des octets en mémoire.
     private static func seedMediaCache(localFile: URL, result: TusUploadResult) async {
         let mime = result.mimeType
         let store: DiskCacheStore?
@@ -267,22 +385,50 @@ public actor TusUploadManager {
             store = nil
         }
         guard let store else { return }
-        await store.seed(copyingLocalFile: localFile, for: result.fileUrl)
+        await store.seed(copyingLocalFile: localFile, for: renderCacheKey(forFileUrl: result.fileUrl))
     }
 
-    private func withBackgroundTask<T: Sendable>(named name: String, operation: @Sendable () async throws -> T) async throws -> T {
-        let taskId = await UIApplication.shared.beginBackgroundTask(withName: name)
+    /// La clé sous laquelle les lecteurs cherchent un média : l'adresse
+    /// RÉSOLUE (`MeeshyConfig.resolveMediaURL`), jamais la clé de stockage que
+    /// la passerelle rend dans `fileUrl` depuis #4324 (#9839). La bulle de
+    /// l'expéditeur, le lecteur audio et les stories résolvent tous ainsi.
+    public static func renderCacheKey(forFileUrl fileUrl: String) -> String {
+        MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
+    }
+
+    /// Le téléversement tourne sous une tâche d'arrière-plan qui se termine
+    /// TOUJOURS une fois (#9875). À l'expiration, UIKit appelle le gestionnaire
+    /// sur le fil principal : le travail est annulé (le PATCH en vol tombe, aucun
+    /// octet ne part pendant la suspension) et la tâche se termine aussitôt, de
+    /// façon synchrone. Le point de reprise est déjà en base — il est écrit
+    /// après chaque tronçon accepté — et l'échec remonte en
+    /// `TusUploadSuspendedError` : la file durable rejoue, et la reprise repart
+    /// de l'offset accepté.
+    private func withBackgroundTask<T: Sendable>(named name: String, operation: @escaping @Sendable () async throws -> T) async throws -> T {
+        let lease = await BackgroundTaskLease(provider: backgroundTasks)
+        await lease.begin(named: name)
+        let work = Task { try await operation() }
+        await lease.cancelOnExpiration { work.cancel() }
         do {
-            let result = try await operation()
-            if taskId != .invalid {
-                await UIApplication.shared.endBackgroundTask(taskId)
-            }
+            let result = try await Self.awaitPropagatingCancellation(work)
+            await lease.end()
             return result
         } catch {
-            if taskId != .invalid {
-                await UIApplication.shared.endBackgroundTask(taskId)
-            }
+            let expired = await lease.end()
+            if expired { throw TusUploadSuspendedError() }
             throw error
+        }
+    }
+
+    /// Attend `work` en lui transmettant l'annulation de l'appelant. `await work.value` ne la transmet
+    /// pas : `cancelUpload` annulait la tâche de `activeTasks`, mais le téléversement réel, détaché ici,
+    /// allait jusqu'au bout — octets gaspillés, et la publication renvoyait le même fichier en parallèle
+    /// de la pré-émission que `stopForPublication` croyait arrêter.
+    static func awaitPropagatingCancellation<T: Sendable>(_ work: Task<T, Error>) async throws -> T {
+        try await withTaskCancellationHandler {
+            try await work.value
+        } onCancel: {
+            work.cancel()
         }
     }
 
@@ -290,17 +436,27 @@ public actor TusUploadManager {
     /// state machine directly — the same rationale as `sha256Hex` below:
     /// a pure-enough I/O sequence exercised without going through
     /// `uploadFile`'s queue/background-task ceremony.
-    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) async throws -> TusUploadResult {
+    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, progressFileId: String? = nil) async throws -> TusUploadResult {
         var credential = credential
         let fileName = fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
-        let fileId = progressMap.first(where: { $0.value.fileName == fileName })?.key ?? UUID().uuidString
+        // La ligne de progression de CET envoi, remise par la file. Chercher par nom de fichier tombait sur
+        // celle d'un autre envoi du même fichier — la pré-montée du composer puis la publication montent le
+        // même — : la progression de l'un s'écrivait sur la ligne de l'autre, qui restait « en file » à vie.
+        let fileId = progressFileId ?? progressMap.first(where: { $0.value.fileName == fileName })?.key ?? UUID().uuidString
 
         // Compute the bytewise checkpoint key once. Same source file +
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
-        let checkpointKey = try Self.sha256Hex(of: fileURL)
+        let digest = try digestMemo.digest(of: fileURL, computing: Self.sha256Hex(of:))
+        let scopedKey = Self.checkpointKey(digest: digest, uploadContext: uploadContext, thumbHash: thumbHash,
+                                           transcription: transcription, capturedInApp: capturedInApp)
+        // Un envoi des mêmes octets déjà en vol tient cette session : celui-ci ouvre la sienne, sous une clé
+        // à lui (jamais reprise, purgée comme tout checkpoint périmé si l'envoi échoue).
+        let leased = TusUploadLeases.shared.claim(scopedKey)
+        defer { if leased { TusUploadLeases.shared.release(scopedKey) } }
+        let checkpointKey = leased ? scopedKey : "\(scopedKey)|\(UUID().uuidString)"
         let store = checkpointStore
 
         // Step 1: Resolve patchURL — either resume from a stored checkpoint
@@ -322,8 +478,16 @@ public actor TusUploadManager {
             Self.logger.info("TUS checkpoint \(checkpointKey, privacy: .public) older than \(Int(checkpointMaxAge), privacy: .public)s — restarting upload")
             await store.delete(checkpointKey: checkpointKey)
         }
+        // Une session dont tous les octets sont partis mais dont l'issue (la pièce
+        // jointe) s'est perdue ne se reprend pas : aucun PATCH ne la redonnerait,
+        // et chaque tentative levait sans une requête. Repartir d'une session neuve.
+        let isFinishLost = !isCheckpointStale && (resumed.map { $0.byteOffset >= fileSize } ?? false)
+        if isFinishLost {
+            Self.logger.warning("TUS checkpoint \(checkpointKey, privacy: .public) fully sent but its finish was lost — restarting upload")
+            await store.delete(checkpointKey: checkpointKey)
+        }
 
-        if !isCheckpointStale,
+        if !isCheckpointStale, !isFinishLost,
            let cp = resumed,
            let url = URL(string: cp.uploadURL, relativeTo: baseURL),
            cp.fileSize == fileSize {
@@ -380,6 +544,7 @@ public actor TusUploadManager {
         let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
 
         while offset < fileSize {
+            try Task.checkCancellation()
             let remaining = fileSize - offset
             let readSize = min(Int64(chunkSize), remaining)
 
@@ -471,7 +636,7 @@ public actor TusUploadManager {
                 // the 409 branch) rather than trust the local `offset` —
                 // resuming from a diverged local counter, or restarting the
                 // whole session, are both worse than the defect this fixes.
-                guard credential.isAccount, !hasRetriedAfterAuthRefusal else {
+                guard let presentedToken = credential.bearerToken, !hasRetriedAfterAuthRefusal else {
                     Self.logger.error("PATCH 401 at offset \(offset, privacy: .public) — no retry available, failing definitively")
                     throw MeeshyError.auth(.sessionExpired)
                 }
@@ -479,7 +644,13 @@ public actor TusUploadManager {
                 Self.logger.warning("PATCH 401 at offset \(offset, privacy: .public) — refreshing session and retrying once")
                 let freshToken: String
                 do {
-                    freshToken = try await refreshAuthSession(true)
+                    freshToken = try await refreshAuthSession(presentedToken)
+                } catch let abandoned as CancellationError {
+                    // #10904 — le compte de la montée n'est plus le compte
+                    // actif (ou sa session a changé) : rien n'est refusé, la
+                    // montée s'arrête sans rejeu sous une autre identité.
+                    Self.logger.warning("PATCH 401 recovery abandoned — the upload's session is no longer the active one")
+                    throw abandoned
                 } catch {
                     Self.logger.error("PATCH 401 recovery — session refresh failed, failing definitively")
                     throw MeeshyError.auth(.sessionExpired)
@@ -500,10 +671,17 @@ public actor TusUploadManager {
                 throw TusResumeRetriableError()
 
             default:
+                if let refusal = GuestAttachmentRefusal(statusCode: patchHttp.statusCode, body: responseData) {
+                    await store.delete(checkpointKey: checkpointKey)
+                    throw refusal
+                }
                 throw URLError(.badServerResponse)
             }
         }
 
+        // Tout est parti sans issue lisible (409 → HEAD == fileSize, corps final
+        // indécodable) : la session ne peut plus rendre sa pièce jointe.
+        await store.delete(checkpointKey: checkpointKey)
         throw URLError(.cannotParseResponse)
     }
 
@@ -533,7 +711,14 @@ public actor TusUploadManager {
         )
         createReq.setValue(metadataValue, forHTTPHeaderField: "Upload-Metadata")
 
-        let (_, createResponse) = try await urlSession.data(for: createReq)
+        let (createBody, createResponse) = try await urlSession.data(for: createReq)
+        // #10006 — le refus d'une pièce jointe d'INVITÉ est définitif et dit
+        // pourquoi (famille fermée, taille) : il remonte typé, jamais en
+        // `badServerResponse` que l'appelant rejouerait.
+        if let http = createResponse as? HTTPURLResponse,
+           let refusal = GuestAttachmentRefusal(statusCode: http.statusCode, body: createBody) {
+            throw refusal
+        }
         guard let httpResponse = createResponse as? HTTPURLResponse,
               httpResponse.statusCode == 201,
               let location = httpResponse.value(forHTTPHeaderField: "Location") else {
@@ -644,15 +829,14 @@ public actor TusUploadManager {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
-    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "tus-upload")
+    private static let logger = MeeshyLog.logger(.tusUpload, subsystem: .legacySDK)
 
     /// Flip a queued/uploading file's progress row to `.error`, preserving its
     /// last bytes/percentage, and re-emit. Resolves the row by `fileName` (the
     /// same lookup `performTusUpload` uses) since the dispatch queue item only
     /// carries the URL. No-op if the row is already gone.
-    private func markFileFailed(fileName: String, error: Error) {
-        guard let fileId = progressMap.first(where: { $0.value.fileName == fileName })?.key,
-              let prev = progressMap[fileId] else { return }
+    private func markFileFailed(fileId: String, error: Error) {
+        guard let prev = progressMap[fileId] else { return }
         progressMap[fileId] = FileUploadProgress(
             fileId: prev.fileId, fileName: prev.fileName, fileSize: prev.fileSize,
             status: .error, percentage: prev.percentage, bytesUploaded: prev.bytesUploaded,

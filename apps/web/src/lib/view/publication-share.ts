@@ -1,3 +1,4 @@
+import type { ShareDestination } from '@/lib/api/social-events-v2-types';
 import { findCardPost } from '@/lib/api/card-caches';
 import type { FeedPost } from '@/lib/api/feed-pages';
 import { recordShareAction } from '@/lib/api/query';
@@ -46,6 +47,8 @@ export function openPublicationShare(params: {
   readonly lookup?: (postId: string) => FeedPost | undefined;
   readonly open?: (request: SendSheetRequest) => void;
   readonly record?: (postId: string) => unknown;
+  /** #10502 — le partage parti, et par où. */
+  readonly onShared?: (destination: ShareDestination) => void;
 }): void {
   const { postId } = params;
   const record = params.record ?? recordShareAction;
@@ -55,6 +58,9 @@ export function openPublicationShare(params: {
     intent: 'share',
     payload: { kind: 'publication', postId, postType: postTypeOf(post), url, preview: previewOf(post) },
     moreOptions: { url },
-    onShared: () => void record(postId),
+    onShared: (destination) => {
+      void record(postId);
+      params.onShared?.(destination ?? 'other');
+    },
   });
 }

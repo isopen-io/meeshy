@@ -1,6 +1,6 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import type { CallCaption } from '@/lib/calls/call-captions';
@@ -27,6 +27,12 @@ describe('CallEffectsMode', () => {
     await loadCallStudioCatalog('fr');
     ensureHappyDomRegistered();
     globals.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  const mounted = new Set<() => void>();
+
+  afterEach(() => {
+    [...mounted].forEach((done) => done());
   });
 
   afterAll(async () => {
@@ -100,9 +106,11 @@ describe('CallEffectsMode', () => {
       await act(async () => {});
     };
     const done = () => {
+      if (!mounted.delete(done)) return;
       act(() => root.unmount());
       host.remove();
     };
+    mounted.add(done);
     return { host, find, all, press, settle, applied, exits, saved, grabbed, released, done };
   };
 

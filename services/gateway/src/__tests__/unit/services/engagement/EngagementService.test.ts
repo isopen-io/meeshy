@@ -5,8 +5,9 @@
 
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { CONTENT_ENGAGEMENT_AXES, CONVERSATION_ENGAGEMENT_AXES, SOCIAL_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
+import { SOCIAL_ENGAGEMENT_AXES } from '@meeshy/shared/types/engagement';
 import { EngagementService } from '../../../../services/engagement/EngagementService';
+import { routeCounterWrites } from '../../../../services/engagement/__tests__/mongoLikeCounters';
 import { getSharedNotificationService } from '../../../../services/notifications/notification-service-registry';
 import { DEFAULT_ENGAGEMENT_SCALE } from '@meeshy/shared/types/engagement-scale';
 import type { EngagementAxisKey } from '@meeshy/shared/types/engagement';
@@ -27,12 +28,17 @@ const mockGetSharedNotificationService = getSharedNotificationService as jest.Mo
  * et `scoreAfter` est le score APRÈS l'incrément, celui dont le service déduit
  * les paliers franchis.
  */
+/**
+ * Le compteur passe lui aussi par `$runCommandRaw` depuis #10541 : chaque
+ * fabrique ROUTE la commande — celle du compteur vers `counterWrite`, qui rend
+ * l'état de la ligne (`{ count }`), toute autre vers le double du score.
+ */
 function makeRawScore(scoreAfter = 0) {
   return jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore: scoreAfter } });
 }
 
 function makePrisma(overrides: Partial<{
-  upsert: jest.Mock;
+  counterWrite: jest.Mock;
   create: jest.Mock;
   findUnique: jest.Mock;
   findMany: jest.Mock;
@@ -41,7 +47,6 @@ function makePrisma(overrides: Partial<{
 }> = {}) {
   return {
     engagementCounter: {
-      upsert: overrides.upsert ?? jest.fn(),
       // `findMany` sert désormais DEUX questions, et un mock qui ignore son
       // `where` répondrait la même chose aux deux :
       //  - `hasAllAxes` (succès composés) filtre sur `axisKey` + `count > 0` ;
@@ -78,7 +83,7 @@ function makePrisma(overrides: Partial<{
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
       updateMany: jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: makeRawScore(),
+    $runCommandRaw: routeCounterWrites(overrides.counterWrite ?? jest.fn(), makeRawScore()),
   } as unknown as PrismaClient;
 }
 
@@ -95,7 +100,6 @@ function makeStreakPrisma(streakState: {
   const findUnique = jest.fn().mockResolvedValue(streakState);
   return {
     engagementCounter: {
-      upsert: jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, crosses no badge threshold (isolates the streak logic under test)
       // Lu par la résolution d'élan (#5749) : aucune activité récente ⇒ seule
       // la famille du geste courant compte, donc facteur neutre — ce qui laisse
       // les assertions de série et de niveau lire des poids non multipliés.
@@ -116,7 +120,8 @@ function makeStreakPrisma(streakState: {
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({}),
       updateMany: overrides.userUpdateMany ?? jest.fn().mockResolvedValue({ count: 1 }),
     },
-    $runCommandRaw: makeRawScore(),
+    // 1 -> 2, crosses no badge threshold (isolates the streak logic under test)
+    $runCommandRaw: routeCounterWrites(jest.fn().mockResolvedValue({ count: 2 }), makeRawScore()),
   } as unknown as PrismaClient;
 }
 
@@ -131,12 +136,11 @@ function makeStreakPrisma(streakState: {
 function makeLevelPrisma(overrides: Partial<{
   create: jest.Mock;
   userUpdate: jest.Mock;
-  upsert: jest.Mock;
+  counterWrite: jest.Mock;
   runCommandRaw: jest.Mock;
 }> = {}) {
   return {
     engagementCounter: {
-      upsert: overrides.upsert ?? jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, no badge threshold crossed
       findMany: jest.fn().mockResolvedValue([]),
     },
     engagementMilestone: {
@@ -153,7 +157,10 @@ function makeLevelPrisma(overrides: Partial<{
       findUnique: jest.fn().mockResolvedValue(null),
       update: overrides.userUpdate ?? jest.fn().mockResolvedValue({ engagementScore: 0 }),
     },
-    $runCommandRaw: overrides.runCommandRaw ?? makeRawScore(),
+    $runCommandRaw: routeCounterWrites(
+      overrides.counterWrite ?? jest.fn().mockResolvedValue({ count: 2 }), // 1 -> 2, no badge threshold crossed
+      overrides.runCommandRaw ?? makeRawScore(),
+    ),
   } as unknown as PrismaClient;
 }
 
@@ -174,42 +181,34 @@ beforeEach(() => {
 });
 
 describe('EngagementService.recordActivity', () => {
-  it('increments the counter via an atomic upsert keyed on (userId, axisKey)', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 6 });
+  it('credits the counter in one atomic write keyed on (userId, axisKey)', async () => {
+    const counterWrite = jest.fn().mockResolvedValue({ count: 6 });
     const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
     await svc.recordActivity('user-1', 'content.text_message');
 
-    expect(upsert).toHaveBeenCalledWith({
-      where: { userId_axisKey: { userId: 'user-1', axisKey: 'content.text_message' } },
-      // `points` à côté de `count` depuis #5742 : deux colonnes, deux questions —
-      // `count` compte des ACTIONS et pilote les badges, `points` porte ce que
-      // l'axe crédite au score et pilote le niveau puis la frappe des Meeshes.
-      //
-      // Le poids se LIT au barème, jamais recopié : écrit en dur (3), ce témoin
-      // est tombé au réordonnancement de #5766 qui a porté le contenu à 9 —
-      // il mesurait alors la mémoire de l'auteur, pas le comportement.
-      create: {
-        userId: 'user-1',
-        axisKey: 'content.text_message',
-        count: 1,
-        points: poidsParDefaut('content.text_message'),
-      },
-      update: {
-        count: { increment: 1 },
-        points: { increment: poidsParDefaut('content.text_message') },
-      },
-      select: { count: true },
+    // Le compteur s'écrit par `EngagementCounterWrites` (#10541) : une action de
+    // plus, et les points de l'axe — deux colonnes, deux questions (#5742).
+    //
+    // Le poids se LIT au barème, jamais recopié : écrit en dur (3), ce témoin
+    // est tombé au réordonnancement de #5766 qui a porté le contenu à 9 —
+    // il mesurait alors la mémoire de l'auteur, pas le comportement.
+    expect(counterWrite).toHaveBeenCalledWith({
+      kind: 'credit',
+      userId: 'user-1',
+      axisKey: 'content.text_message',
+      count: 1,
+      points: poidsParDefaut('content.text_message'),
     });
   });
 
   it('does not create a milestone or notify when the increment crosses no threshold', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 6 }); // 5 -> 6, no threshold in ]5,6]
+    const counterWrite = jest.fn().mockResolvedValue({ count: 6 }); // 5 -> 6, no threshold in ]5,6]
     const create = jest.fn();
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -221,10 +220,10 @@ describe('EngagementService.recordActivity', () => {
   });
 
   it('awards a badge and notifies exactly once when the increment lands on a threshold', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 10 }); // 9 -> 10, crosses threshold 10
+    const counterWrite = jest.fn().mockResolvedValue({ count: 10 }); // 9 -> 10, crosses threshold 10
     const create = jest.fn().mockResolvedValue({});
     const findUnique = jest.fn().mockResolvedValue({ systemLanguage: 'fr' });
-    const prisma = makePrisma({ upsert, create, findUnique });
+    const prisma = makePrisma({ counterWrite, create, findUnique });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -243,20 +242,21 @@ describe('EngagementService.recordActivity', () => {
       // Le MOT du lecteur, jamais la clé stable : « conversation.private ·
       // palier 10 » a été servi en production (2026-09-08). `route` dit où le
       // tap mène — l'écran « Progression ».
-      content: '🏅 Badge débloqué : Publications · palier 10',
+      title: '🏆 Palier 2 atteint',
+      content: 'Publications : 10 — bravo, tu atteins le palier 2 !',
       context: {},
-      metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10 },
+      metadata: { action: 'view_details', route: 'progression', axisKey: 'content.post', threshold: 10, tierRank: 2, value: 10 },
     });
   });
 
   it('names the invitee on an invite_joined badge so the row can offer to write to them (#8724)', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
     const findUnique = jest.fn(async ({ where }: { where: { id: string } }) =>
       where.id === 'newcomer'
         ? { id: 'newcomer', username: 'awa', displayName: 'Awa', avatar: null }
         : { systemLanguage: 'fr' });
-    const prisma = makePrisma({ upsert, create, findUnique });
+    const prisma = makePrisma({ counterWrite, create, findUnique });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
 
@@ -271,9 +271,9 @@ describe('EngagementService.recordActivity', () => {
   });
 
   it('replays the same threshold with zero notifications (anti-replay via unique constraint)', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, crosses threshold 1
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, crosses threshold 1
     const create = jest.fn().mockRejectedValue(p2002Error());
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -284,24 +284,25 @@ describe('EngagementService.recordActivity', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('propagates a milestone create error that is not a unique-constraint conflict', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+  it('a milestone create error that is not a unique-constraint conflict never takes back the credit already written (#10895)', async () => {
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockRejectedValue(new Error('connection lost'));
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
-    await expect(svc.recordActivity('user-1', 'tool.sticker')).rejects.toThrow('connection lost');
+    await expect(svc.recordActivity('user-1', 'tool.sticker')).resolves.toBe(true);
+    expect(counterWrite).toHaveBeenCalledTimes(1);
   });
 
   it('resolves two concurrent calls on the same threshold with a single milestone and notification', async () => {
-    const upsert = jest.fn()
+    const counterWrite = jest.fn()
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValueOnce({ count: 1 });
     const create = jest.fn()
       .mockResolvedValueOnce({})
       .mockRejectedValueOnce(p2002Error());
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     const notificationService = makeSharedNotificationService();
     mockGetSharedNotificationService.mockReturnValue(notificationService);
     const svc = new EngagementService(prisma);
@@ -316,9 +317,9 @@ describe('EngagementService.recordActivity', () => {
   });
 
   it('does not let a notification failure roll back an already-recorded milestone', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
     const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
+    const prisma = makePrisma({ counterWrite, create });
     const notificationService = makeSharedNotificationService({
       createNotification: jest.fn().mockRejectedValue(new Error('push down')),
     });
@@ -333,8 +334,8 @@ describe('EngagementService.recordActivity', () => {
 describe('EngagementService.recordConversationActivity', () => {
   it('credits a first message in a distinct conversation and increments the axis counter', async () => {
     const conversationCreditCreate = jest.fn().mockResolvedValue({});
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const prisma = makePrisma({ conversationCreditCreate, upsert });
+    const counterWrite = jest.fn().mockResolvedValue({ count: 1 });
+    const prisma = makePrisma({ conversationCreditCreate, counterWrite });
     mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
     const svc = new EngagementService(prisma);
 
@@ -343,36 +344,31 @@ describe('EngagementService.recordConversationActivity', () => {
     expect(conversationCreditCreate).toHaveBeenCalledWith({
       data: { userId: 'user-1', axisKey: 'conversation.public', conversationId: 'conv-1' },
     });
-    expect(upsert).toHaveBeenCalledWith({
-      where: { userId_axisKey: { userId: 'user-1', axisKey: 'conversation.public' } },
-      create: { userId: 'user-1', axisKey: 'conversation.public', count: 1, points: 5 },
-      update: { count: { increment: 1 }, points: { increment: 5 } },
-      select: { count: true },
-    });
+    expect(counterWrite).toHaveBeenCalledWith({ kind: 'credit', userId: 'user-1', axisKey: 'conversation.public', count: 1, points: 5 });
   });
 
   it('does not increment the counter again for a second message in an already-credited conversation', async () => {
     const conversationCreditCreate = jest.fn().mockRejectedValue(p2002Error());
-    const upsert = jest.fn();
-    const prisma = makePrisma({ conversationCreditCreate, upsert });
+    const counterWrite = jest.fn();
+    const prisma = makePrisma({ conversationCreditCreate, counterWrite });
     const svc = new EngagementService(prisma);
 
     await svc.recordConversationActivity('user-1', 'conversation.public', 'conv-1');
 
     expect(conversationCreditCreate).toHaveBeenCalledTimes(1);
-    expect(upsert).not.toHaveBeenCalled();
+    expect(counterWrite).not.toHaveBeenCalled();
   });
 
   it('propagates a conversation-credit error that is not a unique-constraint conflict', async () => {
     const conversationCreditCreate = jest.fn().mockRejectedValue(new Error('connection lost'));
-    const upsert = jest.fn();
-    const prisma = makePrisma({ conversationCreditCreate, upsert });
+    const counterWrite = jest.fn();
+    const prisma = makePrisma({ conversationCreditCreate, counterWrite });
     const svc = new EngagementService(prisma);
 
     await expect(
       svc.recordConversationActivity('user-1', 'conversation.public', 'conv-1')
     ).rejects.toThrow('connection lost');
-    expect(upsert).not.toHaveBeenCalled();
+    expect(counterWrite).not.toHaveBeenCalled();
   });
 });
 
@@ -502,7 +498,7 @@ describe('EngagementService streak tracking (#5544)', () => {
       userId: 'user-1',
       type: 'streak_milestone',
       priority: 'normal',
-      content: '🔥 Série de 3 jours !',
+      content: '🔥 Ta Flamme brûle depuis 3 jours !',
       context: {},
       metadata: { action: 'view_details', route: 'progression', threshold: 3 },
     });
@@ -707,9 +703,31 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(runCommandRaw).toHaveBeenCalledWith({
       findAndModify: 'User',
       query: { _id: { $oid: 'user-1' } },
-      update: [{ $set: { engagementScore: { $add: [{ $ifNull: ['$engagementScore', 0] }, attendu] } } }],
+      // Poche, cycle et total à vie montent du même montant, null-safely (#10846).
+      update: [
+        {
+          $set: {
+            sparksEarnedLifetime: {
+              $add: [
+                { $max: [{ $ifNull: ['$sparksEarnedLifetime', 0] }, { $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] },
+                attendu,
+              ],
+            },
+            sparksSincePrestige: {
+              $add: [{ $max: [{ $ifNull: ['$sparksSincePrestige', 0] }, { $ifNull: ['$engagementScore', 0] }] }, attendu],
+            },
+            // La dette se déduit d'abord du gain : seul le reste va en poche (porteur, 2026-10-16).
+            engagementScore: {
+              $add: [{ $ifNull: ['$engagementScore', 0] }, { $subtract: [attendu, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] }],
+            },
+            sparksDebt: { $subtract: [{ $ifNull: ['$sparksDebt', 0] }, { $min: [{ $ifNull: ['$sparksDebt', 0] }, attendu] }] },
+            // La révision de l'état du jeu monte dans la MÊME écriture, sans jamais reculer (#10912).
+            gameRevision: { $max: [{ $toLong: expect.any(Number) }, { $add: [{ $toLong: { $ifNull: ['$gameRevision', 0] } }, 1] }] },
+          },
+        },
+      ],
       new: true,
-      fields: { engagementScore: 1, levelRecord: 1 },
+      fields: { engagementScore: 1, levelRecord: 1, levelMaxLifetime: 1, prestige: 1 },
     });
   });
 
@@ -739,9 +757,9 @@ describe('EngagementService level tracking (#5545)', () => {
     await svc.recordActivity('user-1', 'tool.sticker');
 
     const command = runCommandRaw.mock.calls[0][0] as {
-      update: Array<{ $set: { engagementScore: { $add: [unknown, number] } } }>;
+      update: Array<{ $set: { sparksSincePrestige: { $add: [unknown, number] } } }>;
     };
-    expect(command.update[0].$set.engagementScore.$add[1]).toBe(1);
+    expect(command.update[0].$set.sparksSincePrestige.$add[1]).toBe(1);
   });
 
   it('does not create a level milestone or notify when the increment crosses no level threshold', async () => {
@@ -758,7 +776,7 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(notificationService.createNotification).not.toHaveBeenCalled();
   });
 
-  it('awards LEVEL_UP and notifies exactly once when the increment lands on a threshold', async () => {
+  it('records the score milestone but never pushes a score-tier « level » (the game level is announced by GloryService, #10901)', async () => {
     const create = jest.fn().mockResolvedValue({});
     const runCommandRaw = makeRawScore(10); // 5 -> 10, crosses threshold 10
     const prisma = makeLevelPrisma({ create, runCommandRaw });
@@ -771,16 +789,23 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' },
     });
-    expect(notificationService.createNotification).toHaveBeenCalledWith({
-      userId: 'user-1',
-      type: 'level_up',
-      priority: 'normal',
-      // Le RANG du palier (niveau 1), jamais le seuil de score (10 points) :
-      // « Niveau 150 atteint » se lisait comme un cent-cinquantième niveau.
-      content: '⭐ Niveau 1 atteint !',
-      context: {},
-      metadata: { action: 'view_details', route: 'progression', threshold: 10, level: 1 },
-    });
+    expect(notificationService.createNotification).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'level_up', metadata: expect.objectContaining({ threshold: 10 }) }));
+  });
+
+  it.each([
+    ['{ $numberLong }', { $numberLong: '10' }],
+    ['{ $numberInt }', { $numberInt: '10' }],
+    ['{ $numberDouble }', { $numberDouble: '10' }],
+  ])('awards LEVEL_UP when the raw command returns the new score as %s (#10541)', async (_form, engagementScore) => {
+    const create = jest.fn().mockResolvedValue({});
+    const runCommandRaw = jest.fn().mockResolvedValue({ ok: 1, value: { engagementScore, levelRecord: { $numberLong: '0' } } });
+    const prisma = makeLevelPrisma({ create, runCommandRaw });
+    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
+    const svc = new EngagementService(prisma);
+
+    await svc.recordActivity('user-1', 'conversation.private');
+
+    expect(create).toHaveBeenCalledWith({ data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:10' } });
   });
 
   it('replays the same level threshold with zero notifications (anti-replay via unique constraint)', async () => {
@@ -807,192 +832,5 @@ describe('EngagementService level tracking (#5545)', () => {
     expect(create).toHaveBeenCalledWith({
       data: { userId: 'user-1', milestoneType: 'level', milestoneKey: 'level:50' },
     });
-  });
-});
-
-describe('EngagementService achievements (#5546)', () => {
-  it('awards achievement.first_content on the first content-family axis reached, querying only the content axes', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn().mockResolvedValue([{ axisKey: 'content.text_message' }]); // only this one so far
-    const prisma = makePrisma({ upsert, create, findMany });
-    const notificationService = makeSharedNotificationService();
-    mockGetSharedNotificationService.mockReturnValue(notificationService);
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'content.text_message');
-
-    expect(create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.first_content' },
-    });
-    expect(notificationService.createNotification).toHaveBeenCalledWith({
-      userId: 'user-1',
-      type: 'achievement_unlocked',
-      priority: 'normal',
-      content: '🏆 Succès débloqué : Premier pas',
-      context: {},
-      metadata: { action: 'view_details', route: 'progression', achievementKey: 'achievement.first_content' },
-    });
-    expect(findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', axisKey: { in: [...CONTENT_ENGAGEMENT_AXES] }, count: { gt: 0 } },
-      select: { axisKey: true },
-    });
-    // Only 1 of the 5 content axes has been reached: the composed condition must not fire yet.
-    expect(create).not.toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.all_content_types' },
-    });
-  });
-
-  it('replays achievement.first_content with zero notifications (anti-replay via unique constraint)', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const create = jest.fn().mockRejectedValue(p2002Error());
-    const prisma = makePrisma({ upsert, create });
-    const notificationService = makeSharedNotificationService();
-    mockGetSharedNotificationService.mockReturnValue(notificationService);
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'content.text_message');
-
-    expect(notificationService.createNotification).not.toHaveBeenCalled();
-  });
-
-  it('awards achievement.all_content_types once every content axis has been reached', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the five
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn().mockResolvedValue(CONTENT_ENGAGEMENT_AXES.map((axisKey) => ({ axisKey })));
-    const prisma = makePrisma({ upsert, create, findMany });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'content.reel');
-
-    expect(create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.all_content_types' },
-    });
-  });
-
-  it('does not award achievement.all_content_types while a content axis is still untouched', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn().mockResolvedValue([
-      { axisKey: 'content.text_message' },
-      { axisKey: 'content.post' },
-    ]); // only 2 of 5
-    const prisma = makePrisma({ upsert, create, findMany });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'content.story');
-
-    expect(create).not.toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.all_content_types' },
-    });
-  });
-
-  it.each(['content.audio_message', 'comment.audio'] as const)(
-    'awards achievement.first_voice on the first %s',
-    async (axisKey) => {
-      const upsert = jest.fn().mockResolvedValue({ count: 1 });
-      const create = jest.fn().mockResolvedValue({});
-      const prisma = makePrisma({ upsert, create });
-      mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-      const svc = new EngagementService(prisma);
-
-      await svc.recordActivity('user-1', axisKey);
-
-      expect(create).toHaveBeenCalledWith({
-        data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.first_voice' },
-      });
-    },
-  );
-
-  it('does not award achievement.first_voice for a non-audio axis', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'content.text_message');
-
-    expect(create).not.toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.first_voice' },
-    });
-  });
-
-  it('awards achievement.editor on the first in-app edit', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const create = jest.fn().mockResolvedValue({});
-    const prisma = makePrisma({ upsert, create });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'tool.in_app_edit');
-
-    expect(create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.editor' },
-    });
-  });
-
-  it('awards achievement.three_conversation_kinds once every conversation axis has been reached', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 }); // 0 -> 1, last of the three
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn().mockResolvedValue(CONVERSATION_ENGAGEMENT_AXES.map((axisKey) => ({ axisKey })));
-    const prisma = makePrisma({ upsert, create, findMany });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'conversation.community');
-
-    expect(create).toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.three_conversation_kinds' },
-    });
-  });
-
-  it('does not award achievement.three_conversation_kinds while a conversation axis is still untouched', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn().mockResolvedValue([{ axisKey: 'conversation.private' }]); // only 1 of 3
-    const prisma = makePrisma({ upsert, create, findMany });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'conversation.private');
-
-    expect(create).not.toHaveBeenCalledWith({
-      data: { userId: 'user-1', milestoneType: 'achievement', milestoneKey: 'achievement.three_conversation_kinds' },
-    });
-  });
-
-  it('does not re-evaluate any achievement condition on a non-first increment of the axis', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 2 }); // 1 -> 2, not a first touch
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn();
-    const prisma = makePrisma({ upsert, create, findMany });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'content.text_message');
-
-    expect(findMany).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ milestoneType: 'achievement' }) }),
-    );
-  });
-
-  it('does not evaluate any achievement condition for an axis outside all five conditions', async () => {
-    const upsert = jest.fn().mockResolvedValue({ count: 1 });
-    const create = jest.fn().mockResolvedValue({});
-    const findMany = jest.fn();
-    const prisma = makePrisma({ upsert, create, findMany });
-    mockGetSharedNotificationService.mockReturnValue(makeSharedNotificationService());
-    const svc = new EngagementService(prisma);
-
-    await svc.recordActivity('user-1', 'tool.direct_publish');
-
-    expect(findMany).not.toHaveBeenCalled();
-    expect(create).not.toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ milestoneType: 'achievement' }) }),
-    );
   });
 });

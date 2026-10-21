@@ -7,8 +7,11 @@ import { formatPercent } from '@/lib/admin/interpret/numbers';
 import { sendingBroadcastsRead } from '@/lib/admin/dashboard-reads';
 import { loadAdminRecentReports } from '@/lib/api/admin-overview-queue';
 import { translateAdmin } from '@/lib/i18n-admin-catalog';
+import { useLiveAnnouncer } from '@/lib/view/use-live-announcer';
+import { AdminAnnouncement } from '@/components/admin/announcement';
 
 import { ModerationStatsBlock } from './admin-dashboard-numbers';
+import { AdminReportActBar } from './admin-report-acts';
 import { DashBody, DashEmptyLine, DashListCard, DashMore, DashSection, type DashContext } from './admin-dashboard-parts';
 
 /**
@@ -32,6 +35,7 @@ export function ModerationBlock(context: DashContext) {
     staleTime: MINUTE,
   });
   const title = translateAdmin(language, 'admin.dash.moderation.recent');
+  const announcer = useLiveAnnouncer();
 
   return (
     <DashSection id="moderation" title={translateAdmin(language, 'admin.dash.moderation.title')}>
@@ -48,12 +52,20 @@ export function ModerationBlock(context: DashContext) {
                 <DashEmptyLine text={translateAdmin(language, 'admin.dash.moderation.empty')} />
               ) : (
                 <ul className="grid">
-                  {rows.map((row) => (
-                    <li key={row.id} data-admin-row={row.id} className="flex items-center justify-between gap-3">
+                  {rows.map((row, index) => (
+                    <li key={row.id} data-admin-row={row.id} className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <AdminEntityChip language={language} entity={{ kind: 'report', id: row.id, label: row.name, secondary: row.secondary }} />
                       </div>
                       <AdminInterpretedBadge value={row.status} />
+                      {/* TRAITER DEPUIS LE TABLEAU DE BORD (#10394) : le geste sans ouvrir la file. */}
+                      <AdminReportActBar
+                        language={language}
+                        report={{ id: row.id, reportedType: reports[index]?.entity?.kind ?? null, status: reports[index]?.status ?? null }}
+                        onAnnounce={announcer.announce}
+                        deps={deps}
+                        extraInvalidate={[['admin', 'dash', 'reports-recent']]}
+                      />
                     </li>
                   ))}
                 </ul>
@@ -62,6 +74,7 @@ export function ModerationBlock(context: DashContext) {
           );
         }}
       </DashBody>
+      <AdminAnnouncement text={announcer.text} />
       {block.status === 'ready' ? <DashMore language={language} target={{ kind: 'section', section: 'reports' }} /> : null}
     </DashSection>
   );

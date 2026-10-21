@@ -56,7 +56,7 @@ const check = (ok, what) => {
 };
 
 const HINT = 'Appui long pour lancer les Réels';
-/** Au-delà de `LONG_PRESS_MS` (500), avec la marge d'un moteur chargé. */
+/** Au-delà de `LONG_PRESS_MS` (350 depuis #11207), avec la marge d'un moteur chargé. */
 const HOLD_MS = 750;
 const DISC = '[data-floating-feed]';
 
@@ -194,7 +194,7 @@ for (const scheme of ['light', 'dark']) {
     const cdp = await context.newCDPSession(page);
 
     // ------------------------------------------------ 1. la face « Flux »
-    await page.goto(`${BASE}/`, { waitUntil: 'load' });
+    await page.goto(`${BASE}/chats`, { waitUntil: 'load' });
     await page.waitForSelector('[data-row]');
     const repos = await settled(page);
     check(repos !== null, `${g} : aucun disque du Flux sur la liste`);
@@ -223,7 +223,7 @@ for (const scheme of ['light', 'dark']) {
     check(disparitionsAller === 0, `${g} : le disque a quitté le document pendant la bascule vers le Flux (${disparitionsAller})`);
     check(samePlace(repos, surFlux), `${g} : le disque a sauté à la bascule vers le Flux — ${JSON.stringify([repos, surFlux])}`);
     check(
-      surFlux?.href === '/' && surFlux?.label === 'Conversations' && surFlux?.face === 'conversations' && surFlux?.marque === 3,
+      surFlux?.href === '/chats' && surFlux?.label === 'Conversations' && surFlux?.face === 'conversations' && surFlux?.marque === 3,
       `${g} : sur le Flux, le disque ne se dit pas « Conversations » vers / avec la marque — ${JSON.stringify(surFlux)}`,
     );
     check(surFlux?.hint === HINT, `${g} : sur le Flux, l'indice de l'appui long a disparu`);
@@ -247,16 +247,16 @@ for (const scheme of ['light', 'dark']) {
     avant = (await navs(page)).length;
     const disparitionsRetour = await watchToggle(page, async () => {
       await tap(page, surFlux);
-      check(await waitPath(page, '/'), `${g} : sur le Flux, le tap ne ramène pas à la liste`);
+      check(await waitPath(page, '/chats'), `${g} : sur le Flux, le tap ne ramène pas à la liste`);
     });
     const deRetour = await settled(page);
-    check((await navs(page)).slice(avant).join('|') === 'push /', `${g} : le tap vers la liste empile autre chose que / — ${(await navs(page)).slice(avant)}`);
+    check((await navs(page)).slice(avant).join('|') === 'push /chats', `${g} : le tap vers la liste empile autre chose que /chats — ${(await navs(page)).slice(avant)}`);
     check(disparitionsRetour === 0, `${g} : le disque a quitté le document pendant la bascule vers la liste (${disparitionsRetour})`);
     check(samePlace(repos, deRetour) && deRetour?.label === 'Flux', `${g} : revenu sur la liste, le disque n'est pas « Flux » à sa place`);
 
     // --------------------------------- 4. appui long souris, liste puis Flux
     for (const [depart, retour] of [
-      ['/', '/'],
+      ['/chats', '/chats'],
       ['/feed', '/feed'],
     ]) {
       if (depart === '/feed') {
@@ -277,14 +277,14 @@ for (const scheme of ['light', 'dark']) {
       check((await navs(page)).slice(avant).join('|') === 'push /reels', `${g} : depuis ${depart}, l'appui long empile autre chose que /reels — ${(await navs(page)).slice(avant)}`);
       check((await page.$(DISC)) === null, `${g} : un disque flottant survit sur les Réels`);
       check((await stored(page)) === null, `${g} : l'appui long a déplacé le disque (${await stored(page)})`);
-      if (depart === '/') await capture(page, `disc-longpress-reels.${scheme}.${viewport.width}x${viewport.height}`);
+      if (depart === '/chats') await capture(page, `disc-longpress-reels.${scheme}.${viewport.width}x${viewport.height}`);
       await page.goBack();
       check(await waitPath(page, retour), `${g} : le retour depuis les Réels ne ramène pas à ${retour}`);
       const revenu = await settled(page);
       check(samePlace(repos, revenu), `${g} : de retour sur ${retour}, le disque n'est plus à sa place`);
     }
     await tap(page, await settled(page));
-    await waitPath(page, '/');
+    await waitPath(page, '/chats');
 
     // ------------------------------------------ 5. appui long TACTILE
     const tactile = await settled(page);
@@ -308,7 +308,7 @@ for (const scheme of ['light', 'dark']) {
     menusEmis += menus.length;
     check(menus.every((prevented) => prevented), `${g} : un menu contextuel du système a été laissé passer pendant l'appui long tactile — ${JSON.stringify(menus)}`);
     await page.goBack();
-    await waitPath(page, '/');
+    await waitPath(page, '/chats');
 
     // ------------------------------------------------ 7. Maj+F10
     await page.waitForSelector(DISC);
@@ -318,7 +318,7 @@ for (const scheme of ['light', 'dark']) {
     check(await waitPath(page, '/reels'), `${g} : Maj+F10 sur le disque n'ouvre pas les Réels`);
     check((await navs(page)).slice(avant).join('|') === 'push /reels', `${g} : Maj+F10 empile autre chose que /reels`);
     await page.goBack();
-    await waitPath(page, '/');
+    await waitPath(page, '/chats');
 
     // ---------------------------------- 6. glisser : rien ne s'ouvre, il suit
     const depart = await settled(page);
@@ -337,7 +337,7 @@ for (const scheme of ['light', 'dark']) {
     );
     await page.mouse.up();
     await pause(page, 400);
-    check((await path(page)) === '/', `${g} : un glisser tenu plus de 500 ms a ouvert ${await path(page)}`);
+    check((await path(page)) === '/chats', `${g} : un glisser tenu plus de 500 ms a ouvert ${await path(page)}`);
     check((await navs(page)).length === avant, `${g} : un glisser a empilé une adresse — ${(await navs(page)).slice(avant)}`);
     const pose = await settled(page);
     const memoire = await stored(page);

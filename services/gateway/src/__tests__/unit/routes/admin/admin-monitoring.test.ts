@@ -354,6 +354,22 @@ describe('GET /admin/monitoring — la carte des sauvegardes', () => {
     await app.close();
   });
 
+  it('annonce la prochaine sauvegarde à l’heure de CET environnement (BACKUP_RUN_TIME, #10460)', async () => {
+    writeFileSync(process.env.BACKUP_STATUS_FILE as string, JSON.stringify(VERDICT));
+    const previousRunTime = process.env.BACKUP_RUN_TIME;
+    process.env.BACKUP_RUN_TIME = '02:30';
+    try {
+      const app = await buildApp();
+      const { backups } = JSON.parse((await read(app)).body).data;
+      const paris = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+      expect(paris.format(new Date(backups.nextRunAt))).toBe('02:30');
+      await app.close();
+    } finally {
+      if (previousRunTime === undefined) delete process.env.BACKUP_RUN_TIME;
+      else process.env.BACKUP_RUN_TIME = previousRunTime;
+    }
+  });
+
   it('vaut null quand le fichier est absent — « inconnu », la carte ne se dessine pas', async () => {
     const app = await buildApp();
     expect(JSON.parse((await read(app)).body).data.backups).toBeNull();

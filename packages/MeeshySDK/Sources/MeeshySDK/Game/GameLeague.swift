@@ -68,6 +68,13 @@ public struct LeagueMoment: Sendable, Equatable {
         self.dayKey = dayKey
         self.minuteOfDay = minuteOfDay
     }
+
+    /// L'instant de l'horloge LOCALE (#10131) : le jour civil et la minute depuis minuit dans le calendrier donné.
+    public static func local(_ date: Date = Date(), calendar: Calendar = .current) -> LeagueMoment {
+        let parts = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let dayKey = String(format: "%04d-%02d-%02d", parts.year ?? 1970, parts.month ?? 1, parts.day ?? 1)
+        return LeagueMoment(dayKey: dayKey, minuteOfDay: (parts.hour ?? 0) * 60 + (parts.minute ?? 0))
+    }
 }
 
 public struct LeagueGain: Sendable, Equatable {
@@ -274,6 +281,12 @@ public enum GameLeague {
         let week = weekKey(of: moment.dayKey)
         let closed = weekdayIndex(of: moment.dayKey) == closeWeekday && moment.minuteOfDay >= closeMinute
         return closed ? add(7, to: week) : week
+    }
+
+    /// La prochaine fermeture de semaine (#10225) — miroir de `nextLeagueWeekClose` : le dimanche 20 h de la semaine
+    /// du moment, toujours STRICTEMENT après lui. Le seul instant où l'état d'une saison change.
+    public static func nextWeekClose(after moment: LeagueMoment) -> LeagueMoment {
+        weekClose(of: weekOfMoment(moment))
     }
 
     /// `true` quand le moment est à la fermeture de la semaine ou après.

@@ -63,6 +63,8 @@ struct GameHeroView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.lg) {
             if let cornerLine { corner(cornerLine) }
             levelRow
+            // Les deux paires des étincelles (#10846), TOUJOURS : poche / record d’étincelles, niveau / record de niveau.
+            GameSparkPairsRow(pairs: GameSparkPairs(game.level))
             rankRow
             GameHeroEarn(elan: elan)
         }
@@ -170,14 +172,6 @@ struct GameHeroView: View {
                 if let step = level.step {
                     GameLevelStepRow(step: step, facts: game.levelStepFacts)
                 }
-                if level.record > level.level {
-                    // DEUX pastilles, jamais une longue (#9564) : « Record : niveau 100 · Vent arrière ×1,25 » tenait
-                    // sur deux lignes, puis — une fois interdite de passer à la ligne — poussait le héro hors de l'écran.
-                    FlowLayout(spacing: MeeshySpacing.xs) {
-                        GameChip(text: recordText, tint: MeeshyColors.warning)
-                        if let tailwindText { GameChip(text: tailwindText, tint: MeeshyColors.warning) }
-                    }
-                }
             }
         }
         .id(GameAnchor.level)
@@ -205,25 +199,7 @@ struct GameHeroView: View {
         if level.held, let step = level.step { return GameCopy.levelHeld(step) }
         return level.nextThreshold == nil
             ? GameCopy.levelTop(cap: level.cap)
-            : String(
-                localized: "game.level.to_next",
-                defaultValue: "Encore \(GameCopy.points(level.pointsToNext)) avant le niveau \(GameCopy.formatCount(level.level + 1))",
-                bundle: .main
-            )
-    }
-
-    private var recordText: String {
-        String(
-            localized: "game.level.record",
-            defaultValue: "Record : niveau \(GameCopy.formatCount(level.record))",
-            bundle: .main
-        )
-    }
-
-    /// Le Vent arrière, quand il souffle : il a sa propre pastille.
-    private var tailwindText: String? {
-        guard game.boosts.tailwind > 1 else { return nil }
-        return ConceptText.chipTailwind(GameCopy.factor(game.boosts.tailwind))
+            : GameCopy.levelToNext(remaining: level.pointsToNext, nextLevel: level.level + 1)
     }
 
     // MARK: - Le blason et la division
@@ -239,7 +215,7 @@ struct GameHeroView: View {
                 Text(GameCopy.rankLabel(glory))
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
-                Text(String(localized: "game.rank.glory", defaultValue: "Gloire \(GameCopy.formatCount(glory.glory))", bundle: .main))
+                Text(String(localized: "game.rank.glory", defaultValue: "\(GameCopy.formatCount(glory.glory)) de gloire", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }

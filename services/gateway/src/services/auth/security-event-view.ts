@@ -51,6 +51,9 @@ export const SECURITY_EVENT_ACTORS: Readonly<Record<string, SecurityEventActor>>
   PASSWORD_RESET_EXPIRED_TOKEN: 'unproven',
   PASSWORD_RESET_TOKEN_REUSE: 'unproven',
   PASSWORD_RESET_REVOKED_TOKEN: 'unproven',
+  // Codes 2FA épuisés sur un jeton de réinitialisation (a985c30bbe) : qui tient le jeton n'a pas prouvé être le
+  // titulaire — c'est précisément ce que le second facteur devait établir.
+  PASSWORD_RESET_2FA_ATTEMPTS_EXHAUSTED: 'unproven',
   RATE_LIMIT_EXCEEDED: 'unproven',
   TWO_FA_FAILED: 'unproven',
   SUSPICIOUS_PASSWORD_RESET: 'unproven',

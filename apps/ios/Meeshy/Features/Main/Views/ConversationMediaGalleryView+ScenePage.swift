@@ -377,7 +377,7 @@ struct GalleryScenePlayPause: View {
         } label: {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxxl, weight: .bold))
-                .foregroundColor(MeeshyColors.mediaChromeForeground)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 .offset(x: isPlaying ? 0 : 2)
                 .frame(width: UIFontMetrics.default.scaledValue(for: 64),
                        height: UIFontMetrics.default.scaledValue(for: 64))
@@ -409,9 +409,9 @@ extension ConversationMediaGalleryView {
         GalleryScenePage(
             item: scene,
             stage: sceneStage(),
-            reference: GallerySceneStage.reference(viewport: DeviceLayout.windowSize),
+            reference: GallerySceneStage.reference(viewport: stageViewport),
             clock: sceneClock,
-            presentation: stagePresentation,
+            presentation: stageGeometryPresentation,
             accentColor: accentColor,
             preferredContentLanguages: sceneContext?.playerLanguages ?? [],
             isActive: distance == 0,
@@ -429,7 +429,7 @@ extension ConversationMediaGalleryView {
     /// pager, jamais par la page : une page vit dans le pager, et un sol qui
     /// vivrait avec elle glisserait horizontalement avec elle au lieu de fondre.
     var sceneFloorLayer: some View {
-        GallerySceneFloor(scene: currentScene, presentation: stagePresentation)
+        GallerySceneFloor(scene: currentScene, presentation: stageGeometryPresentation)
             .equatable()
     }
 

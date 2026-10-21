@@ -26,7 +26,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .bubble, font: .cartoon, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .names, font: .poster, color: "#FFE600", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.pop-art.comite",
@@ -48,7 +49,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .bubble, font: .cartoon, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFE600", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.pop-art.groupe",
@@ -69,7 +71,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .cartoon, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#1C3FFF", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.pop-art.tablee",
@@ -91,7 +94,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .cartoon, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#FFE600", place: .top, size: .l, effect: CallFrameTextEffect.outline, letterCase: CallFrameLetterCase.upper),
                 subtitle: nil
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.duo",
@@ -113,7 +117,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .tag, font: .tag, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .names, font: .tag, color: "#FF2E2E", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#111111", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.comite",
@@ -136,7 +141,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .both, style: .tag, font: .tag, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .group, font: .tag, color: "#FF2E2E", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#111111", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.groupe",
@@ -158,7 +164,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .tag, font: .tag, color: "#111111", fill: "#FFFFFF"),
                 title: CallFrameTitle(source: .group, font: .tag, color: "#FF2E2E", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#111111", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.collage.tablee",
@@ -180,7 +187,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .tag, font: .tag, color: "#111111", fill: nil),
                 title: CallFrameTitle(source: .group, font: .tag, color: "#FF2E2E", place: .top, size: .l, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .date, font: .typewriter, color: "#111111", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.vitrail.duo",
@@ -202,7 +210,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .plate, font: .poster, color: "#F5E6C4", fill: "#0E0B1AD9"),
                 title: CallFrameTitle(source: .names, font: .calligraphy, color: "#F5E6C4", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .poster, color: "#E0A93B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.vitrail.comite",
@@ -224,7 +233,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .plate, font: .poster, color: "#F5E6C4", fill: "#0E0B1AD9"),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F5E6C4", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .poster, color: "#E0A93B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.vitrail.groupe",
@@ -246,7 +256,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .name, style: .badge, font: .poster, color: "#F5E6C4", fill: "#0E0B1AD9"),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F5E6C4", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .poster, color: "#E0A93B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.vitrail.tablee",
@@ -268,7 +279,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .poster, color: "#F5E6C4", fill: nil),
                 title: CallFrameTitle(source: .group, font: .calligraphy, color: "#F5E6C4", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: nil),
                 subtitle: CallFrameTitle(source: .date, font: .poster, color: "#E0A93B", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.upper)
-            )
+            ),
+            surfaces: [.capture, .live]
         ),
         CallFrameDesign(
             id: "hors-norme.tete-d-affiche.comite",
@@ -290,7 +302,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .poster, color: "#1E0616", fill: "#F5C84B"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#F5C84B", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .brand, font: .cartoon, color: "#FFD1E4", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture]
         ),
         CallFrameDesign(
             id: "hors-norme.tete-d-affiche.groupe",
@@ -312,7 +325,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .handle, style: .badge, font: .poster, color: "#1E0616", fill: "#F5C84B"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#F5C84B", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .brand, font: .cartoon, color: "#FFD1E4", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture]
         ),
         CallFrameDesign(
             id: "hors-norme.tete-d-affiche.tablee",
@@ -334,7 +348,8 @@ nonisolated extension CallFrameCatalogue {
                 names: CallFrameNames(show: .none, style: .badge, font: .poster, color: "#1E0616", fill: "#F5C84B"),
                 title: CallFrameTitle(source: .group, font: .poster, color: "#F5C84B", place: .top, size: .l, effect: CallFrameTextEffect.glow, letterCase: CallFrameLetterCase.upper),
                 subtitle: CallFrameTitle(source: .brand, font: .cartoon, color: "#FFD1E4", place: .top, size: .s, effect: CallFrameTextEffect.none, letterCase: CallFrameLetterCase.asIs)
-            )
+            ),
+            surfaces: [.capture]
         )
     ]
 }

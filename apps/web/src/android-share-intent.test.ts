@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { SHARE_LIMITS } from '@meeshy/shared/utils/share-limits';
 import { describe, expect, test } from 'bun:test';
 
 import { PONT_PARTAGE } from '@/lib/share-incoming/native-inbox';
@@ -60,6 +61,14 @@ describe('la coque Android reçoit un partage (#8884)', () => {
     expect(plugin).toContain('ShareIntentRules.fileNameFor(');
   });
 
+  test('un fichier vide n’occupe pas de place et le premier qui dépasse arrête le partage, comme la PWA (#11142)', () => {
+    const copie = plugin.slice(plugin.indexOf('private JSObject copied('), plugin.indexOf('private static String displayNameOf('));
+    expect(copie).toContain('ShareIntentRules.verdictOf(size)');
+    expect(copie).toMatch(/CopyVerdict\.STOP\)\s*\{\s*break;/);
+    expect(copie).toMatch(/CopyVerdict\.SKIP\)\s*\{\s*continue;/);
+    expect(readFileSync(join(APP, 'public', 'sw-share-target.js'), 'utf8')).toContain('total + value.size > SHARE_MAX_TOTAL_BYTES) break;');
+  });
+
   test('le partage en attente est publié AVANT que la copie ne réveille le web', () => {
     expect(plugin.indexOf('pending = copy;')).toBeGreaterThan(-1);
     expect(plugin.indexOf('pending = copy;')).toBeLessThan(plugin.indexOf('executor.execute(copy)'));
@@ -72,13 +81,14 @@ describe('la coque Android reçoit un partage (#8884)', () => {
     expect(plugin).toContain('share.put("subject"');
   });
 
-  test('les bornes du pont sont celles du service worker de la PWA', () => {
+  test('les bornes du pont sont celles du service worker de la PWA ET les plafonds communs (D10)', () => {
     const regles = lire(join(JAVA, 'ShareIntentRules.java'));
     const worker = readFileSync(join(APP, 'public', 'sw-share-target.js'), 'utf8');
-    expect(regles).toContain('MAX_FILES = 10');
-    expect(worker).toContain('SHARE_MAX_FILES = 10');
-    expect(regles).toContain('MAX_TOTAL_BYTES = 100L * 1024 * 1024');
-    expect(worker).toContain('SHARE_MAX_TOTAL_BYTES = 100 * 1024 * 1024');
+    const mebibytes = SHARE_LIMITS.maxTotalBytes / (1024 * 1024);
+    expect(regles).toContain(`MAX_FILES = ${SHARE_LIMITS.maxFiles};`);
+    expect(worker).toContain(`SHARE_MAX_FILES = ${SHARE_LIMITS.maxFiles};`);
+    expect(regles).toContain(`MAX_TOTAL_BYTES = ${mebibytes}L * 1024 * 1024;`);
+    expect(worker).toContain(`SHARE_MAX_TOTAL_BYTES = ${mebibytes} * 1024 * 1024;`);
   });
 
   test('le manifeste COMMITÉ inscrit l’app aux partages — la garde du gate, rejouée sur le vrai fichier', () => {

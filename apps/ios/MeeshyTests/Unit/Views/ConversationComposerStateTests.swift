@@ -168,11 +168,40 @@ final class ConversationComposerStateTests: XCTestCase {
             .appendingPathComponent("FeedComposerSheet.swift"), encoding: .utf8)
         XCTAssertFalse(citation.contains("onComplete: { _ in editingVideoURL = nil }"),
                        "La citation d'un post jette le résultat de l'éditeur vidéo.")
-        XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: target.id"))
+        XCTAssertTrue(citation.contains("PendingVideoEditReplacement.apply(result, to: id"),
+                      "La vidéo retouchée remplace SA pièce dans la feuille du fil (#11170).")
         // #9166 — la scène se retire elle-même et sa fermeture vide la file
         // avant « Terminé » : `removeFirst()` sur une file vide abattait l'app
         // (mesuré au simulateur).
         XCTAssertFalse(citation.contains("videosToPreview.removeFirst()"),
                        "la tête de la file des vidéos se retire sans supposer qu'elle existe")
+    }
+}
+
+/// #10807 — modifier un message envoyé n'est pas écrire un brouillon. Le champ
+/// porte le texte du message en modification ; ce que la conversation garde
+/// comme brouillon, c'est ce que l'auteur composait AVANT d'entrer en édition.
+@MainActor
+final class ConversationComposerEditDraftTests: XCTestCase {
+
+    private func editing(draftBeforeEdit: String?) -> ConversationComposerState {
+        var state = ConversationComposerState()
+        state.editingMessageId = "message-1"
+        state.editingOriginalContent = "Bonjour depuis le simulateur"
+        state.draftBeforeEdit = draftBeforeEdit
+        return state
+    }
+
+    func test_enEdition_sansBrouillon_rienNeSePersiste() {
+        XCTAssertEqual(editing(draftBeforeEdit: nil).persistedDraftText(composing: "Bonjour depuis le si"), "")
+        XCTAssertEqual(editing(draftBeforeEdit: "").persistedDraftText(composing: "Bonjour depuis le si"), "")
+    }
+
+    func test_enEdition_leBrouillonDAvantSurvit() {
+        XCTAssertEqual(editing(draftBeforeEdit: "à finir").persistedDraftText(composing: "Bonjour depuis le si"), "à finir")
+    }
+
+    func test_horsEdition_leChampEstLeBrouillon() {
+        XCTAssertEqual(ConversationComposerState().persistedDraftText(composing: "à finir"), "à finir")
     }
 }

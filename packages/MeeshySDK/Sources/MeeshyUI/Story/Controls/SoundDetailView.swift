@@ -60,6 +60,7 @@ public struct SoundDetailView: View {
             }
         }
         .task { await model.loadIfNeeded() }
+        .onDisappear { Task { await model.flushImpressions() } }
     }
 
     private var header: some View {
@@ -131,6 +132,7 @@ public struct SoundDetailView: View {
             LazyVGrid(columns: columns, spacing: MeeshySpacing.xxs) {
                 ForEach(model.posts) { post in
                     SoundPostTile(post: post)
+                        .onAppear { model.postAppeared(post.id) }
                 }
             }
             .padding(.horizontal, MeeshySpacing.xxs)

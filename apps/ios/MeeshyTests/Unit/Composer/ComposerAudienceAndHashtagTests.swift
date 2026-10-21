@@ -294,8 +294,52 @@ final class ComposerAudienceAndHashtagTests: XCTestCase {
             .appendingPathComponent("Meeshy/Features/Main/Views")
         for fichier in ["ReelFeedCard.swift", "ReelsPlayerView.swift"] {
             let source = try String(contentsOf: views.appendingPathComponent(fichier), encoding: .utf8)
-            XCTAssertTrue(source.contains("ReelPublishedContent.content(type: .reel"),
-                          "\(fichier) montre la légende d'un réel sans texte par la règle unique.")
+            XCTAssertTrue(source.contains("ReelCaptionMemo.shared.caption("),
+                          "\(fichier) montre la légende d'un réel sans texte par la règle unique, mémorisée (#10354).")
+            XCTAssertFalse(source.contains("ReelPublishedContent.content("),
+                           "\(fichier) reparse la légende à chaque corps : passer par ReelCaptionMemo.")
         }
+    }
+
+    // MARK: - La légende servie se calcule une fois (#10354)
+
+    @MainActor
+    func test_memo_servesTheSingleRule() {
+        let memo = ReelCaptionMemo()
+        XCTAssertEqual(memo.caption(text: "", captions: ["Coucher de soleil"]),
+                       ReelPublishedContent.content(type: .reel, text: "", captions: ["Coucher de soleil"]))
+        XCTAssertEqual(memo.caption(text: nil, captions: []), "")
+    }
+
+    @MainActor
+    func test_memo_computesOncePerServedText() {
+        var computed = 0
+        let memo = ReelCaptionMemo { text, captions in
+            computed += 1
+            return ReelPublishedContent.content(type: .reel, text: text, captions: captions)
+        }
+        _ = memo.caption(text: "#voyage", captions: ["Plage"])
+        _ = memo.caption(text: "#voyage", captions: ["Plage"])
+        _ = memo.caption(text: "#voyage", captions: ["Plage"])
+        XCTAssertEqual(computed, 1, "un corps de page qui se réévalue ne reparse plus la légende")
+    }
+
+    @MainActor
+    func test_memo_aTranslationOrALanguageChoiceIsANewKey() {
+        let memo = ReelCaptionMemo()
+        XCTAssertEqual(memo.caption(text: "Bonjour", captions: []), "Bonjour")
+        XCTAssertEqual(memo.caption(text: "Hello", captions: []), "Hello",
+                       "le Prisme sert un autre texte : la mémoire ne rend jamais celui d'une autre langue")
+    }
+
+    @MainActor
+    func test_memo_isBounded() {
+        var computed = 0
+        let memo = ReelCaptionMemo(capacity: 2) { text, _ in computed += 1; return text }
+        _ = memo.caption(text: "a", captions: [])
+        _ = memo.caption(text: "b", captions: [])
+        _ = memo.caption(text: "c", captions: [])
+        _ = memo.caption(text: "a", captions: [])
+        XCTAssertEqual(computed, 4, "au-delà de sa capacité, la mémoire repart vide")
     }
 }

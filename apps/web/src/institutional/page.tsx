@@ -1,24 +1,11 @@
-/** @jsxImportSource preact */
-/*
- * PRAGMA OBLIGATOIRE, et voici pourquoi elle n'est pas décorative.
- *
- * Le reste de l'application compile son JSX vers `react/jsx-runtime`, que Vite
- * ALIASE vers Preact. Ce fichier-ci est rendu par `preact-render-to-string`
- * depuis un script lancé par bun — HORS du pipeline Vite, donc hors de l'alias.
- * Sans cette ligne, le JSX produit de vrais éléments React, que le rendu Preact
- * ne sait pas lire : il rend une chaîne VIDE, sans erreur.
- *
- * Le symptôme observé : cinq pages servies en 200, titre correct, métadonnées
- * correctes, `<body></body>`. Un défaut qui passe tous les contrôles sauf celui
- * de regarder la page.
- */
-import { BRAND_LOGO_PATH } from '../lib/brand';
+import { LANDING_COPY } from '../landing/landing-copy';
+import { LanguageMenu, SiteFooter, SiteHeader } from '../landing/site-chrome';
 import { BrandSignature } from './brand-signature';
 import { meeViewSrc } from './mee-views';
 import type { Block, Card, FramedRow, ContentPage, MeeView, Section } from './type';
 
 /**
- * LE RENDU DES CINQ PAGES INSTITUTIONNELLES.
+ * LE RENDU DES SEPT PAGES INSTITUTIONNELLES.
  *
  * Un composant, sept contenus. Ces pages sont PRÉCHAUFFÉES en HTML statique
  * (`scripts/prerender-institutional.tsx`) : elles ne montent aucun composant
@@ -26,7 +13,17 @@ import type { Block, Card, FramedRow, ContentPage, MeeView, Section } from './ty
  * applicatif. C'est ce que #5554 demande, et c'est aussi ce qui en fait le
  * premier essai réel du routage en production — sans session, sans API, sans
  * temps réel, elles ne peuvent échouer que sur le routage lui-même.
+ *
+ * Elles portent l'en-tête et le pied de meeshy.me (`landing/site-chrome.tsx`,
+ * #10071), dans la copie FRANÇAISE de la landing : c'est la langue de leur
+ * contenu. Le sélecteur de langue mène à la landing de la langue choisie
+ * (`LanguageMenu`) — ces pages ne sont pas traduites, il ne le prétend pas.
+ *
+ * Rendues par `react-dom/server`, comme la landing : un composant partagé ne
+ * peut avoir qu'un seul moteur de rendu hors de Vite (`preact-render-to-string`
+ * ne lit pas un élément React — il rendait une chaîne VIDE, sans erreur).
  */
+const COPY = LANDING_COPY.fr;
 
 function Chips({ items }: { items: readonly string[] }) {
   return (
@@ -159,8 +156,8 @@ function RenderedBlock({ block }: { block: Block }) {
 
 function RenderedSection({ section }: { section: Section }) {
   return (
-    <section className="mt-8">
-      <h2 className="text-thread font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+    <section className="mt-8 md:mt-12">
+      <h2 className="text-thread leading-snug font-bold md:text-[1.625rem]" style={{ color: 'var(--color-ios-ink)' }}>
         {section.title}
       </h2>
       <div className="mt-3 space-y-3">
@@ -179,34 +176,17 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
        première version posait l'encre SECONDAIRE ici, ce qui faisait lire une
        politique de confidentialité entière en couleur d'accompagnement. Seules
        la mention de date et le pied prennent l'encre atténuée. */
-    <div style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}>
+    <div className="flex min-h-dvh flex-col" style={{ backgroundColor: 'var(--color-ios-surface)', color: 'var(--color-ios-ink)' }}>
       <a href="#contenu" className="skip-link">
         Aller au contenu
       </a>
 
-      <header className="mx-auto flex max-w-[42rem] items-center gap-3 px-5 pt-6 pb-2">
-        {/* `minHeight: 44` — la cible de la charte. Le lien ne portait que du
-            texte (≈ 20 px de haut) ; le logo l'a amené à 40. Les 4 derniers
-            se posent ici plutôt que sur l'image, pour que la zone cliquable
-            couvre le mot autant que la marque. */}
-        <a
-          href="/"
-          className="flex items-center gap-2 text-brand font-bold"
-          style={{ color: 'var(--color-ios-brand)', minHeight: 44 }}
-        >
-          {/* Décoratif : « Meeshy » à côté porte déjà le nom — un `alt` ici le
-              ferait lire deux fois par un lecteur d'écran. */}
-          <img src={BRAND_LOGO_PATH} width="40" height="40" alt="" />
-          Meeshy
-        </a>
-        <span className="flex-1" />
-        <a href="/" className="text-caption text-meta underline underline-offset-2">
-          Retour à l’accueil
-        </a>
-      </header>
+      <SiteHeader language="fr" copy={COPY} onLanding={false} languageControl={<LanguageMenu language="fr" copy={COPY} />} />
 
-      <main id="contenu" className="mx-auto max-w-[42rem] px-5 pb-16 text-body leading-relaxed">
-        <h1 className="mt-4 text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
+      {/* La colonne de lecture : 44 rem au plus (≈ 70 signes par ligne), des
+          marges qui s'élargissent avec l'écran — jamais un texte collé au bord. */}
+      <main id="contenu" className="mx-auto w-full max-w-[44rem] grow px-5 pt-6 pb-16 text-body leading-relaxed sm:px-8 md:pt-12">
+        <h1 className="text-screen leading-tight font-bold md:text-[2.75rem]" style={{ color: 'var(--color-ios-ink)' }}>
           {page.title}
         </h1>
         {page.hero ? <p className="mt-3 text-secondary">{page.hero}</p> : null}
@@ -245,19 +225,11 @@ export function InstitutionalPage({ page, version }: { page: ContentPage; versio
         </section>
       </main>
 
-      <footer
-        className="mx-auto max-w-[42rem] px-5 pb-8 text-caption"
-        style={{ color: 'var(--color-ios-ink-3)' }}
-      >
-        <nav className="flex flex-wrap gap-x-4 gap-y-2">
-          <a href="/about" className="underline underline-offset-2">À propos</a>
-          <a href="/contact" className="underline underline-offset-2">Contact</a>
-          <a href="/partners" className="underline underline-offset-2">Partenaires</a>
-          <a href="/privacy" className="underline underline-offset-2">Confidentialité</a>
-          <a href="/terms" className="underline underline-offset-2">Conditions</a>
-        </nav>
-        <BrandSignature version={version} />
-      </footer>
+      <SiteFooter language="fr" copy={COPY} onLanding={false} languageLinks={false}>
+        <div className="ld-wrap ld-footer-signature">
+          <BrandSignature version={version} language="fr" />
+        </div>
+      </SiteFooter>
     </div>
   );
 }

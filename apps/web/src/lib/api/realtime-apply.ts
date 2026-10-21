@@ -332,6 +332,9 @@ export function applyMessageTranslation(queryClient: QueryClient, data: Translat
     patchThreadMessages(queryClient, conversationId, (messages) =>
       messages.map((m) => (m.id === data.messageId ? merged : m)),
     );
+    /* Une requête du fil EN VOL rendrait le message nu, parti avant sa
+       traduction (#10573) : elle est relancée, motif `applyMessageNew`. */
+    keepLiveMessageOverFetch(queryClient, conversationId);
   }
 
   /* LA LIGNE SUIT MÊME FIL FERMÉ (#7547) — elle se retrouve par son DERNIER
@@ -407,7 +410,10 @@ function mergedAttachment(cached: Attachment, incoming: Record<string, unknown>)
      et le cache tient la FORME DU FIL (D-26) — c'est `decodeMessagesPage`,
      posé en `select`, qui dénullifie chaque pièce à la lecture
      (`decode.ts` § `decodeAttachment`), jamais ce puits. */
-  const merged = { ...cached, ...incoming } as unknown as Attachment;
+  /* Un `null` servi n'EFFACE pas ce que le cache tient déjà : la passerelle relit la pièce
+     en base, qui peut précéder de peu l'écriture de la transcription (#10742). */
+  const kept = (['transcription', 'translations'] as const).filter((key) => incoming[key] == null && cached[key] != null);
+  const merged = { ...cached, ...incoming, ...Object.fromEntries(kept.map((key) => [key, cached[key]])) } as unknown as Attachment;
   if (!maskedAttachment(cached)) return merged;
 
   return {

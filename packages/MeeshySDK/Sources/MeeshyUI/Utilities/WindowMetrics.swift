@@ -11,8 +11,15 @@ import UIKit
 /// does not have. The scene is picked by `activationState`, never by
 /// `connectedScenes.first`: `connectedScenes` is an unordered `Set`, so
 /// `.first` routinely hands back a background scene under multi-window.
-enum WindowMetrics {
+public enum WindowMetrics {
+    /// Miroir de `DeviceLayout.activeWindowScene` : deux scènes au premier plan (fenêtre détachée) — celle qui tient la
+    /// fenêtre clé l'emporte.
     private static var activeWindowScene: UIWindowScene? {
+        for scene in UIApplication.shared.connectedScenes {
+            guard let windowScene = scene as? UIWindowScene, windowScene.activationState == .foregroundActive,
+                  windowScene.keyWindow != nil else { continue }
+            return windowScene
+        }
         for scene in UIApplication.shared.connectedScenes {
             guard let windowScene = scene as? UIWindowScene,
                   windowScene.activationState == .foregroundActive else { continue }
@@ -21,7 +28,15 @@ enum WindowMetrics {
         return nil
     }
 
-    private static var activeWindow: UIWindow? {
+    /// L'unique lecture de l'écran principal du module.
+    public static var mainScreen: UIScreen { UIScreen.main }
+
+    public static var physicalDisplay: DisplayMetrics {
+        let screen = mainScreen
+        return DisplayMetrics(points: screen.bounds.size, scale: screen.scale)
+    }
+
+    static var activeWindow: UIWindow? {
         guard let scene = activeWindowScene else { return nil }
         for window in scene.windows where window.isKeyWindow {
             return window
@@ -33,7 +48,13 @@ enum WindowMetrics {
     /// physical display only when no foreground scene exists (teardown,
     /// background refresh) — no layout is happening then.
     static var windowSize: CGSize {
-        activeWindow?.bounds.size ?? UIScreen.main.bounds.size
+        activeWindow?.bounds.size ?? physicalDisplay.points
+    }
+
+    /// Trame de la fenêtre active en coordonnées d'ÉCRAN — l'espace des trames de clavier. `nil` sans fenêtre.
+    static var activeWindowFrameInScreen: CGRect? {
+        guard let window = activeWindow else { return nil }
+        return window.convert(window.bounds, to: window.screen.coordinateSpace)
     }
 
     /// Safe-area insets of the window the app is actually rendered in. `.zero`

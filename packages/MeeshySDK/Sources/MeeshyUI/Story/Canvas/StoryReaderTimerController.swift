@@ -309,14 +309,13 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         // Proxy weak partagé : le link ne retient jamais le controller —
         // le `deinit` (backstop) reste atteignable, et un tick orphelin
         // s'auto-invalide. Cf. WeakDisplayLinkTarget.
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.tick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link
     }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { trackingLinksOf } from '@meeshy/shared/utils/text-segments';
 
-import { Avatar } from '@/components/avatar';
+import { PeerAvatar } from '@/components/peer-avatar';
 import { CommentBody } from '@/components/comment-body';
 import { CommentMedia } from '@/components/comment-media';
 import { CommentRowMenu, type CommentMenuPick } from '@/components/comment-row-menu';
@@ -17,11 +17,12 @@ import type {
   CommentGestureReasonKey,
 } from '@/lib/api/comment-gestures';
 import { COMMENT_MAX_LENGTH, type PostComment } from '@/lib/api/publication-comments';
+import { servedRingOf } from '@/lib/profile-decor/served-ring';
 import type { ReportReason } from '@/lib/api/reports';
 import { resolveFeedText } from '@/lib/feed/text';
 import { translate } from '@/lib/i18n-catalog';
 import type { InterfaceLanguage } from '@/lib/interface-language';
-import { STICKER_RENDER_SCALE, STICKER_SIDE } from '@/lib/reading-mode/metrics';
+import { STICKER_SIDE } from '@/lib/reading-mode/metrics';
 import { shortRelativeTime } from '@/lib/relative-time';
 import { commentMenuEntries, type CommentMenuEntry } from '@/lib/view/comment-menu';
 import { commentStickerOf } from '@/lib/view/comment-sticker';
@@ -93,6 +94,8 @@ export type CommentGestureHandlers = {
   readonly postImageableOf?: (comment: PostComment, servedText: string) => boolean | null;
   /** « COPIER » (#8734) — le texte AFFICHÉ ; l'hôte annonce l'issue. Absent ⇒ aucune entrée. */
   readonly onCopy?: (text: string) => void;
+  /** « RETIRER » (#11150) — la modération de plateforme, sur le commentaire d'un autre ; le motif écrit. Absent ⇒ aucune entrée. */
+  readonly onRemove?: (commentId: string, reason: string, parentId?: string) => void;
   /** « SIGNALER » (#8734) — le motif choisi dans la feuille ; aux autres seuls. Absent ⇒ aucune entrée. */
   readonly onReport?: (commentId: string, reason: ReportReason) => void;
   /** Le dernier geste EN ÉCHEC sur cette rangée, avec SA classe d'issue. */
@@ -526,6 +529,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
           canCopy: actionable.onCopy !== undefined,
           canImage: actionable.onImage !== undefined,
           canReport: actionable.onReport !== undefined,
+          canRemove: actionable.onRemove !== undefined,
           ...(composed === null ? {} : { postComposition: { imageable: composed } }),
         });
   const pick = (choice: CommentMenuPick) => {
@@ -543,6 +547,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
       case 'delete':
         requestDelete();
         return;
+      case 'remove':
+        actionable?.onRemove?.(comment.id, choice.reason, ...parentArgs(comment));
+        return;
       case 'report':
         actionable?.onReport?.(comment.id, choice.reason);
         return;
@@ -558,7 +565,9 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
     >
       <CommentSwipe onReply={reply}>
         <div className="flex gap-3 py-2">
-          <Avatar
+          <PeerAvatar
+            presenceKey={comment.author.id}
+            ringRef={servedRingOf(comment.author)}
             initials={initialsOf(name)}
             color="var(--color-ios-brand)"
             size={32}
@@ -621,7 +630,7 @@ export function CommentRow({ comment, language, preferredLanguages, locale, now,
               <CommentBody comment={comment} contentLength={lu.text.length}>
                 {sticker !== null ? (
                   <div data-comment-sticker className="py-1">
-                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE * STICKER_RENDER_SCALE} />
+                    <StickerArtwork sticker={sticker.sticker} picture={sticker.picture} side={STICKER_SIDE} senderName={name} />
                   </div>
                 ) : null}
                 {(sticker === null && media.length === 0) || lu.text.trim() !== '' ? (

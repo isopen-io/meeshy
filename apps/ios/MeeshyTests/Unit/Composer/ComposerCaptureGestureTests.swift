@@ -18,7 +18,11 @@ final class ComposerCaptureGestureTests: XCTestCase {
         XCTAssertEqual(action(.scene, .drag), .close)
     }
 
-    func test_action_chosenThumbnailArmed_doubleTapAndLongPress_goToTheGallery() {
+    /// **Le cadre EST le déclencheur** (#10284) : la case choisie photographie
+    /// d'UN toucher (le double reste une photo), filme à l'appui long — et ces
+    /// prises partent en galerie, puis en retouche.
+    func test_action_chosenThumbnailArmed_isTheShutter_tapPhotographs_longPressFilms_toTheGallery() {
+        XCTAssertEqual(action(.chosenThumbnail, .tap), .photoToGallery)
         XCTAssertEqual(action(.chosenThumbnail, .doubleTap), .photoToGallery)
         XCTAssertEqual(action(.chosenThumbnail, .longPress), .filmToGallery)
         XCTAssertEqual(action(.otherThumbnail, .tap), .select)
@@ -48,6 +52,7 @@ final class ComposerCaptureGestureTests: XCTestCase {
         let segments = ComposerCaptureGestureContext(pendingSegments: 2)
         XCTAssertEqual(action(.scene, .doubleTap, segments), .none, "une photo jetterait les segments en attente")
         XCTAssertEqual(action(.chosenThumbnail, .longPress, segments), .none)
+        XCTAssertEqual(action(.chosenThumbnail, .tap, segments), .none, "la case choisie ne jette pas les segments")
         XCTAssertEqual(action(.scene, .longPress, segments), .filmSegment, "la relance des segments reste")
         XCTAssertEqual(action(.otherThumbnail, .tap, segments), .none, "le look ne change plus une fois la prise commencée")
     }
@@ -56,6 +61,7 @@ final class ComposerCaptureGestureTests: XCTestCase {
         let videoSeule = ComposerCaptureGestureContext(allowsPhoto: false)
         XCTAssertEqual(action(.scene, .doubleTap, videoSeule), .none)
         XCTAssertEqual(action(.chosenThumbnail, .doubleTap, videoSeule), .none)
+        XCTAssertEqual(action(.chosenThumbnail, .tap, videoSeule), .none)
     }
 
     func test_action_formatWithoutVideo_longPressIsInert() {
@@ -106,14 +112,23 @@ final class ComposerCaptureGestureTests: XCTestCase {
         XCTAssertEqual(double.action, .photoToEdit)
         XCTAssertTrue(double.consumedDouble)
         XCTAssertNil(double.memory, "un troisième toucher ouvre un nouveau double")
-        XCTAssertEqual(toucher(.chosenThumbnail, precedentIlYa: 0.2, precedentSur: .chosenThumbnail).action,
-                       .photoToGallery)
+    }
+
+    /// Sur un déclencheur, le premier toucher a DÉJÀ photographié : le second
+    /// d'un double est absorbé — jamais deux photos d'un double toucher (#10284).
+    func test_tap_doubleOnATrigger_takesOnePhoto_theSecondTouchIsAbsorbed() {
+        XCTAssertEqual(toucher(.chosenThumbnail, precedentIlYa: nil).action, .photoToGallery)
+        let second = toucher(.chosenThumbnail, precedentIlYa: 0.2, precedentSur: .chosenThumbnail)
+        XCTAssertEqual(second.action, .none)
+        XCTAssertTrue(second.consumedDouble)
+        XCTAssertNil(second.memory)
+        XCTAssertEqual(toucher(.shutter, precedentIlYa: nil).action, .photoToEdit)
+        XCTAssertEqual(toucher(.shutter, precedentIlYa: 0.2, precedentSur: .shutter).action, .none)
     }
 
     func test_tap_sceneThenChosenThumbnail_isNeverADouble() {
         let miniature = toucher(.chosenThumbnail, precedentIlYa: 0.2, precedentSur: .scene)
-        XCTAssertNotEqual(miniature.action, .photoToGallery, "aucune photo ne part en galerie sans double sur la miniature")
-        XCTAssertNotEqual(miniature.action, .photoToEdit)
+        XCTAssertEqual(miniature.action, .photoToGallery, "un toucher sur la case choisie photographie, seul")
         XCTAssertFalse(miniature.consumedDouble)
         XCTAssertEqual(miniature.memory, ComposerCaptureLastTap(zone: .chosenThumbnail, at: maintenant))
         XCTAssertEqual(toucher(.scene, precedentIlYa: 0.2, precedentSur: .chosenThumbnail).action, .focus)

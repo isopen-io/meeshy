@@ -68,10 +68,10 @@ extension CommentsSheetView {
                 // overlay story) la resservent depuis le cache sans refetch.
                 if let parentId = edited.parentId {
                     if let replies = repliesMap[parentId] {
-                        try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)")
+                        await bestEffort("feedCommentsSheetCommentEdit.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(replies), for: "replies-\(parentId)") }
                     }
                 } else if let current = liveComments {
-                    try? await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)")
+                    await bestEffort("feedCommentsSheetCommentEdit.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(Self.persistableComments(current), for: "post-\(post.id)") }
                 }
             } catch {
                 liveComments = snapshotComments
