@@ -16,8 +16,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     private var recorder: AVAudioRecorder? {
         didSet { teardown.update { $0.recorder = recorder } }
     }
-    private var timer: Timer? {
-        didSet { teardown.update { $0.timer = timer } }
+    private var displayLink: CADisplayLink? {
+        didSet { teardown.update { $0.displayLink = displayLink } }
     }
     private var levelHistory: [CGFloat] = []
     private var settings: AudioRecordingSettings = .standard
@@ -27,8 +27,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     /// Ressources à libérer depuis le `deinit` (potentiellement off-main).
     /// Concerne les instances NON partagées (ex. `AudioPostComposerView`)
     /// lâchées mid-recording par un swipe-down de sheet : sans ce filet le
-    /// Timer 20 Hz restait au run loop, le micro actif et la session jamais
-    /// rendue.
+    /// lien d'affichage restait au run loop, le micro actif et la session
+    /// jamais rendue.
     private let teardown = TeardownBox(RecordingResources())
 
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -36,7 +36,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).
     // Garde : MainActorDeinitSourceGuardTests / MeeshyUIDeinitSourceGuardTests.
     nonisolated deinit {
-        teardown.update(RecordingResources.invalidateTimer)
+        teardown.update(RecordingResources.invalidateDisplayLink)
         // `recorder` non-nil ⟺ mort mid-recording : sémantique cancel
         // (fichier partiel dérivé de `recorder.url`). Déporté sur une queue
         // utility : stop/removeItem sont bloquants et ce dealloc arrive sur le
@@ -118,12 +118,18 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         audioLevels = levelHistory
         RecorderCallGuard.shared.register(self)
 
-        // Un second démarrage sans arrêt entre les deux laissait l'ancien minuteur tourner à 20 Hz
-        // jusqu'à la fin du processus.
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.updateMetering() }
+        // Un second démarrage sans arrêt entre les deux laissait l'ancien lien tourner
+        // jusqu'à la fin du processus. Le niveau suit l'écran, plafonné à 30 Hz.
+        displayLink?.invalidate()
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .pinned(fps: 30)) { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.updateMetering()
         }
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     /// Tranche la permission micro AVANT toute activation de session.
@@ -171,15 +177,15 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     /// rend le fichier ; annuler le supprime. La session reste à l'appel.
     func stopForCall() {
         guard isRecording, let recorder, recorder.isRecording else { return }
-        timer?.invalidate()
-        timer = nil
+        displayLink?.invalidate()
+        displayLink = nil
         recorder.stop()
     }
 
     @discardableResult
     func stopRecording() -> URL? {
-        timer?.invalidate()
-        timer = nil
+        displayLink?.invalidate()
+        displayLink = nil
         recorder?.stop()
         isRecording = false
 
@@ -191,8 +197,8 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     }
 
     func cancelRecording() {
-        timer?.invalidate()
-        timer = nil
+        displayLink?.invalidate()
+        displayLink = nil
         recorder?.stop()
         isRecording = false
 
@@ -263,15 +269,15 @@ private extension Logger {
 }
 
 private nonisolated struct RecordingResources {
-    var timer: Timer?
+    var displayLink: CADisplayLink?
     var recorder: AVAudioRecorder?
 
     var isRecording: Bool {
         recorder != nil
     }
 
-    static func invalidateTimer(_ resources: inout RecordingResources) {
-        resources.timer?.invalidate()
+    static func invalidateDisplayLink(_ resources: inout RecordingResources) {
+        resources.displayLink?.invalidate()
     }
 
     static func releaseOffMain(_ resources: RecordingResources) {
