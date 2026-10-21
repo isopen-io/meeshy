@@ -356,7 +356,7 @@ final class PresenceManager: ObservableObject {
         presenceMap.merge(updates) { _, newEntry in newEntry }
     }
 
-    deinit {
+    nonisolated deinit {
         recalcTimer?.invalidate()
         recalcTimer = nil
         persistTask?.cancel()
