@@ -46,6 +46,17 @@ const en = {
   'message.pin.failed': 'The message could not be pinned',
   'message.unpin.failed': 'The message could not be unpinned',
   'message.report.title': 'Report this message',
+  'message.menu.retry': 'Retry',
+  'message.menu.translateOnDevice': 'Translate on device',
+  'message.menu.translateOnDevice.queued': 'Translation requested on this device',
+  'message.menu.translateOnDevice.consent': 'Turn on “Translate on this device” in Settings',
+  'message.menu.e2eeAbsent': 'End-to-end encrypted: no transcription or analysis',
+  'message.link.open': 'Open link',
+  'message.link.copy': 'Copy link',
+  'message.link.copied': 'Link copied',
+  'message.location.open': 'Open in a map',
+  'message.location.copy': 'Copy address',
+  'message.location.copied': 'Address copied',
 } satisfies MessagePiecesCatalog;
 
 export default en;

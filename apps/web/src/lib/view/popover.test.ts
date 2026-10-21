@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 
 import { placeMessageMenuCluster, placePopover, placePopoverVertical, type MessageMenuClusterInput } from './popover';
 import {
+  MENU_CHROME,
   MENU_GAP,
+  MENU_ROW_HEIGHT,
   MENU_WIDTH,
   menuListHeight,
   PREVIEW_MIN_VISIBLE,
@@ -150,6 +152,23 @@ const clusterInput = (overrides: Partial<MessageMenuClusterInput> = {}): Message
 });
 
 describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais hors écran', () => {
+  test('360×640, un menu groupé de 13 lignes et 3 traits : la liste est BORNÉE à l’écran, « Supprimer » reste atteignable (#11210, revue)', () => {
+    const rows = 13;
+    const menuHeight = rows * MENU_ROW_HEIGHT + MENU_CHROME + 3 * 9;
+    const placement = placeMessageMenuCluster(
+      clusterInput({ viewport: { width: 360, height: 640 }, anchor: { top: 300, bottom: 400, left: 16, right: 344, width: 328, height: 100 }, menuHeight }),
+    );
+    expect(placement.menuHiddenHeight).toBeGreaterThan(0);
+    expect(placement.menuTop + placement.menuMaxHeight).toBeLessThanOrEqual(640 - 12);
+    expect(placement.menuMaxHeight).toBeLessThan(menuHeight);
+    expect(placement.menuMaxHeight).toBeGreaterThanOrEqual(2 * MENU_ROW_HEIGHT);
+  });
+
+  test('une liste qui tient n’est pas bornée en deçà de sa hauteur', () => {
+    const placement = placeMessageMenuCluster(clusterInput());
+    expect(placement.menuMaxHeight).toBeGreaterThanOrEqual(5 * 44 + 8);
+  });
+
   test('rail AU-DESSUS de l’aperçu, liste AU-DESSOUS — gaps 12/6 tenus', () => {
     const placement = placeMessageMenuCluster(clusterInput());
     expect(placement.previewTop - (placement.railTop + RAIL_HEIGHT)).toBe(RAIL_GAP);

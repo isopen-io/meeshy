@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { message, minutesAgo } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import { messagePinAction, reportOffered } from './message-actions';
 
@@ -15,7 +16,7 @@ import { messagePinAction, reportOffered } from './message-actions';
  */
 
 const NOW = Date.parse('2026-10-14T10:00:00.000Z');
-const ME = { id: 'u-me', hasAccount: true } as const;
+const ME = menuScope({ id: 'u-me' });
 
 const row = (overrides: Partial<Message> = {}): Message =>
   message({
@@ -40,7 +41,7 @@ describe('messagePinAction — l’épingle offerte est celle que le serveur adm
   });
 
   test('sans compte ⇒ rien (la route refuse la session anonyme)', () => {
-    expect(messagePinAction(row(), { hasAccount: false }, { now: NOW })).toBeNull();
+    expect(messagePinAction(row(), menuScope({ id: 'u-me', hasAccount: false }), { now: NOW })).toBeNull();
   });
 
   test('un message encore optimiste, supprimé, échu, à vue unique ou système ⇒ rien', () => {
@@ -67,7 +68,7 @@ describe('reportOffered — on signale le message d’un autre, jamais le sien',
 
   test('sans compte, message optimiste, supprimé, système ou à vue unique ⇒ jamais', () => {
     expect(reportOffered(row({ isViewOnce: true }), ME)).toBe(false);
-    expect(reportOffered(row(), { id: 'u-me', hasAccount: false })).toBe(false);
+    expect(reportOffered(row(), menuScope({ id: 'u-me', hasAccount: false }))).toBe(false);
     expect(reportOffered(row({ id: 'cid_9' }), ME)).toBe(false);
     expect(reportOffered(row({ deletedAt: new Date(NOW) }), ME)).toBe(false);
     expect(reportOffered(row({ messageType: 'system' }), ME)).toBe(false);

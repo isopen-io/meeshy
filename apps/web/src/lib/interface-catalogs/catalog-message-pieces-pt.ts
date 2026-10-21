@@ -46,6 +46,17 @@ const pt = {
   'message.pin.failed': 'Não foi possível fixar a mensagem',
   'message.unpin.failed': 'Não foi possível desafixar a mensagem',
   'message.report.title': 'Denunciar esta mensagem',
+  'message.menu.retry': 'Tentar novamente',
+  'message.menu.translateOnDevice': 'Traduzir no dispositivo',
+  'message.menu.translateOnDevice.queued': 'Tradução pedida a este dispositivo',
+  'message.menu.translateOnDevice.consent': 'Ative “Traduzir neste dispositivo” nas definições',
+  'message.menu.e2eeAbsent': 'Criptografia de ponta a ponta: sem transcrição nem análise',
+  'message.link.open': 'Abrir link',
+  'message.link.copy': 'Copiar link',
+  'message.link.copied': 'Link copiado',
+  'message.location.open': 'Abrir num mapa',
+  'message.location.copy': 'Copiar endereço',
+  'message.location.copied': 'Endereço copiado',
 } satisfies MessagePiecesCatalog;
 
 export default pt;
