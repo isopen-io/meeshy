@@ -293,6 +293,8 @@ struct ConversationPreviewView: View {
                     phase: state.phase
                 )
             }
+        } else if ConversationLockManager.shared.isLocked(conversation.id) {
+            recentMessages([], translations: [:], served: [:], phase: .sealed)
         } else {
             recentMessages(cachedMessages, translations: [:], served: [:], phase: cachedMessages.isEmpty ? .empty : .loaded)
         }

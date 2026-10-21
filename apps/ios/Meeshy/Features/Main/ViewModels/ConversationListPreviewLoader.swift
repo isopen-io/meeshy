@@ -30,6 +30,8 @@ enum ConversationPreviewPhase: Equatable {
     case loaded
     case empty
     case unavailable
+    /// La conversation est verrouillée par PIN : aucun message ne se lit.
+    case sealed
 }
 
 /// Les derniers messages servis, leurs traductions, et celle que le Prisme du
@@ -99,6 +101,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         case loaded(ConversationPreviewSnapshot)
         case empty
         case unavailable
+        case sealed
 
         var phase: ConversationPreviewPhase {
             switch self {
@@ -106,6 +109,7 @@ final class ConversationListPreviewLoader: ObservableObject {
             case .loaded: return .loaded
             case .empty: return .empty
             case .unavailable: return .unavailable
+            case .sealed: return .sealed
             }
         }
 
@@ -168,21 +172,27 @@ final class ConversationListPreviewLoader: ObservableObject {
     private let messageService: MessageServiceProviding
     private let cache: ConversationPreviewCacheProviding
     private let readerPrism: () -> [String]
+    private let isLocked: @MainActor (String) -> Bool
 
     init(
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
-        readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
+        readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
+        isLocked: @escaping @MainActor (String) -> Bool = { ConversationLockManager.shared.isLocked($0) }
     ) {
         self.messageService = messageService
         self.cache = cache
         self.readerPrism = readerPrism
+        self.isLocked = isLocked
     }
 
     /// Une conversation jamais chargée se lit `.loading` : l'aperçu n'affirme
     /// jamais « Aucun message » avant de l'avoir constaté.
+    /// Une conversation verrouillée se lit `.sealed`, quoi que le chargeur ait
+    /// déjà servi : le verrou posé APRÈS un chargement ne laisse rien lisible.
     func state(for conversationId: String) -> PreviewState {
-        states[conversationId] ?? .loading
+        guard !isLocked(conversationId) else { return .sealed }
+        return states[conversationId] ?? .loading
     }
 
     func fingerprint(for conversationId: String) -> ConversationPreviewFingerprint {
@@ -191,7 +201,7 @@ final class ConversationListPreviewLoader: ObservableObject {
 
     /// Projection héritée (menu < iOS 26, témoins du VM) : les messages servis.
     var messages: [String: [Message]] {
-        states.compactMapValues { $0.snapshot?.messages }
+        states.filter { !isLocked($0.key) }.compactMapValues { $0.snapshot?.messages }
     }
 
     func load(
@@ -199,6 +209,11 @@ final class ConversationListPreviewLoader: ObservableObject {
         intent: LoadIntent,
         currentUserId: @escaping @MainActor @Sendable () -> String = { "" }
     ) async {
+        guard !isLocked(conversationId) else {
+            states[conversationId] = nil
+            provenance[conversationId] = nil
+            return
+        }
         while let running = inFlight[conversationId] {
             await running.task.value
             guard running.intent.reach < intent.reach else { return }

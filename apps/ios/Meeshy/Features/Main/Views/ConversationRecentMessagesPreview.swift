@@ -33,6 +33,7 @@ enum ConversationPreviewRenderer {
         case skeleton
         case empty
         case unavailable
+        case sealed
         case messages
     }
 
@@ -104,8 +105,10 @@ enum ConversationPreviewRenderer {
     }
 
     static func display(phase: ConversationPreviewPhase, messageCount: Int) -> Display {
+        guard phase != .sealed else { return .sealed }
         guard messageCount == 0 else { return .messages }
         switch phase {
+        case .sealed: return .sealed
         case .loading: return .skeleton
         case .unavailable: return .unavailable
         case .empty, .loaded: return .empty
@@ -341,6 +344,13 @@ struct ConversationRecentMessagesPreview: View {
             EmptyStateView(
                 icon: "wifi.exclamationmark",
                 title: String(localized: "preview.messages_unavailable", defaultValue: "Impossible de charger les messages"),
+                subtitle: ""
+            )
+            .padding(.bottom, MeeshySpacing.smPlus)
+        case .sealed:
+            EmptyStateView(
+                icon: "lock.fill",
+                title: String(localized: "preview.conversation_locked", defaultValue: "Conversation verrouillée"),
                 subtitle: ""
             )
             .padding(.bottom, MeeshySpacing.smPlus)
