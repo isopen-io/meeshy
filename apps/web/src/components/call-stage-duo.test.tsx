@@ -163,6 +163,34 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
     view.done();
   });
 
+  test('changer de coin se joue en FLIP : un `transform` qui revient à zéro, jamais left/top/width/height (#11314)', () => {
+    fresh();
+    const played: (readonly Keyframe[])[] = [];
+    const proto = HTMLElement.prototype as unknown as Record<string, unknown>;
+    const savedAnimate = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'animate');
+    const savedRect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
+    proto.animate = function animate(frames: readonly Keyframe[]) {
+      played.push(frames);
+      return { cancel: () => undefined };
+    };
+    proto.getBoundingClientRect = function rect(this: HTMLElement) {
+      const left = this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300;
+      return { left, top: 80, right: left, bottom: 80, width: 0, height: 0, x: left, y: 80, toJSON: () => ({}) };
+    };
+    try {
+      const view = mount();
+      view.key('ArrowLeft');
+      expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
+      expect(view.frame().className).not.toMatch(/transition-\[/);
+      view.done();
+    } finally {
+      if (savedAnimate === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      else Object.defineProperty(HTMLElement.prototype, 'animate', savedAnimate);
+      if (savedRect === undefined) Reflect.deleteProperty(HTMLElement.prototype, 'getBoundingClientRect');
+      else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', savedRect);
+    }
+  });
+
   test('la vignette dit comment la déplacer', () => {
     fresh();
     const view = mount();
