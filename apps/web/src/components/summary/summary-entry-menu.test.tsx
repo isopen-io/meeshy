@@ -34,6 +34,7 @@ const face = (id: string, displayName: string, evidenceMessageIds: readonly stri
   displayName,
   avatarUrl: null,
   colorHex: '#31B6BA',
+  participant: undefined,
   awaitingCount: evidenceMessageIds.length,
   needScore: 1,
   evidenceMessageIds,
