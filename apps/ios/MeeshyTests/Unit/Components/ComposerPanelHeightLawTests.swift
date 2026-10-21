@@ -173,6 +173,7 @@ final class ComposerPanelHeightLawTests: XCTestCase {
         other.rootViewController = UIViewController()
         other.makeKeyAndVisible()
         defer { other.isHidden = true }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
 
         postKeyboardFrame(CGRect(x: 0, y: 874 - 336, width: 402, height: 336))
 
