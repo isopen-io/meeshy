@@ -557,7 +557,7 @@ struct CallView: View {
             let user = try await UserService.shared.getProfile(handle: userId).user
             guard callManager.remoteUserId == userId else { return }
             remoteProfile = user
-            try? await CacheCoordinator.shared.profiles.save([user], for: userId)
+            await bestEffort("callView.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([user], for: userId) }
         } catch {
             Logger.calls.warning("CallView: profil distant non résolu (\(userId)): \(error.localizedDescription)")
         }

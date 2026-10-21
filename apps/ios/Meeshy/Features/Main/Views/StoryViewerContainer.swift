@@ -427,7 +427,7 @@ struct StoryReaderCover: ViewModifier {
         // Un `fullScreenCover` n'hérite pas des EnvironmentObject : le trio que
         // `StoryViewerView` déclare (feuille de partage interne) est remis ici,
         // une fois pour tous les points d'appel.
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
         .environmentObject(statusViewModel)
         .conversationListObject(conversationList)
         .environment(\.meeshyConversationList, conversationList)
@@ -475,7 +475,7 @@ struct StoryPreviewReader: View {
         )
         // Les objets d'environnement ne traversent pas un `fullScreenCover` :
         // sans eux, l'aperçu planterait à la première lecture de l'un d'eux.
-        .environmentObject(router)
+        .modifier(MeeshyRouterInjection(router: router))
         .conversationListObject(conversationList)
         .environmentObject(statusViewModel)
     }

@@ -251,7 +251,7 @@ const de = {
   'game.detail.fact.level_now': 'Das ist dein aktuelles Level.',
   'game.detail.fact.level_required': 'Dieses Level brauchst du, um es freizuschalten.',
   'game.badge.counts_label': 'Was sie verfolgt',
-  'game.badge.stars_label': 'Sterne',
+  'game.badge.stars_label': 'Stufen',
   'game.badge.reason.none': 'Noch kein Stern: Deine erste Geste lässt das Kupfer leuchten.',
   'game.badge.reason.crossed': '{material}, weil du die Schwelle von {threshold} überschritten hast: Du stehst bei {count}.',
   'game.badge.reason.served': '{material}, verdient beim Überschreiten der Schwelle von {threshold}.',

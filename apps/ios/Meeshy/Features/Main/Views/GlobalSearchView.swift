@@ -9,7 +9,7 @@ struct GlobalSearchView: View {
     @StateObject private var viewModel = GlobalSearchViewModel()
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.meeshyConversationList) var conversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
     // Présentée en fullScreenCover : hérite des EnvironmentValues, PAS des
     // EnvironmentObject. Cf. SocialChromeEnvironment.swift.
     @Environment(\.meeshyMoodEmojiResolver) private var moodEmojiResolver
@@ -496,11 +496,13 @@ struct GlobalSearchView: View {
 
     private var messagesResultsList: some View {
         ForEach(Array(viewModel.messageResults.enumerated()), id: \.element.id) { index, result in
-            messageResultRow(result)
-                .staggeredAppear(index: index, baseDelay: 0.03)
-                .onTapGesture {
-                    handleMessageTap(result)
-                }
+            Button {
+                handleMessageTap(result)
+            } label: {
+                messageResultRow(result)
+            }
+            .buttonStyle(MeeshyPointerButtonStyle())
+            .staggeredAppear(index: index, baseDelay: 0.03)
         }
     }
 
@@ -557,11 +559,13 @@ struct GlobalSearchView: View {
 
     private var conversationsResultsList: some View {
         ForEach(Array(viewModel.conversationResults.enumerated()), id: \.element.id) { index, result in
-            conversationResultRow(result)
-                .staggeredAppear(index: index, baseDelay: 0.03)
-                .onTapGesture {
-                    handleConversationTap(result)
-                }
+            Button {
+                handleConversationTap(result)
+            } label: {
+                conversationResultRow(result)
+            }
+            .buttonStyle(MeeshyPointerButtonStyle())
+            .staggeredAppear(index: index, baseDelay: 0.03)
         }
     }
 
@@ -693,12 +697,14 @@ struct GlobalSearchView: View {
 
     private var usersResultsList: some View {
         ForEach(Array(viewModel.userResults.enumerated()), id: \.element.id) { index, result in
-            liveUserResultRow(result)
-                .staggeredAppear(index: index, baseDelay: 0.03)
-                .onTapGesture {
-                    viewModel.noteUserResultTapped(result.id, position: index)
-                    handleUserTap(result)
-                }
+            Button {
+                viewModel.noteUserResultTapped(result.id, position: index)
+                handleUserTap(result)
+            } label: {
+                liveUserResultRow(result)
+            }
+            .buttonStyle(MeeshyPointerButtonStyle())
+            .staggeredAppear(index: index, baseDelay: 0.03)
         }
     }
 

@@ -174,6 +174,8 @@ const f = {
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'The engagement points scale — points per operation, multiplier and caps — was changed by an administrator.',
   'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Server operation triggered',
   'admin.audit.action.TRIGGER_SERVER_OPERATION.explain': 'A backup or a Docker image purge was requested from the Operations screen; the detail keeps the operation, environment and reason.',
+  'admin.audit.action.SERVER_OPERATION_REFUSED': 'Server operation refused',
+  'admin.audit.action.SERVER_OPERATION_REFUSED.explain': 'A backup or a Docker clean-up was requested and refused; the detail keeps the operation, environment and reason for refusal (insufficient rank, confirmation, cooldown, operation in progress, relay missing).',
   'admin.audit.action.GAME_SEASON_UPDATE': 'Game season changed',
   'admin.audit.action.GAME_SEASON_UPDATE.explain': 'An administrator scheduled, shifted, paused or adjusted an upcoming Game season.',
   'admin.audit.action.GAME_SEASON_PROPOSAL_REQUEST': 'Season proposal requested from the AI',

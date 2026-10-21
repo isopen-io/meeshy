@@ -41,6 +41,7 @@ struct AttachmentLoadingTile: View {
                                     .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
                             )
                     }
+                    .accessibilityLabel(String(localized: "attachment.loading.cancel-a11y", defaultValue: "Annuler le chargement", bundle: .main))
                     .offset(x: 5, y: -5)
                 }
             }

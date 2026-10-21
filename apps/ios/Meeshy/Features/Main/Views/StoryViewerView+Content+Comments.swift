@@ -449,7 +449,7 @@ extension StoryViewerView {
             storyCommentLikedIds = Self.computeLikedIds(from: response.data)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
-            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            await bestEffort("storyViewerViewContentComments.comments.save", category: .cache) { try await CacheCoordinator.shared.comments.save(comments, for: cacheKey) }
 
             let topLevel = topAll.filter { $0.replies > 0 }
             Task {

@@ -38,6 +38,8 @@ public struct MediaTrimStrip: View {
     private let sourceDuration: Double
     private let bounds: MediaTrimBounds
     private let waveform: [Float]
+    /// L'onde du modèle est le champ PUBLIÉ, normalisé au pic : linéaire par défaut (#9886).
+    private let waveformReading: WaveformReading
     private let accent: Color
     private let onChange: (MediaTrimBounds) -> Void
     private let onCommit: (() -> Void)?
@@ -49,6 +51,7 @@ public struct MediaTrimStrip: View {
                 sourceDuration: Double,
                 bounds: MediaTrimBounds,
                 waveform: [Float] = [],
+                waveformReading: WaveformReading = .published,
                 accent: Color = MeeshyColors.brandPrimary,
                 onChange: @escaping (MediaTrimBounds) -> Void,
                 onCommit: (() -> Void)? = nil) {
@@ -56,6 +59,7 @@ public struct MediaTrimStrip: View {
         self.sourceDuration = sourceDuration
         self.bounds = bounds
         self.waveform = waveform
+        self.waveformReading = waveformReading
         self.accent = accent
         self.onChange = onChange
         self.onCommit = onCommit
@@ -112,7 +116,7 @@ public struct MediaTrimStrip: View {
                 }
                 .overlay(alignment: .bottom) {
                     if !waveform.isEmpty {
-                        WaveformStrip(samples: waveform, tint: .white.opacity(0.75))
+                        WaveformStrip(samples: waveform, tint: .white.opacity(0.75), reading: waveformReading)
                             .frame(height: Self.hauteur * 0.34)
                     }
                 }
@@ -121,7 +125,7 @@ public struct MediaTrimStrip: View {
             if waveform.isEmpty {
                 enAttente
             } else {
-                WaveformStrip(samples: waveform, tint: accent)
+                WaveformStrip(samples: waveform, tint: accent, reading: waveformReading)
                     .background(Color.black.opacity(0.28))
             }
         }

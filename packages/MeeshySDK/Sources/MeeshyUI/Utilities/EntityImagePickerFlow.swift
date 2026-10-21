@@ -19,7 +19,7 @@ struct EntityImagePickerFlow: ViewModifier {
             .adaptiveOnChange(of: pickerItem) { _, newItem in
                 guard let newItem else { return }
                 Task {
-                    guard let data = try? await newItem.loadTransferable(type: Data.self),
+                    guard let data = try? await PickedMedia.loadImageData(newItem),
                           let image = UIImage(data: data) else { return }
                     await MainActor.run { imageForEditor = image }
                 }

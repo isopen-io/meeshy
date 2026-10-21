@@ -61,7 +61,7 @@ describe('le modèle de la série', () => {
       kind: 'streak',
       streakDays: 4,
       totalText: '120',
-      label: 'Flamme de 4 jours, 120 étincelles dont 12 aujourd’hui',
+      label: '4 jours, 120 étincelles dont 12 aujourd’hui',
     });
   });
 
@@ -87,7 +87,7 @@ describe('la rangée de liste', () => {
     expect(mark).not.toContain('rounded-chip');
     expect(mark).not.toContain('background');
     expect(html.indexOf('data-streak-mark')).toBeLessThan(html.indexOf('data-time'));
-    expect(html).toContain('<span class="sr-only">Flamme de 4 jours, 120 étincelles dont 12 aujourd’hui</span>');
+    expect(html).toContain('<span class="sr-only">4 jours, 120 étincelles dont 12 aujourd’hui</span>');
   });
 
   test('série tombée : le cumul seul, sans flamme, à l’encre tertiaire, juste avant l’heure (#9570)', () => {

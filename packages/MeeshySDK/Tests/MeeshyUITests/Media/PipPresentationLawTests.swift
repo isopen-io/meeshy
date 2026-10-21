@@ -20,8 +20,6 @@ final class PipPresentationLawTests: XCTestCase {
     func test_onlyTheFullscreenStyle_isAFullscreenPresentation() {
         XCTAssertEqual(VideoPresentation.of(.fullscreen), .fullscreen)
         XCTAssertEqual(VideoPresentation.of(.inline), .inline)
-        XCTAssertEqual(VideoPresentation.of(.flat), .inline)
-        XCTAssertEqual(VideoPresentation.of(.mini), .inline)
     }
 
     /// Post du fil (`.inlineDefault ∪ .mute`), page de post, profil visité et
@@ -33,7 +31,7 @@ final class PipPresentationLawTests: XCTestCase {
             .inlineDefault.union(.pip), .fullscreenDefault,
         ]
         for controls in inlineSets {
-            for style: MeeshyVideoPlayer.Style in [.inline, .flat, .mini] {
+            for style: MeeshyVideoPlayer.Style in [.inline] {
                 XCTAssertFalse(MeeshyVideoPlayer.surfaceEnablesPip(style: style, controls: controls),
                                "\(style) \(controls.rawValue)")
             }

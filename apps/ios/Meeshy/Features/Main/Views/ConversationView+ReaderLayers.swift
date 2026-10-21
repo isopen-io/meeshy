@@ -26,7 +26,8 @@ struct ConversationRiverLayer: View {
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var router: Router
     let showScript: () -> Void
-    let reply: (Message) -> Void
+    /// #11224 — LE point d'entrée du menu d'un message (`presentLongPressMenu`).
+    let presentMenu: (Message) -> Void
     let openViewOnce: (String) -> Bool
     let openMedia: (MessageAttachment) -> Void
 
@@ -85,19 +86,18 @@ struct ConversationRiverLayer: View {
                 overlayState.storyViewerStartAtFirstUnviewed = true
                 overlayState.showStoryViewer = true
             },
-            // Lot 3 : mêmes retours au Fil que le Résumé — Script, puis atterrissage
-            // sur le message (et le composeur en mode réponse pour « Répondre »).
+            // Lot 3 : même retour au Fil que le Résumé — Script, puis atterrissage.
             onOpenInThread: { messageId in
                 showScript()
                 scrollState.scrollToMessageId = messageId
                 scrollState.scrollToMessageTrigger += 1
             },
-            onReply: { messageId in
-                showScript()
-                guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
-                reply(msg)
-                scrollState.scrollToMessageId = messageId
-                scrollState.scrollToMessageTrigger += 1
+            // #11224 — l'appui long ouvre LE menu du message, avec les gardes
+            // de la liste : la loi d'actions, l'aperçu dans le mode du fil.
+            onLongPress: { messageId in
+                guard overlayState.longPressEnabled, overlayState.quickReactionMessageId == nil,
+                      let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                presentMenu(msg)
             },
             // #7618 — MÊME canal que le Fil : la puce OUVRE, la
             // sortie consomme. La Rivière consommait au toucher.
@@ -115,9 +115,9 @@ struct ConversationRiverLayer: View {
             onReachPresent: {
                 viewModel.markCaughtUpFromSummaryOrRiver()
             },
-            text: { message in
-                viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
-            }
+            // #11233 — le texte que la bulle du Fil AFFICHE (drapeau compris) :
+            // « Copier », ouvert depuis la Rivière, copie ce qu'elle montre.
+            text: { message in MessageExitTransport.displayedText(message, in: viewModel) }
         ))
     }
 }

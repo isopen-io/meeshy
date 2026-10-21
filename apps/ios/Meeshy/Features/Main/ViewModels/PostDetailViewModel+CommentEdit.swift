@@ -28,9 +28,9 @@ extension PostDetailViewModel {
                 postId: post.id, commentId: target.id, content: content, effectFlags: effectFlags,
                 originalLanguage: originalLanguage
             )
-            try? await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)")
+            await bestEffort("postDetailViewModelCommentEdit.comments.savePreservingFreshness", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(comments, for: "post-\(post.id)") }
             if let parentId = edited.parentId, let replies = repliesMap[parentId] {
-                try? await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)")
+                await bestEffort("postDetailViewModelCommentEdit.comments.savePreservingFreshness.2", category: .cache) { try await CacheCoordinator.shared.comments.savePreservingFreshness(replies, for: "replies-\(parentId)") }
             }
         } catch {
             comments = snapshotComments

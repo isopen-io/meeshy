@@ -179,3 +179,104 @@ final class BareShapeTapTargetGuardTests: XCTestCase {
         return enumerator.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
     }
 }
+
+/// **Une zone touchable qui agit est un bouton pour VoiceOver, le clavier et le pointeur.**
+///
+/// Un `.onTapGesture` n'expose rien : ni trait `button` au lecteur d'écran, ni
+/// focus clavier, ni survol du pointeur iPad. Deux formes de sortie, selon ce
+/// que la zone porte :
+/// - la zone n'a que le tap : elle devient un `Button` au style
+///   `MeeshyPointerButtonStyle` ;
+/// - la zone porte aussi un appui long ou n'agit que sous condition : le geste
+///   reste, et il se déclare `.isButton` avec une `.accessibilityAction`.
+final class TapZoneButtonGuardTests: XCTestCase {
+
+    enum TapInvoker: Equatable { case button, tapGesture, none }
+
+    private var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Guards
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy")
+    }
+
+    private static let convertedSites: [(file: String, action: String)] = [
+        ("Features/Main/Views/GlobalSearchView.swift", "handleMessageTap(result)"),
+        ("Features/Main/Views/GlobalSearchView.swift", "handleConversationTap(result)"),
+        ("Features/Main/Views/GlobalSearchView.swift", "handleUserTap(result)"),
+        ("Features/Main/Views/FeedComposerAttachmentsRow.swift", "onOpenThumbnail(attachment)"),
+        ("Features/Main/Components/MediaHub/ConversationMediaHubView.swift", "open(item)"),
+    ]
+
+    private static let exposedGestures: [(file: String, action: String)] = [
+        ("Features/Main/Views/Bubble/BubbleReactionsOverlay.swift", "onAddReaction?(messageId)"),
+        ("Features/Main/Views/Bubble/BubbleReactionsOverlay.swift", "onToggleReaction?(reaction.emoji)"),
+        ("Features/Main/Views/ParticipantsView.swift", "openAnonymousProfile(participant)"),
+    ]
+
+    func test_uneZoneTouchableConvertieEstUnBoutonAuSurvolPointeur() throws {
+        for site in Self.convertedSites {
+            let source = try String(contentsOf: appRoot.appendingPathComponent(site.file), encoding: .utf8)
+            let invokers = Self.invokers(of: site.action, in: source)
+            XCTAssertFalse(invokers.isEmpty, "\(site.file) : \(site.action) introuvable")
+            XCTAssertFalse(invokers.contains(where: { $0.invoker == .tapGesture }),
+                           "\(site.file) : \(site.action) reste dans un .onTapGesture")
+            XCTAssertTrue(invokers.contains(where: { $0.invoker == .button }),
+                          "\(site.file) : \(site.action) n'est pas dans un Button")
+            XCTAssertTrue(source.contains("MeeshyPointerButtonStyle("),
+                          "\(site.file) : le Button n'a pas MeeshyPointerButtonStyle")
+        }
+    }
+
+    func test_unGesteGardeSeDeclareBoutonAVoiceOver() throws {
+        for site in Self.exposedGestures {
+            let source = try String(contentsOf: appRoot.appendingPathComponent(site.file), encoding: .utf8)
+            let lines = source.components(separatedBy: "\n")
+            let gestures = Self.invokers(of: site.action, in: source).filter { $0.invoker == .tapGesture }
+            XCTAssertFalse(gestures.isEmpty, "\(site.file) : \(site.action) n'est pas dans un .onTapGesture")
+            for gesture in gestures {
+                XCTAssertTrue(Self.isExposed(gestureAt: gesture.line, in: lines),
+                              "\(site.file):\(gesture.line + 1) : le geste \(site.action) n'est ni .isButton ni .accessibilityAction")
+            }
+        }
+    }
+
+    func test_leScannerDistingueUnBoutonDUnGesteNu() {
+        let bare = ["            .onTapGesture {", "                open(item)", "            }"]
+        let button = ["        Button {", "            open(item)", "        } label: {"]
+        let exposed = [
+            "            .onTapGesture {", "                open(item)", "            }",
+            "            .accessibilityAddTraits(.isButton)", "            .accessibilityAction { open(item) }",
+        ]
+        XCTAssertEqual(Self.invokers(of: "open(item)", in: bare.joined(separator: "\n")).map(\.invoker), [.tapGesture])
+        XCTAssertEqual(Self.invokers(of: "open(item)", in: button.joined(separator: "\n")).map(\.invoker), [.button])
+        XCTAssertTrue(Self.isExposed(gestureAt: 0, in: exposed))
+        XCTAssertFalse(Self.isExposed(gestureAt: 0, in: bare))
+    }
+
+    static func invokers(of action: String, in source: String) -> [(invoker: TapInvoker, line: Int)] {
+        let lines = source.components(separatedBy: "\n")
+        return lines.indices
+            .filter { lines[$0].contains(action) && !lines[$0].contains("func ") }
+            .map { index in invoker(above: index, in: lines) }
+    }
+
+    static func invoker(above index: Int, in lines: [String]) -> (invoker: TapInvoker, line: Int) {
+        let window = max(0, index - 6)...index
+        for line in window.reversed() {
+            if lines[line].contains(".onTapGesture") { return (.tapGesture, line) }
+            if lines[line].contains("Button {") || lines[line].contains("Button(action:") { return (.button, line) }
+        }
+        return (.none, index)
+    }
+
+    static func isExposed(gestureAt line: Int, in lines: [String]) -> Bool {
+        let following = lines.dropFirst(line + 1).prefix(20)
+        let scope = following.prefix(while: { !$0.contains(".onTapGesture") })
+        let traits = scope.contains(where: { $0.contains(".accessibilityAddTraits(") && $0.contains("isButton") })
+        let action = scope.contains(where: { $0.contains(".accessibilityAction") })
+        return traits && action
+    }
+}

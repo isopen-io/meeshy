@@ -109,15 +109,24 @@ enum ReelPrewarm {
 
     /// Lance — ou rejoint — le téléchargement silencieux du fichier vidéo de
     /// `post` dans le registre partagé. Rend la clé de cache, `nil` pour un
-    /// réel sans vidéo.
+    /// réel sans vidéo. Le palier choisit la session réseau (#11283) : un
+    /// palier lointain est discrétionnaire et ne part sur cellulaire que si le
+    /// réglage vidéo de l'utilisateur l'autorise.
     @discardableResult
-    static func prefetchFile(of post: FeedPost, center: AttachmentDownloadCenter = .shared) -> String? {
+    static func prefetchFile(
+        of post: FeedPost,
+        tier: ReelPreloadWindow.Tier = .decode,
+        center: AttachmentDownloadCenter = .shared
+    ) -> String? {
         guard let media = post.primaryReelDisplayMedia, media.type == .video,
               videoURL(for: post) != nil else { return nil }
         let attachment = media.toMessageAttachment()
         center.prefetch(urlString: attachment.fileUrl,
                         expectedSize: Int64(attachment.fileSize),
-                        cacheStore: .video)
+                        cacheStore: .video,
+                        profile: ReelTransferPolicy.profile(
+                            for: tier,
+                            videoPolicy: MediaDownloadPreferencesStore.shared.preferences.video))
         return AttachmentDownloadCenter.key(for: attachment.fileUrl)
     }
 
@@ -308,7 +317,8 @@ final class ReelPagerPreloader {
     private func prepareFiles(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
         let near = plan.filter { $0.tier == .decode || $0.tier == .mount }
         let nearKeys: [(step: ReelPreloadWindow.Step, key: String)] = near.compactMap { step in
-            ReelPrewarm.prefetchFile(of: reels[step.index], center: center).map { (step: step, key: $0) }
+            ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center)
+                .map { (step: step, key: $0) }
         }
 
         await prefetchAudio(reels: reels, plan: plan)
@@ -322,7 +332,9 @@ final class ReelPagerPreloader {
         }
         for step in plan where step.tier == .prime {
             guard !Task.isCancelled else { return }
-            guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], center: center) else { continue }
+            guard let key = ReelPrewarm.prefetchFile(of: reels[step.index], tier: step.tier, center: center) else {
+                continue
+            }
             await ReelPrewarm.awaitFile(key: key, center: center)
         }
     }

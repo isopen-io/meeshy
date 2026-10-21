@@ -40,6 +40,3 @@ nonisolated enum FeedListItem: Hashable, Sendable {
     case textPost(id: String)
     case mediaPost(id: String)
 }
-
-// Type aliases for DiffableDataSource to suppress @MainActor inference
-typealias FeedListDataSource = UICollectionViewDiffableDataSource<FeedListSection, FeedListItem>

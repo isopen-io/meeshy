@@ -92,12 +92,16 @@ struct AddParticipantSheet: View {
                     .foregroundColor(theme.textMuted)
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(MeeshyOpacity.light)))
+                    .meeshyTapTarget()
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
-        .padding(.horizontal, MeeshySpacing.xl)
-        .padding(.top, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.sm)
+        .padding(EdgeInsets(
+            top: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: 28),
+            leading: MeeshySpacing.xl,
+            bottom: MeeshySpacing.sm - MeeshyTapTarget.inset(forVisualSide: 28),
+            trailing: MeeshySpacing.xl - MeeshyTapTarget.inset(forVisualSide: 28)
+        ))
     }
 
     // MARK: - Search Field

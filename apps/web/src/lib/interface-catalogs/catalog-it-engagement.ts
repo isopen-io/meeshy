@@ -4,8 +4,8 @@
  * catalogue `catalog-it.ts`, qu'il RÉPAND.
  */
 const itEngagement = {
-  'engagement.pill.streak.one': 'Fiamma di {count} giorno',
-  'engagement.pill.streak.other': 'Fiamma di {count} giorni',
+  'engagement.pill.streak.one': '{count} giorno',
+  'engagement.pill.streak.other': '{count} giorni',
   'engagement.pill.points.one': '{total} scintilla, di cui {today} oggi',
   'engagement.pill.points.other': '{total} scintille, di cui {today} oggi',
   'engagement.pill.total.one': '{total} scintilla guadagnata in questa conversazione',

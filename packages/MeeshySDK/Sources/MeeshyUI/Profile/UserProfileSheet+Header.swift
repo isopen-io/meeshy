@@ -304,9 +304,9 @@ extension UserProfileSheet {
                 .foregroundColor(theme.textPrimary)
                 .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                 .adaptiveGlass(in: Circle())
+                .meeshyTapTarget()
         }
-        .padding(.leading, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.mdPlus)
+        .padding(EdgeInsets(top: MeeshySpacing.mdPlus - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), leading: MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular), bottom: 0, trailing: 0))
         .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .module))
         .accessibilityHint(String(localized: "profile.close.hint", defaultValue: "Ferme le profil", bundle: .module))
     }

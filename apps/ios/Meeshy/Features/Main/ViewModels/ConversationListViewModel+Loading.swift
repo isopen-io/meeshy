@@ -318,7 +318,7 @@ extension ConversationListViewModel {
                         hasMore: false,
                         for: "list"
                     )
-                    try? await CacheCoordinator.shared.conversations.save(exhaustedSnapshot, for: "list")
+                    await bestEffort("conversationListViewModelLoading.conversations.save", category: .cache) { try await CacheCoordinator.shared.conversations.save(exhaustedSnapshot, for: "list") }
                 }
                 return
             }

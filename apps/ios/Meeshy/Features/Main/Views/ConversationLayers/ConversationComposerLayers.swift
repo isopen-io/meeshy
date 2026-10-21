@@ -69,7 +69,7 @@ struct ConversationComposerPickers: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: ConversationComposerState.maxMediaSelection, matching: .any(of: [.images, .videos]), photoLibrary: .shared())
+            .photosPicker(isPresented: $composerState.showPhotoPicker, selection: $composerState.selectedPhotoItems, maxSelectionCount: ConversationComposerState.maxMediaSelection, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current, photoLibrary: .shared())
             .fileImporter(isPresented: $composerState.showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 onFileImport(result)
             }
@@ -192,6 +192,20 @@ enum ComposerQuotedMediaTarget {
         guard let thumbUrl, !thumbUrl.isEmpty,
               let url = MeeshyConfig.resolveMediaURL(thumbUrl) else { return nil }
         return PreviewMedia(url: url, type: type)
+    }
+
+    /// La cible d'une vidéo ou d'un son cité : le FICHIER, pas sa vignette
+    /// (#9890). Rien d'honnête à jouer — protégé, story, sans adresse — n'ouvre
+    /// rien.
+    static func playback(reply: ReplyReference) -> PreviewMedia? {
+        guard let attachment = reply.quotedPlayableAttachment,
+              let url = MeeshyConfig.resolveMediaURL(attachment.fileUrl) else { return nil }
+        return PreviewMedia(
+            url: url,
+            type: reply.quotedMediaKind == .audio ? "audio" : "video",
+            attachment: attachment,
+            reportsConsumption: reply.quotedPlaybackReportsConsumption
+        )
     }
 }
 

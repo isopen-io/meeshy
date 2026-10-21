@@ -107,3 +107,49 @@ export const operationConflictResponseSchema = {
     data: { type: 'object', properties: { availableAt: dateServie } },
   },
 } as const;
+
+/** Un conteneur de l'environnement (#11441), écrit contre `opsContainerSchema` (`@meeshy/shared/types/admin-ops-containers`). */
+const containerSchema = {
+  type: 'object',
+  properties: {
+    name: chaine,
+    service: chaineNulle,
+    image: chaine,
+    imageId: chaineNulle,
+    imageCreatedAt: dateNulle,
+    state: { type: 'string', enum: ['created', 'running', 'paused', 'restarting', 'removing', 'exited', 'dead'] },
+    health: { type: 'string', enum: ['healthy', 'unhealthy', 'starting', 'none'] },
+    startedAt: dateNulle,
+    finishedAt: dateNulle,
+    restartCount: nombre,
+    exitCode: nombreNul,
+    stats: {
+      type: 'object',
+      nullable: true,
+      properties: {
+        cpuPercent: nombre,
+        memoryUsedBytes: nombre,
+        memoryLimitBytes: nombreNul,
+        netRxBytes: nombre,
+        netTxBytes: nombre,
+        blockReadBytes: nombre,
+        blockWriteBytes: nombre,
+        pids: nombre,
+      },
+    },
+    networks: { type: 'array', items: { type: 'object', properties: { name: chaine, ipAddress: chaine } } },
+    ports: {
+      type: 'array',
+      items: { type: 'object', properties: { containerPort: nombre, protocol: chaine, hostIp: chaineNulle, hostPort: nombreNul } },
+    },
+  },
+} as const;
+
+export const containersViewResponseSchema = {
+  type: 'object',
+  properties: {
+    environment: { type: 'string', enum: ['staging', 'production', 'local'] },
+    measuredAt: dateNulle,
+    containers: { type: 'array', items: containerSchema },
+  },
+} as const;

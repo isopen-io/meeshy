@@ -117,14 +117,20 @@ final class DeepLinkSurfaceRoutingGuardTests: XCTestCase {
         return output
     }
 
+    /// Deux formes d'écriture : l'URL littérale (`"meeshy://conversations/unread"`)
+    /// et la fabrique des widgets (`WidgetDeepLink`, e423684dfb), qui compose
+    /// `"meeshy://\(host)/…"` et reçoit chaque host en littéral `host: "…"`.
+    /// Sans la seconde, `contact` et `quickreply` passeraient pour orphelins
+    /// alors qu'un widget les émet.
     private func emittedHosts() throws -> Set<String> {
-        let pattern = try NSRegularExpression(pattern: "meeshy://([A-Za-z]+)")
+        let patterns = try ["meeshy://([A-Za-z]+)", "url\\(host: \"([A-Za-z]+)\""]
+            .map { try NSRegularExpression(pattern: $0) }
         var hosts: Set<String> = []
 
         for file in try handwrittenSources() {
             let code = strippingComments(file.code)
             let range = NSRange(code.startIndex..., in: code)
-            for match in pattern.matches(in: code, range: range) {
+            for match in patterns.flatMap({ $0.matches(in: code, range: range) }) {
                 guard let hostRange = Range(match.range(at: 1), in: code) else { continue }
                 hosts.insert(String(code[hostRange]).lowercased())
             }

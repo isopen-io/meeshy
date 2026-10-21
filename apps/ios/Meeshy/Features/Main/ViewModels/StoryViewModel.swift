@@ -316,7 +316,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             // par les events socket (2026-06-01). On sauve la version triée pour
             // que les chemins .fresh/.stale servent déjà le bon ordre.
             sortStoryGroupsInPlace()
-            try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+            await bestEffort("storyViewModel.stories.save", category: .cache) { try await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey) }
             prefetchAllStoryMedia(storyGroups)
             renderMissingReceiverCovers()
             if loadFailure != nil { loadFailure = nil }

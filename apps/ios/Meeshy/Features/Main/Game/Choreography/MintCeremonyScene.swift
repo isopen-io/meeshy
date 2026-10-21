@@ -34,14 +34,23 @@ struct MintCeremonyScene: View {
                 .padding(.trailing, 14)
                 .padding(.bottom, 10)
         }
-        .contentShape(Rectangle())
-        .onTapGesture { run.skip() }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spoken)
-        .accessibilityHint(MintCeremonyCopy.skip)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityAction { run.skip() }
-        .accessibilityIdentifier("game.mint.ceremony")
+        .accessibilityHidden(true)
+        .overlay { skipSurface }
+    }
+
+    /// TOUT l'écran passe la scène (#11482), zones sûres comprises — sous la barre d'état comme au-dessus de l'indicateur
+    /// d'accueil : une surface pleine, posée PAR-DESSUS la forge, prend chaque toucher, et la scène ne finit qu'une fois.
+    private var skipSurface: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .ignoresSafeArea()
+            .onTapGesture { run.skip() }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spoken)
+            .accessibilityHint(MintCeremonyCopy.skip)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { run.skip() }
+            .accessibilityIdentifier("game.mint.ceremony")
     }
 
     private var spoken: String {
@@ -65,7 +74,8 @@ struct MintCeremonyScene: View {
                 MintCeremonyStageLayers(edition: run.edition, number: run.number, refusal: run.refusal, batches: batches,
                                         reduced: run.reduced, frame: frame, stage: stage, palette: palette)
                     .opacity(frame.backdrop)
-                MintCeremonyCoinLayers(edition: run.edition, number: run.number, frame: frame, stage: stage, palette: palette)
+                // La pièce se dessine dans son édition d'AFFICHAGE (#11483) ; la forge suit la loi.
+                MintCeremonyCoinLayers(edition: run.look, number: run.number, frame: frame, stage: stage, palette: palette)
             }
             .offset(x: frame.shake.x * stage.k, y: frame.shake.y * stage.k)
         }

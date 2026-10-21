@@ -94,7 +94,9 @@ struct PublishesSceneNavigation: ViewModifier {
     let role: MeeshySceneRole
 
     func body(content: Content) -> some View {
-        content.focusedSceneValue(\.meeshySceneNavigation, MeeshySceneNavigation(router: router, role: role))
+        content
+            .environment(\.routerCommands, router.commands)
+            .focusedSceneValue(\.meeshySceneNavigation, MeeshySceneNavigation(router: router, role: role))
     }
 }
 

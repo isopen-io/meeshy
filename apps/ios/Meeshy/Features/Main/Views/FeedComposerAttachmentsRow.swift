@@ -42,14 +42,21 @@ struct FeedComposerAttachmentsRow: View {
         VStack(spacing: MeeshySpacing.xs) {
             ZStack {
                 if let thumb = pendingThumbnails[attachment.id] {
-                    Image(uiImage: thumb)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: 72, height: 72)
-                        .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
-                        .onTapGesture {
-                            onOpenThumbnail(attachment)
-                        }
+                    Button {
+                        onOpenThumbnail(attachment)
+                    } label: {
+                        Image(uiImage: thumb)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: 72, height: 72)
+                            .clipShape(RoundedRectangle(cornerRadius: MeeshyRadius.sm))
+                    }
+                    .buttonStyle(MeeshyPointerButtonStyle(shape: .roundedRect(cornerRadius: MeeshyRadius.sm)))
+                    .accessibilityLabel(String(
+                        localized: "conversation.composer.attachment.edit",
+                        defaultValue: "Éditer \(MediaKindLabel.attachmentLabel(for: attachment))",
+                        bundle: .main
+                    ))
 
                     if attachment.type == .video {
                         Image(systemName: "play.circle.fill")

@@ -81,16 +81,21 @@ final class ConversationSelectionGuardTests: XCTestCase {
     }
 
     func test_bothMenuSites_callBeginSelectionMode() throws {
-        // Le menu custom « Plus… » et la liste appellent `beginSelectionMode` par les gestes que
-        // l'hôte leur remet (`messageActions`) ; le menu natif iOS 26+ l'appelle directement.
-        let code = try source("Features/Main/Views/ConversationView.swift")
-            + source("Features/Main/Views/ConversationView+NativeMessageMenu.swift")
-        let occurrences = code.components(separatedBy: "beginSelectionMode(seedingWith:").count - 1
-        XCTAssertGreaterThanOrEqual(
-            occurrences, 2,
-            "Les DEUX sites d'entrée (menu longpress custom « Plus… », menu natif iOS 26+) doivent appeler "
-                + "`beginSelectionMode(seedingWith:)` — point d'entrée unique."
+        // #11214 — le menu natif iOS 26+ (mort, sans appelant) a quitté le dépôt. Les menus vivants
+        // (overlay d'appui long, feuille « Plus… », double toucher) passent tous par le geste que
+        // l'hôte leur remet (`messageActions.beginSelection`), seul appelant de `beginSelectionMode`.
+        let host = try source("Features/Main/Views/ConversationView.swift")
+        XCTAssertEqual(
+            host.components(separatedBy: "beginSelectionMode(seedingWith:").count - 1, 1,
+            "`messageActions.beginSelection` doit être l'UNIQUE porte vers `beginSelectionMode(seedingWith:)`."
         )
+        let list = try source("Features/Main/Views/ConversationView+MessageListLayer.swift")
+        XCTAssertTrue(
+            list.contains("onSelectMessage: { messageId in messageActions.beginSelection(messageId) }"),
+            "Le double toucher doit armer la sélection par le geste de l'hôte."
+        )
+        let overlay = try source("Features/Main/Views/ConversationView+OverlayMenu.swift")
+        XCTAssertTrue(overlay.contains("onSelect: { actions.beginSelection(msg.id) }"))
     }
 
     // MARK: - `endSelectionMode` vide la sélection — jamais résiduelle

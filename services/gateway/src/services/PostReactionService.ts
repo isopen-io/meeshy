@@ -242,7 +242,7 @@ export class PostReactionService {
       // Retirer la réaction reprend ce qu'elle a rapporté — sur l'original et
       // sur chaque republication par laquelle elle a été posée ou reconfirmée.
       removed.forEach(({ id }) =>
-        reclaimContentCredits(this.prisma, userId, creditSource.postReaction(id), {}, this.engagement),
+        reclaimContentCredits(this.prisma, userId, creditSource.postReaction(id), this.engagement),
       );
     }
 

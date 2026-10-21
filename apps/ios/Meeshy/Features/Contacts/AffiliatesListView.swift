@@ -10,7 +10,7 @@ struct AffiliatesListView: View {
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
     @Environment(\.colorScheme) private var colorScheme
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     var body: some View {
         VStack(spacing: 0) {

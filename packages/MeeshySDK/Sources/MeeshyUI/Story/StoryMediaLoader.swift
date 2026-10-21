@@ -48,7 +48,7 @@ public final class StoryMediaLoader {
     /// Load and downsample an image from PhotosPickerItem.
     /// Uses ImageIO for hardware-accelerated decode + downsample in a single pass.
     public func loadImage(from item: PhotosPickerItem, maxDimension: CGFloat = 1080) async -> UIImage? {
-        guard let data = try? await item.loadTransferable(type: Data.self) else { return nil }
+        guard let data = try? await PickedMedia.loadImageData(item) else { return nil }
         return await loadImage(data: data, maxDimension: maxDimension)
     }
 

@@ -189,7 +189,7 @@ enum StoryExportAuthorIdentity {
             break
         }
         guard let fetched = try? await UserService.shared.getProfile(idOrUsername: userId) else { return nil }
-        try? await CacheCoordinator.shared.profiles.save([fetched], for: userId)
+        await bestEffort("storyExportDressing.profiles.save", category: .cache) { try await CacheCoordinator.shared.profiles.save([fetched], for: userId) }
         return fetched
     }
 }

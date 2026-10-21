@@ -6,13 +6,13 @@ import os
 
 @MainActor
 protocol ConversationCommandProviding: AnyObject {
-    func canDeleteForEveryone(_ message: Message, window: TimeInterval) -> Bool
+    func canDeleteForEveryone(_ message: Message) -> Bool
     func consumeViewOnce(messageId: String, serverId: String) async -> Bool
     func markAsReceived()
     func consumeReactionToken() -> Bool
     func addReaction(localId: String, remoteId: String, participantId: String, emoji: String)
     func removeReaction(localId: String, remoteId: String, participantId: String, emoji: String)
-    func deleteLocally(messageId: String)
+    func deleteForMe(_ targets: [ForMeTarget], projection: ForMeProjection) async -> ConversationCommandFailure?
     func withdrawUnsent(messageId: String) async
     func deleteForEveryone(messageId: String, serverId: String) async -> ConversationCommandFailure?
     func removeForModeration(messageId: String, serverId: String, reason: String) async -> ConversationCommandFailure?
@@ -72,6 +72,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
     private let networkMonitor: NetworkMonitorProviding
     private let reactionOutbox: any ReactionOutboxEnqueuing
     private let attachments: any AttachmentDeleting
+    private let personalHiding: any PersonalMessageHiding
     private let now: () -> Date
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-commands")
@@ -90,6 +91,7 @@ final class ConversationCommandHandler: ConversationCommandProviding {
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
         reactionOutbox: any ReactionOutboxEnqueuing = LiveReactionOutbox(),
         attachments: any AttachmentDeleting = AttachmentService.shared,
+        personalHiding: any PersonalMessageHiding = MessageService.shared,
         now: @escaping () -> Date = { Date() }
     ) {
         self.state = state
@@ -100,15 +102,17 @@ final class ConversationCommandHandler: ConversationCommandProviding {
         self.networkMonitor = networkMonitor
         self.reactionOutbox = reactionOutbox
         self.attachments = attachments
+        self.personalHiding = personalHiding
         self.now = now
         self.reactionLastRefill = now()
     }
 
     // MARK: - Message Actions
 
-    func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        guard message.isMe else { return false }
-        return Date().timeIntervalSince(message.createdAt) <= window
+    /// `admitMessageDelete` (#11214) : l'auteur supprime pour tous SANS fenêtre —
+    /// la passerelle n'en impose aucune, la fenêtre de 2 h n'existait qu'ici.
+    func canDeleteForEveryone(_ message: Message) -> Bool {
+        message.isMe && message.deletedAt == nil
     }
 
     func consumeViewOnce(messageId: String, serverId: String) async -> Bool {
@@ -169,8 +173,35 @@ final class ConversationCommandHandler: ConversationCommandProviding {
 
     // MARK: - Delete
 
-    func deleteLocally(messageId: String) {
-        LocallyHiddenMessagesStore.shared.hide(messageId)
+    /// **« Supprimer pour moi » vaut PARTOUT** (#11221) : la route que le web
+    /// appelle déjà, dont la passerelle diffuse le masquage aux autres appareils
+    /// du lecteur. Optimiste DANS LA PROJECTION — le message quitte le fil avant
+    /// la réponse, la base n'est purgée qu'après l'accord ; un refus lève le
+    /// filtre et la base le rend, sans relecture réseau. Une sélection part en UNE
+    /// requête. Hors ligne, refus dit : un masquage resté local reviendrait au
+    /// prochain chargement, sans que rien l'explique.
+    func deleteForMe(_ targets: [ForMeTarget], projection: ForMeProjection) async -> ConversationCommandFailure? {
+        guard !targets.isEmpty else { return nil }
+        guard networkMonitor.isOnline else { return Self.offlineRemovalRefusal }
+        let localIds = targets.map(\.messageId)
+        projection.conceal(localIds)
+        do {
+            try await hideOnServer(targets.map(\.serverId))
+        } catch {
+            await projection.reveal(localIds)
+            return ConversationCommandFailure(error)
+        }
+        try? await persistence.purgeMessages(ids: localIds)
+        targets.forEach { StarredMessagesStore.shared.remove(messageId: $0.serverId) }
+        return nil
+    }
+
+    private func hideOnServer(_ serverIds: [String]) async throws {
+        guard serverIds.count > 1 else {
+            try await personalHiding.hideForMe(messageId: serverIds[0])
+            return
+        }
+        try await personalHiding.hideForMe(messageIds: serverIds)
     }
 
     /// Un message `.failed` n'a jamais atteint le serveur : sa ligne d'outbox, même remise

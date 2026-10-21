@@ -659,9 +659,8 @@ public extension CanvasV3 {
         if let sourceStart = audio.sourceStart { payload["sourceStart"] = .number(sourceStart) }
         if let sourceEnd = audio.sourceEnd { payload["sourceEnd"] = .number(sourceEnd) }
         // **La forme d'onde d'une note vocale** — ~80 échantillons figés à la
-        // composition (`StoryModels.swift`), que `StoryAudioPlayerView` peint
-        // barre par barre. Sans eux, son `guard !samples.isEmpty else { return }`
-        // ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
+        // composition (`StoryModels.swift`), que la pastille audio peint
+        // barre par barre. Sans eux, elle ne dessine RIEN : chaque lecteur voyait une bande VIDE sous une note
         // vocale posée sur la scène. Quatre-vingts nombres pour ne pas servir un
         // trou — le calcul n'a pas besoin d'être long.
         //

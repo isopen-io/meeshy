@@ -336,3 +336,57 @@ describe('AdminUsersPanel — états dessinés et garde', () => {
     expect(gateway.calls()).toHaveLength(0);
   });
 });
+
+describe('AdminUsersPanel — les gestes sur la ligne (#11410)', () => {
+  const actionOf = (host: ParentNode, id: string, gesture: string) => rowOf(host, id)?.querySelector<HTMLButtonElement>(`[data-admin-row-action="${gesture}"]`) ?? null;
+  const gesturesOf = (host: ParentNode, id: string) =>
+    [...(rowOf(host, id)?.querySelectorAll('[data-admin-row-action]') ?? [])].map((button) => button.getAttribute('data-admin-row-action'));
+  const patchReply =
+    (seen: HttpRequest[]): RoutedReply =>
+    (request) => {
+      if (request.method !== 'PATCH') return undefined;
+      seen.push(request);
+      return { ok: true, data: served({ id: CLEO, username: 'cleo', email: 'cleo@example.test' }) };
+    };
+
+  test('seuls les gestes qui ont un effet : rien pour Alice, « Activer » et « Valider l’e-mail » pour Bob, « Déverrouiller » et « Valider l’e-mail » pour Cléo', async () => {
+    const { host } = await open();
+    expect(gesturesOf(host, ALICE)).toEqual([]);
+    expect(textOf(rowOf(host, ALICE))).toContain('Rien à faire');
+    expect(gesturesOf(host, BOB)).toEqual(['activate', 'verify-email']);
+    expect(gesturesOf(host, CLEO)).toEqual(['unlock', 'verify-email']);
+    expect(actionOf(host, CLEO, 'unlock')?.getAttribute('aria-label')).toBe('Déverrouiller — @cleo');
+  });
+
+  test('déverrouiller part aussitôt, sans confirmation — le souverain sans motif', async () => {
+    const seen: HttpRequest[] = [];
+    const { host } = await open({ replies: [patchReply(seen), usersReply()] });
+    await mounter.click(actionOf(host, CLEO, 'unlock'));
+    await mounter.settle();
+    expect(seen.map((request) => [pathOf(request), request.body])).toEqual([[`/api/v1/admin/users/${CLEO}/security`, { unlock: true }]]);
+  });
+
+  test('l’ADMIN envoie le motif proposé ; activer écrit { isActive: true }', async () => {
+    const seen: HttpRequest[] = [];
+    const { host } = await open({ identity: adminIdentityFixture({ role: 'ADMIN' }), replies: [patchReply(seen), usersReply()] });
+    await mounter.click(actionOf(host, BOB, 'activate'));
+    await mounter.settle();
+    expect(seen.map((request) => [pathOf(request), request.body])).toEqual([
+      [`/api/v1/admin/users/${BOB}`, { isActive: true, reason: 'Contrôle aléatoire, test de fonctionnalité et suivi client' }],
+    ]);
+  });
+
+  test('un refus remet la ligne telle qu’elle était, et le dit', async () => {
+    const refuse: RoutedReply = (request) => (request.method === 'PATCH' ? { ok: false, status: 403, error: 'Hiérarchie insuffisante' } : undefined);
+    const { host } = await open({ replies: [refuse, usersReply()] });
+    await mounter.click(actionOf(host, CLEO, 'verify-email'));
+    await mounter.settle();
+    expect(gesturesOf(host, CLEO)).toEqual(['unlock', 'verify-email']);
+    expect(textOf(host.querySelector('[data-admin-users-panel]'))).toContain('Refusé : votre rôle ne permet pas de modifier ce membre');
+  });
+
+  test('sans `canManageUsers` (modérateur), la colonne n’existe pas', async () => {
+    const { host } = await open({ identity: adminIdentityFixture({ role: 'MODERATOR', permissions: { canAccessAdmin: true } }) });
+    expect(host.querySelector('[data-admin-row-actions]')).toBeNull();
+  });
+});

@@ -399,6 +399,14 @@ public struct MeeshyAvatar: View {
         context.isTappable && !resolvedItems.isEmpty
     }
 
+    private func performTap() {
+        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 1.0 }
+        }
+        handleTap()
+    }
+
     private func handleTap() {
         HapticFeedback.light()
         if storyState == .unread, let onViewStory { onViewStory(); return }
@@ -474,13 +482,9 @@ public struct MeeshyAvatar: View {
             if hasTapHandler {
                 visual
                     .contentShape(Circle())
-                    .onTapGesture {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 0.9 }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { tapScale = 1.0 }
-                        }
-                        handleTap()
-                    }
+                    .onTapGesture(perform: performTap)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityAction { performTap() }
             } else { visual }
         }
 
