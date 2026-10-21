@@ -23,7 +23,7 @@ struct iPadEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environmentObject(router)
+            .meeshyRouter(router)
             .modifier(PublishesSceneNavigation(router: router, role: .main))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
@@ -222,7 +222,7 @@ struct iPadSheetsLayer: ViewModifier {
                         onOpenFullConversation(conv)
                     }
                 })
-                .environmentObject(router)
+                .meeshyRouter(router)
                 .environmentObject(storyViewModel)
                 .environmentObject(statusViewModel)
                 .meeshyConversationList(conversationViewModel)
@@ -325,7 +325,7 @@ struct iPadCoversAndChromeLayer: ViewModifier {
                     .ignoresSafeArea()
                     }
                 }
-                .environmentObject(router)
+                .meeshyRouter(router)
                 .environmentObject(statusViewModel)
                 .meeshyConversationList(conversationViewModel)
                 .environmentObject(storyViewModel)

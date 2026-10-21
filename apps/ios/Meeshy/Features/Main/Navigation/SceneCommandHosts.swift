@@ -27,7 +27,7 @@ struct GlobalSearchCoverHost: ViewModifier {
             .fullScreenCover(isPresented: $isPresented) {
                 GlobalSearchView()
                     .environmentObject(conversationViewModel)
-                    .environmentObject(router)
+                    .meeshyRouter(router)
             }
             .modifier(PublishesSceneAction(keyPath: \.meeshySearch, perform: { isPresented = true }))
     }
