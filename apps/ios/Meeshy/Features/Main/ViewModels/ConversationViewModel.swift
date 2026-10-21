@@ -7,7 +7,7 @@ import MeeshyUI
 import os
 
 @MainActor
-class ConversationViewModel: ObservableObject {
+class ConversationViewModel: ObservableObject, AttachmentSendHosting {
 
     // MARK: - Published State
 
