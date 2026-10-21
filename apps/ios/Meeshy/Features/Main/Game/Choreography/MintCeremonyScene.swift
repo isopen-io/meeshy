@@ -29,7 +29,7 @@ struct MintCeremonyScene: View {
             }
             .ignoresSafeArea()
             Text(MintCeremonyCopy.skip)
-                .font(.system(size: 11))
+                .font(MeeshyFont.relative(11))
                 .foregroundStyle(MintCeremonyPalette(edition: run.edition).hint)
                 .padding(.trailing, 14)
                 .padding(.bottom, 10)
@@ -93,6 +93,11 @@ struct MintCeremonyFit: Equatable {
     /// Le centre, dans l'écran, d'une boîte posée en `(x, y)` (coin haut-gauche) de taille `w × h` dans la scène.
     func center(x: Double, y: Double, w: Double, h: Double) -> CGPoint {
         CGPoint(x: offX + (x + w / 2) * k, y: offY + (y + h / 2) * k)
+    }
+
+    /// Une police de la SCÈNE : sa taille est une géométrie de la scène de 360 × 640, portée par `k` comme le reste.
+    func font(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        Font.system(size: size * k, weight: weight)
     }
 }
 
