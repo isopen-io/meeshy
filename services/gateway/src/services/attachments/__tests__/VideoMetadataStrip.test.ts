@@ -36,6 +36,8 @@ function makeClip(fileName: string, format: 'mp4' | 'mov'): string {
     '-f', 'lavfi', '-i', 'testsrc=duration=1:size=64x64:rate=10',
     '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1',
     '-c:v', 'mpeg4', '-c:a', 'aac', '-shortest',
+    '-movflags', 'use_metadata_tags',
+    '-metadata', `com.apple.quicktime.location.ISO6709=${LOCATION}`,
     '-metadata', `location=${LOCATION}`,
     '-metadata', `title=${SECRET}`,
     '-metadata', 'creation_time=2026-01-02T03:04:05Z',
@@ -98,6 +100,17 @@ describe('VideoMetadataStrip — remux sans ré-encodage (#9746)', () => {
     expect(packetHashes(clip)).toBe(before);
     const boxes = topLevelBoxes(await fs.readFile(clip));
     expect(boxes.indexOf('moov')).toBeLessThan(boxes.indexOf('mdat'));
+  });
+
+  it('garde la rotation d’affichage (matrice de la piste), qui n’est pas une métadonnée', async () => {
+    const source = makeClip('upright.mp4', 'mp4');
+    const rotated = path.join(workDir, 'rotated.mp4');
+    execFileSync('ffmpeg', ['-v', 'error', '-display_rotation', '90', '-i', source, '-c', 'copy', '-y', rotated]);
+
+    await stripVideoMetadataFile({ filePath: rotated, mimeType: 'video/mp4' });
+
+    const sideData = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream_side_data_list', '-of', 'compact', rotated]).toString();
+    expect(sideData).toContain('rotation=90');
   });
 
   it('garde l’original quand ffmpeg échoue, et le dit', async () => {

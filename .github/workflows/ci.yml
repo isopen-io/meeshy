@@ -1542,6 +1542,16 @@ jobs:
           cd packages/shared
           pnpm run build
 
+      # #11258 — le retrait des métadonnées vidéo se prouve par ffmpeg/ffprobe
+      # RÉELS (GPS absent, paquets identiques) : la passerelle les embarque en
+      # production (Dockerfile), sa suite les exige ici.
+      - name: Install ffmpeg (gateway)
+        if: matrix.package.name == 'gateway'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          ffprobe -version | head -1
+
       - name: Run tests with coverage (bun)
         if: env.PACKAGE_MANAGER == 'bun'
         timeout-minutes: ${{ matrix.package.testTimeoutMinutes }}
