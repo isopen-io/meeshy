@@ -626,7 +626,7 @@ struct ConversationAnimatedBackground: View {
         return ZStack {
             ForEach(0..<flagCount, id: \.self) { i in
                 Text(flags[i])
-                    .font(.system(size: 24))
+                    .font(MeeshyFont.emoji(24))
                     .shadow(color: .black.opacity(0.15), radius: 2)
                     .offset(
                         x: cos(CGFloat(i) * .pi * 2 / CGFloat(flagCount) + orbitPhase) * (size.width * 0.35),
