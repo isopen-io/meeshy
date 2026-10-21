@@ -305,7 +305,7 @@ describe('reprise anti-abus — applyPostRemovalEffects', () => {
     ['REEL', 'content.reel'],
   ])('un %s retiré par son auteur rend ses points (%s)', async (type, operationKey) => {
     const recorder = makeRecorder();
-    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type }, { id: AUTHOR_ID }, soundCapture, undefined, recorder);
+    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type, createdAt: new Date() }, { id: AUTHOR_ID }, soundCapture, undefined, recorder);
     await settle();
 
     expect(recorder.reclaimContent).toHaveBeenCalledWith(AUTHOR_ID, operationKey, POST_ID);
@@ -313,15 +313,25 @@ describe('reprise anti-abus — applyPostRemovalEffects', () => {
 
   it('un retrait par un modérateur reprend les points de l’AUTEUR, pas du modérateur', async () => {
     const recorder = makeRecorder();
-    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'POST' }, { id: MODERATOR_ID }, soundCapture, undefined, recorder);
+    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'POST', createdAt: new Date() }, { id: MODERATOR_ID }, soundCapture, undefined, recorder);
     await settle();
 
     expect(recorder.reclaimContent).toHaveBeenCalledWith(AUTHOR_ID, 'content.post', POST_ID);
   });
 
+  it('un POST publié il y a plus d’un mois, retiré par un modérateur, ne reprend rien (#11467)', async () => {
+    const recorder = makeRecorder();
+    const publishedAt = new Date(Date.now() - 31 * 86_400_000);
+    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'POST', createdAt: publishedAt }, { id: MODERATOR_ID, viaAdministration: true }, soundCapture, undefined, recorder);
+    await settle();
+
+    expect(recorder.reclaimContent).not.toHaveBeenCalled();
+    expect(recorder.reclaimSource).not.toHaveBeenCalled();
+  });
+
   it('un STATUS retiré ne reprend rien — ce n’est pas un contenu lourd', async () => {
     const recorder = makeRecorder();
-    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'STATUS' }, { id: AUTHOR_ID }, soundCapture, undefined, recorder);
+    await applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'STATUS', createdAt: new Date() }, { id: AUTHOR_ID }, soundCapture, undefined, recorder);
     await settle();
 
     expect(recorder.reclaimContent).not.toHaveBeenCalled();
@@ -332,7 +342,7 @@ describe('reprise anti-abus — applyPostRemovalEffects', () => {
     recorder.reclaimContent.mockRejectedValue(new Error('mongo down'));
 
     await expect(
-      applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'REEL' }, { id: AUTHOR_ID }, soundCapture, undefined, recorder),
+      applyPostRemovalEffects(prisma, { id: POST_ID, authorId: AUTHOR_ID, type: 'REEL', createdAt: new Date() }, { id: AUTHOR_ID }, soundCapture, undefined, recorder),
     ).resolves.toBeUndefined();
     await settle();
   });
