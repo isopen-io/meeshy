@@ -394,10 +394,7 @@
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Container/TimelineInspectorHost.swift::TimelineInspectorHost.clipSnapshot": 121,
     "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Views/Plan2D/Plan2DView.swift::Plan2DView.body": 100,
     "packages/MeeshySDK/Sources/MeeshyUI/Utilities/MessageTextRenderer.swift::MessageTextRenderer.buildAttributed": 96,
-    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/MessageTextRenderer.swift::MessageTextRenderer.parse": 176,
-    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+InitialLoad.swift::ConversationViewModel.loadMessages": 242,
-    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+InitialLoad.swift::ConversationViewModel.loadOlderMessages#2": 109,
-    "apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel+InitialLoad.swift::ConversationViewModel.refreshMessagesFromAPI": 93
+    "packages/MeeshySDK/Sources/MeeshyUI/Utilities/MessageTextRenderer.swift::MessageTextRenderer.parse": 176
   },
   "seuils": {
     "fonction": 80,
