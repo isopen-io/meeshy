@@ -41,10 +41,15 @@ const activityOf = (presence: LivePresence | undefined): number =>
  * UN AMORÇAGE N'EFFACE PAS PLUS FRAIS QUE LUI (#11412) — le snapshot est composé
  * avant d'arriver : un `user:status` ou une frappe reçus entre-temps portent une
  * activité plus récente, que la photographie ne remonte pas. À activité égale
- * ou plus récente, le snapshot l'emporte.
+ * ou plus récente, le snapshot l'emporte. Plus ancien, il garde l'activité de
+ * l'entrée mais peut encore dire « connecté » : la passerelle calcule
+ * `isOnline` en direct, alors qu'une frappe date l'activité sur l'horloge du
+ * client — jeter le snapshot laisserait décroître un pair bel et bien là.
  */
-const isStaler = (incoming: LivePresence, existing: LivePresence | undefined): boolean =>
-  activityOf(existing) > activityOf(incoming);
+const mergeSnapshot = (incoming: LivePresence, existing: LivePresence | undefined): LivePresence =>
+  existing !== undefined && activityOf(existing) > activityOf(incoming)
+    ? { isOnline: incoming.isOnline || existing.isOnline, lastActiveAt: existing.lastActiveAt }
+    : incoming;
 
 export type PresenceStoreApi = StoreApi<PresenceState>;
 
@@ -56,7 +61,7 @@ export function createPresenceStore(): PresenceStoreApi {
       set((state) => ({
         byUser: {
           ...state.byUser,
-          ...Object.fromEntries(entries.filter(([userId, presence]) => !isStaler(presence, state.byUser[userId]))),
+          ...Object.fromEntries(entries.map(([userId, presence]) => [userId, mergeSnapshot(presence, state.byUser[userId])] as const)),
         },
       })),
     markAllOffline: () =>

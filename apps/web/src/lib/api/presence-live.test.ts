@@ -132,6 +132,20 @@ describe('bindPresenceLive', () => {
     expect(store.getState().byUser[CAROL]).toEqual({ isOnline: true, lastActiveAt: iso(NOW) });
   });
 
+  /* La frappe date l'activité sur l'horloge du CLIENT : un snapshot composé un
+     peu avant, qui dit « connecté », ne doit pas être jeté pour autant — sinon le
+     pair connecté décroît jusqu'à la prochaine rediffusion du battement. */
+  test('le snapshot rallume un pair connecté même quand une frappe locale est plus récente (#11412)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.TYPING_START, { userId: BOB, username: 'bob', conversationId: 'conv-a' });
+
+    fire(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+      users: [{ userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW - 2 * 60_000) }],
+    });
+
+    expect(store.getState().byUser[BOB]).toEqual({ isOnline: true, lastActiveAt: iso(NOW) });
+  });
+
   test('le snapshot l’emporte à activité égale ou plus récente (#11412)', () => {
     const { store, fire } = bound();
     fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW) });
