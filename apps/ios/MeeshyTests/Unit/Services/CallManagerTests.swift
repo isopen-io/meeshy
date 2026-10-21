@@ -6342,6 +6342,12 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
             body.contains("qualitySeconds[previousLevel, default: 0] +="),
             "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
         )
+        let recorder = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager+AnalyticsRecorder.swift")
+        XCTAssertTrue(
+            recorder.contains("    func payload(now: Date, context: CallAnalyticsContext)"),
+            "The analytics payload is built by a NON-mutating CallAnalyticsRecorder.payload — the compiler then forbids folding the open window into the accumulators"
+        )
+        XCTAssertFalse(recorder.contains("mutating func payload("), "payload must stay non-mutating")
     }
 }
 
