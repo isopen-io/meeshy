@@ -93,7 +93,7 @@ class BookmarksViewModel: ObservableObject {
             hasMore = response.pagination?.hasMore ?? false
 
             if replacingExisting || nextCursor == nil || posts.count == unique.count {
-                try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+                await bestEffort("bookmarksViewModel.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
             }
         } catch {
             FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.loadError", defaultValue: "Impossible de charger les favoris", bundle: .main))
@@ -105,7 +105,7 @@ class BookmarksViewModel: ObservableObject {
         let removed = posts.remove(at: index)
         do {
             try await postService.removeBookmark(postId: postId)
-            try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+            await bestEffort("bookmarksViewModel.feed.save.2", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
         } catch {
             // Défaire CE retrait, pas l'écran : une page chargée ou un autre
             // retrait réussi pendant l'attente restait effacé par l'instantané.
@@ -142,7 +142,7 @@ class BookmarksViewModel: ObservableObject {
             } else {
                 try await postService.unlike(postId: postId)
             }
-            try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+            await bestEffort("bookmarksViewModel.feed.save.3", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
         } catch {
             if let current = posts.firstIndex(where: { $0.id == postId }) {
                 posts[current] = snapshot

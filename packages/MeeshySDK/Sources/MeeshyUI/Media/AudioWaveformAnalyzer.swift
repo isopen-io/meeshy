@@ -7,6 +7,11 @@ import MeeshySDK
 
 /// Observable wrapper around WaveformCache for SwiftUI views.
 /// Provides @Published samples that views can bind to directly.
+///
+/// **Ce qu'il publie est LINÉAIRE, crête à 1** — la forme que ses lecteurs (bulle
+/// audio, éditeur, cellule du composer, cadran plein écran) dessinent telle
+/// quelle. La mesure du cache est un RMS absolu ; il la ramène à ce contrat, et
+/// lui seul (#9886).
 @MainActor
 public class AudioWaveformAnalyzer: ObservableObject {
     @Published public var samples: [Float] = []
@@ -24,7 +29,7 @@ public class AudioWaveformAnalyzer: ObservableObject {
             do {
                 let result = try await WaveformCache.shared.samples(from: data, count: barCount)
                 guard !Task.isCancelled else { return }
-                self?.samples = result
+                self?.samples = WaveformScale.peakNormalized(result)
                 self?.isAnalyzing = false
             } catch {
                 guard !Task.isCancelled else { return }
@@ -42,7 +47,7 @@ public class AudioWaveformAnalyzer: ObservableObject {
             do {
                 let result = try await WaveformCache.shared.samples(from: url, count: barCount)
                 guard !Task.isCancelled else { return }
-                self?.samples = result
+                self?.samples = WaveformScale.peakNormalized(result)
                 self?.isAnalyzing = false
             } catch {
                 guard !Task.isCancelled else { return }
@@ -69,7 +74,7 @@ public class AudioWaveformAnalyzer: ObservableObject {
         }
     }
 
-    deinit {
+    nonisolated deinit {
         analyzeTask?.cancel()
     }
 }

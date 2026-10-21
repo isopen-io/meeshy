@@ -3,6 +3,8 @@ import { apiDeps, postMediaUploadDeps } from '@/lib/api/deps';
 import { createDirectConversation, createGroupConversation, type ConversationsDeps } from '@/lib/api/conversations';
 import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
+import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
+import { servedMediaFile } from '@/lib/media/served-media';
 import type { ApiResult } from '@/lib/api/http';
 import { sendMessage } from '@/lib/api/messages';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
@@ -26,6 +28,8 @@ export type SendSheetPortsParams = {
   readonly media?: PostMediaUploadDeps;
   readonly fetchImpl?: typeof fetch;
   readonly online?: () => boolean;
+  /** La préparation des photos avant téléversement (#11310) — le worker d'image par défaut. */
+  readonly prepare?: ImagePreparer;
 };
 
 const browserOnline = (): boolean => typeof navigator === 'undefined' || navigator.onLine !== false;
@@ -36,8 +40,8 @@ const browserOnline = (): boolean => typeof navigator === 'undefined' || navigat
  * que de fichiers est un ÉCHEC d'envoi (`UPLOAD_PARTIAL`), jamais un message
  * amputé (même réconciliation que `perform-send.ts`).
  */
-async function uploadFiles(deps: ConversationsDeps, files: readonly File[]): Promise<ApiResult<{ readonly attachmentIds: readonly string[] }>> {
-  const result = await uploadAttachments({ ...deps, pending: files.map((file) => ({ file })) });
+async function uploadFiles(deps: ConversationsDeps, prepare: ImagePreparer, files: readonly File[]): Promise<ApiResult<{ readonly attachmentIds: readonly string[] }>> {
+  const result = await uploadAttachments({ ...deps, pending: await prepare.prepareUploads(files.map((file) => ({ file }))) });
   if (!result.ok) return result;
   if (result.data.attachments.length < files.length) {
     return { ok: false, status: 200, error: 'Lot de pièces jointes incomplet', code: 'UPLOAD_PARTIAL' };
@@ -53,7 +57,7 @@ async function downloadFile(
     const response = await fetchImpl(media.url);
     if (!response.ok) return null;
     const blob = await response.blob();
-    return new File([blob], media.name, { type: media.mime !== '' ? media.mime : blob.type });
+    return servedMediaFile(blob, media.name, { type: media.mime !== '' ? media.mime : blob.type });
   } catch {
     return null;
   }
@@ -63,6 +67,7 @@ export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPor
   const deps = params.deps ?? apiDeps;
   const mediaDeps = params.media ?? postMediaUploadDeps;
   const fetchImpl = params.fetchImpl ?? fetch;
+  const prepare = params.prepare ?? browserImagePreparer;
 
   return {
     online: params.online ?? browserOnline,
@@ -76,11 +81,11 @@ export function createSendSheetPorts(params: SendSheetPortsParams): SendSheetPor
     },
     forward: (forward) => forwardMessages({ ...deps, ...forward }),
     sendMessage: (message) => sendMessage({ ...deps, ...message }),
-    uploadFiles: (files) => uploadFiles(deps, files),
+    uploadFiles: (files) => uploadFiles(deps, prepare, files),
     fetchFile: (media) => downloadFile(fetchImpl, media),
     uploadMedia: async (file) => {
       const { uploadPostMedia } = await import('@/lib/api/post-media-upload');
-      const result = await uploadPostMedia({ ...mediaDeps, file, uploadContext: 'story' });
+      const result = await uploadPostMedia({ ...mediaDeps, file: await prepare.prepare(file), uploadContext: 'story' });
       return result.ok ? { ok: true, data: result.data } : result;
     },
     publishMedia: async ({ format, media, caption }) => {

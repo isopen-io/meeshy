@@ -24,7 +24,7 @@ struct RootEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .environmentObject(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .modifier(PublishesSceneNavigation(router: router, role: .main))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
@@ -50,7 +50,7 @@ struct RootEnvironmentLayer: ViewModifier {
                         onOpenFullConversation(conv)
                     }
                 })
-                    .environmentObject(router)
+                    .modifier(MeeshyRouterInjection(router: router))
                     .environmentObject(storyViewModel)
                     .environmentObject(statusViewModel)
                     .meeshyConversationList(conversationViewModel)
@@ -143,45 +143,18 @@ struct RootStoryDoorsLayer: ViewModifier {
                 await onStart()
                 ConversationListVMOwner.endLaunch()
             }
-            .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
-                StoryViewerContainer(
-                    viewModel: storyViewModel,
-                    userId: request.id,
-                    isPresented: Binding(
-                        get: { storyViewerCoordinator.pendingRequest != nil },
-                        set: { if !$0 { storyViewerCoordinator.dismiss() } }
-                    ),
-                    onReplyToStory: { replyContext in
-                        storyViewerCoordinator.dismiss()
-                        router.navigateToStoryReply(replyContext, conversationList: conversationViewModel)
-                    },
-                    singleGroup: request.singleGroup,
-                    postId: request.postId,
-                    startAtFirstUnviewed: request.startAtFirstUnviewed,
-                    presentationSource: "RootView.fromConv",
-                    initialAction: request.initialAction,
-                    targetCommentId: request.targetCommentId,
-                    targetParentCommentId: request.targetParentCommentId
-                )
-                // Re-inject the trio that StoryViewerView declares as
-                // @EnvironmentObject (so it can re-inject them onto its inner
-                // SharePickerView sheet). fullScreenCover does not inherit
-                // EnvironmentObjects automatically.
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .meeshyConversationList(conversationViewModel)
-                // Re-inject le flag isStoryViewerPresenting — fullScreenCover
-                // n'hérite pas non plus des `Environment` values du parent,
-                // donc le `StoryViewerContainer.ConnectionBanner` interne au
-                // cover ne pouvait pas se cacher sans ça. Bug sync pill
-                // chevauche header 2026-05-27.
-                .environment(\.isStoryViewerPresenting, true)
-                // U1 — transition zoom depuis la bulle du tray (iOS 18+, no-op
-                // sinon). sourceID = userId du groupe : si la story s'ouvre
-                // depuis un point d'entrée sans bulle enregistrée (notification,
-                // deep link), iOS retombe sur la transition cover standard.
-                .zoomTransitionDestination(sourceID: request.id, in: storyZoomNamespace)
-            }
+            .modifier(StoryReaderCover(
+                request: $storyViewerCoordinator.pendingRequest,
+                storyViewModel: storyViewModel,
+                statusViewModel: statusViewModel,
+                router: router,
+                conversationList: conversationViewModel,
+                presentationSource: "RootView.fromConv",
+                zoomNamespace: storyZoomNamespace,
+                onReply: { replyContext in
+                    router.navigateToStoryReply(replyContext, conversationList: conversationViewModel)
+                }
+            ))
             // La célébration d'un palier (#5809), posée en UNE ligne : l'hôte est
             // écrit une seule fois et vit chez sa jumelle iPad à l'identique.
             .engagementReveal(router: router)

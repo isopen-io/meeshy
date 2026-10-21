@@ -435,6 +435,40 @@ export function previousPosition(
 }
 
 /**
+ * **LE GLISSÉ CHANGE D'AUTEUR** (#11198, miroir `landOnNextGroup` iOS) — le
+ * cube passe au groupe VOISIN depuis n'importe quelle story du groupe
+ * courant, et y entre à son {@link entryIndexFor} : première non vue non
+ * expirée, sinon première non expirée. `null` ⇒ aucun voisin dans ce sens
+ * (bord de la liste, portée « un seul groupe ») : la carte résiste.
+ *
+ * Le RECUL se pose sur la DERNIÈRE story de l'auteur d'avant — exactement
+ * `landOnPreviousGroup` d'iOS (`StoryViewerPosition.previousGroupLanding`) : le
+ * même lecteur, le même geste, la même arrivée sur les deux plateformes.
+ */
+export function nextGroupPosition(
+  groups: readonly StoryPlaybackGroup[],
+  position: StoryPlaybackPosition,
+  now: number,
+): StoryPlaybackPosition | null {
+  return groupEntryAt(groups, position.groupIndex + 1, now);
+}
+
+export function previousGroupPosition(
+  groups: readonly StoryPlaybackGroup[],
+  position: StoryPlaybackPosition,
+): StoryPlaybackPosition | null {
+  const groupIndex = position.groupIndex - 1;
+  const group = groupIndex >= 0 ? groups[groupIndex] : undefined;
+  if (group === undefined) return null;
+  return { groupIndex, storyIndex: Math.max(0, group.stories.length - 1) };
+}
+
+function groupEntryAt(groups: readonly StoryPlaybackGroup[], groupIndex: number, now: number): StoryPlaybackPosition | null {
+  const group = groupIndex >= 0 ? groups[groupIndex] : undefined;
+  return group === undefined ? null : { groupIndex, storyIndex: entryIndexFor(group, now) };
+}
+
+/**
  * `StoryViewerScope.resolve(all:resolvedIndex:singleGroup:)`
  * (`StoryViewerScope.swift:29-42`) — LA PORTÉE « UN SEUL GROUPE » (revue de
  * #6149, défaut majeur 3) : ouvrir une story depuis « Mes stories » laissait

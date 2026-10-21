@@ -35,6 +35,8 @@ export type ShellCallSnapshot = {
   readonly video: boolean;
   readonly phase: CallPhase['kind'] | null;
   readonly micMuted: boolean;
+  /** Une vidéo est à l'écran (`pipSource`) : la mienne, celle d'un pair ou son écran partagé — l'appel flotte comme sur le web (#11346). */
+  readonly floats: boolean;
   readonly aspect: PipAspect | null;
 };
 
@@ -44,20 +46,22 @@ export type ShellCallCommand =
   | { readonly method: 'haptic'; readonly options: { readonly kind: 'connected' | 'reconnecting' | 'ended' } }
   | {
       readonly method: 'setPictureInPictureControls';
-      readonly options: { readonly micMuted: boolean; readonly aspectWidth?: number; readonly aspectHeight?: number };
+      readonly options: { readonly micMuted: boolean; readonly floats: boolean; readonly aspectWidth?: number; readonly aspectHeight?: number };
     };
 
 const LIVE_PHASES: ReadonlySet<CallPhase['kind']> = new Set(['outgoing', 'connecting', 'connected', 'reconnecting']);
 
 export function shellCallSnapshot(call: ActiveCall | null): ShellCallSnapshot {
-  if (call === null) return { active: false, video: false, phase: null, micMuted: false, aspect: null };
+  if (call === null) return { active: false, video: false, phase: null, micMuted: false, floats: false, aspect: null };
   const active = LIVE_PHASES.has(call.phase.kind);
+  const source = active ? pipSource(call) : null;
   return {
     active,
     video: call.media === 'video',
     phase: call.phase.kind,
     micMuted: call.micMuted,
-    aspect: active && call.media === 'video' ? pipAspect(pipSource(call)) : null,
+    floats: source !== null,
+    aspect: pipAspect(source),
   };
 }
 
@@ -83,10 +87,11 @@ const sameAspect = (a: PipAspect | null, b: PipAspect | null): boolean => a?.wid
 const pipControlsFor = (previous: ShellCallSnapshot, next: ShellCallSnapshot): ShellCallCommand | null => {
   if (!next.active) return null;
   const knownMuted = previous.active && previous.micMuted;
+  const knownFloats = previous.active && previous.floats;
   const knownAspect = previous.active ? previous.aspect : null;
-  if (next.micMuted === knownMuted && sameAspect(next.aspect, knownAspect)) return null;
+  if (next.micMuted === knownMuted && next.floats === knownFloats && sameAspect(next.aspect, knownAspect)) return null;
   const aspect = next.aspect === null ? {} : { aspectWidth: next.aspect.width, aspectHeight: next.aspect.height };
-  return { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted, ...aspect } };
+  return { method: 'setPictureInPictureControls', options: { micMuted: next.micMuted, floats: next.floats, ...aspect } };
 };
 
 /** Les appels au plugin qu'impose un changement du magasin, dans l'ordre. */

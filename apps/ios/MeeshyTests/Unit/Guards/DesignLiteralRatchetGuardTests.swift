@@ -227,6 +227,10 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
             globs: ["\(ui)/Game/GameReferralBannerView.swift"]
         ),
         Exemption(
+            reason: "jeu : la palette et les couches de la cérémonie de la frappe (une forge de nuit, apps/web/src/styles/game-ceremony.css), rejouées couleur pour couleur à l'identique du web — acier, bois, poussières et nuit du prisme ne sont pas des jetons d'interface",
+            globs: ["\(app)/Game/Choreography/MintCeremonyLayers.swift"]
+        ),
+        Exemption(
             reason: "code : thèmes de coloration syntaxique",
             globs: [
                 "\(ui)/Media/SyntaxHighlighter.swift",

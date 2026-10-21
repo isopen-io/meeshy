@@ -97,9 +97,9 @@ describe('la carte du fil et la fiche', () => {
 
   test('le lecteur d’écran entend la phrase entière, le texte visible lui est muet', () => {
     const mark = markOf(card({ viewerPoints: 99 })) ?? '';
-    expect(mark).toContain('<span class="sr-only">Ce post t’a rapporté 99 étincelles</span>');
+    expect(mark).toContain('<span class="sr-only">Ce post a fait jaillir 99 étincelles pour toi</span>');
     expect(mark).toMatch(/aria-hidden="true"[^>]*>[\s\S]*\+99/);
-    expect(markOf(card({ viewerPoints: 1 }))).toContain('Ce post t’a rapporté 1 étincelle<');
+    expect(markOf(card({ viewerPoints: 1 }))).toContain('Ce post a fait jaillir 1 étincelle pour toi<');
   });
 
   test('la fiche porte la même marque, après sa date', () => {
@@ -118,8 +118,8 @@ describe('la carte du fil et la fiche', () => {
   });
 
   test('la phrase suit la langue d’interface', () => {
-    expect(renderToStaticMarkup(<PostPointsMark points={99} language="en" />)).toContain('This post earned you 99 sparks');
-    expect(renderToStaticMarkup(<PostPointsMark points={99} language="ar" />)).toContain('منحك هذا المنشور 99 شرارات');
+    expect(renderToStaticMarkup(<PostPointsMark points={99} language="en" />)).toContain('This post made 99 sparks fly for you');
+    expect(renderToStaticMarkup(<PostPointsMark points={99} language="ar" />)).toContain('أطلق هذا المنشور 99 شرارات لك');
   });
 });
 
@@ -143,7 +143,7 @@ describe('le nombre roule vers sa nouvelle valeur', () => {
     expect(host.textContent).toContain('+10');
 
     act(() => root.render(<PostPointsMark points={20} language="fr" roll={roll} />));
-    expect(host.querySelector('.sr-only')?.textContent).toBe('Ce post t’a rapporté 20 étincelles');
+    expect(host.querySelector('.sr-only')?.textContent).toBe('Ce post a fait jaillir 20 étincelles pour toi');
     act(() => roll.flush(0));
     act(() => roll.flush(200));
     const midway = Number((host.querySelector('[data-post-points-value]')?.textContent ?? '').replace('+', ''));
@@ -153,7 +153,7 @@ describe('le nombre roule vers sa nouvelle valeur', () => {
     expect(host.querySelector('[data-post-points-value]')?.textContent).toBe('+20');
 
     act(() => root.render(<PostPointsMark points={12} language="fr" roll={roll} />));
-    expect(host.querySelector('.sr-only')?.textContent).toBe('Ce post t’a rapporté 12 étincelles');
+    expect(host.querySelector('.sr-only')?.textContent).toBe('Ce post a fait jaillir 12 étincelles pour toi');
     act(() => roll.flush(3_000));
     act(() => roll.flush(3_200));
     const down = Number((host.querySelector('[data-post-points-value]')?.textContent ?? '').replace('+', ''));

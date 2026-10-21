@@ -134,7 +134,11 @@ export async function retractPostNotifications(
       // `metadata.repostId` le repost qui l'a produite. Supprimer le repost
       // doit la retirer, et seul le second chemin le sait — le premier la
       // laissait en base, annonçant un repost qui n'existe plus.
+      // La notification qui explique à l'auteur le retrait de son contenu nomme
+      // ce même post : la retirer avec lui effacerait l'explication au moment
+      // exact où elle sert (#11160).
       filter: {
+        type: { $ne: 'content_removed' },
         $or: [
           { 'context.postId': { $in: targets } },
           { 'metadata.repostId': { $in: targets } },

@@ -41,7 +41,6 @@ type Props = {
   readonly edition?: MeeshEdition;
   readonly number?: number;
   readonly year?: number;
-  readonly numberLabel?: string;
   /** Incrémenté par l'hôte pour jouer la frappe ; ne joue rien au montage. */
   readonly playKey?: number;
   readonly onStrike?: () => void;
@@ -51,7 +50,7 @@ type Props = {
   readonly createEnv?: (host: HTMLElement, canvas: HTMLCanvasElement) => EffectEnv;
 };
 
-export function MintScene({ size, face, edition = 'silver', number, year, numberLabel, playKey = 0, onStrike, playOptions, createEnv }: Props) {
+export function MintScene({ size, face, edition = 'silver', number, year, playKey = 0, onStrike, playOptions, createEnv }: Props) {
   const { ref, play } = useChoreography<HTMLDivElement>(playOptions);
   const [strike, setStrike] = useState(0);
   const first = useRef(true);
@@ -77,7 +76,7 @@ export function MintScene({ size, face, edition = 'silver', number, year, number
   return (
     <div ref={ref} aria-hidden="true" data-game-mint-scene="" style={{ position: 'relative', display: 'inline-block', width: Math.round(size * 1.9), height: Math.round(size * 1.1) }}>
       <div data-game-coin-stage="" style={{ position: 'absolute', left: Math.round(size * 0.45), top: 0, width: size, height: size }}>
-        <MeeshCoinFlip size={size} face={face} edition={edition} {...(number === undefined ? {} : { number })} {...(year === undefined ? {} : { year })} {...(numberLabel === undefined ? {} : { numberLabel })} />
+        <MeeshCoinFlip size={size} face={face} edition={edition} {...(number === undefined ? {} : { number })} {...(year === undefined ? {} : { year })} />
         <GameEffectLayer effect="sheen" circle replayKey={strike} {...layerEnv} />
         <GameEffectLayer effect="shockwave" circle autoStart={false} replayKey={strike} {...layerEnv} />
         {edition === 'prism' ? <GameEffectLayer effect="iridescence" circle {...layerEnv} /> : null}

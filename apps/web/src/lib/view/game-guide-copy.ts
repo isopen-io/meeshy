@@ -131,11 +131,13 @@ export function momentCopy(moment: GuideMoment, language: Language = currentInte
         short: translateGame(language, 'game.guide.moment.missions_unlocked.short'),
       });
     case 'first-mint-possible': {
-      // La frappe fait baisser le niveau (#10892) : la phrase le dit, la puce de l'aperçu dit de combien.
-      const { price, gloryGain } = moment.data;
+      // La frappe fait baisser le niveau (#10892) : la phrase le dit, la puce de l'aperçu dit de combien ;
+      // une frappe qui ne coûte aucun niveau le dit aussi, comme iOS.
+      const { price, levelsLost, gloryGain } = moment.data;
+      const means = levelsLost > 0 ? 'game.guide.moment.first_mint_possible.means' : 'game.guide.moment.first_mint_possible.means_free';
       return copy(moment.action, language, {
         what: translateGame(language, 'game.guide.moment.first_mint_possible.what'),
-        means: translateGame(language, 'game.guide.moment.first_mint_possible.means', { price: points(price), glory: number(gloryGain) }),
+        means: translateGame(language, means, { price: points(price), glory: number(gloryGain) }),
         next: translateGame(language, 'game.guide.moment.first_mint_possible.next'),
         short: translateGame(language, 'game.guide.moment.first_mint_possible.short', { price: points(price) }),
       });

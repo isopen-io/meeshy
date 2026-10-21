@@ -17,7 +17,8 @@ enum LoginServerPicker {
 
 struct LoginView: View {
     @EnvironmentObject var authManager: AuthManager
-    @StateObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
 
     // Normal login form state
     @State private var username = ""
@@ -899,11 +900,7 @@ struct LoginView: View {
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
         .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                focusedField = .twoFactorCode
-            }
-        }
+        .onAppear(after: .milliseconds(350)) { focusedField = .twoFactorCode }
     }
 
     private func attempt2FALogin() {

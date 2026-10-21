@@ -97,10 +97,10 @@ struct ConversationDashboardView: View {
             withAnimation(.easeOut(duration: 0.6)) {
                 sectionsAppeared = true
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
-                    ringsAnimated = true
-                }
+        }
+        .onAppear(after: .milliseconds(300)) {
+            withAnimation(.spring(response: 0.8, dampingFraction: 0.7)) {
+                ringsAnimated = true
             }
         }
     }

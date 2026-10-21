@@ -51,9 +51,9 @@ describe('les tables couvrent le catalogue partagé, sans trou ni vide', () => {
 describe('les phrases de palier', () => {
   const progress = resolveEngagementProgress(ENGAGEMENT_PROGRESS_FIXTURE);
 
-  test('un axe à 42 sur un palier 50 : « Encore 8 avant le palier 50 »', () => {
+  test('un axe à 42 sur un palier 50 : « 8 jusqu’au palier 50 »', () => {
     const messages = progress.axes.find((a) => a.axisKey === 'content.text_message');
-    expect(messages && nextStepLabel(messages)).toBe('Encore 8 avant le palier 50');
+    expect(messages && nextStepLabel(messages)).toBe('8 jusqu’au palier 50');
   });
 
   test('une échelle complète le dit, sans palier inventé', () => {
@@ -98,7 +98,7 @@ describe('l’écran Progression parle la langue d’interface', () => {
 
   test('interface en : palier, échelle complète, niveau, section, axe, succès', async () => {
     await loadGameCatalog('en');
-    expect(messages && nextStepLabel(messages, 'en')).toBe('8 more before milestone 50');
+    expect(messages && nextStepLabel(messages, 'en')).toBe('8 to the 50 mark');
     expect(levelTitle(3, 'en')).toBe('Level 3');
     expect(achievementSectionTitle('cercles', 'en')).toBe('Circles');
     expect(achievementSectionTitle('decouverte', 'en')).toBe('Discovery');
@@ -111,6 +111,6 @@ describe('l’écran Progression parle la langue d’interface', () => {
   test('interface de : la section et le palier viennent du catalogue allemand', async () => {
     await loadGameCatalog('de');
     expect(achievementSectionTitle('appels', 'de')).toBe('Anrufe');
-    expect(messages && nextStepLabel(messages, 'de')).toBe('Noch 8 bis Stufe 50');
+    expect(messages && nextStepLabel(messages, 'de')).toBe('8 bis Stufe 50');
   });
 });

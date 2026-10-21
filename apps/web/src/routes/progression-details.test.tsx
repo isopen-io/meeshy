@@ -338,7 +338,7 @@ describe('la modale', () => {
     expect(dialog.getAttribute('aria-labelledby')).toBe(dialog.querySelector('h2')?.id);
     expect(dialog.dataset.sheetPresentation).toBe('bottom');
     expect(dialog.querySelector('[data-detail-emblem]')?.className).toContain('game-pop');
-    expect(dialog.querySelector('[data-detail-state]')?.textContent).toContain('Gloire');
+    expect(dialog.querySelector('[data-detail-state]')?.textContent).toContain('de gloire');
     expect(dialog.querySelector('[data-detail-what]')?.textContent).toContain('Ton blason montre ton rang');
     expect(dialog.querySelector('[data-detail-how]')?.textContent).toContain('Comment l’obtenir');
   });
@@ -460,7 +460,7 @@ describe('aucune page de Progression ne monte d’en-tête statique', () => {
 
   test('le retour est un disque de verre de 44 points, qui rebondit', async () => {
     const host = await mounter.mount(
-      <ProgressionShell title="Ligue" screen={{ kind: 'subpage', route: 'progressionLigue', concept: 'league' }}>
+      <ProgressionShell title="Joute" screen={{ kind: 'subpage', route: 'progressionLigue', concept: 'league' }}>
         <p>contenu</p>
       </ProgressionShell>,
     );

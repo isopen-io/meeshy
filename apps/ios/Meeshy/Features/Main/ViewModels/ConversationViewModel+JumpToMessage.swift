@@ -26,7 +26,7 @@ extension ConversationViewModel {
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            await bestEffort("conversationViewModelJumpToMessage.messages.upsertFromAPIMessages", category: .grdb) { try await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages) }
 
             await applyJumpedWindow(response, around: messageId)
         } catch {
@@ -84,7 +84,7 @@ extension ConversationViewModel {
                 includeReplies: true, includeTranslations: true, languages: nil
             )
             guard isInJumpedState else { return }
-            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            await bestEffort("conversationViewModelJumpToMessage.messages.upsertFromAPIMessages.2", category: .grdb) { try await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages) }
             guard isInJumpedState, messageStore.windowGeneration == generation else { return }
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
@@ -158,17 +158,7 @@ extension ConversationViewModel {
         return messageStore.jumpedNewerEdge != edgeBefore
     }
 
-    /// Outcome of `jumpToQuotedMessage`.
-    enum JumpResult {
-        /// The message was already present in the local store — caller should
-        /// perform an instant scroll + highlight.
-        case foundLocally
-        /// The message was fetched from the server and loaded into the store.
-        /// Caller should scroll + highlight after the snapshot settles.
-        case loadedFromServer
-        /// The message could not be found (deleted, not accessible, network error).
-        case notFound
-    }
+    typealias JumpResult = ConversationJumpResult
 
     /// High-level "jump to a quoted message" flow called when the user taps
     /// a reply reference. If the message is already in the local store's
@@ -197,7 +187,7 @@ extension ConversationViewModel {
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
-            try? await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages)
+            await bestEffort("conversationViewModelJumpToMessage.messages.upsertFromAPIMessages.3", category: .grdb) { try await messagePersistence.upsertFromAPIMessages(response.data, preferredLanguages: preferredLanguages) }
 
             // Check if the target message was in the response
             let found = response.data.contains(where: { $0.id == messageId })

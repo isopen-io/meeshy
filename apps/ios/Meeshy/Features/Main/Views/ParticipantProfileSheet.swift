@@ -46,7 +46,8 @@ struct ParticipantProfileSheet: View {
     let conversationId: String
     let participantId: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
     /// #10111 — la fiche s'ouvre depuis le cache et se synchronise dès l'ouverture.
     @StateObject private var loader: ParticipantProfileLoader

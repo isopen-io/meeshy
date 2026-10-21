@@ -110,7 +110,7 @@ final class PresenceManagerSeedTests: XCTestCase {
             sut.presenceState(for: "typer"), PresenceState.online,
             "typing:start reçu = preuve d'activité ; une page REST plus ancienne ne doit pas la dégrader"
         )
-        XCTAssertEqual(sut.presenceMap["typer"]?.isOnline, true)
+        XCTAssertEqual(sut.presenceMap["typer"]?.isOnline, false, "l'activité date le pair, elle ne le déclare pas connecté (#11412)")
         XCTAssertEqual(sut.presenceMap["typer"]?.lastActiveAt, fresh)
     }
 

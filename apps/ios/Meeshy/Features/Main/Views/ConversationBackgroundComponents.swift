@@ -24,13 +24,11 @@ struct ConvBgPulseRing: View {
             .stroke(color.opacity(opacity), lineWidth: 3)
             .frame(width: 55, height: 55)
             .scaleEffect(scale)
-            .onAppear {
+            .onAppear(after: .seconds(delay)) {
                 guard !reduceMotion else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeOut(duration: 2.5).repeatForever(autoreverses: false)) {
-                        scale = 3.2
-                        opacity = 0.0
-                    }
+                withAnimation(.easeOut(duration: 2.5).repeatForever(autoreverses: false)) {
+                    scale = 3.2
+                    opacity = 0.0
                 }
             }
             .onDisappear {
@@ -149,13 +147,11 @@ struct ConvBgGlobePulseRing: View {
             .stroke(color.opacity(opacity), lineWidth: 3)
             .frame(width: 90, height: 90)
             .scaleEffect(scale)
-            .onAppear {
+            .onAppear(after: .seconds(delay)) {
                 guard !reduceMotion else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeOut(duration: 2.4).repeatForever(autoreverses: false)) {
-                        scale = 2.8
-                        opacity = 0.0
-                    }
+                withAnimation(.easeOut(duration: 2.4).repeatForever(autoreverses: false)) {
+                    scale = 2.8
+                    opacity = 0.0
                 }
             }
             .onDisappear {
@@ -294,12 +290,10 @@ struct ConvBgSignalWave: View {
                 x: -cos(angle) * progress * 60,
                 y: -sin(angle) * progress * 60
             )
-            .onAppear {
+            .onAppear(after: .seconds(delay)) {
                 guard !reduceMotion else { return }
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    withAnimation(.easeIn(duration: 1.8).repeatForever(autoreverses: false)) {
-                        progress = 1.0
-                    }
+                withAnimation(.easeIn(duration: 1.8).repeatForever(autoreverses: false)) {
+                    progress = 1.0
                 }
             }
             .onDisappear {

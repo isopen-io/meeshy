@@ -239,7 +239,7 @@ struct ProfileDecorSheet: View {
             }
             .padding(MeeshySpacing.xs)
             .frame(maxWidth: .infinity)
-            .background(selectionBackground(selected))
+            .background(DecorTileOutline(selected: selected))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -303,7 +303,7 @@ struct ProfileDecorSheet: View {
                     .lineLimit(1)
             }
             .padding(MeeshySpacing.xs)
-            .background(selectionBackground(selected))
+            .background(DecorTileOutline(selected: selected))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -330,6 +330,8 @@ struct ProfileDecorSheet: View {
 
     private func frameTile(ref: ProfileDecorRef?, design: BannerFrameDesign?, label: String) -> some View {
         let selected = model.current(.bannerFrame) == ref
+        let paint = currentBannerPaint
+        let isDark = theme.mode.isDark
         return Button {
             HapticFeedback.light()
             Task { await model.equip(ref, side: .bannerFrame) }
@@ -338,7 +340,7 @@ struct ProfileDecorSheet: View {
                 Color.clear
                 .aspectRatio(3, contentMode: .fit)
                 .overlay {
-                    ProfileBannerPaintView(paint: currentBannerPaint, thumbHash: bannerThumbHash, accentHex: accentHex, isDark: theme.mode.isDark, height: 64)
+                    ProfileBannerPaintView(paint: paint, thumbHash: bannerThumbHash, accentHex: accentHex, isDark: isDark, height: 64)
                 }
                 .overlay {
                     if let design {
@@ -353,7 +355,7 @@ struct ProfileDecorSheet: View {
                     .lineLimit(1)
             }
             .padding(MeeshySpacing.xs)
-            .background(selectionBackground(selected))
+            .background(DecorTileOutline(selected: selected))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(label)
@@ -391,10 +393,6 @@ struct ProfileDecorSheet: View {
         }
     }
 
-    private func selectionBackground(_ selected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: MeeshyRadius.md)
-            .stroke(selected ? MeeshyColors.indigo500 : Color.clear, lineWidth: 2)
-    }
 }
 
 private extension View {
@@ -547,6 +545,17 @@ struct ProfileBannerPaintView: View {
     }
 }
 
+/// Le liseré d'une tuile choisie : une vue de valeur, pour se poser dans l'étiquette d'un bouton
+/// sans appeler de méthode isolée au fil principal (Xcode 27, isolation par région).
+struct DecorTileOutline: View {
+    let selected: Bool
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+            .stroke(selected ? MeeshyColors.indigo500 : Color.clear, lineWidth: 2)
+    }
+}
+
 /// La tuile « Image » (#11165) : des valeurs seules, pour vivre dans l'étiquette d'un `PhotosPicker`.
 struct ProfileBannerImageTile: View {
     let preview: String?
@@ -579,10 +588,7 @@ struct ProfileBannerImageTile: View {
                 .lineLimit(1)
         }
         .padding(MeeshySpacing.xs)
-        .background(
-            RoundedRectangle(cornerRadius: MeeshyRadius.md)
-                .stroke(selected ? MeeshyColors.indigo500 : Color.clear, lineWidth: 2)
-        )
+        .background(DecorTileOutline(selected: selected))
         .contentShape(Rectangle())
     }
 }

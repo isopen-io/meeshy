@@ -53,149 +53,49 @@ extension ConversationViewModel {
     // MARK: - Extract Text Translations from REST Responses
 
     func extractTextTranslations(from apiMessages: [APIMessage]) {
-        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
+        let prism = MessageTranslationMerge.prism(of: preferredLanguages)
         for msg in apiMessages {
             guard let translations = msg.translations, !translations.isEmpty else { continue }
-            var existing = messageTranslations[msg.id] ?? []
-            for t in translations {
-                guard prismeLangs.contains(t.targetLanguage.lowercased()) else { continue }
-                let mt = MessageTranslation(
-                    id: t.id,
-                    messageId: t.messageId,
-                    sourceLanguage: t.sourceLanguage ?? msg.originalLanguage ?? "auto",
-                    targetLanguage: t.targetLanguage,
-                    translatedContent: t.translatedContent,
-                    translationModel: t.translationModel,
-                    confidenceScore: t.confidenceScore
-                )
-                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
-                    existing[idx] = mt
-                } else {
-                    existing.append(mt)
-                }
-            }
-            messageTranslations[msg.id] = existing
-            translationResolutionCache.removeValue(forKey: msg.id)
+            absorbTranslations(
+                MessageTranslationMerge.translations(from: translations, originalLanguage: msg.originalLanguage),
+                for: msg.id, prism: prism
+            )
         }
+    }
+
+    private func absorbTranslations(_ incoming: [MessageTranslation], for messageId: String, prism: Set<String>) {
+        messageTranslations[messageId] = MessageTranslationMerge.merging(
+            incoming, into: messageTranslations[messageId] ?? [], prism: prism
+        )
+        translationResolutionCache.removeValue(forKey: messageId)
     }
 
     func hydrateTranslationsFromCache(messageIds: [String]? = nil) async {
         let msgIds = messageIds ?? messages.map(\.id)
-        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
+        let prism = MessageTranslationMerge.prism(of: preferredLanguages)
 
-        // 1. In-memory CacheCoordinator (fast, volatile)
-        let cached = await CacheCoordinator.shared.cachedTranslations(for: msgIds)
+        let cached = await translationSource.cached(for: msgIds)
         for (msgId, translations) in cached {
-            var existing = messageTranslations[msgId] ?? []
-            for t in translations {
-                guard prismeLangs.contains(t.targetLanguage.lowercased()) else { continue }
-                let mt = MessageTranslation(
-                    id: t.id,
-                    messageId: t.messageId,
-                    sourceLanguage: t.sourceLanguage,
-                    targetLanguage: t.targetLanguage,
-                    translatedContent: t.translatedContent,
-                    translationModel: t.translationModel,
-                    confidenceScore: t.confidenceScore
-                )
-                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
-                    existing[idx] = mt
-                } else {
-                    existing.append(mt)
-                }
-            }
-            messageTranslations[msgId] = existing
-            translationResolutionCache.removeValue(forKey: msgId)
+            absorbTranslations(MessageTranslationMerge.translations(from: translations), for: msgId, prism: prism)
         }
 
-        // 2. GRDB fallback — for message IDs not covered by the volatile cache,
-        //    read persisted TranslationRecords so cold-start shows translations
-        //    instantly without waiting for a REST round-trip.
         let uncoveredIds = msgIds.filter { messageTranslations[$0] == nil || messageTranslations[$0]?.isEmpty == true }
         guard !uncoveredIds.isEmpty else { return }
-        let reader = messagePersistence.reader
-        let grdbTranslations: [String: [TranslationRecord]] = (try? await reader.read { db in
-            let records = try TranslationRecord
-                .filter(uncoveredIds.contains(Column("messageLocalId")))
-                .fetchAll(db)
-            return Dictionary(grouping: records, by: \.messageLocalId)
-        }) ?? [:]
-
-        for (msgId, records) in grdbTranslations {
-            var existing = messageTranslations[msgId] ?? []
-            for r in records {
-                guard prismeLangs.contains(r.targetLanguage.lowercased()) else { continue }
-                let mt = MessageTranslation(
-                    id: r.id,
-                    messageId: msgId,
-                    sourceLanguage: r.sourceLanguage ?? "auto",
-                    targetLanguage: r.targetLanguage,
-                    translatedContent: r.translatedContent,
-                    translationModel: r.translationModel,
-                    confidenceScore: r.confidenceScore
-                )
-                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
-                    existing[idx] = mt
-                } else {
-                    existing.append(mt)
-                }
-            }
-            messageTranslations[msgId] = existing
-            translationResolutionCache.removeValue(forKey: msgId)
+        let persisted = await translationSource.persisted(for: uncoveredIds)
+        for (msgId, records) in persisted {
+            absorbTranslations(MessageTranslationMerge.translations(from: records, messageId: msgId), for: msgId, prism: prism)
         }
     }
 
     /// Pré-hydrate `messageTranslations` depuis GRDB AVANT que `messageStore`
-    /// ne fasse surfacer les messages. Sans ça, les bulles se rendent une
-    /// première fois sans traduction, puis re-rendent quand
-    /// `hydrateTranslationsFromCache()` (appelé après `loadInitial`) se termine
-    /// — d'où l'apparition « en second temps » des données de langue. En
-    /// peuplant le dictionnaire en amont, le tout premier rendu applique déjà
-    /// le Prisme Linguistique (contenu traduit affiché comme du natif).
+    /// ne fasse surfacer les messages : le tout premier rendu applique déjà le
+    /// Prisme Linguistique, sans second temps.
     func hydratePersistedTranslations() async {
-        let convId = conversationId
-        let reader = messagePersistence.reader
-        let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
-            // grdb-07 — un message "own" est keyé localId=cid en GRDB mais ses
-            // traductions sont persistées sous l'id SERVEUR : filtrer sur le
-            // seul localId ne matchait rien pour ces messages.
-            let localIds = try MessageRecord
-                .filter(Column("conversationId") == convId)
-                .order(Column("createdAt").desc)
-                .limit(80)
-                .fetchAll(db)
-                .flatMap { [$0.localId, $0.serverId].compactMap { $0 } }
-            guard !localIds.isEmpty else { return [:] }
-            let records = try TranslationRecord
-                .filter(localIds.contains(Column("messageLocalId")))
-                .fetchAll(db)
-            return Dictionary(grouping: records, by: \.messageLocalId)
-        }) ?? [:]
-
+        let grouped = await translationSource.recentPersisted(conversationId: conversationId, limit: 80)
         guard !grouped.isEmpty else { return }
-
-        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
+        let prism = MessageTranslationMerge.prism(of: preferredLanguages)
         for (msgId, records) in grouped {
-            var existing = messageTranslations[msgId] ?? []
-            for r in records {
-                guard prismeLangs.contains(r.targetLanguage.lowercased()) else { continue }
-                let mt = MessageTranslation(
-                    id: r.id,
-                    messageId: msgId,
-                    sourceLanguage: r.sourceLanguage ?? "auto",
-                    targetLanguage: r.targetLanguage,
-                    translatedContent: r.translatedContent,
-                    translationModel: r.translationModel,
-                    confidenceScore: r.confidenceScore
-                )
-                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
-                    existing[idx] = mt
-                } else {
-                    existing.append(mt)
-                }
-            }
-            messageTranslations[msgId] = existing
-            translationResolutionCache.removeValue(forKey: msgId)
+            absorbTranslations(MessageTranslationMerge.translations(from: records, messageId: msgId), for: msgId, prism: prism)
         }
     }
 
@@ -236,18 +136,9 @@ extension ConversationViewModel {
             translationResolutionCache.removeValue(forKey: resolved)
             activeTranslationOverrides.removeValue(forKey: resolved)
         }
-        let persistence = messagePersistence
+        let source = translationSource
         let ids = resolved == messageId ? [messageId] : [messageId, resolved]
-        Task {
-            for id in ids {
-                await CacheCoordinator.shared.invalidateTranslations(for: id)
-                do {
-                    try await persistence.deleteTranslations(messageLocalId: id)
-                } catch {
-                    Logger.messages.warning("[ConversationVM] deleteTranslations failed \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                }
-            }
-        }
+        Task { await source.purge(ids: ids) }
     }
 
     func setActiveTranslation(for messageId: String, translation: MessageTranslation?) {
@@ -269,9 +160,11 @@ extension ConversationViewModel {
     /// detail view. Owning the in-flight flag AND the network call here
     /// (rather than in the view) is what lets the loader survive the sheet
     /// being dismissed and re-presented.
+    /// Fail-closed en E2EE (#11214) : `ServerTranslationAdmission`.
     func requestTextTranslation(
-        messageId: String, content: String, sourceLanguage: String, targetLanguage: String
+        messageId: String, content: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .text)) }
         guard !(translatingTextLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingTextLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingTextLanguages[messageId]?.remove(targetLanguage) }
@@ -282,13 +175,8 @@ extension ConversationViewModel {
                 targetLanguage: targetLanguage, messageId: messageId
             )
             let translation = MessageTranslation(
-                id: "\(messageId)-\(targetLanguage)",
-                messageId: messageId,
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                translatedContent: response.translatedText,
-                translationModel: "on-demand",
-                confidenceScore: nil
+                id: "\(messageId)-\(targetLanguage)", messageId: messageId, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage,
+                translatedContent: response.translatedText, translationModel: "on-demand", confidenceScore: nil
             )
             var existing = messageTranslations[messageId] ?? []
             if let idx = existing.firstIndex(where: { $0.targetLanguage == targetLanguage }) {
@@ -312,8 +200,9 @@ extension ConversationViewModel {
     /// `messageTranslatedAudios` so a second open of the language sheet
     /// never re-triggers the full pipeline for a language already fetched.
     func requestAudioTranslation(
-        messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String
+        messageId: String, attachmentId: String, sourceLanguage: String, targetLanguage: String, conversationEncryptionMode: String?
     ) async {
+        guard ServerTranslationAdmission.admits(messageIndex(for: messageId).map { messages[$0] }, conversationEncryptionMode: conversationEncryptionMode) else { return translationRequestFailed.send(.serverRefused(messageId: messageId, language: targetLanguage, kind: .audio)) }
         guard !(translatingAudioLanguages[messageId]?.contains(targetLanguage) ?? false) else { return }
         translatingAudioLanguages[messageId, default: []].insert(targetLanguage)
         defer { translatingAudioLanguages[messageId]?.remove(targetLanguage) }
@@ -527,47 +416,32 @@ extension ConversationViewModel {
     // MARK: - Extract Transcription/Translation Data from REST Responses
 
     func extractAttachmentTranscriptions(from apiMessages: [APIMessage]) {
-        for msg in apiMessages {
-            for att in msg.attachments ?? [] {
-                if let t = att.transcription {
-                    let segments = (t.segments ?? []).map(MessageTranscriptionSegment.init)
-                    let transcription = MessageTranscription(
-                        attachmentId: att.id,
-                        text: t.resolvedText,
-                        language: t.language ?? "?",
-                        confidence: t.confidence,
-                        durationMs: t.durationMs,
-                        segments: segments,
-                        speakerCount: t.speakerCount
-                    )
-                    messageTranscriptions[msg.id] = transcription
-                    messageTranscriptionsByAttachment[att.id] = transcription
-                }
-                if let translations = att.translations {
-                    var audios: [MessageTranslatedAudio] = []
-                    for (lang, trans) in translations {
-                        guard let url = trans.url, !url.isEmpty else { continue }
-                        let segments = (trans.segments ?? []).map(MessageTranscriptionSegment.init)
-                        audios.append(MessageTranslatedAudio(
-                            attachmentId: att.id,
-                            language: lang,
-                            url: url,
-                            transcription: trans.transcription,
-                            durationMs: trans.durationMs,
-                            format: trans.format,
-                            cloned: trans.cloned,
-                            quality: trans.quality,
-                            voiceModelId: trans.voiceModelId,
-                            ttsModel: trans.ttsModel,
-                            segments: segments
-                        ))
-                    }
-                    if !audios.isEmpty {
-                        messageTranslatedAudios[msg.id] = audios
-                        messageTranslatedAudiosByAttachment[att.id] = audios
-                    }
-                }
-            }
+        applyAudioMetadata(AttachmentAudioMetadata.entries(fromAPI: apiMessages), forceOverwrite: true)
+    }
+
+    var audioMetadataState: AttachmentAudioState {
+        AttachmentAudioState(
+            transcriptions: messageTranscriptions,
+            transcriptionsByAttachment: messageTranscriptionsByAttachment,
+            translatedAudios: messageTranslatedAudios,
+            translatedAudiosByAttachment: messageTranslatedAudiosByAttachment
+        )
+    }
+
+    func applyAudioMetadata(_ entries: [AttachmentAudioEntry], forceOverwrite: Bool) {
+        guard !entries.isEmpty else { return }
+        adoptAudioMetadata(AttachmentAudioMetadata.merged(entries, into: audioMetadataState, forceOverwrite: forceOverwrite))
+    }
+
+    func adoptAudioMetadata(_ next: AttachmentAudioState) {
+        let current = audioMetadataState
+        if next.transcriptions != current.transcriptions { messageTranscriptions = next.transcriptions }
+        if next.transcriptionsByAttachment != current.transcriptionsByAttachment {
+            messageTranscriptionsByAttachment = next.transcriptionsByAttachment
+        }
+        if next.translatedAudios != current.translatedAudios { messageTranslatedAudios = next.translatedAudios }
+        if next.translatedAudiosByAttachment != current.translatedAudiosByAttachment {
+            messageTranslatedAudiosByAttachment = next.translatedAudiosByAttachment
         }
     }
 }

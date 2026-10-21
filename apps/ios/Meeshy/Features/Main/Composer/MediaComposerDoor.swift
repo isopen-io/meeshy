@@ -367,7 +367,7 @@ struct MediaComposerDoor: View {
             Button(action: onDismiss) {
                 Text(MediaComposerCopy.cancel)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.lg)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
@@ -445,35 +445,20 @@ struct MediaComposerDoor: View {
         }
     }
 
-    /// L'aperçu est rendu par le LECTEUR (`StoryViewerView`), pas par un
-    /// composant maison — loi 6, tenue par le même registre de rendu que le
-    /// composer. Un troisième chemin d'aperçu mentirait tôt ou tard.
+    /// L'aperçu est rendu par LE lecteur (`StoryPreviewReader`, #11197) — loi 6.
+    /// Monté ici plutôt que par `StoryPreviewReaderCover` : les hôtes de
+    /// l'aperçu sont optionnels pour cette porte.
     @ViewBuilder
     private func apercu(_ assets: StoryPreviewAssets) -> some View {
         if let preview {
-            let items = assets.slides.map { $0.toPreviewStoryItem() }
-            let group = StoryGroup(
-                id: "preview",
-                username: String(localized: "story.preview.username", defaultValue: "Aperçu", bundle: .main),
-                avatarColor: MeeshyColors.brandPrimaryHex,
-                stories: items
+            StoryPreviewReader(
+                assets: assets,
+                isPresented: Binding(get: { previewAssets != nil }, set: { if !$0 { previewAssets = nil } }),
+                storyViewModel: storyViewModel,
+                statusViewModel: preview.statusViewModel,
+                router: preview.router,
+                conversationList: preview.conversationList
             )
-            StoryViewerView(
-                viewModel: storyViewModel,
-                groups: [group],
-                currentGroupIndex: 0,
-                isPresented: Binding(
-                    get: { previewAssets != nil },
-                    set: { if !$0 { previewAssets = nil } }
-                ),
-                isPreviewMode: true,
-                preloadedImages: assets.loadedImages.merging(assets.backgroundImages) { fg, _ in fg },
-                preloadedVideoURLs: assets.videoURLs,
-                preloadedAudioURLs: assets.audioURLs
-            )
-            .environmentObject(preview.router)
-            .conversationListObject(preview.conversationList)
-            .environmentObject(preview.statusViewModel)
         }
     }
 

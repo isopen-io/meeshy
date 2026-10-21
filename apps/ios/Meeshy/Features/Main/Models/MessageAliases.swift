@@ -7,5 +7,3 @@ typealias Message = MeeshyMessage
 typealias MessageAttachment = MeeshyMessageAttachment
 typealias Reaction = MeeshyReaction
 typealias ReactionSummary = MeeshyReactionSummary
-typealias ChatMessage = MeeshyChatMessage
-typealias MessageReaction = MeeshyMessageReaction

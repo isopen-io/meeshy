@@ -274,7 +274,7 @@ struct StoryHeaderView: View {
                                 // l'anneau « story dispo » serait redondant (cf. user
                                 // request 2026-05-27). Le contexte `.storyViewer` suffit
                                 // déjà à masquer l'anneau via `showsStoryRing == false`.
-                                MeeshyAvatar(
+                                LivePresence { MeeshyAvatar(
                                     name: group.username,
                                     context: .storyViewer,
                                     accentColor: group.avatarColor,
@@ -290,7 +290,7 @@ struct StoryHeaderView: View {
                                             selectedProfileUser = .from(storyGroup: group)
                                         }
                                     ]
-                                )
+                                ) }
                                 .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
                             }
                             .onLongPressGesture(minimumDuration: 0.4) {
@@ -530,12 +530,14 @@ struct StoryHeaderView: View {
             } label: {
                 Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
             }
-        default:
+        case .report:
             Button(role: .destructive) {
                 showReportSheet = true
             } label: {
                 Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
             }
+        default:
+            EmptyView()
         }
     }
 

@@ -336,16 +336,27 @@ public enum PostCommentCardComposition {
         (visibility ?? "").uppercased() == "PUBLIC"
     }
 
+    /// Un post qui DISPARAÎT (story, statut — « Mes stories » l'ouvre par son `FeedPost`)
+    /// n'est support que comme une story et PAR SON VISUEL, sous les gardes de la story :
+    /// sans visuel, jamais en tête (#11477, jumelle de `composingPostOf`, web).
     static func support(of source: PostCommentCardSource) -> Support? {
         if let post = source.post {
-            guard isPublicAudience(post.visibility), !disappears(post) else { return nil }
+            guard !disappears(post) else {
+                let story = PostCommentCardStory(feedPost: post)
+                return story.heroMedia(now: source.now) == nil ? nil : storySupport(story, source: source)
+            }
+            guard isPublicAudience(post.visibility) else { return nil }
             return Support(
                 author: post.author, authorId: post.authorId, username: post.authorUsername,
                 text: MessageCardText.nonBlank(source.read(post.displayContent)).map { excerpt($0) },
                 timestamp: post.timestamp, media: postMedia(of: post)
             )
         }
-        guard let story = source.story, isPublicAudience(story.visibility),
+        return source.story.flatMap { storySupport($0, source: source) }
+    }
+
+    private static func storySupport(_ story: PostCommentCardStory, source: PostCommentCardSource) -> Support? {
+        guard isPublicAudience(story.visibility),
               !StoryItem.isExpired(createdAt: story.timestamp, expiresAt: story.expiresAt, at: source.now) else { return nil }
         // Une story à canvas sans vignette ne s'image pas : le garde d'avant #10915 tient.
         if story.hasCanvas, story.heroMedia(now: source.now) == nil { return nil }

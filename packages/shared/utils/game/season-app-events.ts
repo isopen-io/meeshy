@@ -68,15 +68,18 @@ export type SeasonAppEvent = {
   readonly localizations: Readonly<Record<string, AppEventLocalization>>;
 };
 
-/** Les textes par défaut d'une saison sans texte propre — `{n}` est son numéro. */
+/**
+ * Les textes par défaut d'une saison sans texte propre — `{n}` est son numéro. Le joueur la vit comme un
+ * VOYAGE en terre de langue (épopée, #11175) : la clé `saison-<n>` et le lien `…/saison/<n>` restent ceux du fil.
+ */
 export const DEFAULT_SEASON_EVENT_COPY: Readonly<Record<SeasonCopyLocale, SeasonCopy>> = {
-  fr: { title: 'Saison {n}', tagline: 'Huit semaines, 40 étapes', description: 'Une nouvelle saison du Jeu Meeshy : des missions chaque jour, des étoiles à gagner et une coupe au bout.' },
-  en: { title: 'Season {n}', tagline: 'Eight weeks, 40 steps', description: 'A new Meeshy Game season: daily missions, stars to earn and a cup at the finish line.' },
-  es: { title: 'Temporada {n}', tagline: 'Ocho semanas, 40 etapas', description: 'Una nueva temporada del Juego Meeshy: misiones cada día, estrellas que ganar y una copa al final.' },
-  de: { title: 'Saison {n}', tagline: 'Acht Wochen, 40 Etappen', description: 'Eine neue Saison im Meeshy-Spiel: tägliche Missionen, Sterne zum Sammeln und ein Pokal am Ziel.' },
-  it: { title: 'Stagione {n}', tagline: 'Otto settimane, 40 tappe', description: 'Una nuova stagione del Gioco Meeshy: missioni ogni giorno, stelle da vincere e una coppa alla fine.' },
-  'pt-BR': { title: 'Temporada {n}', tagline: 'Oito semanas, 40 etapas', description: 'Uma nova temporada do Jogo Meeshy: missões diárias, estrelas para ganhar e uma taça no final.' },
-  ar: { title: 'الموسم {n}', tagline: 'ثمانية أسابيع و40 مرحلة', description: 'موسم جديد في لعبة Meeshy: مهام يومية ونجوم تكسبها وكأس في النهاية.' },
+  fr: { title: 'Voyage {n}', tagline: 'Huit semaines, 40 haltes', description: 'Un nouveau voyage en terre de langue dans le Jeu Meeshy : un rêve chaque nuit, des haltes et une coupe au bout.' },
+  en: { title: 'Journey {n}', tagline: 'Eight weeks, 40 stops', description: 'A new journey to the land of a language in the Meeshy Game: a dream each night, strides, stops and a cup at the end.' },
+  es: { title: 'Viaje {n}', tagline: 'Ocho semanas, 40 paradas', description: 'Un nuevo viaje a tierra de idioma en el Juego Meeshy: un sueño cada noche, pasos, paradas y una copa al final.' },
+  de: { title: 'Reise {n}', tagline: 'Acht Wochen, 40 Rasten', description: 'Eine neue Reise in ein Sprachland im Meeshy-Spiel: jede Nacht ein Traum, Schritte, Rasten und ein Pokal am Ziel.' },
+  it: { title: 'Viaggio {n}', tagline: 'Otto settimane, 40 soste', description: 'Un nuovo viaggio in terra di lingua nel Gioco Meeshy: un sogno ogni notte, passi, soste e una coppa alla fine.' },
+  'pt-BR': { title: 'Viagem {n}', tagline: 'Oito semanas, 40 paradas', description: 'Uma nova viagem a uma terra de idioma no Jogo Meeshy: um sonho a cada noite, passos, paradas e uma taça no final.' },
+  ar: { title: 'الرحلة {n}', tagline: 'ثمانية أسابيع و40 محطة', description: 'رحلة جديدة إلى أرض لغة في لعبة Meeshy: حلم كل ليلة، وخطوات، ومحطات، وكأس في النهاية.' },
 };
 
 /** Le décalage horaire de Paris à ce jour (midi UTC : du bon côté d'un changement d'heure du dimanche). */

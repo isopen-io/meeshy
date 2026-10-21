@@ -48,6 +48,25 @@ final class BestEffortTests: XCTestCase {
         XCTAssertEqual(spy.failures.first?.context, "ctx")
     }
 
+    func test_bestEffortAsync_voidOperationThrows_recordsOnceAndReturnsNil() async {
+        let spy = SpyErrorRecorder()
+
+        let value: Void? = await bestEffort("socialEventsV2Outbox.purgeAll", recorder: spy) { () async throws -> Void in
+            throw StubError()
+        }
+
+        XCTAssertNil(value)
+        XCTAssertEqual(spy.failures.count, 1)
+        XCTAssertEqual(spy.failures.first?.context, "socialEventsV2Outbox.purgeAll")
+        XCTAssertEqual(spy.failures.first?.category, .grdb)
+        XCTAssertTrue(spy.failures.first?.errorType.contains("StubError") ?? false)
+
+        let okSpy = SpyErrorRecorder()
+        let ok: Void? = await bestEffort("socialEventsV2Outbox.purgeAll", recorder: okSpy) { () async throws -> Void in }
+        XCTAssertNotNil(ok)
+        XCTAssertTrue(okSpy.failures.isEmpty)
+    }
+
     func test_bestEffortAsync_operationSucceeds_returnsValue() async {
         let spy = SpyErrorRecorder()
 

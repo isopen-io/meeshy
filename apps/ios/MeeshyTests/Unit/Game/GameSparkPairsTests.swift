@@ -38,19 +38,18 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(pairs.levelMax, 11)
     }
 
-    /// Les convertibles sont la seule valeur réelle : la poche ne se nomme plus « En poche ».
-    /// Retour porteur du 2026-10-17 (#10860, 9275039845) : la poche dit « Convertibles ». Le témoin lisait le
-    /// libellé RÉSOLU et le comparait au français : la CI tourne en anglais (« Convertible ») et rougissait sans
+    /// La poche est « Ta lumière » (épopée, #11179, § 4) : ni « En poche » ni « Convertibles ».
+    /// Le témoin lisait le libellé RÉSOLU et le comparait au français : la CI tourne en anglais et rougissait sans
     /// défaut. Le mot du porteur se vérifie au CATALOGUE ; l'écran, dans la langue où tournent les témoins.
-    func test_pocketLabel_saysConvertibles() throws {
-        XCTAssertEqual(try catalogValue("game.sparks.pocket.label", "fr"), "Convertibles")
+    func test_pocketLabel_saysTaLumiere() throws {
+        XCTAssertEqual(try catalogValue("game.sparks.pocket.label", "fr"), "Ta lumière")
         XCTAssertEqual(GameSparksCopy.pocketLabel, try catalogValue("game.sparks.pocket.label", Self.runningLanguage))
     }
 
-    /// Après un Prestige : le cycle d'abord, puis le record d'étincelles — « 8 200 cumulées · record 12 000 » (#10899).
+    /// Après une renaissance : le cycle d'abord, puis tout ce qui a été reçu — « 8 200 cet Âge · 12 000 en tout » (#10899, #11179).
     func test_cumul_afterAPrestige_readsTheCycleThenTheSparkRecord() throws {
         let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 8_200, lifetime: 12_000, levelMax: 40))
-        XCTAssertEqual(try catalogValue("game.sparks.cumul.record", "fr"), "%1$@ cumulées · record %2$@")
+        XCTAssertEqual(try catalogValue("game.sparks.cumul.record", "fr"), "%1$@ cet Âge · %2$@ en tout")
         let format = try catalogValue("game.sparks.cumul.record", Self.runningLanguage)
         let expected = format.replacingOccurrences(of: "%1$@", with: GameCopy.formatCount(8_200))
             .replacingOccurrences(of: "%2$@", with: GameCopy.formatCount(12_000))
@@ -58,9 +57,9 @@ final class GameSparkPairsTests: XCTestCase {
         XCTAssertEqual(pairs.facts[1].value, expected, "la fiche dit le même cycle et le même record")
     }
 
-    /// Sous le niveau : le record de niveau, nommé — « Record de niveau : 40 » (#10899).
+    /// Sous le niveau : la plus haute lumière, nommée — « Ta plus haute lumière : niveau 40 » (#10899, #11179).
     func test_levelLine_saysTheLevelRecord() throws {
-        XCTAssertEqual(try catalogValue("game.sparks.levelRecord.line", "fr"), "Record de niveau : %@")
+        XCTAssertEqual(try catalogValue("game.sparks.levelRecord.line", "fr"), "Ta plus haute lumière : niveau %@")
         let format = try catalogValue("game.sparks.levelRecord.line", Self.runningLanguage)
         XCTAssertEqual(GameSparksCopy.levelRecordLine(40), format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(40)))
         let row = try AppSourceGuard.unit("Meeshy/Features/Main/Game/GameSparkPairs.swift")
@@ -83,10 +82,10 @@ final class GameSparkPairsTests: XCTestCase {
         return try XCTUnwrap(unit["value"] as? String)
     }
 
-    /// Sans Prestige, le cycle égale le record : « Record d’étincelles : 12 000 », un seul nombre (#10899).
+    /// Sans renaissance, le cycle égale le total : « 12 000 reçues depuis toujours », un seul nombre (#10899, #11179).
     func test_cumul_withoutPrestige_saysTheSparkRecord() throws {
         let pairs = GameSparkPairs(level(sparks: 5_000, cycle: 12_000, lifetime: 12_000, levelMax: 40))
-        XCTAssertEqual(try catalogValue("game.sparks.record.line", "fr"), "Record d’étincelles : %@")
+        XCTAssertEqual(try catalogValue("game.sparks.record.line", "fr"), "%@ reçues depuis toujours")
         let format = try catalogValue("game.sparks.record.line", Self.runningLanguage)
         XCTAssertEqual(pairs.cumulLine, format.replacingOccurrences(of: "%@", with: GameCopy.formatCount(12_000)))
         XCTAssertEqual(pairs.facts[1].value, GameCopy.formatCount(12_000))

@@ -37,7 +37,7 @@ struct ComposerViewfinder: View {
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var capture: ComposerCaptureSession
-    @State private var delivered = false
+    @State private var life = ComposerCaptureCoverLife()
     /// Cet hôte n'a pas de carte : la taille ne joue que sous le flash d'écran,
     /// où le selfie se réduit en scène entourée de blanc, ou s'agrandit (#9566).
     @State private var size = ComposerSceneCameraSize.card
@@ -61,7 +61,13 @@ struct ComposerViewfinder: View {
                 .ignoresSafeArea()
                 .anchorPreference(key: ComposerSceneCameraFrameKey.self, value: .bounds) { $0 }
         }
+        // **Une disparition n'est pas une fermeture** (#11352, même cycle que
+        // #11347) : ouvert clavier levé, SwiftUI détache puis rattache ce plein
+        // écran sans le détruire. La session éteinte se réarme au mode promis.
         .onAppear {
+            if life.attach(), !life.settled {
+                ComposerCaptureCoverLife.reattach(capture, mode: ComposerViewfinderRules.sceneMode(for: initialMode))
+            }
             camera.configure()
             capture.watchThermalState()
             // La porte qui promet la vidéo arme le micro À L'OUVERTURE : le
@@ -70,15 +76,18 @@ struct ComposerViewfinder: View {
                 Task { @MainActor in await camera.enableAudioCaptureIfNeeded() }
             }
         }
-        .onDisappear { capture.disarm() }
+        .onDisappear {
+            life.detach()
+            capture.disarm()
+        }
         .statusBarHidden()
     }
 
     /// **Une prise ne part qu'une fois** : deux validations rapprochées pendant
-    /// que le viseur se retire poseraient deux pièces.
+    /// que le viseur se retire poseraient deux pièces — et jamais d'un viseur
+    /// détaché, dont la session est déjà désarmée.
     private func deliver(_ result: CameraResult) {
-        guard !delivered else { return }
-        delivered = true
+        guard life.settle() else { return }
         capture.finishCapture()
         HapticFeedback.success()
         onCapture(result)

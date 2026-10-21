@@ -172,30 +172,30 @@ store:
       submit: true
       localizations:
         fr-FR:
-          name: "Saison 1"
-          short_description: "Huit semaines, 40 étapes"
-          long_description: "Une nouvelle saison du Jeu Meeshy : des missions chaque jour, des étoiles à gagner et une coupe au bout."
+          name: "Voyage 1"
+          short_description: "Huit semaines, 40 haltes"
+          long_description: "Un nouveau voyage en terre de langue dans le Jeu Meeshy : un rêve chaque nuit, des haltes et une coupe au bout."
         en-US:
-          name: "Season 1"
-          short_description: "Eight weeks, 40 steps"
-          long_description: "A new Meeshy Game season: daily missions, stars to earn and a cup at the finish line."
+          name: "Journey 1"
+          short_description: "Eight weeks, 40 stops"
+          long_description: "A new journey to the land of a language in the Meeshy Game: a dream each night, strides, stops and a cup at the end."
         es-ES:
-          name: "Temporada 1"
-          short_description: "Ocho semanas, 40 etapas"
-          long_description: "Una nueva temporada del Juego Meeshy: misiones cada día, estrellas que ganar y una copa al final."
+          name: "Viaje 1"
+          short_description: "Ocho semanas, 40 paradas"
+          long_description: "Un nuevo viaje a tierra de idioma en el Juego Meeshy: un sueño cada noche, pasos, paradas y una copa al final."
         de-DE:
-          name: "Saison 1"
-          short_description: "Acht Wochen, 40 Etappen"
-          long_description: "Eine neue Saison im Meeshy-Spiel: tägliche Missionen, Sterne zum Sammeln und ein Pokal am Ziel."
+          name: "Reise 1"
+          short_description: "Acht Wochen, 40 Rasten"
+          long_description: "Eine neue Reise in ein Sprachland im Meeshy-Spiel: jede Nacht ein Traum, Schritte, Rasten und ein Pokal am Ziel."
         it:
-          name: "Stagione 1"
-          short_description: "Otto settimane, 40 tappe"
-          long_description: "Una nuova stagione del Gioco Meeshy: missioni ogni giorno, stelle da vincere e una coppa alla fine."
+          name: "Viaggio 1"
+          short_description: "Otto settimane, 40 soste"
+          long_description: "Un nuovo viaggio in terra di lingua nel Gioco Meeshy: un sogno ogni notte, passi, soste e una coppa alla fine."
         pt-BR:
-          name: "Temporada 1"
-          short_description: "Oito semanas, 40 etapas"
-          long_description: "Uma nova temporada do Jogo Meeshy: missões diárias, estrelas para ganhar e uma taça no final."
+          name: "Viagem 1"
+          short_description: "Oito semanas, 40 paradas"
+          long_description: "Uma nova viagem a uma terra de idioma no Jogo Meeshy: um sonho a cada noite, passos, paradas e uma taça no final."
         ar-SA:
-          name: "الموسم 1"
-          short_description: "ثمانية أسابيع و40 مرحلة"
-          long_description: "موسم جديد في لعبة Meeshy: مهام يومية ونجوم تكسبها وكأس في النهاية."
+          name: "الرحلة 1"
+          short_description: "ثمانية أسابيع و40 محطة"
+          long_description: "رحلة جديدة إلى أرض لغة في لعبة Meeshy: حلم كل ليلة، وخطوات، ومحطات، وكأس في النهاية."

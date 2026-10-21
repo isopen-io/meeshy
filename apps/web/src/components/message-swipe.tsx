@@ -5,6 +5,7 @@ import { THREAD_STATES_GLYPHS } from '@/components/glyphs-thread-states';
 import { dayLabel, time } from '@/lib/grouping';
 import { translate } from '@/lib/i18n-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { impact } from '@/lib/view/haptics';
 import {
   messageSwipeOffset,
   messageSwipeOutcome,
@@ -50,11 +51,6 @@ export type MessageSwipeActions = {
 };
 
 type Start = { readonly id: number; readonly x: number; readonly y: number; readonly direction: 'ltr' | 'rtl' };
-
-const vibrate = (ms: number): void => {
-  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-  navigator.vibrate(ms);
-};
 
 const directionOf = (element: Element): 'ltr' | 'rtl' => {
   const computed = element.ownerDocument.defaultView?.getComputedStyle(element).direction;
@@ -143,7 +139,7 @@ export function MessageSwipe({
     current.current = next;
     setOffset(next);
     const armed = messageSwipeOutcome(next, active) !== null;
-    if (armed && !crossed.current) vibrate(10);
+    if (armed && !crossed.current) impact('light');
     crossed.current = armed;
   }, []);
 
@@ -156,7 +152,7 @@ export function MessageSwipe({
       const outcome = engaged.current && active !== undefined ? messageSwipeOutcome(current.current, active) : null;
       reset();
       if (outcome === null) return;
-      vibrate(20);
+      impact('medium');
       actionsRef.current?.onAction(outcome);
     },
     [reset],

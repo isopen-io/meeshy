@@ -29,6 +29,7 @@
  */
 
 import type { Prisma } from '@meeshy/shared/prisma/client';
+import { prefixRange } from '../../utils/prefix-range';
 
 export const GENRES_DE_MEDIA = ['visual', 'audio', 'document', 'link', 'contact', 'conversation', 'location'] as const;
 
@@ -68,7 +69,7 @@ const contient = (fragment: string): Prisma.MessageWhereInput => ({
 
 const pieceDontLeTypeCommencePar = (prefixes: readonly string[]): Prisma.MessageWhereInput => ({
   attachments: {
-    some: { ...NON_VUE_UNIQUE, OR: prefixes.map((prefixe) => ({ mimeType: { startsWith: prefixe } })) },
+    some: { ...NON_VUE_UNIQUE, OR: prefixes.map((prefixe) => ({ mimeType: prefixRange(prefixe) })) },
   },
 });
 
@@ -84,7 +85,7 @@ const CLAUSES: Readonly<Record<GenreDeMedia, Prisma.MessageWhereInput>> = {
           {
             NOT: {
               OR: [...MIMES_VISUELS, ...MIMES_AUDIO, ...MIMES_CONTACT].map((prefixe) => ({
-                mimeType: { startsWith: prefixe },
+                mimeType: prefixRange(prefixe),
               })),
             },
           },

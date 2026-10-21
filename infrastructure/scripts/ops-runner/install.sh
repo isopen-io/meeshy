@@ -5,7 +5,7 @@
 #
 # Pose, pour l'environnement donne :
 #   /opt/meeshy/<env>/ops/requests   demandes deposees par la passerelle (uid 1001, 0700)
-#   /opt/meeshy/<env>/ops/state      ops.json et docker.json, lus par la passerelle (0755)
+#   /opt/meeshy/<env>/ops/state      ops.json, docker.json et containers.json, lus par la passerelle (0755)
 #   /opt/meeshy/<env>/ops/done       demandes executees (root, 0700, 30 jours)
 #   /opt/meeshy/<env>/ops/rejected   demandes refusees  (root, 0700, 30 jours)
 #   /opt/meeshy/<env>/ops/bin        le runner et le script de sauvegarde du depot

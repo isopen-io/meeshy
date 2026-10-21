@@ -325,7 +325,7 @@ final class ProfileUserPostsViewModel: ObservableObject {
             // bounded to the NEWEST 100. GRDBCacheStore.save keeps `suffix(100)`
             // (oldest, posts are newest-first) so we persist `prefix(100)` to
             // avoid trimming the newest posts on cold start.
-            try? await CacheCoordinator.shared.feed.save(Array(posts.prefix(100)), for: cacheKey)
+            await bestEffort("profileUserPostsViewModel.feed.save", category: .cache) { try await CacheCoordinator.shared.feed.save(Array(posts.prefix(100)), for: cacheKey) }
             // Persisté À CÔTÉ de la page (même clé) : la prochaine instance du
             // VM reprend au curseur profond au lieu de se coincer sur un cache
             // `.fresh` sans curseur.

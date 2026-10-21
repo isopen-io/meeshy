@@ -13,7 +13,9 @@ import MeeshySDK
 ///
 /// La légende vient de `String(localized:)` — la langue du LECTEUR : l'id
 /// porte le sens, le dessin le dit dans chaque langue.
-extension StickerTemplateRenderer {
+enum AvailabilityStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .availability
+
 
     // MARK: Le patron d'un cartouche de disponibilité
 
@@ -333,7 +335,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille DISPONIBILITÉ
 
-    static let availabilityDrawers: [StickerTemplateDrawer] = availabilityCards.map { availabilityDrawer($0) } + [
+    static let drawers: [StickerTemplateDrawer] = availabilityCards.map { availabilityDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.availabilityOnline,
             name: { String(localized: "sticker.template.availability.online", defaultValue: "En ligne", bundle: .module) },

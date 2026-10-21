@@ -369,11 +369,16 @@ export const attachmentDefaults = {
   capturedInApp: false,
 } as const;
 
-/** Les champs qu'une `Conversation` exige et que la vue ne consulte pas. */
+/**
+ * Les champs qu'une `Conversation` exige et que la vue ne consulte pas — et le
+ * régime de chiffrement, que la passerelle SERT toujours (`null` en clair) :
+ * absent, le menu le lit inconnu, donc chiffré (#11372).
+ */
 export const conversationDefaults = {
   status: 'active',
   visibility: 'private',
   isActive: true,
+  encryptionMode: null,
   createdAt: minutesAgo(60 * 24 * 30),
   updatedAt: minutesAgo(0),
 } as const;

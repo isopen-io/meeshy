@@ -1,5 +1,5 @@
 [Unit]
-Description=Publie l'usage Docker pour l'administration Meeshy (%i)
+Description=Publie l'usage Docker et l'etat des conteneurs pour l'administration Meeshy (%i)
 Documentation=https://github.com/isopen-io/meeshy/issues/10386
 Requires=docker.service
 After=docker.service

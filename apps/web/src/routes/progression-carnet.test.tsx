@@ -90,7 +90,7 @@ describe('un carnet vide', () => {
     const { env } = bench([]);
     const host = await mount(<CarnetBody env={env} />);
     await settle();
-    expect(host.textContent).toContain('Ton carnet est vide');
+    expect(host.textContent).toContain('Ta Chronique attend sa première page');
     expect(host.textContent).toContain('Mee et Meo');
   });
 
@@ -99,7 +99,7 @@ describe('un carnet vide', () => {
     const host = await mount(<CarnetBody env={env} />);
     await settle();
     expect(host.querySelector('[role="alert"]')).toBeNull();
-    expect(host.textContent).toContain('Ton carnet est vide');
+    expect(host.textContent).toContain('Ta Chronique attend sa première page');
   });
 
   test('pendant la lecture : occupé, pas un faux vide', async () => {
@@ -107,7 +107,7 @@ describe('un carnet vide', () => {
     const env = { ...base, notebook: { ...base.notebook, list: () => new Promise<readonly NotebookEntry[]>(() => undefined) } } as PhotoEnv;
     const host = await mount(<CarnetBody env={env} />);
     expect(host.querySelector('[aria-busy="true"]')).not.toBeNull();
-    expect(host.textContent).not.toContain('Ton carnet est vide');
+    expect(host.textContent).not.toContain('Ta Chronique attend sa première page');
   });
 });
 
@@ -233,7 +233,7 @@ describe('la place et l’appareil (#10161)', () => {
     const { env } = bench([kept(startMoment(), '2026-10-04T10:00:00.000Z')]);
     const host = await mount(<CarnetBody env={env} />);
     await settle();
-    expect(by(host, 'data-carnet-size')?.textContent).toContain('Le carnet occupe');
+    expect(by(host, 'data-carnet-size')?.textContent).toContain('La Chronique occupe');
     expect(host.textContent).toContain('Tes photos vivent sur cet appareil.');
   });
 
@@ -266,7 +266,7 @@ describe('la place et l’appareil (#10161)', () => {
 describe('à rattraper', () => {
   const game = gameBlockFixture({ mintedLifetime: 21, flameRecord: 8, streak: 6 });
   const keptStart = kept(startMoment(), '2026-09-01T10:00:00.000Z');
-  const keptFirst = kept(meeshMoment({ number: 1, edition: 'silver' }), '2026-09-02T10:00:00.000Z');
+  const keptFirst = kept(meeshMoment({ number: 1 }), '2026-09-02T10:00:00.000Z');
   const catchUp = (host: ParentNode) => Array.from(host.querySelectorAll('[data-carnet-catch-up]')).map((e) => e.getAttribute('data-carnet-catch-up'));
 
   test('sans bloc du jeu en cache : aucune section', async () => {
@@ -316,7 +316,7 @@ describe('à rattraper', () => {
     const tracks = Array.from(host.querySelectorAll('[data-carnet-track]')).map((e) => e.getAttribute('data-carnet-track'));
     expect(tracks).toContain('meesh');
     expect(tracks).toContain('flame');
-    expect(host.querySelector('[data-carnet-track="meesh"]')?.textContent).toContain('Meeshes');
+    expect(host.querySelector('[data-carnet-track="meesh"]')?.textContent).toContain('L’Héritage');
     expect(host.querySelector('[data-carnet-track="meesh"] [data-carnet-catch-up="flame:7"]')).toBeNull();
   });
 

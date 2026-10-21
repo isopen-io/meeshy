@@ -1,7 +1,35 @@
 import SwiftUI
 
-struct MeeshySceneAction {
+/// Une valeur focalisée est comparée à chaque rendu : sans égalité, SwiftUI y
+/// voit un changement, reconstruit la barre de menus et réévalue l'émetteur,
+/// qui republie. C'est la boucle qui figeait l'ouverture d'une conversation
+/// (#11131, #11238). Une action a donc TOUJOURS un propriétaire, et deux
+/// actions du même propriétaire sont égales : aucune ne peut naître neuve à
+/// chaque rendu.
+struct MeeshySceneAction: Equatable {
+    let owner: AnyObject
     let perform: () -> Void
+
+    init(owner: AnyObject, perform: @escaping () -> Void) {
+        self.owner = owner
+        self.perform = perform
+    }
+
+    static func == (lhs: MeeshySceneAction, rhs: MeeshySceneAction) -> Bool {
+        lhs.owner === rhs.owner
+    }
+}
+
+/// Le propriétaire d'une action publiée, un par émetteur (`@State`) : l'action
+/// reste la même d'un rendu à l'autre, et exécute la dernière fermeture reçue.
+final class SceneActionRelay {
+    var perform: () -> Void = {}
+
+    var action: MeeshySceneAction {
+        MeeshySceneAction(owner: self) { [weak self] in self?.perform() }
+    }
+
+    nonisolated deinit {}
 }
 
 enum MeeshySceneRole {
@@ -66,16 +94,20 @@ struct PublishesSceneNavigation: ViewModifier {
     let role: MeeshySceneRole
 
     func body(content: Content) -> some View {
-        content.focusedSceneValue(\.meeshySceneNavigation, MeeshySceneNavigation(router: router, role: role))
+        content
+            .environment(\.routerCommands, router.commands)
+            .focusedSceneValue(\.meeshySceneNavigation, MeeshySceneNavigation(router: router, role: role))
     }
 }
 
 struct PublishesSceneAction: ViewModifier {
     let keyPath: WritableKeyPath<FocusedValues, MeeshySceneAction?>
     let perform: () -> Void
+    @State private var relay = SceneActionRelay()
 
     func body(content: Content) -> some View {
-        content.focusedSceneValue(keyPath, MeeshySceneAction(perform: perform))
+        relay.perform = perform
+        return content.focusedSceneValue(keyPath, relay.action)
     }
 }
 

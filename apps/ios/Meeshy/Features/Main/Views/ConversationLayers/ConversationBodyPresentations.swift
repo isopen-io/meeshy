@@ -14,8 +14,7 @@ struct ConversationBodyCovers: ViewModifier {
     let conversation: Conversation?
     let accentColor: String
     let isDark: Bool
-    let isGuest: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let onReply: (Message) -> Void
     let actions: ConversationMessageActions
@@ -30,8 +29,8 @@ struct ConversationBodyCovers: ViewModifier {
             .mediaSaveFlow(mediaSaveCoordinator)
             .modifier(ConversationMessageSheets(
                 viewModel: viewModel, overlayState: $overlayState, conversation: conversation,
-                accentColor: accentColor, isDark: isDark, isGuest: isGuest,
-                isAdminOrMod: isAdminOrMod, mediaSaveCoordinator: mediaSaveCoordinator,
+                accentColor: accentColor, isDark: isDark,
+                authority: authority, mediaSaveCoordinator: mediaSaveCoordinator,
                 actions: actions))
     }
 }
@@ -76,6 +75,16 @@ struct ConversationBodySheets<Anchor: View, Picker: View>: ViewModifier {
     }
 }
 
+/// **Le voile de l'appui long** (#11208). Le fond se floutait à 12, plein
+/// écran : la conversation devenait illisible, et le flou s'ajoutait à
+/// l'assombrissement que l'overlay pose déjà (`MessageOverlayMenu.dismissBackground`).
+/// Le voile est désormais cet assombrissement, sur un flou léger qui ne passe
+/// jamais 8. La loi commune iOS / web (le web floute à 16 px) est tranchée par
+/// la décision-produit #11222 ; cette valeur s'y alignera.
+nonisolated enum ConversationOverlayBackdrop {
+    static let blurRadius: CGFloat = 6
+}
+
 /// **Le menu d'appui long, en `ViewModifier` NOMINAL** (LOT-10) : flou du fond
 /// AVANT l'overlay — pour ne flouter que la conversation, jamais le menu —,
 /// puis l'animation, l'overlay, la restitution du clavier à la fermeture, les
@@ -90,7 +99,7 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
     let frameTracker: MessageFrameBox
     let accentColor: String
     let isDirect: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
     let threadLanguage: (Message) -> MessageOverlayMenu.ThreadLanguage
@@ -100,7 +109,7 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
 
     func body(content: Content) -> some View {
         content
-            .blur(radius: overlayState.showOverlayMenu ? 12 : 0)
+            .blur(radius: overlayState.showOverlayMenu ? ConversationOverlayBackdrop.blurRadius : 0)
             .animation(.easeOut(duration: 0.28), value: overlayState.showOverlayMenu)
             .overlay { menuLayer }
             .adaptiveOnChange(of: overlayState.showOverlayMenu) { _, isShowing in
@@ -122,7 +131,7 @@ struct ConversationBodyOverlayMenu<Piece: View, PlaceCover: View>: ViewModifier 
             frameTracker: frameTracker,
             accentColor: accentColor,
             isDirect: isDirect,
-            isAdminOrMod: isAdminOrMod,
+            authority: authority,
             mediaSaveCoordinator: mediaSaveCoordinator,
             actions: actions,
             threadLanguage: threadLanguage,
@@ -140,7 +149,7 @@ struct ConversationOverlayMenuLayer<Piece: View>: View {
     let frameTracker: MessageFrameBox
     let accentColor: String
     let isDirect: Bool
-    let isAdminOrMod: Bool
+    let authority: ConversationMenuAuthority
     let mediaSaveCoordinator: MediaSaveCoordinator
     let actions: ConversationMessageActions
     let threadLanguage: (Message) -> MessageOverlayMenu.ThreadLanguage
@@ -164,10 +173,10 @@ struct ConversationOverlayMenuLayer<Piece: View>: View {
             overlayState: $overlayState,
             msg: msg,
             accentColor: accentColor,
-            bubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
+            bubbleFrame: overlayState.overlaySourceFrame ?? frameTracker.frame(for: msg.id) ?? .zero,
             threadLanguage: threadLanguage(msg),
             isDirect: isDirect,
-            isAdminOrMod: isAdminOrMod,
+            authority: authority,
             mediaSaveCoordinator: mediaSaveCoordinator,
             actions: actions
         )

@@ -1,5 +1,6 @@
 import XCTest
 import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Gardes de source sur le panneau droit iPad.
@@ -147,8 +148,12 @@ final class iPadRightPanelNavigationGuardTests: XCTestCase {
     func test_iPadCovers_matchTheiPhoneForReelsStoriesAndProfileReels() throws {
         let layer = try source(of: "RootLayers/iPadRootViewLayers.swift")
         XCTAssertTrue(layer.contains("ReelOpenFailureView("), "un réel introuvable montre son échec, pas d'autres réels")
-        XCTAssertTrue(layer.contains("targetCommentId: request.targetCommentId"))
-        XCTAssertTrue(layer.contains("targetParentCommentId: request.targetParentCommentId"))
+        // Le lecteur de story se monte par le couvercle UNIQUE (#11197) : l'iPad le pose, et c'est
+        // lui qui descend une notification de réponse jusqu'à SON commentaire, pour toutes les racines.
+        XCTAssertTrue(layer.contains(".modifier(StoryReaderCover("), "l'iPad monte le lecteur par le couvercle unique")
+        let cover = try source(of: "StoryViewerContainer.swift")
+        XCTAssertTrue(cover.contains("targetCommentId: presented.targetCommentId"))
+        XCTAssertTrue(cover.contains("targetParentCommentId: presented.targetParentCommentId"))
         XCTAssertTrue(layer.contains("onOpenReel: { reel, reels in"), "un réel de profil s'ouvre dans le lecteur")
     }
 
@@ -414,6 +419,18 @@ final class TemporaryMediaSweeperTests: XCTestCase {
             (name: "media-save-1234", modified: old),
         ], now: now)
         XCTAssertEqual(swept, ["composer_photo_A.jpg", "recent_C.mov"])
+    }
+
+    func test_aStagedPhotoLibraryImport_isSweptOnceExpired() throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let source = FileManager.default.temporaryDirectory.appendingPathComponent("sweep-source-\(UUID().uuidString).mov")
+        try Data("a".utf8).write(to: source)
+        let staged = try PickedMediaStaging.stage(source)
+        defer { try? FileManager.default.removeItem(at: source); PickedMediaStaging.discard(staged) }
+        let swept = TemporaryMediaSweeper.expired([
+            (name: staged.lastPathComponent, modified: now.addingTimeInterval(-8 * 24 * 3600)),
+        ], now: now)
+        XCTAssertEqual(swept, [staged.lastPathComponent], "une vidéo importée (#9870) que personne ne réclame ne reste pas dans tmp")
     }
 
     func test_sweep_removesOnlyTheExpiredFiles() throws {

@@ -35,6 +35,15 @@ const CATEGORY_OF: Readonly<Record<number, string>> = {
   2: FIXTURE_PROCHES_CATEGORY_ID,
 };
 
+/**
+ * LE SEUL GROUPE DE LA DÉMONSTRATION QUE LE LECTEUR A CRÉÉ (#11211) — ailleurs
+ * il est membre (`participantDefaults.role`), et un membre ne renomme ni
+ * n'invite (`conversationActionsFor`). `c-page-04` porte donc le rang que la
+ * passerelle sert dans `currentUserRole`, pour que Renommer, Inviter et Gérer
+ * les membres aient une ligne où se montrer (`check-row-menu-more.mjs`).
+ */
+export const READER_CREATED_GROUP_ID = 'c-page-04';
+
 export const PAGINATION_CONVERSATIONS: readonly Conversation[] = Array.from({ length: 34 }, (_, i) => {
   const n = String(i + 1).padStart(2, '0');
   const isGroupType = i % 2 === 1;
@@ -60,6 +69,7 @@ export const PAGINATION_CONVERSATIONS: readonly Conversation[] = Array.from({ le
     lastMessage,
     lastMessageAt: lastMessage.createdAt,
     lastMessageOriginalLanguage: 'fr',
+    ...(`c-page-${n}` === READER_CREATED_GROUP_ID ? { currentUserRole: 'creator' } : {}),
     ...(CATEGORY_OF[i] === undefined
       ? {}
       : { userPreferences: [{ isPinned: false, isMuted: false, isArchived: false, categoryId: CATEGORY_OF[i] }] }),

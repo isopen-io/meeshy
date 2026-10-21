@@ -67,6 +67,8 @@ public struct LocationMessageView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(String(localized: "location.a11y.label", defaultValue: "Position : \(placeName ?? String(localized: "location.shared", defaultValue: "Position partagée", bundle: .module))", bundle: .module))
         .accessibilityHint(String(localized: "location.a11y.hint", defaultValue: "Touchez pour ouvrir la carte en plein écran", bundle: .module))
+        .accessibilityAddTraits(onTapFullscreen == nil ? [] : .isButton)
+        .accessibilityAction { onTapFullscreen?() }
         .accessibilityAction(named: Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))) {
             openInMaps()
         }

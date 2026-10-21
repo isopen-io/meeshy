@@ -63,7 +63,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
 
                 if let permissionMessage {
                     Text(permissionMessage)
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xxxl)
@@ -147,7 +147,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 Image(systemName: context.contextIcon)
                     .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                 Text(context.contextLabel)
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
             }
             .foregroundColor(Color(hex: accentColor))
             .padding(.horizontal, MeeshySpacing.md)
@@ -210,7 +210,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                     .opacity(recorder.duration.truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0.3)
 
                 Text(String(localized: "audio.recorder.recording", defaultValue: "Enregistrement", bundle: .module))
-                    .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                    .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.errorStrong)
             }
         }
@@ -228,7 +228,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             }
 
             Text(String(localized: "audio.recorder.tapToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                .font(.system(size: MeeshyFont.bodySize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
         }
     }
@@ -319,7 +319,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
             .buttonStyle(.plain)
 
             Text(String(localized: "audio.recorder.record", defaultValue: "Enregistrer", bundle: .module))
-                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
         }
     }

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   MODERATION_REASON_MAX,
-  moderatesConversation,
   moderatesPlatformContent,
   moderationReasonOf,
   removalBody,
@@ -21,32 +20,6 @@ describe('le motif d’un retrait', () => {
   test('le corps du DELETE ne porte le motif que s’il y en a un — l’auteur supprime sans corps, comme avant', () => {
     expect(removalBody(undefined)).toEqual({});
     expect(removalBody('Spam')).toEqual({ body: { reason: 'Spam' } });
-  });
-});
-
-describe('qui retire le message d’un autre dans une conversation', () => {
-  test('jamais dans une conversation directe, quel que soit le rôle', () => {
-    expect(moderatesConversation({ conversation: { type: 'direct', currentUserRole: 'creator' }, platformRole: 'BIGBOSS' })).toBe(false);
-  });
-
-  test('le créateur, l’administrateur et le modérateur d’un groupe, d’une conversation publique, globale ou de diffusion', () => {
-    for (const type of ['group', 'public', 'global', 'broadcast']) {
-      for (const role of ['creator', 'admin', 'moderator', 'ADMIN']) {
-        expect({ type, role, ok: moderatesConversation({ conversation: { type, currentUserRole: role }, platformRole: null }) }).toEqual({ type, role, ok: true });
-      }
-    }
-  });
-
-  test('un simple membre non, sauf rôle de plateforme MODERATOR, ADMIN ou BIGBOSS', () => {
-    const conversation = { type: 'group', currentUserRole: 'member' };
-    expect(moderatesConversation({ conversation, platformRole: null })).toBe(false);
-    expect(moderatesConversation({ conversation, platformRole: 'USER' })).toBe(false);
-    expect(moderatesConversation({ conversation, platformRole: 'AUDIT' })).toBe(false);
-    for (const role of ['MODERATOR', 'ADMIN', 'BIGBOSS']) expect(moderatesConversation({ conversation, platformRole: role })).toBe(true);
-  });
-
-  test('un type inconnu n’ouvre rien', () => {
-    expect(moderatesConversation({ conversation: { type: 'mystery', currentUserRole: 'creator' }, platformRole: 'ADMIN' })).toBe(false);
   });
 });
 

@@ -239,7 +239,7 @@ class TrackingLinksViewModel: ObservableObject {
         async let s = TrackingLinkService.shared.fetchStats()
         links = (try? await l) ?? []
         stats = try? await s
-        try? await CacheCoordinator.shared.trackingLinks.save(links, for: "list")
+        await bestEffort("trackingLinksView.trackingLinks.save", category: .cache) { try await CacheCoordinator.shared.trackingLinks.save(links, for: "list") }
         isLoading = false
     }
 
