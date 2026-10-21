@@ -7,11 +7,11 @@ import os
 
 struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    private let dependencies = DependencyContainer.shared
+    let dependencies = DependencyContainer.shared
     @StateObject private var authManager = AuthManager.shared
     @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
-    @StateObject private var deepLinkRouter = DeepLinkRouter.shared
+    @StateObject var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
     /// La célébration de l'arrivée, au-dessus de la racine connectée.
@@ -19,8 +19,8 @@ struct MeeshyApp: App {
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     /// Le splash et sa loi de vie : il tombe dès que la session et la
     /// liste en cache sont prêtes, et à son plafond quoi que fasse le démarrage.
-    @StateObject private var launchSplash = LaunchSplashController()
-    @State private var hasCheckedSession = false
+    @StateObject var launchSplash = LaunchSplashController()
+    @State var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
     /// Le contenu d'un lien ouvert sans session, au-dessus de la connexion.
     @StateObject private var visitorPresenter = VisitorContentPresenter.shared
@@ -309,417 +309,7 @@ struct MeeshyApp: App {
                           let request = CallBackRequest(userActivity: userActivity) else { return }
                     CallBackDialer.shared.dial(request)
                 }
-                .task {
-                    ImageDownsamplingConfig.applyGlobal()
-                    KeychainManager.shared.migrateToAfterFirstUnlock()
-                    #if DEBUG
-                    // Vitrine App Store : session fictive et lien fixé AVANT la
-                    // restauration de l'environnement et de la session — voir `VitrineStage`.
-                    VitrineStage.preparer()
-                    #endif
-                    MeeshyConfig.shared.restoreEnvironment()
-                    // Miroir de l'environnement pour les extensions (NSE +
-                    // partage), qui n'ont pas accès à MeeshyConfig. À poser
-                    // APRÈS restoreEnvironment, sinon on publierait la valeur
-                    // par défaut au lieu de l'environnement restauré.
-                    WidgetDataManager.shared.publishAPIBaseURL()
-                    // Local-First : résous le sous-titre des toasts de
-                    // conversation (nom renommé + favori) depuis le snapshot
-                    // local App Group, jamais le titre brut serveur.
-                    NotificationToastManager.shared.conversationPresentationProvider = { conversationId in
-                        WidgetDataManager.shared.conversationToastPresentation(forId: conversationId)
-                    }
-                    // « Vibrations » : le SDK gate sur `vibrationEnabled` et
-                    // appelle ce player à l'apparition d'un toast — l'haptique
-                    // vit app-side (le SDK core n'importe pas UIKit).
-                    NotificationToastManager.shared.hapticPlayer = {
-                        HapticFeedback.light()
-                    }
-                    // Un fil consommé quitte le centre iOS. Le SDK sait
-                    // CE QUI est consommé ; la couture `UNUserNotificationCenter`
-                    // et le budget d'arrière-plan qui l'entoure vivent
-                    // app-side, dans `NotificationActionHandler`.
-                    NotificationToastManager.shared.deliveredBannerPurger = { ref in
-                        NotificationActionHandler.removeDeliveredBanners(forThreadOf: ref)
-                    }
-                    // Révocation par socket (`notification:deleted`) : la
-                    // bannière déjà livrée suit la suppression — même atome de
-                    // retrait que le push de contrôle `notification_revoked`.
-                    NotificationActionHandler.shared.observeRevocations(from: NotificationToastManager.shared.notificationWasDeleted.eraseToAnyPublisher())
-                    // Le balayage des bannières éphémères échues, au
-                    // démarrage puis à chaque retour au premier plan. C'est le
-                    // seul des trois chemins qui tourne quand l'utilisateur
-                    // REGARDE : la NSE nettoie plus souvent, mais elle ne
-                    // s'exécute qu'à l'arrivée d'un push.
-                    await NotificationActionHandler.sweepExpiredEphemeralBanners()
-                    NotificationActionHandler.shared.observeForegroundSweep()
-                    launchSplash.reach(.cache)
-                    // Le cache vivant est-il bien celui du compte qui
-                    // s'ouvre ? Sans effet dans le cas nominal ; après une
-                    // bascule interrompue, il est rendu ou effacé AVANT la
-                    // première lecture.
-                    await CacheAccountBinder.shared.bind(DependencyContainer.activeAccountStoreKey()).value
-                    await CacheCoordinator.shared.start()
-                    #if DEBUG
-                    // Vitrine : le fil et les médias sont rangés AVANT que la
-                    // restauration de la session ne monte les racines qui les lisent.
-                    await VitrineStage.remplirLesCaches()
-                    #endif
-                    // Touch PresenceManager early so it has subscribed to
-                    // `presence:snapshot` + `user:status` + `didReconnect`
-                    // BEFORE the first socket auth lands. Without this, the
-                    // very first snapshot emitted after a cold start could
-                    // land before any view referencing PresenceManager.shared
-                    // has been built, and PassthroughSubject would drop it.
-                    _ = PresenceManager.shared
-                    // Start NWPathMonitor at the very top of boot so the path has
-                    // resolved by the time `checkExistingSession()` asks
-                    // `NetworkMonitor.isOnline` whether a proactive token refresh
-                    // may run. Without this early touch the monitor would first
-                    // start there and answer with its optimistic `online` default.
-                    _ = NetworkMonitor.shared
-                    // `StoryOfflineQueueBootstrap` a été supprimé : son
-                    // gestionnaire de publication ré-enfilait l'item dans la
-                    // MÊME file (`StoryPublishQueue`), et sa vidange sur retour
-                    // réseau doublait l'observateur de connexion que la file
-                    // possède déjà. Le seul gestionnaire légitime est posé par
-                    // `StoryPublishService.setExecutor`, depuis les racines.
-                    // Wire the outbox pool so OfflineQueue can persist every
-                    // outbox kind (sendMessage, sendReaction, edit/delete,
-                    // and the 14 non-message mutations) to SQLite on enqueue.
-                    // Must run before any enqueue call to avoid silent
-                    // poolNotConfigured throws on the hot path.
-                    //
-                    // Wave 1 Task 3.6 — the legacy MessageRetryQueue +
-                    // ReactionQueue actors were collapsed into OfflineQueue ;
-                    // they shared the same `outbox` table and namespaces
-                    // (`ofq_*` / `mrq_*` / `rxq_*`), so the unified
-                    // `OfflineQueue.bootRecovery()` already resets every
-                    // inflight record regardless of kind or id prefix.
-                    let bootPool = dependencies.dbPool
-                    launchSplash.reach(.outbox)
-                    await OfflineQueue.shared.configure(pool: bootPool)
-
-                    // Partages que l'extension n'a pas pu envoyer : ils
-                    // rejoignent l'outbox dès qu'il est capable d'enfiler,
-                    // donc juste APRÈS `configure(pool:)` — plus tôt, chaque
-                    // enfilement échouerait sur `poolNotConfigured`. Non
-                    // bloquant pour le boot ; un échec laisse le relais sur
-                    // disque pour la reprise en avant-plan.
-                    Task { await SharePendingSendConsumer.shared.consumeAll() }
-
-                    // **L'entrée externe** (vue `2a`) — jumelle du
-                    // balayage ci-dessus, et pour la même raison. L'extension
-                    // tente d'ouvrir `meeshy://compose-share` après avoir déposé
-                    // sa fiche, mais `extensionContext.open` peut échouer sans
-                    // un mot : si l'ouverture était le seul déclencheur, la
-                    // pièce serait perdue. Un raccourci ne doit jamais être le
-                    // seul chemin.
-                    Task { await ShareComposeHandoffConsumer.shared.consumeNext() }
-                    ShareRelayConsumer.shared.consumeNext()
-
-                    // Wire preference mutations to flush the outbox immediately after
-                    // enqueue so changes don't get stuck `.pending` until boot/foreground
-                    // transition. The SDK cannot import app-side OutboxFlushTrigger
-                    // (SDK purity), so we inject this Sendable closure at boot.
-                    UserPreferencesManager.shared.onSettingsMutationEnqueued = {
-                        Task { await OutboxFlushTrigger.flushNow() }
-                    }
-
-                    // Phase 4 §6.1.1 — boot crash recovery. Any record left
-                    // `.inflight` from a previous process (the app was killed
-                    // mid-dispatch) is reset to `.pending` so the flusher
-                    // picks it back up. The gateway dedup contract on
-                    // `(conversationId, clientMessageId)` ensures a message
-                    // that actually reached the server before the crash is
-                    // not duplicated at replay time. The sweep covers ALL
-                    // kinds (sendMessage, sendReaction, edit/delete,
-                    // non-message mutations) thanks to the unified outbox.
-                    Task.detached(priority: .background) {
-                        do {
-                            _ = try await OfflineQueue.shared.bootRecovery()
-                        } catch {
-                            Logger.messages.error("Boot recovery failed: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-
-                    // Wire the in-memory retry handlers so the reconnection
-                    // path (socket reconnect → retryAll/retryPending) can
-                    // send queued items without going through the outbox
-                    // flusher. The outbox flusher handles items that survive
-                    // a crash or cold start; these handlers handle the hot
-                    // reconnection path for items that were in-memory.
-                    //
-                    // Phase 4 — `clientMessageId` is propagated through the
-                    // SendMessageRequest so the server applies the same
-                    // catch-P2002 idempotent dedup (cf. spec §6.2) regardless
-                    // of which path (cold flush or hot retry) sent the item.
-                    await OfflineQueue.shared.setRetrySend { @Sendable item in
-                        do {
-                            let request = SendMessageRequest(
-                                content: item.content,
-                                originalLanguage: item.originalLanguage,
-                                replyToId: item.replyToId,
-                                forwardedFromId: item.forwardedFromId,
-                                forwardedFromConversationId: item.forwardedFromConversationId,
-                                attachmentIds: item.attachmentIds,
-                                clientMessageId: item.clientMessageId,
-                                location: item.location
-                            )
-                            let response = try await MessageService.shared.send(
-                                conversationId: item.conversationId, request: request
-                            )
-                            return response.id
-                        } catch {
-                            return nil
-                        }
-                    }
-                    launchSplash.reach(.settingsQueue)
-                    await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
-                        do {
-                            // Le chemin vient d'un enregistrement PERSISTÉ, écrit
-                            // par une version possiblement antérieure de l'app :
-                            // aucun type ne lui survit. C'est le seul appelant
-                            // légitime de cette entrée, et son nom le dit.
-                            //
-                            // L'ENVELOPPE SEULE, et rien de `data`. `PATCH /users/me` sert
-                            // `data: { user, message }` (profile-updates.ts) : exiger
-                            // `APIResponse<MeeshyUser>` ferait échouer le décodage après une
-                            // écriture réussie, et l'action resterait en file, rejouée à chaque
-                            // retour en ligne. Un rejeu ne veut rien de la réponse sinon son
-                            // acceptation : exiger une forme de `data` est un pari sur une route
-                            // qu'on ne connaît pas (`SettingsReplayEnvelopeTests`).
-                            let _: SimpleAPIResponse = try await APIClient.shared.replayPersistedRequest(
-                                persistedPath: action.endpoint,
-                                method: action.httpMethod,
-                                body: action.payload
-                            )
-                            return true
-                        } catch MeeshyError.server(let code, _) where [400, 404, 413, 422].contains(code) {
-                            // P1 — `APIClient.request` only ever throws `MeeshyError`
-                            // (never the legacy `APIError`), so this catch NEVER
-                            // matched and every 4xx (validation error, etc.) fell
-                            // through to the generic `catch` below and was kept
-                            // queued — replayed forever against a payload that can
-                            // never succeed. Treat client-side validation errors as
-                            // terminal — replaying the same payload won't help. Drop
-                            // the action so the queue doesn't bounce forever.
-                            //
-                            // 429 is deliberately EXCLUDED from this set — mirrors
-                            // `OutboxFlusher.permanentRejectionStatusCodes`
-                            // (packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxFlusher.swift),
-                            // which documents 408/429/503 as retryable (APIClient's
-                            // own `retryableStatusCodes` already treats 429 as
-                            // transient). An unfiltered `(400..<500)` range here
-                            // would silently sweep 429 into "terminal", permanently
-                            // dropping a queued settings mutation that only failed
-                            // because of rate limiting.
-                            return true
-                        } catch MeeshyError.forbidden {
-                            // 403 is also a terminal client-side error (thrown as
-                            // its own `MeeshyError` case rather than `.server`) —
-                            // same "drop, don't replay" treatment as the other 4xx.
-                            return true
-                        } catch {
-                            // Transient (5xx / connectivity): keep the action
-                            // queued; the next NetworkMonitor `online` edge
-                            // will replay it.
-                            return false
-                        }
-                    }
-                    // Delete legacy JSON queue files from disk on the first boot
-                    // after migration to the SQLite outbox pipeline. The files are
-                    // no longer written to; this removes any stale data on device.
-                    // Wave 1 Task 3.6 — `OfflineQueue.deleteLegacyFile()` now
-                    // sweeps the `message_retry_queue.json` + `reaction_queue.json`
-                    // files in addition to the original `offline_queue.json`
-                    // since the corresponding actors were folded into the
-                    // unified queue.
-                    let didDeleteLegacyKey = "meeshy.outbox.legacyFilesDeleted"
-                    if !UserDefaults.standard.bool(forKey: didDeleteLegacyKey) {
-                        Task.detached(priority: .background) {
-                            OfflineQueue.deleteLegacyFile()
-                            await MainActor.run {
-                                UserDefaults.standard.set(true, forKey: didDeleteLegacyKey)
-                            }
-                        }
-                    }
-                    // Drain any outbox rows that survived a crash or cold start.
-                    // This runs at every boot (not just once) so items from the
-                    // previous session are retried as soon as the app is active.
-                    Task.detached(priority: .background) {
-                        // bootRecovery resets any rows that were left in the
-                        // `.inflight` state by a prior crash mid-dispatch. Without
-                        // this, those rows are invisible to flush() (which only
-                        // selects `.pending`) until the next background/foreground
-                        // transition triggers BackgroundTransitionCoordinator which also
-                        // calls bootRecovery. SwiftUI's onChange(of:scenePhase) does
-                        // NOT fire on the initial `.active` state, so the coordinator
-                        // path is skipped on cold start. do/catch + log
-                        // instead of a silent `try?`: BackgroundTransitionCoordinator's
-                        // own `resumeFromBackground()` call to `bootRecovery()`
-                        // (on the next foreground) is an independent retry
-                        // path, so a failure here is not fatal, but it MUST
-                        // be visible — a silent failure would leave
-                        // crash-orphaned `.inflight` rows invisible to
-                        // flush() for the rest of THIS cold start with zero
-                        // trace in the logs.
-                        do {
-                            _ = try await OfflineQueue.shared.bootRecovery()
-                        } catch {
-                            Logger.messages.error("Boot recovery (outbox flusher path) failed: \(error.localizedDescription, privacy: .public) — retried on next foreground")
-                        }
-                        let flusher = OutboxFlusher(
-                            pool: bootPool,
-                            dispatcher: OutboxDispatcher(),
-                            onOutcome: { @Sendable outcome in
-                                Task { await OfflineQueue.shared.publishOutcome(outcome) }
-                            },
-                            // BW1 — skip flushing while offline so retries
-                            // do not burn through 60s URLSession timeouts ×
-                            // 5 maxAttempts in airplane mode.
-                            isNetworkReachable: { @Sendable in
-                                await MainActor.run { NetworkConditionMonitor.shared.isOnline }
-                            }
-                        )
-                        let nextRetry = await flusher.flush()
-                        await OutboxRetryScheduler.shared.schedule(at: nextRetry)
-                        // Wake the outbox flusher on every network
-                        // reconnect: a mutation enqueued offline leaves no
-                        // backoff timer armed, so without this it waits for an
-                        // incidental lifecycle event.
-                        await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
-                        // Wake the flusher immediately after any
-                        // social mutation is enqueued online (like/post/
-                        // comment), instead of leaving it `.pending` until the
-                        // next incidental lifecycle event.
-                        await OutboxRetryScheduler.shared.startObservingMutationEnqueued()
-                        // Reprise du socket sans changement réseau : le flusher,
-                        // seul émetteur de l'outbox, repart aussi.
-                        await OutboxRetryScheduler.shared.startObservingSocketReconnect()
-                    }
-
-                    // Engagement outbox boot: recover orphan .open sessions
-                    // (crash-truncated), evict rows older than 7d / over the cap,
-                    // flush finalized rows, and arm the reconnect observer so a
-                    // session finalized offline ships as soon as the link returns.
-                    Task { @MainActor in
-                        await EngagementOutbox.shared.bootSweep()
-                        await EngagementOutbox.shared.purge(olderThan: Date().addingTimeInterval(-7 * 86400), maxRows: 5000)
-                        await EngagementFlushTrigger.flushNow()
-                        EngagementRetryScheduler.shared.startObservingNetworkReconnect()
-                    }
-
-                    // Un envoi long (média, story, publication) se suit
-                    // dans la Dynamic Island et sur l'écran verrouillé.
-                    OutboxLiveActivityCoordinator.shared.start()
-
-                    // L'appel, le vocal en lecture et
-                    // l'enregistrement se pilotent depuis l'îlot : les boutons
-                    // de leurs activités reviennent ici.
-                    LiveActivityCommandBinding.shared.install()
-
-                    // Session check gates auth and MUST finish before the splash
-                    // dismisses. Friendship hydration only powers non-critical
-                    // friend-status badges, yet it fetches ALL sent + received
-                    // requests over the network (paginated) — keep it OFF the
-                    // cold-start critical path. `hydrate()` coalesces concurrent
-                    // callers and fast-paths when already hydrated, so firing it
-                    // here and letting it finish in the background is safe; the
-                    // badges fill in shortly after the list is already on screen.
-                    Task { await FriendshipCache.shared.hydrate() }
-                    launchSplash.reach(.session)
-                    await authManager.checkExistingSession()
-                    hasCheckedSession = true
-                    // Prisme Linguistique — mémorise la langue UI (langue
-                    // principale de l'utilisateur) dès que la session cold-start
-                    // est résolue, pour l'appliquer au prochain lancement.
-                    UILanguageOverride.cache(from: authManager.currentUser?.systemLanguage)
-                    UILanguageOverride.refreshNotificationLanguage()
-                    if authManager.isAuthenticated {
-                        // P1 — prime SessionManager's `lastKnownUserId` cache
-                        // on EVERY cold start with an already-restored session,
-                        // not just on a fresh login transition. Without this,
-                        // a session restored at launch that is torn down via
-                        // `logout()` before any E2EE activity in this process
-                        // (no DM sent/received) would leave `clearSessions()`
-                        // with no userId to scope its Keychain wipe against.
-                        Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-                        #if DEBUG
-                        // Vitrine : les vraies bases se remplissent avant le
-                        // préchargement de la liste ; l'écran de la scène s'ouvre une fois
-                        // le voile du lancement parti.
-                        await VitrineStage.remplir()
-                        VitrineStage.ouvrir(apres: launchSplash.$phase)
-                        #endif
-                        // Précharge le cache liste — SQLite read instantané,
-                        // retourne `.empty` au tout premier install. C'est ce que
-                        // le splash attend pour tomber : la liste se montre
-                        // servie, jamais vide puis remplie.
-                        launchSplash.reach(.conversationList)
-                        // La liste se lit DÈS la session restaurée : le `.task` de la racine
-                        // arriverait 0,6 à 2,2 s plus tard, et le voile tomberait sur une liste
-                        // vide. La racine rejoint ce chargement
-                        // (`ConversationListVMOwner.loadAtLaunch`). Lancé AVANT de rendre la
-                        // main : le premier rendu de la racine tient le fil principal 0,8 à
-                        // 1,9 s (Debug), et la lecture du cache le chevauche au lieu de le suivre.
-                        ConversationListVMOwner.prewarm(userId: authManager.currentUser?.id ?? "")
-                        _ = await CacheCoordinator.shared.conversations.load(for: "list")
-
-                        // Détacher TOUS les bootstraps réseau (push, VoIP,
-                        // unread, sync). Sur un réseau dégradé, chacun peut
-                        // timeout 60s — un cold start observé a déjà tenu
-                        // le splash 86s. Ces tâches tournent en parallèle
-                        // du reste du splash et finalisent imperceptiblement
-                        // après que la vue principale soit affichée.
-                        Task { [authManager] in
-                            _ = authManager  // capture explicite (lint)
-                            await Self.runPushBootstrapSequence(
-                                voipRegister: { VoIPPushManager.shared.register() },
-                                requestPushPermission: requestPushPermissionIfNeeded
-                            )
-                            await NotificationToastManager.shared.refreshUnreadCount()
-                            await NotificationCoordinator.shared.syncNow()
-                        }
-                    } else {
-                        handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
-                    }
-
-                    // **Pas d'attente des sockets derrière un cache prêt** : le splash tombe
-                    // dès que le cache est prêt. Attendre les sockets le retiendrait jusqu'à
-                    // 1,5 s pour que présences et non-lus ne se mettent pas à jour sous les
-                    // yeux — ce que Cache-First demande justement de laisser voir.
-                    await launchSplash.markReady()
-                    // Surface any crash/hang reports captured since the last
-                    // foreground. Done after the splash + session work so the
-                    // toast lands on a stable UI rather than racing the splash
-                    // animation.
-                    surfacePendingCrashReports()
-
-                    // Retention policy: purge messages older than 6 months from
-                    // GRDB on every cold start. The server remains the source of
-                    // truth — purged messages can be re-fetched via pagination.
-                    // Runs at background priority so it never blocks the UI.
-                    // grdb-08 — réutilise l'acteur DÉJÀ démarré du container :
-                    // une seconde instance relançait le write worker ET le GC
-                    // outbox exhausted à chaque boot. purgeOldMessages n'a
-                    // aucune dépendance à start().
-                    let retentionPersistence = dependencies.messagePersistence
-                    Task.detached(priority: .background) {
-                        do {
-                            let count = try await retentionPersistence.purgeOldMessages()
-                            if count > 0 {
-                                Logger(subsystem: "com.meeshy.app", category: "retention")
-                                    .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
-                            }
-                        } catch {
-                            // grdb-02 — le try? avaleur a masqué pendant des
-                            // mois un rollback à 100 % de la rétention.
-                            Logger(subsystem: "com.meeshy.app", category: "retention")
-                                .error("purgeOldMessages failed: \(error.localizedDescription, privacy: .public)")
-                        }
-                    }
-                }
+                .task { await runLaunchSequence() }
                 // La session elle-même (sockets, clés, notifications) se règle dans
                 // `MeeshyApp+Lifecycle.swift`, hors de toute fenêtre : ici, seulement
                 // l'état de CETTE vue.
@@ -819,7 +409,7 @@ struct MeeshyApp: App {
     /// seconde copie : le fil d'envoi la déclenche aussi. Au démarrage
     /// à froid, le report de l'inscription et la carte 5 de l'onboarding
     /// passent d'abord.
-    private func requestPushPermissionIfNeeded() async {
+    func requestPushPermissionIfNeeded() async {
         await PushPermissionPrompt.onColdStart(request: { await PushPermissionPrompt.requestIfNeeded(using: pushManager) })
     }
 
@@ -846,7 +436,7 @@ struct MeeshyApp: App {
     /// Each report is also logged via `Logger.crash` so the full call stack
     /// is grep-able in Console.app under subsystem `me.meeshy.app` /
     /// category `crash`.
-    private func surfacePendingCrashReports() {
+    func surfacePendingCrashReports() {
         guard !hasSurfacedCrashReports else { return }
         hasSurfacedCrashReports = true
 
@@ -908,7 +498,7 @@ struct MeeshyApp: App {
 
     // MARK: - Guest Deep Link (handles join/chat links when not authenticated)
 
-    private func handleGuestDeepLink(_ link: DeepLink?) {
+    func handleGuestDeepLink(_ link: DeepLink?) {
         guard let link else { return }
         // Hold the link until the session check finishes. Otherwise an
         // incoming join/chat link would activate a guest session BEFORE
