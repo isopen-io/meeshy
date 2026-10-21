@@ -7,45 +7,27 @@ import MeeshyUI
 
 extension ConversationView {
 
-    /// Sous ce seuil (fraction de la hauteur d'écran), le message est jugé
-    /// assez haut pour que le menu s'affiche entièrement sans remonter la
-    /// liste. Au-delà, le message est trop bas — la liste remonte jusqu'à ce
-    /// qu'il soit proche du centre vertical AVANT que le menu ne s'ouvre.
-    static let longPressRepositionThreshold: CGFloat = 0.6
-
-    /// Le temps laissé à `scrollToItem(at: .centeredVertically, animated:
-    /// true)` (`MessageListViewController.beginVerifiedScroll`) pour amener
-    /// le message vers le centre avant de présenter le menu par-dessus.
-    static let longPressRepositionDelay: TimeInterval = 0.3
-
-    /// **Le point d'entrée UNIQUE du menu longpress (#4004).**
+    /// **Le point d'entrée UNIQUE du menu longpress (#4004, #11208).**
     ///
-    /// Deux ajustements AVANT présentation, jamais après (sinon le menu
-    /// s'ouvrirait mal placé puis se recalerait sous les yeux de l'auteur) :
-    /// 1. Le clavier (et le panneau d'options du composer, même geste) se
-    ///    ferme — un clavier actif mange une partie de l'écran que le menu
-    ///    doit pouvoir occuper.
-    /// 2. Si le message est trop bas (`longPressRepositionThreshold`), la
-    ///    liste remonte vers son centre AVANT que `showOverlayMenu` ne passe
-    ///    à `true` — réutilise le mécanisme de scroll centré déjà existant
-    ///    (`scrollState.scrollToMessageId`/`scrollToMessageTrigger`, la MÊME
-    ///    voie que le saut vers une citation ou un message non lu), qui
-    ///    centre déjà verticalement sa cible
-    ///    (`collectionView.scrollToItem(at: .centeredVertically:)`).
+    /// Le clavier (et le panneau d'options du composer, même geste) se ferme
+    /// AVANT la présentation : un clavier actif mange une partie de l'écran que
+    /// le menu doit pouvoir occuper.
     ///
-    /// `cellFrame` (`nil` si la cellule n'est pas matérialisée) vient du
-    /// SITE D'APPEL UIKit (`MessageListViewController.cellFrameInWindow`,
-    /// même patron qu'`onAddReaction`) — **pas** de `frameTracker` (revue
-    /// 2026-08-27) : `MessageFramePreferenceKey` ne traverse la frontière
-    /// UIKit qu'en mode Rivière (`RiverBubbleView`, seul site qui la publie
-    /// réellement) ; la liste standard (`MessageListView`/
-    /// `MessageListViewController`) a RETIRÉ sa propre publication au profit
-    /// de `cellFrameInWindow` — lire `frameTracker.frame(for:)` ici aurait
-    /// rendu ce correctif un NO-OP silencieux dans le mode de lecture le
-    /// plus courant.
+    /// `cellFrame` (`nil` si la cellule n'est pas matérialisée) vient du SITE
+    /// D'APPEL UIKit (`MessageListViewController.cellFrameInWindow`, même
+    /// patron qu'`onAddReaction`) — **pas** de `frameTracker` (revue
+    /// 2026-08-27) : `MessageFramePreferenceKey` ne traverse la frontière UIKit
+    /// qu'en mode Rivière (`RiverBubbleView`, seul site qui la publie). Il est
+    /// GARDÉ dans `overlayState.overlaySourceFrame` (#11208) : il était reçu
+    /// puis jeté, et l'overlay retombait sur un aperçu reconstruit, centré,
+    /// loin de la cellule pressée.
     ///
-    /// `cellFrame == nil` : aucun ajustement de scroll n'a de sens, le menu
-    /// se présente directement.
+    /// **Ni défilement préalable, ni délai** (#11208). La liste remontait un
+    /// message trop bas, puis le menu paraissait 0,3 s plus tard : la liste
+    /// bougeait sous le doigt et l'appui long ne répondait pas dans l'image du
+    /// geste. L'overlay place lui-même son cluster dans la fenêtre — il le
+    /// remonte quand la cellule est trop basse, et `MessageOverlayRevealLaw`
+    /// dégage le menu d'un aperçu trop haut.
     ///
     /// L'état désactivé ici (clavier, panneau d'options) est mémorisé dans
     /// `overlayState.restoreAfterLongPress` et restitué par
@@ -59,30 +41,10 @@ extension ConversationView {
         overlayState.restoreAfterLongPress = (isTyping: isTyping, showOptions: composerState.showOptions)
         isTyping = false
         composerState.showOptions = false
-
-        // La fenêtre qui porte la conversation, jamais `UIScreen.main.bounds` ni la fenêtre clé : le seuil se
-        // mesure sur la FENÊTRE où la conversation est rendue, pas sur la dalle. En Split
-        // View ou Slide Over, la seconde est bien plus haute que la première —
-        // une cellule au bas de la fenêtre restait alors sous le seuil, et le
-        // menu paraissait sans le recentrage qu'il exige.
         // #9907 — l'aperçu d'une PIÈCE se présente au centre de l'écran,
-        // indépendamment de la cellule : aucun recentrage à attendre.
-        let cellFrame = pieceId == nil ? cellFrame : nil
-        guard let frame = cellFrame,
-              frame.midY > SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height * Self.longPressRepositionThreshold
-        else {
-            overlayState.showOverlayMenu = true
-            return
-        }
-
-        scrollState.scrollToMessageId = message.id
-        scrollState.scrollToMessageTrigger += 1
-        // `self` est une struct SwiftUI : la fermeture copie la vue, mais
-        // `@State` porte un stockage PARTAGÉ — muter `overlayState` ici
-        // touche bien l'état affiché, sans risque de cycle (pas de classe).
-        DispatchQueue.main.asyncAfter(deadline: .now() + Self.longPressRepositionDelay) {
-            self.overlayState.showOverlayMenu = true
-        }
+        // indépendamment de la cellule.
+        overlayState.overlaySourceFrame = pieceId == nil ? cellFrame : nil
+        overlayState.showOverlayMenu = true
     }
 
     /// **Restitue le clavier/panneau d'options désactivés par
@@ -96,6 +58,7 @@ extension ConversationView {
     /// écraserait ce choix. `editingMessageId != nil` juste après la
     /// fermeture est le signal que cette action a été prise.
     func restoreStateAfterLongPressIfNeeded() {
+        overlayState.overlaySourceFrame = nil
         guard let saved = overlayState.restoreAfterLongPress else { return }
         overlayState.restoreAfterLongPress = nil
         if composerState.editingMessageId != nil {
@@ -114,15 +77,24 @@ extension ConversationView {
     }
 
     /// Ce que le fil sert pour `message` — le drapeau de sa cellule et les
-    /// pistes qu'il élit, mêmes écrivains que la cellule (#9259).
+    /// pistes qu'il élit, mêmes écrivains que la cellule (#9259) — et ce que la
+    /// cellule pose autour de lui : anneau de story, humeur de l'auteur,
+    /// dénominateur des accusés, mêmes sources que `messageCellInputs` (#11208).
     func overlayThreadLanguage(for message: Message) -> MessageOverlayMenu.ThreadLanguage {
         let messageId = message.id
         return MessageOverlayMenu.ThreadLanguage(
             selection: viewModel.bubbleLanguageSelections[messageId],
-            usesFlatRow: readingModeController.mode.usesFlatRow,
+            readingMode: readingModeController.mode,
             servedAudioTracks: viewModel.servedAudioTracks(of: message),
             onSetActiveDisplayLanguage: { viewModel.setBubbleActiveDisplayLanguage($0, for: messageId) },
-            onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) }
+            onSetSecondaryLanguage: { viewModel.setBubbleSecondaryLanguage($0, for: messageId) },
+            senderStoryRing: message.isMe ? .none : storyViewModel.storyRingState(forUserId: message.senderId),
+            senderMoodEmoji: statusViewModel.statusForUser(userId: message.senderId)?.moodEmoji,
+            recipientCount: MessageCellInputs.recipientCount(
+                isDirect: isDirect,
+                serverRecipients: message.recipientCount,
+                memberCount: viewModel.currentConversation?.memberCount
+            )
         )
     }
 }
@@ -221,11 +193,8 @@ extension ConversationView {
                     }
                 }
                 if let idx = viewModel.messageIndex(for: msgId), canRemoveMessage(viewModel.messages[idx]) {
-                    Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                        overlayState.deleteConfirmMessageId = nil
-                        ContentRemovalPresenter.present(.message) { reason in
-                            Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
-                        }
+                    ContentRemovalOffer.messageButton(before: { overlayState.deleteConfirmMessageId = nil }) { reason in
+                        Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
                     }
                 }
                 Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
@@ -250,11 +219,8 @@ extension ConversationView {
                         deleteSelectedMessages(mode: .everyone)
                     }
                 }
-                if selectionOffersRemoval {
-                    Button(String(localized: "moderation.removal.action", defaultValue: "Retirer", bundle: .main), role: .destructive) {
-                        removeSelectedMessages()
-                    }
-                }
+                ContentRemovalOffer.selectionButton(selectedMessagesInThreadOrder, ids: overlayState.selectedMessageIds,
+                    viewModel: viewModel, mayRemove: canRemoveMessage, onConfirmed: endSelectionMode)
                 Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
                     deleteSelectedMessages(mode: .local)
                 }

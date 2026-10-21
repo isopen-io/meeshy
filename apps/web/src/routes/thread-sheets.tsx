@@ -13,7 +13,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { offerStudioSeed } from '@/lib/stories/studio-seed';
 import { loadMessagePiecesCatalog, translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { closeReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
-import { imageableOf, messageDetailExposureOf, messageMenuContextOf, translationChoices } from '@/lib/view/message-actions';
+import { imageableOf, messageDetailExposureOf, translationChoices } from '@/lib/view/message-actions';
 import { deliveryOf as deliveryStatusOf, isMineOf } from '@/lib/view/message';
 import type { MessageMenuController } from '@/lib/view/use-message-menu';
 
@@ -77,6 +77,7 @@ export type ThreadSheetsMenu = Pick<
   | 'reportFor'
   | 'onPickReportReason'
   | 'onDismissReport'
+  | 'menuContextOf'
 >;
 
 /**
@@ -166,6 +167,7 @@ export function ThreadMessageSheets({
             choices={data.choices}
             forwardItems={data.forwardItems}
             subjectLabel={data.subjectLabel}
+            canReact={data.canReact}
             onClose={messageMenu.onCloseMenu}
             /* LA PIÈCE VISÉE (#9907, #9908) — l'aperçu la montre seule, le
                défilement change la cible, le rail réagit sur elle. */
@@ -212,7 +214,8 @@ export function ThreadMessageSheets({
         const servedDetail = messageMenu.servedOf(detailFor);
         /* Un message protégé (#7580, #8008) : ni langues ni pièces — rien de son contenu. */
         const exposed = messageDetailExposureOf(detailMessage, { now: Date.now() });
-        const menuContext = messageMenuContextOf(detailMessage, { now: Date.now() });
+        /* Le contexte du MENU, pour CE lecteur (#11372) : « Plus… » ne retient pas moins que le menu. */
+        const menuContext = messageMenu.menuContextOf(detailMessage);
         const imageable = imageableOf(menuContext);
         const composable = menuContext.composableIndex === null || menuContext.composableIndex === undefined ? null : (detailMessage.attachments ?? [])[menuContext.composableIndex];
         return (

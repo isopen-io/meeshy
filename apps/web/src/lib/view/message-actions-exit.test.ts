@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 import { translation } from '@/lib/api/fixtures-base';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import type { ExitMessage } from './content-exit';
 import { forwardMenuItems, imageableOf, messageMenuContextOf, messageMenuItems } from './message-actions';
@@ -18,7 +19,13 @@ const { EPHEMERAL, EPHEMERAL_AFTER_READ } = MESSAGE_EFFECT_FLAGS;
 
 const photo = { mimeType: 'image/jpeg', isBlurred: false, isViewOnce: false };
 
+/* Le message d'un AUTRE, lu par un membre inscrit (#11210) : la loi partagée dit ce que le rôle permet. */
+const SCOPE = menuScope();
+
 const base = {
+  id: 'm1',
+  senderId: 'u-autre',
+  createdAt: new Date(NOW - 60_000),
   isViewOnce: false,
   viewOnceCount: 0,
   isBlurred: false,
@@ -35,7 +42,7 @@ const NATURES = {
 };
 
 const surfaces = (message: (typeof NATURES)[keyof typeof NATURES]) => {
-  const ctx = messageMenuContextOf(message, { now: NOW });
+  const ctx = messageMenuContextOf(message, { now: NOW, scope: SCOPE });
   return {
     menu: messageMenuItems(ctx).map((item) => item.id),
     forwardSubmenu: forwardMenuItems(ctx).map((item) => item.id),
@@ -47,7 +54,7 @@ const surfaces = (message: (typeof NATURES)[keyof typeof NATURES]) => {
 describe('menu du message, sous-menu de Transférer et « Plus… » — nature × action', () => {
   test('ORDINAIRE : tout est offert', () => {
     expect(surfaces(NATURES.ordinary)).toEqual({
-      menu: ['select', 'translate', 'copy', 'forward', 'reply', 'export', 'more'],
+      menu: ['reply', 'copy', 'forward', 'translate', 'select', 'export', 'more'],
       forwardSubmenu: ['forward', 'exportDiscussion'],
       plusImager: true,
       plusComposer: 0,
@@ -56,7 +63,7 @@ describe('menu du message, sous-menu de Transférer et « Plus… » — nature 
 
   test('FLAMME À DURÉE : Transférer seul — ni Copier, ni Imager, ni Imager la discussion, ni Composer', () => {
     expect(surfaces(NATURES['timed-flame'])).toEqual({
-      menu: ['select', 'translate', 'forward', 'reply', 'more'],
+      menu: ['reply', 'forward', 'translate', 'select', 'more'],
       forwardSubmenu: ['forward'],
       plusImager: false,
       plusComposer: null,
@@ -65,7 +72,7 @@ describe('menu du message, sous-menu de Transférer et « Plus… » — nature 
 
   test('FLAMME APRÈS LECTURE : aucune sortie — Transférer n’est pas rendu', () => {
     const offered = surfaces(NATURES['after-read-flame']);
-    expect(offered.menu).toEqual(['select', 'translate', 'reply', 'more']);
+    expect(offered.menu).toEqual(['reply', 'translate', 'select', 'more']);
     expect(offered.plusImager).toBe(false);
     expect(offered.plusComposer).toBeNull();
   });
@@ -82,9 +89,9 @@ describe('menu du message, sous-menu de Transférer et « Plus… » — nature 
     expect(messageMenuItems(ctx).map((item) => item.id)).not.toContain('exportQuick');
   });
 
-  test('la PIÈCE à vue unique d’un message ordinaire ferme les sorties du message entier', () => {
+  test('la PIÈCE à vue unique d’un message ordinaire ferme les sorties du message entier — et, pour la loi partagée, le message est à vue unique : ni réponse ni traduction (#11210)', () => {
     const offered = surfaces({ ...base, attachments: [{ ...photo, isViewOnce: true }] });
-    expect(offered.menu).toEqual(['select', 'translate', 'reply', 'more']);
+    expect(offered.menu).toEqual(['select', 'more']);
     expect(offered.plusImager).toBe(false);
   });
 
@@ -116,7 +123,7 @@ describe('une réponse qui cite un contenu protégé ne s’image pas', () => {
 
   test('témoin : une citation ordinaire laisse tout offert', () => {
     expect(surfaces(replying(quoted))).toEqual({
-      menu: ['select', 'translate', 'copy', 'forward', 'reply', 'export', 'more'],
+      menu: ['reply', 'copy', 'forward', 'translate', 'select', 'export', 'more'],
       forwardSubmenu: ['forward', 'exportDiscussion'],
       plusImager: true,
       plusComposer: 0,
@@ -125,8 +132,8 @@ describe('une réponse qui cite un contenu protégé ne s’image pas', () => {
 
   QUOTED_NATURES.forEach(([label, quote]) => {
     test(`citer ${label} : ni Imager, ni Export rapide, ni Imager la discussion — le reste demeure`, () => {
-      const ctx = { ...messageMenuContextOf(replying(quote), { now: NOW }), hasDefaultExportFormat: true };
-      expect(messageMenuItems(ctx).map((item) => item.id)).toEqual(['select', 'translate', 'copy', 'forward', 'reply', 'more']);
+      const ctx = { ...messageMenuContextOf(replying(quote), { now: NOW, scope: SCOPE }), hasDefaultExportFormat: true };
+      expect(messageMenuItems(ctx).map((item) => item.id)).toEqual(['reply', 'copy', 'forward', 'translate', 'select', 'more']);
       expect(forwardMenuItems(ctx).map((item) => item.id)).toEqual(['forward']);
       expect(imageableOf(ctx)).toBe(false);
       expect(ctx.composableIndex).toBe(0);

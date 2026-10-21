@@ -194,6 +194,60 @@ describe('useViewerSwipe — le doigt', () => {
     expect(journal).toEqual([]);
   });
 
+  test('un glissé horizontal SUIVI (#11198) remet chaque déplacement puis le relâcher à l’hôte, sans paginer au seuil', async () => {
+    const journal: string[] = [];
+    const moves: number[] = [];
+    const releases: { dx: number; predictedDx: number }[] = [];
+    const { stage, follow } = await mount({
+      onDismiss: () => journal.push('dismiss'),
+      onNext: () => journal.push('next'),
+      horizontal: {
+        onMove: (dx) => moves.push(dx),
+        onRelease: (release) => releases.push(release),
+        onCancel: () => journal.push('cancel'),
+      },
+    });
+    await drag(stage, [
+      [300, 100],
+      [295, 101],
+      [250, 110],
+      [120, 130],
+    ]);
+    expect(moves).toEqual([-50, -180]);
+    expect(releases.map((release) => release.dx)).toEqual([-180]);
+    expect(Number.isFinite(releases[0]?.predictedDx)).toBe(true);
+    expect(journal).toEqual([]);
+    expect(follow.style.transform).toBe('');
+  });
+
+  test('l’axe se fige au premier déplacement : un glissé né vertical ne tourne rien et ferme toujours', async () => {
+    const journal: string[] = [];
+    const moves: number[] = [];
+    const { stage } = await mount({
+      onDismiss: () => journal.push('dismiss'),
+      horizontal: { onMove: (dx) => moves.push(dx), onRelease: () => journal.push('release'), onCancel: () => journal.push('cancel') },
+    });
+    await drag(stage, [
+      [100, 100],
+      [102, 160],
+      [180, 280],
+    ]);
+    expect(moves).toEqual([]);
+    expect(journal).toEqual(['dismiss']);
+  });
+
+  test('un glissé horizontal suivi, annulé par le système, rend la main à l’hôte', async () => {
+    const journal: string[] = [];
+    const { stage } = await mount({
+      onDismiss: () => journal.push('dismiss'),
+      horizontal: { onMove: () => undefined, onRelease: () => journal.push('release'), onCancel: () => journal.push('cancel') },
+    });
+    await act(async () => stage.dispatchEvent(pointer('pointerdown', 300, 100)));
+    await act(async () => stage.dispatchEvent(pointer('pointermove', 200, 100)));
+    await act(async () => stage.dispatchEvent(pointer('pointercancel', 200, 100)));
+    expect(journal).toEqual(['cancel']);
+  });
+
   test('un geste annulé par le système remet la scène en place sans rien décider', async () => {
     const journal: string[] = [];
     const { stage, follow } = await mount({ onDismiss: () => journal.push('dismiss') });

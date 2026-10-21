@@ -10,7 +10,9 @@ import MeeshySDK
 /// l'éclair, la tête qui rayonne — pour que la famille ait une silhouette et
 /// non dix cartouches. Chaque légende vient de `String(localized:)`, donc de la
 /// langue du LECTEUR : le nom du gabarit EST le mot dessiné.
-extension StickerTemplateRenderer {
+enum SurpriseStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .surprise
+
 
     // MARK: Les légendes — une clé LITTÉRALE par gabarit
 
@@ -478,7 +480,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille STUPEUR
 
-    static let surpriseDrawers: [StickerTemplateDrawer] = [
+    static let drawers: [StickerTemplateDrawer] = [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.surpriseWow,
             name: { Self.wowCaption },

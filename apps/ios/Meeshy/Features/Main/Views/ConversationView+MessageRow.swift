@@ -36,8 +36,7 @@ extension ConversationView {
     /// suppression locale part IMMÉDIATEMENT, sans `confirmationDialog`.
     /// Tout autre message garde la confirmation habituelle.
     func requestDeleteMessage(_ messageId: String) {
-        if let idx = viewModel.messageIndex(for: messageId),
-           viewModel.messages[idx].deliveryStatus == .failed {
+        if viewModel.outgoingState(of: messageId)?.isFailed == true {
             Task { await viewModel.deleteMessage(messageId: messageId, mode: .everyone) }
             return
         }

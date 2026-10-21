@@ -8,11 +8,7 @@ private let pinLogger = MeeshyLog.logger(.tlsPinning, subsystem: .sdk)
 
 final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
 
-    // Log at most once per process lifetime that pinning is unconfigured. A
-    // check-then-set race is acceptable here: the worst outcome is two log
-    // entries, never a crash. `nonisolated(unsafe)` is required because Swift 6
-    // treats mutable static stored properties as data-race-unsafe by default.
-    private nonisolated(unsafe) static var didWarnUnconfigured = false
+    private static let didWarnUnconfigured = Locked(false)
 
     private let pinSetProvider: @Sendable () -> Set<String>
     private let pinnedHostProvider: @Sendable () -> String
@@ -61,8 +57,11 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
         switch CertificatePinning.evaluate(chain: chain, against: pinSet) {
         case .unconfigured:
             #if !DEBUG
-            if !Self.didWarnUnconfigured {
-                Self.didWarnUnconfigured = true
+            let isFirstWarning = CertificatePinningDelegate.didWarnUnconfigured.mutate { warned -> Bool in
+                defer { warned = true }
+                return !warned
+            }
+            if isFirstWarning {
                 pinLogger.fault("TLS pinning not configured for \(pinnedHost, privacy: .public) — system chain only. Populate MeeshyConfig.certificatePins before production to prevent MITM.")
             }
             #endif

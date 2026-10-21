@@ -16,7 +16,7 @@ import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
-import { useScene } from '@/lib/lens/scene';
+import { useListReorderFlip, useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { publicWebOrigin } from '@/lib/links/public-origin';
@@ -38,7 +38,7 @@ import { blockedIdsOf, lazyBlockedUsersQueryOptions } from '@/lib/api/blocked-pe
 import { blockTargetOf } from '@/lib/api/conversation-block-target';
 import { appQueryClient } from '@/lib/api/query-client';
 import { rowBlockAction, rowPreferenceAction } from '@/lib/api/row-intents';
-import type { RowIntent } from '@/lib/view/row-actions';
+import type { RowDetailsFocus, RowIntent } from '@/lib/view/row-actions';
 import { applyFilter, emptinessOf, filterLabel, LIST_FILTERS, NEUTRAL_SELECTION, orderConversations, selectionLabel, toggleFilter, type ListSelection } from '@/lib/lens/filters';
 import { memoriserLienParLecteur, partagerInvitationParrainee, retourInvitationParrainee } from '@/lib/view/invitation';
 import { authorStoryRing } from '@/lib/view/author-story-ring';
@@ -387,10 +387,15 @@ export default function ConversationsScreen() {
   const conversations = useMemo(() => withPreferenceOverrides(list.data ?? EMPTY_CONVERSATIONS, overrides), [list.data, overrides]);
   /* LA FICHE D'UNE CONVERSATION NON DIRECTE, OUVERTE DEPUIS SON AVATAR
      (#10300) — miroir de `ThemedConversationRow` (`onTap: onViewConversationInfo`).
-     `setDetailsId` est stable : les rangées mémoïsées ne se re-rendent pas. Un
+     `openDetailsOnTop` est stable : les rangées mémoïsées ne se re-rendent pas. Un
      visiteur sans compte n'ouvre aucune fiche (#10205). */
   const [detailsId, setDetailsId] = useState<string | null>(null);
-  const openDetails = useSpeaksAsGuest() ? undefined : setDetailsId;
+  const [detailsFocus, setDetailsFocus] = useState<RowDetailsFocus | undefined>(undefined);
+  const openDetailsOnTop = useCallback((id: string) => {
+    setDetailsFocus(undefined);
+    setDetailsId(id);
+  }, []);
+  const openDetails = useSpeaksAsGuest() ? undefined : openDetailsOnTop;
   const detailsConversation = detailsId === null ? undefined : conversations.find((c) => c.id === detailsId);
   /**
    * LES ENTRÉES D'iOS DU MENU D'UNE LIGNE (#10593) — Renommer ouvre la
@@ -406,6 +411,10 @@ export default function ConversationsScreen() {
   latest.current = { conversations, viewerId: viewer.id ?? '' };
   const handleRowIntent = useCallback((conversationId: string, intent: RowIntent) => {
     if (intent.kind === 'rename') return setRenameId(conversationId);
+    if (intent.kind === 'details') {
+      setDetailsFocus(intent.focus);
+      return setDetailsId(conversationId);
+    }
     if (intent.kind === 'favorite') return rowPreferenceAction(conversationId, { reaction: intent.emoji });
     if (intent.kind === 'moveTo') return rowPreferenceAction(conversationId, { categoryId: intent.categoryId });
     if (intent.intent === 'block') return setBlockId(conversationId);
@@ -505,6 +514,7 @@ export default function ConversationsScreen() {
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
+  useListReorderFlip(frame, visible);
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et
@@ -1007,8 +1017,12 @@ export default function ConversationsScreen() {
           viewerId={viewer.id ?? ''}
           deps={apiDeps}
           origin={publicWebOrigin(window.location.origin)}
-          onClose={() => setDetailsId(null)}
+          onClose={() => {
+            setDetailsId(null);
+            setDetailsFocus(undefined);
+          }}
           onRequestDeparture={(kind) => requestDeparture({ conversationId: detailsConversation.id, kind, returnToList: false })}
+          focus={detailsFocus}
         />
       )}
     </div>

@@ -33,6 +33,17 @@ const ptPublicEntry = {
   'magicLink.offline': 'Sem conexão. Verifique sua rede e tente novamente.',
   'magicLink.submit': 'Receber o link',
   'magicLink.submit.busy': 'Enviando…',
+  'magicLink.flowTitle': 'Entrar com e-mail',
+  'magicLink.validating': 'Verificando o link…',
+  'magicLink.invalid.title': 'Link inválido ou expirado',
+  'magicLink.invalid.body': 'Um link de acesso expira após 10 minutos e funciona apenas uma vez.',
+  'magicLink.requestNew': 'Solicitar um novo link',
+  'magicLink.backToLogin': 'Voltar para o login',
+  'magicLink.retry': 'Tentar novamente',
+  'magicLink.resend': 'Reenviar',
+  'magicLink.resend.label': 'Reenviar o link',
+  'magicLink.cancel': 'Cancelar',
+  'magicLink.linkExpired': 'Link expirado, solicite um novo',
 } satisfies Readonly<Record<keyof typeof frPublicEntry, string>>;
 
 export default ptPublicEntry;

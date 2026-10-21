@@ -43,4 +43,45 @@ final class StoryViewerToastHostGuardTests: XCTestCase {
                 + "partir avec, et ce témoin doit être retiré en connaissance de cause."
         )
     }
+
+    // MARK: - UN lecteur, quel que soit le point d'appel (#11197)
+
+    private static var appRoot: URL {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+    }
+
+    /// Les fichiers de l'app dont le CODE (commentaires retirés) contient `needle`.
+    private static func appFiles(containing needle: String) throws -> [String] {
+        let meeshy = appRoot.appendingPathComponent("Meeshy")
+        let files = FileManager.default.enumerator(at: meeshy, includingPropertiesForKeys: nil)?
+            .compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" } ?? []
+        return try files
+            .filter { AppSourceGuard.stripComments(try String(contentsOf: $0, encoding: .utf8)).contains(needle) }
+            .map(\.lastPathComponent)
+            .sorted()
+    }
+
+    /// **Le lecteur se monte à UN seul endroit.** Six `fullScreenCover`
+    /// recopiaient `StoryViewerContainer(` et cinq portes de composer
+    /// `StoryViewerView(` : les copies avaient divergé (pas de « Répondre »
+    /// depuis les favoris, pastille de synchronisation sous l'en-tête depuis la
+    /// conversation). Les points d'appel décrivent une `StoryViewerRequest` ou
+    /// des `StoryPreviewAssets` ; seul ce fichier en fait un lecteur.
+    func test_leLecteurNeSeMonteQueDansSonConteneur() throws {
+        XCTAssertEqual(try Self.appFiles(containing: "StoryViewerContainer("), ["StoryViewerContainer.swift"],
+                       "Un point d'appel monte sa propre copie du lecteur : passer par `StoryReaderCover`.")
+        XCTAssertEqual(try Self.appFiles(containing: "StoryViewerView("), ["StoryViewerContainer.swift"],
+                       "Un aperçu monte sa propre copie du lecteur : passer par `StoryPreviewReaderCover`.")
+    }
+
+    /// Le couvercle unique pose ce que chaque copie oubliait tour à tour.
+    func test_leCouvercleUniquePorteCeQueLesCopiesOubliaient() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit(Self.containerPath))
+        XCTAssertTrue(source.contains(".environment(\\.isStoryViewerPresenting, true)"))
+        XCTAssertTrue(source.contains("onReplyToStory: replyHandler"))
+        XCTAssertTrue(source.contains("initialStoryIndex: presented.initialStoryIndex"))
+    }
 }

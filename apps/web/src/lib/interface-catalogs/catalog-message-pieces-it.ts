@@ -46,6 +46,17 @@ const it = {
   'message.pin.failed': 'Impossibile fissare il messaggio',
   'message.unpin.failed': 'Impossibile rimuovere il messaggio dai fissati',
   'message.report.title': 'Segnala questo messaggio',
+  'message.menu.retry': 'Riprova',
+  'message.menu.translateOnDevice': 'Traduci sul dispositivo',
+  'message.menu.translateOnDevice.queued': 'Traduzione richiesta a questo dispositivo',
+  'message.menu.translateOnDevice.consent': 'Attiva «Traduci su questo dispositivo» nelle impostazioni',
+  'message.menu.e2eeAbsent': 'Crittografia end-to-end: niente trascrizione né analisi',
+  'message.link.open': 'Apri il link',
+  'message.link.copy': 'Copia il link',
+  'message.link.copied': 'Link copiato',
+  'message.location.open': 'Apri in una mappa',
+  'message.location.copy': 'Copia l’indirizzo',
+  'message.location.copied': 'Indirizzo copiato',
 } satisfies MessagePiecesCatalog;
 
 export default it;

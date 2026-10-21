@@ -899,11 +899,7 @@ struct LoginView: View {
         .padding(.horizontal, MeeshySpacing.xxxl)
         .opacity(showFields ? 1 : 0)
         .offset(y: showFields ? 0 : MeeshySpacing.xxxl)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                focusedField = .twoFactorCode
-            }
-        }
+        .onAppear(after: .milliseconds(350)) { focusedField = .twoFactorCode }
     }
 
     private func attempt2FALogin() {

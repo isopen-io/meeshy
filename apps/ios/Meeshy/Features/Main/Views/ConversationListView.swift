@@ -308,6 +308,7 @@ struct ConversationListView: View {
                 )
             }
         }
+        .modifier(ConversationListReorderAnimation(order: orderedConversationIds, scrollRelay: scrollOffsetRelay))
         .modifier(ConversationListKeyboardNavigation(
             visibleIds: conversationViewModel.groupedConversations
                 .filter { isSectionContentVisible($0.section.id) }.flatMap { $0.conversations.map(\.id) },
@@ -422,7 +423,8 @@ struct ConversationListView: View {
             // time. Re-evaluates when AuthManager publishes a new currentUser
             // because the parent body re-runs on @Published changes.
             preferredContentLanguages: passContext.preferredContentLanguages,
-            cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
+            previewFingerprint: conversationViewModel.previewLoader.fingerprint(for: conversation.id),
+            previewLoader: conversationViewModel.previewLoader,
             leadingActions: swipeActions.leadingSwipeActions(for: conversation),
             trailingActions: swipeActions.trailingSwipeActions(for: conversation),
             onViewStory: { handleStoryView(conversation) },
@@ -433,9 +435,7 @@ struct ConversationListView: View {
                 sheetTargets.inviteSheet = conversation
             } : nil,
             onTap: { openConversation(conversation) },
-            onLoadPreview: {
-                await conversationViewModel.loadPreviewMessages(for: conversation.id)
-            },
+            onLoadPreview: { await conversationViewModel.loadPreviewMessages(for: conversation.id, intent: $0) },
             enableAutoPreviewLoad: passContext.autoPreviewIds.contains(conversation.id),
             onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id, refresh: true) }
@@ -504,15 +504,18 @@ struct ConversationListView: View {
         .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentColor: conversation.accentColor) }
     }
 
-    private func openConversation(_ conversation: Conversation) {
-        guard ConversationLockManager.shared.isLocked(conversation.id) else { return onSelect(conversation) }
+    func openConversation(_ conversation: Conversation, searching: Bool = false) {
+        let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
+        if route.armsSearchNow { router.pendingOpenSearch = true }
+        guard route.presentsLockSheet else { return onSelect(conversation) }
+        sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
         lockSheetMode = .openConversation
         sheetTargets.lockSheet = conversation
     }
 
     private func openConversation(id: String) {
         conversationViewModel.groupedConversations.lazy.flatMap(\.conversations)
-            .first { $0.id == id }.map(openConversation(_:))
+            .first { $0.id == id }.map { openConversation($0) }
     }
 
     private var swipeActions: ConversationSwipeActions {

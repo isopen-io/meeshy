@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 
+import { impact } from '@/lib/view/haptics';
 import { GlyphSvg } from '@/components/glyph';
 import { FEED_GLYPHS } from '@/components/glyphs-feed';
 import {
@@ -31,11 +32,6 @@ import {
  */
 
 type Start = { readonly id: number; readonly x: number; readonly y: number; readonly direction: 'ltr' | 'rtl' };
-
-const vibrate = (ms: number): void => {
-  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-  navigator.vibrate(ms);
-};
 
 const directionOf = (element: Element): 'ltr' | 'rtl' => {
   const view = element.ownerDocument.defaultView;
@@ -110,7 +106,7 @@ export function CommentSwipe({
     current.current = next;
     setOffset(next);
     const armed = commentSwipeCommits(next);
-    if (armed && !crossed.current) vibrate(10);
+    if (armed && !crossed.current) impact('light');
     crossed.current = armed;
   }, []);
 
@@ -122,7 +118,7 @@ export function CommentSwipe({
       const replies = engaged.current && commentSwipeCommits(current.current);
       reset();
       if (!replies) return;
-      vibrate(20);
+      impact('medium');
       onReply?.();
     },
     [onReply, reset],

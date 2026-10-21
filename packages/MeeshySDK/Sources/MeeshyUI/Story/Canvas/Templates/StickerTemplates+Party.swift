@@ -9,7 +9,9 @@ import MeeshySDK
 /// chapeau, ruban — et trois posent un symbole SF sur une forme dessinée. Les
 /// légendes viennent de `String(localized:)`, donc de la langue du LECTEUR,
 /// comme la météo : l'id porte le sens, le dessin le dit dans chaque langue.
-extension StickerTemplateRenderer {
+enum PartyStickerTemplates: StickerTemplateFamilyDrawing {
+    static let family: StickerTemplateFamily = .party
+
 
     // MARK: - Le patron « motif dessus, légende dessous »
 
@@ -657,7 +659,7 @@ extension StickerTemplateRenderer {
 
     // MARK: - Le registre de la famille FÊTE
 
-    static let partyDrawers: [StickerTemplateDrawer] = stackCards.map { stackDrawer($0) } + [
+    static let drawers: [StickerTemplateDrawer] = stackCards.map { stackDrawer($0) } + [
         StickerTemplateDrawer(
             id: StickerTemplateCatalog.ID.partyBalloons,
             name: { String(localized: "sticker.template.party.balloons", defaultValue: "Ballons", bundle: .module) },

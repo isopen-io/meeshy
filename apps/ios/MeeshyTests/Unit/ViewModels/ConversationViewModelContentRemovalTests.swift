@@ -111,7 +111,7 @@ final class ConversationViewModelContentRemovalTests: XCTestCase {
         try await seed(fx, localId: "msg-b", senderId: "another-one")
         try await seed(fx, localId: "msg-mine", senderId: Self.viewerId)
 
-        await fx.sut.removeSelectedMessages(["msg-a", "msg-b", "msg-mine"], reason: "Propos haineux")
+        await ConversationSelectionRemoval(viewModel: fx.sut).run(["msg-a", "msg-b", "msg-mine"], reason: "Propos haineux")
 
         XCTAssertEqual(fx.messageService.deleteCallCount, 3)
         XCTAssertEqual(fx.messageService.deleteReasonsByMessageId["msg-a"], .some("Propos haineux"))
@@ -129,7 +129,7 @@ final class ConversationViewModelContentRemovalTests: XCTestCase {
         try await seed(fx, localId: "msg-b", senderId: "another-one")
         fx.messageService.deleteFailingMessageIds = ["msg-b"]
 
-        await fx.sut.removeSelectedMessages(["msg-a", "msg-b"], reason: "Propos haineux")
+        await ConversationSelectionRemoval(viewModel: fx.sut).run(["msg-a", "msg-b"], reason: "Propos haineux")
 
         let kept = try await fx.record("msg-b")
         XCTAssertNil(kept?.deletedAt, "le message refusé revient")
@@ -142,7 +142,7 @@ final class ConversationViewModelContentRemovalTests: XCTestCase {
         let fx = try await makeFixture(isOnline: false)
         try await seed(fx, localId: "msg-a", senderId: "someone-else")
 
-        await fx.sut.removeSelectedMessages(["msg-a"], reason: "Propos haineux")
+        await ConversationSelectionRemoval(viewModel: fx.sut).run(["msg-a"], reason: "Propos haineux")
 
         XCTAssertEqual(fx.messageService.deleteCallCount, 0)
         let row = try await fx.record("msg-a")

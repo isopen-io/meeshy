@@ -1,49 +1,42 @@
-import type { Message } from '@/lib/api/types';
+import type { MessageActionVerdicts } from '@meeshy/shared/utils/message-action-policy';
 
-import { isMineOf } from './message';
+import { messageActionsOf, type ActionMessage, type ActionScope } from './message-action-scope';
 
 /**
- * CE QUE LE DIALOGUE DE SUPPRESSION OFFRE (#10582) — la règle du SERVEUR, lue
- * avant l'aller-retour.
+ * CE QUE LE DIALOGUE DE SUPPRESSION OFFRE (#10582, #11150, #11210) — une
+ * PROJECTION des verdicts de `messageActionsFor` (`@meeshy/shared`), qui
+ * reprend `admitMessageDelete` : aucune règle de rôle ni d'auteur n'est
+ * réécrite ici.
  *
- * « POUR TOUS » suit `admitMessageDelete` (`services/gateway/src/services/
- * messaging/messageDeleteAdmission.ts`) : l'auteur supprime son message SANS
- * LIMITE DE TEMPS. iOS n'offre ce choix que pendant deux heures
- * (`ConversationCommandHandler.canDeleteForEveryone`) ; le serveur n'impose
- * aucune fenêtre, et c'est lui que cette loi suit — une fenêtre posée ici
- * retirerait à un auteur un droit que la passerelle lui reconnaît.
- * Un message système émis par le lecteur (l'avis de capture, #9641) ne se
- * retire pas, un message déjà supprimé non plus.
- *
- * « RETIRER » (#11150) — le message d'un AUTRE, par qui modère la conversation
- * (`moderatesConversation`, `content-removal.ts` : rôle de conversation ou de
- * plateforme, jamais en direct). L'hôte le décide et le remet en `moderates` ;
- * le retrait demande un motif, et l'auteur en est prévenu. Une sélection qui
- * mêle les miens et ceux des autres se retire en entier : la passerelle ignore
- * le motif sur les messages de l'auteur.
+ * - « POUR TOUS » : l'auteur, SANS LIMITE DE TEMPS (le serveur n'impose aucune
+ *   fenêtre) ; un avis système ou un message déjà supprimé, jamais.
+ * - « RETIRER » : le message d'un AUTRE, par qui modère la conversation (rôle
+ *   de conversation ou de plateforme, jamais en direct) ; un motif est exigé
+ *   et l'auteur en est prévenu. Une sélection qui mêle les miens et ceux des
+ *   autres se retire en entier : la passerelle ignore le motif sur les messages
+ *   de l'auteur.
+ * - « POUR MOI » : un compte et un message que le serveur connaît.
  *
  * L'offre vaut pour TOUS les messages visés ou pour aucun : un seul message
- * d'un autre dans la sélection retire « pour tous » au lot entier, comme
+ * d'un autre retire « pour tous » au lot entier, comme
  * `selectionAllowsDeleteForAll` sur iOS.
- *
- * « POUR MOI » demande un compte (`routes/user-deletions.ts` refuse la
- * session anonyme) et un message que le serveur connaît.
  */
-export type DeleteViewer = { readonly id: string; readonly hasAccount: boolean; readonly moderates?: boolean };
-
 export type DeleteOffer = { readonly forEveryone: boolean; readonly forMe: boolean; readonly remove: boolean };
-
-type DeletableMessage = Pick<Message, 'id' | 'senderId' | 'deletedAt' | 'messageType'>;
 
 const NOTHING: DeleteOffer = { forEveryone: false, forMe: false, remove: false };
 
-const knownToServer = (message: DeletableMessage): boolean => !message.id.startsWith('cid_');
+const removable = (verdicts: MessageActionVerdicts): boolean => verdicts.deleteForEveryone || verdicts.remove !== null;
 
-export function deleteOfferOf(messages: readonly DeletableMessage[], viewer: DeleteViewer): DeleteOffer {
-  if (messages.length === 0 || !viewer.hasAccount || !messages.every(knownToServer)) return NOTHING;
-  const live = messages.every((m) => m.deletedAt == null && m.messageType !== 'system');
-  const forEveryone = live && messages.every((m) => isMineOf(m as Message, viewer.id));
-  return { forEveryone, forMe: true, remove: live && !forEveryone && viewer.moderates === true };
+export function deleteOfferOf(messages: readonly ActionMessage[], scope: ActionScope, input: { readonly now: number } = { now: Date.now() }): DeleteOffer {
+  if (messages.length === 0) return NOTHING;
+  const verdicts = messages.map((message) => messageActionsOf(message, scope, input).verdicts);
+  const forEveryone = verdicts.every((v) => v.deleteForEveryone);
+  const forMe = verdicts.every((v) => v.deleteForMe);
+  const remove = !forEveryone && verdicts.every(removable) && verdicts.some((v) => v.remove !== null);
+  return forMe || forEveryone || remove ? { forEveryone, forMe, remove } : NOTHING;
 }
+
+/** « RETIRER » SEUL (#11210) — le geste du menu rapide : il mène droit au motif. */
+export const removalOfferOf = (offer: DeleteOffer): DeleteOffer | null => (offer.remove ? { forEveryone: false, forMe: false, remove: true } : null);
 
 export const offersDeletion = (offer: DeleteOffer): boolean => offer.forEveryone || offer.forMe || offer.remove;
