@@ -1,5 +1,5 @@
 {
-  "$format": "Générés en EXÉCUTANT messageActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
+  "$format": "Générés en EXÉCUTANT messageActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react, pin) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
   "vectors": [
     {
       "_label": "groupe-membre-texte-d-autrui",
@@ -746,8 +746,7 @@
           ],
           "organize": [],
           "more": [
-            "sentiment",
-            "report"
+            "sentiment"
           ],
           "moderation": [
             "remove"
@@ -764,7 +763,7 @@
             "reasonRequired": true
           },
           "pin": null,
-          "report": true,
+          "report": false,
           "canReact": false,
           "canReply": false,
           "translate": "served-switch",
@@ -911,9 +910,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment",
             "report"
@@ -928,7 +925,7 @@
           "deleteForEveryone": false,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": true,
           "canReact": true,
           "canReply": false,
@@ -1760,8 +1757,7 @@
           ],
           "organize": [],
           "more": [
-            "sentiment",
-            "report"
+            "sentiment"
           ],
           "moderation": [],
           "destructive": [
@@ -1774,7 +1770,7 @@
           "deleteForMe": true,
           "remove": null,
           "pin": null,
-          "report": true,
+          "report": false,
           "canReact": false,
           "canReply": false,
           "translate": "served-switch",
@@ -2514,9 +2510,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment",
             "report"
@@ -2531,7 +2525,7 @@
           "deleteForEveryone": false,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": true,
           "canReact": true,
           "canReply": false,
@@ -2683,9 +2677,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment",
             "report"
@@ -2700,7 +2692,7 @@
           "deleteForEveryone": false,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": true,
           "canReact": true,
           "canReply": false,
@@ -2765,9 +2757,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment",
             "report"
@@ -2782,7 +2772,7 @@
           "deleteForEveryone": false,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": true,
           "canReact": true,
           "canReply": false,
@@ -2794,7 +2784,10 @@
           "save": false,
           "serverFeatureAbsence": null
         }
-      }
+      },
+      "clientStricter": [
+        "pin"
+      ]
     },
     {
       "_label": "groupe-ecriture-reservee-aux-membres-le-membre-repond",
@@ -2930,9 +2923,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment",
             "report"
@@ -2947,7 +2938,7 @@
           "deleteForEveryone": false,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": true,
           "canReact": true,
           "canReply": false,
@@ -3012,9 +3003,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment",
             "report"
@@ -3033,7 +3022,7 @@
           "remove": {
             "reasonRequired": true
           },
-          "pin": "pin",
+          "pin": null,
           "report": true,
           "canReact": true,
           "canReply": false,
@@ -3185,9 +3174,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment"
           ],
@@ -3202,7 +3189,7 @@
           "deleteForEveryone": true,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": false,
           "canReact": false,
           "canReply": false,
@@ -3267,9 +3254,7 @@
             "forward",
             "translate"
           ],
-          "organize": [
-            "pin"
-          ],
+          "organize": [],
           "more": [
             "sentiment"
           ],
@@ -3284,7 +3269,7 @@
           "deleteForEveryone": true,
           "deleteForMe": true,
           "remove": null,
-          "pin": "pin",
+          "pin": null,
           "report": false,
           "canReact": false,
           "canReply": false,
@@ -3369,6 +3354,437 @@
           "deleteForMe": true,
           "remove": null,
           "pin": "unpin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "broadcast-abonne-ne-desepingle-pas",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "pinnedAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "broadcast",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": true,
+          "defaultWriteRole": "admin"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": null,
+          "pin": null,
+          "report": true,
+          "canReact": true,
+          "canReply": false,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "broadcast-moderator-plateforme-epingle",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "broadcast",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": true,
+          "defaultWriteRole": "admin"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "MODERATOR",
+          "conversationRole": "member",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "edit",
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": {
+            "asModerator": true,
+            "windowEndsAt": null
+          },
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "groupe-ecriture-moderateurs-le-moderateur-epingle",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "moderator"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "moderator",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
+          "report": true,
+          "canReact": true,
+          "canReply": true,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "groupe-clos-ne-desepingle-pas",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z",
+          "pinnedAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": "2026-10-19T00:00:00.000Z",
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "creator",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": null,
+          "report": true,
+          "canReact": false,
+          "canReply": false,
+          "translate": "served-switch",
+          "transcribe": false,
+          "sentiment": true,
+          "forward": true,
+          "copy": true,
+          "save": false,
+          "serverFeatureAbsence": null
+        }
+      }
+    },
+    {
+      "_label": "annonces-sur-un-groupe-l-admin-epingle",
+      "input": {
+        "message": {
+          "id": "65f000000000000000000001",
+          "senderId": "part-author",
+          "authorUserId": "user-author",
+          "content": "Bonjour à tous",
+          "messageType": "text",
+          "createdAt": "2026-10-20T11:00:00.000Z"
+        },
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": true,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": "admin",
+          "isActiveMember": true,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        },
+        "now": 1792497600000
+      },
+      "expected": {
+        "content": {
+          "kind": "text",
+          "flags": {
+            "viewOnce": false,
+            "blurred": false,
+            "encrypted": false,
+            "ephemeral": false,
+            "optimistic": false,
+            "failed": false,
+            "captureNotice": false
+          }
+        },
+        "groups": {
+          "primary": [
+            "reply",
+            "copy",
+            "forward",
+            "translate"
+          ],
+          "organize": [
+            "pin"
+          ],
+          "more": [
+            "sentiment",
+            "report"
+          ],
+          "moderation": [
+            "remove"
+          ],
+          "destructive": [
+            "deleteForMe"
+          ]
+        },
+        "verdicts": {
+          "edit": null,
+          "deleteForEveryone": false,
+          "deleteForMe": true,
+          "remove": {
+            "reasonRequired": true
+          },
+          "pin": "pin",
           "report": true,
           "canReact": true,
           "canReply": true,
@@ -4064,7 +4480,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -4237,7 +4654,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -4321,7 +4739,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -4755,7 +5174,8 @@
       "clientStricter": [
         "edit",
         "delete",
-        "react"
+        "react",
+        "pin"
       ]
     },
     {
@@ -4834,7 +5254,8 @@
       "clientStricter": [
         "edit",
         "delete",
-        "react"
+        "react",
+        "pin"
       ]
     },
     {
@@ -4912,7 +5333,8 @@
       "clientStricter": [
         "edit",
         "delete",
-        "react"
+        "react",
+        "pin"
       ]
     },
     {
@@ -4994,7 +5416,8 @@
       "clientStricter": [
         "edit",
         "delete",
-        "react"
+        "react",
+        "pin"
       ]
     },
     {
@@ -6249,7 +6672,8 @@
       },
       "clientStricter": [
         "edit",
-        "delete"
+        "delete",
+        "pin"
       ]
     },
     {
@@ -6330,7 +6754,8 @@
       },
       "clientStricter": [
         "edit",
-        "delete"
+        "delete",
+        "pin"
       ]
     },
     {
@@ -6407,7 +6832,8 @@
       },
       "clientStricter": [
         "edit",
-        "delete"
+        "delete",
+        "pin"
       ]
     },
     {
@@ -6484,7 +6910,8 @@
       },
       "clientStricter": [
         "edit",
-        "delete"
+        "delete",
+        "pin"
       ]
     },
     {
@@ -6564,7 +6991,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -6646,7 +7074,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -6726,7 +7155,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -6810,7 +7240,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -6891,7 +7322,8 @@
         }
       },
       "clientStricter": [
-        "edit"
+        "edit",
+        "pin"
       ]
     },
     {
@@ -6970,7 +7402,10 @@
           "save": false,
           "serverFeatureAbsence": null
         }
-      }
+      },
+      "clientStricter": [
+        "pin"
+      ]
     },
     {
       "_label": "invite-sans-droit-d-envoi",
@@ -7049,7 +7484,8 @@
         }
       },
       "clientStricter": [
-        "react"
+        "react",
+        "pin"
       ]
     },
     {
@@ -7131,7 +7567,8 @@
       },
       "clientStricter": [
         "edit",
-        "delete"
+        "delete",
+        "pin"
       ]
     }
   ]

@@ -82,6 +82,8 @@ describe('messageActionsFor — les verdicts alignés sur la passerelle (#11205)
     expect(actions({ message: mine }).verdicts.report).toBe(false);
     expect(actions({ message: { messageType: 'system' } }).verdicts.report).toBe(false);
     expect(actions().verdicts.report).toBe(true);
+    expect(actions({ viewer: { isActiveMember: false } }).verdicts.report).toBe(false);
+    expect(actions({ viewer: { isActiveMember: false, platformRole: 'MODERATOR', conversationRole: null } }).verdicts.report).toBe(false);
   });
 
   it('en direct, aucun tiers ne retire un message, même un ADMIN de plateforme', () => {

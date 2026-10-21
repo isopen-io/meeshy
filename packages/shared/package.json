@@ -106,6 +106,8 @@
     "generate:glory-frames": "bun scripts/generate-glory-frames.ts",
     "translator-languages:generate": "tsx scripts/generate-translator-languages.ts",
     "translator-languages:check": "tsx scripts/generate-translator-languages.ts --check",
+    "action-policy-vectors:generate": "bun scripts/generate-action-policy-vectors.ts",
+    "action-policy-vectors:check": "bun scripts/generate-action-policy-vectors.ts --check",
     "generate": "prisma generate --schema=./prisma/schema.prisma --generator client",
     "generate:all": "prisma generate --schema=./prisma/schema.prisma",
     "generate:python": "prisma generate --schema=./prisma/schema.prisma --generator client_py",
