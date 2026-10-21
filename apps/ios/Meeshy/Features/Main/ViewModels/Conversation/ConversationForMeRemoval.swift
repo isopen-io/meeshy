@@ -37,10 +37,6 @@ nonisolated struct PersonalConcealment: Equatable, Sendable {
     func conceals(_ record: MessageRecord) -> Bool {
         ids.contains(record.localId) || record.serverId.map(ids.contains) == true
     }
-
-    func filtering(_ records: [MessageRecord]) -> [MessageRecord] {
-        ids.isEmpty ? records : records.filter { !conceals($0) }
-    }
 }
 
 /// **« Supprimer pour moi » sur une SÉLECTION** : un envoi raté n'a pas d'id
