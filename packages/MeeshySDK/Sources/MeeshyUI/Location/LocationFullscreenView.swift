@@ -78,7 +78,7 @@ public struct LocationFullscreenView: View {
                         .font(.system(size: MeeshyIconSize.xs))
                         .foregroundColor(Color(hex: accentColor))
                     Text(name)
-                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                         .foregroundColor(.primary)
                     Spacer()
                 }
@@ -91,11 +91,11 @@ public struct LocationFullscreenView: View {
 
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagée", bundle: .module))
-                        .font(.system(size: MeeshyFont.bodySize, weight: .semibold))
+                        .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
                         .foregroundColor(.primary)
                     if let addr = address {
                         Text(addr)
-                            .font(.system(size: MeeshyFont.smallSize))
+                            .font(MeeshyFont.relative(MeeshyFont.smallSize))
                             .foregroundColor(.secondary)
                     }
                     Text(String(format: "%.5f, %.5f", latitude, longitude))
@@ -114,7 +114,7 @@ public struct LocationFullscreenView: View {
                         Image(systemName: "map.fill")
                             .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -132,7 +132,7 @@ public struct LocationFullscreenView: View {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                             .font(.system(size: MeeshyIconSize.xs, weight: .semibold))
                         Text(String(localized: "location.fullscreen.directions", defaultValue: "Itinéraire", bundle: .module))
-                            .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                            .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
                     .frame(maxWidth: .infinity)

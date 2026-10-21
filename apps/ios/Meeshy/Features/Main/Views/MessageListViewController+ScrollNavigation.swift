@@ -179,14 +179,13 @@ extension MessageListViewController {
         // retenait le VC entier (run loop → link → VC, deinit inatteignable)
         // quand on quittait la conversation pendant une recherche de message
         // cité — tick 60-120 fps + paginations réseau pour un écran mort.
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
             }
             self.slowScrollTick(link)
         }
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
         link.add(to: .main, forMode: .common)
         slowScrollDisplayLink = link
     }

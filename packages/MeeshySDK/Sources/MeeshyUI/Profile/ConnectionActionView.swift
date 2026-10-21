@@ -104,7 +104,7 @@ public struct ConnectionActionView: View {
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
             }
             Text(text)
-                .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
         }
         .foregroundColor(color)
         .padding(.horizontal, MeeshySpacing.smPlus)
@@ -153,7 +153,7 @@ public struct ConnectionActionView: View {
                 Image(systemName: "clock")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(pendingLabel)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.warning)
             .padding(.horizontal, MeeshySpacing.smPlus)
@@ -174,7 +174,7 @@ public struct ConnectionActionView: View {
                 Image(systemName: "person.badge.plus")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
                 Text(addLabel)
-                    .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
             .foregroundColor(.white)
             .padding(.horizontal, MeeshySpacing.md)

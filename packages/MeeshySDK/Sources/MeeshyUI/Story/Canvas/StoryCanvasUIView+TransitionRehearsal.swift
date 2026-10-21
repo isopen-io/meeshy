@@ -88,12 +88,11 @@ extension StoryCanvasUIView {
         noteEditInteraction()
         let maskBefore = rootLayer.mask
         StoryRenderer.applyOpening(opening, rootLayer: rootLayer, elapsed: 0)
-        let link = WeakDisplayLinkTarget.makeLink { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .gesture) { [weak self] link in
             self?.advanceTransitionRehearsal(at: link.targetTimestamp)
         }
         transitionRehearsal = StoryCanvasTransitionRehearsalRun(plan: plan, link: link,
                                                                maskBefore: maskBefore)
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)
     }
 

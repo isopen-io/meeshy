@@ -150,8 +150,8 @@ struct MintCeremonyStageLayers: View {
             tools
             impacts
             Text(refusal.map(MintCeremonyCopy.refused) ?? MintCeremonyCopy.say(edition, number: number))
-                .font(.system(size: 14 * stage.k).italic())
-                .foregroundColor(palette.say)
+                .font(stage.font(14).italic())
+                .foregroundStyle(palette.say)
                 .multilineTextAlignment(.center)
                 .lineSpacing(3 * stage.k)
                 .opacity(frame.say)
@@ -163,11 +163,11 @@ struct MintCeremonyStageLayers: View {
     private var sign: some View {
         VStack(spacing: 3 * stage.k) {
             Text(MintCeremonyCopy.ancestors)
-                .font(.system(size: 15 * stage.k, weight: .semibold))
-                .foregroundColor(palette.sign)
+                .font(stage.font(15, weight: .semibold))
+                .foregroundStyle(palette.sign)
             Text(MintCeremonyCopy.ancestorsLine(edition))
-                .font(.system(size: 11.5 * stage.k, weight: .medium))
-                .foregroundColor(palette.signSub)
+                .font(stage.font(11.5, weight: .medium))
+                .foregroundStyle(palette.signSub)
         }
         .multilineTextAlignment(.center)
         .opacity(frame.sign)
@@ -183,9 +183,9 @@ struct MintCeremonyStageLayers: View {
             .scaleEffect(frame.orb)
             .modifier(MintCeremonyStageBox(stage: stage, x: 150, y: 66, w: 60, h: 60))
         Text(MintCeremonyCopy.light)
-            .font(.system(size: 11 * stage.k, weight: .semibold))
+            .font(stage.font(11, weight: .semibold))
             .tracking(0.66 * stage.k)
-            .foregroundColor(palette.orbInk)
+            .foregroundStyle(palette.orbInk)
             .modifier(MintCeremonyStageBox(stage: stage, x: 100, y: 128, w: 160, h: 16))
         RoundedRectangle(cornerRadius: 4 * stage.k)
             .fill(LinearGradient(colors: MintCeremonyPalette.anvilTop, startPoint: .top, endPoint: .bottom))
@@ -256,8 +256,8 @@ struct MintCeremonyStageLayers: View {
 
     private func tchak(_ text: String) -> some View {
         Text(text)
-            .font(.system(size: 28 * stage.k, weight: .black))
-            .foregroundColor(palette.tchak)
+            .font(stage.font(28, weight: .black))
+            .foregroundStyle(palette.tchak)
             .shadow(color: palette.shade, radius: 0, y: 2 * stage.k)
     }
 }
@@ -414,8 +414,8 @@ struct MintCeremonyCoinLayers: View {
                 .opacity(frame.coin.opacity)
                 .modifier(MintCeremonyStageBox(stage: stage, x: frame.coin.x - 75, y: frame.coin.y - 75, w: 150, h: 150))
             Text(MintCeremonyCopy.glory(GameGlory.points.mint))
-                .font(.system(size: 13 * stage.k, weight: .heavy))
-                .foregroundColor(palette.gloryInk)
+                .font(stage.font(13, weight: .heavy))
+                .foregroundStyle(palette.gloryInk)
                 .lineLimit(1)
                 .opacity(frame.glory.opacity)
                 .modifier(MintCeremonyStageBox(stage: stage, x: target.x - 80, y: target.y - 24 - 40 * frame.glory.rise, w: 160, h: 18))
