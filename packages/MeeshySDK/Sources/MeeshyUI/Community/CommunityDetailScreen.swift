@@ -176,6 +176,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                     .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                     .background(Color.black.opacity(0.35))
                     .clipShape(Circle())
+                    .meeshyTapTarget()
             }
 
             Spacer()
@@ -204,6 +205,7 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
+                        .meeshyTapTarget()
                 }
             } else {
                 Button {
@@ -216,11 +218,12 @@ public struct CommunityDetailScreen<ViewModel: CommunityDetailModeling, Settings
                         .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
                         .background(Color.black.opacity(0.35))
                         .clipShape(Circle())
+                        .meeshyTapTarget()
                 }
             }
         }
-        .padding(.horizontal, MeeshySpacing.lg)
-        .padding(.top, MeeshySpacing.xs)
+        .padding(.horizontal, MeeshySpacing.lg - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
+        .padding(.top, MeeshySpacing.xs - MeeshyTapTarget.inset(forVisualSide: MeeshyControlSize.regular))
     }
 
     // MARK: - Header (bannière + avatar + infos)
