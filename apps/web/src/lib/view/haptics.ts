@@ -101,13 +101,19 @@ export function installHapticsDriver(driver: HapticsDriver | null): void {
   registry.driver = driver;
 }
 
+const reducedMotion = (): boolean =>
+  typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 /** Un hôte EXPLICITE (témoin, appelant qui sait) passe avant tout moteur installé. */
 const driverFor = (host: VibrateHost | undefined): HapticsDriver =>
   host !== undefined ? vibrationDriver(host) : (registry.driver ?? shellHapticsDriver(coqueCourante(), browserHost()));
 
-export const impact = (strength: ImpactStrength, host?: VibrateHost): boolean => driverFor(host).cue(strength);
+/** `prefers-reduced-motion` : aucune vibration, ni navigateur ni plugin natif. */
+export const impact = (strength: ImpactStrength, host?: VibrateHost): boolean =>
+  !reducedMotion() && driverFor(host).cue(strength);
 
-export const success = (host?: VibrateHost): boolean => driverFor(host).cue('success');
+export const success = (host?: VibrateHost): boolean => !reducedMotion() && driverFor(host).cue('success');
 
 /** Un motif libre — réservé aux chorégraphies qui ont le leur (le jeu). */
-export const playPattern = (ms: readonly number[], host?: VibrateHost): boolean => driverFor(host).pattern(ms);
+export const playPattern = (ms: readonly number[], host?: VibrateHost): boolean =>
+  !reducedMotion() && driverFor(host).pattern(ms);
