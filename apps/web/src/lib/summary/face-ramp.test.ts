@@ -13,7 +13,7 @@ const NOW = Date.UTC(2026, 0, 10, 9, 0, 0);
 const entry = (partial: Partial<FaceRampRankingInput> & { readonly id: string; readonly displayName: string }): FaceRampRankingInput => ({
   avatarUrl: null,
   colorHex: '#000000',
-  presence: 'offline',
+  participant: undefined,
   mentionEvidence: [],
   directReplyEvidence: [],
   unansweredQuestionEvidence: [],
@@ -26,7 +26,7 @@ const participant = (id: string, displayName: string): DigestParticipant => ({
   displayName,
   avatarUrl: null,
   colorHex: '#000000',
-  presence: 'offline',
+  participant: undefined,
 });
 
 describe('rankFaceRamp — les douze cas', () => {

@@ -16,13 +16,23 @@ import { presenceKeyOf, presenceOf } from './conversation';
  */
 export const presenceClock: IntervalClock = createIntervalClock(30_000);
 
-/** La présence SERVIE d'un participant : la carte vivante d'abord, la charge REST sinon. */
-export function servedPresenceOf(
+/**
+ * UNE PERSONNE QU'UNE VUE NOMME (#11412) — son identifiant quand la vue le
+ * connaît (un membre actif, un visage de la rampe), et la charge REST qui la
+ * porte quand elle a été servie. L'un ou l'autre peut manquer.
+ */
+export type PresenceSubject = {
+  readonly userId: string | undefined;
+  readonly participant: Participant | undefined;
+};
+
+/** La présence SERVIE : la carte vivante d'abord (par l'identifiant nommé, sinon la clé du participant), la charge REST sinon. */
+function servedPresenceOfSubject(
   state: Pick<PresenceState, 'byUser'>,
-  participant: Participant | undefined,
+  { userId, participant }: PresenceSubject,
   now: number,
 ): UserPresenceStatus {
-  return livePresenceOf(state, presenceKeyOf(participant), now) ?? presenceOf(participant, now);
+  return livePresenceOf(state, userId ?? presenceKeyOf(participant), now) ?? presenceOf(participant, now);
 }
 
 type PresenceHookOptions = {
@@ -66,11 +76,28 @@ export function usePresences(
   participants: readonly (Participant | undefined)[],
   options: PresenceHookOptions = {},
 ): readonly UserPresenceStatus[] {
-  return useResolvedPresences((state, at) => participants.map((participant) => servedPresenceOf(state, participant, at)), options);
+  return usePresencesOf(participants.map((participant) => ({ userId: undefined, participant })), options);
 }
 
 export function usePresence(participant: Participant | undefined, options?: PresenceHookOptions): UserPresenceStatus {
   return usePresences([participant], options)[0] ?? 'offline';
+}
+
+/**
+ * LES PASTILLES DE PERSONNES NOMMÉES (#11412) — un membre actif que la
+ * passerelle n'a pas compté parmi les participants servis (elle en tronque la
+ * liste), un visage de la rampe du résumé : la carte vivante les connaît par
+ * leur identifiant, même quand aucune charge REST ne les porte.
+ */
+export function usePresencesOf(
+  subjects: readonly PresenceSubject[],
+  options: PresenceHookOptions = {},
+): readonly UserPresenceStatus[] {
+  return useResolvedPresences((state, at) => subjects.map((subject) => servedPresenceOfSubject(state, subject, at)), options);
+}
+
+export function usePresenceOf(subject: PresenceSubject, options?: PresenceHookOptions): UserPresenceStatus {
+  return usePresencesOf([subject], options)[0] ?? 'offline';
 }
 
 /**

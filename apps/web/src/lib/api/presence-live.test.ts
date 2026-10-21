@@ -87,6 +87,67 @@ describe('bindPresenceLive', () => {
     expect(livePresenceOf(store.getState(), BOB, NOW)).toBe('online');
   });
 
+  test('la frappe d’un pair non connecté ne rafraîchit que son activité : il décroît vert → orange → gris → rien (#11412)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: false, lastActiveAt: iso(NOW - 30 * 60_000) });
+
+    fire(SERVER_EVENTS.TYPING_START, { userId: BOB, username: 'bob', conversationId: 'conv-a' });
+
+    expect(store.getState().byUser[BOB]).toEqual({ isOnline: false, lastActiveAt: iso(NOW) });
+    expect(livePresenceOf(store.getState(), BOB, NOW + 2 * 60_000)).toBe('away');
+    expect(livePresenceOf(store.getState(), BOB, NOW + 4 * 60_000)).toBe('idle');
+    expect(livePresenceOf(store.getState(), BOB, NOW + 6 * 60_000)).toBe('offline');
+  });
+
+  test('la frappe d’un pair connecté garde sa connexion servie (#11412)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW - 2 * 60_000) });
+
+    fire(SERVER_EVENTS.TYPING_START, { userId: BOB, username: 'bob', conversationId: 'conv-a' });
+
+    expect(store.getState().byUser[BOB]).toEqual({ isOnline: true, lastActiveAt: iso(NOW) });
+  });
+
+  test('la frappe d’un pair jamais servi ne le déclare pas connecté (#11412)', () => {
+    const { store, fire } = bound();
+
+    fire(SERVER_EVENTS.TYPING_START, { userId: CAROL, username: 'carol', conversationId: 'conv-a' });
+
+    expect(store.getState().byUser[CAROL]).toEqual({ isOnline: false, lastActiveAt: iso(NOW) });
+  });
+
+  test('le snapshot n’écrase pas une entrée plus récente (#11412)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.TYPING_START, { userId: BOB, username: 'bob', conversationId: 'conv-a' });
+    fire(SERVER_EVENTS.USER_STATUS, { userId: CAROL, username: 'carol', isOnline: true, lastActiveAt: iso(NOW) });
+
+    fire(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+      users: [
+        { userId: BOB, username: 'bob', isOnline: false, lastActiveAt: iso(NOW - 10 * 60_000) },
+        { userId: CAROL, username: 'carol', isOnline: false, lastActiveAt: null },
+      ],
+    });
+
+    expect(store.getState().byUser[BOB]).toEqual({ isOnline: false, lastActiveAt: iso(NOW) });
+    expect(store.getState().byUser[CAROL]).toEqual({ isOnline: true, lastActiveAt: iso(NOW) });
+  });
+
+  test('le snapshot l’emporte à activité égale ou plus récente (#11412)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW) });
+    fire(SERVER_EVENTS.USER_STATUS, { userId: CAROL, username: 'carol', isOnline: false, lastActiveAt: null });
+
+    fire(SERVER_EVENTS.PRESENCE_SNAPSHOT, {
+      users: [
+        { userId: BOB, username: 'bob', isOnline: false, lastActiveAt: iso(NOW) },
+        { userId: CAROL, username: 'carol', isOnline: true, lastActiveAt: iso(NOW - 60_000) },
+      ],
+    });
+
+    expect(store.getState().byUser[BOB]).toEqual({ isOnline: false, lastActiveAt: iso(NOW) });
+    expect(store.getState().byUser[CAROL]).toEqual({ isOnline: true, lastActiveAt: iso(NOW - 60_000) });
+  });
+
   test('la frappe du lecteur lui-même ne s’inscrit pas', () => {
     const { store, fire } = bound();
 
@@ -104,13 +165,28 @@ describe('bindPresenceLive', () => {
     expect(store.getState().byUser).toEqual({});
   });
 
-  test('une coupure vide le magasin : la passerelle ré-amorce à la reconnexion', () => {
+  test('une coupure éteint sans effacer : chaque pastille décroît depuis sa dernière activité (#11412)', () => {
     const { store, fire } = bound();
     fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW) });
+    fire(SERVER_EVENTS.USER_STATUS, { userId: CAROL, username: 'carol', isOnline: false, lastActiveAt: null });
 
     fire('disconnect');
 
-    expect(store.getState().byUser).toEqual({});
+    expect(store.getState().byUser).toEqual({
+      [BOB]: { isOnline: false, lastActiveAt: iso(NOW) },
+      [CAROL]: { isOnline: false, lastActiveAt: null },
+    });
+    expect(livePresenceOf(store.getState(), BOB, NOW + 2 * 60_000)).toBe('away');
+  });
+
+  test('après la coupure, le snapshot de la reconnexion rallume la pastille (#11412)', () => {
+    const { store, fire } = bound();
+    fire(SERVER_EVENTS.USER_STATUS, { userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW - 60_000) });
+    fire('disconnect');
+
+    fire(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users: [{ userId: BOB, username: 'bob', isOnline: true, lastActiveAt: iso(NOW) }] });
+
+    expect(store.getState().byUser[BOB]).toEqual({ isOnline: true, lastActiveAt: iso(NOW) });
   });
 
   test('le détachement retire chaque écouteur et vide le magasin de l’identité partie', () => {

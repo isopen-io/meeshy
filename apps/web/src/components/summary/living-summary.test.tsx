@@ -32,7 +32,7 @@ const rampEntry = (id: string, evidenceMessageIds: readonly string[]): FaceRampE
   displayName: 'Amina',
   avatarUrl: null,
   colorHex: '#31B6BA',
-  presence: 'online',
+  participant: undefined,
   awaitingCount: evidenceMessageIds.length,
   needScore: 12.5,
   evidenceMessageIds,

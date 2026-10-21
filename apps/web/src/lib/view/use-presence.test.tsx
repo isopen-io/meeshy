@@ -7,7 +7,7 @@ import { createPresenceStore } from '@/lib/api/presence-store';
 import type { Participant } from '@/lib/api/types';
 
 import type { IntervalClock } from './interval-clock';
-import { usePresence, usePresenceOfUser } from './use-presence';
+import { usePresence, usePresenceOf, usePresenceOfUser, type PresenceSubject } from './use-presence';
 
 /**
  * LA PASTILLE SUIT LE TEMPS RÉEL ET DÉCROÎT D'ELLE-MÊME (#10571) — et ne se
@@ -200,6 +200,75 @@ describe('usePresenceOfUser', () => {
 
   test('la présence d’un autre ne repeint pas la pastille', () => {
     const view = mountUser('user-bob');
+    const before = view.renders();
+
+    act(() => view.store.getState().put('user-carol', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.renders()).toBe(before);
+  });
+});
+
+function mountSubject(subject: PresenceSubject) {
+  const store = createPresenceStore();
+  const { clock, tick } = manualClock();
+  let at = T0;
+  let renders = 0;
+  const seen: string[] = [];
+  function Dot() {
+    renders += 1;
+    const status = usePresenceOf(subject, { now: () => at, store, clock });
+    seen.push(status);
+    return <span data-status={status} />;
+  }
+  container = document.createElement('div');
+  document.body.appendChild(container);
+  const mounted = createRoot(container);
+  root = mounted;
+  act(() => mounted.render(<Dot />));
+  return {
+    store,
+    status: () => seen[seen.length - 1],
+    renders: () => renders,
+    advanceTo: (next: number) => {
+      at = next;
+      act(() => tick(next));
+    },
+  };
+}
+
+/**
+ * UNE PERSONNE NOMMÉE PAR SON IDENTIFIANT, SA CHARGE REST PEUT-ÊTRE (#11412) —
+ * un membre actif hors des participants servis, un visage de la rampe : la
+ * carte vivante par l'identifiant d'abord, la charge REST sinon, décroissant
+ * avec l'horloge.
+ */
+describe('usePresenceOf', () => {
+  test('sans participant servi, la carte vivante de l’identifiant allume la pastille', () => {
+    const view = mountSubject({ userId: 'user-bob', participant: undefined });
+
+    act(() => view.store.getState().put('user-bob', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.status()).toBe('online');
+  });
+
+  test('sans entrée vivante, la charge REST décide et décroît avec l’horloge', () => {
+    const view = mountSubject({ userId: 'user-bob', participant: participant({ isOnline: false, lastActiveAt: new Date(T0) }) });
+
+    expect(view.status()).toBe('online');
+    view.advanceTo(T0 + 2 * 60_000);
+    expect(view.status()).toBe('away');
+  });
+
+  test('l’identifiant nommé prime sur la clé du participant', () => {
+    const view = mountSubject({ userId: 'user-bob', participant: participant({ userId: 'user-other' }) });
+
+    act(() => view.store.getState().put('user-bob', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.status()).toBe('online');
+  });
+
+  test('la présence d’un autre ne repeint pas la pastille', () => {
+    const view = mountSubject({ userId: 'user-bob', participant: undefined });
     const before = view.renders();
 
     act(() => view.store.getState().put('user-carol', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));

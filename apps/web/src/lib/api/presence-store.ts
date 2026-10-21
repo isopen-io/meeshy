@@ -14,11 +14,11 @@ import { getUserPresenceStatus, type UserPresenceStatus } from '@meeshy/shared/u
  * chaque authentification (`presence:snapshot`, résolu par destinataire).
  *
  * Le client ne FABRIQUE rien : il ne garde que ce que la passerelle sert, et
- * `typing:start` — l'activité qu'elle diffuse déjà — vaut activité immédiate
- * (`packages/shared/utils/user-presence.ts`, en tête). Une coupure VIDE la
- * carte, comme le détachement (changement d'identité) : ce qui a changé pendant
- * qu'on n'écoutait pas ne survit pas, et la reconnexion ré-amorce par le
- * snapshot.
+ * `typing:start` — l'activité qu'elle diffuse déjà — rafraîchit la seule
+ * activité (`packages/shared/utils/user-presence.ts`, en tête). Une coupure
+ * ÉTEINT la carte sans l'effacer (#11412) : chaque pastille décroît depuis sa
+ * dernière activité au lieu de disparaître d'un coup, et le snapshot de la
+ * reconnexion la corrige. Seul le détachement (changement d'identité) la vide.
  */
 
 export type LivePresence = {
@@ -30,8 +30,21 @@ export type PresenceState = {
   readonly byUser: Readonly<Record<string, LivePresence>>;
   put(userId: string, presence: LivePresence): void;
   putAll(entries: readonly (readonly [string, LivePresence])[]): void;
+  markAllOffline(): void;
   clear(): void;
 };
+
+const activityOf = (presence: LivePresence | undefined): number =>
+  presence?.lastActiveAt == null ? Number.NEGATIVE_INFINITY : Date.parse(presence.lastActiveAt);
+
+/**
+ * UN AMORÇAGE N'EFFACE PAS PLUS FRAIS QUE LUI (#11412) — le snapshot est composé
+ * avant d'arriver : un `user:status` ou une frappe reçus entre-temps portent une
+ * activité plus récente, que la photographie ne remonte pas. À activité égale
+ * ou plus récente, le snapshot l'emporte.
+ */
+const isStaler = (incoming: LivePresence, existing: LivePresence | undefined): boolean =>
+  activityOf(existing) > activityOf(incoming);
 
 export type PresenceStoreApi = StoreApi<PresenceState>;
 
@@ -39,7 +52,19 @@ export function createPresenceStore(): PresenceStoreApi {
   return createStore<PresenceState>((set) => ({
     byUser: {},
     put: (userId, presence) => set((state) => ({ byUser: { ...state.byUser, [userId]: presence } })),
-    putAll: (entries) => set((state) => ({ byUser: { ...state.byUser, ...Object.fromEntries(entries) } })),
+    putAll: (entries) =>
+      set((state) => ({
+        byUser: {
+          ...state.byUser,
+          ...Object.fromEntries(entries.filter(([userId, presence]) => !isStaler(presence, state.byUser[userId]))),
+        },
+      })),
+    markAllOffline: () =>
+      set((state) => ({
+        byUser: Object.fromEntries(
+          Object.entries(state.byUser).map(([userId, presence]) => [userId, { ...presence, isOnline: false }] as const),
+        ),
+      })),
     clear: () => set({ byUser: {} }),
   }));
 }
