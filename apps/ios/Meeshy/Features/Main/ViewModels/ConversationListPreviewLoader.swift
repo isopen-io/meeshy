@@ -168,20 +168,15 @@ final class ConversationListPreviewLoader: ObservableObject {
     private let messageService: MessageServiceProviding
     private let cache: ConversationPreviewCacheProviding
     private let readerPrism: () -> [String]
-    /// La preuve qu'un message chiffré a été déchiffré SUR CET APPAREIL
-    /// (`DecryptedMessageLedger`) : sans elle, son contenu reste scellé.
-    private let isDecryptedOnDevice: (String) -> Bool
 
     init(
         messageService: MessageServiceProviding,
         cache: ConversationPreviewCacheProviding = LiveConversationPreviewCache(),
-        readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
-        isDecryptedOnDevice: @escaping (String) -> Bool = { DecryptedMessageLedger.shared.contains($0) }
+        readerPrism: @escaping () -> [String] = { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
     ) {
         self.messageService = messageService
         self.cache = cache
         self.readerPrism = readerPrism
-        self.isDecryptedOnDevice = isDecryptedOnDevice
     }
 
     /// Une conversation jamais chargée se lit `.loading` : l'aperçu n'affirme
@@ -231,7 +226,7 @@ final class ConversationListPreviewLoader: ObservableObject {
         let fromCache = Self.cachedMessages(in: cached)
         if let fromCache, provenance[conversationId] != .network {
             let translations = await cache.translations(for: fromCache.map(\.id))
-            publish(fromCache, translations: translations, for: conversationId, isReadableOnDevice: { self.deviceReadable($0) })
+            publish(fromCache, translations: translations, for: conversationId)
             provenance[conversationId] = Self.isFresh(cached) ? .freshCache : .staleCache
         }
         guard Self.needsNetwork(intent: intent, cached: cached) else { return }
@@ -241,28 +236,31 @@ final class ConversationListPreviewLoader: ObservableObject {
         await refresh(conversationId, plaintextSources: fromCache ?? [], currentUserId: currentUserId)
     }
 
-    /// Un message chiffré se lit en clair dans l'aperçu s'il a été DÉCHIFFRÉ
-    /// sur cet appareil et si son contenu n'est pas resté le cryptogramme —
-    /// le moteur de synchronisation peut réécrire le cache depuis le REST
-    /// après le déchiffrement.
-    private func deviceReadable(_ message: Message) -> Bool {
-        isDecryptedOnDevice(message.id) && !Self.looksLikeCiphertext(message.content)
-    }
-
     // MARK: - Lois pures
 
-    /// L'aperçu tel que le lecteur le lit : un message chiffré que
-    /// `isReadableOnDevice` ne prouve pas déchiffré sur l'appareil n'emporte
-    /// que son drapeau (jamais le cryptogramme comme texte), aucun message
-    /// chiffré n'emporte de traduction, et chaque message sert la traduction que `ReaderPrism`
-    /// élit — `nil` ⇒ l'original, jamais `translations.first`.
+    /// Un message chiffré se lit en clair dans l'aperçu si sa PROVENANCE
+    /// couvre le texte qu'il porte (#11382) : c'est cet appareil qui l'a
+    /// déchiffré, et personne ne l'a réécrit depuis — le moteur de
+    /// synchronisation peut réécrire le cache depuis le REST (le
+    /// cryptogramme), et le serveur forger un texte qui n'en a pas la forme.
+    /// Jamais deviné à la forme du texte. Un message qui se DÉCLARE en clair
+    /// (`isEncrypted == false`) dans une conversation chiffrée n'est pas jugé
+    /// ici : le fil le montre aussi, et sa loi, commune aux deux, est #11404.
+    static func isReadableOnDevice(_ message: Message) -> Bool {
+        message.isEncrypted && message.isContentDecryptedOnDevice
+    }
+
+    /// L'aperçu tel que le lecteur le lit : un message chiffré que sa
+    /// provenance ne prouve pas déchiffré sur l'appareil n'emporte que son
+    /// drapeau (jamais le cryptogramme comme texte), aucun message chiffré
+    /// n'emporte de traduction, et chaque message sert la traduction que
+    /// `ReaderPrism` élit — `nil` ⇒ l'original, jamais `translations.first`.
     static func snapshot(
         messages: [Message],
         translations: [String: [MessageTranslation]],
-        prism: [String],
-        isReadableOnDevice: (Message) -> Bool = { _ in false }
+        prism: [String]
     ) -> ConversationPreviewSnapshot {
-        let sealed = messages.map { $0.isEncrypted && isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
+        let sealed = messages.map { Self.isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
         let encryptedIds = Set(sealed.filter { $0.isEncrypted }.map(\.id))
         let readable = translations.filter { !encryptedIds.contains($0.key) }
         let served = sealed.reduce(into: [String: MessageTranslation]()) { served, message in
@@ -289,13 +287,6 @@ final class ConversationListPreviewLoader: ObservableObject {
             preferredLanguages: prism,
             isServable: { !$0.translatedContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         )?.value
-    }
-
-    /// Le cryptogramme d'un message E2EE est du base64 d'au moins une
-    /// enveloppe AES-GCM (nonce 12 + étiquette 16 octets) : un clair n'en a
-    /// pas la forme. Fail-closed — dans le doute, on scelle.
-    static func looksLikeCiphertext(_ content: String) -> Bool {
-        (Data(base64Encoded: content)?.count ?? 0) >= 28
     }
 
     private static func isFresh(_ result: CacheResult<[Message]>) -> Bool {
@@ -337,12 +328,9 @@ final class ConversationListPreviewLoader: ObservableObject {
     private func publish(
         _ messages: [Message],
         translations: [String: [MessageTranslation]],
-        for conversationId: String,
-        isReadableOnDevice: (Message) -> Bool
+        for conversationId: String
     ) {
-        let snapshot = Self.snapshot(
-            messages: messages, translations: translations, prism: readerPrism(), isReadableOnDevice: isReadableOnDevice
-        )
+        let snapshot = Self.snapshot(messages: messages, translations: translations, prism: readerPrism())
         states[conversationId] = messages.isEmpty ? .empty : .loaded(snapshot)
     }
 
@@ -353,7 +341,7 @@ final class ConversationListPreviewLoader: ObservableObject {
     private func plaintextOnDevice(_ conversationId: String, sources: [Message]) -> [String: Message] {
         let served = states[conversationId]?.snapshot?.messages ?? []
         return (sources + served)
-            .filter { $0.isEncrypted && !$0.content.isEmpty && deviceReadable($0) }
+            .filter { !$0.content.isEmpty && Self.isReadableOnDevice($0) }
             .reduce(into: [String: Message]()) { known, message in known[message.id] = message }
     }
 
@@ -393,16 +381,14 @@ final class ConversationListPreviewLoader: ObservableObject {
                 message.editedAt = api.editedAt
                 return message
             }
-            let restored = Set(decoded.compactMap { message -> String? in
-                guard message.isEncrypted, let known = onDevice[message.id], Self.isSameVersion(known, as: message) else {
-                    return nil
-                }
-                return message.id
-            })
+            // Le clair connu recouvre le cryptogramme AVEC sa provenance : la
+            // revalidation suivante le reconnaît encore.
             let messages = decoded.map { message -> Message in
-                guard restored.contains(message.id), let known = onDevice[message.id] else { return message }
+                guard message.isEncrypted, let known = onDevice[message.id], Self.isSameVersion(known, as: message) else {
+                    return message
+                }
                 var clear = message
-                clear.content = known.content
+                clear.carryDecryptedContent(from: known)
                 return clear
             }
             let translations = ordered.reduce(into: [String: [MessageTranslation]]()) { map, api in
@@ -410,7 +396,7 @@ final class ConversationListPreviewLoader: ObservableObject {
                 guard !readable.isEmpty else { return }
                 map[api.id] = MessageTranslationMerge.translations(from: readable, originalLanguage: api.originalLanguage)
             }
-            publish(messages, translations: translations, for: conversationId, isReadableOnDevice: { restored.contains($0.id) })
+            publish(messages, translations: translations, for: conversationId)
             provenance[conversationId] = .network
         } catch {
             Logger.messages.warning("[ConversationList] previewMessages fetch failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")

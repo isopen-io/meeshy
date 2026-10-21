@@ -33,7 +33,7 @@ struct StoryReactionFlightView: View {
         let from = CGPoint(x: flight.from.midX, y: flight.from.midY)
         let to = CGPoint(x: target.midX, y: target.midY)
         Text(flight.emoji)
-            .font(.system(size: MeeshyFont.displaySize))
+            .font(MeeshyFont.emoji(MeeshyFont.displaySize))
             .scaleEffect(1.35 + (0.5 - 1.35) * progress)
             .position(
                 x: from.x + (to.x - from.x) * progress,

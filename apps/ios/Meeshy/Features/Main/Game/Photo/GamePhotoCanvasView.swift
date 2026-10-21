@@ -174,9 +174,10 @@ struct GamePhotoEmblem: View {
             LevelRingView(level: level, progress: 1, tier: tier)
         case .levelHundred(let prestige):
             LevelRingView(level: 100, progress: 1, tier: .galaxie, prestige: prestige)
-        case .meesh(let number, let edition):
+        case .meesh(let number, _):
+            // La pièce se dessine dans son édition d'AFFICHAGE (#11483) : le n° 247, frappé après le n° 100, est d'or.
             MeeshCoinView(face: .reverse(number: number, year: Calendar.current.component(.year, from: Date())),
-                          edition: edition, figures: nil)
+                          edition: GameMint.displayEdition(forNumber: number), figures: nil)
         case .treasury:
             MeeshCoinView(face: .obverse, edition: .silver, figures: nil)
         case .flame(let form, _):

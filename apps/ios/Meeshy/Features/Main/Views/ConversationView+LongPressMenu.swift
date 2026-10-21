@@ -220,8 +220,10 @@ extension ConversationView {
                 }
                 ContentRemovalOffer.selectionButton(selectedMessagesInThreadOrder, ids: overlayState.selectedMessageIds,
                     viewModel: viewModel, mayRemove: canRemoveMessage, onConfirmed: endSelectionMode)
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    deleteSelectedMessages(mode: .local)
+                if selectionAllowsDeleteForMe {
+                    Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
+                        deleteSelectedMessages(mode: .local)
+                    }
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
             } message: {

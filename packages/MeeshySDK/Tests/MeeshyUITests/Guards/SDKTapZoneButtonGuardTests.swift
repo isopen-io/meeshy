@@ -150,7 +150,7 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
     func test_lesCyclesDuTexteOntUneActionParDefaut() {
         let text = (Self.lines(of: "Story/StoryTextEditTopBar.swift") ?? []).joined(separator: "\n")
         XCTAssertTrue(text.contains("let onActivate: () -> Void"))
-        XCTAssertTrue(text.contains(".accessibilityAction(onActivate)"))
+        XCTAssertTrue(text.contains(".accessibilityAction { onActivate() }"))
     }
 
     func test_aucuneActionDAccessibiliteNePorteLeLibellePerform() throws {
@@ -159,6 +159,22 @@ final class SDKTapZoneButtonGuardTests: XCTestCase {
         let offenders = files.compactMap { $0 as? URL }
             .filter { $0.pathExtension == "swift" }
             .filter { (try? String(contentsOf: $0, encoding: .utf8))?.contains(".accessibilityAction(perform:") == true }
+            .map(\.lastPathComponent)
+        XCTAssertEqual(offenders, [])
+    }
+
+    /// Xcode 27 ne résout plus `.accessibilityAction(handler)` (référence de fonction passée en position) :
+    /// « missing argument for parameter 'named' ». La fermeture de queue compile sous Xcode 26.1 ET 27.
+    func test_aucuneActionDAccessibiliteNePasseUneReferenceDeFonctionEnPosition() throws {
+        let root = Self.sourcesRoot
+        let files = try XCTUnwrap(FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil))
+        let positional = try NSRegularExpression(pattern: #"\.accessibilityAction\([A-Za-z_][A-Za-z0-9_.]*\)"#)
+        let offenders = files.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" }
+            .filter { url in
+                guard let text = try? String(contentsOf: url, encoding: .utf8) else { return false }
+                return positional.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+            }
             .map(\.lastPathComponent)
         XCTAssertEqual(offenders, [])
     }

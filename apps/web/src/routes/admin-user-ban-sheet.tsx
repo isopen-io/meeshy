@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { AdminBadge } from '@/components/admin/badges';
 import { AdminButton } from '@/components/admin/button';
 import { AdminFormActions, AdminFormSheet, AdminReasonField, AdminTextInput, motiveState } from '@/components/admin/form';
-import { AdminEmptyState, AdminSkeleton } from '@/components/admin/states';
+import { AdminSkeleton } from '@/components/admin/states';
 import { EDGE, INK, INK2, SURFACE } from '@/components/admin/tone';
 import { personLabel } from '@/lib/admin/interpret/labels';
 import { sentenceCase } from '@/lib/admin/interpret/language';
@@ -202,13 +202,21 @@ export function AdminUserBanSheet({
           disabled: !motive.ready,
           onClick: () => void bannir(),
         }}
+        onCancel={onClose}
       />
 
-      <section className="grid gap-2 pt-2" aria-label={translateAdmin(language, 'admin.ban.title')}>
+      {/* L'HISTORIQUE, TITRÉ (#11410) : relu sur la capture à 375 px, l'état vide sans titre se
+          lisait comme un troisième bouton entre « Bannir » et « Annuler ». */}
+      <section className="grid gap-2 pt-2" aria-labelledby="admin-ban-history" data-admin-ban-history="">
+        <h3 id="admin-ban-history" className="text-caption font-semibold uppercase" style={{ color: INK2 }}>
+          {translateAdmin(language, 'admin.people.ban.history')}
+        </h3>
         {historique.isPending ? (
           <AdminSkeleton rows={2} language={language} />
         ) : (historique.data ?? []).length === 0 ? (
-          <AdminEmptyState title={translateAdmin(language, 'admin.ban.none')} />
+          <p className="text-caption" style={{ color: INK2 }} data-admin-ban-empty="">
+            {translateAdmin(language, 'admin.ban.none')}
+          </p>
         ) : (
           (historique.data ?? []).map((ban) => (
             <BanRow
@@ -221,8 +229,6 @@ export function AdminUserBanSheet({
           ))
         )}
       </section>
-
-      <AdminFormActions language={language} onCancel={onClose} />
     </AdminFormSheet>
   );
 }

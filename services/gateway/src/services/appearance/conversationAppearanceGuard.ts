@@ -24,7 +24,7 @@
  * L'appartenance reste AUSSI vérifiée par l'écrivain unique, pour tout fond.
  */
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-import { isPackOwned } from '@meeshy/shared/types/content-pack';
+import { isFreePack, isPackOwned } from '@meeshy/shared/types/content-pack';
 import { ownedPackKeys } from '@meeshy/shared/types/pack-ownership';
 import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
 import { messageProtection } from '@meeshy/shared/utils/message-protection';
@@ -52,9 +52,9 @@ const ok = (appearance: ConversationAppearance): AppearanceGuardOutcome => ({ ki
 async function designOwned({ prisma, index, userId }: AppearanceGuardParams, pack: string, design: string): Promise<boolean> {
   const entry = index.entries('wallpaper').find((candidate) => candidate.slug === pack && !candidate.hidden);
   if (entry === undefined || !index.itemKeys(entry).includes(design)) return false;
-  if (entry.price === undefined) return true;
+  if (isFreePack(entry)) return true;
   const owned = ownedPackKeys(await prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }));
-  return isPackOwned({ domain: 'wallpaper', slug: pack, price: entry.price }, owned);
+  return isPackOwned({ domain: 'wallpaper', slug: pack, price: entry.price, reward: entry.reward }, owned);
 }
 
 async function isMember({ prisma, userId, conversationId }: AppearanceGuardParams): Promise<boolean> {

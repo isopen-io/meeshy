@@ -52,6 +52,9 @@ on:
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
+      # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
+      # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/device-tier-vectors.json'
       # Le contrat MeeshyLens v1 (#11270) : LensFormatVectorsTests rejoue ses vecteurs.
       - 'packages/shared/fixtures/lens-v1/**'
   pull_request:
@@ -80,6 +83,9 @@ on:
       - 'packages/shared/types/call-rules.ts'
       - 'packages/shared/types/consents.ts'
       - 'packages/shared/types/preferences/application.ts'
+      # Le tier média (#11281) : DeviceMediaTierTests rejoue ces vecteurs neutres,
+      # partagés avec le web — une régénération seule doit rejouer le miroir Swift.
+      - 'packages/shared/fixtures/device-tier-vectors.json'
       - 'packages/shared/fixtures/lens-v1/**'
   # Intentionally NOT triggered by changes to this workflow file itself: an
   # app-only PR that merely touches CI config must not be gated by the SDK suite.

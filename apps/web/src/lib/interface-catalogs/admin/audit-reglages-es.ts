@@ -176,6 +176,8 @@ const f = {
   'admin.audit.action.UPDATE_ENGAGEMENT_SCALE.explain': 'Un administrador modificó el baremo de puntos de participación: puntos por operación, multiplicador y límites.',
   'admin.audit.action.TRIGGER_SERVER_OPERATION': 'Operación lanzada en el servidor',
   'admin.audit.action.TRIGGER_SERVER_OPERATION.explain': 'Se solicitó una copia de seguridad o una purga de imágenes Docker desde la pantalla Operaciones; el detalle guarda la operación, el entorno y el motivo.',
+  'admin.audit.action.SERVER_OPERATION_REFUSED': 'Operación en el servidor rechazada',
+  'admin.audit.action.SERVER_OPERATION_REFUSED.explain': 'Se pidió una copia de seguridad o una limpieza de Docker y se rechazó; el detalle guarda la operación, el entorno y el motivo del rechazo (rango insuficiente, confirmación, plazo, operación en curso, relé ausente).',
   'admin.audit.action.GAME_SEASON_UPDATE': 'Temporada del Juego modificada',
   'admin.audit.action.GAME_SEASON_UPDATE.explain': 'Un administrador programó, aplazó, pausó o ajustó una temporada futura del Juego.',
   'admin.audit.action.GAME_SEASON_PROPOSAL_REQUEST': 'Propuesta de temporada pedida a la IA',

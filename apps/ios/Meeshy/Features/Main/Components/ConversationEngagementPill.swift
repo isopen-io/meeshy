@@ -74,12 +74,20 @@ struct ConversationEngagementPill: View, Equatable {
         guard snapshot.streakDays > 0 else {
             return totalAccessibilityText(total)
         }
-        let streak = snapshot.streakDays
+        let days = streakDaysText(snapshot.streakDays)
         return String(
             localized: "conversation.engagement.a11y.streak",
-            defaultValue: "Série de jours : \(streak) · Points : \(total) · Aujourd'hui : \(today)",
+            defaultValue: "\(days) · Étincelles : \(total) · Aujourd'hui : \(today)",
             bundle: .main
         )
+    }
+
+    /// La série d'une conversation ne dit que sa durée, sous 🔥 : « 4 jours » (#11484). La Flamme reste le nom du rythme
+    /// du HÉROS ; les mêmes mots que le web (`engagement.pill.streak.*`).
+    static func streakDaysText(_ days: Int) -> String {
+        days == 1
+            ? String(localized: "conversation.engagement.a11y.streak_days.one", defaultValue: "\(days) jour", bundle: .main)
+            : String(localized: "conversation.engagement.a11y.streak_days.other", defaultValue: "\(days) jours", bundle: .main)
     }
 }
 

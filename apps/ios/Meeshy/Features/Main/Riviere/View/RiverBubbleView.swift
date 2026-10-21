@@ -80,10 +80,6 @@ struct RiverBubbleContent: Equatable {
     /// Vue unique scellée (#7618) ou déjà ouverte (#7579) : la bulle ne porte
     /// QUE la puce, `text` est vide par la projection, jamais masqué par la vue.
     let viewOnceChip: ViewOnceChip.State?
-    /// Le texte peut-il être COPIÉ ? Verdict de la loi de sortie
-    /// (`Message.exitOffer`, #9573), projeté par `RiverConversationMapping` :
-    /// un contenu qui disparaît, ou flouté, ne se copie pas.
-    let offersCopy: Bool
     /// Vue unique TEXTE lue sur place (#7579) : la retoucher, ou la voir sortir
     /// de l'écran, la fait passer à « déjà ouvert ».
     let isViewOnceRevealed: Bool
@@ -135,7 +131,6 @@ struct RiverBubbleContent: Equatable {
         protection: MessageProtectionDescriptor = .unprotected,
         isBurning: Bool = false,
         viewOnceChip: ViewOnceChip.State? = nil,
-        offersCopy: Bool = true,
         isViewOnceRevealed: Bool = false,
         protectedTap: ProtectedContentTap = .none,
         tapAfterReveal: ProtectedContentTap = .none,
@@ -161,7 +156,6 @@ struct RiverBubbleContent: Equatable {
         self.protection = protection
         self.isBurning = isBurning
         self.viewOnceChip = viewOnceChip
-        self.offersCopy = offersCopy
         self.isViewOnceRevealed = isViewOnceRevealed
         self.protectedTap = protectedTap
         self.tapAfterReveal = tapAfterReveal
@@ -394,11 +388,13 @@ struct RiverBubbleView: View, Equatable {
     /// story non lue ouvre sa story. Reçus de l'hôte, jamais résolus ici.
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
-    /// Lot 3 — l'appui long : « Ouvrir dans le fil » (retour Script +
-    /// atterrissage, comme Résumé), « Répondre » (Script + composeur),
-    /// « Copier ». Les deux premiers sont des actes de l'hôte.
+    /// « Ouvrir dans le fil » (retour Script + atterrissage, comme Résumé) —
+    /// une action d'accessibilité nommée de la bulle.
     var onOpenInThread: ((String) -> Void)? = nil
-    var onReply: ((String) -> Void)? = nil
+    /// #11224 — l'appui long rend la main à l'hôte, qui ouvre LE menu du
+    /// message (`presentLongPressMenu`) : mêmes actions, mêmes droits, même
+    /// aperçu que dans les autres modes. La Rivière n'a plus de menu à elle.
+    var onLongPress: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de l'hôte. `nil` ⇒ le
     /// voile ne se lève pas : `BubbleBlurRevealController.requestReveal` est
     /// fail-closed sur un message qui exige l'accusé serveur. C'est le bon
@@ -506,8 +502,43 @@ struct RiverBubbleView: View, Equatable {
         )
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityLabel)
-        .accessibilityActions { quotedMediaAccessibilityAction }
-        .contextMenu { bubbleMenu }
+        .accessibilityActions {
+            quotedMediaAccessibilityAction
+            openInThreadAccessibilityAction
+            menuAccessibilityAction
+        }
+        .simultaneousGesture(
+            // Le geste de la rangée du Fil (`ConditionalBubbleLongPress`) : même
+            // durée, même tolérance, même retrait devant une pièce qui a réclamé
+            // l'appui, même clavier baissé avant la surcouche.
+            LongPressGesture(minimumDuration: MessagePressClaim.rowMinimumDuration, maximumDistance: 6).onEnded { _ in
+                guard let onLongPress, !MessagePressClaim.isClaimed() else { return }
+                HapticFeedback.medium()
+                MessageMenuKeyboard.dismiss()
+                onLongPress(content.bubble.messageId)
+            },
+            including: onLongPress == nil ? .subviews : .all
+        )
+    }
+
+    /// L'appui long d'un élément COMBINÉ n'est pas garanti sous VoiceOver : le
+    /// menu s'ouvre aussi par une action nommée, comme la rangée du Fil.
+    @ViewBuilder
+    private var menuAccessibilityAction: some View {
+        if let onLongPress {
+            Button(String(localized: "a11y.message.actions.long_press", bundle: .main)) {
+                onLongPress(content.bubble.messageId)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var openInThreadAccessibilityAction: some View {
+        if let onOpenInThread {
+            Button(String(localized: "riviere.bubble.openInThread", defaultValue: "Ouvrir dans le fil", bundle: .main)) {
+                onOpenInThread(content.bubble.messageId)
+            }
+        }
     }
 
     /// #8283 — la bulle se lit d'un seul élément : la zone média y devient une
@@ -553,38 +584,6 @@ struct RiverBubbleView: View, Equatable {
             fontSize: FocalMetrics.Text.size
         )
         .lineSpacing(FocalMetrics.Text.lineSpacing(forResolvedFontSize: FocalMetrics.Text.size))
-    }
-
-    // MARK: - Appui long — les actes que le Fil offre déjà, avec ses mots
-
-    /// Les libellés sont CEUX du Fil (`action.reply`, `action.copy`,
-    /// `MessageMoreSheet`) — un seul vocabulaire pour un même acte.
-    @ViewBuilder
-    private var bubbleMenu: some View {
-        if let onOpenInThread {
-            Button {
-                onOpenInThread(content.bubble.messageId)
-            } label: {
-                Label(
-                    String(localized: "riviere.bubble.openInThread", defaultValue: "Ouvrir dans le fil", bundle: .main),
-                    systemImage: "text.bubble"
-                )
-            }
-        }
-        if let onReply {
-            Button {
-                onReply(content.bubble.messageId)
-            } label: {
-                Label(String(localized: "action.reply", defaultValue: "Répondre", bundle: .main), systemImage: "arrowshape.turn.up.left")
-            }
-        }
-        if content.viewOnceChip == nil, content.offersCopy {
-            Button {
-                if content.offersCopy { UIPasteboard.general.string = content.text }
-            } label: {
-                Label(String(localized: "action.copy", defaultValue: "Copier", bundle: .main), systemImage: "doc.on.doc")
-            }
-        }
     }
 
     // MARK: - Corps du message — la bulle proprement dite

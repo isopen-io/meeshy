@@ -14,6 +14,7 @@ import { translateAdmin, type AdminPlainCatalogKey, type AdminLanguage } from '@
 
 import { withContactProof } from './admin-member-contact';
 import { GLASS_CARD_CLASS, GLASS_CARD_EDGE, useMemberWrite } from './admin-member-parts';
+import { GESTURE_ROW } from './admin-member-quick-edit';
 
 /**
  * **LES ACTIONS EN UN CLIC** (#8289, demande porteur) — ce qu'un
@@ -83,11 +84,11 @@ export function AdminMemberQuickActions({
     <section
       aria-label={translateAdmin(language, 'admin.quick.title')}
       data-admin-quick-actions=""
-      className={embedded ? 'flex flex-wrap items-center gap-2' : `${GLASS_CARD_CLASS} grid gap-3 p-4`}
+      className={embedded ? GESTURE_ROW : `${GLASS_CARD_CLASS} grid gap-3 p-4`}
       {...(embedded ? {} : { style: GLASS_CARD_EDGE })}
     >
       {visibles.length === 0 ? null : (
-        <div className="flex flex-wrap gap-2">
+        <div className={embedded ? GESTURE_ROW : 'flex flex-wrap gap-2'}>
           {visibles.map((action) => (
             <AdminButton
               key={action.id}

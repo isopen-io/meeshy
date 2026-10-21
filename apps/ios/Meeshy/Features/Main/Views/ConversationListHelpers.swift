@@ -309,7 +309,8 @@ struct ConversationPreviewView: View {
             isDirect: isDirect,
             isDark: isDark,
             currentUserId: AuthManager.shared.currentUser?.id ?? "",
-            cardWidth: cardWidth
+            cardWidth: cardWidth,
+            backdrop: ConversationPreviewRenderer.backdrop(for: conversation, computedAccentHex: accentColor, isDark: isDark)
         )
     }
 

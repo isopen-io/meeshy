@@ -251,7 +251,7 @@ public struct AudioForegroundChip: View {
             .accessibilityValue(accessibilityValueLabel)
             .accessibilityHint(accessibilityHintLabel)
             .accessibilityAddTraits(.isButton)
-            .accessibilityAction(onTap)
+            .accessibilityAction { onTap() }
     }
 
     private var chipContent: some View {

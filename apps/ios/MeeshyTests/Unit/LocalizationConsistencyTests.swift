@@ -368,7 +368,6 @@ final class LocalizationConsistencyTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift",  // 1
         "apps/ios/Meeshy/Features/Main/Views/StoryLocationReaderTapOverlay.swift",  // 1
-        "apps/ios/Meeshy/Features/Main/Views/VideoLegacySupport.swift",  // 1
         // 268i (#4308) — les 105 écrans débloqués par la RÉCONCILIATION des
         // `defaultValue`. Ils ne butaient que sur la règle B : leur littéral
         // inline disait « Reply » là où le catalogue `fr` — celui qui

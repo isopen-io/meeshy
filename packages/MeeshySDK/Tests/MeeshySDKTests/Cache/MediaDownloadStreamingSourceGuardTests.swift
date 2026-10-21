@@ -96,7 +96,7 @@ final class MediaDownloadStreamingSourceGuardTests: XCTestCase {
 
     func test_attachmentDownloadCenter_goesThroughTheStreamedFunnel() throws {
         let center = try source(named: "AttachmentDownloadCenter.swift", in: productionSources())
-        XCTAssertTrue(center.contains("store.data(for: resolvedKey, progress:"))
+        XCTAssertTrue(center.contains("store.data(for: resolvedKey, profile: profile, progress:"))
         XCTAssertFalse(center.contains("store.store("), "le centre n'écrit plus d'octets accumulés dans le cache")
     }
 }
