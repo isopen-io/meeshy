@@ -1,3 +1,5 @@
+import { recordingMimeOf } from '@/lib/media/recording-codec';
+
 import type { CardMedia } from './message-card-media';
 
 /**
@@ -31,11 +33,9 @@ export function motionDurationOf(params: { readonly output: Exclude<CardOutput, 
   return Math.min(known, params.output === 'gif' ? MAX_GIF_MS : MAX_VIDEO_MS);
 }
 
-const RECORDER_TYPES = ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'] as const;
-
-/** Le premier conteneur que l'enregistreur du navigateur sait écrire — le MP4 d'abord, lu partout. */
+/** Le premier conteneur que l'enregistreur du navigateur sait écrire — la loi unique, MP4 d'abord (lu partout). */
 export function pickRecorderType(isTypeSupported: (type: string) => boolean): string | null {
-  return RECORDER_TYPES.find((type) => isTypeSupported(type)) ?? null;
+  return recordingMimeOf('video', isTypeSupported) ?? null;
 }
 
 export const extensionOfType = (type: string): 'mp4' | 'webm' | 'gif' | 'png' =>

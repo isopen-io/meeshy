@@ -17,6 +17,8 @@ import {
   withoutPiece,
 } from './message-piece';
 import { NO_MEDIA_OFFERS } from './viewer-page-offers';
+import { messageActionsOf, type MenuViewer } from './message-action-scope';
+import { menuScope } from '@/test-support/menu-viewer';
 
 /**
  * #9907, #9908, #9906 — CHAQUE PIÈCE D'UN MESSAGE SE VISE SEULE. Ces témoins
@@ -135,16 +137,28 @@ describe('pieceMenuItems — le menu d’une pièce (#9908)', () => {
   });
 });
 
-describe('pieceDeletable — qui supprime une pièce après l’envoi (#9906)', () => {
+describe('pieceDeletable — qui supprime une pièce après l’envoi (#9906, #11210)', () => {
+  /** Les verdicts de la loi partagée (`messageActionsFor`) pour ce lecteur — jamais une règle d'auteur locale. */
+  const verdictsFor = (subject: Message, viewer: Partial<MenuViewer> = {}) =>
+    messageActionsOf(subject, menuScope({ id: 'u-moi', ...viewer }), { now: Date.parse('2026-10-10T10:00:00.000Z') }).verdicts;
+
   test('l’auteur, sur un message connu de la passerelle', () => {
-    expect(pieceDeletable({ message: lot(3), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(true);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3)), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(true);
   });
 
-  test('ni un autre lecteur, ni un envoi encore local, ni un message supprimé', () => {
-    expect(pieceDeletable({ message: lot(3), piece: piece('a-3'), viewerId: 'u-autre' })).toBe(false);
-    expect(pieceDeletable({ message: lot(3, { id: 'cid_123' }), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
-    expect(pieceDeletable({ message: lot(3, { deletedAt: new Date() }), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
-    expect(pieceDeletable({ message: lot(3), piece: piece('a-3', 'image/jpeg', { uploadedBy: 'u-autre' }), viewerId: 'u-moi' })).toBe(false);
+  test('ni un autre lecteur, ni un envoi encore local, ni un message supprimé, ni la pièce qu’un autre a déposée', () => {
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3), { id: 'u-autre' }), piece: piece('a-3'), viewerId: 'u-autre' })).toBe(false);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3, { id: 'cid_123' })), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3, { deletedAt: new Date() })), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3)), piece: piece('a-3', 'image/jpeg', { uploadedBy: 'u-autre' }), viewerId: 'u-moi' })).toBe(false);
+  });
+
+  test('un modérateur de la conversation ne supprime pas la pièce d’un autre : la passerelle ne l’admet qu’à celui qui l’a déposée', () => {
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3), { id: 'u-autre', conversationRole: 'moderator' }), piece: piece('a-3'), viewerId: 'u-autre' })).toBe(false);
+  });
+
+  test('un lecteur sans compte ne supprime rien, même ce qu’il a envoyé', () => {
+    expect(pieceDeletable({ verdicts: verdictsFor(lot(3), { hasAccount: false, isAnonymous: true }), piece: piece('a-3'), viewerId: 'u-moi' })).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 import { deviceCacheKey, type DeviceTranslationCache } from './cache';
 import type { DeviceTranslator } from './engine';
-import { deviceTranslationTarget } from './target';
+import { offeredMessageTarget } from './target';
 
 export type OfferedMessage = {
   readonly id: string;
@@ -108,13 +108,7 @@ export function createDeviceTranslationScheduler(params: {
     offer: (offer: { readonly messages: readonly OfferedMessage[]; readonly preferredLanguages: readonly string[] }): void => {
       const jobs: Job[] = [];
       for (const message of [...offer.messages].reverse()) {
-        if (message.encrypted || message.content.trim() === '') continue;
-        const pair = deviceTranslationTarget({
-          preferredLanguages: offer.preferredLanguages,
-          originalLanguage: message.originalLanguage,
-          translatedLanguages: message.translatedLanguages,
-          canTranslate: translator.supports,
-        });
+        const pair = offeredMessageTarget({ message, preferredLanguages: offer.preferredLanguages, canTranslate: translator.supports });
         if (pair === null) continue;
         const key = deviceCacheKey({ messageId: message.id, target: pair.target, text: message.content });
         if (key === active) continue;

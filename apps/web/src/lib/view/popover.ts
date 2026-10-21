@@ -151,6 +151,13 @@ export type MessageMenuClusterPlacement = {
   /** Ce que la liste perd sous le bas utile de l'écran (≤ 0 : rien) — la
    * mesure que `revealFloor` (#9043) dégage en réduisant l'aperçu. */
   readonly menuHiddenHeight: number;
+  /**
+   * LA HAUTEUR QUE LA LISTE PEUT OCCUPER AU REPOS (#11210) — jusqu'au bas utile
+   * de l'écran, jamais plus que la liste elle-même. Au-delà, elle DÉFILE : le
+   * glisser (#9043) n'est plus le seul chemin vers sa dernière ligne, que le
+   * clavier et la souris atteignent aussi.
+   */
+  readonly menuMaxHeight: number;
 };
 
 const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(max, value));
@@ -214,5 +221,6 @@ export function placeMessageMenuCluster(input: MessageMenuClusterInput): Message
     menuLeft,
     railLeft,
     menuHiddenHeight: menuTop + menuHeight - availBottom,
+    menuMaxHeight: Math.min(menuHeight, Math.max(0, availBottom - menuTop)),
   };
 }

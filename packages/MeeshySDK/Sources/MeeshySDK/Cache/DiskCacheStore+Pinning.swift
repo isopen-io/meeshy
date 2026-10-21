@@ -42,7 +42,7 @@ extension DiskCacheStore {
         if pinExpiries.count != before { persistPins() }
     }
 
-    private var pinsSidecarURL: URL {
+    var pinsSidecarURL: URL {
         baseDirectory.appendingPathComponent(".pins.json")
     }
 
