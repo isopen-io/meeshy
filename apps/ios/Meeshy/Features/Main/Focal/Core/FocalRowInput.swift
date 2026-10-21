@@ -358,6 +358,11 @@ extension FocalRowInput {
         var isDirect: Bool = false
         var isRightToLeft: Bool = false
         var availableWidth: CGFloat? = nil
+        /// La rangée dans sa suite (#11213) : l'aperçu d'une CONVERSATION montre
+        /// plusieurs messages et groupe ceux d'un même auteur, comme le fil.
+        /// Seul, un message est une tête ET une fin de groupe.
+        var isFirstInGroup: Bool = true
+        var isLastInGroup: Bool = true
     }
 
     /// **La rangée que le fil montre pour `message`, prête pour l'aperçu
@@ -404,8 +409,8 @@ extension FocalRowInput {
             serverId: message.id,
             content: content,
             density: density,
-            isFirstInGroup: true,
-            isLastInGroup: true,
+            isFirstInGroup: context.isFirstInGroup,
+            isLastInGroup: context.isLastInGroup,
             senderId: message.senderId,
             senderDisplayName: message.senderName ?? message.senderUsername ?? "",
             senderUsername: message.senderUsername,

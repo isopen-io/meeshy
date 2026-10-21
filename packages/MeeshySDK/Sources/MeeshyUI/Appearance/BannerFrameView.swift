@@ -49,13 +49,14 @@ public struct BannerFrameView: View, Equatable {
 private struct BannerFrameLayers: UIViewRepresentable {
     let design: BannerFrameDesign
     let animates: Bool
+    @Environment(\.displayScale) private var displayScale
 
     func makeUIView(context: Context) -> BannerFrameLayerView {
         BannerFrameLayerView()
     }
 
     func updateUIView(_ view: BannerFrameLayerView, context: Context) {
-        view.configure(design: design, animates: animates)
+        view.configure(design: design, animates: animates, scale: displayScale)
     }
 }
 
@@ -66,6 +67,10 @@ final class BannerFrameLayerView: UIView {
     private var design: BannerFrameDesign?
     private var renderedSize: CGSize = .zero
     private var renderedDesign: BannerFrameDesign?
+    private var scale: CGFloat = 1
+    private var renderedScale: CGFloat = 0
+
+    var stillImage: UIImage? { still.image }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -82,8 +87,9 @@ final class BannerFrameLayerView: UIView {
 
     nonisolated deinit {}
 
-    func configure(design: BannerFrameDesign, animates: Bool) {
+    func configure(design: BannerFrameDesign, animates: Bool, scale: CGFloat) {
         self.design = design
+        self.scale = scale
         motion.animates = animates
         render()
     }
@@ -98,11 +104,12 @@ final class BannerFrameLayerView: UIView {
     /// Une nouvelle taille ou un nouveau cadre : le dessin fixe et les couches se refont, une fois.
     private func render() {
         guard let design, bounds.width > 0, bounds.height > 0 else { return }
-        guard bounds.size != renderedSize || design != renderedDesign else { return }
+        guard bounds.size != renderedSize || design != renderedDesign || scale != renderedScale else { return }
         renderedSize = bounds.size
         renderedDesign = design
+        renderedScale = scale
         let plan = BannerFrameRenderer.plan(design, size: bounds.size)
-        still.image = BannerFrameRenderer.staticImage(design, size: bounds.size, skipping: plan.animated)
+        still.image = BannerFrameRenderer.staticImage(design, size: bounds.size, skipping: plan.animated, screenScale: scale)
         motion.show(plan.isStill ? .empty : BannerFrameRenderer.motionContent(design, size: bounds.size, plan: plan))
     }
 }

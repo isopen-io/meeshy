@@ -13,6 +13,7 @@ import { languageName } from '@/lib/languages';
 import { messageMenuItems, translationChoices } from '@/lib/view/message-actions';
 import { useMessageMenu } from '@/lib/view/use-message-menu';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { MessageMenu } from './message-menu';
 
@@ -234,8 +235,8 @@ describe('l’appui long sur un message que la passerelle refuse de réactions n
         messages: [lot],
         readerLanguages: ['fr'],
         readerLocale: 'fr-FR',
-        viewerId: 'u-viewer',
-        canStar: false,
+        viewer: menuViewer({ hasAccount: false }),
+        conversation: menuConversation(),
         reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
         announce: () => {},
         queryClient,
