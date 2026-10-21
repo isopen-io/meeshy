@@ -2724,6 +2724,7 @@
 		B79C9D3844970666B75DEC0C /* AssetWriterStartWritingGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29928EC698DD6E841A5250AB /* AssetWriterStartWritingGuardTests.swift */; };
 		B79E9780086CB1B296640274 /* ConsentNoticeDecisionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 489265456B050165E4BE4F1A /* ConsentNoticeDecisionTests.swift */; };
 		B7AE976E63462282106ACFF8 /* PresenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7197D1889C1347D2D89484F /* PresenceManager.swift */; };
+		B7B1251310301402699C2813 /* LivePresence.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2590C2EA71D9226AEA79E4 /* LivePresence.swift */; };
 		B7E4955E78EA8C8A315A1831 /* CallPillRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D2CCFDF2701C1F7959186DD /* CallPillRow.swift */; };
 		B7E6027D31528D57F1C79D98 /* ConversationView+HeaderControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAC2CCD43599D6EFBF9D5BB /* ConversationView+HeaderControls.swift */; };
 		B7EE9F09C8891529682C2745 /* ConversationImageRetoucheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 728717D767C6E90A18CEC8D0 /* ConversationImageRetoucheTests.swift */; };
@@ -6559,6 +6560,7 @@
 		AEE456E08133D5C2A574AFDD /* RootViewLayers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootViewLayers.swift; sourceTree = "<group>"; };
 		AEF3D2A3379AC85C338106E5 /* ConversationPresentedMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPresentedMedia.swift; sourceTree = "<group>"; };
 		AEFC858D55347283B7AB6E55 /* UniversalComposerBar+Protections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "UniversalComposerBar+Protections.swift"; sourceTree = "<group>"; };
+		AF2590C2EA71D9226AEA79E4 /* LivePresence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivePresence.swift; sourceTree = "<group>"; };
 		AF25F23599555992D5EE644C /* MessageListViewController+LongMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MessageListViewController+LongMessage.swift"; sourceTree = "<group>"; };
 		AF2745FA2E19A0A6779DE4BC /* StoryViewModel+PublicationUpload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewModel+PublicationUpload.swift"; sourceTree = "<group>"; };
 		AF27ED03C1648E86B0B43593 /* MockPostServiceRequirementParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPostServiceRequirementParityTests.swift; sourceTree = "<group>"; };
@@ -8914,6 +8916,7 @@
 				1AD0AF6FB243AA63DCF30A2E /* LanguageFlagChip.swift */,
 				1489DD560DF87E13408C850A /* LanguagePickerSheet.swift */,
 				669F87494476EFA1E50C4C0E /* LinkPreviewCard.swift */,
+				AF2590C2EA71D9226AEA79E4 /* LivePresence.swift */,
 				5B0E572518B85B56D055F46A /* LocalizedNumber.swift */,
 				17C113ABEF2601E98448BDB5 /* LocationPickerView.swift */,
 				28816254597DA49937313B56 /* LocationSharingSettingsSection.swift */,
@@ -14187,6 +14190,7 @@
 				7C1B717E90646E5152C315A7 /* LiveActivityCommandIntent.swift in Sources */,
 				1E4B17688687E043E74E25AB /* LiveActivityHost.swift in Sources */,
 				572C924A1C99D0ED7C8F12C0 /* LiveCallJoiner.swift in Sources */,
+				B7B1251310301402699C2813 /* LivePresence.swift in Sources */,
 				9895A7FA5FA32ED2B2A8EAC8 /* LivingSummaryAssembly.swift in Sources */,
 				0BF51701F54AFBB0DC71DEA7 /* LivingSummaryHost.swift in Sources */,
 				98D5889243EB613B81530934 /* LivingSummaryModels.swift in Sources */,
