@@ -129,7 +129,7 @@ final class ShareItemLoaderTests: XCTestCase {
         let link = elsewhere.appendingPathComponent("photo.jpg")
         try FileManager.default.createSymbolicLink(at: link, withDestinationURL: secret)
         let traversal = elsewhere.appendingPathComponent("../\(sealed.lastPathComponent)/session.json")
-        let policy = ShareSourcePolicy(sealed: [sealed], privateRoots: [], exemptions: [])
+        let policy = ShareSourcePolicy(sealed: [sealed], privateRoots: [], systemCopyRoots: [])
 
         XCTAssertFalse(policy.admits(secret))
         XCTAssertFalse(policy.admits(link), "un lien symbolique se juge sur sa cible")
@@ -137,19 +137,50 @@ final class ShareItemLoaderTests: XCTestCase {
         XCTAssertTrue(policy.admits(try makeFile(named: "ok.jpg", bytes: 8, in: elsewhere)))
     }
 
-    func test_policy_refusesThePrivateArea_exceptItsExemptions_butNeverASealedRoot() throws {
+    func test_policy_refusesThePrivateArea_exceptTheSystemCopy_butNeverASealedRoot() throws {
         let home = try makeDirectory()
         let tmp = home.appendingPathComponent("tmp", isDirectory: true)
+        let systemCopy = tmp.appendingPathComponent("TemporaryItems/.com.apple.Foundation.NSItemProvider.a1b2c3", isDirectory: true)
         let preferences = home.appendingPathComponent("Library/Preferences", isDirectory: true)
-        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: systemCopy, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: preferences, withIntermediateDirectories: true)
         let sealedInsideTmp = tmp.appendingPathComponent("group", isDirectory: true)
         try FileManager.default.createDirectory(at: sealedInsideTmp, withIntermediateDirectories: true)
-        let policy = ShareSourcePolicy(sealed: [sealedInsideTmp], privateRoots: [home], exemptions: [tmp])
+        let policy = ShareSourcePolicy(sealed: [sealedInsideTmp], privateRoots: [home], systemCopyRoots: [tmp])
 
-        XCTAssertTrue(policy.admits(try makeFile(named: "copie.jpg", bytes: 8, in: tmp)))
+        XCTAssertTrue(policy.admits(try makeFile(named: "copie.jpg", bytes: 8, in: systemCopy)))
         XCTAssertFalse(policy.admits(try makeFile(named: "me.meeshy.plist", bytes: 8, in: preferences)))
         XCTAssertFalse(policy.admits(try makeFile(named: "x.jpg", bytes: 8, in: sealedInsideTmp)))
+    }
+
+    // MARK: - Seule la copie du système passe (#11428)
+
+    /// Le faux App Group vit HORS de l'exemption : dans `tmp` mais pas dans un
+    /// dossier de copie du système, et dans `Library/Caches`. Les deux
+    /// passaient tant que tout `tmp` et tout `Library/Caches` étaient exemptés.
+    func test_policy_aFakeAppGroupInTmpOrInTheCaches_isRefused_onlyTheSystemFolderPasses() throws {
+        let home = try makeDirectory()
+        let tmp = home.appendingPathComponent("tmp", isDirectory: true)
+        let fakeGroupInTmp = tmp.appendingPathComponent("group.me.meeshy.apps", isDirectory: true)
+        let fakeGroupInCaches = home.appendingPathComponent("Library/Caches/group.me.meeshy.apps", isDirectory: true)
+        let lookalike = tmp.appendingPathComponent("com.apple.Foundation.NSItemProvider.x", isDirectory: true)
+        let bareSystemFolder = tmp.appendingPathComponent(".com.apple.Foundation.NSItemProvider.", isDirectory: true)
+        let directSystemCopy = tmp.appendingPathComponent(".com.apple.Foundation.NSItemProvider.fXwu7y", isDirectory: true)
+        try [fakeGroupInTmp, fakeGroupInCaches, lookalike, bareSystemFolder, directSystemCopy].forEach {
+            try FileManager.default.createDirectory(at: $0, withIntermediateDirectories: true)
+        }
+        let policy = ShareSourcePolicy(sealed: [], privateRoots: [home], systemCopyRoots: [tmp])
+
+        XCTAssertFalse(policy.admits(try makeFile(named: "share_directory.json", bytes: 8, in: fakeGroupInTmp)))
+        XCTAssertFalse(policy.admits(try makeFile(named: "session.json", bytes: 8, in: fakeGroupInCaches)))
+        XCTAssertFalse(policy.admits(try makeFile(named: "a.jpg", bytes: 8, in: lookalike)), "le point initial fait partie du nom")
+        XCTAssertFalse(policy.admits(try makeFile(named: "a.jpg", bytes: 8, in: bareSystemFolder)), "un dossier sans suffixe n'est pas une copie")
+        XCTAssertFalse(policy.admits(directSystemCopy), "le dossier lui-même n'est pas un fichier remis")
+        XCTAssertTrue(policy.admits(try makeFile(named: "IMG.jpg", bytes: 8, in: directSystemCopy)))
+        XCTAssertFalse(
+            policy.admits(directSystemCopy.appendingPathComponent("../../Library/Caches/group.me.meeshy.apps/session.json")),
+            "un `..` ne sort pas du dossier de copie"
+        )
     }
 
     func test_livePolicy_sealsTheAppGroupAndTheAppBundle() {
@@ -158,7 +189,37 @@ final class ShareItemLoaderTests: XCTestCase {
             XCTAssertFalse(live.admits(group.appendingPathComponent("share_directory.json")))
         }
         XCTAssertFalse(live.admits(Bundle.main.bundleURL.appendingPathComponent("Info.plist")))
-        XCTAssertTrue(live.admits(URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("copie.jpg")))
+    }
+
+    func test_livePolicy_admitsOnlyTheSystemCopy_neverTheRestOfTmpNorTheCaches() {
+        let live = ShareSourcePolicy.live
+        let tmp = URL(fileURLWithPath: NSTemporaryDirectory())
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+
+        XCTAssertFalse(live.admits(tmp.appendingPathComponent("fake-group/share_directory.json")))
+        XCTAssertFalse(live.admits(home.appendingPathComponent("Library/Caches/fake-group/session.json")))
+        XCTAssertTrue(live.admits(tmp.appendingPathComponent("TemporaryItems/.com.apple.Foundation.NSItemProvider.i7znue/IMG.jpg")))
+    }
+
+    /// La MESURE dont dépend la politique : ce que `loadFileRepresentation`
+    /// remet est une copie dans le dossier du système, admise, alors que la
+    /// source (ici un faux App Group sous `tmp`) ne l'est pas. Si iOS change
+    /// l'emplacement de ses copies, ce témoin rougit avant que les partages
+    /// ne soient tous refusés.
+    func test_loadFileRepresentation_handsACopyInTheSystemFolder_admittedWhereItsSourceIsNot() async throws {
+        let fakeGroup = try makeDirectory()
+        let photo = try makeFile(named: "IMG.jpg", bytes: 64, in: fakeGroup)
+        let provider = googlePhotosProvider(file: photo, typeIdentifier: UTType.jpeg.identifier)
+        let live = ShareSourcePolicy.live
+
+        let verdict: (path: String, admitted: Bool) = await withCheckedContinuation { continuation in
+            _ = provider.loadFileRepresentation(forTypeIdentifier: UTType.jpeg.identifier) { url, _ in
+                continuation.resume(returning: (url?.path ?? "aucune URL", url.map(live.admits) ?? false))
+            }
+        }
+
+        XCTAssertFalse(live.admits(photo), "la source n'est pas une copie du système")
+        XCTAssertTrue(verdict.admitted, "copie remise hors du dossier attendu : \(verdict.path)")
     }
 
     func test_gather_aWebLinkAndText_composeTheContentWithoutAnyFile() async throws {
