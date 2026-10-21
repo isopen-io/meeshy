@@ -3,7 +3,7 @@
     "apps/ios/Meeshy/AppDelegate.swift::AppDelegate.application": 101,
     "apps/ios/Meeshy/AppDelegate.swift::AppDelegate.application#5": 165,
     "apps/ios/Meeshy/AppDelegate.swift::AppDelegate.registerNotificationCategories": 136,
-    "apps/ios/Meeshy/Core/DependencyContainer.swift::DependencyContainer.wireOutboxLogoutHook": 141,
+    "apps/ios/Meeshy/Core/DependencyContainer.swift::DependencyContainer.wireOutboxLogoutHook": 129,
     "apps/ios/Meeshy/Features/Auth/Signup/SignupView+Phone.swift::SignupView.phoneField": 87,
     "apps/ios/Meeshy/Features/Auth/Signup/SignupView.swift::SignupView.body": 82,
     "apps/ios/Meeshy/Features/Contacts/RequestsTab.swift::RequestsTab.receivedRow": 90,
