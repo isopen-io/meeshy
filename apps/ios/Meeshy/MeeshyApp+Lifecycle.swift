@@ -81,70 +81,42 @@ extension MeeshyApp {
     }
 
     static func sessionChanged(isAuthenticated isAuth: Bool) {
-        // Tag every subsequent crash report with the active user
-        // so we can filter the Crashlytics dashboard per account.
-        // Cleared on logout to prevent the next user inheriting
-        // the previous identity.
-        CrashDiagnosticsManager.shared.setUserID(
-            isAuth ? AuthManager.shared.currentUser?.id : nil
-        )
+        let context = sessionTransitionContext(isAuthenticated: isAuth)
         if isAuth {
+            SessionTransitionPlan.opening(context).forEach(performOpeningStep)
+        } else {
+            SessionTransitionPlan.closing(context).forEach(performClosingStep)
+        }
+    }
+
+    private static func sessionTransitionContext(isAuthenticated isAuth: Bool) -> SessionTransitionContext {
+        SessionTransitionContext(
+            userId: isAuth ? AuthManager.shared.currentUser?.id : nil,
+            friendshipsHydrated: FriendshipCache.shared.isHydrated,
+            hasActiveCall: CallManagerHost.shared.manager?.callState.isActive == true
+        )
+    }
+
+    private static func performOpeningStep(_ step: SessionOpeningStep) {
+        switch step {
+        case .tagCrashReports(let userId):
+            CrashDiagnosticsManager.shared.setUserID(userId)
+        case .replayShareLinkAwaitingAccount:
             DeepLinkRouter.shared.replayShareLinkAwaitingAccount()
-            // Re-arm every coordinator after a logout/login cycle.
-            // `start()` is idempotent-guarded, so without the
-            // matching `reset()` on the logout branch below the
-            // second login would be a silent no-op and socket
-            // publishers would be left without subscribers.
+        case .startNotificationCoordinators:
             NotificationCoordinator.shared.widgetSink = WidgetDataManager.shared
             NotificationCoordinator.shared.start()
-            // A5.3 — resync notifications quand SyncSeqTracker
-            // détecte un trou de séquence (_seq) sur notification:new.
             NotificationGapResyncCoordinator.shared.start()
+        case .startCache:
             Task { await CacheCoordinator.shared.start() }
-            // SOTA audit Pilier 22 V2 — register the publish-queue
-            // handler + listeners so any pending stories from a
-            // previous session start surfacing to the UI as soon
-            // as the user authenticates.
+        case .configureStoryPublishing:
             StoryPublishService.shared.configure()
-            // Re-hydrate the friendship cache for the now-active
-            // user. `MeeshyApp.task` only hydrates once per view
-            // lifecycle, so without this call an account switch
-            // (logout A → login B) would leave B with A's friend
-            // graph until the next cold start.
-            if !FriendshipCache.shared.isHydrated {
-                Task { await FriendshipCache.shared.hydrate() }
-            }
-            // `MeeshyApp.task` only runs once per view lifecycle;
-            // force a fresh socket connection so we don't rely on
-            // any stale state carried over from a prior session.
+        case .hydrateFriendships:
+            Task { await FriendshipCache.shared.hydrate() }
+        case .reconnectSockets:
             MessageSocketManager.shared.forceReconnect()
             SocialSocketManager.shared.forceReconnect()
-            // Route conversation/category socket events (deleted,
-            // reordered, category:×4) into ConversationStore /
-            // UserCategoryStore. Idempotent (re-wires cleanly) and
-            // the 6 publishers live on the socket singleton, so a
-            // single activation after login survives reconnects.
-            //
-            // `onReadingModePreferenceChanged` — G-124, volet
-            // « préférence serveur » de P7. Le SDK relaie la
-            // valeur BRUTE reçue sur `user:preferences-updated`
-            // (scope conversation) ; ici, et ici seulement, elle
-            // devient un `ReadingModePreference` typé et atterrit
-            // dans le MÊME magasin scopé que les trois autres
-            // points d'entrée (encoche liste, sous-menu, fil
-            // ouvert — `LentilleReadingModePreferenceCenter`,
-            // `Lentille/Mode/LentilleReadingModeContext.swift`) :
-            // ce n'est PAS un second canal, c'est une quatrième
-            // écriture dans le magasin optimiste existant, qui
-            // devient cache devant ce canal serveur (contrat
-            // LWS-2bis, en-tête de `ReadingModePreferenceStoring`).
-            // Gate sur le MÊME drapeau que ces trois surfaces —
-            // écrire sous drapeau OFF n'aurait aucun lecteur, mais
-            // couper la garde ferait dépendre R19 d'une future
-            // purge plutôt que d'un simple gate au point d'écriture.
-            // Une valeur brute hors des 5 cas gelés (`rawValue:`
-            // échoue) est ignorée — jamais une préférence
-            // fabriquée depuis une chaîne inconnue.
+        case .activateConversationStoreBridge:
             ConversationStoreSocketBridge.shared.activate(
                 onReadingModePreferenceChanged: { conversationId, rawReadingMode in
                     guard LentilleFeatureFlag.isReadingModesEnabled,
@@ -157,74 +129,54 @@ extension MeeshyApp {
                     }
                 }
             )
+        case .promptPushPermission:
             Task { await PushPermissionPrompt.onSessionOpened(origin: AuthManager.shared.sessionOrigin) }
+        case .refreshUnreadCount:
             Task { await NotificationToastManager.shared.refreshUnreadCount() }
+        case .reRegisterPushTokens:
             PushNotificationManager.shared.reRegisterTokenIfNeeded()
-            // Force a PushKit re-registration on every login so the
-            // gateway UPSERT-by-(userId,token,type) flips back to
-            // isActive=true any device row deactivated during a
-            // previous BadDeviceToken burst. register() alone is a
-            // no-op when voipRegistry is already set.
             VoIPPushManager.shared.forceReregister()
-            Task {
-                do {
-                    let bundle = try E2EEService.shared.generatePublicBundle()
-                    try await E2EAPI.shared.uploadBundle(bundle: bundle)
-                } catch {
-                    Logger.e2ee.error("E2EE bundle upload failed: \(error)")
-                }
-            }
+        case .uploadE2EEBundle:
+            Task { await uploadE2EEBundle() }
+        case .migrateKeychain:
             Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-            // A push tapped from the login screen leaves a pending
-            // payload on `PushNotificationManager`; the root view
-            // mounted by this login transition consumes it directly
-            // via its `$pendingNotificationPayload` subscription
-            // (the published value is replayed to that late
-            // subscriber), so no manual hop is needed here.
-        } else {
+        }
+    }
+
+    private static func uploadE2EEBundle() async {
+        do {
+            let bundle = try E2EEService.shared.generatePublicBundle()
+            try await E2EAPI.shared.uploadBundle(bundle: bundle)
+        } catch {
+            Logger.e2ee.error("E2EE bundle upload failed: \(error)")
+        }
+    }
+
+    private static func performClosingStep(_ step: SessionClosingStep) {
+        switch step {
+        case .untagCrashReports:
+            CrashDiagnosticsManager.shared.setUserID(nil)
+        case .resetNotifications:
             NotificationToastManager.shared.reset()
             NotificationCoordinator.shared.reset()
-            // Clear the in-memory friendship graph BEFORE the
-            // cache purge so any view that re-renders during the
-            // transition can't read user A's friend list.
+        case .clearFriendships:
             FriendshipCache.shared.clear()
-            // Wipe the Signal/E2EE material — IdentityKey,
-            // SignedPreKey, per-peer SymmetricKeys, peer list.
-            // Without this, user B logging in next would
-            // generate a public bundle from user A's leftover
-            // IdentityKey and upload it under their own
-            // account — a hard cross-account identity leak.
+        case .clearE2EESessions:
             Task { await SessionManager.shared.clearSessions() }
-            // #8674 — le cache n'est plus vidé ici : la sortie de
-            // session le lie à « personne », en mettant de côté
-            // celui d'un compte gardé et en effaçant celui d'un
-            // compte déconnecté. Sans effet quand c'est déjà fait ;
-            // le coordinateur est seulement démonté pour que le
-            // `start()` suivant réarme.
+        case .unbindCache:
             CacheAccountBinder.shared.bind(nil)
             Task { await CacheCoordinator.shared.stop() }
-            // Purge the device's VoIP registration (PushKit +
-            // keychain-backed token record) — without this, a
-            // different user logging in on this device inherits
-            // user A's VoIP push registration until the
-            // registration cooldown naturally expires.
+        case .unregisterVoIP:
             Task { await VoIPPushManager.shared.unregisterAndClearToken() }
-            // End any active call before the sockets go down —
-            // otherwise the call is orphaned locally: the peer
-            // keeps ringing/connecting to a device that vanished
-            // without sending a hangup signal.
-            if CallManagerHost.shared.manager?.callState.isActive == true {
-                CallManager.shared.endCall()
-            }
+        case .endActiveCall:
+            CallManager.shared.endCall()
+        case .disconnectSockets:
             MessageSocketManager.shared.disconnect()
             SocialSocketManager.shared.disconnect()
-            // Close store and sync-engine lanes: no queued event of user A may mutate state after logout.
+        case .stopSocketRelays:
             ConversationStoreSocketBridge.shared.deactivate()
             Task { await ConversationSyncEngine.shared.stopSocketRelay() }
-            // startup-08 — une BGTask soumise avant le logout ne
-            // doit pas survivre pour réveiller un appareil
-            // déconnecté (delta sync 401 en boucle, prefetch sur
-            // cache vidé).
+        case .cancelBackgroundTasks:
             BackgroundTaskManager.shared.cancelAllScheduled()
         }
     }

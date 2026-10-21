@@ -5,6 +5,9 @@ import os
 
 // MARK: - Social Socket Manager
 
+// unchecked: tout l'état mutable n'est touché que sur la file principale (`.handleQueue(.main)` + `Task { @MainActor }`).
+// La façade reste non isolée : CacheCoordinator et ConversationSyncEngine la reçoivent en valeur par défaut d'init non
+// isolé, par des protocoles `Sendable` — migration portée par #11530, préalable au @MainActor de type.
 public final class SocialSocketManager: ObservableObject, SocialSocketProviding, @unchecked Sendable {
     public static let shared = SocialSocketManager()
 
@@ -182,10 +185,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         guard let url = SocketConfig.baseURL else { return .notArmed }
 
-        DispatchQueue.main.async { self.connectionState = .connecting }
+        Task { @MainActor in self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
+            .handleQueue(.main),
             // CALL-FIX 2026-06-06 — WebSocket transport (voir MessageSocketManager).
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
@@ -299,7 +303,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         reconnectAttempt = 0
         backoff.reset()
         if wasReconnect {
-            DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
+            Task { @MainActor [weak self] in self?.didReconnect.send(()) }
         }
         return wasReconnect
     }
@@ -531,37 +535,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     // MARK: - Event Handlers
 
-    private func setupEventHandlers() {
-        guard let socket else { return }
-
+    private func installLifecycleHandlers(on socket: SocketIOClient) {
         socket.on(clientEvent: .connect) { [weak self] _, _ in
-            guard let self else { return }
-            // R1/R2 — records the connection and fires `didReconnect` when this
-            // follows a previous connection (resume / network-back / re-auth).
-            self.handleConnectionEstablished()
-            DispatchQueue.main.async {
-                self.isConnected = true
-                self.connectionState = .connected
-            }
-            // BW-IOS-07 — AUCUN battement applicatif ici, delibere. Le pong
-            // ENGINE (25 s) rafraichit deja la presence de cette socket, plus
-            // souvent que les 30 s retirees ; le `heartbeat` NU qui vivait ici
-            // n'avait ni `clientTime` (donc aucun RTT calculable) ni ecouteur
-            // d'ack — doublon exact du battement web supprime au cycle 78. Le
-            // seul battement applicatif iOS est celui de
-            // `MessageSocketManager`, qui porte `clientTime`.
-            self.subscribeFeed()
-            // Re-join des post rooms après (re)connexion : le gateway a oublié nos
-            // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
-            // recevoir likes/commentaires/réactions temps réel après un flap réseau.
-            let rooms = self.postRoomsToRejoinOnConnect()
-            for postId in rooms {
-                self.socket?.emit("post:join", ["postId": postId])
-            }
-            if !rooms.isEmpty {
-                Logger.socket.info("SocialSocket reconnected — re-joined \(rooms.count) post room(s)")
-            }
-            Logger.socket.info("SocialSocket connected")
+            self?.handleTransportConnected()
         }
 
         socket.on(clientEvent: .disconnect) { [weak self, weak socket] data, _ in
@@ -569,20 +545,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             // Seul le socket COURANT réarme : un ancien, remplacé, n'a plus rien à rouvrir.
             let retries = SocketDisconnectPolicy.retries(afterReason: SocketDisconnectPolicy.reason(in: data))
                 && socket != nil && socket === self.socket
-            DispatchQueue.main.async {
-                self.isConnected = false
-                if self.hadPreviousConnection {
-                    self.connectionState = .reconnecting(attempt: 0)
-                } else {
-                    self.connectionState = .disconnected
-                }
-                // Coupure prononcée par la passerelle, sur le socket COURANT :
-                // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
-                if retries {
-                    self.scheduleReconnectWithBackoff()
-                }
-            }
-            Logger.socket.info("SocialSocket disconnected")
+            self.handleTransportDisconnected(retries: retries)
         }
 
         // Une perte de transport n'émet PAS `.disconnect` quand la reconnexion automatique est active :
@@ -590,22 +553,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // restait vrai pendant toute la coupure — chaque envoi attendait son accusé avant le repli REST,
         // et le retour du réseau ne relançait rien.
         socket.on(clientEvent: .reconnect) { [weak self] _, _ in
-            guard let self else { return }
-            DispatchQueue.main.async {
-                self.isConnected = false
-                self.connectionState = .reconnecting(attempt: 0)
-            }
-            Logger.socket.info("SocialSocket transport lost — reconnecting")
+            self?.handleTransportLost()
         }
 
         socket.on(clientEvent: .reconnectAttempt) { [weak self] _, _ in
-            guard let self else { return }
-            self.reconnectAttempt += 1
-            let attempt = self.reconnectAttempt
-            DispatchQueue.main.async {
-                self.connectionState = .reconnecting(attempt: attempt)
-            }
-            Logger.socket.info("SocialSocket reconnect attempt \(attempt)")
+            self?.handleReconnectAttempt()
         }
 
         socket.on(clientEvent: .error) { data, _ in
@@ -616,288 +568,76 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             // silent token refresh, and even that preserves the session.
             Logger.socket.error("SocialSocket error: \(data)")
         }
+    }
 
-        // --- Post events ---
+    func handleTransportConnected() {
+        // R1/R2 — records the connection and fires `didReconnect` when this
+        // follows a previous connection (resume / network-back / re-auth).
+        handleConnectionEstablished()
+        Task { @MainActor in
+            self.isConnected = true
+            self.connectionState = .connected
+        }
+        // BW-IOS-07 — AUCUN battement applicatif ici, delibere. Le pong
+        // ENGINE (25 s) rafraichit deja la presence de cette socket, plus
+        // souvent que les 30 s retirees ; le `heartbeat` NU qui vivait ici
+        // n'avait ni `clientTime` (donc aucun RTT calculable) ni ecouteur
+        // d'ack — doublon exact du battement web supprime au cycle 78. Le
+        // seul battement applicatif iOS est celui de
+        // `MessageSocketManager`, qui porte `clientTime`.
+        subscribeFeed()
+        // Re-join des post rooms après (re)connexion : le gateway a oublié nos
+        // rooms à la coupure. Sans ça, le post/reel/story ouvert cessait de
+        // recevoir likes/commentaires/réactions temps réel après un flap réseau.
+        let rooms = postRoomsToRejoinOnConnect()
+        for postId in rooms {
+            socket?.emit("post:join", ["postId": postId])
+        }
+        if !rooms.isEmpty {
+            Logger.socket.info("SocialSocket reconnected — re-joined \(rooms.count) post room(s)")
+        }
+        Logger.socket.info("SocialSocket connected")
+    }
 
-        socket.on("post:created") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostCreatedData.self, from: data) { [weak self] payload in
-                self?.postCreated.send(payload)
+    func handleTransportDisconnected(retries: Bool) {
+        Task { @MainActor in
+            self.isConnected = false
+            if self.hadPreviousConnection {
+                self.connectionState = .reconnecting(attempt: 0)
+            } else {
+                self.connectionState = .disconnected
+            }
+            // Coupure prononcée par la passerelle, sur le socket COURANT :
+            // Socket.IO ne la rattrape pas (`SocketDisconnectPolicy`).
+            if retries {
+                self.scheduleReconnectWithBackoff()
             }
         }
+        Logger.socket.info("SocialSocket disconnected")
+    }
 
-        socket.on("post:updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostUpdatedData.self, from: data) { [weak self] payload in
-                self?.postUpdated.send(payload.post)
-            }
+    func handleTransportLost() {
+        Task { @MainActor in
+            self.isConnected = false
+            self.connectionState = .reconnecting(attempt: 0)
         }
+        Logger.socket.info("SocialSocket transport lost — reconnecting")
+    }
 
-        socket.on("post:deleted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostDeletedData.self, from: data) { [weak self] payload in
-                self?.postDeleted.send(payload.postId)
-            }
+    func handleReconnectAttempt() {
+        reconnectAttempt += 1
+        let attempt = reconnectAttempt
+        Task { @MainActor in
+            self.connectionState = .reconnecting(attempt: attempt)
         }
+        Logger.socket.info("SocialSocket reconnect attempt \(attempt)")
+    }
 
-        socket.on("post:liked") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostLikedData.self, from: data) { [weak self] payload in
-                self?.postLiked.send(payload)
-            }
-        }
+    private func setupEventHandlers() {
+        guard let socket else { return }
 
-        socket.on("post:unliked") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostUnlikedData.self, from: data) { [weak self] payload in
-                self?.postUnliked.send(payload)
-            }
-        }
-
-        socket.on("post:reposted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostRepostedData.self, from: data) { [weak self] payload in
-                self?.postReposted.send(payload)
-            }
-        }
-
-        socket.on("post:bookmarked") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostBookmarkedData.self, from: data) { [weak self] payload in
-                self?.postBookmarked.send(payload)
-            }
-        }
-
-        // --- Story events ---
-
-        socket.on("story:created") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryCreatedData.self, from: data) { [weak self] payload in
-                self?.storyCreated.send(payload.story)
-            }
-        }
-
-        socket.on("story:viewed") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryViewedData.self, from: data) { [weak self] payload in
-                self?.storyViewed.send(payload)
-            }
-        }
-
-        socket.on("story:reacted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryReactedData.self, from: data) { [weak self] payload in
-                self?.storyReacted.send(payload)
-            }
-        }
-
-        socket.on("story:unreacted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryUnreactedData.self, from: data) { [weak self] payload in
-                self?.storyUnreacted.send(payload)
-            }
-        }
-
-        socket.on("story:updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryUpdatedData.self, from: data) { [weak self] payload in
-                self?.storyUpdated.send(payload)
-            }
-        }
-
-        socket.on("story:deleted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryDeletedData.self, from: data) { [weak self] payload in
-                self?.storyDeleted.send(payload)
-            }
-        }
-
-        // --- Status events ---
-
-        socket.on("status:created") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStatusCreatedData.self, from: data) { [weak self] payload in
-                self?.statusCreated.send(payload.status)
-            }
-        }
-
-        socket.on("status:deleted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStatusDeletedData.self, from: data) { [weak self] payload in
-                self?.statusDeleted.send(payload.statusId)
-            }
-        }
-
-        socket.on("status:updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStatusCreatedData.self, from: data) { [weak self] payload in
-                self?.statusUpdated.send(payload.status)
-            }
-        }
-
-        socket.on("status:reacted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStatusReactedData.self, from: data) { [weak self] payload in
-                self?.statusReacted.send(payload)
-            }
-        }
-
-        socket.on("status:unreacted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStatusUnreactedData.self, from: data) { [weak self] payload in
-                self?.statusUnreacted.send(payload)
-            }
-        }
-
-        // --- Conversation events ---
-        // Surfaced on the social manager (in addition to MessageSocketManager)
-        // so feature-level coordinators that don't own a message socket can
-        // still react to a conversation being deleted server-side.
-        //
-        // B6 — The gateway emits the **`conversation:closed`** event when a
-        // conversation is "deleted" (soft-delete via `isActive=false +
-        // closedAt`; cf. `services/gateway/src/routes/conversations/core.ts`).
-        // The historical `conversation:deleted` listener stayed wired in
-        // case a future hard-delete code path emits it, but the actual
-        // server traffic is `conversation:closed` — both fan into the
-        // same `conversationDeleted` publisher so downstream consumers
-        // (audio coordinator, list view models) don't need to care which
-        // event the backend emitted.
-
-        let conversationLifecycleHandler: ([Any]) -> Void = { [weak self] data in
-            guard let self else { return }
-            self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
-                self?.conversationDeleted.send(payload.conversationId)
-            }
-        }
-        socket.on("conversation:deleted") { data, _ in conversationLifecycleHandler(data) }
-        socket.on("conversation:closed") { data, _ in conversationLifecycleHandler(data) }
-
-        // --- Comment events ---
-
-        socket.on("comment:updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentUpdatedData.self, from: data) { [weak self] payload in
-                self?.commentUpdated.send(payload)
-            }
-        }
-
-        socket.on("comment:added") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentAddedData.self, from: data) { [weak self] payload in
-                self?.commentAdded.send(payload)
-            }
-        }
-
-        socket.on("comment:deleted") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentDeletedData.self, from: data) { [weak self] payload in
-                self?.commentDeleted.send(payload)
-            }
-        }
-
-        socket.on("comment:liked") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentLikedData.self, from: data) { [weak self] payload in
-                self?.commentLiked.send(payload)
-            }
-        }
-
-        socket.on("comment:unliked") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentLikedData.self, from: data) { [weak self] payload in
-                self?.commentUnliked.send(payload)
-            }
-        }
-
-        socket.on("comment:reaction-added") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentReactionUpdateEvent.self, from: data) { [weak self] payload in
-                self?.commentReactionAdded.send(payload)
-            }
-        }
-
-        socket.on("comment:reaction-removed") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentReactionUpdateEvent.self, from: data) { [weak self] payload in
-                self?.commentReactionRemoved.send(payload)
-            }
-        }
-
-        // NOTE: there is no `socket.on("comment:reaction-sync")` — the gateway
-        // never broadcasts that event; comment reaction sync data is returned via
-        // the `comment:reaction-request-sync` ACK (see requestCommentReactionSync).
-
-        socket.on("post:reaction-added") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostReactionUpdateEvent.self, from: data) { [weak self] payload in
-                self?.postReactionAdded.send(payload)
-            }
-        }
-
-        socket.on("post:reaction-removed") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostReactionUpdateEvent.self, from: data) { [weak self] payload in
-                self?.postReactionRemoved.send(payload)
-            }
-        }
-
-        // NOTE: there is no `socket.on("post:reaction-sync")` — the gateway never
-        // broadcasts that event; post reaction sync data is returned via the
-        // `post:reaction-request-sync` ACK (see requestPostReactionSync).
-
-        // --- Story translation events ---
-
-        // Source de vérité : `packages/shared/types/socketio-events.ts` →
-        // `STORY_TRANSLATION_UPDATED: 'story:translation-updated'`. L'ancien nom
-        // `post:story-translation-updated` (en place jusqu'au 2026-06-01) ne
-        // correspondait plus à l'event émis par le gateway
-        // (`StoryTextObjectTranslationService`) → les traductions de story temps
-        // réel n'atteignaient jamais le client.
-        socket.on("story:translation-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketStoryTranslationUpdatedData.self, from: data) { [weak self] payload in
-                self?.storyTranslationUpdated.send(payload)
-            }
-        }
-
-        // --- Post translation events ---
-
-        socket.on("post:translation-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketPostTranslationUpdatedData.self, from: data) { [weak self] payload in
-                self?.postTranslationUpdated.send(payload)
-            }
-        }
-
-        socket.on("comment:translation-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentTranslationUpdatedData.self, from: data) { [weak self] payload in
-                self?.commentTranslationUpdated.send(payload)
-            }
-        }
-
-        socket.on("comment:media-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketCommentMediaUpdatedData.self, from: data) { [weak self] payload in
-                self?.commentMediaUpdated.send(payload)
-            }
-        }
-
-        // Source de vérité : `packages/shared/types/socketio-events/event-names.ts`
-        // → `MEDIA_CAPTION_TRANSLATION_UPDATED: 'media:caption-translation-updated'`
-        // (#6280).
-        socket.on("media:caption-translation-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketMediaCaptionTranslationUpdatedData.self, from: data) { [weak self] payload in
-                self?.mediaCaptionTranslationUpdated.send(payload)
-            }
-        }
-
-        // NOTE — `notification:new` in-app toasts are handled via
-        // MessageSocketManager.notificationReceived → NotificationToastManager.
-        // SocialSocketManager intentionally does NOT mirror that event (a second
-        // decode with no consumer would be dead work + a double-toast hazard).
+        installLifecycleHandlers(on: socket)
+        socket.install(SocialSocketRoutes.all(for: self))
     }
 
     // MARK: - Decode Helper
@@ -910,9 +650,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// that `conversationDeleted` publishes — covering B6's hook from the
     /// gateway-side event name.
     nonisolated func _test_handleConversationLifecyclePayload(_ data: [Any]) {
-        self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
-            self?.conversationDeleted.send(payload.conversationId)
-        }
+        handleConversationLifecyclePayload(data)
     }
     #endif
 
@@ -924,8 +662,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// cross-queue sharing.)
     private static let offMainDecoder: JSONDecoder = makeSocketPayloadDecoder()
     private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
+    private static let deliveryLane = MainActorDeliveryLane()
 
-    private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
+    nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @MainActor @Sendable (T) -> Void) {
         guard let first = data.first else { return }
 
         let jsonData: Data
@@ -947,7 +686,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         Self.decodeQueue.async {
             do {
                 let decoded = try Self.offMainDecoder.decode(type, from: jsonData)
-                DispatchQueue.main.async { handler(decoded) }
+                Self.deliveryLane.deliver { handler(decoded) }
             } catch {
                 Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
             }

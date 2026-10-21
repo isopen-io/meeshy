@@ -6,8 +6,8 @@ import SocketIO
 // s'il le choisit) l'appelant pendant que l'appel 1:1 sonne. Miroir de
 // `packages/shared/types/call-preview.ts`. Un canal DISTINCT de `call:signal`,
 // où une réponse décrocherait l'appel. Dans son propre fichier :
-// `MessageSocketManager.swift` est hors budget, il n'y porte que
-// `registerCallPreviewHandlers(on:)`.
+// `MessageSocketManager.swift` est hors budget, la table des routes n'y porte que
+// `callPreviewRoutes`.
 
 /// `call:preview-requested` — à l'appelant : `userId` voit l'appel sonner et demande l'aperçu.
 public struct CallPreviewRequestedEvent: Decodable, Sendable, Equatable {
@@ -36,17 +36,15 @@ extension MessageSocketManager {
         CallPreviewSocketChannel.events.eraseToAnyPublisher()
     }
 
-    func registerCallPreviewHandlers(on socket: SocketIOClient) {
-        socket.on("call:preview-requested") { [weak self] data, _ in
-            self?.decode(CallPreviewRequestedEvent.self, from: data) { event in
+    var callPreviewRoutes: [SocketInboundRoute] {
+        [
+            route(.callPreviewRequested, CallPreviewRequestedEvent.self) { _, event in
                 CallPreviewSocketChannel.events.send(.requested(event))
-            }
-        }
-        socket.on("call:preview-signal") { [weak self] data, _ in
-            self?.decode(CallAnswerData.self, from: data) { event in
+            },
+            route(.callPreviewSignal, CallAnswerData.self) { _, event in
                 CallPreviewSocketChannel.events.send(.signal(event))
-            }
-        }
+            },
+        ]
     }
 
     /// L'appelé demande l'aperçu de l'appel qui sonne.

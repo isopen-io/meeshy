@@ -3047,16 +3047,32 @@ final class CallManagerScreenCaptureAlertTests: XCTestCase {
     /// The SDK must register a socket.on listener for call:screen-capture-alert
     /// and publish received events via callScreenCaptureAlert.
     func test_messageSocketManager_listensForScreenCaptureAlert() throws {
-        let source = try socketManagerSource()
+        let events = try sdkSocketSource("SocketEvent.swift")
+        let routes = try sdkSocketSource("MessageSocketRoutes+Calls.swift")
         XCTAssertTrue(
-            source.contains("\"call:screen-capture-alert\""),
-            "MessageSocketManager must register a socket.on(\"call:screen-capture-alert\") " +
-            "listener — the gateway relays this event to the remote participant but " +
-            "without a listener the iOS client never sees it")
+            events.contains("case callScreenCaptureAlert = \"call:screen-capture-alert\""),
+            "SocketEvent must keep the wire name call:screen-capture-alert — the gateway " +
+            "relays this event to the remote participant")
         XCTAssertTrue(
-            source.contains("callScreenCaptureAlert.send"),
-            "MessageSocketManager must forward decoded call:screen-capture-alert events " +
-            "via callScreenCaptureAlert.send() so CallManager's Combine sink fires")
+            routes.contains("m.route(.callScreenCaptureAlert, CallScreenCaptureAlertData.self)"),
+            "The inbound route table must register call:screen-capture-alert — without a " +
+            "route the iOS client never sees it")
+        XCTAssertTrue(
+            routes.contains("callScreenCaptureAlert.send"),
+            "The route must forward decoded call:screen-capture-alert events via " +
+            "callScreenCaptureAlert.send() so CallManager's Combine sink fires")
+    }
+
+    private func sdkSocketSource(_ name: String) throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("packages/MeeshySDK/Sources/MeeshySDK/Sockets")
+        return try String(contentsOf: url.appendingPathComponent(name), encoding: .utf8)
     }
 
     /// CallView must check isRemoteScreenCapturing to display a recording indicator.

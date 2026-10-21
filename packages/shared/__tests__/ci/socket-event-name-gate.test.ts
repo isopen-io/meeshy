@@ -118,6 +118,20 @@ const SCANNED_ROOTS: ReadonlyArray<{ readonly platform: string; readonly path: s
   { platform: 'Android', path: 'apps/android' },
 ];
 
+/**
+ * iOS n'épelle plus ses canaux au site d'appel : ils vivent tous comme valeurs
+ * brutes de `SocketEvent` (`case messageNew = "message:new"`), et les sites
+ * d'abonnement et d'émission passent le cas, jamais la chaîne. La recopie à la
+ * main que cette garde surveille s'est donc DÉPLACÉE dans cette table — c'est
+ * elle qu'on lit. Le motif `case … = "…"` ne s'applique QU'À ce fichier : une
+ * autre énumération à valeurs brutes n'est pas une table de canaux.
+ */
+const SOCKET_EVENT_TABLES: ReadonlyArray<{ readonly platform: string; readonly path: string }> = [
+  { platform: 'iOS (SDK)', path: 'packages/MeeshySDK/Sources/MeeshySDK/Sockets/SocketEvent.swift' },
+];
+
+const SOCKET_EVENT_TABLE_CASE = /\bcase\s+`?\w+`?\s*=\s*"([^"]+)"/g;
+
 const SCANNED_EXTENSIONS: ReadonlySet<string> = new Set(['.swift', '.kt']);
 
 /**
@@ -185,7 +199,26 @@ type Occurrence = {
   readonly eventName: string;
 };
 
+function collectTableOccurrences(): ReadonlyArray<Occurrence> {
+  return SOCKET_EVENT_TABLES.flatMap(({ platform, path }) => {
+    let raw: string;
+    try {
+      raw = readFileSync(join(REPO_ROOT, path), 'utf8');
+    } catch {
+      return [];
+    }
+    const source = stripComments(raw);
+    return [...source.matchAll(new RegExp(SOCKET_EVENT_TABLE_CASE.source, SOCKET_EVENT_TABLE_CASE.flags))].map(
+      (match) => ({ platform, file: path, site: 'SocketEvent', eventName: match[1] })
+    );
+  });
+}
+
 function collectOccurrences(): ReadonlyArray<Occurrence> {
+  return [...collectLiteralOccurrences(), ...collectTableOccurrences()];
+}
+
+function collectLiteralOccurrences(): ReadonlyArray<Occurrence> {
   return SCANNED_ROOTS.flatMap(({ platform, path }) =>
     collectSourceFiles(join(REPO_ROOT, path)).flatMap((absolute) => {
       const source = stripComments(readFileSync(absolute, 'utf8'));
@@ -226,6 +259,12 @@ describe('socket event names spelled out by native clients', () => {
   ])('still finds the literal event names spelled out by %s', (platform, floor) => {
     const found = occurrences.filter((o) => o.platform.startsWith(platform));
     expect(found.length).toBeGreaterThanOrEqual(floor);
+  });
+
+  it('reads every raw value of the iOS SocketEvent table as a product channel name', () => {
+    const tableNames = occurrences.filter((o) => o.site === 'SocketEvent');
+    expect(tableNames.length).toBeGreaterThanOrEqual(60);
+    expect(tableNames.filter((o) => !PRODUCT_EVENT_SHAPE.test(o.eventName)).map((o) => o.eventName)).toEqual([]);
   });
 
   it('only ever names a channel the shared contract declares', () => {
