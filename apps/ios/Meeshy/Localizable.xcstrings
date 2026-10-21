@@ -23326,288 +23326,6 @@
         }
       }
     },
-    "message.action.compose": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إنشاء"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gestalten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compose"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Componer"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Composer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Componi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compor"
-          }
-        }
-      }
-    },
-    "message.action.edit": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحرير"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bearbeiten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Éditer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modifica"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Editar"
-          }
-        }
-      }
-    },
-    "message.action.forward": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إعادة توجيه"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weiterleiten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forward"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reenviar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transférer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inoltra"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encaminhar"
-          }
-        }
-      }
-    },
-    "message.action.more": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "المزيد…"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mehr…"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "More…"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Más…"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Plus…"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Altro…"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mais…"
-          }
-        }
-      }
-    },
-    "message.action.reply": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "رد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Antworten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reply"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Responder"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Répondre"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rispondi"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Responder"
-          }
-        }
-      }
-    },
-    "message.action.select": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "تحديد"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auswählen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Select"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seleccionar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sélectionner"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Seleziona"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Selecionar"
-          }
-        }
-      }
-    },
     "message.piece.a11y.options": {
       "extractionState": "manual",
       "localizations": {
@@ -44857,53 +44575,6 @@
         }
       }
     },
-    "action.delete": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "حذف"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Löschen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eliminar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supprimer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Elimina"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Excluir"
-          }
-        }
-      }
-    },
     "action.delete_media": {
       "extractionState": "manual",
       "localizations": {
@@ -45041,53 +44712,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Favorito"
-          }
-        }
-      }
-    },
-    "action.forward": {
-      "extractionState": "stale",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "إعادة توجيه"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Weiterleiten"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Forward"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reenviar"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Transférer"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Inoltra"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Encaminhar"
           }
         }
       }
@@ -94999,43 +94623,137 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "سلسلة الأيام: %1$lld · الشرارات: %2$lld · اليوم: %3$lld"
+            "value": "%1$@ · الشرارات: %2$lld · اليوم: %3$lld"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Tage in Folge: %1$lld · Funken: %2$lld · Heute: %3$lld"
+            "value": "%1$@ · Funken: %2$lld · Heute: %3$lld"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Day streak: %1$lld · Sparks: %2$lld · Today: %3$lld"
+            "value": "%1$@ · Sparks: %2$lld · Today: %3$lld"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Racha de días: %1$lld · Chispas: %2$lld · Hoy: %3$lld"
+            "value": "%1$@ · Chispas: %2$lld · Hoy: %3$lld"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Série de jours : %1$lld · Étincelles : %2$lld · Aujourd'hui : %3$lld"
+            "value": "%1$@ · Étincelles : %2$lld · Aujourd'hui : %3$lld"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Giorni di fila: %1$lld · Scintille: %2$lld · Oggi: %3$lld"
+            "value": "%1$@ · Scintille: %2$lld · Oggi: %3$lld"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sequência de dias: %1$lld · Faíscas: %2$lld · Hoje: %3$lld"
+            "value": "%1$@ · Faíscas: %2$lld · Hoje: %3$lld"
+          }
+        }
+      }
+    },
+    "conversation.engagement.a11y.streak_days.one": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld يوم"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Tag"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld day"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld día"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld jour"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld giorno"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld dia"
+          }
+        }
+      }
+    },
+    "conversation.engagement.a11y.streak_days.other": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld أيام"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Tage"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld days"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld días"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld jours"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld giorni"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld dias"
           }
         }
       }
@@ -136146,53 +135864,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Histórico"
-          }
-        }
-      }
-    },
-    "message-detail.tab.language": {
-      "extractionState": "manual",
-      "localizations": {
-        "ar": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ترجمة"
-          }
-        },
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Übersetzen"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Translate"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Traducir"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Traduire"
-          }
-        },
-        "it": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Traduci"
-          }
-        },
-        "pt-BR": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Traduzir"
           }
         }
       }
@@ -237914,43 +237585,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "النجوم"
+            "value": "العتبات"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sterne"
+            "value": "Stufen"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stars"
+            "value": "Marks"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estrellas"
+            "value": "Escalones"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Étoiles"
+            "value": "Paliers"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Stelle"
+            "value": "Gradini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Estrelas"
+            "value": "Patamares"
           }
         }
       }
@@ -238196,7 +237867,7 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "المستويات السبعة"
+            "value": "العتبات السبع"
           }
         },
         "de": {
@@ -238208,7 +237879,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The seven tiers"
+            "value": "The seven marks"
           }
         },
         "es": {
@@ -238226,13 +237897,13 @@
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "I sette livelli"
+            "value": "I sette gradini"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Os sete níveis"
+            "value": "Os sete patamares"
           }
         }
       }
@@ -243615,7 +243286,7 @@
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Pasador"
+            "value": "Barquero"
           }
         },
         "fr": {
@@ -306311,6 +305982,241 @@
           "stringUnit": {
             "state": "translated",
             "value": "Motivo: %@"
+          }
+        }
+      }
+    },
+    "about.info.mediaTier": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملف الوسائط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Medienprofil"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media profile"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil multimedia"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profil média"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Profilo multimediale"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Perfil de mídia"
+          }
+        }
+      }
+    },
+    "about.info.mediaTier.low": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "أساسي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einfach"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basic"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Básico"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basique"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Base"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Básico"
+          }
+        }
+      }
+    },
+    "about.info.mediaTier.mid": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "متوسط"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mittel"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intermediate"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intermedio"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intermédiaire"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intermedio"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intermediário"
+          }
+        }
+      }
+    },
+    "about.info.mediaTier.high": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "عالٍ"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoch"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alto"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Élevé"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alto"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alto"
+          }
+        }
+      }
+    },
+    "about.info.mediaTier.pro": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "احترافي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pro"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pro"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pro"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pro"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pro"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pro"
           }
         }
       }

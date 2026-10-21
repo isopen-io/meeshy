@@ -16,7 +16,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     var inFlightTasks: [String: InFlightDownload] = [:]
     var fileTimestamps: [String: Date] = [:]
     let readRegistry = CacheReadRegistry()
-    private let urlSession: URLSession
+    let urlSession: URLSession
     let networkTransfer: NetworkTransfer
     let fileDownloader: MediaFileDownloader
 
@@ -39,6 +39,12 @@ public actor DiskCacheStore: ReadableCacheStore {
     struct InFlightDownload {
         let id = UUID()
         let task: Task<Data, Error>
+        let profile: MediaTransferProfile
+
+        init(task: Task<Data, Error>, profile: MediaTransferProfile = .standard) {
+            self.task = task
+            self.profile = profile
+        }
     }
 
     /// Budget mémoire du L1 (Data brut par entrée). 80 MB par défaut — les
@@ -384,72 +390,6 @@ public actor DiskCacheStore: ReadableCacheStore {
 
         // 2. Download from network (coalesced with any in-flight fetch) and cache
         return try await networkData(for: urlString, url: Self.remoteURL(urlString))
-    }
-
-    /// Single network funnel: every remote fetch for this store goes through
-    /// here so concurrent callers (`data(for:)`, `image(for:)`, prefetchers)
-    /// share ONE URLSession task per media key instead of opening duplicate
-    /// connections. Observed on device: the same voice note fetched 2-3×
-    /// concurrently by independent paths saturated a slow cellular link
-    /// (NSURLError -1001 ×50 → HTTP/2 connection torn down).
-    func networkData(
-        for urlString: String,
-        url: URL,
-        transfer: NetworkTransfer? = nil,
-        progress: MediaFileDownloader.ProgressHandler? = nil,
-        cancelsWithCaller: Bool = false
-    ) async throws -> Data {
-        let fileKey = Self.fileKey(for: urlString)
-        // Un transfert déjà annulé (l'utilisateur vient de l'arrêter) ne se
-        // rejoint pas : il ne rendrait qu'une `CancellationError`.
-        if let existing = inFlightTasks[fileKey], !existing.task.isCancelled {
-            return try await existing.task.value
-        }
-        let transfer = transfer ?? networkTransfer
-
-        let task = Task<Data, Error> {
-            // Média protégé même-origine (ex. audio de la bibliothèque de sons
-            // servi par `/api/v1/static/:filename`, route JWT) : la requête nue
-            // recevait 401 et la story jouait MUETTE, gelée sur le spinner de
-            // stall (bug prod 2026-08-02, post 6a6ef0b44415c63ff8da7855).
-            let request = Self.networkRequest(
-                for: url,
-                apiOrigin: MeeshyConfig.shared.serverOrigin,
-                authToken: APIClient.shared.authToken,
-                sessionToken: APIClient.shared.anonymousSessionToken
-            )
-            if transfer == .streamedToFile {
-                return try await streamedNetworkData(for: urlString, request: request, progress: progress)
-            }
-            let (data, response) = try await urlSession.data(for: request)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                throw DiskCacheError.notCached(urlString)
-            }
-            // #9478 — un fichier rappelé, expiré ou consommé rend 404 : la
-            // copie locale échue partirait sinon resservie par
-            // `cachedFileURL(for:)`, qui ne regarde pas la fraîcheur.
-            if MediaCacheDirective.meansGone(statusCode: httpResponse.statusCode) {
-                await evict(urlString)
-                throw DiskCacheError.notCached(urlString)
-            }
-            guard (200...299).contains(httpResponse.statusCode) else {
-                throw DiskCacheError.notCached(urlString)
-            }
-            await store(data, for: urlString, honoring: httpResponse)
-            return data
-        }
-
-        let entry = InFlightDownload(task: task)
-        inFlightTasks[fileKey] = entry
-        defer {
-            if inFlightTasks[fileKey]?.id == entry.id { inFlightTasks[fileKey] = nil }
-        }
-        guard cancelsWithCaller else { return try await task.value }
-        return try await withTaskCancellationHandler {
-            try await task.value
-        } onCancel: {
-            task.cancel()
-        }
     }
 
     /// In-flight network download for `key`, if any. Lets an external
@@ -811,123 +751,6 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     func diskFilePath(for fileKey: String) -> URL {
         baseDirectory.appendingPathComponent(fileKey)
-    }
-
-    // MARK: - Purge sélective (mesure et destruction ciblées)
-    //
-    // Ajouts pour la purge par type × domaine des Réglages. Le store est
-    // indexé par `SHA256(url)` et ne connaît aucun domaine métier : c'est
-    // l'appelant qui fournit la liste d'URLs qu'il a su attribuer (cf.
-    // `CacheMediaAttribution`). Ces primitives ne font donc que deux choses —
-    // MESURER ce que pèsent des clés données, et les DÉTRUIRE.
-
-    /// Octets réellement occupés sur disque par `urlStrings`.
-    ///
-    /// Mesuré fichier par fichier, jamais estimé : une URL dont le fichier
-    /// n'est pas (ou plus) en cache compte pour zéro. C'est ce qui permet à
-    /// l'UI d'annoncer une taille exacte avant purge plutôt qu'un ordre de
-    /// grandeur.
-    public func diskBytes(forURLs urlStrings: Set<String>) async -> Int {
-        var total = 0
-        for urlString in urlStrings {
-            let path = diskFilePath(for: Self.fileKey(for: urlString)).path
-            guard let size = (try? fileManager.attributesOfItem(atPath: path))?[.size] as? Int else { continue }
-            total += size
-        }
-        return total
-    }
-
-    /// Octets occupés par les fichiers que `urlStrings` ne couvre PAS.
-    ///
-    /// C'est le résidu « non attribué » : des médias bien présents sur disque
-    /// dont l'entité porteuse (post, story, message) a quitté le cache GRDB.
-    /// Plus personne ne peut les rattacher à un domaine, mais ils occupent une
-    /// place réelle — les taire donnerait une somme des cases inférieure à la
-    /// taille du cache, ce que l'utilisateur constaterait immédiatement.
-    ///
-    /// Le sidecar `.pins.json` est exclu du décompte via `.skipsHiddenFiles`,
-    /// comme dans `estimatedDiskBytes()`.
-    public func unattributedDiskBytes(excluding urlStrings: Set<String>) async -> Int {
-        let known = Set(urlStrings.map { Self.fileKey(for: $0) })
-        guard let enumerator = fileManager.enumerator(
-            at: baseDirectory,
-            includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else { return 0 }
-        var total = 0
-        while let fileURL = enumerator.nextObject() as? URL {
-            guard !known.contains(fileURL.lastPathComponent) else { continue }
-            if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
-                total += size
-            }
-        }
-        return total
-    }
-
-    /// Détruit les entrées de `urlStrings`, en ANNULANT d'abord tout
-    /// téléchargement en vol pour ces clés.
-    ///
-    /// Sans cette annulation, une purge lancée pendant qu'un média se
-    /// télécharge est silencieusement défaite : la tâche réseau se termine
-    /// après la suppression et son `save()` réécrit le fichier. L'utilisateur
-    /// voit alors le cache regrossir tout seul juste après avoir vidé une
-    /// case — le pire des symptômes, parce qu'il ressemble à un bug de mesure
-    /// et non à une purge incomplète.
-    ///
-    /// L'annulation est coopérative : `URLSession.data(from:)` honore
-    /// l'annulation de la `Task`, et le `save()` qui suit ne s'exécute pas.
-    /// On retire l'entrée du registre AVANT d'annuler pour qu'un appelant
-    /// concurrent ne récupère pas une tâche déjà condamnée.
-    @discardableResult
-    public func purge(urls urlStrings: Set<String>) async -> Int {
-        var freed = 0
-        for urlString in urlStrings {
-            let fileKey = Self.fileKey(for: urlString)
-            if let inFlight = inFlightTasks.removeValue(forKey: fileKey) {
-                inFlight.task.cancel()
-            }
-            let filePath = diskFilePath(for: fileKey)
-            if let size = (try? fileManager.attributesOfItem(atPath: filePath.path))?[.size] as? Int {
-                freed += size
-            }
-            memoryCache.removeObject(forKey: fileKey as NSString)
-            fileTimestamps.removeValue(forKey: fileKey)
-            fileManager.removeItemLogging(at: filePath, context: "purge sélective", logger: logger)
-            // Même raison que dans `invalidate(for:)` : un pin conservé
-            // re-protégerait le futur re-téléchargement de la même clé.
-            loadPinsIfNeeded()
-            if pinExpiries.removeValue(forKey: fileKey) != nil { persistPins() }
-        }
-        return freed
-    }
-
-    /// Détruit tout ce que `urlStrings` ne couvre PAS (le résidu non attribué).
-    @discardableResult
-    public func purgeUnattributed(excluding urlStrings: Set<String>) async -> Int {
-        let known = Set(urlStrings.map { Self.fileKey(for: $0) })
-        guard let enumerator = fileManager.enumerator(
-            at: baseDirectory,
-            includingPropertiesForKeys: [.fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else { return 0 }
-        var victims: [(url: URL, size: Int)] = []
-        while let fileURL = enumerator.nextObject() as? URL {
-            guard !known.contains(fileURL.lastPathComponent) else { continue }
-            let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
-            victims.append((fileURL, size))
-        }
-        var freed = 0
-        for victim in victims {
-            let fileKey = victim.url.lastPathComponent
-            if let inFlight = inFlightTasks.removeValue(forKey: fileKey) {
-                inFlight.task.cancel()
-            }
-            memoryCache.removeObject(forKey: fileKey as NSString)
-            fileTimestamps.removeValue(forKey: fileKey)
-            fileManager.removeItemLogging(at: victim.url, context: "purge résidu non attribué", logger: logger)
-            freed += victim.size
-        }
-        return freed
     }
 
     /// `true` si un téléchargement est en vol pour cette URL. Exposé pour les

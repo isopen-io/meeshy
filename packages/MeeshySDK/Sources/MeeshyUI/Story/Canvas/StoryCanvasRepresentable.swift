@@ -279,6 +279,9 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // décoration qui déclare un mouvement le JOUE pendant qu'on compose,
         // comme la vidéo et le son juste au-dessus et juste en dessous.
         view.playsStickerMotionInEditMode = true
+        // Les curseurs de look du composer repeignent le fond HORS du fil
+        // principal (#9873). Le prefetcher du lecteur, lui aussi en `.edit`, non.
+        view.backgroundLayer.bakesLookOffMainThread = true
         // Pincer ou tourner un calque modifie la slide à la cadence du doigt :
         // le canvas UIKit la dessine depuis sa propre copie, et le binding —
         // dont chaque écriture réévalue le composer — suit à 30 Hz au plus.

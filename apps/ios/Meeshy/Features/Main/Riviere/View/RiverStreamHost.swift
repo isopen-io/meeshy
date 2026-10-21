@@ -93,9 +93,10 @@ struct RiverStreamHost: View {
     /// R-5 — la fiche d'une voix, la story d'une voix : l'hôte les ouvre.
     var onOpenProfile: ((ProfileSheetUser) -> Void)? = nil
     var onViewStory: ((String) -> Void)? = nil
-    /// Lot 3 — retours au Fil depuis une bulle (appui long).
+    /// « Ouvrir dans le fil » (action d'accessibilité) et l'appui long, qui
+    /// ouvre le menu unifié du message chez l'hôte (#11224).
     var onOpenInThread: ((String) -> Void)? = nil
-    var onReply: ((String) -> Void)? = nil
+    var onLongPress: ((String) -> Void)? = nil
     /// #7452 — la consommation d'une vue unique, reçue de `ConversationView`.
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     /// #8283 — la zone média d'une citation : joue un vocal sur place (#8320)
@@ -584,7 +585,7 @@ struct RiverStreamHost: View {
                 onOpenProfile: onOpenProfile,
                 onViewStory: onViewStory,
                 onOpenInThread: onOpenInThread,
-                onReply: onReply,
+                onLongPress: onLongPress,
                 onConsumeViewOnce: onConsumeViewOnce,
                 onMediaTap: onMediaTap
             )

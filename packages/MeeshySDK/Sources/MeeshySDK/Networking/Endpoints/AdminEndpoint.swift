@@ -90,6 +90,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case messagesTrends
     case monitoring
     case opsByOperation(operation: String)
+    case opsContainers
     case opsHostMetrics
     case opsStatus
     case posts
@@ -232,6 +233,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .messagesTrends: return "/api/v1/admin/messages/trends"
         case .monitoring: return "/api/v1/admin/monitoring"
         case .opsByOperation(let operation): return "/api/v1/admin/ops/\(operation)"
+        case .opsContainers: return "/api/v1/admin/ops/containers"
         case .opsHostMetrics: return "/api/v1/admin/ops/host-metrics"
         case .opsStatus: return "/api/v1/admin/ops/status"
         case .posts: return "/api/v1/admin/posts"

@@ -123,6 +123,8 @@ final class StoryCanvasPlaybackEnergyCanvasTests: XCTestCase {
         let playback = try ComposerSourceGuard.source("Canvas/StoryCanvasUIView+Playback.swift")
         XCTAssertTrue(playback.contains("StoryPlaybackCadence.tier("))
         XCTAssertTrue(playback.contains("EditClockArming.shouldArm("))
+        XCTAssertTrue(playback.contains("mediaTier: DeviceMediaTier.current"),
+                      "le palier de l'appareil vient de la loi DeviceMediaTier, lue à chaque pose de la plage")
         XCTAssertFalse(playback.contains("CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)"),
                        "le palier de lecture vient de la loi, pas d'une plage écrite au site")
     }

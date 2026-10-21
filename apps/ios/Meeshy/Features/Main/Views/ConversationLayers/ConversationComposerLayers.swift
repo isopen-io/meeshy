@@ -193,6 +193,20 @@ enum ComposerQuotedMediaTarget {
               let url = MeeshyConfig.resolveMediaURL(thumbUrl) else { return nil }
         return PreviewMedia(url: url, type: type)
     }
+
+    /// La cible d'une vidéo ou d'un son cité : le FICHIER, pas sa vignette
+    /// (#9890). Rien d'honnête à jouer — protégé, story, sans adresse — n'ouvre
+    /// rien.
+    static func playback(reply: ReplyReference) -> PreviewMedia? {
+        guard let attachment = reply.quotedPlayableAttachment,
+              let url = MeeshyConfig.resolveMediaURL(attachment.fileUrl) else { return nil }
+        return PreviewMedia(
+            url: url,
+            type: reply.quotedMediaKind == .audio ? "audio" : "video",
+            attachment: attachment,
+            reportsConsumption: reply.quotedPlaybackReportsConsumption
+        )
+    }
 }
 
 /// La vignette citée est un BOUTON (A11Y-11) : un `onTapGesture` n'est ni

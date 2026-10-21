@@ -2,25 +2,6 @@ import SwiftUI
 import AVFoundation
 import MeeshySDK
 
-// MARK: - Mini Renderer
-
-internal struct _MiniRenderer: View {
-    let player: MeeshyVideoPlayer
-
-    var body: some View {
-        MeeshyVideoThumbnail(
-            attachment: player.attachment,
-            accentColor: player.accentColor,
-            showPlayBadge: true,
-            showDurationBadge: player.controls.contains(.duration),
-            cornerRadius: player.frame.cornerRadius,
-            onTap: player.onExpand
-        )
-        .aspectRatio(player.attachment.videoAspectRatio ?? 1.0, contentMode: .fit)
-        .applyVideoFrame(player.frame)
-    }
-}
-
 // MARK: - Fullscreen Renderer
 //
 // Routes through `SharedAVPlayerManager` so PIP + global play coordination
@@ -387,10 +368,15 @@ internal struct _FullscreenRenderer: View {
     /// Shared by the initial mount and the retry button so they can never
     /// diverge into two different failure behaviours.
     private func attemptLoad() {
-        manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
-        // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la pièce
-        // jointe qu'elle qualifie : ce moteur est partagé (#7212).
-        manager.setServedConsumption(player.attachment.currentUserConsumption, for: player.attachment.id)
+        if player.reportsConsumption {
+            manager.load(urlString: player.attachment.fileUrl, attachmentId: player.attachment.id)
+            // Reposée APRÈS `load()` — qui appelle `cleanup()` — et clé par la pièce
+            // jointe qu'elle qualifie : ce moteur est partagé (#7212).
+            manager.setServedConsumption(player.attachment.currentUserConsumption, for: player.attachment.id)
+        } else {
+            // Sans identifiant, le moteur ne rapporte ni ne reprend rien (#9890).
+            manager.load(urlString: player.attachment.fileUrl)
+        }
         if manager.player == nil {
             loadFailed = true
         } else {
@@ -647,7 +633,7 @@ internal struct _FullscreenRenderer: View {
     }
 
     private func reportWatch(complete: Bool) {
-        guard let start = watchStartTime else { return }
+        guard player.reportsConsumption, let start = watchStartTime else { return }
         // Règle et raison : `VideoDismissWatchReport`. En deux mots — un player
         // détaché a déjà rapporté ET persisté sa position ; le relire ici
         // effacerait ce qu'il vient d'écrire (#3908).

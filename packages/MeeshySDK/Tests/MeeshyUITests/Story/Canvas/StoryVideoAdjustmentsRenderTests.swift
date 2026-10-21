@@ -105,6 +105,8 @@ final class StoryVideoAdjustmentsRenderTests: XCTestCase {
     func test_leContexteDeRendu_estPartageEntreLesTrames() {
         XCTAssertTrue(StoryVideoAdjustmentsProcessor.context === StoryVideoAdjustmentsProcessor.context,
                       "Aucun CIContext n'est créé par trame.")
+        XCTAssertTrue(StoryVideoAdjustmentsProcessor.context === StoryRenderingContext.shared.ciContext,
+                      "La lecture règle ses trames dans le contexte où l'export les compose (#9873).")
     }
 
     func test_lAfficheDeLaVignette_porteLesReglages() throws {

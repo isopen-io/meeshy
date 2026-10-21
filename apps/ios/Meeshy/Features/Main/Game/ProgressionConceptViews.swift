@@ -42,7 +42,7 @@ struct ProgressionConceptEmblem: View {
         case .points:
             ConceptMarkView(kind: .points)
         case .meesh:
-            MeeshCoinView(face: .obverse, edition: game?.mint.edition ?? .silver, figures: nil)
+            MeeshCoinView(face: .obverse, edition: game.map { GameMint.displayEdition(forNumber: $0.mint.number) } ?? .silver, figures: nil)
         case .glory:
             if let glory = game?.glory {
                 RankBlasonView(rank: glory.rank, division5: glory.shownDivision, level: game?.level.shown.level, mythic: glory.mythicSeat)

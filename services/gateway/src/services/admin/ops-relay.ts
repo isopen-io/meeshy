@@ -7,7 +7,7 @@
  * écrit par renommage atomique dans `OPS_REQUESTS_DIR`. Le runner de l'hôte
  * (`infrastructure/scripts/ops-runner/`) la revalide, ne connaît qu'une liste
  * blanche fixe d'actions, et publie son état dans `OPS_STATE_DIR` (monté en
- * lecture seule) : `ops.json` et `docker.json`.
+ * lecture seule) : `ops.json`, `docker.json` et `containers.json` (#11441).
  *
  * Les deux fichiers lus sont une FRONTIÈRE DE CONFIANCE : bornés en taille et
  * validés à chaque lecture. Absents, illisibles ou hors schéma, ils valent
@@ -17,6 +17,11 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { access, open, readdir, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import {
+  OPS_CONTAINERS_FILE_MAX_BYTES,
+  opsContainersFileSchema,
+  type OpsContainersView,
+} from '@meeshy/shared/types/admin-ops-containers';
 import {
   OPS_ENVIRONMENTS,
   OPS_REQUEST_FILE_MAX_BYTES,
@@ -95,6 +100,20 @@ export async function readDockerUsage(stateDir: string | null): Promise<DockerUs
   return parsed.success ? parsed.data : null;
 }
 
+/**
+ * Les conteneurs de l'environnement (#11441) — la même frontière que `docker.json` :
+ * bornée (256 Ko), validée, et `null` hors contrat. Un fichier dont UN conteneur sort
+ * du schéma est rejeté en entier : le runner normalise chaque champ pour que cela
+ * n'arrive pas, et une liste à moitié crue serait pire qu'une liste absente.
+ */
+export async function readContainers(stateDir: string | null): Promise<Omit<OpsContainersView, 'environment'> | null> {
+  if (!stateDir) return null;
+  const parsed = opsContainersFileSchema.safeParse(
+    await readBoundedJson(path.join(stateDir, 'containers.json'), OPS_CONTAINERS_FILE_MAX_BYTES),
+  );
+  return parsed.success ? parsed.data : null;
+}
+
 const isRequestFileName = (name: string): boolean => /^[0-9a-f-]{36}\.json$/.test(name);
 
 async function pendingRequests(requestsDir: string): Promise<readonly OpsRequestFile[]> {
@@ -144,13 +163,25 @@ const isLiveRun = (run: ServerOperationRun | null | undefined, now: Date): boole
 export type SubmitResult =
   | { readonly kind: 'queued'; readonly accepted: ServerOperationAccepted }
   | { readonly kind: 'refused'; readonly status: 503; readonly code: 'OPS_RELAY_UNAVAILABLE' }
+  | { readonly kind: 'refused'; readonly status: 503; readonly code: 'AUDIT_UNAVAILABLE' }
   | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_IN_PROGRESS' }
   | { readonly kind: 'refused'; readonly status: 409; readonly code: 'OPERATION_COOLDOWN'; readonly availableAt: string };
 
 export type OpsRelay = {
   readonly settings: OpsSettings;
-  readonly submit: (input: { readonly operation: ServerOperation; readonly requestedBy: string }) => Promise<SubmitResult>;
+  /**
+   * `beforeDeposit` (#11441, #10459 point 3) — appelé une fois les délais et la file vérifiés,
+   * JUSTE AVANT le dépôt, dans la section sérialisée : la trace d'une demande acceptée est
+   * écrite AVANT qu'elle n'existe, et un `false` (journal indisponible) n'en dépose aucune.
+   * Obligatoire : aucun appelant ne dépose sans trace.
+   */
+  readonly submit: (input: {
+    readonly operation: ServerOperation;
+    readonly requestedBy: string;
+    readonly beforeDeposit: (requestId: string) => Promise<boolean>;
+  }) => Promise<SubmitResult>;
   readonly status: () => Promise<ServerOperationStatus>;
+  readonly containers: () => Promise<OpsContainersView>;
 };
 
 export type OpsRelayOptions = {
@@ -170,7 +201,11 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
     return next;
   };
 
-  const submitNow = async (operation: ServerOperation, requestedBy: string): Promise<SubmitResult> => {
+  const submitNow = async (
+    operation: ServerOperation,
+    requestedBy: string,
+    beforeDeposit: (requestId: string) => Promise<boolean>,
+  ): Promise<SubmitResult> => {
     const requestsDir = settings.requestsDir;
     if (!requestsDir || !(await isWritableDirectory(requestsDir))) {
       return { kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' };
@@ -196,6 +231,9 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
     const body = JSON.stringify(request);
     if (Buffer.byteLength(body) > OPS_REQUEST_FILE_MAX_BYTES) {
       return { kind: 'refused', status: 503, code: 'OPS_RELAY_UNAVAILABLE' };
+    }
+    if (!(await beforeDeposit(request.id))) {
+      return { kind: 'refused', status: 503, code: 'AUDIT_UNAVAILABLE' };
     }
     const temporary = path.join(requestsDir, `.${request.id}.json.tmp`);
     try {
@@ -229,7 +267,11 @@ export function createOpsRelay(options: OpsRelayOptions): OpsRelay {
 
   return {
     settings,
-    submit: ({ operation, requestedBy }) => serialized(() => submitNow(operation, requestedBy)),
+    submit: ({ operation, requestedBy, beforeDeposit }) => serialized(() => submitNow(operation, requestedBy, beforeDeposit)),
     status,
+    containers: async () => {
+      const published = await readContainers(settings.stateDir);
+      return { environment: settings.environment, measuredAt: published?.measuredAt ?? null, containers: published?.containers ?? [] };
+    },
   };
 }
