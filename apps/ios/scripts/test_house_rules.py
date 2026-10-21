@@ -225,6 +225,7 @@ class ObservedThemeSingleton(unittest.TestCase):
         "@Environment(\\.theme) var theme\n",
         "let m = ThemeManager.shared.mode\n",
         "@ObservedObject var theme: ThemeManager\n",
+        "@ResolvedThemePalette private var theme\n",
         "@ObservedObject private var vm = FooViewModel.shared\n",
     )
 
