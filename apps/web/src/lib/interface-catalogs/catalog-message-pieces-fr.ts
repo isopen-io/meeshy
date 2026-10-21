@@ -52,6 +52,8 @@ const fr = {
   'message.report.title': 'Signaler ce message',
   'message.menu.retry': 'Réessayer',
   'message.menu.translateOnDevice': 'Traduire sur l’appareil',
+  'message.menu.translateOnDevice.queued': 'Traduction demandée à cet appareil',
+  'message.menu.translateOnDevice.consent': 'Activez « Traduire sur cet appareil » dans les réglages',
   'message.menu.e2eeAbsent': 'Chiffré de bout en bout : ni transcription ni analyse',
   'message.link.open': 'Ouvrir le lien',
   'message.link.copy': 'Copier le lien',

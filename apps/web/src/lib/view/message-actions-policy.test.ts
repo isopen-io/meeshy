@@ -104,9 +104,21 @@ describe('les RÔLES viennent de la loi partagée, jamais d’une règle locale'
 describe('le chiffrement de bout en bout retire ce que le serveur lirait', () => {
   const e2ee = scopeOf({ conversation: { encryptionMode: 'e2ee' } });
 
-  test('« Traduire » mène à la traduction sur l’appareil, jamais au serveur', () => {
-    const all = ids(messageMenuItems(ctxOf(row(), e2ee)));
+  test('sans traduction encore, « Traduire sur l’appareil » est offert — même d’une seule langue (#11210, revue)', () => {
+    const all = ids(messageMenuItems(ctxOf(row({ translations: [] }), e2ee)));
     expect(all).toContain('translateOnDevice');
+    expect(all).not.toContain('translate');
+  });
+
+  test('une traduction déjà sur l’appareil : « Traduire » bascule, sans rien demander au serveur ni annoncer ce qu’il ne fait pas', () => {
+    const all = ids(messageMenuItems(ctxOf(row(), e2ee)));
+    expect(all).toContain('translate');
+    expect(all).not.toContain('translateOnDevice');
+  });
+
+  test('un message sans clair sur cet appareil (chiffré) ne s’offre pas à la traduction de l’appareil', () => {
+    const all = ids(messageMenuItems(ctxOf(row({ translations: [], isEncrypted: true }), e2ee)));
+    expect(all).not.toContain('translateOnDevice');
     expect(all).not.toContain('translate');
   });
 
@@ -230,6 +242,13 @@ describe('menuConversationOf — la conversation que la loi lit', () => {
     expect(all).not.toContain('forward');
   });
 
+  test('tant que le régime est inconnu, le menu ne PRÉTEND rien : ni mention du bout en bout, ni « sur l’appareil »', () => {
+    const unread: ActionScope = { viewer: menuScope().viewer, conversation: menuConversationOf(undefined) };
+    const all = ids(messageMenuItems(ctxOf(row({ translations: [] }), unread)));
+    expect(all).not.toContain('e2eeNotice');
+    expect(all).not.toContain('translateOnDevice');
+  });
+
   test('une conversation lue porte son type, son régime et ses règles d’écriture', () => {
     expect(
       menuConversationOf({ type: 'broadcast', encryptionMode: 'server', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin' }),
@@ -254,7 +273,34 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
       conversationRole: 'admin',
       canSendMessages: true,
       isActiveMember: true,
+      isDeclaredMinor: false,
     });
+  });
+
+  test('un invité dont la ligne n’est pas servie (au-delà du plafond du détail) garde « Répondre » — le composeur le laisse écrire', () => {
+    const viewer = menuViewerOf({
+      viewer: { id: 'p-late', isAnonymous: true },
+      participants: [{ id: 'p-early', role: 'member', permissions: { canSendMessages: true } }],
+      conversation: { isMember: true },
+      platformRole: null,
+    });
+    expect(viewer.canSendMessages).toBe(true);
+    const scope: ActionScope = { viewer, conversation: menuConversationOf({ type: 'public', encryptionMode: null, isActive: true }) };
+    expect(ids(messageMenuItems(ctxOf(row(), scope)))).toContain('reply');
+  });
+
+  test('un mineur déclaré se lit sur la restriction servie : dans Meeshy Global, ni Répondre ni Épingler', () => {
+    const viewer = menuViewerOf({
+      viewer: { id: 'u-viewer', isAnonymous: false },
+      participants: [],
+      conversation: { isMember: true, viewerWriteRestriction: 'minor-global' },
+      platformRole: 'USER',
+    });
+    expect(viewer.isDeclaredMinor).toBe(true);
+    const scope: ActionScope = { viewer, conversation: menuConversationOf({ type: 'global', encryptionMode: null, isActive: true }) };
+    const all = ids(messageMenuItems(ctxOf(row(), scope)));
+    expect(all).not.toContain('reply');
+    expect(all).not.toContain('pin');
   });
 
   test('un invité d’un lien : aucun compte, aucun rôle de plateforme, sa permission d’envoi', () => {

@@ -48,6 +48,8 @@ const ar = {
   'message.report.title': 'الإبلاغ عن هذه الرسالة',
   'message.menu.retry': 'إعادة المحاولة',
   'message.menu.translateOnDevice': 'الترجمة على الجهاز',
+  'message.menu.translateOnDevice.queued': 'طُلبت الترجمة على هذا الجهاز',
+  'message.menu.translateOnDevice.consent': 'فعّل «الترجمة على هذا الجهاز» في الإعدادات',
   'message.menu.e2eeAbsent': 'مشفّرة من طرف إلى طرف: لا نسخ صوتي ولا تحليل',
   'message.link.open': 'فتح الرابط',
   'message.link.copy': 'نسخ الرابط',

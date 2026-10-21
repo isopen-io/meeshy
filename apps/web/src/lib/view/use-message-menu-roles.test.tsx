@@ -12,6 +12,7 @@ import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 import { menuViewer } from '@/test-support/menu-viewer';
 
+import type { DeviceTranslationPorts } from './device-translation-request';
 import type { MenuViewer } from './message-actions';
 import { useMessageMenu } from './use-message-menu';
 
@@ -69,7 +70,13 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function mount(options: { readonly viewer?: Partial<MenuViewer>; readonly conversation?: Partial<ActionConversation> } = {}) {
+function mount(
+  options: {
+    readonly viewer?: Partial<MenuViewer>;
+    readonly conversation?: Partial<ActionConversation>;
+    readonly deviceTranslation?: DeviceTranslationPorts;
+  } = {},
+) {
   const retried: string[] = [];
   const announced: string[] = [];
   const queryClient = new QueryClient();
@@ -87,6 +94,7 @@ function mount(options: { readonly viewer?: Partial<MenuViewer>; readonly conver
       announce: (text) => announced.push(text),
       queryClient,
       transport: { request: async () => ({ ok: true, data: null as never }) },
+      ...(options.deviceTranslation === undefined ? {} : { deviceTranslation: options.deviceTranslation }),
     });
     return (
       <>
@@ -216,5 +224,48 @@ describe('useMessageMenu — les gestes du TYPE', () => {
     await act(async () => new Promise((r) => setTimeout(r, 0)));
     expect(written).toEqual(['Place de l’Hôtel de Ville, Paris']);
     expect(announced).toEqual(['Adresse copiée']);
+  });
+});
+
+describe('useMessageMenu — « Traduire sur l’appareil » mène à la traduction de l’appareil (#11210, revue)', () => {
+  const ports = (granted: boolean) => {
+    const offered: { readonly ids: readonly string[]; readonly mode: string | null; readonly viewerId: string; readonly languages: readonly string[] }[] = [];
+    const settings: number[] = [];
+    const deviceTranslation: DeviceTranslationPorts = {
+      granted: async () => granted,
+      offer: async (_queryClient, params) => {
+        offered.push({
+          ids: params.messages.map((m) => m.id),
+          mode: params.conversationEncryptionMode,
+          viewerId: params.viewerId,
+          languages: params.preferredLanguages,
+        });
+      },
+      openSettings: () => settings.push(1),
+    };
+    return { deviceTranslation, offered, settings };
+  };
+  const settle = () => act(async () => new Promise((r) => setTimeout(r, 0)));
+
+  test('accordée, l’appareil reçoit CE message, avec le régime de la conversation et le Prisme du lecteur — et le geste le dit', async () => {
+    const { deviceTranslation, offered, settings } = ports(true);
+    const { api, open, announced } = mount({ conversation: { encryptionMode: 'e2ee' }, deviceTranslation });
+    open('m-theirs');
+    expect(ids(api())).toContain('translateOnDevice');
+    act(() => api().onMenuAction('m-theirs', 'translateOnDevice'));
+    await settle();
+    expect(offered).toEqual([{ ids: ['m-theirs'], mode: 'e2ee', viewerId: 'u-viewer', languages: ['fr'] }]);
+    expect(settings).toEqual([]);
+    expect(announced).toEqual(['Traduction demandée à cet appareil']);
+  });
+
+  test('sans accord, rien ne se télécharge : le geste mène aux réglages où l’accord se donne, et le dit', async () => {
+    const { deviceTranslation, offered, settings } = ports(false);
+    const { api, announced } = mount({ conversation: { encryptionMode: 'e2ee' }, deviceTranslation });
+    act(() => api().onMenuAction('m-theirs', 'translateOnDevice'));
+    await settle();
+    expect(offered).toEqual([]);
+    expect(settings).toEqual([1]);
+    expect(announced).toEqual(['Activez « Traduire sur cet appareil » dans les réglages']);
   });
 });

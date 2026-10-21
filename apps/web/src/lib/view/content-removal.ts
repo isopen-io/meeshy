@@ -1,7 +1,5 @@
 import { platformModerates } from '@meeshy/shared/utils/message-action-policy';
 
-import { messageActionsOf, type ActionMessage, type MenuViewer } from './message-action-scope';
-
 /**
  * **RETIRER LE CONTENU D'UN AUTRE** (#11150) — la loi du client, reflet du
  * contrat de la passerelle (issue sœur du milestone « Un administrateur retire
@@ -31,30 +29,15 @@ export function removalBody(reason: string | undefined): { readonly body?: { rea
   return reason === undefined ? {} : { body: { reason } };
 }
 
-/** Un lecteur inscrit, membre actif, de ce rôle — la seule forme que la loi partagée juge (`message-action-policy.ts`). */
-const memberViewer = (platformRole: string | null | undefined, conversationRole: string | null | undefined): MenuViewer => ({
-  id: 'viewer',
-  hasAccount: true,
-  isAnonymous: false,
-  platformRole: platformRole ?? null,
-  conversationRole: conversationRole ?? null,
-  canSendMessages: true,
-  isActiveMember: true,
-});
-
-/** Le message d'un AUTRE, vivant — ce que « Retirer » vise. */
-const OTHERS_MESSAGE: ActionMessage = { id: 'others-message', senderId: 'author', content: '…', createdAt: new Date(0), isViewOnce: false, isBlurred: false };
-
-/** Rôle de plateforme MODERATOR, ADMIN ou BIGBOSS, comparé EXACTEMENT (`platformModerates`, `@meeshy/shared`). */
+/** Rôle de plateforme MODERATOR, ADMIN ou BIGBOSS, comparé EXACTEMENT (`platformModerates`, `@meeshy/shared`). Le retrait d'un MESSAGE se lit sur `verdicts.remove` (`messageActionsOf`). */
 export const moderatesPlatformContent = (platformRole: string | null | undefined): boolean =>
-  platformModerates({ ...memberViewer(platformRole, null), isDeclaredMinor: false });
-
-/** Le verdict `remove` de `messageActionsFor` sur le message d'un autre — jamais une seconde règle (#11210). */
-export function moderatesConversation(params: {
-  readonly conversation: { readonly type: string; readonly currentUserRole?: string | null | undefined };
-  readonly platformRole: string | null | undefined;
-}): boolean {
-  const { conversation, platformRole } = params;
-  const scope = { viewer: memberViewer(platformRole, conversation.currentUserRole), conversation: { type: conversation.type } };
-  return messageActionsOf(OTHERS_MESSAGE, scope, { now: Date.now() }).verdicts.remove !== null;
-}
+  platformModerates({
+    id: '',
+    hasAccount: true,
+    isAnonymous: false,
+    platformRole: platformRole ?? null,
+    conversationRole: null,
+    canSendMessages: true,
+    isActiveMember: true,
+    isDeclaredMinor: false,
+  });

@@ -48,6 +48,8 @@ const es = {
   'message.report.title': 'Denunciar este mensaje',
   'message.menu.retry': 'Reintentar',
   'message.menu.translateOnDevice': 'Traducir en el dispositivo',
+  'message.menu.translateOnDevice.queued': 'Traducción solicitada a este dispositivo',
+  'message.menu.translateOnDevice.consent': 'Activa «Traducir en este dispositivo» en los ajustes',
   'message.menu.e2eeAbsent': 'Cifrado de extremo a extremo: sin transcripción ni análisis',
   'message.link.open': 'Abrir enlace',
   'message.link.copy': 'Copiar enlace',

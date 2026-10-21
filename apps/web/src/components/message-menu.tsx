@@ -500,7 +500,7 @@ export function MessageMenu({
       close();
       return;
     }
-    if (item.id === 'translate' || item.id === 'translateOnDevice') {
+    if (item.id === 'translate') {
       showPanel('translate');
       return;
     }
@@ -590,11 +590,16 @@ export function MessageMenu({
   const committed = Math.min(1, Math.max(floor, committedReveal ?? revealRestingFactor({ floor, assistiveReveal: false })));
   const previewTransform = (factor: number) => restTransform(placement.previewScale * factor);
   const listTop = (factor: number) => placement.menuTop - revealRise({ factor, shrinkableHeight });
+  /* LA LISTE TIENT DANS L'ÉCRAN (#11210) — bornée au bas utile, elle défile
+     au-delà ; quand le glisser la remonte, la place gagnée lui revient. */
+  const listMaxHeight = (factor: number) => Math.max(2 * MENU_ROW_HEIGHT, placement.menuMaxHeight + placement.menuTop - listTop(factor));
   const paintReveal = (factor: number) => {
     const host = previewHostRef.current;
     if (host !== null) host.style.transform = previewTransform(factor) ?? '';
     const list = listRef.current;
-    if (list !== null) list.style.top = `${listTop(factor)}px`;
+    if (list === null) return;
+    list.style.top = `${listTop(factor)}px`;
+    list.style.maxHeight = `${listMaxHeight(factor)}px`;
   };
   const onSurfacePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     dragRef.current = { id: event.pointerId, startY: event.clientY, factor: committed };
@@ -801,6 +806,8 @@ export function MessageMenu({
               top: listTop(committed),
               left: placement.menuLeft,
               width: MENU_WIDTH,
+              maxHeight: listMaxHeight(committed),
+              overflowY: 'auto',
               paddingBlock: MENU_PADDING_Y,
               pointerEvents: 'auto',
             }}
@@ -869,6 +876,8 @@ export function MessageMenu({
               top: listTop(committed),
               left: placement.menuLeft,
               width: MENU_WIDTH,
+              maxHeight: listMaxHeight(committed),
+              overflowY: 'auto',
               paddingBlock: MENU_PADDING_Y,
               pointerEvents: 'auto',
             }}

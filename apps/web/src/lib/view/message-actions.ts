@@ -13,7 +13,7 @@ import type { PlainMessagePiecesKey } from '@/lib/i18n-message-pieces-catalog';
 import { kindOf, translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
-import { messageActionsOf, type ActionMessage, type ActionScope } from './message-action-scope';
+import { menuRegimeKnown, messageActionsOf, type ActionMessage, type ActionScope } from './message-action-scope';
 import { placeOf, type SharedPlace } from './message-body';
 
 export { menuConversationOf, menuViewerOf, type ActionScope, type MenuViewer } from './message-action-scope';
@@ -224,6 +224,10 @@ export type MessageMenuContext = {
   readonly canRetry?: boolean;
   /** LE CATALOGUE DU FIL EST CHARGÉ : les libellés qui y vivent peuvent se dire. */
   readonly piecesLabels?: boolean;
+  /** LE RÉGIME DE LA CONVERSATION EST CONNU (#11210) — absent ⇒ inconnu : l'écran ne prétend rien du bout en bout. */
+  readonly regimeKnown?: boolean;
+  /** LE MESSAGE A UN CLAIR SUR CET APPAREIL — le web ne déchiffre pas le bout en bout (`offeredMessagesOf`). */
+  readonly deviceClear?: boolean;
 };
 
 type MenuPiece = {
@@ -297,6 +301,8 @@ export function messageMenuContextOf(
     composableIndex: composable === -1 ? null : composable,
     link: firstLinkOf(message.content),
     place: placeOf(message),
+    deviceClear: message.isEncrypted !== true,
+    ...(input.scope === undefined ? {} : { regimeKnown: menuRegimeKnown(input.scope.conversation) }),
     ...(subject === null || input.scope === undefined
       ? {}
       : { actions: messageActionsOf(subject, input.scope, { now: input.now, ...(input.failed === undefined ? {} : { failed: input.failed }) }) }),
@@ -337,17 +343,30 @@ const SERVABLE: Readonly<Partial<Record<PolicyActionId, Servable>>> = {
   edit: { id: 'edit', offered: (ctx) => ctx.canEdit === true && ctx.hasText },
   copy: { id: 'copy', offered: copyable },
   forward: { id: 'forward', offered: (ctx) => ctx.canForward },
-  translate: { id: 'translate', offered: (ctx) => ctx.hasText && !ctx.isProtected && ctx.languageCount > 1 },
+  translate: { id: 'translate', offered: (ctx) => ctx.hasText && !ctx.isProtected && (ctx.languageCount > 1 || deviceTranslatable(ctx)) },
   save: { id: 'save', offered: (ctx) => ctx.canSave === true && ctx.sticker === undefined && exportsOut(ctx) },
 };
 
 /** Sans la loi, seuls les gestes que la loi de SORTIE gouverne — aucun rôle, aucun auteur. */
 const EXIT_ONLY: readonly PolicyActionId[] = ['copy', 'forward', 'translate', 'save'];
 
-/** En bout en bout, « Traduire » ne demande rien au serveur : il bascule entre les traductions de l'appareil. */
+/**
+ * L'APPAREIL PEUT TRADUIRE CE MESSAGE (#11210) — le verdict de la loi le dit
+ * (`translate: 'device'`), le régime est CONNU, le message a un clair ici, et
+ * aucune traduction n'est encore là : « Traduire sur l'appareil » la demande
+ * (`device-translation-request.ts`). Une traduction déjà présente se BASCULE.
+ */
+const deviceTranslatable = (ctx: MessageMenuContext): boolean =>
+  ctx.actions?.verdicts.translate === 'device' && ctx.regimeKnown === true && ctx.deviceClear !== false && ctx.languageCount <= 1 && labels(ctx);
+
+/**
+ * « Traduire » BASCULE entre les traductions présentes, servies ou faites par
+ * l'appareil — il ne demande rien au serveur. Sans traduction, en bout en
+ * bout, il DEMANDE à l'appareil.
+ */
 const translateEntry = (ctx: MessageMenuContext): readonly MessageMenuItem[] => {
-  if (ctx.actions?.verdicts.translate !== 'device') return [entry('translate', 'primary')];
-  return labels(ctx) ? [entry('translateOnDevice', 'primary')] : [];
+  if (ctx.languageCount > 1) return [entry('translate', 'primary')];
+  return deviceTranslatable(ctx) ? [entry('translateOnDevice', 'primary')] : [];
 };
 
 function primaryCandidates(ctx: MessageMenuContext): readonly MessageMenuItem[] {
@@ -383,7 +402,7 @@ export function messageMenuGroups(ctx: MessageMenuContext): MessageMenuGroups {
   const destructive = deletes ? [entry('delete', 'destructive')] : [];
   if (ctx.gone === true) return { primary: [], organize: [], more: [], moderation: [], destructive };
   const moderation = verdicts?.remove != null && labels(ctx) ? [entry('remove', 'moderation')] : [];
-  const notice = verdicts?.serverFeatureAbsence != null && labels(ctx) ? [entry('e2eeNotice', 'more')] : [];
+  const notice = verdicts?.serverFeatureAbsence != null && ctx.regimeKnown === true && labels(ctx) ? [entry('e2eeNotice', 'more')] : [];
   if (ctx.isViewOnce === true) return { primary: [], organize: [], more: [entry('more', 'more'), ...notice], moderation, destructive };
   const candidates = primaryCandidates(ctx);
   const overflow = candidates.slice(MAX_PRIMARY_MENU_ACTIONS).map((item) => ({ ...item, group: 'more' as const }));

@@ -14,6 +14,7 @@ export const menuViewer = (overrides: Partial<MenuViewer> = {}): MenuViewer => (
   conversationRole: 'member',
   canSendMessages: true,
   isActiveMember: true,
+  isDeclaredMinor: false,
   ...overrides,
 });
 

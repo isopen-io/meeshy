@@ -18,9 +18,13 @@ import { metadataOf } from './message-metadata';
  * « Plus… », la suppression, l'épingle, le signalement et la modération en
  * lisent les verdicts : aucun ne recompose une règle de rôle ou d'auteur.
  *
- * Ce que le client ne sait pas, il le dit fermé : un mineur déclaré n'est pas
- * connu du web (la passerelle refuse alors en 403, et le refus se dit), une
- * conversation non lue ne fait du lecteur ni un membre ni un rédacteur.
+ * Ce que le client ne sait pas, il le dit fermé — une conversation non lue ne
+ * fait du lecteur ni un membre ni un rédacteur — SAUF ce que la passerelle ne
+ * sert pas à tout le monde : la ligne de participation d'un invité arrivé
+ * au-delà du plafond du détail (`CONVERSATION_DETAIL_PARTICIPANTS_CAP`, 100)
+ * n'est pas servie, et son absence ne lui retire pas le droit d'écrire que le
+ * composeur lui laisse (la passerelle refuse en 403 s'il le faut). Le mineur
+ * déclaré se lit sur `viewerWriteRestriction`, servi sur chaque conversation.
  */
 export type MenuViewer = {
   /** `User.id` d'un inscrit, `Participant.id` d'un invité ; vide sans session. */
@@ -34,6 +38,8 @@ export type MenuViewer = {
   readonly conversationRole: string | null;
   readonly canSendMessages: boolean;
   readonly isActiveMember: boolean;
+  /** `viewerWriteRestriction === 'minor-global'` (#9927) : Meeshy Global se lit sans s'écrire. */
+  readonly isDeclaredMinor: boolean;
 };
 
 export type ActionScope = { readonly viewer: MenuViewer; readonly conversation: ActionConversation };
@@ -49,7 +55,13 @@ type ScopeParticipant = {
 export function menuViewerOf(input: {
   readonly viewer: { readonly id: string | null; readonly isAnonymous: boolean };
   readonly participants: readonly ScopeParticipant[] | undefined;
-  readonly conversation: { readonly currentUserRole?: string | null | undefined; readonly isMember?: boolean | undefined } | undefined;
+  readonly conversation:
+    | {
+        readonly currentUserRole?: string | null | undefined;
+        readonly isMember?: boolean | undefined;
+        readonly viewerWriteRestriction?: string | null | undefined;
+      }
+    | undefined;
   readonly platformRole: string | null;
 }): MenuViewer {
   const { viewer, conversation } = input;
@@ -63,8 +75,9 @@ export function menuViewerOf(input: {
     isAnonymous: viewer.isAnonymous,
     platformRole: hasAccount ? input.platformRole : null,
     conversationRole: conversation?.currentUserRole ?? participant?.role ?? null,
-    canSendMessages: participant?.permissions?.canSendMessages ?? hasAccount,
+    canSendMessages: participant?.permissions?.canSendMessages ?? id !== '',
     isActiveMember: conversation !== undefined && conversation.isMember !== false,
+    isDeclaredMinor: conversation?.viewerWriteRestriction === 'minor-global',
   };
 }
 
@@ -74,6 +87,14 @@ export function menuViewerOf(input: {
  * ferait partir le clair ne s'offre avant de savoir.
  */
 const UNREAD_REGIME = 'unread';
+
+/**
+ * LE RÉGIME EST-IL CONNU ? — non tant que le détail n'est pas lu. Les verdicts
+ * restent fermés (chiffré par défaut), mais l'écran ne PRÉTEND rien : ni la
+ * mention du bout en bout, ni « sur l'appareil » sur une conversation qui
+ * sera peut-être en clair.
+ */
+export const menuRegimeKnown = (conversation: ActionConversation): boolean => conversation.encryptionMode !== UNREAD_REGIME;
 
 /** La conversation que la loi lit — un type inconnu n'ouvre rien qui dépende du type. */
 export const menuConversationOf = (
@@ -127,7 +148,7 @@ const subjectOf = (message: ActionMessage, failed: boolean): MessageActionSubjec
   pinnedAt: message.pinnedAt ?? null,
 });
 
-const actionViewerOf = (viewer: MenuViewer): ActionViewer => ({ ...viewer, participantId: viewer.participantId ?? null, isDeclaredMinor: false });
+const actionViewerOf = (viewer: MenuViewer): ActionViewer => ({ ...viewer, participantId: viewer.participantId ?? null });
 
 /** Un inscrit, jamais un invité — la loi partagée (`viewerIsRegistered`) : le favori, l'épingle et la suppression le demandent. */
 export const menuViewerRegistered = (viewer: MenuViewer): boolean => viewerIsRegistered(actionViewerOf(viewer));

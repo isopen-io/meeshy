@@ -48,6 +48,8 @@ const en = {
   'message.report.title': 'Report this message',
   'message.menu.retry': 'Retry',
   'message.menu.translateOnDevice': 'Translate on device',
+  'message.menu.translateOnDevice.queued': 'Translation requested on this device',
+  'message.menu.translateOnDevice.consent': 'Turn on “Translate on this device” in Settings',
   'message.menu.e2eeAbsent': 'End-to-end encrypted: no transcription or analysis',
   'message.link.open': 'Open link',
   'message.link.copy': 'Copy link',

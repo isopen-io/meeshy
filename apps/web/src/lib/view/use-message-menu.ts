@@ -39,7 +39,8 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { menuViewerRegistered, type ActionScope } from './message-action-scope';
+import { menuViewerRegistered, messageActionsOf, type ActionScope } from './message-action-scope';
+import { deviceTranslationPorts, requestDeviceTranslation, type DeviceTranslationPorts } from './device-translation-request';
 import { contentExitOf, exitOffers } from './content-exit';
 import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
@@ -166,6 +167,8 @@ export function useMessageMenu(params: {
   readonly transport?: PieceMenuTransport;
   /** La source servie au signalement (`reports.ts` se tait sur les fixtures) — celle de l'application par défaut. */
   readonly source?: DataSource;
+  /** « Traduire sur l'appareil » (#11210) — le consentement et le moteur de l'application par défaut. */
+  readonly deviceTranslation?: DeviceTranslationPorts;
 }) {
   const { conversationId, messages, readerLanguages, announce, viewer, send } = params;
   const viewerId = viewer.id;
@@ -179,6 +182,15 @@ export function useMessageMenu(params: {
   );
   const registered = menuViewerRegistered(viewer);
   const failedOf = useCallback((messageId: string): boolean => send?.failed(messageId) === true, [send]);
+  /**
+   * LES VERDICTS D'UN MESSAGE (#11210) — la loi partagée, lue par TOUTES les
+   * portes du menu : le menu rapide, celui d'une pièce, la barre de sélection,
+   * le rail et le double toucher. Aucune ne garde une règle à elle.
+   */
+  const actionsOf = useCallback(
+    (message: Message) => messageActionsOf(message, scope, { now: Date.now(), failed: failedOf(message.id) }),
+    [scope, failedOf],
+  );
 
   const [menuTarget, setMenuTarget] = useState<MessageMenuTargetState | null>(null);
   const [displayLanguages, setDisplayLanguages] = useState<ReadonlyMap<string, string>>(new Map());
@@ -202,6 +214,7 @@ export function useMessageMenu(params: {
     conversationId,
     viewerId,
     messageOf,
+    actionsOf,
     onReplyToMedia: params.reply.setReplyToMedia,
     announce,
     queryClient: params.queryClient ?? appQueryClient,
@@ -417,6 +430,8 @@ export function useMessageMenu(params: {
    * ouvert, la barre ouverte et la sélection le neutralisent.
    */
   const [quickReactionFor, setQuickReactionFor] = useState<QuickReactionTarget | null>(null);
+  /** Réagir : la loi du double toucher (ni supprimé, ni échu, ni envoi local) ET le verdict `canReact` (membre, droit d'envoi). */
+  const reactableOf = useCallback((message: Message): boolean => doubleTapReactable(message, Date.now()) && actionsOf(message).verdicts.canReact, [actionsOf]);
   const onCloseQuickReaction = useCallback(() => setQuickReactionFor(null), []);
   const blockedRef = useRef(false);
   blockedRef.current = selection !== null || menuTarget !== null || quickReactionFor !== null;
@@ -424,7 +439,7 @@ export function useMessageMenu(params: {
     ({ row, origin, x }: DoubleTap) => {
       const messageId = row.dataset.row;
       const message = messageId === undefined ? undefined : messageOf(messageId);
-      if (message === undefined || !doubleTapReactable(message, Date.now())) return;
+      if (message === undefined || !reactableOf(message)) return;
       const pieceId = pieceIdAt(origin, row);
       const reactsOnPiece = pieceId !== undefined && pieceDataOf(message.id, pieceId)?.canReact === true;
       if (reactsOnPiece) prewarmPieceReaction();
@@ -436,7 +451,7 @@ export function useMessageMenu(params: {
         ...(reactsOnPiece ? { pieceId } : {}),
       });
     },
-    [messageOf, pieceDataOf],
+    [messageOf, pieceDataOf, reactableOf],
   );
   const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap });
 
@@ -545,6 +560,25 @@ export function useMessageMenu(params: {
         if (failedOf(messageId)) send?.retry(messageId);
         return;
       }
+      if (id === 'translateOnDevice') {
+        const message = messageOf(messageId);
+        if (message === undefined || actionsOf(message).verdicts.translate !== 'device') return;
+        void requestDeviceTranslation({
+          ports: params.deviceTranslation ?? deviceTranslationPorts,
+          queryClient: params.queryClient ?? appQueryClient,
+          params: { messages: [message], viewerId, preferredLanguages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null },
+        })
+          .then((outcome) =>
+            announce(
+              translateMessagePieces(
+                currentInterfaceLanguage(),
+                outcome === 'queued' ? 'message.menu.translateOnDevice.queued' : 'message.menu.translateOnDevice.consent',
+              ),
+            ),
+          )
+          .catch(() => undefined);
+        return;
+      }
       if (isTypeAction(id)) {
         const message = messageOf(messageId);
         if (message !== undefined) runTypeAction(id, message);
@@ -570,7 +604,7 @@ export function useMessageMenu(params: {
       if (id === 'forward') {
         const message = messageOf(messageId);
         const now = Date.now();
-        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, now);
+        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, now) ?? (actionsOf(message).verdicts.forward ? null : 'unavailable');
         if (message === undefined || refusal !== null) {
           announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[refusal ?? 'unavailable']));
           return;
@@ -616,7 +650,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -638,6 +672,19 @@ export function useMessageMenu(params: {
 
   const onEndSelection = useCallback(() => setSelection(null), []);
 
+  /**
+   * LA LOI PARTAGÉE BORNE LA SÉLECTION (#11210) — `verdicts.forward` (bout en
+   * bout, avis système, envoi local) s'ajoute à la loi de sortie. Un protégé
+   * (vue unique, flamme) reste dans la demande : l'écran de partage le RETIRE
+   * avec son motif (D6). Ce que la loi refuse pour une autre raison n'y entre
+   * pas : une sélection dont rien n'est transférable n'est pas admise.
+   */
+  const forwardableOf = useCallback((message: Message): boolean => actionsOf(message).verdicts.forward, [actionsOf]);
+  const forwardCandidatesOf = useCallback(
+    (picked: readonly Message[], now: number): readonly Message[] =>
+      picked.filter((m) => forwardableOf(m) || forwardRefusalOf(m, now) !== null),
+    [forwardableOf],
+  );
   /**
    * LE GESTE DE LA BARRE (#5866, #8884) — il ADMET d'abord, il ouvre ensuite.
    *
@@ -663,8 +710,11 @@ export function useMessageMenu(params: {
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
       if (selection === null) return;
       const ids = orderedIds(placed, new Set(selection.ids));
-      const candidates = ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
       const now = Date.now();
+      const candidates = forwardCandidatesOf(
+        ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined),
+        now,
+      );
       const admission = admitForward(candidates, now);
       if (!admission.admitted) {
         announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[admission.reason]));
@@ -673,7 +723,7 @@ export function useMessageMenu(params: {
       setSelection(null);
       openSendSheet(forwardRequestOf({ conversationId, messages: candidates, now, sourceEncrypted: sourceEncrypted() }));
     },
-    [selection, messageOf, announce, conversationId, sourceEncrypted],
+    [selection, messageOf, announce, conversationId, sourceEncrypted, forwardCandidatesOf],
   );
 
   /**
@@ -686,7 +736,7 @@ export function useMessageMenu(params: {
     if (selection === null) return { forward: false, copy: false, delete: false };
     const picked = selection.ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
     return {
-      forward: admitForward(picked, Date.now()).admitted,
+      forward: admitForward(forwardCandidatesOf(picked, Date.now()), Date.now()).admitted,
       copy: selection.ids.some((id) => (copyableTextOf(id) ?? '') !== ''),
       delete: deleteOfferFor(selection.ids) !== null,
     };
@@ -777,7 +827,7 @@ export function useMessageMenu(params: {
       forwardItems: forwardMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
       subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
-      canReact: doubleTapReactable(message, Date.now()),
+      canReact: reactableOf(message),
       ...(pieceData === undefined ? {} : { piece: pieceData }),
     };
   })();

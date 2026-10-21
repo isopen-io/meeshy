@@ -559,6 +559,63 @@ describe('MessageMenu — les groupes (#11210)', () => {
     expect(buttons.filter((b) => b.dataset.variant === 'destructive').length).toBe(1);
   });
 
+  test('« Traduire sur l’appareil » DEMANDE la traduction (l’hôte agit) — jamais le sous-menu des langues présentes', () => {
+    const actions: string[] = [];
+    const items = messageMenuItems({
+      ...messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope({}, { encryptionMode: 'e2ee' }) }),
+      piecesLabels: true,
+    });
+    const el = mount({ items, events: { onAction: (id) => actions.push(id) } });
+    act(() => {
+      row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    });
+    const device = document.querySelector<HTMLElement>('.message-menu-list [data-action="translateOnDevice"]')!;
+    act(() => device.click());
+    expect(actions).toEqual(['translateOnDevice']);
+    expect(document.querySelector('[data-message-menu-languages]')).toBeNull();
+  });
+
+  test('360×640 : la liste groupée est BORNÉE au bas de l’écran et DÉFILE — « Supprimer » s’atteint sans le glisser (#11210, revue)', () => {
+    const real = { height: Object.getOwnPropertyDescriptor(window, 'innerHeight'), width: Object.getOwnPropertyDescriptor(window, 'innerWidth') };
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 640 });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 360 });
+    try {
+      const mine = message({
+        id: 'm2',
+        conversationId: 'c-a',
+        senderId: 'u-viewer',
+        content: 'Le programme : https://meeshy.me/programme',
+        originalLanguage: 'fr',
+        translations: [{ id: 't', messageId: 'm2', targetLanguage: 'en', translatedContent: 'The programme', translationModel: 'medium', createdAt: new Date() }],
+        createdAt: minutesAgo(5),
+      });
+      const items = messageMenuItems({
+        ...messageMenuContextOf(mine, { now: Date.now(), scope: menuScope() }),
+        piecesLabels: true,
+        canEdit: true,
+        hasDefaultExportFormat: true,
+      });
+      expect(items.length).toBeGreaterThanOrEqual(12);
+      const el = mount({ items });
+      const rect = { top: 300, bottom: 400, left: 16, right: 344, width: 328, height: 100, x: 16, y: 300 };
+      row(el).getBoundingClientRect = () => ({ ...rect, toJSON: () => rect }) as DOMRect;
+      act(() => {
+        row(el).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+      });
+      const list = document.querySelector<HTMLElement>('.message-menu-list')!;
+      const top = Number.parseFloat(list.style.top);
+      const maxHeight = Number.parseFloat(list.style.maxHeight);
+      expect(top + maxHeight).toBeLessThanOrEqual(640 - 12);
+      expect(list.style.overflowY).toBe('auto');
+      expect(Array.from(list.querySelectorAll<HTMLElement>('[role="menuitem"]')).at(-1)?.dataset.action).toBe('delete');
+    } finally {
+      for (const [key, descriptor] of [['innerHeight', real.height], ['innerWidth', real.width]] as const) {
+        if (descriptor === undefined) Reflect.deleteProperty(window, key);
+        else Object.defineProperty(window, key, descriptor);
+      }
+    }
+  });
+
   test('en bout en bout, la mention se lit en « Plus », sans être une entrée du menu', () => {
     open(moderated('e2ee'));
     const notice = document.querySelector('[data-message-menu-notice]');

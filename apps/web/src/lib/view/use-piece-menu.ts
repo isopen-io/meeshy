@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
+import type { MessageActions } from '@meeshy/shared/utils/message-action-policy';
 
 import { performPieceDelete, type PieceDeleteOutcome } from '@/lib/api/delete-piece';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
@@ -21,7 +22,9 @@ import { attachmentSendRequest, mediaPageOffers, type MediaPageOffers } from './
  * le menu de l'appui long fait quand il vise UNE pièce d'un message à
  * plusieurs pièces. Composé par `useMessageMenu`, qui garde la cible ; ce hook
  * n'ajoute aucune règle : les offres sont celles de la visionneuse
- * (`mediaPageOffers`), la réaction celle de la visionneuse
+ * (`mediaPageOffers`) BORNÉES par les verdicts du message (`actionsOf`, la
+ * loi partagée `messageActionsFor` : répondre, transférer, réagir et
+ * supprimer s'y lisent comme au menu du message entier), la réaction celle de la visionneuse
  * (`performAttachmentReaction`), la réponse celle de la visionneuse
  * (`setReplyToMedia` + `withAttachmentReply`), le transfert la feuille d'envoi
  * commune, la suppression `performPieceDelete`.
@@ -84,12 +87,25 @@ export function usePieceMenu(params: {
   readonly conversationId: string;
   readonly viewerId: string;
   readonly messageOf: (id: string) => Message | undefined;
+  /** Les verdicts de la loi partagée pour ce message (#11210) — la MÊME lecture que le menu du message entier. */
+  readonly actionsOf: (message: Message) => MessageActions;
   readonly onReplyToMedia: (messageId: string, attachmentId: string) => void;
   readonly announce: (message: string) => void;
   readonly queryClient: QueryClient;
   readonly transport: Transport;
 }) {
-  const { conversationId, viewerId, messageOf, onReplyToMedia, announce, queryClient, transport } = params;
+  const { conversationId, viewerId, messageOf, actionsOf, onReplyToMedia, announce, queryClient, transport } = params;
+
+  /** Ce que la pièce offre (la visionneuse), dans ce que le MESSAGE admet (la loi). */
+  const offersOf = useCallback(
+    (message: Message, piece: Attachment): MediaPageOffers => {
+      const now = Date.now();
+      const offers = mediaPageOffers({ attachment: piece, message, capabilities: THREAD_CAPABILITIES, now });
+      const { verdicts } = actionsOf(message);
+      return { ...offers, reply: offers.reply && verdicts.canReply, share: offers.share && verdicts.forward, react: offers.react && verdicts.canReact };
+    },
+    [actionsOf],
+  );
 
   const pieceDataOf = useCallback(
     (messageId: string, pieceId: string | undefined): PieceMenuData | undefined => {
@@ -99,17 +115,16 @@ export function usePieceMenu(params: {
       const target = targetedPieceOf(message, pieceId, Date.now());
       if (target === null) return undefined;
       const piece = target.pieces[target.index]!;
-      const now = Date.now();
-      const offers = mediaPageOffers({ attachment: piece, message, capabilities: THREAD_CAPABILITIES, now });
+      const offers = offersOf(message, piece);
       return {
         pieces: target.pieces,
         index: target.index,
-        items: pieceMenuItems({ offers, deletable: pieceDeletable({ message, piece, viewerId }) }),
+        items: pieceMenuItems({ offers, deletable: pieceDeletable({ verdicts: actionsOf(message).verdicts, piece, viewerId }) }),
         canReact: offers.react,
         positionLabel: piecePositionLabel(piece, target.index, target.pieces.length),
       };
     },
-    [messageOf, viewerId],
+    [messageOf, viewerId, offersOf, actionsOf],
   );
 
   const pieceOf = useCallback(
@@ -150,11 +165,13 @@ export function usePieceMenu(params: {
       if (found === undefined) return;
       const { message, piece } = found;
       const lang = currentInterfaceLanguage();
+      const offers = offersOf(message, piece);
       if (id === 'pieceReply') {
-        onReplyToMedia(messageId, pieceId);
+        if (offers.reply) onReplyToMedia(messageId, pieceId);
         return;
       }
       if (id === 'pieceForward') {
+        if (!offers.share) return;
         openSendSheet(
           attachmentSendRequest({ attachment: piece, message, now: Date.now(), sourceEncrypted: conversationEncrypted(findCachedConversation(queryClient, conversationId)) }),
         );
@@ -167,11 +184,12 @@ export function usePieceMenu(params: {
           .catch(() => announce(translate(lang, 'media.viewer.offline')));
         return;
       }
+      if (!pieceDeletable({ verdicts: actionsOf(message).verdicts, piece, viewerId })) return;
       void performPieceDelete({ queryClient, conversationId, message, attachmentId: pieceId, transport }).then((outcome) =>
         announce(deleteNotice(outcome)),
       );
     },
-    [pieceOf, onReplyToMedia, viewerId, announce, queryClient, conversationId, transport],
+    [pieceOf, offersOf, actionsOf, onReplyToMedia, viewerId, announce, queryClient, conversationId, transport],
   );
 
   return { pieceDataOf, onPieceReact, onPieceAction };
