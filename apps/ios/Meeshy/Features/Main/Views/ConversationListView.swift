@@ -504,15 +504,22 @@ struct ConversationListView: View {
         .overlay { KeyboardCursorRing(isActive: keyboardCursor == conversation.id, accentColor: conversation.accentColor) }
     }
 
-    private func openConversation(_ conversation: Conversation) {
-        guard ConversationLockManager.shared.isLocked(conversation.id) else { return onSelect(conversation) }
+    /// La porte UNIQUE d'ouverture depuis la liste : le verrou par PIN n'est
+    /// vérifié nulle part ailleurs (`ConversationOpenRoute`).
+    func openConversation(_ conversation: Conversation, searching: Bool = false) {
+        let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
+        guard route.presentsLockSheet else {
+            if route.armsSearchNow { router.pendingOpenSearch = true }
+            return onSelect(conversation)
+        }
+        sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
         lockSheetMode = .openConversation
         sheetTargets.lockSheet = conversation
     }
 
     private func openConversation(id: String) {
         conversationViewModel.groupedConversations.lazy.flatMap(\.conversations)
-            .first { $0.id == id }.map(openConversation(_:))
+            .first { $0.id == id }.map { openConversation($0) }
     }
 
     private var swipeActions: ConversationSwipeActions {

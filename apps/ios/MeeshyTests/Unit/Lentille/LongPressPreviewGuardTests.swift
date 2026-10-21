@@ -194,10 +194,43 @@ final class LongPressPreviewGuardTests: XCTestCase {
     }
 
     /// Le repli < iOS 26 : toucher la carte ouvre la conversation, comme
-    /// l'aperçu natif.
-    func test_fallback_tapOnTheCard_opensTheConversation() throws {
+    /// l'aperçu natif — par la PORTE du verrou (`openConversation`), comme le
+    /// toucher d'une rangée. Un `onSelect` nu ouvrait une conversation
+    /// verrouillée par PIN sans le demander : aucun autre site ne revérifie le
+    /// verrou (revue adversariale #11213).
+    func test_fallback_tapOnTheCard_opensTheConversationThroughTheLock() throws {
         let normalized = normalizedCode(try source(Self.overlayPath))
-        XCTAssertTrue(normalized.contains(".contentShape(Rectangle()) .onTapGesture { dismissContextMenu() onSelect(conversation) }"))
+        XCTAssertTrue(normalized.contains(".contentShape(Rectangle()) .onTapGesture { dismissContextMenu() openConversation(conversation) }"))
+    }
+
+    /// La loupe de l'aperçu et l'entrée « Rechercher » du menu natif passent la
+    /// même porte, en gardant la recherche pour après le PIN.
+    func test_searchPaths_openThroughTheLock() throws {
+        let normalized = normalizedCode(try source(Self.overlayPath))
+        XCTAssertEqual(occurrences(of: "openConversation(conversation, searching: true)", in: normalized), 2)
+        XCTAssertFalse(
+            normalized.contains("router.pendingOpenSearch = true"),
+            "la recherche ne s'arme qu'une fois le verrou franchi (`ConversationOpenRoute.armsSearchNow`)"
+        )
+    }
+
+    /// Aucun chemin d'appui long n'ouvre une conversation par `onSelect` nu.
+    func test_longPressPaths_neverOpenWithABareOnSelect() throws {
+        for path in [Self.overlayPath, Self.nativePath] {
+            let normalized = normalizedCode(try source(path))
+            XCTAssertFalse(normalized.contains("onSelect("), "\(path) : une ouverture passe par `openConversation`, la porte du verrou")
+        }
+    }
+
+    /// La porte elle-même : le toucher d'une rangée, le clavier et l'appui long
+    /// lisent la même loi, et la feuille de verrou garde la recherche demandée.
+    func test_openConversation_isTheSingleLockGate() throws {
+        let list = normalizedCode(try source("Meeshy/Features/Main/Views/ConversationListView.swift"))
+        XCTAssertTrue(list.contains("func openConversation(_ conversation: Conversation, searching: Bool = false)"))
+        XCTAssertTrue(list.contains("ConversationOpenRoute.resolve(conversation.id, searching: searching)"))
+        XCTAssertFalse(list.contains("private func openConversation(_ conversation: Conversation"))
+        let presentations = normalizedCode(try source("Meeshy/Features/Main/Views/ConversationListView+Presentations.swift"))
+        XCTAssertTrue(presentations.contains("sheetTargets.searchAfterUnlock"))
     }
 
     /// Prisme (patron `ConversationPreviewPrismSourceGuardTests`) : l'aperçu

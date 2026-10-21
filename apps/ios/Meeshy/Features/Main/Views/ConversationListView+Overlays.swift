@@ -70,13 +70,13 @@ extension ConversationListView {
 
         // Rechercher dans la conversation — MÊME chemin que le bouton
         // « Rechercher » de l'aperçu du fallback custom (`onSearch`, SSOT) :
-        // arme `pendingOpenSearch` puis ouvre la conversation, qui consomme le
-        // flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
+        // la porte du verrou (`openConversation`) arme `pendingOpenSearch` —
+        // après le PIN si la conversation est verrouillée — puis ouvre la
+        // conversation, qui consomme le flag et présente la recherche. Sur iOS 26+ l'aperçu natif est statique
         // (non cliquable) — l'action vit donc dans le menu (décision 2026-07-14).
         Button {
             HapticFeedback.light()
-            router.pendingOpenSearch = true
-            onSelect(conversation)
+            openConversation(conversation, searching: true)
         } label: {
             Label(
                 String(localized: "context.search", defaultValue: "Rechercher", bundle: .main),
@@ -468,8 +468,7 @@ extension ConversationListView {
                             onCall: previewCallAction(for: conversation),
                             onSearch: {
                                 dismissContextMenu()
-                                router.pendingOpenSearch = true
-                                onSelect(conversation)
+                                openConversation(conversation, searching: true)
                             },
                             onInfo: { dismissContextMenu(); sheetTargets.info = conversation },
                             onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
@@ -480,11 +479,12 @@ extension ConversationListView {
                         // contenu défilait dans la carte au lieu de la déplacer
                         // (vérifié frame par frame 2026-07-03).
                         .scrollDisabled(true)
-                        // Toucher la carte ouvre la conversation (parité native).
+                        // Toucher la carte ouvre la conversation (parité native),
+                        // par la porte du verrou, comme le toucher d'une rangée.
                         .contentShape(Rectangle())
                         .onTapGesture {
                             dismissContextMenu()
-                            onSelect(conversation)
+                            openConversation(conversation)
                         }
                         // 340 pt au plus, et jamais plus large que la colonne (volet
                         // gauche iPad étroit) : la carte débordait de ses bords.
