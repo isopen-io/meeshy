@@ -135868,6 +135868,53 @@
         }
       }
     },
+    "message-more.e2ee.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "مشفّرة من طرف إلى طرف: الترجمة والنسخ عبر الخادم غير متاحين في هذه المحادثة."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ende-zu-Ende-verschlüsselt: Übersetzung und Transkription durch den Server sind in dieser Unterhaltung nicht verfügbar."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End-to-end encrypted: server translation and transcription aren't available in this conversation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cifrada de extremo a extremo: la traducción y la transcripción por el servidor no están disponibles en esta conversación."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiffrée de bout en bout : la traduction et la transcription par le serveur ne sont pas disponibles dans cette conversation."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crittografata end-to-end: traduzione e trascrizione dal server non sono disponibili in questa conversazione."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Criptografada de ponta a ponta: a tradução e a transcrição pelo servidor não estão disponíveis nesta conversa."
+          }
+        }
+      }
+    },
     "message-more.section.actions": {
       "extractionState": "manual",
       "localizations": {

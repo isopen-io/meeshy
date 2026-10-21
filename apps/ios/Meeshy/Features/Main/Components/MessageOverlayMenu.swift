@@ -216,13 +216,13 @@ struct MessageOverlayMenu: View {
     /// Les actions du TYPE (#11214) : la cible se relit sur le message, et la
     /// copie passe par la loi de sortie, comme « Copier ».
     private func performKindAction(_ action: PrimaryAction) {
-        let link = MessageKindTarget.firstLink(in: message.content)
         let place = message.location
         switch action {
         case .openLink:
-            if let link { openURL(link) }
+            if let link = MessageKindTarget.openableLink(of: message) { openURL(link) }
         case .copyLink:
-            if let link, MessageExitTransport.copy(link.absoluteString, of: message) { HapticFeedback.success() }
+            if let link = MessageKindTarget.firstRawLink(in: message.content),
+               MessageExitTransport.copy(link, of: message) { HapticFeedback.success() }
         case .openInMaps:
             if let url = place.flatMap({ MessageKindTarget.mapsURL(for: $0) }) { openURL(url) }
         case .copyAddress:

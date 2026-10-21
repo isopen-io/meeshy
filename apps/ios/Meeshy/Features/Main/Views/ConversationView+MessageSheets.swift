@@ -115,7 +115,8 @@ struct ConversationMessageSheets: ViewModifier {
                                 conversationEncryptionMode: authority.conversation.encryptionMode
                             )
                         }
-                    }
+                    },
+                    serverFeaturesAbsent: ctx.serverFeaturesAbsent
                 )
             }
             .sheet(item: $overlayState.callDetailMessage) { msg in

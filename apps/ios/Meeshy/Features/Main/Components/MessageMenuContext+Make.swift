@@ -118,10 +118,13 @@ extension MessageMenuContext {
         let verdicts = law.verdicts
         let kind = law.content.kind
         let gone = kind == .deleted || (message.expiresAt.map { $0 <= now } ?? false)
+        // Un envoi jamais parti (`cid_…`) est OPTIMISTE pour la loi : ni « pour
+        // moi » ni « pour tous », mais `.discard` — sans lui, il restait dans le fil.
+        let discards = law.groups.destructive.contains(.discard)
         return MessageMenuContext(
             isMine: message.isMe,
             canEdit: verdicts.edit != nil,
-            canDelete: verdicts.deleteForEveryone || verdicts.deleteForMe || verdicts.remove != nil,
+            canDelete: verdicts.deleteForEveryone || verdicts.deleteForMe || verdicts.remove != nil || discards,
             hasText: !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             hasMedia: !message.attachments.isEmpty,
             hasTimebasedMedia: message.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack },
@@ -146,10 +149,15 @@ extension MessageMenuContext {
             canPin: verdicts.pin != nil,
             canStar: authority.viewer.isRegistered && !gone,
             canReport: verdicts.report,
-            canTranslate: verdicts.translate != nil,
+            // En E2EE la loi rend `.device` ; la vue Langue ne sait demander
+            // qu'au serveur, qui refuse. Tant que la traduction à la demande ne
+            // passe pas par l'appareil, « Traduire » n'est pas offert.
+            canTranslate: verdicts.translate == .servedSwitch,
             canRemove: verdicts.remove != nil,
             canDeleteForEveryone: verdicts.deleteForEveryone,
             canDeleteForMe: verdicts.deleteForMe,
+            canDiscard: discards,
+            canForward: verdicts.forward,
             isFailed: law.content.flags.failed,
             isGone: gone,
             isLocation: kind == .location,
@@ -222,11 +230,12 @@ enum MessageMenuPolicyInput {
 enum MessageKindTarget {
 
     static func offered(by groups: MessageActionPolicy.Groups, for message: Message) -> [PrimaryAction] {
-        let link = firstLink(in: message.content) != nil
+        let link = firstRawLink(in: message.content) != nil
         let place = message.location != nil
+        let opens = link && !linksAreInert(message)
         return (groups.primary + groups.more).compactMap { action -> PrimaryAction? in
             switch action {
-            case .openLink: return link ? .openLink : nil
+            case .openLink: return opens ? .openLink : nil
             case .copyLink: return link ? .copyLink : nil
             case .openInMaps: return place ? .openInMaps : nil
             case .copyAddress: return place ? .copyAddress : nil
@@ -235,12 +244,35 @@ enum MessageKindTarget {
         }
     }
 
-    static func firstLink(in text: String) -> URL? {
-        let pattern = try? NSRegularExpression(pattern: "https?://[^\\s<>\"]+", options: [.caseInsensitive])
+    /// Compilée une fois : la fabrique se rejoue à chaque rendu de l'overlay.
+    private static let linkPattern = try? NSRegularExpression(pattern: "https?://[^\\s<>\"]+", options: [.caseInsensitive])
+
+    /// #10286 — le lien d'un invité, ou d'un auteur sans compte prouvé, est
+    /// INERTE dans la bulle (`BubbleContentBuilder`) : ni aperçu, ni toucher.
+    /// Le menu ne rouvre pas la porte que la bulle garde fermée. Le copier
+    /// reste offert : le texte est visible, et « Copier » le donne déjà.
+    static func linksAreInert(_ message: Message) -> Bool {
+        message.senderIsAnonymous || !message.senderHasAccount
+    }
+
+    static func firstRawLink(in text: String) -> String? {
         let range = NSRange(text.startIndex..., in: text)
-        guard let match = pattern?.firstMatch(in: text, range: range),
+        guard let match = linkPattern?.firstMatch(in: text, range: range),
               let bounds = Range(match.range, in: text) else { return nil }
-        return URL(string: String(text[bounds]))
+        return String(text[bounds])
+    }
+
+    static func firstLink(in text: String) -> URL? {
+        firstRawLink(in: text).flatMap { URL(string: $0) }
+    }
+
+    /// Ce qu'« Ouvrir le lien » ouvre : la redirection SUIVIE quand la
+    /// passerelle en a émis une (`/l/<token>`, comme la bulle), sinon
+    /// l'adresse ; rien pour un lien inerte.
+    static func openableLink(of message: Message) -> URL? {
+        guard !linksAreInert(message), let raw = firstRawLink(in: message.content) else { return nil }
+        if let token = message.trackedLinkMap[raw], let tracked = TrackedLink.redirectURL(token: token) { return tracked }
+        return URL(string: raw)
     }
 
     static func mapsURL(for place: SharedPlace) -> URL? {

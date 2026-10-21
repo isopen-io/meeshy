@@ -126,13 +126,17 @@ extension ConversationView {
     func pieceOverlayContent(for message: Message) -> AnyView? {
         guard MessagePieceTarget.piece(overlayState.overlayPieceId, in: message) != nil else { return nil }
         let messageId = message.id
+        // La suppression SERVEUR, jamais « pour moi » (#11214) : la passerelle
+        // refuse la pièce d'autrui à un membre ordinaire.
+        let menu = MessageMenuContext.make(message: message, viewModel: viewModel, authority: menuAuthority)
         return AnyView(
             MessagePieceOverlay(
                 message: message,
                 accentHex: accentColor,
                 focusedPieceId: $overlayState.overlayPieceId,
                 isPresented: $overlayState.showOverlayMenu,
-                canDelete: MessageMenuContext.make(message: message, viewModel: viewModel, authority: menuAuthority).canDelete,
+                canDelete: menu.canDeleteOnServer,
+                canForward: menu.canForward,
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
                 },
@@ -169,6 +173,13 @@ extension ConversationView {
     /// sur iPad un popover ancré au cadre entier de la colonne, que UIKit
     /// présentait sur la liste des conversations voisine. Sur iPhone, rien ne
     /// change : la feuille d'actions monte du bas.
+    /// Les verdicts de suppression du message visé — la fabrique unique ;
+    /// un message disparu entre-temps n'ouvre rien.
+    func deleteVerdicts(for messageId: String) -> MessageMenuContext {
+        guard let index = viewModel.messageIndex(for: messageId) else { return .closed }
+        return MessageMenuContext.make(message: viewModel.messages[index], viewModel: viewModel, authority: menuAuthority)
+    }
+
     var messageDeleteConfirmationAnchor: some View {
         Color.clear
             .frame(width: 1, height: 1)
@@ -182,23 +193,27 @@ extension ConversationView {
                 titleVisibility: .visible,
                 presenting: overlayState.deleteConfirmMessageId
             ) { msgId in
-                // « Supprimer pour tous » : l'auteur, sans fenêtre — la
-                // passerelle n'en impose aucune (`admitMessageDelete`, #11214).
-                if let idx = viewModel.messageIndex(for: msgId),
-                   viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
+                // Les trois boutons sont les verdicts de la fabrique (#11214) :
+                // « pour tous » à l'auteur, sans fenêtre (`admitMessageDelete`),
+                // jamais sur un avis ; « Retirer » à un tiers modérateur, jamais
+                // sur un message déjà parti ; « pour moi » au compte.
+                let verdicts = deleteVerdicts(for: msgId)
+                if verdicts.canDeleteForEveryone {
                     Button(String(localized: "conversation.view.delete_for_everyone", bundle: .main), role: .destructive) {
                         Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
                         overlayState.deleteConfirmMessageId = nil
                     }
                 }
-                if let idx = viewModel.messageIndex(for: msgId), canRemoveMessage(viewModel.messages[idx]) {
+                if verdicts.canRemove {
                     ContentRemovalOffer.messageButton(before: { overlayState.deleteConfirmMessageId = nil }) { reason in
                         Task { await viewModel.removeMessage(messageId: msgId, reason: reason) }
                     }
                 }
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
-                    overlayState.deleteConfirmMessageId = nil
+                if verdicts.canDeleteForMe {
+                    Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
+                        Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
+                        overlayState.deleteConfirmMessageId = nil
+                    }
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
             } message: { _ in

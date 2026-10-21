@@ -185,12 +185,16 @@ struct MessageMenuContext: Equatable {
     var canStar: Bool = true
     var canReport: Bool = true
     var canTranslate: Bool = true
-    /// Les trois verdicts de suppression, distincts : un tiers modérateur
-    /// RETIRE avec motif, l'auteur supprime pour tous, chacun pour soi.
-    /// `canDelete` en est l'union — la porte de la confirmation.
+    /// Les verdicts de suppression, distincts : un tiers modérateur RETIRE
+    /// avec motif, l'auteur supprime pour tous, chacun pour soi, et un envoi
+    /// jamais parti s'abandonne (`.discard`). `canDelete` en est l'union — la
+    /// porte de l'entrée « Supprimer ».
     var canRemove: Bool = false
     var canDeleteForEveryone: Bool = false
     var canDeleteForMe: Bool = true
+    var canDiscard: Bool = false
+    /// Le verdict `forward` de la loi : ni E2EE, ni avis système, ni envoi raté.
+    var canForward: Bool = true
     var isFailed: Bool = false
     /// Supprimé ou éphémère échu : il ne reste que « Supprimer pour moi ».
     var isGone: Bool = false
@@ -202,6 +206,11 @@ struct MessageMenuContext: Equatable {
 
     /// « Imager » a-t-il quelque chose à peindre ? Un texte ou un média peignable.
     var canImagine: Bool { hasText || hasPaintableMedia }
+
+    /// **Une suppression qui part vers la PASSERELLE** — « Supprimer le média »,
+    /// supprimer une pièce. « Supprimer pour moi » est local et n'en ouvre
+    /// aucune : la passerelle refuse un membre sur le message d'autrui.
+    var canDeleteOnServer: Bool { canDeleteForEveryone || canRemove }
 }
 
 /// **Ce qu'une graine de composer sait poser sur un canvas.**
@@ -402,7 +411,7 @@ enum MessageActionResolver {
         // supprimer.
         let showsContent = !ctx.isBlurred
         var actions: [MoreItem] = ctx.canReply ? [.reply] : []
-        if showsContent && ctx.exits.offers(.forward) { actions.append(.forward) }
+        if showsContent && ctx.canForward && ctx.exits.offers(.forward) { actions.append(.forward) }
         actions.append(.thread)
         if ctx.isMine && ctx.canEdit && ctx.hasText { actions.append(.edit) }
         if ctx.hasText && showsContent && ctx.exits.offers(.copy) { actions.append(.copy) }
@@ -416,7 +425,7 @@ enum MessageActionResolver {
         if let epinglee = ctx.stickerFavorite {
             actions.append(epinglee ? .unpinSticker : .pinSticker)
         }
-        if ctx.canDelete && ctx.hasMedia && !ctx.isLocation { actions.append(.media) }
+        if ctx.canDeleteOnServer && ctx.hasMedia && !ctx.isLocation { actions.append(.media) }
         if ctx.canDelete { actions.append(.delete) }
         sections.append(.actions(actions))
 
@@ -424,16 +433,19 @@ enum MessageActionResolver {
         // (langue), transcription (audio/vidéo), réactions (voir + ajouter),
         // vues, sentiment (texte), historique (édité).
         var info: [MoreItem] = []
-        let translatesText = ctx.hasText && ctx.canTranslate
-        if (translatesText || ctx.hasTimebasedMedia) && showsContent { info.append(.language) }
         // Chiffré de bout en bout : le serveur ne lit pas le clair, ses
         // services n'existent pas (#11214) — la feuille le dit, le menu ne
-        // les offre pas.
+        // les offre pas. La vue Langue n'existe que si elle peut traduire.
         let serverReads = !ctx.serverFeaturesAbsent
+        let translatesText = ctx.hasText && ctx.canTranslate
+        let translatesAudio = ctx.hasTimebasedMedia && serverReads
+        if (translatesText || translatesAudio) && showsContent { info.append(.language) }
         if ctx.hasTimebasedMedia && showsContent && serverReads { info.append(.transcription) }
         info.append(.reactions)
         if ctx.showReadReceipts { info.append(.views) }
-        if ctx.hasText && showsContent && serverReads { info.append(.sentiment) }
+        // Le sentiment se calcule SUR L'APPAREIL (`NLTagger`) : rien ne part,
+        // il reste offert en E2EE.
+        if ctx.hasText && showsContent { info.append(.sentiment) }
         if ctx.isEdited && ctx.hasEditRevisions && showsContent { info.append(.history) }
         sections.append(.info(info))
 

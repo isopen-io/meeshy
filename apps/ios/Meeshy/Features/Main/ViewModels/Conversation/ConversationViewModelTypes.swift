@@ -13,14 +13,7 @@ extension ConversationTranslationRequestFailure {
     /// Le refus d'une traduction SERVEUR en E2EE (#11214) : la feuille quitte
     /// son état « en cours » et dit pourquoi.
     static func serverRefused(messageId: String, language: String, kind: Kind) -> Self {
-        Self(
-            messageId: messageId, language: language, kind: kind,
-            message: String(
-                localized: "message.translation.e2ee.serverRefused",
-                defaultValue: "Chiffrée de bout en bout : cette conversation se traduit sur votre appareil, jamais par le serveur.",
-                bundle: .main
-            )
-        )
+        Self(messageId: messageId, language: language, kind: kind, message: ServerTranslationAdmission.refusalMessage)
     }
 }
 
@@ -36,6 +29,21 @@ enum ServerTranslationAdmission {
             conversationEncryptionMode: conversationEncryptionMode,
             isEncrypted: message?.isEncrypted ?? false,
             encryptionMode: message?.encryptionMode
+        )
+    }
+
+    /// Hors conversation (plein écran audio, galerie) : la pièce chiffrée
+    /// compte aussi — le message synthétique de ces hôtes ne porte pas le drapeau.
+    static func admitsOutsideConversation(_ message: Message) -> Bool {
+        admits(message, conversationEncryptionMode: nil) && !message.attachments.contains { $0.isEncrypted }
+    }
+
+    /// Ce que l'utilisateur lit quand la traduction serveur est refusée.
+    static var refusalMessage: String {
+        String(
+            localized: "message.translation.e2ee.serverRefused",
+            defaultValue: "Chiffrée de bout en bout : cette conversation se traduit sur votre appareil, jamais par le serveur.",
+            bundle: .main
         )
     }
 }
