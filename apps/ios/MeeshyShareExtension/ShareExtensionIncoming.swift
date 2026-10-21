@@ -10,7 +10,7 @@ import MeeshySDK
 /// lui que la fiche d'envoi (`SharePendingShare.media`) et la fiche de studio
 /// (`ShareComposeHandoff.media`) portent déjà.
 nonisolated enum ShareExtensionIncoming {
-    static func make(text: String?, media: [ShareStagedMedia], mediaRoot: URL?, preparationFailed: Bool) -> ShareIncoming {
+    static func make(text: String?, media: [ShareStagedMedia], mediaRoot: URL?, failures: [ShareMediaStagingError]) -> ShareIncoming {
         ShareIncoming(
             media: media.map { staged in
                 ShareIncomingMedia(
@@ -21,7 +21,25 @@ nonisolated enum ShareExtensionIncoming {
                 )
             },
             text: text,
-            preparationFailed: preparationFailed
+            shortfalls: shortfalls(from: failures)
         )
+    }
+
+    /// Une raison par sorte d'échec, jamais une par fichier : l'écran dit
+    /// combien de pièces le plafond a laissées, et qu'il en manque d'autres.
+    static func shortfalls(from failures: [ShareMediaStagingError]) -> [ShareShortfall] {
+        let overBudget = failures.filter(\.isOverBudget).count
+        let others = failures.count - overBudget
+        return [
+            overBudget > 0 ? ShareShortfall.overBudget(uncopied: overBudget) : nil,
+            others > 0 ? ShareShortfall.unprepared : nil,
+        ].compactMap { $0 }
+    }
+}
+
+nonisolated extension ShareMediaStagingError {
+    var isOverBudget: Bool {
+        guard case .byteBudgetExceeded = self else { return false }
+        return true
     }
 }

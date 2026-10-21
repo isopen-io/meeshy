@@ -37,6 +37,13 @@ enum ShareSheetCopy {
     static var unprepared: String {
         String(localized: "share.sheet.content.unprepared", defaultValue: "Des fichiers n’ont pas pu être préparés. Téléchargez-les d’abord, puis réessayez.", bundle: .meeshyShare)
     }
+    static func shortfall(_ shortfall: ShareShortfall) -> String {
+        switch shortfall {
+        case .unprepared: return unprepared
+        case .overBudget(let uncopied):
+            return String(format: String(localized: "share.sheet.content.over-budget", defaultValue: "Fichiers non copiés : %d. Un partage emporte au plus 20 fichiers et 500 Mo.", bundle: .meeshyShare), uncopied)
+        }
+    }
     static var overLimit: String { String(localized: "share.sheet.content.over-limit", defaultValue: "dépasse la limite", bundle: .meeshyShare) }
     static var remove: String { String(localized: "share.sheet.content.remove", defaultValue: "Retirer", bundle: .meeshyShare) }
 
