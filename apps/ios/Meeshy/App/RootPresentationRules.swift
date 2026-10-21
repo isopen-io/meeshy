@@ -6,15 +6,18 @@ enum RootRoute: Equatable {
 
 enum RootPresentationRules {
     static func route(session: AppRootSession, hasCheckedSession: Bool, previewReplacesLogin: Bool) -> RootRoute {
-        .none
+        if session.isAuthenticated { return .connected }
+        guard hasCheckedSession, !previewReplacesLogin, !session.isSwitchingAccount else { return .none }
+        return .login
     }
 
     static func showsGuestCover(guest: GuestSession?, isAuthenticated: Bool) -> Bool {
-        false
+        guard let guest else { return false }
+        return !isAuthenticated || guest.isDeliberate
     }
 
     static func visitorContentIsEligible(isAuthenticated: Bool, hasGuestSession: Bool, splashPhase: LaunchSplashController.Phase) -> Bool {
-        false
+        !isAuthenticated && !hasGuestSession && splashPhase != .covering
     }
 
     static func showsOnboarding(
@@ -24,10 +27,10 @@ enum RootPresentationRules {
         hasGuestSession: Bool,
         hasVisitorRequest: Bool
     ) -> Bool {
-        false
+        !hasCompletedOnboarding && !isAuthenticated && splashPhase != .covering && !hasGuestSession && !hasVisitorRequest
     }
 
     static func showsCelebration(isAuthenticated: Bool, isShowing: Bool) -> Bool {
-        false
+        isAuthenticated && isShowing
     }
 }

@@ -17,14 +17,14 @@ struct AppRootSession: Equatable {
     let systemLanguage: String?
 
     init(_ source: some AppRootSessionSource) {
-        isAuthenticated = false
-        hasResolvedStoredSession = false
-        isSwitchingAccount = false
-        revocationNotice = nil
-        systemLanguage = nil
+        isAuthenticated = source.isAuthenticated
+        hasResolvedStoredSession = source.hasResolvedStoredSession
+        isSwitchingAccount = source.isSwitchingAccount
+        revocationNotice = source.sessionRevocationNotice
+        systemLanguage = source.rootSystemLanguage
     }
 }
 
 extension AuthManager: AppRootSessionSource {
-    var rootSystemLanguage: String? { nil }
+    var rootSystemLanguage: String? { currentUser?.systemLanguage }
 }
