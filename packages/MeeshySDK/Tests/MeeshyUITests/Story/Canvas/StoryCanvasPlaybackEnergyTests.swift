@@ -281,7 +281,7 @@ final class StoryCanvasPlaybackEnergyTests: XCTestCase {
         }
         for (weaker, stronger) in zip(ranges, ranges.dropFirst()) {
             XCTAssertLessThanOrEqual(weaker.maximum, stronger.maximum)
-            XCTAssertLessThanOrEqual(weaker.preferred, stronger.preferred)
+            XCTAssertLessThanOrEqual(weaker.preferred ?? 0, stronger.preferred ?? 0)
         }
     }
 

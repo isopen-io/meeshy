@@ -277,8 +277,7 @@ extension StoryCanvasUIView {
             }
             self.displayLinkTick(link)
         }
-        link.preferredFrameRateRange = StoryPlaybackCadence.frameRateRange(
-            for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
+        link.preferredFrameRateRange = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
         link.add(to: .main, forMode: .common)
         displayLink = link
         // Autorise (ou ré-autorise après pause) la lecture du player vidéo de
@@ -362,8 +361,7 @@ extension StoryCanvasUIView {
     /// qui approche, un audio qui se planifie ou un hôte qui s'abonne changent
     /// le palier sans repasser par `startPlayback`. N'écrit que sur changement.
     func applyPlaybackCadence(to link: CADisplayLink) {
-        let range = StoryPlaybackCadence.frameRateRange(
-            for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
+        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
         let current = link.preferredFrameRateRange
         guard current.minimum != range.minimum
                 || current.maximum != range.maximum
