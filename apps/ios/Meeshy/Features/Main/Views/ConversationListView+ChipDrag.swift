@@ -128,10 +128,15 @@ final class ChipAutoScrollDriver {
     /// tant que le doigt est dans une zone de bord, et dort (`isPaused`) dès
     /// qu'il en sort : `update` est rappelé à chaque mouvement du doigt, donc le
     /// réveil n'attend jamais un tick.
+    ///
+    /// Le drapeau `isActivelyScrolling` retombe ICI quand le doigt sort de la
+    /// zone : l'horloge endormie ne tique plus, et le drop qui suit sur une
+    /// section serait sinon rendu inerte par un défilement déjà arrêté.
     func update(fingerLocation location: CGPoint) {
         fingerLocation = location
-        let link = ensureLink()
-        link.isPaused = !ChipAutoScroll.shouldRun(speed: currentSpeed())
+        let running = ChipAutoScroll.shouldRun(speed: currentSpeed())
+        if !running { isActivelyScrolling = false }
+        ensureLink().isPaused = !running
     }
 
     func stop() {
@@ -170,17 +175,23 @@ final class ChipAutoScrollDriver {
     }
 
     private func tick(_ link: CADisplayLink) {
-        guard let scrollView else { return }
+        link.isPaused = !advance(elapsed: link.targetTimestamp - link.timestamp)
+    }
+
+    /// Un pas d'auto-scroll de `elapsed` secondes. Rend `false` quand il n'y a
+    /// plus rien à défiler (doigt hors zone, liste absente) : l'horloge peut
+    /// alors dormir jusqu'au prochain mouvement du doigt.
+    @discardableResult
+    func advance(elapsed: TimeInterval) -> Bool {
         let speed = currentSpeed()
-        guard ChipAutoScroll.shouldRun(speed: speed) else {
+        guard let scrollView, ChipAutoScroll.shouldRun(speed: speed) else {
             isActivelyScrolling = false
-            link.isPaused = true
-            return
+            return false
         }
         let clamped = ChipAutoScroll.clampedOffset(
             scrollView.contentOffset.y + ChipAutoScroll.displacement(
                 speed: speed,
-                elapsed: link.targetTimestamp - link.timestamp
+                elapsed: elapsed
             ),
             contentHeight: scrollView.contentSize.height,
             viewportHeight: scrollView.bounds.height,
@@ -189,11 +200,12 @@ final class ChipAutoScrollDriver {
         )
         guard clamped != scrollView.contentOffset.y else {
             isActivelyScrolling = false
-            return
+            return true
         }
         isActivelyScrolling = true
         scrollView.contentOffset.y = clamped
         onScrollTick?(fingerLocation)
+        return true
     }
 }
 

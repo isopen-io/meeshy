@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import UIKit
 @testable import Meeshy
 
 /// Phase 3 du morph drag-n-drop de la liste de conversations : pendant que la
@@ -137,5 +138,47 @@ final class ConversationChipAutoScrollTests: XCTestCase {
         XCTAssertFalse(ChipAutoScroll.shouldRun(speed: 0))
         XCTAssertTrue(ChipAutoScroll.shouldRun(speed: -120))
         XCTAssertTrue(ChipAutoScroll.shouldRun(speed: 120))
+    }
+
+    // MARK: - ChipAutoScrollDriver — le drop redevient légitime dès la sortie de zone (#9883)
+
+    private func makeScrollableList() -> UIScrollView {
+        let scroll = UIScrollView(frame: CGRect(x: 0, y: 0, width: 390, height: 900))
+        scroll.contentSize = CGSize(width: 390, height: 5000)
+        return scroll
+    }
+
+    func test_driver_fingerInBottomZone_scrollsTheList() {
+        let driver = ChipAutoScrollDriver()
+        let scroll = makeScrollableList()
+        driver.scrollView = scroll
+        driver.update(fingerLocation: CGPoint(x: 100, y: 890))
+        driver.advance(elapsed: 1.0 / 60.0)
+        XCTAssertTrue(driver.isActivelyScrolling)
+        XCTAssertGreaterThan(scroll.contentOffset.y, 0)
+        driver.stop()
+    }
+
+    func test_driver_fingerLeavesTheEdgeZone_theDropIsNoLongerHeldAsAutoScrolling() {
+        let driver = ChipAutoScrollDriver()
+        driver.scrollView = makeScrollableList()
+        driver.update(fingerLocation: CGPoint(x: 100, y: 890))
+        driver.advance(elapsed: 1.0 / 60.0)
+        XCTAssertTrue(driver.isActivelyScrolling)
+
+        // L'horloge s'endort à la sortie de zone : aucun tic ne viendra plus
+        // remettre le drapeau à zéro. S'il restait levé, le drop sur la section
+        // visée serait rendu inerte (`ChipDropResolver.action(isAutoScrolling:)`).
+        driver.update(fingerLocation: CGPoint(x: 100, y: 450))
+        XCTAssertFalse(driver.isActivelyScrolling)
+        driver.stop()
+    }
+
+    func test_driver_atZeroSpeed_theStepAsksTheClockToSleep() {
+        let driver = ChipAutoScrollDriver()
+        driver.scrollView = makeScrollableList()
+        driver.update(fingerLocation: CGPoint(x: 100, y: 450))
+        XCTAssertFalse(driver.advance(elapsed: 1.0 / 60.0))
+        driver.stop()
     }
 }

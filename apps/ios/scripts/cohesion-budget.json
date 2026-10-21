@@ -28,7 +28,6 @@
     "apps/ios/Meeshy/Features/Main/Components/MiniAudioPlayerBar.swift::MiniAudioPlayerBar.content": 125,
     "apps/ios/Meeshy/Features/Main/Components/RecentMediaCell.swift::RecentMediaCell.body": 81,
     "apps/ios/Meeshy/Features/Main/Components/StatusBubbleOverlay.swift::StatusBubbleOverlay.body": 81,
-    "apps/ios/Meeshy/Features/Main/Components/SyncPill.swift::SyncPill.labelText": 85,
     "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Layout.swift::UniversalComposerBar.expandedComposer": 294,
     "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift::UniversalComposerBar.recordingBar": 136,
     "apps/ios/Meeshy/Features/Main/Components/UniversalComposerBar+Recording.swift::UniversalComposerBar.textInputField": 145,
