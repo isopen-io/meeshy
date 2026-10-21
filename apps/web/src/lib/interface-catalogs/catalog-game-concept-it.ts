@@ -257,7 +257,7 @@ const it = {
   'game.badge.reason.served': '{material}, ottenuto superando la soglia di {threshold}.',
   'game.badge.next': '{missing} fino alla prossima stella: {material}, alla soglia di {threshold}.',
   'game.badge.complete': 'Le sette stelle sono accese: questa medaglia è al Prisma.',
-  'game.badge.ladder_title': 'I sette livelli',
+  'game.badge.ladder_title': 'I sette gradini',
   'game.badge.rung.upcoming': 'A {threshold}',
   'game.badge.rung.next': 'Prossima stella · {missing} in più',
   'game.badge.upcoming_title': 'In arrivo',

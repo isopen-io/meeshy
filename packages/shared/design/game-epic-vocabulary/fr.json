@@ -333,6 +333,7 @@
     "game.gauge.flame": "Flamme",
     "game.fact.strides": "Pas",
     "game.fact.rebirths": "Renaissances",
-    "game.badge.stars_label": "Paliers"
+    "game.badge.stars_label": "Paliers",
+    "game.badge.ladder_title": "Les sept paliers"
   }
 }

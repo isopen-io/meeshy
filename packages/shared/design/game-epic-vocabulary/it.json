@@ -336,6 +336,7 @@
     "game.gauge.flame": "Fiamma",
     "game.fact.strides": "Passi",
     "game.fact.rebirths": "Rinascite",
-    "game.badge.stars_label": "Gradini"
+    "game.badge.stars_label": "Gradini",
+    "game.badge.ladder_title": "I sette gradini"
   }
 }

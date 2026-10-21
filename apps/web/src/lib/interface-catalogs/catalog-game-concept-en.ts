@@ -257,7 +257,7 @@ const en = {
   'game.badge.reason.served': '{material}, earned when you passed the {threshold} mark.',
   'game.badge.next': '{missing} to the next star: {material}, at the {threshold} mark.',
   'game.badge.complete': 'All seven stars are lit: this medal is Prism.',
-  'game.badge.ladder_title': 'The seven tiers',
+  'game.badge.ladder_title': 'The seven marks',
   'game.badge.rung.upcoming': 'At {threshold}',
   'game.badge.rung.next': 'Next star · {missing} to go',
   'game.badge.upcoming_title': 'Coming up',

@@ -373,6 +373,7 @@
     "game.gauge.flame": "Llama",
     "game.fact.strides": "Pasos",
     "game.fact.rebirths": "Renacimientos",
-    "game.badge.stars_label": "Escalones"
+    "game.badge.stars_label": "Escalones",
+    "game.badge.ladder_title": "Los siete escalones"
   }
 }

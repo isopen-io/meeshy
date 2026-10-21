@@ -257,7 +257,7 @@ const pt = {
   'game.badge.reason.served': '{material}, conquistado ao passar do limite de {threshold}.',
   'game.badge.next': '{missing} até a próxima estrela: {material}, no limiar de {threshold}.',
   'game.badge.complete': 'As sete estrelas estão acesas: esta medalha está no Prisma.',
-  'game.badge.ladder_title': 'Os sete níveis',
+  'game.badge.ladder_title': 'Os sete patamares',
   'game.badge.rung.upcoming': 'Em {threshold}',
   'game.badge.rung.next': 'Próxima estrela · mais {missing}',
   'game.badge.upcoming_title': 'A seguir',

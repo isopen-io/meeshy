@@ -341,6 +341,7 @@
     "game.gauge.flame": "Chama",
     "game.fact.strides": "Passos",
     "game.fact.rebirths": "Renascimentos",
-    "game.badge.stars_label": "Patamares"
+    "game.badge.stars_label": "Patamares",
+    "game.badge.ladder_title": "Os sete patamares"
   }
 }

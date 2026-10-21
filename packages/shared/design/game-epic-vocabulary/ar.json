@@ -343,6 +343,7 @@
     "game.gauge.flame": "اللهب",
     "game.fact.strides": "الخطوات",
     "game.fact.rebirths": "الانبعاثات",
-    "game.badge.stars_label": "العتبات"
+    "game.badge.stars_label": "العتبات",
+    "game.badge.ladder_title": "العتبات السبع"
   }
 }

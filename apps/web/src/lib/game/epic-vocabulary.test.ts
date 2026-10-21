@@ -190,6 +190,14 @@ describe('les paliers des médailles et la série d’une conversation ne repren
       });
     });
 
+    test(`${vocabulary.language} : le titre de l’échelle d’une médaille dit le mot des paliers, jamais « tier », « livelli » ni « níveis »`, () => {
+      const title = vocabulary.names['game.badge.ladder_title'] ?? '';
+      expect({ language: vocabulary.language, says: title.toLocaleLowerCase(vocabulary.language).includes(TIERS_OF[vocabulary.language].toLocaleLowerCase(vocabulary.language)) }).toEqual({
+        language: vocabulary.language,
+        says: true,
+      });
+    });
+
     test(`${vocabulary.language} : les paliers d’une médaille portent leur nom canonique`, () => {
       expect({ language: vocabulary.language, name: vocabulary.names['game.badge.stars_label'] ?? null }).toEqual({
         language: vocabulary.language,

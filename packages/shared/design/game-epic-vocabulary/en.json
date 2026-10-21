@@ -339,6 +339,7 @@
     "game.gauge.flame": "Flame",
     "game.fact.strides": "Strides",
     "game.fact.rebirths": "Rebirths",
-    "game.badge.stars_label": "Marks"
+    "game.badge.stars_label": "Marks",
+    "game.badge.ladder_title": "The seven marks"
   }
 }

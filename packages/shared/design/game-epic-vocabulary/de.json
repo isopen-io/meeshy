@@ -328,6 +328,7 @@
     "game.gauge.flame": "Flamme",
     "game.fact.strides": "Schritte",
     "game.fact.rebirths": "Wiedergeburten",
-    "game.badge.stars_label": "Stufen"
+    "game.badge.stars_label": "Stufen",
+    "game.badge.ladder_title": "Die sieben Stufen"
   }
 }

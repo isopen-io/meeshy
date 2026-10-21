@@ -257,7 +257,7 @@ const ar = {
   'game.badge.reason.served': '{material}، نلته حين تجاوزت عتبة {threshold}.',
   'game.badge.next': '{missing} حتى النجمة التالية: {material}، عند عتبة {threshold}.',
   'game.badge.complete': 'النجوم السبع مضاءة: هذا الوسام في المنشور.',
-  'game.badge.ladder_title': 'المستويات السبعة',
+  'game.badge.ladder_title': 'العتبات السبع',
   'game.badge.rung.upcoming': 'عند {threshold}',
   'game.badge.rung.next': 'النجمة التالية · {missing} أخرى',
   'game.badge.upcoming_title': 'القادم',
