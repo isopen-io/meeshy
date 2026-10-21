@@ -217,10 +217,18 @@ final class StoryReactionStripGestureTests: XCTestCase {
             return XCTFail("`unifiedDragGesture` introuvable — la garde ne mesurerait rien.")
         }
         let plat = compact(corps)
-        guard let consultation = plat.range(of: "StoryReactionStripGesture.yieldsHorizontalAxis("),
+        // #11045 : la barre ET les composants posés sur la scène cèdent ensemble,
+        // par `StoryReaderHorizontalYield.yields(`, qui consulte la barre.
+        guard let consultation = plat.range(of: "StoryReaderHorizontalYield.yields("),
               let axe = plat.range(of: "gestureAxis=1") else {
-            return XCTFail("Le lecteur doit consulter `yieldsHorizontalAxis(` avant de poser `gestureAxis = 1`.")
+            return XCTFail("Le lecteur doit consulter `StoryReaderHorizontalYield.yields(` avant de poser `gestureAxis = 1`.")
         }
+        let cession = try strippedSource(at: "Meeshy/Features/Main/Views/StoryReaderDragOwnership.swift")
+        guard let yields = corps("static func yields(", dans: cession) else {
+            return XCTFail("`StoryReaderHorizontalYield.yields` introuvable — la garde ne mesurerait rien.")
+        }
+        XCTAssertTrue(compact(yields).contains("StoryReactionStripGesture.yieldsHorizontalAxis(stripFrame:stripFrame,dragStart:dragStart)"),
+                      "La cession consulte le cadre de la barre au point de départ.")
         XCTAssertLessThan(consultation.lowerBound, axe.lowerBound,
                           "La consultation doit PRÉCÉDER l'arrêt de l'axe horizontal.")
         XCTAssertTrue(plat.contains("stripFrame:reactionStripFrame"),
