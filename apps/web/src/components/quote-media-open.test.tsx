@@ -8,6 +8,7 @@ import { attachmentDefaults } from '@/lib/api/fixtures-base';
 import type { Attachment, Message } from '@/lib/api/types';
 import { closeSendSheet, sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import { Quote } from './message-blocks';
 
@@ -164,7 +165,7 @@ describe('Quote — l’aperçu média d’une citation s’ouvre, le reste saut
     act(() => {
       root.render(
         <QueryClientProvider client={client}>
-          <ThreadMediaContext.Provider value={{ viewerId: 'u-viewer', onReplyToMedia: () => {} }}>
+          <ThreadMediaContext.Provider value={{ viewerId: 'u-viewer', onReplyToMedia: () => {}, actionScope: menuScope() }}>
             <Quote quote={quoting([VIDEO_SANS_VIGNETTE])} isMine={false} languages={['fr']} onJump={() => {}} />
           </ThreadMediaContext.Provider>
         </QueryClientProvider>,

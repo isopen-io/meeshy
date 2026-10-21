@@ -7,6 +7,7 @@ import { heldAccountOf, sessionStore } from '@/lib/api/session';
 import { forgetEmailLinkSecret } from '@/lib/links/email-link-secret';
 import { linkDeviceSecrets } from '@/lib/links/link-device-secret';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { translate } from '@/lib/i18n-catalog';
 import { placeMagicLinkValidationFailure } from '@/lib/view/auth-feedback';
 import { landingAfterSession } from '@/lib/session-guard';
 import { href, Link, navigate } from '@/routes/route-table';
@@ -54,6 +55,7 @@ export function MagicLinkValidation({
   const [asked, setAsked] = useState<LinkQuestion | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const called = useRef(false);
+  const language = currentInterfaceLanguage();
 
   useEffect(() => {
     if (token === null) return;
@@ -126,7 +128,7 @@ export function MagicLinkValidation({
             <GlyphSvg glyph={AUTH_GLYPHS.magicWand} size={56} />
           </span>
           <p aria-busy="true" style={{ color: 'var(--color-ios-ink-2)' }}>
-            Vérification du lien…
+            {translate(language, 'magicLink.validating')}
           </p>
         </>
       ) : null}
@@ -135,9 +137,9 @@ export function MagicLinkValidation({
         <>
           <Glyph name="warningCircle" size={48} className="mx-auto" style={{ color: 'var(--ios-error)' }} />
           <h1 className="text-screen font-bold" style={{ color: 'var(--color-ios-ink)' }}>
-            Lien invalide ou expiré
+            {translate(language, 'magicLink.invalid.title')}
           </h1>
-          <p style={{ color: 'var(--color-ios-ink-2)' }}>Un lien de connexion expire après 10 minutes et ne sert qu’une fois.</p>
+          <p style={{ color: 'var(--color-ios-ink-2)' }}>{translate(language, 'magicLink.invalid.body')}</p>
           <div className="grid gap-3">
             <Link
               to="magicLink"
@@ -146,7 +148,7 @@ export function MagicLinkValidation({
               className="grid place-items-center rounded-field font-bold text-ios-on-brand"
               style={{ minHeight: 52, background: 'linear-gradient(90deg, var(--ios-indigo-600), var(--ios-indigo-400))' }}
             >
-              Demander un nouveau lien
+              {translate(language, 'magicLink.requestNew')}
             </Link>
             <Link
               to="login"
@@ -159,7 +161,7 @@ export function MagicLinkValidation({
                 color: 'var(--color-ios-ink)',
               }}
             >
-              Retour à la connexion
+              {translate(language, 'magicLink.backToLogin')}
             </Link>
           </div>
         </>
@@ -167,7 +169,7 @@ export function MagicLinkValidation({
 
       {state === 'ask' && asked !== null ? (
         <LinkSignInConfirmation
-          language={currentInterfaceLanguage()}
+          language={language}
           question={asked}
           current={heldAccountOf(sessionStore.getState().session)?.user ?? null}
           onConfirm={() => {
@@ -180,7 +182,7 @@ export function MagicLinkValidation({
 
       {state === 'confirm' && replacement !== null ? (
         <AccountReplacementPrompt
-          language={currentInterfaceLanguage()}
+          language={language}
           replacement={replacement}
           gestures={gestures}
           alreadyConfirmed={confirmed}
@@ -189,7 +191,7 @@ export function MagicLinkValidation({
         />
       ) : null}
 
-      {state === 'age-blocked' ? <AgeBlocked language={currentInterfaceLanguage()} onConfirm={() => go(href('login'), true)} /> : null}
+      {state === 'age-blocked' ? <AgeBlocked language={language} onConfirm={() => go(href('login'), true)} /> : null}
 
       {state === 'offline' ? (
         <>
@@ -202,7 +204,7 @@ export function MagicLinkValidation({
             className="mx-auto grid place-items-center rounded-field px-6 font-semibold text-ios-on-brand"
             style={{ minHeight: 44, background: 'var(--color-ios-brand)' }}
           >
-            Réessayer
+            {translate(language, 'magicLink.retry')}
           </button>
         </>
       ) : null}

@@ -86,6 +86,7 @@ public struct VideoClipBar: View, Equatable {
 
     /// Filmstrip auto-extrait quand l'hôte ne fournit pas de frames (vidéos).
     /// Exclu de `==` (état interne, pas une prop visuelle d'entrée).
+    @Environment(\.displayScale) private var displayScale
     @State private var loadedFrames: [UIImage] = []
 
     private var effectiveFrames: [UIImage] {
@@ -215,14 +216,15 @@ public struct VideoClipBar: View, Equatable {
         ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
         .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
-        .task(id: videoURL ?? imageURL) {
+        .task(id: "\((videoURL ?? imageURL)?.absoluteString ?? "")|\(displayScale)") {
             guard frames.isEmpty else { return }
             if let videoURL {
                 loadedFrames = await VideoFilmstrip.frames(url: videoURL, count: 6,
-                                                           maxHeight: laneHeight)
+                                                           maxHeight: laneHeight, scale: displayScale)
             } else if let imageURL,
                       let still = await ImageStill.thumbnail(url: imageURL,
-                                                             maxHeight: laneHeight) {
+                                                             maxHeight: laneHeight,
+                                                             scale: displayScale) {
                 loadedFrames = [still]
             }
         }
