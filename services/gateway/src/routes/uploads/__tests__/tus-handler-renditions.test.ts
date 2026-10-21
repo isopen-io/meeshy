@@ -179,7 +179,7 @@ describe('tus-handler — mêmes rendus que le chemin multipart (#11260)', () =>
       expect(data.imageVariants.every((v: { format: string }) => v.format === 'webp')).toBe(true);
     });
 
-    it('serialisation ancien client : la réponse garde tous les champs historiques et imageVariants s ajoute sans rien déplacer', async () => {
+    it('serialisation ancien client : la réponse garde tous les champs historiques, aux mêmes formes, même quand des variantes existent', async () => {
       const prisma = buildFakePrisma();
       const result = await runFullUpload({ prisma, filename: 'photo.jpg', filetype: 'image/jpeg', bytes: await bigJpeg(), uploadContext: 'post' });
 

@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { unclaimedMediaWhere } from './mediaOwnership';
-import { reclaimMediaRowBytes, type PostMediaByteRemover } from './reclaimPostMediaBytes';
+import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes, type PostMediaByteRemover } from './reclaimPostMediaBytes';
 
 /**
  * Le balayage des `PostMedia` que personne n'a réclamés.
@@ -60,7 +60,7 @@ export async function sweepPendingPostMedia(
 ): Promise<{ swept: number; reclaimed: number }> {
   const rows = await prisma.postMedia.findMany({
     where: { ...unclaimedMediaWhere(), createdAt: { lt: options.olderThan } },
-    select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
+    select: { id: true, ...POST_MEDIA_FILE_COLUMNS },
     take: options.batchSize ?? DEFAULT_BATCH_SIZE,
   });
 

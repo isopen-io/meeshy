@@ -44,7 +44,7 @@ import { creditPostEngagement, creditSource } from './posts/postEngagementCredit
 import { retractReactionNotifications } from './notifications/retractReactionNotifications';
 import { reproduceEditedSubjectNotifications } from './posts/reproduceEditedSubjectNotifications';
 import { getSharedNotificationService } from './notifications/notification-service-registry';
-import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
+import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { collectCaptureTracks } from './posts/collectCaptureTracks';
 import { withCanvasMedia } from './posts/canvasMediaClaims';
 import { videoSoundExtractionAllowed } from './posts/soundEligibility';
@@ -1028,9 +1028,7 @@ export class PostService {
             id: true,
             mimeType: true,
             duration: true,
-            fileUrl: true,
-            thumbnailUrl: true,
-            imageVariants: true,
+            ...POST_MEDIA_FILE_COLUMNS,
           },
         },
       },

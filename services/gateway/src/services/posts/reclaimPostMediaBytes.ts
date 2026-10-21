@@ -91,6 +91,17 @@ export interface PostMediaFileRow {
 }
 
 /**
+ * Le `select` de ces colonnes, que TOUT lecteur d'une ligne à détruire répand :
+ * une colonne d'octets ajoutée à `PostMediaFileRow` sans l'être ici ne compile
+ * pas, et aucun des lecteurs ne peut l'oublier en silence.
+ */
+export const POST_MEDIA_FILE_COLUMNS = {
+  fileUrl: true,
+  thumbnailUrl: true,
+  imageVariants: true,
+} as const satisfies Record<keyof PostMediaFileRow, true>;
+
+/**
  * Efface les octets de ces lignes, sauf ceux qu'un `Sound` vivant référence.
  *
  * Prend les LIGNES, jamais un périmètre à requêter lui-même, et les DEUX

@@ -6,7 +6,7 @@ import { deactivatePostTrackingLinks } from './posts/deactivatePostTrackingLinks
 import { purgePostPoints } from './engagement/PostPointsRecorder';
 import { detachReposts } from './posts/detachReposts';
 import { buildSweepableFilter, EPHEMERAL_AUTHOR_ARCHIVE_MS, SWEPT_POST_TYPES } from './posts/ephemeralPosts';
-import { reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
+import { POST_MEDIA_FILE_COLUMNS, reclaimMediaRowBytes } from './posts/reclaimPostMediaBytes';
 import { retractPostNotifications } from './posts/retractPostNotifications';
 import { SoundCaptureService } from './posts/SoundCaptureService';
 import { NOT_DELETED } from './posts/softDelete';
@@ -327,7 +327,7 @@ export class ExpiredStoriesCleanupService {
               { commentId: { in: commentIds } },
             ],
           },
-          select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
+          select: { id: true, ...POST_MEDIA_FILE_COLUMNS },
         });
 
         // Clear PostComments BEFORE deleting the posts. The cascade from
