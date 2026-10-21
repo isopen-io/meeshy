@@ -177,7 +177,7 @@ struct ConversationLockSheet: View {
             } label: {
                 Image(systemName: biometricKind.systemImage)
                     .font(.title2.weight(.medium))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(width: 76, height: 76)
             }
             .accessibilityLabel(String(localized: "conversation.lock.a11y.biometric", defaultValue: "Déverrouiller avec la biométrie", bundle: .main))
@@ -509,7 +509,7 @@ struct ConversationBiometricUnlockRow: View {
                     HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: kind.systemImage)
                             .font(.subheadline.weight(.medium))
-                            .foregroundColor(Color(hex: color))
+                            .foregroundStyle(Color(hex: color))
                             .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                             .background(
                                 RoundedRectangle(cornerRadius: MeeshyRadius.xs)
@@ -518,7 +518,7 @@ struct ConversationBiometricUnlockRow: View {
                             .accessibilityHidden(true)
                         Text(String(localized: "settings.security.biometric_unlock", defaultValue: "Déverrouiller par biométrie", bundle: .main))
                             .font(.subheadline.weight(.medium))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                     }
                 }
                 .tint(MeeshyColors.indigo500)

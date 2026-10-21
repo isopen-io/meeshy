@@ -335,7 +335,7 @@ struct ProtectedFormChip: View {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
         }
-        .foregroundColor(ink)
+        .foregroundStyle(ink)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.smPlus)
         .background(BubbleBackground(isMe: isMe, accentHex: accentHex, isDark: isDark))

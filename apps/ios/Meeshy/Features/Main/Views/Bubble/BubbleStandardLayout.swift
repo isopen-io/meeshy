@@ -33,32 +33,6 @@ struct BubbleFullscreenPlace: Identifiable {
     var id: String { "\(place.latitude),\(place.longitude)" }
 }
 
-enum BubbleAccessibilityAction: CaseIterable, Equatable {
-    case reply, react, copy, openMenu
-
-    var name: String {
-        switch self {
-        case .reply: return MessageActionVerb.reply.label
-        case .react: return String(localized: "media.react.title", defaultValue: "Réagir", bundle: .main)
-        case .copy: return MessageActionVerb.copy.label
-        case .openMenu: return String(localized: "conversation.row.menu_action", defaultValue: "Ouvrir le menu", bundle: .main)
-        }
-    }
-}
-
-enum BubbleAccessibilityActionSet {
-    static func available(canReply: Bool, canReact: Bool, canCopy: Bool, canOpenMenu: Bool) -> [BubbleAccessibilityAction] {
-        BubbleAccessibilityAction.allCases.filter { action in
-            switch action {
-            case .reply: return canReply
-            case .react: return canReact
-            case .copy: return canCopy
-            case .openMenu: return canOpenMenu
-            }
-        }
-    }
-}
-
 struct BubbleStandardLayout: View {
     // MARK: - Inputs (data + visual context)
 
@@ -70,11 +44,7 @@ struct BubbleStandardLayout: View {
     let content: BubbleContent
     let message: Message
     let contactColor: String
-    /// Blended bubble accent for received bubbles (sender colour 30% over brand
-    /// 70%), pre-computed ONCE by the orchestrator. Was a computed `var` that
-    /// re-ran `blendTwo` (hex→RGB→HSB→hex) on each of its ~6 read sites per body
-    /// evaluation; the inputs (`message.senderColor`, `contactColor`) are stable
-    /// for the bubble's lifetime, so the blend belongs upstream of the body.
+    /// Blended received-bubble accent (sender 30% over brand 70%), pre-computed ONCE.
     let otherBubbleColor: String
     let isDirect: Bool
     let isDark: Bool
@@ -237,14 +207,7 @@ struct BubbleStandardLayout: View {
     }
 
     private var bottomSpacing: CGFloat {
-        // Espacement majore x1.6 (22 -> 35pt, 20 -> 32pt) quand un overlay
-        // de reaction deborde sous la bulle, pour eviter que le bouton +
-        // (face.smiling, hit-area 40pt) ou les pills ne tapent contre le
-        // message suivant. Le facteur x1.6 garde une silhouette compacte
-        // entre messages sans overlay, et offre une "respiration" claire
-        // autour de ceux qui en ont.
-        // Fin de groupe 10 → 6 (overlay 35 → 31) le 2026-08-21 : « réduit
-        // l'espace entre les groupes de messages ».
+        // Majoration x1.6 quand un overlay de réaction déborde sous la bulle.
         if isLastInGroup {
             return hasOverflowingOverlay ? 31 : 6
         }
@@ -280,13 +243,7 @@ struct BubbleStandardLayout: View {
         if let raw = content.text?.raw, LongMessageExcerpt.isLong(raw) {
             return nil
         }
-        // Link-preview bubbles host a self-loading OG card whose height changes
-        // when metadata lands (skeleton → populated card with a 2-line title +
-        // description + thumbnail) WITHOUT any `BubbleContent` change —
-        // `firstLinkURL` is identical before and after the fetch, so the
-        // content-keyed cache would return the stale skeleton-era height and the
-        // populated card would overflow the bubble frame (the misalignment seen
-        // on device). Measure live, like expandable bubbles above.
+        // Link-preview: the OG card height changes after fetch with no content change; measure live.
         if content.text?.firstLinkURL != nil {
             return nil
         }
@@ -389,31 +346,23 @@ struct BubbleStandardLayout: View {
         return String(format: String(localized: "a11y.bubble.replyTo.excerpt", bundle: .main), author, excerpt)
     }
 
+    private var accessibilityActionRows: some View {
+        Group { bubbleAccessibilityActions; quotedZoneAccessibilityActions }
+    }
+
+    private var bubbleAccessibilityActions: some View {
+        BubbleAccessibilityActionButtons(
+            messageId: message.id,
+            onReply: onAccessibilityReply,
+            onReact: onOpenReactPicker,
+            onCopy: onAccessibilityCopy,
+            onOpenMenu: onAccessibilityOpenMenu
+        )
+    }
+
     /// **LOI DES ZONES — la moitié VoiceOver.** Site unique des deux rangées :
     /// `QuotedZoneAccessibility` (#8320), qui y ajoute l'écoute d'un audio cité
     /// et le saut au message cité.
-    @ViewBuilder
-    private var bubbleAccessibilityActions: some View {
-        let available = BubbleAccessibilityActionSet.available(
-            canReply: onAccessibilityReply != nil,
-            canReact: onOpenReactPicker != nil,
-            canCopy: onAccessibilityCopy != nil,
-            canOpenMenu: onAccessibilityOpenMenu != nil
-        )
-        ForEach(available, id: \.self) { action in
-            Button(action.name) { performAccessibilityAction(action) }
-        }
-    }
-
-    private func performAccessibilityAction(_ action: BubbleAccessibilityAction) {
-        switch action {
-        case .reply: onAccessibilityReply?()
-        case .react: onOpenReactPicker?(message.id)
-        case .copy: onAccessibilityCopy?()
-        case .openMenu: onAccessibilityOpenMenu?()
-        }
-    }
-
     private var quotedZoneAccessibilityActions: some View {
         QuotedZoneAccessibility.actions(
             reference: content.reply?.reference,
@@ -565,10 +514,7 @@ struct BubbleStandardLayout: View {
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
-        .accessibilityActions {
-            bubbleAccessibilityActions
-            quotedZoneAccessibilityActions
-        }
+        .accessibilityActions { accessibilityActionRows }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {
                 ShareSheet(activityItems: [url])

@@ -683,12 +683,12 @@ struct SecurityView: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(String(localized: "settings.security.master_pin", defaultValue: "Code PIN principal", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Text(hasMasterPIN
                      ? String(localized: "settings.security.configured", defaultValue: "Configuré", bundle: .main)
                      : String(localized: "settings.security.not_configured", defaultValue: "Non configuré", bundle: .main))
                     .font(.subheadline.weight(.medium))
-                    .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
+                    .foregroundStyle(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
             }
 
             Spacer()
@@ -698,14 +698,14 @@ struct SecurityView: View {
                     if lockedCount > 0 {
                         Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                             .padding(.horizontal, MeeshySpacing.sm)
                             .padding(.vertical, MeeshySpacing.xxs)
                             .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
                     }
                     Image(systemName: "checkmark.shield.fill")
                         .font(.callout)
-                        .foregroundColor(MeeshyColors.success)
+                        .foregroundStyle(MeeshyColors.success)
                 }
             }
         }
