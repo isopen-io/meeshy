@@ -7,6 +7,8 @@ import {
   bubbleBarRows,
   bubbleOrigin,
   bubbleSize,
+  bubbleTranslate,
+  BUBBLE_SETTLE_TRANSITION,
   DEFAULT_BUBBLE,
   fittingTier,
   isBubbleTap,
@@ -182,5 +184,19 @@ describe('« Choisir les périphériques » dans la bulle (#9097)', () => {
     expect(offersOutputChoice({ shell: false, sinks: true })).toBe(true);
     expect(offersOutputChoice({ shell: true, sinks: false })).toBe(true);
     expect(offersOutputChoice({ shell: false, sinks: false })).toBe(false);
+  });
+});
+
+describe('bubbleTranslate — la bulle se déplace en `translate`, jamais en left/top (#11314)', () => {
+  test('au repos : l’origine, la zone sûre haute ajoutée en CSS', () => {
+    expect(bubbleTranslate({ origin: { left: 280, top: 96 }, drag: null })).toBe('280px calc(96px + env(safe-area-inset-top))');
+  });
+
+  test('pendant le glissé : le doigt s’ajoute à l’origine', () => {
+    expect(bubbleTranslate({ origin: { left: 280, top: 96 }, drag: { x: -30, y: 12 } })).toBe('250px calc(108px + env(safe-area-inset-top))');
+  });
+
+  test('l’aimantation au bord ne joue QUE `translate`, au tempo de l’ancienne transition', () => {
+    expect(BUBBLE_SETTLE_TRANSITION).toBe('translate 180ms ease-out');
   });
 });
