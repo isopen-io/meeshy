@@ -1,10 +1,10 @@
 {
   "rules": {
     "anyview": 97,
-    "autocapitalization": 3,
+    "autocapitalization": 0,
     "available-floor": 3,
     "corner-radius-modifier": 7,
-    "disable-autocorrection": 4,
+    "disable-autocorrection": 0,
     "fixed-font": 945,
     "foreground-color": 3167,
     "idiom": 0,
