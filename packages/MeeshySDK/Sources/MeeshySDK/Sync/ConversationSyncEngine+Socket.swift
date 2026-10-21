@@ -162,11 +162,7 @@ extension ConversationSyncEngine {
         // Les fenêtres d'accusé de réception ne survivent pas au relais : sur un
         // changement de compte, un envoi encore en attente partirait sous la
         // session SUIVANTE.
-        let pending: [Task<Void, Never>] = stateQueue.sync {
-            let tasks = Array(_markAsReceivedTasks.values)
-            _markAsReceivedTasks.removeAll()
-            return tasks
-        }
+        let pending = openLedger.mutate { $0.takeAllReceiptTasks() }
         pending.forEach { $0.cancel() }
     }
 
@@ -295,7 +291,7 @@ extension ConversationSyncEngine {
         _conversationsDidChange.send()
 
         // Auto mark-as-received for messages from other users — coalescé par
-        // conversation (voir `_markAsReceivedTasks`).
+        // conversation (voir `OpenConversationLedger.markAsReceivedTasks`).
         if !isMe {
             scheduleMarkAsReceived(for: msg.conversationId)
         }
@@ -311,19 +307,20 @@ extension ConversationSyncEngine {
         // désynchroniserait — la tâche s'y retirant elle-même, une seconde
         // rafale pourrait réarmer avant que la première ne se soit enregistrée,
         // et `stopSocketRelay` n'aurait plus que la tâche MORTE à annuler.
-        stateQueue.sync {
-            guard _markAsReceivedTasks[conversationId] == nil else { return }
-            _markAsReceivedTasks[conversationId] = Task { [weak self] in
-                guard await cancellableSleep(for: .seconds(window)), let self else { return }
-                // La fenêtre se ferme AVANT l'envoi : un message arrivant
-                // pendant l'aller-retour ouvre la fenêtre SUIVANTE au lieu
-                // d'être avalé.
-                self.stateQueue.sync { _ = self._markAsReceivedTasks.removeValue(forKey: conversationId) }
-                guard !Task.isCancelled else { return }
-                do {
-                    try await self.conversationService.markAsReceived(conversationId: conversationId)
-                } catch {
-                    Self.logger.error("[SyncEngine] markAsReceived failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        openLedger.mutate { ledger in
+            ledger.armReceiptWindow(conversationId) {
+                Task { [weak self] in
+                    guard await cancellableSleep(for: .seconds(window)), let self else { return }
+                    // La fenêtre se ferme AVANT l'envoi : un message arrivant
+                    // pendant l'aller-retour ouvre la fenêtre SUIVANTE au lieu
+                    // d'être avalé.
+                    self.openLedger.mutate { $0.closeReceiptWindow(conversationId) }
+                    guard !Task.isCancelled else { return }
+                    do {
+                        try await self.conversationService.markAsReceived(conversationId: conversationId)
+                    } catch {
+                        Self.logger.error("[SyncEngine] markAsReceived failed for \(conversationId, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                    }
                 }
             }
         }
