@@ -1,0 +1,2981 @@
+{
+  "description": "Vecteurs MeeshyLens v1 — rejoués par vitest (types/__tests__/lens-format.test.ts) ET par Swift (LensFormatVectorsTests). Un vecteur = un document + le résumé attendu.",
+  "vectors": [
+    {
+      "name": "une lens complète est lue en entier",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "les cinq primitives, rien de plus",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": []
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "legende", "neige"],
+        "triggerCount": 0,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "sans noms traduits ni mise à jour",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ]
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "sans lieu ni communauté, la fenêtre reste valide",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": { "startsAt": "2026-12-01T00:00:00Z", "endsAt": "2026-12-31T23:59:59Z" },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "une clé inconnue au sommet est ignorée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        },
+        "futureHint": { "a": 1 }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "une clé inconnue dans une couche est ignorée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8, "future": true },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "une couche de genre inconnu est ignorée, les autres restent",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          { "kind": "hologram", "id": "holo", "asset": "dddddddddddddddd.png" },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 1,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "une couche connue mais illisible est ignorée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 9
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "legende", "neige"],
+        "triggerCount": 1,
+        "ignoredLayers": 1,
+        "ignoredTriggers": 1
+      }
+    },
+    {
+      "name": "un déclencheur inconnu est ignoré",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" },
+          { "on": "onTeleport", "action": "burst", "target": "neige" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 1
+      }
+    },
+    {
+      "name": "un déclencheur vers une couche absente est ignoré",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" },
+          { "on": "onBlink", "action": "show", "target": "fantome" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 1
+      }
+    },
+    {
+      "name": "un repli qui masque une couche absente n'échoue pas",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige", "fantome"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "douze couches, c'est le plafond",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "particles", "id": "p0", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p1", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p2", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p3", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p4", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p5", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p6", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p7", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p8", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p9", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p10", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p11", "preset": "snow", "density": "low" }
+        ],
+        "triggers": []
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["p0", "p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8", "p9", "p10", "p11"],
+        "triggerCount": 0,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "huit déclencheurs, c'est le plafond",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 8,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "treize couches dépassent le plafond",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "particles", "id": "p0", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p1", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p2", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p3", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p4", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p5", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p6", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p7", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p8", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p9", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p10", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p11", "preset": "snow", "density": "low" },
+          { "kind": "particles", "id": "p12", "preset": "snow", "density": "low" }
+        ],
+        "triggers": []
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "neuf déclencheurs dépassent le plafond",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "burst", "target": "neige" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "plus de 32 couches déclarées, c'est un abus",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "hologram", "id": "h0" },
+          { "kind": "hologram", "id": "h1" },
+          { "kind": "hologram", "id": "h2" },
+          { "kind": "hologram", "id": "h3" },
+          { "kind": "hologram", "id": "h4" },
+          { "kind": "hologram", "id": "h5" },
+          { "kind": "hologram", "id": "h6" },
+          { "kind": "hologram", "id": "h7" },
+          { "kind": "hologram", "id": "h8" },
+          { "kind": "hologram", "id": "h9" },
+          { "kind": "hologram", "id": "h10" },
+          { "kind": "hologram", "id": "h11" },
+          { "kind": "hologram", "id": "h12" },
+          { "kind": "hologram", "id": "h13" },
+          { "kind": "hologram", "id": "h14" },
+          { "kind": "hologram", "id": "h15" },
+          { "kind": "hologram", "id": "h16" },
+          { "kind": "hologram", "id": "h17" },
+          { "kind": "hologram", "id": "h18" },
+          { "kind": "hologram", "id": "h19" },
+          { "kind": "hologram", "id": "h20" },
+          { "kind": "hologram", "id": "h21" },
+          { "kind": "hologram", "id": "h22" },
+          { "kind": "hologram", "id": "h23" },
+          { "kind": "hologram", "id": "h24" },
+          { "kind": "hologram", "id": "h25" },
+          { "kind": "hologram", "id": "h26" },
+          { "kind": "hologram", "id": "h27" },
+          { "kind": "hologram", "id": "h28" },
+          { "kind": "hologram", "id": "h29" },
+          { "kind": "hologram", "id": "h30" },
+          { "kind": "hologram", "id": "h31" },
+          { "kind": "hologram", "id": "h32" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "deux couches ne portent pas le même identifiant",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "grade", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une lens sans aucune couche n'existe pas",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [],
+        "triggers": []
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "la fenêtre se ferme avant de s'ouvrir",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-11-01T00:00:00Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une date de fenêtre sans fuseau est refusée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "le 30 février n'existe pas",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-02-30", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "le 29 février d'une année non bissextile n'existe pas",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-02-29T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "le 29 février d'une année bissextile existe",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2028-02-29T00:00:00Z",
+          "endsAt": "2028-03-01T00:00:00Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 0,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "un pays s'écrit en deux majuscules",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["fr"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une communauté est un identifiant à 24 hexadécimaux",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["abc"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "le crédit nomme un auteur",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une surface inconnue est refusée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["hologramme"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une surface ne se répète pas",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["live", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "le coût est dans la liste fermée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "luxe",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "la version du schéma est obligatoire",
+      "input": {
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "la version du schéma est un entier",
+      "input": {
+        "schema": 1.5,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "la version du schéma n'est pas un booléen",
+      "input": {
+        "schema": true,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "un texte sans français est une couche illisible, ignorée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "en": "Hello" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["grade", "cadre", "couronne", "etoile", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 1,
+        "ignoredTriggers": 0
+      }
+    },
+    {
+      "name": "un document qui n'est pas un objet",
+      "input": null,
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "un tableau n'est pas une lens",
+      "input": [],
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une chaîne n'est pas une lens",
+      "input": "lens",
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "un schéma futur demande la mise à jour, sans lire le reste",
+      "input": {
+        "schema": 2,
+        "whatever": { "shape": "unknown" }
+      },
+      "expect": { "status": "update-required", "schema": 2 }
+    },
+    {
+      "name": "un schéma futur lointain demande la mise à jour",
+      "input": { "schema": 40, "layers": "x" },
+      "expect": { "status": "update-required", "schema": 40 }
+    },
+    {
+      "name": "le schéma zéro n'existe pas",
+      "input": {
+        "schema": 0,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": { "status": "invalid" }
+    },
+    {
+      "name": "une couche shader est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" },
+          {
+            "kind": "shader",
+            "id": "sh",
+            "source": "void main(){}"
+          }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["layer:shader"]
+      }
+    },
+    {
+      "name": "une couche script est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" },
+          { "kind": "script", "id": "sc" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["layer:script"]
+      }
+    },
+    {
+      "name": "une couche 3D est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" },
+          { "kind": "model3d", "id": "m3" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["layer:model3d"]
+      }
+    },
+    {
+      "name": "une clé shader est interdite où qu'elle soit",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8, "shader": "x" },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["key:shader"]
+      }
+    },
+    {
+      "name": "une clé script est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        },
+        "script": "alert(1)"
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["key:script"]
+      }
+    },
+    {
+      "name": "une clé réseau est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        },
+        "network": { "endpoint": "x" }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["key:endpoint", "key:network"]
+      }
+    },
+    {
+      "name": "une clé url est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8,
+            "url": "x"
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["key:url"]
+      }
+    },
+    {
+      "name": "une URL dans une valeur est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "https://exemple.test/a.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["url"]
+      }
+    },
+    {
+      "name": "une URL data est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "data:image/png;base64,AAAA",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["url"]
+      }
+    },
+    {
+      "name": "une URL dans un texte de lens est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "aaaaaaaaaaaaaaaa.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "va sur https://x.test", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["url"]
+      }
+    },
+    {
+      "name": "une URL relative au protocole est interdite",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "//cdn.test/a.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["url"]
+      }
+    },
+    {
+      "name": "les interdits se cumulent, triés",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "http://a.test/x", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" },
+          { "kind": "shader", "id": "sh" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        },
+        "script": "s"
+      },
+      "expect": {
+        "status": "forbidden",
+        "reasons": ["key:script", "layer:shader", "url"]
+      }
+    },
+    {
+      "name": "un asset qui n'est pas adressé par contenu rend sa couche illisible, ignorée",
+      "input": {
+        "schema": 1,
+        "id": "aurore-polaire",
+        "name": "Aurore polaire",
+        "names": { "en": "Polar dawn", "ar": "فجر قطبي" },
+        "credits": { "author": "Studio Nord", "createdAt": "2026-10-01", "updatedAt": "2026-10-12" },
+        "surfaces": ["capture", "live"],
+        "cost": "standard",
+        "window": {
+          "startsAt": "2026-12-01T00:00:00Z",
+          "endsAt": "2026-12-31T23:59:59Z",
+          "geo": {
+            "countries": ["FR", "CA"]
+          },
+          "communities": ["64b7f0c2a1b2c3d4e5f60718"]
+        },
+        "layers": [
+          { "kind": "lut", "id": "grade", "asset": "grade.png", "intensity": 0.8 },
+          { "kind": "frame", "id": "cadre", "motif": "elegant.art-deco", "opacity": 0.9 },
+          {
+            "kind": "sticker",
+            "id": "couronne",
+            "asset": "bbbbbbbbbbbbbbbb.png",
+            "anchor": { "type": "face", "point": "top-of-head", "dy": -0.1 },
+            "size": 0.6,
+            "rotation": 8
+          },
+          {
+            "kind": "sticker",
+            "id": "etoile",
+            "asset": "cccccccccccccccc.png",
+            "anchor": { "type": "screen", "x": 0.85, "y": 0.12 },
+            "size": 0.15
+          },
+          {
+            "kind": "text",
+            "id": "legende",
+            "text": { "fr": "Bonne année", "en": "Happy new year", "es": "Feliz año" },
+            "font": "Fraunces",
+            "color": "#FFFFFF",
+            "size": 0.07,
+            "anchor": { "type": "screen", "x": 0.5, "y": 0.9 }
+          },
+          { "kind": "particles", "id": "neige", "preset": "snow", "density": "mid" }
+        ],
+        "triggers": [
+          { "on": "onSmile", "action": "burst", "target": "neige" },
+          { "on": "onTap", "action": "hide", "target": "etoile" }
+        ],
+        "fallbacks": {
+          "reduced": {
+            "hide": ["neige"]
+          },
+          "minimal": {
+            "hide": ["neige", "couronne"]
+          }
+        }
+      },
+      "expect": {
+        "status": "ok",
+        "layerIds": ["cadre", "couronne", "etoile", "legende", "neige"],
+        "triggerCount": 2,
+        "ignoredLayers": 1,
+        "ignoredTriggers": 0
+      }
+    }
+  ]
+}
