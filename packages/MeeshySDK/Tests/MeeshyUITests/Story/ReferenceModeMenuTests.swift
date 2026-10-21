@@ -2,6 +2,7 @@ import Testing
 @testable import MeeshyUI
 @testable import MeeshySDK
 
+@MainActor
 struct ReferenceModeMenuTests {
 
     @Test func test_symbolName_isDistinctPerMode() {
