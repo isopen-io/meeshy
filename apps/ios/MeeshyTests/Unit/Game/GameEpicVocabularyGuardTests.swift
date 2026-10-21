@@ -11,18 +11,14 @@ import XCTest
 /// de la clé web `game.X` : la portée d'un motif et les noms la lisent sous ce nom-là. Et chaque `defaultValue` du jeu
 /// dit le français du catalogue, la langue source.
 ///
-/// Le français est livré ; les six autres langues le seront par la partie 2 du lot (#11179). Leur verdict est marqué
-/// ATTENDU (`XCTExpectFailure`, non strict) : la garde les lit déjà, et la partie 2 retire la langue de
-/// `awaitingPart2` dès qu'elle est conforme.
+/// Les sept langues sont sous la garde, sans exception. Que les clés communes au web disent, dans chaque langue, le
+/// texte du web au caractère près, c'est le témoin de parité `apps/web/src/lib/game/ios-catalog-parity.test.ts`.
 final class GameEpicVocabularyGuardTests: XCTestCase {
 
     // MARK: - Les langues
 
     /// Les sept langues du jeu, par leur code d'interface (le nom du fichier de lexique).
     private static let languages = ["fr", "en", "es", "de", "it", "pt", "ar"]
-
-    /// Les langues dont le texte iOS n'est pas encore aligné sur l'épopée : la partie 2 du lot (#11179).
-    private static let awaitingPart2: Set<String> = ["en", "es", "de", "it", "pt", "ar"]
 
     /// Le catalogue iOS nomme le portugais `pt-BR` ; le lexique, comme le web, `pt`.
     private static func catalogLocale(of language: String) -> String {
@@ -172,13 +168,6 @@ final class GameEpicVocabularyGuardTests: XCTestCase {
         }
     }
 
-    private func expectingPart2(_ language: String, _ check: () -> Void) {
-        guard Self.awaitingPart2.contains(language) else { return check() }
-        let options = XCTExpectedFailure.Options()
-        options.isStrict = false
-        XCTExpectFailure("\(language) : le texte iOS suit l'épopée à la partie 2 du lot (#11179)", options: options, failingBlock: check)
-    }
-
     // MARK: - Le témoin de la garde elle-même
 
     /// La garde voit un mot banni, et ne le voit pas dans une substitution ; sa portée lit `game2.X` comme `game.X`.
@@ -214,9 +203,7 @@ final class GameEpicVocabularyGuardTests: XCTestCase {
     func test_everyLanguageOfTheGame_hasItsLexicon() throws {
         let vocabularies = try vocabularies()
         for language in Self.languages {
-            expectingPart2(language) {
-                XCTAssertNotNil(vocabularies[language], "\(language).json manque dans packages/shared/design/game-epic-vocabulary")
-            }
+            XCTAssertNotNil(vocabularies[language], "\(language).json manque dans packages/shared/design/game-epic-vocabulary")
         }
     }
 
@@ -227,11 +214,12 @@ final class GameEpicVocabularyGuardTests: XCTestCase {
         for language in Self.languages {
             let table = try gameValues(locale: Self.catalogLocale(of: language))
             XCTAssertGreaterThan(table.count, 1_000, "\(language) : le balayage ne voit presque rien du jeu")
-            let violations = try vocabularies[language].map { try Self.bannedWords($0, in: table) }
-            expectingPart2(language) {
-                guard let violations else { return XCTFail("\(language) : pas de lexique, pas de garde") }
-                XCTAssertTrue(violations.isEmpty, "\(language) : \(violations.count) mots bannis\n" + violations.map(\.description).joined(separator: "\n"))
+            guard let vocabulary = vocabularies[language] else {
+                XCTFail("\(language) : pas de lexique, pas de garde")
+                continue
             }
+            let violations = try Self.bannedWords(vocabulary, in: table)
+            XCTAssertTrue(violations.isEmpty, "\(language) : \(violations.count) mots bannis\n" + violations.map(\.description).joined(separator: "\n"))
         }
     }
 
@@ -239,11 +227,12 @@ final class GameEpicVocabularyGuardTests: XCTestCase {
         let vocabularies = try vocabularies()
         for language in Self.languages {
             let table = try gameValues(locale: Self.catalogLocale(of: language))
-            let misnamed = vocabularies[language].map { Self.misnamed($0, in: table) }
-            expectingPart2(language) {
-                guard let misnamed else { return XCTFail("\(language) : pas de lexique, pas de garde") }
-                XCTAssertTrue(misnamed.isEmpty, "\(language) : noms qui divergent\n" + misnamed.joined(separator: "\n"))
+            guard let vocabulary = vocabularies[language] else {
+                XCTFail("\(language) : pas de lexique, pas de garde")
+                continue
             }
+            let misnamed = Self.misnamed(vocabulary, in: table)
+            XCTAssertTrue(misnamed.isEmpty, "\(language) : noms qui divergent\n" + misnamed.joined(separator: "\n"))
         }
     }
 
