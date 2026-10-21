@@ -313,7 +313,7 @@ final class OverlayAudioPlayer: ObservableObject, AudiblyPlayingPlayer, Interrup
         }
     }
 
-    deinit {
+    nonisolated deinit {
         if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
         if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         NotificationCenter.default.removeObserver(self)

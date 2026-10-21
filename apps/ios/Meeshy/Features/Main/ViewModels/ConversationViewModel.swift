@@ -594,7 +594,7 @@ class ConversationViewModel: ObservableObject {
     /// une extension Swift ne peut pas déclarer de propriété stockée.
     var storeRefreshGeneration: Int = 0
 
-    deinit {
+    nonisolated deinit {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
         newerPagesChain?.cancel()
