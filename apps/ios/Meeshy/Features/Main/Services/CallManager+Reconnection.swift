@@ -55,7 +55,7 @@ extension CallManager {
         }
 
         reconnectAttempt += 1
-        analyticsTotalReconnects += 1
+        analytics.totalReconnects += 1
         guard reconnectAttempt <= QualityThresholds.maxReconnectAttempts else {
             if callUsesCallKit, let uuid = activeCallUUID {
                 callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)

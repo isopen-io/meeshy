@@ -5085,7 +5085,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analyticsCallInitiatedDate = Date()"),
+            body.contains("analytics.callInitiatedDate = Date()"),
             "startCall must stamp analyticsCallInitiatedDate so setupTimeMs measures " +
             "the interval from initiation to first connected state."
         )
@@ -5102,7 +5102,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             ?? source.endIndex
         let body = String(source[funcRange.lowerBound..<bodyEnd])
         XCTAssertTrue(
-            body.contains("analyticsCallInitiatedDate = Date()"),
+            body.contains("analytics.callInitiatedDate = Date()"),
             "handleIncomingCallNotification must stamp analyticsCallInitiatedDate so setupTimeMs " +
             "measures the interval from incoming ring to first connected state."
         )
@@ -5137,7 +5137,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("analyticsCallInitiatedDate"),
+            source.contains("initiatedAt: callInitiatedDate"),
             "setupTimeMs must use analyticsCallInitiatedDate (set at call initiation) — " +
             "using callStartDate would always produce 0 because it is set at the same " +
             "instant as analyticsConnectedDate (both in transitionToConnected)."
@@ -5181,26 +5181,15 @@ final class CallManagerAnalyticsTests: XCTestCase {
         guard let body = emitAnalyticsBody(in: source) else {
             XCTFail("emitCallAnalyticsIfNeeded not found in CallManager.swift"); return
         }
-        let accumulators = [
-            "analyticsCallInitiatedDate = nil",
-            "analyticsConnectedDate = nil",
-            "analyticsNetworkTransitions = 0",
-            "analyticsQualitySeconds = [:]",
-            "analyticsLastQualityDate = nil",
-            "analyticsCurrentLevel = nil",
-            "analyticsRttSum = 0",
-            "analyticsSampleCount = 0",
-            "analyticsMaxPacketLoss = 0",
-            "analyticsPacketLossSum = 0",
-            "analyticsEffectsUsed = []",
-        ]
-        for accumulator in accumulators {
-            XCTAssertTrue(
-                body.contains(accumulator),
-                "emitCallAnalyticsIfNeeded must reset \(accumulator) — " +
-                "otherwise the next call inherits stale telemetry from the previous one."
-            )
-        }
+        XCTAssertTrue(
+            body.contains("analytics.resetAccumulators()"),
+            "emitCallAnalyticsIfNeeded must reset the recorder after emission — " +
+            "otherwise the next call inherits stale telemetry from the previous one."
+        )
+        XCTAssertTrue(
+            source.contains("self = CallAnalyticsRecorder()"),
+            "The recorder reset must restore the initial value, accumulator by accumulator."
+        )
     }
 
     /// The analytics `ANALYTICS` event key must be defined in `CALL_EVENTS` in the
@@ -5251,7 +5240,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("attemptReconnection not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("analyticsTotalReconnects += 1"),
+            body.contains("analytics.totalReconnects += 1"),
             "attemptReconnection must increment analyticsTotalReconnects alongside " +
             "reconnectAttempt, so the cumulative count survives across reconnect cycles."
         )
@@ -5272,7 +5261,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             "transitionToConnected must still reset the live reconnectAttempt budget."
         )
         XCTAssertFalse(
-            body.contains("analyticsTotalReconnects"),
+            body.contains("analytics.totalReconnects"),
             "transitionToConnected must NOT reset analyticsTotalReconnects — it accumulates " +
             "across the whole call and is only cleared in endCallInternal."
         )
@@ -5286,7 +5275,7 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("endCallInternal not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains("analyticsTotalReconnects = 0"),
+            body.contains("analytics.totalReconnects = 0"),
             "endCallInternal must reset analyticsTotalReconnects so the next call starts clean."
         )
     }
@@ -5299,12 +5288,8 @@ final class CallManagerAnalyticsTests: XCTestCase {
     /// `emitCallAnalyticsIfNeeded` itself.
     func test_emitCallAnalyticsSnapshot_usesTotalReconnectsForReconnectionCount() throws {
         let source = try callManagerSource()
-        guard let snapshotRange = source.range(of: "private func emitCallAnalyticsSnapshot(") else {
-            XCTFail("emitCallAnalyticsSnapshot not found in CallManager.swift"); return
-        }
-        let snapshotBody = String(source[snapshotRange.lowerBound...].prefix(2600))
         XCTAssertTrue(
-            snapshotBody.contains("\"reconnectionCount\":   analyticsTotalReconnects"),
+            source.contains("\"reconnectionCount\":   totalReconnects"),
             "The analytics payload must report analyticsTotalReconnects (cumulative), not " +
             "reconnectAttempt (the live, per-cycle FSM retry budget zeroed on every reconnect)."
         )
@@ -5334,17 +5319,17 @@ final class CallManagerAnalyticsTests: XCTestCase {
             XCTFail("didCollectStats not found in CallManager.swift"); return
         }
         XCTAssertTrue(
-            body.contains(#"analyticsEffectsUsed.insert("backgroundBlur")"#),
+            source.contains(#"effectsUsed.insert("backgroundBlur")"#) && body.contains("backgroundBlur: filterConfig.backgroundBlurEnabled"),
             "didCollectStats must insert \"backgroundBlur\" into analyticsEffectsUsed when " +
             "filterConfig.backgroundBlurEnabled is set — otherwise the field stays empty forever."
         )
         XCTAssertTrue(
-            body.contains(#"analyticsEffectsUsed.insert("skinSmoothing")"#),
+            source.contains(#"effectsUsed.insert("skinSmoothing")"#) && body.contains("skinSmoothing: filterConfig.skinSmoothingEnabled"),
             "didCollectStats must insert \"skinSmoothing\" into analyticsEffectsUsed when " +
             "filterConfig.skinSmoothingEnabled is set."
         )
         XCTAssertTrue(
-            body.contains(#"analyticsEffectsUsed.insert("colorFilter")"#),
+            source.contains(#"effectsUsed.insert("colorFilter")"#) && body.contains("colorFilter: filterConfig.isEnabled"),
             "didCollectStats must insert \"colorFilter\" into analyticsEffectsUsed when a " +
             "color-grading preset (filterConfig.isEnabled) is active."
         )
@@ -6272,13 +6257,13 @@ final class CallSetupMetricsTests: XCTestCase {
             source.contains("callSetupMetrics"),
             "emitCallAnalyticsIfNeeded must compute metrics via the pure CallReliabilityPolicy.callSetupMetrics"
         )
-        let anchorCount = source.components(separatedBy: "analyticsNegotiationStartDate = Date()").count - 1
+        let anchorCount = source.components(separatedBy: "analytics.negotiationStartDate = Date()").count - 1
         XCTAssertGreaterThanOrEqual(
             anchorCount, 2,
             "The negotiation anchor must be stamped on BOTH sides: answerCall (callee) and participant-joined (caller)"
         )
         XCTAssertTrue(
-            source.contains("analyticsNegotiationStartDate = nil"),
+            source.contains("analytics.resetAccumulators()"),
             "The negotiation anchor must be reset per call"
         )
     }
@@ -6354,7 +6339,7 @@ final class CallAnalyticsSnapshotTests: XCTestCase {
         }
         let body = String(source[fnRange.lowerBound...].prefix(900))
         XCTAssertFalse(
-            body.contains("analyticsQualitySeconds[prevLevel, default: 0] +="),
+            body.contains("qualitySeconds[previousLevel, default: 0] +="),
             "The final emit must not mutate the quality accumulators — the open window is folded in PURELY by CallReliabilityPolicy.qualityDistribution"
         )
     }

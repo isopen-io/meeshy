@@ -267,7 +267,7 @@ extension CallManager {
             hasExistingStartDate: callStartDate != nil
         ) {
             callStartDate = Date()
-            analyticsConnectedDate = callStartDate
+            analytics.connectedDate = callStartDate
             callDuration = 0
         }
         // Snapshots analytics périodiques — idempotent (les reconnexions

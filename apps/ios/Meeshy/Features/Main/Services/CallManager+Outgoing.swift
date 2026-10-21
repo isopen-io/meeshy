@@ -106,7 +106,7 @@ extension CallManager {
             return false
         }
 
-        analyticsCallInitiatedDate = Date()
+        analytics.callInitiatedDate = Date()
 
         // Optimistic local state — `currentCallId` is reassigned to the real
         // gateway-issued ObjectId once the ACK lands.
@@ -341,7 +341,7 @@ extension CallManager {
             return false
         }
 
-        analyticsCallInitiatedDate = Date()
+        analytics.callInitiatedDate = Date()
         currentCallId = callId
         CallResumeLedger.shared.begin(callId)
         self.remoteUserId = remoteUserId
