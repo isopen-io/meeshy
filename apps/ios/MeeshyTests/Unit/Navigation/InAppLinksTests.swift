@@ -65,7 +65,7 @@ final class InAppLinksTests: XCTestCase {
         let ipad = try String(contentsOf: views.appendingPathComponent("RootLayers/iPadRootViewLayers.swift"),
                               encoding: .utf8)
         let politiqueIPad = try XCTUnwrap(ipad.range(of: ".inAppLinks(router: router)"))
-        let lecteurIPad = try XCTUnwrap(ipad.range(of: ".fullScreenCover(isPresented: $showStoryViewerFromConv)"))
+        let lecteurIPad = try XCTUnwrap(ipad.range(of: ".modifier(StoryReaderCover("))
         XCTAssertGreaterThan(politiqueIPad.lowerBound, lecteurIPad.lowerBound,
                              "iPad : `.inAppLinks` doit envelopper la couche qui présente le lecteur de story")
     }
