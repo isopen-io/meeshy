@@ -232,7 +232,12 @@ function VideoDuo({ call, language, self }: Pick<StageProps, 'call' | 'language'
     onWheel: pinch.onWheel,
   };
   const cornerFrame = useRef<HTMLDivElement>(null);
-  useFlip(cornerFrame, { key: cornerShown ? `${corner}:${size.width}x${size.height}` : null, duration: SELF_TILE_FLIP_MS, easing: 'ease-out' });
+  useFlip(cornerFrame, {
+    key: cornerShown ? `${corner}:${size.width}x${size.height}:${offset === null ? 'rest' : 'held'}` : null,
+    held: offset !== null,
+    duration: SELF_TILE_FLIP_MS,
+    easing: 'ease-out',
+  });
   const tileBox = offset === null ? rest : { ...rest, x: rest.x + offset.dx, y: rest.y + offset.dy };
   const onArrow = (event: KeyboardEvent<HTMLButtonElement>): void => {
     const next = swapped ? null : cornerAfterArrow(corner, event.key);

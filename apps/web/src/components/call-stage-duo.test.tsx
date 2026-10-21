@@ -100,8 +100,10 @@ function withFlipProbe(run: () => void, { reducedMotion = false }: { readonly re
     return { cancel: () => undefined };
   };
   proto.getBoundingClientRect = function rect(this: HTMLElement) {
-    const left = this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300;
-    return { left, top: 80, right: left, bottom: 80, width: 0, height: 0, x: left, y: 80, toJSON: () => ({}) };
+    const moved = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(this.style.transform);
+    const left = (this.getAttribute('data-call-self-tile-corner') === 'top-left' ? 20 : 300) + Number(moved?.[1] ?? 0);
+    const top = 80 + Number(moved?.[2] ?? 0);
+    return { left, top, right: left, bottom: top, width: 0, height: 0, x: left, y: top, toJSON: () => ({}) };
   };
   Object.defineProperty(window, 'matchMedia', { configurable: true, value: () => ({ matches: reducedMotion }) });
   try {
@@ -220,6 +222,17 @@ describe('ma vignette se glisse de coin en coin (#8747)', () => {
       view.done();
     });
     expect(played).toEqual([[{ transform: 'translate(280px, 0px)' }, { transform: 'none' }]]);
+  });
+
+  test('lâchée près de son coin, elle y revient en FLIP depuis le doigt — ni saut, ni rien pendant le glissé', () => {
+    fresh();
+    const played = withFlipProbe(() => {
+      const view = mount();
+      view.drag(-40, 60);
+      expect(view.frame().getAttribute('data-call-self-tile-corner')).toBe('top-right');
+      view.done();
+    });
+    expect(played).toEqual([[{ transform: 'translate(-40px, 60px)' }, { transform: 'none' }]]);
   });
 
   test('mouvement réduit : le retour au coin est sec', () => {

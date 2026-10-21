@@ -17,12 +17,21 @@ const pointOf = (element: HTMLElement | null): FlipPoint | null => {
  * précédent : la page a pu défiler entre les deux, et ce défilement n'est pas
  * un déplacement. Rien n'est mesuré tant que la clé ne change pas, et un rendu
  * qui la garde n'interrompt pas le mouvement en cours. `key: null` désarme le
- * crochet. Le mouvement est la loi pure `flipKeyframes` — `transform` et
- * `opacity`, rien d'autre — et « réduire le mouvement » rend la bascule sèche.
+ * crochet. `held` dit que l'état d'arrivée est TENU par le doigt : rien ne s'y
+ * joue (le mouvement en cours s'interrompt, le doigt a la main), et le lâcher,
+ * qui change la clé, repart de là où le doigt l'a laissé. Le mouvement est la
+ * loi pure `flipKeyframes` — `transform` et `opacity`, rien d'autre — et
+ * « réduire le mouvement » rend la bascule sèche.
  */
 export function useFlip(
   ref: RefObject<HTMLElement | null>,
-  { key, duration, easing, fadeFrom }: { readonly key: string | null; readonly duration: number; readonly easing: string; readonly fadeFrom?: number },
+  {
+    key,
+    duration,
+    easing,
+    fadeFrom,
+    held = false,
+  }: { readonly key: string | null; readonly duration: number; readonly easing: string; readonly fadeFrom?: number; readonly held?: boolean },
 ): void {
   const committed = useRef<string | null>(null);
   const first = useRef<FlipPoint | null>(null);
@@ -39,7 +48,7 @@ export function useFlip(
     if (element === null || key === null || before === null || before === key || from === null) return;
     running.current?.cancel();
     running.current = null;
-    if (typeof element.animate !== 'function') return;
+    if (held || typeof element.animate !== 'function') return;
     const last = pointOf(element);
     if (last === null) return;
     const frames = flipKeyframes({ first: from, last, reducedMotion: prefersReducedMotion(), ...(fadeFrom === undefined ? {} : { fadeFrom }) });

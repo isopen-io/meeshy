@@ -54,11 +54,11 @@ afterEach(() => {
   else Object.defineProperty(HTMLElement.prototype, 'getBoundingClientRect', realRect);
 });
 
-type ProbeProps = { readonly flipKey: string | null; readonly y?: number; readonly fadeFrom?: number };
+type ProbeProps = { readonly flipKey: string | null; readonly y?: number; readonly fadeFrom?: number; readonly held?: boolean };
 
-function Probe({ flipKey, y = 0, fadeFrom }: ProbeProps) {
+function Probe({ flipKey, y = 0, fadeFrom, held }: ProbeProps) {
   const ref = useRef<HTMLDivElement>(null);
-  useFlip(ref, { key: flipKey, duration: 250, easing: 'ease-out', ...(fadeFrom === undefined ? {} : { fadeFrom }) });
+  useFlip(ref, { key: flipKey, duration: 250, easing: 'ease-out', ...(fadeFrom === undefined ? {} : { fadeFrom }), ...(held === undefined ? {} : { held }) });
   return <div ref={ref} data-probe="" data-y={y} />;
 }
 
@@ -127,6 +127,18 @@ describe('useFlip', () => {
     await render({ flipKey: 'c', y: 100 });
     expect(played).toHaveLength(2);
     expect(cancelled).toBe(1);
+  });
+
+  test('un état TENU par le doigt ne se joue pas (il interrompt le mouvement) ; le lâcher repart de là où le doigt l’a laissé', async () => {
+    stub();
+    await render({ flipKey: 'rest', y: 100 });
+    await render({ flipKey: 'other', y: 200 });
+    await render({ flipKey: 'held', y: 260, held: true });
+    expect(played).toHaveLength(1);
+    expect(cancelled).toBe(1);
+    await render({ flipKey: 'rest', y: 100 });
+    expect(played).toHaveLength(2);
+    expect(played[1]?.frames).toEqual([{ transform: 'translate(0px, 160px)' }, { transform: 'none' }]);
   });
 
   test('un premier rendu ne joue rien ; une clé nulle désarme le crochet', async () => {
