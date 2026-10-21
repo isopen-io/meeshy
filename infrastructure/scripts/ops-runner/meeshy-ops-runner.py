@@ -17,8 +17,13 @@ systemd .path reveille ce runner, qui :
     jamais `system prune`) ; la purge vaut pour tout l'hote, production comprise :
     elle prend le verrou de la promotion de la production, pour ne jamais
     effacer l'image qu'une promotion vient de tirer et n'a pas encore demarree ;
-  - publie l'etat dans state/ops.json et l'usage Docker dans state/docker.json,
-    seuls fichiers montes (en lecture seule) dans la passerelle.
+  - publie l'etat dans state/ops.json, l'usage Docker dans state/docker.json et
+    l'etat des conteneurs de SON environnement dans state/containers.json (#11441),
+    seuls fichiers montes (en lecture seule) dans la passerelle. Les conteneurs sont
+    ceux du projet compose dont le dossier est /opt/meeshy/<env> : staging ne voit
+    jamais la production. Rien n'en est publie hors du contrat (nom, service,
+    image et sa date, etat, sante, demarrage, consommation, reseaux, ports) : ni
+    variable d'environnement, ni label, ni commande, ni montage.
 
 Execute par `python3 -I` (aucun module du dossier courant n'est importe).
 
@@ -89,6 +94,8 @@ class Paths:
         self.rejected = os.path.join(base, "rejected")
         self.ops_file = os.path.join(self.state, "ops.json")
         self.docker_file = os.path.join(self.state, "docker.json")
+        self.containers_file = os.path.join(self.state, "containers.json")
+        self.compose_dir = os.environ.get("OPS_COMPOSE_DIR") or "/opt/meeshy/%s" % env
         self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup.service" % env
         self.backup_status = os.environ.get("OPS_BACKUP_STATUS_FILE") or "/opt/meeshy/%s/backup-status/etat.json" % env
 
@@ -239,13 +246,173 @@ def docker_usage():
     }
 
 
+# Les conteneurs de l'environnement (#11441). Le contrat est celui de
+# packages/shared/types/admin-ops-containers.ts : chaque champ est NORMALISE ici,
+# car la passerelle rejette le fichier entier au premier champ hors schema.
+CONTAINERS_MAX = 64
+CONTAINER_STATES = ("created", "running", "paused", "restarting", "removing", "exited", "dead")
+CONTAINER_HEALTHS = ("healthy", "unhealthy", "starting")
+DOCKER_INSTANT_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+HEX_RE = re.compile(r"^[0-9a-f]{12,}$")
+PORT_RE = re.compile(r"^(\d{1,5})/(tcp|udp|sctp)$")
+
+
+def docker_instant(text):
+    if not isinstance(text, str) or text.startswith("0001-"):
+        return None
+    match = DOCKER_INSTANT_RE.match(text)
+    if not match:
+        return None
+    millis = int(((match.group(2) or ".0")[1:] + "000")[:3])
+    offset = "+00:00" if match.group(3) == "Z" else match.group(3)
+    moment = datetime.datetime.fromisoformat(match.group(1) + offset)
+    return iso(moment.replace(microsecond=millis * 1000))
+
+
+def short_id(digest):
+    if not isinstance(digest, str):
+        return None
+    hexa = digest.split(":", 1)[-1]
+    return hexa[:12] if HEX_RE.match(hexa) else None
+
+
+def bounded(text, limit):
+    return text[:limit] if isinstance(text, str) else ""
+
+
+def whole(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, number)
+
+
+def pair(text):
+    left, _, right = (text or "").partition("/")
+    return parse_size(left.strip()), parse_size(right.strip())
+
+
+def container_stats(row, memory_limit):
+    try:
+        cpu = max(0.0, float(str(row.get("CPUPerc", "0")).strip().rstrip("%") or 0))
+    except ValueError:
+        cpu = 0.0
+    used, _ = pair(row.get("MemUsage"))
+    rx, tx = pair(row.get("NetIO"))
+    read, write = pair(row.get("BlockIO"))
+    return {
+        "cpuPercent": round(cpu, 2),
+        "memoryUsedBytes": used,
+        "memoryLimitBytes": memory_limit,
+        "netRxBytes": rx,
+        "netTxBytes": tx,
+        "blockReadBytes": read,
+        "blockWriteBytes": write,
+        "pids": whole(row.get("PIDs")),
+    }
+
+
+def container_ports(raw):
+    ports = []
+    seen = set()
+    for key in sorted((raw or {}).keys()):
+        match = PORT_RE.match(key or "")
+        if not match or not 1 <= int(match.group(1)) <= 65535:
+            continue
+        port, protocol = int(match.group(1)), match.group(2)
+        bindings = raw.get(key) or [None]
+        for binding in bindings:
+            host_port = whole((binding or {}).get("HostPort")) or None
+            if host_port is not None and host_port > 65535:
+                host_port = None
+            identity = (port, protocol, host_port)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            host_ip = bounded((binding or {}).get("HostIp"), 64) or None
+            ports.append({"containerPort": port, "protocol": protocol, "hostIp": host_ip if host_port else None, "hostPort": host_port})
+    ports.sort(key=lambda entry: (entry["hostPort"] is not None, entry["containerPort"]))
+    return ports[:32]
+
+
+def container_of(detail, image_dates, stats_by_id):
+    state = detail.get("State") or {}
+    config = detail.get("Config") or {}
+    labels = config.get("Labels") or {}
+    status = state.get("Status")
+    health = (state.get("Health") or {}).get("Status")
+    memory = whole((detail.get("HostConfig") or {}).get("Memory"))
+    running = status == "running"
+    networks = detail.get("NetworkSettings") or {}
+    name = bounded((detail.get("Name") or "").lstrip("/"), 128) or short_id(detail.get("Id")) or "?"
+    exit_code = state.get("ExitCode")
+    stats = stats_by_id.get(detail.get("Id")) if running else None
+    return {
+        "name": name,
+        "service": bounded(labels.get("com.docker.compose.service"), 128) or None,
+        "image": bounded(config.get("Image"), 256) or short_id(detail.get("Image")) or "?",
+        "imageId": short_id(detail.get("Image")),
+        "imageCreatedAt": image_dates.get(detail.get("Image")),
+        "state": status if status in CONTAINER_STATES else "dead",
+        "health": health if health in CONTAINER_HEALTHS else "none",
+        "startedAt": docker_instant(state.get("StartedAt")),
+        "finishedAt": None if running else docker_instant(state.get("FinishedAt")),
+        "restartCount": whole(detail.get("RestartCount")),
+        "exitCode": exit_code if isinstance(exit_code, int) and not isinstance(exit_code, bool) else None,
+        "stats": container_stats(stats, memory or None) if stats is not None else None,
+        "networks": [
+            {"name": bounded(network, 128), "ipAddress": bounded((settings or {}).get("IPAddress"), 64)}
+            for network, settings in sorted((networks.get("Networks") or {}).items())
+            if bounded(network, 128)
+        ][:16],
+        "ports": container_ports(networks.get("Ports")),
+    }
+
+
+def docker_json(args, check=True):
+    result = subprocess.run(["docker"] + args, capture_output=True, text=True, timeout=120, check=check)
+    return result.stdout
+
+
+def containers_usage(paths):
+    ids = [line.strip() for line in docker_json(
+        ["ps", "-a", "-q", "--no-trunc", "--filter", "label=com.docker.compose.project.working_dir=%s" % paths.compose_dir],
+    ).splitlines() if line.strip()][:CONTAINERS_MAX]
+    if not ids:
+        return {"measuredAt": iso(now_utc()), "containers": []}
+    details = json.loads(docker_json(["inspect"] + ids) or "[]")
+    image_ids = sorted({d.get("Image") for d in details if isinstance(d.get("Image"), str)})
+    # Une image retiree fait sortir `image inspect` en erreur, mais il imprime les autres.
+    images = json.loads(docker_json(["image", "inspect"] + image_ids, check=False) or "[]") if image_ids else []
+    image_dates = {image.get("Id"): docker_instant(image.get("Created")) for image in images if isinstance(image, dict)}
+    running = [d.get("Id") for d in details if (d.get("State") or {}).get("Status") == "running"]
+    stats_by_id = {}
+    if running:
+        for line in docker_json(["stats", "--no-stream", "--no-trunc", "--format", "{{json .}}"] + running).splitlines():
+            if line.strip():
+                row = json.loads(line)
+                stats_by_id[row.get("ID")] = row
+    containers = [container_of(detail, image_dates, stats_by_id) for detail in details if isinstance(detail, dict)]
+    containers.sort(key=lambda c: (c["service"] or c["name"], c["name"]))
+    return {"measuredAt": iso(now_utc()), "containers": containers}
+
+
 def publish_docker_usage(paths):
+    status = 0
     try:
         write_json_atomic(paths.docker_file, docker_usage())
     except (OSError, ValueError, subprocess.SubprocessError) as error:
         log("docker-df: echec (%s)" % type(error).__name__)
-        return 1
-    return 0
+        status = 1
+    # Les deux publications sont independantes : un echec de l'une ne retient pas
+    # l'autre, et une collecte ratee garde la derniere publication (rien n'est ecrit).
+    try:
+        write_json_atomic(paths.containers_file, containers_usage(paths))
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        log("containers: echec (%s)" % type(error).__name__)
+        status = 1
+    return status
 
 
 def run_backup(paths, started):

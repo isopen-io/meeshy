@@ -36,6 +36,14 @@ const NOW = '2026-10-12T22:00:00.000Z';
 const FAKES = {
   docker: `#!/usr/bin/env bash
 echo "docker $*" >> "$FAKE_LOG"
+if [[ "$1" == "ps" ]]; then
+  [[ "\${FAKE_FAIL:-}" == containers ]] && exit 1
+  [[ -n "\${FAKE_PS:-}" ]] && cat "$FAKE_PS"
+  exit 0
+fi
+if [[ "$1" == "inspect" ]]; then cat "$FAKE_INSPECT"; exit 0; fi
+if [[ "$1 $2" == "image inspect" ]]; then [[ -n "\${FAKE_IMAGES:-}" ]] && cat "$FAKE_IMAGES"; exit "\${FAKE_IMAGES_EXIT:-0}"; fi
+if [[ "$1" == "stats" ]]; then cat "$FAKE_STATS"; exit 0; fi
 if [[ "$1 $2" == "system df" ]]; then
   echo '{"Active":"20","Reclaimable":"18.1GB (28%)","Size":"64.63GB","TotalCount":"64","Type":"Images"}'
   echo '{"Active":"20","Reclaimable":"0B (0%)","Size":"388.3MB","TotalCount":"25","Type":"Containers"}'
@@ -314,5 +322,181 @@ describe('docker-df et init', () => {
     assert.equal(result.status, 2);
     const other = spawnSync('python3', ['-I', RUNNER, 'process', 'qa'], { env, encoding: 'utf8' });
     assert.equal(other.status, 2);
+  });
+});
+
+describe('docker-df publie les conteneurs de SON environnement (#11441)', () => {
+  const GATEWAY_ID = 'a'.repeat(64);
+  const MONGO_ID = 'b'.repeat(64);
+  const SECRET = 'JWT_SECRET=ne-doit-jamais-sortir';
+
+  const inspect = () => [
+    {
+      Id: GATEWAY_ID,
+      Name: '/meeshy-gateway-staging',
+      Image: 'sha256:3f1c2a9e8b7d6c5b4a3f1c2a9e8b7d6c5b4a3f1c2a9e8b7d6c5b4a3f1c2a9e8b',
+      RestartCount: 2,
+      State: {
+        Status: 'running',
+        ExitCode: 0,
+        StartedAt: '2026-10-11T20:00:00.123456789Z',
+        FinishedAt: '0001-01-01T00:00:00Z',
+        Health: { Status: 'healthy' },
+      },
+      Config: {
+        Image: 'isopen/meeshy-gateway:dev',
+        Env: [SECRET],
+        Cmd: ['node', 'server.js'],
+        Labels: { 'com.docker.compose.service': 'gateway-staging', 'traefik.http.routers.x.rule': 'Host(`secret`)' },
+      },
+      HostConfig: { Memory: 2147483648 },
+      Mounts: [{ Source: '/opt/meeshy/staging/.env' }],
+      NetworkSettings: {
+        Networks: { 'meeshy-staging-network': { IPAddress: '172.20.0.5' } },
+        Ports: { '3000/tcp': null, '443/tcp': [{ HostIp: '0.0.0.0', HostPort: '8443' }, { HostIp: '::', HostPort: '8443' }] },
+      },
+    },
+    {
+      Id: MONGO_ID,
+      Name: '/meeshy-database-staging',
+      Image: 'sha256:9e8b7d6c5b4a3f1c2a9e8b7d6c5b4a3f1c2a9e8b7d6c5b4a3f1c2a9e8b7d6c5b',
+      RestartCount: 0,
+      State: { Status: 'exited', ExitCode: 137, StartedAt: '2026-10-10T08:00:00Z', FinishedAt: '2026-10-12T21:00:00.5Z' },
+      Config: { Image: 'mongo:8.0', Env: [], Labels: { 'com.docker.compose.service': 'database-staging' } },
+      HostConfig: { Memory: 0 },
+      NetworkSettings: { Networks: { 'meeshy-staging-network': { IPAddress: '' } }, Ports: {} },
+    },
+  ];
+  const images = () => [
+    { Id: 'sha256:3f1c2a9e8b7d6c5b4a3f1c2a9e8b7d6c5b4a3f1c2a9e8b7d6c5b4a3f1c2a9e8b', Created: '2026-10-11T19:40:00.987654321Z' },
+  ];
+  const stats = () =>
+    [{ ID: GATEWAY_ID, CPUPerc: '3.20%', MemUsage: '256MiB / 2GiB', NetIO: '1.2MB / 3.4MB', BlockIO: '0B / 4.1kB', PIDs: '24' }]
+      .map((row) => JSON.stringify(row))
+      .join('\n');
+
+  const stage = (overrides = {}) => {
+    const files = {
+      FAKE_PS: path.join(root, 'ps.txt'),
+      FAKE_INSPECT: path.join(root, 'inspect.json'),
+      FAKE_IMAGES: path.join(root, 'images.json'),
+      FAKE_STATS: path.join(root, 'stats.txt'),
+    };
+    writeFileSync(files.FAKE_PS, `${GATEWAY_ID}\n${MONGO_ID}\n`);
+    writeFileSync(files.FAKE_INSPECT, JSON.stringify(overrides.inspect ?? inspect()));
+    writeFileSync(files.FAKE_IMAGES, JSON.stringify(images()));
+    writeFileSync(files.FAKE_STATS, stats());
+    return files;
+  };
+  const published = () => JSON.parse(readFileSync(path.join(base, 'state', 'containers.json'), 'utf8'));
+
+  it('ne demande que les conteneurs du projet compose de l’environnement (staging ne voit pas la production)', () => {
+    const result = run('docker-df', stage());
+    assert.equal(result.status, 0, result.stderr);
+    const ps = calls().find((line) => line.startsWith('docker ps'));
+    assert.equal(ps, 'docker ps -a -q --no-trunc --filter label=com.docker.compose.project.working_dir=/opt/meeshy/staging');
+  });
+
+  it('publie chaque conteneur à la forme du contrat : image et sa date, état, santé, démarrage, consommation, réseaux, ports', () => {
+    run('docker-df', stage());
+    assert.deepEqual(published(), {
+      measuredAt: NOW,
+      containers: [
+        {
+          name: 'meeshy-database-staging',
+          service: 'database-staging',
+          image: 'mongo:8.0',
+          imageId: '9e8b7d6c5b4a',
+          imageCreatedAt: null,
+          state: 'exited',
+          health: 'none',
+          startedAt: '2026-10-10T08:00:00.000Z',
+          finishedAt: '2026-10-12T21:00:00.500Z',
+          restartCount: 0,
+          exitCode: 137,
+          stats: null,
+          networks: [{ name: 'meeshy-staging-network', ipAddress: '' }],
+          ports: [],
+        },
+        {
+          name: 'meeshy-gateway-staging',
+          service: 'gateway-staging',
+          image: 'isopen/meeshy-gateway:dev',
+          imageId: '3f1c2a9e8b7d',
+          imageCreatedAt: '2026-10-11T19:40:00.987Z',
+          state: 'running',
+          health: 'healthy',
+          startedAt: '2026-10-11T20:00:00.123Z',
+          finishedAt: null,
+          restartCount: 2,
+          exitCode: 0,
+          stats: {
+            cpuPercent: 3.2,
+            memoryUsedBytes: 268_435_456,
+            memoryLimitBytes: 2_147_483_648,
+            netRxBytes: 1_200_000,
+            netTxBytes: 3_400_000,
+            blockReadBytes: 0,
+            blockWriteBytes: 4_100,
+            pids: 24,
+          },
+          networks: [{ name: 'meeshy-staging-network', ipAddress: '172.20.0.5' }],
+          ports: [
+            { containerPort: 3000, protocol: 'tcp', hostIp: null, hostPort: null },
+            { containerPort: 443, protocol: 'tcp', hostIp: '0.0.0.0', hostPort: 8443 },
+          ],
+        },
+      ],
+    });
+  });
+
+  it('ne publie AUCUN secret : ni variable d’environnement, ni label, ni commande, ni montage', () => {
+    run('docker-df', stage());
+    const raw = readFileSync(path.join(base, 'state', 'containers.json'), 'utf8');
+    for (const leak of ['JWT_SECRET', 'ne-doit-jamais-sortir', 'traefik', 'server.js', '.env', 'Mounts', 'Env']) {
+      assert.equal(raw.includes(leak), false, `« ${leak} » a traversé`);
+    }
+  });
+
+  it('un échec de la collecte des conteneurs ne retient pas l’usage Docker, et garde la dernière publication', () => {
+    run('docker-df', stage());
+    const before = readFileSync(path.join(base, 'state', 'containers.json'), 'utf8');
+    const result = run('docker-df', { ...stage(), FAKE_FAIL: 'containers' });
+    assert.equal(result.status, 1);
+    assert.ok(existsSync(path.join(base, 'state', 'docker.json')));
+    assert.equal(readFileSync(path.join(base, 'state', 'containers.json'), 'utf8'), before);
+  });
+
+  it('une image disparue (inspect partiel, code 1) laisse sa date à null sans perdre les autres', () => {
+    run('docker-df', { ...stage(), FAKE_IMAGES_EXIT: '1' });
+    const gateway = published().containers.find((c) => c.name === 'meeshy-gateway-staging');
+    assert.equal(gateway.imageCreatedAt, '2026-10-11T19:40:00.987Z');
+  });
+
+  it('un état inconnu de Docker ou un nom démesuré ne fait pas rejeter le fichier par la passerelle', () => {
+    const odd = inspect();
+    odd[0].State.Status = 'zombie';
+    odd[0].Name = `/${'x'.repeat(300)}`;
+    run('docker-df', stage({ inspect: odd }));
+    const first = published().containers.find((c) => c.service === 'gateway-staging');
+    assert.equal(first.state, 'dead');
+    assert.equal(first.name.length, 128);
+  });
+
+  it('la publication passe le schéma partagé que la passerelle applique (les deux productions, confrontées)', () => {
+    run('docker-df', stage());
+    const check = spawnSync(
+      'bun',
+      ['-e', `import { opsContainersFileSchema } from '${path.join(here, '../../../packages/shared/types/admin-ops-containers.ts')}'; const r = opsContainersFileSchema.safeParse(JSON.parse(await Bun.file(process.argv[1]).text())); console.log(r.success ? 'OK' : JSON.stringify(r.error.issues)); process.exit(r.success ? 0 : 1);`, path.join(base, 'state', 'containers.json')],
+      { encoding: 'utf8' },
+    );
+    if (check.error?.code === 'ENOENT') return;
+    assert.equal(check.status, 0, check.stdout + check.stderr);
+  });
+
+  it('sans aucun conteneur, la liste est vide et la commande réussit', () => {
+    const result = run('docker-df');
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(published(), { measuredAt: NOW, containers: [] });
   });
 });
