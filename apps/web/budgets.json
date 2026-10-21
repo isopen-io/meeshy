@@ -155,9 +155,9 @@
       "pattern": "^assets/post-media-upload-[A-Za-z0-9_-]+\\.js$",
       "dynamic_only": true,
       "kb": {
-        "value": 3,
-        "status": "CIBLE -- MESUREE PAR #6900 (REVUE-CORRECTION), NON ARBITREE",
-        "source": "Mesure de measure-weight.mjs le 2026-09-17 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,84 Ko gzip -9 -- le client TUS d'un `PostMedia` (`lib/api/post-media-upload.ts` : creation, tranches de 2 Mio, reprise sur 409/404/410, metadonnees UTF-8 en base64, pannes rendues en valeurs). CHARGE A LA DEMANDE par le studio de story a la PREMIERE selection de fichier (`import()`, `routes/story-compose.tsx`) : une story texte seul ne le telecharge jamais. `dynamic_only` garde cette voie unique -- un import statique le ferait payer a l'ouverture du studio. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
+        "value": 5,
+        "status": "REMESURE PAR LA REPRISE D UN ENVOI COUPE (#11311, 2026-10-21), NON ARBITREE -- PRECEDENT : CIBLE MESUREE PAR #6900 (REVUE-CORRECTION), NON ARBITREE",
+        "source": "REMESURE le 2026-10-21 par #11311 (un envoi coupe reprend apres rechargement ou mise en arriere-plan) : 3,8 Ko gzip -9 (`bun run build` puis `node scripts/measure-weight.mjs`), 1,84 Ko a l origine du client. Ce qui s ajoute au chunk : le checkpoint IndexedDB et l empreinte du fichier (`lib/api/tus-checkpoint.ts`), la reprise par HEAD, le bail par fichier, et le port d envoi de fond Background Fetch (`lib/api/tus-background.ts`) ; le relais du service worker (`public/sw-background-upload.js`) n est PAS dans le chunk. Tout reste a la demande, charge a la premiere selection de fichier. Plafond porte a ceil(3,8) + 1 = 5. PRECEDENT : Mesure de measure-weight.mjs le 2026-09-17 (`bun run build` puis `node scripts/measure-weight.mjs`) : 1,84 Ko gzip -9 -- le client TUS d'un `PostMedia` (`lib/api/post-media-upload.ts` : creation, tranches de 2 Mio, reprise sur 409/404/410, metadonnees UTF-8 en base64, pannes rendues en valeurs). CHARGE A LA DEMANDE par le studio de story a la PREMIERE selection de fichier (`import()`, `routes/story-compose.tsx`) : une story texte seul ne le telecharge jamais. `dynamic_only` garde cette voie unique -- un import statique le ferait payer a l'ouverture du studio. Arrondi au Ko SUPERIEUR (2) + 1 Ko de marge, meme discipline que les chunks voisins."
       }
     },
     "feed": {

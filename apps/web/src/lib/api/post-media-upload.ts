@@ -400,7 +400,8 @@ async function transmit(
      l'appelant. Une annulation de l'APPELANT reste une annulation. */
   const hidden = new AbortController();
   let backgrounded = false;
-  let wire: PostMediaUploadParams = params.signal === undefined ? { ...params, signal: hidden.signal } : { ...params, signal: anySignal([params.signal, hidden.signal]) };
+  let wire: PostMediaUploadParams =
+    port === null ? params : params.signal === undefined ? { ...params, signal: hidden.signal } : { ...params, signal: anySignal([params.signal, hidden.signal]) };
   const stopWatching =
     port === null
       ? () => undefined
@@ -460,7 +461,7 @@ async function transmit(
         if (realignments > MAX_OFFSET_REALIGNMENTS) return refusal(response);
         const relive = params.credential();
         if (relive === null) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
-        const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(relive), 'Tus-Resumable': TUS_RESUMABLE } }, wire);
+        const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(relive), 'Tus-Resumable': TUS_RESUMABLE } }, params);
         if (head.kind === 'failure') return head.failure;
         const served = head.response.status === 200 ? offsetOf(head.response) : null;
         if (served === null) return failure(409, 'Décalage serveur illisible', 'TUS_OFFSET_UNKNOWN');
@@ -474,7 +475,7 @@ async function transmit(
         restarted = true;
         const again = params.credential();
         if (again === null || again.kind !== credential.kind) return failure(401, 'Authentification requise', 'UNAUTHORIZED');
-        const recreated = await createUpload(wire, again);
+        const recreated = await createUpload(params, again);
         if (typeof recreated !== 'string') return recreated;
         location = recreated;
         offset = 0;
