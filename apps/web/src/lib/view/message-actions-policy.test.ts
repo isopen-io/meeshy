@@ -10,6 +10,7 @@ import { menuScope } from '@/test-support/menu-viewer';
 
 import {
   MAX_PRIMARY_MENU_ACTIONS,
+  menuConversationOf,
   menuViewerOf,
   messageMenuContextOf,
   messageMenuGroups,
@@ -218,6 +219,21 @@ describe('la forme du menu rapide', () => {
   test('« Supprimer » porte la variante destructive, séparée du reste', () => {
     const items = messageMenuItems(ctxOf(row({ senderId: 'u-viewer' })));
     expect(items.at(-1)).toMatchObject({ id: 'delete', group: 'destructive', glyph: 'trash' });
+  });
+});
+
+describe('menuConversationOf — la conversation que la loi lit', () => {
+  test('une conversation pas encore lue est jugée CHIFFRÉE : ni modification ni transfert avant de savoir', () => {
+    const unread: ActionScope = { viewer: menuScope().viewer, conversation: menuConversationOf(undefined) };
+    const all = ids(messageMenuItems(ctxOf(row({ senderId: 'u-viewer' }), unread, { canEdit: true })));
+    expect(all).not.toContain('edit');
+    expect(all).not.toContain('forward');
+  });
+
+  test('une conversation lue porte son type, son régime et ses règles d’écriture', () => {
+    expect(
+      menuConversationOf({ type: 'broadcast', encryptionMode: 'server', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin' }),
+    ).toEqual({ type: 'broadcast', encryptionMode: 'server', isActive: true, isAnnouncementChannel: true, defaultWriteRole: 'admin' });
   });
 });
 

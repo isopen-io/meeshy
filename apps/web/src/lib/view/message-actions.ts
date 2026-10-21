@@ -382,7 +382,7 @@ export function messageMenuGroups(ctx: MessageMenuContext): MessageMenuGroups {
   const deletes = verdicts !== undefined && (verdicts.deleteForEveryone || verdicts.deleteForMe) && labels(ctx);
   const destructive = deletes ? [entry('delete', 'destructive')] : [];
   if (ctx.gone === true) return { primary: [], organize: [], more: [], moderation: [], destructive };
-  const moderation = verdicts?.remove != null ? [entry('remove', 'moderation')] : [];
+  const moderation = verdicts?.remove != null && labels(ctx) ? [entry('remove', 'moderation')] : [];
   const notice = verdicts?.serverFeatureAbsence != null && labels(ctx) ? [entry('e2eeNotice', 'more')] : [];
   if (ctx.isViewOnce === true) return { primary: [], organize: [], more: [entry('more', 'more'), ...notice], moderation, destructive };
   const candidates = primaryCandidates(ctx);

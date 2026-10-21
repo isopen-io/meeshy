@@ -39,7 +39,7 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { menuConversationOf, menuViewerRegistered, type ActionScope } from './message-action-scope';
+import { menuViewerRegistered, type ActionScope } from './message-action-scope';
 import { contentExitOf, exitOffers } from './content-exit';
 import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
@@ -111,9 +111,6 @@ type TypeActionId = Extract<MessageActionId, 'openLink' | 'copyLink' | 'openInMa
 const TYPE_ACTIONS: ReadonlySet<MessageActionId> = new Set<TypeActionId>(['openLink', 'copyLink', 'openInMaps', 'copyAddress', 'saveContact']);
 const isTypeAction = (id: MessageActionId): id is TypeActionId => TYPE_ACTIONS.has(id);
 
-/** Une conversation que le fil n'a pas encore lue : un type inconnu, qui n'ouvre rien qui dépende du type. */
-const UNKNOWN_CONVERSATION: ActionConversation = menuConversationOf(undefined);
-
 /** Le menu d'un STICKER (#10630) : hors bibliothèque tant qu'elle n'est pas lue, l'ajout est offert — le doublon se déduplique côté serveur. */
 const stickerContextOf = (
   message: Message,
@@ -136,8 +133,8 @@ export function useMessageMenu(params: {
    * les verdicts de `messageActionsFor`.
    */
   readonly viewer: MenuViewer;
-  /** LA CONVERSATION (#11210, `menuConversationOf`) — type, régime de chiffrement, écriture ; absente : un type inconnu, qui n'ouvre rien. */
-  readonly conversation?: ActionConversation;
+  /** LA CONVERSATION (#11210, `menuConversationOf`) — type, régime de chiffrement, écriture ; non lue, son régime est inconnu, donc chiffré. */
+  readonly conversation: ActionConversation;
   /** L'ENVOI DU FIL (#11210, `useSend`) — « Réessayer » relance un envoi en échec ; absent, rien ne s'offre. */
   readonly send?: { readonly retry: (messageId: string) => void; readonly failed: (messageId: string) => boolean };
   /**
@@ -168,7 +165,7 @@ export function useMessageMenu(params: {
 }) {
   const { conversationId, messages, readerLanguages, announce, viewer, send } = params;
   const viewerId = viewer.id;
-  const conversation = params.conversation ?? UNKNOWN_CONVERSATION;
+  const { conversation } = params;
   /* LE LECTEUR ET LA CONVERSATION, PAR LEURS VALEURS — l'hôte les recompose à chaque rendu. */
   const scope = useMemo<ActionScope>(
     () => ({ viewer, conversation }),

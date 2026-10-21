@@ -17,8 +17,16 @@ export const menuViewer = (overrides: Partial<MenuViewer> = {}): MenuViewer => (
   ...overrides,
 });
 
-/** Le lecteur et sa conversation — un groupe ouvert, en clair, par défaut. */
-export const menuScope = (
-  viewer: Partial<MenuViewer> = {},
-  conversation: Partial<ActionScope['conversation']> = {},
-): ActionScope => ({ viewer: menuViewer(viewer), conversation: { type: 'group', encryptionMode: null, isActive: true, ...conversation } });
+/** La conversation des témoins — un groupe ouvert, en clair. */
+export const menuConversation = (overrides: Partial<ActionScope['conversation']> = {}): ActionScope['conversation'] => ({
+  type: 'group',
+  encryptionMode: null,
+  isActive: true,
+  ...overrides,
+});
+
+/** Le lecteur et sa conversation. */
+export const menuScope = (viewer: Partial<MenuViewer> = {}, conversation: Partial<ActionScope['conversation']> = {}): ActionScope => ({
+  viewer: menuViewer(viewer),
+  conversation: menuConversation(conversation),
+});

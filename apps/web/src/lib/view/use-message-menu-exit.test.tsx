@@ -12,7 +12,7 @@ import type { Message } from '@/lib/api/types';
 import { sharePlanOf } from '@/lib/send/share-entry';
 import { sendSheetStore } from '@/lib/send/send-sheet-store';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { menuViewer } from '@/test-support/menu-viewer';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -69,6 +69,7 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
       viewer: menuViewer({ hasAccount: false }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
     });

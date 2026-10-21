@@ -10,7 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { sendSheetStore, type SendSheetRequest } from '@/lib/send/send-sheet-store';
-import { menuViewer } from '@/test-support/menu-viewer';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -79,6 +79,7 @@ function mount(messages: readonly Message[]): { api: () => MenuApi; announced: s
       // message se LIT du serveur, donc `hasAccount: true` monterait une requête
       // qui n'a rien à voir avec ce qui est mesuré.
       viewer: menuViewer({ hasAccount: false }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
     });

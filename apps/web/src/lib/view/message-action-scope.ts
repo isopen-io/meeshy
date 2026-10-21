@@ -68,12 +68,19 @@ export function menuViewerOf(input: {
   };
 }
 
+/**
+ * Le régime d'une conversation que le fil n'a pas encore lue : INCONNU, donc
+ * chiffré pour la loi (`sharedTranslationServerReadsMessage`) — rien de ce qui
+ * ferait partir le clair ne s'offre avant de savoir.
+ */
+const UNREAD_REGIME = 'unread';
+
 /** La conversation que la loi lit — un type inconnu n'ouvre rien qui dépende du type. */
 export const menuConversationOf = (
   conversation: Pick<Conversation, 'type' | 'encryptionMode' | 'isActive' | 'isAnnouncementChannel' | 'defaultWriteRole'> | undefined,
 ): ActionConversation => ({
   type: conversation?.type ?? 'unknown',
-  encryptionMode: conversation?.encryptionMode ?? null,
+  encryptionMode: conversation === undefined ? UNREAD_REGIME : conversation.encryptionMode ?? null,
   isActive: conversation?.isActive ?? null,
   isAnnouncementChannel: conversation?.isAnnouncementChannel ?? null,
   defaultWriteRole: conversation?.defaultWriteRole ?? null,

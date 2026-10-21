@@ -11,7 +11,7 @@ import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { threadOf, threadPages } from '@/test-support/thread-cache';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
-import { menuViewer } from '@/test-support/menu-viewer';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -86,6 +86,7 @@ function mount(options: { readonly hasAccount?: boolean; readonly answer?: (requ
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
       viewer: menuViewer({ hasAccount: options.hasAccount ?? true }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
       queryClient,
