@@ -92,8 +92,10 @@ describe('le composeur d’une conversation chiffrée de bout en bout (#11216)',
     expect(band?.textContent).toBe('Conversation chiffrée de bout en bout : le web ne peut pas encore y écrire');
   });
 
-  test.each([null, 'server', 'hybrid'])('mode %s : le composeur reste libre (le serveur chiffre lui-même)', async (mode) => {
-    const host = await mount(<Probe conversation={conversation(`c-${String(mode)}`, { type: 'direct', encryptionMode: mode })} />);
-    expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+  test('modes en clair, server et hybrid : le composeur reste libre (le serveur chiffre lui-même)', async () => {
+    for (const mode of [null, 'server', 'hybrid']) {
+      const host = await mount(<Probe conversation={conversation(`c-${String(mode)}`, { type: 'direct', encryptionMode: mode })} />);
+      expect(host.querySelector('[data-probe-field]')).not.toBeNull();
+    }
   });
 });

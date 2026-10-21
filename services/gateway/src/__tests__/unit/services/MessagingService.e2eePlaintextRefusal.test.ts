@@ -190,6 +190,15 @@ describe('MessagingService.handleMessage — aucun clair dans une conversation e
     expect(mockPrisma.message.create).not.toHaveBeenCalled();
   });
 
+  it('un type « system » déclaré par le client n’ouvre pas la porte du clair', async () => {
+    conversationIn(E2EE);
+
+    const response = await service.handleMessage({ ...plaintext, messageType: 'system' } as MessageRequest, senderParticipantId);
+
+    expect(response.code).toBe(E2EE_PLAINTEXT_REFUSED);
+    expect(mockPrisma.message.create).not.toHaveBeenCalled();
+  });
+
   it('ne fabrique aucun lien suivi pour un clair refusé — rien du texte ne quitte la garde', async () => {
     conversationIn(E2EE);
 
