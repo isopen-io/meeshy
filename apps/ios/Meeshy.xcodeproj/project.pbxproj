@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		7EE49FC12E0BE141EFDFE4A9 /* GameFicheHierarchyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2D5E4034F296A95A7F16C09 /* GameFicheHierarchyTests.swift */; };
+		0C7B17240C329BCAEBB0DC4E /* ProgressionConceptFiche.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14A5A6BE8298CE9F36BE60D6 /* ProgressionConceptFiche.swift */; };
+		6694F41DE14E989BA25A8C73 /* GameFicheHeads.swift in Sources */ = {isa = PBXBuildFile; fileRef = E68A57AFB1927972A56B4F15 /* GameFicheHeads.swift */; };
+		A7A2DA063F28FFC2035D637B /* GameFicheCopy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC0D4EF6DFF27C43AA6DC4FA /* GameFicheCopy.swift */; };
+		16EC77D39AD5946B80097EC3 /* ProgressionFactIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0283942B8289430D7F5A0CE /* ProgressionFactIdentity.swift */; };
 		0008D7D5B479D759E7DBC760 /* MediaSaveDeduplicationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2624CEAC671EFD3549C7B59C /* MediaSaveDeduplicationTests.swift */; };
 		000948901E548E0CAC33E529 /* StatusBubbleControllerReplyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1ABF76B8551B950BB417F705 /* StatusBubbleControllerReplyTests.swift */; };
 		000DFCA6AC3E9CFFAC1E6305 /* CameraZoomPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49F4D0129AD7BD10774B4315 /* CameraZoomPolicyTests.swift */; };
@@ -3835,6 +3840,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D2D5E4034F296A95A7F16C09 /* GameFicheHierarchyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameFicheHierarchyTests.swift; sourceTree = "<group>"; };
+		14A5A6BE8298CE9F36BE60D6 /* ProgressionConceptFiche.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionConceptFiche.swift; sourceTree = "<group>"; };
+		E68A57AFB1927972A56B4F15 /* GameFicheHeads.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameFicheHeads.swift; sourceTree = "<group>"; };
+		CC0D4EF6DFF27C43AA6DC4FA /* GameFicheCopy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameFicheCopy.swift; sourceTree = "<group>"; };
+		A0283942B8289430D7F5A0CE /* ProgressionFactIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionFactIdentity.swift; sourceTree = "<group>"; };
 		000DC6B58B09C752A55AB41D /* RiverStreamHostSourceGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RiverStreamHostSourceGuardTests.swift; sourceTree = "<group>"; };
 		000EBA9963DBF574F94AE01B /* ConversationAudioCoordinator+NowPlaying.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationAudioCoordinator+NowPlaying.swift"; sourceTree = "<group>"; };
 		005826130DD0EA048C6BDD71 /* LentilleSkeletonRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LentilleSkeletonRow.swift; sourceTree = "<group>"; };
@@ -8969,6 +8979,7 @@
 				14F9C8E0A7C1C4E2C046F80F /* ProgressionChromeGuardTests.swift */,
 				AE71F47EE2AE17FE8B4249BD /* ProgressionConceptGuardTests.swift */,
 				54465F37E0F47C83394F560E /* ProgressionConceptModelTests.swift */,
+				D2D5E4034F296A95A7F16C09 /* GameFicheHierarchyTests.swift */,
 				E9F3B525A4A78E878ADF5644 /* ProgressionNoSidewaysScrollTests.swift */,
 				20872039C8574AB5CA067A4C /* ProgressionViewModelGameTests.swift */,
 			);
@@ -10017,6 +10028,10 @@
 				1E6CCB12BAA81EF538D06A01 /* PlayerBannerHost.swift */,
 				E8757F4158E6DFB6313BA369 /* ProgressionConceptCopy.swift */,
 				409A3B3FBA2AD95427E8094C /* ProgressionConceptModel.swift */,
+				14A5A6BE8298CE9F36BE60D6 /* ProgressionConceptFiche.swift */,
+				E68A57AFB1927972A56B4F15 /* GameFicheHeads.swift */,
+				CC0D4EF6DFF27C43AA6DC4FA /* GameFicheCopy.swift */,
+				A0283942B8289430D7F5A0CE /* ProgressionFactIdentity.swift */,
 				9AA256F7A8B8DE0BE5B32CE3 /* ProgressionConceptPage.swift */,
 				2BE94EBC4A747E8BC1CB7369 /* ProgressionConceptViews.swift */,
 				1CECDFDE661C5F0BE26FC93E /* ProgressionFrontList.swift */,
@@ -14331,6 +14346,10 @@
 				108E7C0625847E5E366B6E2A /* ProgressionComponents.swift in Sources */,
 				FDA961EA74AB43817994C186 /* ProgressionConceptCopy.swift in Sources */,
 				C5D5819120DCDFA15CB97499 /* ProgressionConceptModel.swift in Sources */,
+				0C7B17240C329BCAEBB0DC4E /* ProgressionConceptFiche.swift in Sources */,
+				6694F41DE14E989BA25A8C73 /* GameFicheHeads.swift in Sources */,
+				A7A2DA063F28FFC2035D637B /* GameFicheCopy.swift in Sources */,
+				16EC77D39AD5946B80097EC3 /* ProgressionFactIdentity.swift in Sources */,
 				A68175B0512C21E8D1A709CE /* ProgressionConceptPage.swift in Sources */,
 				F1986ED6352B2DDC9BA2F5A2 /* ProgressionConceptViews.swift in Sources */,
 				F12EC1D7157AF62385FCBF09 /* ProgressionCopy.swift in Sources */,
@@ -16030,6 +16049,7 @@
 				20B09DDD0626F942E73C6C31 /* ProgressionChromeGuardTests.swift in Sources */,
 				F8284EB0C4BB6618478E0B92 /* ProgressionConceptGuardTests.swift in Sources */,
 				22833CDEF908293D45337776 /* ProgressionConceptModelTests.swift in Sources */,
+				7EE49FC12E0BE141EFDFE4A9 /* GameFicheHierarchyTests.swift in Sources */,
 				CA1A43E588C940A740C2A2BE /* ProgressionElansHeroTests.swift in Sources */,
 				DF654D3958D672E82FF75355 /* ProgressionHeroWiringTests.swift in Sources */,
 				9150D5875F2C96996428F71D /* ProgressionLastAchievementHeroTests.swift in Sources */,
