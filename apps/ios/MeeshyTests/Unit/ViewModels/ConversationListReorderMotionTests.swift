@@ -21,6 +21,34 @@ final class ConversationListReorderMotionTests: XCTestCase {
         XCTAssertEqual(ConversationListReorderMotion.dampingFraction, 0.86, accuracy: 0.0001)
     }
 
+    func test_isBumpToTop_oneConversationRisesOthersKeepTheirOrder_isTrue() {
+        XCTAssertTrue(ConversationListReorderMotion.isBumpToTop(from: ["a", "b", "c", "d"], to: ["c", "a", "b", "d"]))
+    }
+
+    func test_isBumpToTop_filterSwitch_isFalse() {
+        XCTAssertFalse(
+            ConversationListReorderMotion.isBumpToTop(from: ["a", "b", "c", "d"], to: ["c", "d"]),
+            "passer de « Tous » à « Non lus » remplace la liste, sans ressort"
+        )
+    }
+
+    func test_isBumpToTop_paginationAppend_isFalse() {
+        XCTAssertFalse(
+            ConversationListReorderMotion.isBumpToTop(from: ["a", "b"], to: ["a", "b", "c", "d"]),
+            "une page ajoutée s'insère sans ressort pendant la décélération"
+        )
+    }
+
+    func test_isBumpToTop_rewrittenOrderOrOtherAccount_isFalse() {
+        XCTAssertFalse(ConversationListReorderMotion.isBumpToTop(from: ["a", "b", "c"], to: ["c", "b", "a"]))
+        XCTAssertFalse(ConversationListReorderMotion.isBumpToTop(from: ["a", "b", "c"], to: ["x", "y", "z"]))
+    }
+
+    func test_isBumpToTop_unchangedOrHeadAlreadyOnTop_isFalse() {
+        XCTAssertFalse(ConversationListReorderMotion.isBumpToTop(from: ["a", "b"], to: ["a", "b"]))
+        XCTAssertFalse(ConversationListReorderMotion.isBumpToTop(from: [], to: []))
+    }
+
     func test_isScrolling_recentTick_isTrue() {
         let now = Date(timeIntervalSince1970: 1_000)
 
