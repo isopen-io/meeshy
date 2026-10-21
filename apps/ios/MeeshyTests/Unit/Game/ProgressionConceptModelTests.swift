@@ -101,27 +101,29 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertTrue(line.lowercased().contains("décembre"), line)
     }
 
-    // MARK: - La carte à trois étages (amendement porteur)
+    // MARK: - La carte à trois étages (#11180, épopée § 5)
 
-    func test_everyServedConcept_showsAValue_atLeastOneImportantDatum_itsWhy_andItsHow() {
+    func test_everyServedConcept_showsANameAValueAndAtMostOneLine_neverRepeatingTheValue() {
         let full = GameWave2Fixture.game()
         for (label, game) in [("jeu complet", Optional(full)), ("jeu sans vague 2", Optional(GameFixture.game())), ("ancien serveur", nil)] {
             for card in ProgressionConceptModel.cards(progress: progress(game), game: game) {
                 let key = "\(card.concept.rawValue) (\(label))"
                 XCTAssertFalse(card.name.isEmpty, "\(key) : pas de nom")
                 XCTAssertFalse(card.value.isEmpty, "\(key) : pas de valeur")
-                XCTAssertFalse(card.chips.isEmpty, "\(key) : aucune donnée importante")
-                XCTAssertLessThanOrEqual(card.chips.count, ProgressionConceptModel.maxChips, "\(key) : trois données au plus")
-                XCTAssertEqual(Set(card.chips).count, card.chips.count, "\(key) : une donnée répétée")
-                XCTAssertFalse(card.chips.contains(""), "\(key) : une pastille vide")
-                XCTAssertFalse(card.why.isEmpty, "\(key) : pas de « à quoi ça sert »")
-                XCTAssertFalse(card.how.isEmpty, "\(key) : pas de « comment ça marche »")
-                XCTAssertNotEqual(card.why, card.how, "\(key) : le pourquoi et le comment sont deux phrases")
+                if let line = card.line {
+                    XCTAssertFalse(line.text.isEmpty, "\(key) : une ligne vide")
+                    XCTAssertFalse(line.facts.contains(card.valueFact), "\(key) : la ligne redit le fait de la valeur")
+                    XCTAssertNotEqual(line.text, card.value, "\(key) : la ligne redit la valeur")
+                }
+                XCTAssertEqual(Set(card.facts).count, card.facts.count, "\(key) : un fait dit deux fois sur la carte")
                 if let gauge = card.gauge {
                     XCTAssertTrue((0...1).contains(gauge), "\(key) : une jauge hors de 0…1 (\(gauge))")
                 }
-                XCTAssertTrue(card.accessibilityLabel.contains(card.name) && card.accessibilityLabel.contains(card.value)
-                    && card.accessibilityLabel.contains(card.why), "\(key) : VoiceOver dit concept, valeur et pourquoi")
+                XCTAssertTrue(card.accessibilityLabel.contains(card.name) && card.accessibilityLabel.contains(card.value),
+                              "\(key) : VoiceOver dit le nom et la valeur")
+                if let line = card.line {
+                    XCTAssertTrue(card.accessibilityLabel.contains(line.text), "\(key) : VoiceOver dit aussi la ligne")
+                }
             }
         }
     }
@@ -141,8 +143,8 @@ final class ProgressionConceptModelTests: XCTestCase {
         let served = progress(game)
         func value(_ concept: ProgressionConcept) -> String { ProgressionConceptModel.value(concept, progress: served, game: game) }
 
-        XCTAssertEqual(value(.level), GameText.bannerLevel(level: GameCopy.formatCount(game.level.level)))
-        XCTAssertEqual(value(.points), GameCopy.points(game.level.score))
+        XCTAssertEqual(value(.level), GameCopy.tierName(game.level.shown.tier), "l'anneau porte le niveau, la valeur nomme la lumière")
+        XCTAssertEqual(value(.points), GameCopy.points(game.level.sparkFacts.pocket))
         XCTAssertEqual(value(.meesh), GameCopy.meeshes(served.meesh?.balance ?? -1))
         XCTAssertEqual(value(.glory), GameCopy.rankLabel(game.glory))
         XCTAssertEqual(value(.flame), GameCopy.days(game.flame.days))
@@ -152,31 +154,40 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(value(.atlas), ConceptText.ratio("1", GameCopy.formatCount(GameAtlas.total)))
     }
 
+    func test_theLevelCard_letsTheRingCarryTheLevel_andTellsItToTheScreenReader() {
+        let game = GameWave2Fixture.game()
+        let card = ProgressionConceptModel.card(.level, progress: progress(game), game: game)
+
+        XCTAssertEqual(card.emblem, ProgressionEmblemFact(fact: .level, label: GameText.bannerLevel(level: GameCopy.formatCount(game.level.shown.level))))
+        XCTAssertTrue(card.accessibilityLabel.contains(GameText.bannerLevel(level: GameCopy.formatCount(game.level.shown.level))))
+        XCTAssertEqual(card.valueFact, .tier)
+    }
+
     func test_missions_lockedBelowLevelFive_sayTheLevel_notZeroOutOfThree() {
         let low = GameFixture.game(score: 0)
         XCTAssertFalse(low.missions.unlocked, "le témoin veut un jeu d'avant le niveau 5")
 
-        let value = ProgressionConceptModel.value(.missions, progress: progress(low), game: low)
+        let card = ProgressionConceptModel.card(.missions, progress: progress(low), game: low)
 
-        XCTAssertEqual(value, GameText.doorLeagueLocked(level: GameCopy.formatCount(GameMissions.minLevel)))
+        XCTAssertEqual(card.value, GameText.doorLeagueLocked(level: GameCopy.formatCount(GameMissions.minLevel)))
+        XCTAssertNil(card.line, "une porte fermée se dit par son seuil, sans ligne")
     }
 
-    func test_missions_aReadyChest_isAnImportantDatum() {
+    func test_missions_aReadyOffering_takesTheLine() {
         let game = GameFixture.game(chestStatus: .ready)
 
         let card = ProgressionConceptModel.card(.missions, progress: progress(game), game: game)
 
-        XCTAssertEqual(card.chips.first, ConceptText.chipChestReady, "le coffre prêt se lit dès la première page")
-        XCTAssertTrue(card.urgent, "le coffre prêt est la pastille d'action, teintée")
-        XCTAssertEqual(card.chips.filter { $0 == ConceptText.chipChestReady }.count, 1, "une seule fois")
+        XCTAssertEqual(card.line?.text, ConceptText.chipChestReady, "l'Offrande prête se lit dès la première page")
+        XCTAssertTrue(card.urgent, "l'Offrande prête est l'action : elle se marque")
     }
 
-    func test_flame_atRisk_putsTheWarningFirst() {
+    func test_flame_atRisk_takesTheLine() {
         let game = GameFixture.game(flameStatus: .atRisk)
 
         let card = ProgressionConceptModel.card(.flame, progress: progress(game), game: game)
 
-        XCTAssertEqual(card.chips.first, GameCopy.flameStatus(.atRisk))
+        XCTAssertEqual(card.line?.text, GameCopy.flameStatus(.atRisk))
         XCTAssertTrue(card.urgent)
         let calm = GameFixture.game(flameStatus: .lit)
         XCTAssertFalse(ProgressionConceptModel.card(.flame, progress: progress(calm), game: calm).urgent, "une Flamme qui brûle ne demande rien")
@@ -189,94 +200,107 @@ final class ProgressionConceptModelTests: XCTestCase {
 
         let open = GameWave2Fixture.game()
         XCTAssertEqual(ProgressionConceptModel.value(.league, progress: progress(open), game: open), GameText.leagueName(.jade),
-                       "la valeur est le nom de la ligue ; la place est une pastille (règle n° 2)")
-        XCTAssertTrue(ProgressionConceptModel.card(.league, progress: progress(open), game: open).chips
-            .contains(GameText.leagueRankLine(rank: "4", size: "12")))
+                       "la valeur est le nom du cercle ; la place est la ligne")
+        XCTAssertEqual(ProgressionConceptModel.card(.league, progress: progress(open), game: open).line?.text,
+                       GameText.leagueRankLine(rank: "4", size: "12"))
     }
 
-    // MARK: - Où j'en suis : les trois règles de dédoublonnage (amendement n° 4)
+    // MARK: - Un fait ne paraît qu'une fois par écran (#11180)
 
-    func test_theFactsOfASheet_areWellFormed_andNeverRepeatTheHeadValue() {
+    func test_theFactsOfASheet_areWellFormed_andNeverRepeatWhatTheScreenShows() {
         let full = GameWave2Fixture.game()
         for (label, game) in [("jeu complet", Optional(full)), ("jeu sans vague 2", Optional(GameFixture.game())), ("ancien serveur", nil)] {
             let served = progress(game)
             for concept in ProgressionConcepts.served(for: served, game: game) {
-                let facts = ProgressionConceptModel.facts(concept, progress: served, game: game)
-                let head = ProgressionConceptModel.value(concept, progress: served, game: game)
-                XCTAssertEqual(Set(facts.map(\.label)).count, facts.count, "\(concept.rawValue) (\(label)) : un libellé en double")
-                XCTAssertFalse(facts.contains { $0.label.isEmpty || $0.value.isEmpty }, "\(concept.rawValue) (\(label)) : une ligne vide")
-                XCTAssertFalse(facts.contains { $0.value == head }, "\(concept.rawValue) (\(label)) : une ligne redit la valeur de tête (règle n° 2)")
-                if [ProgressionConcept.level, .points, .league].contains(concept) {
-                    XCTAssertFalse(facts.contains { $0.label == ConceptText.name(concept) },
-                                   "\(concept.rawValue) (\(label)) : « \(ConceptText.name(concept)) : … » sous la tête (règle n° 2)")
+                let key = "\(concept.rawValue) (\(label))"
+                let fiche = ProgressionConceptFiche.make(concept, progress: served, game: game)
+                let ids = fiche.facts.compactMap(\.identity)
+                XCTAssertEqual(ids.count, fiche.facts.count, "\(key) : une ligne sans identité")
+                XCTAssertEqual(Set(ids).count, ids.count, "\(key) : une identité dite deux fois")
+                XCTAssertFalse(fiche.facts.contains { $0.label.isEmpty || $0.value.isEmpty }, "\(key) : une ligne vide")
+                XCTAssertTrue(Set(ids).isDisjoint(with: fiche.state?.facts ?? []), "\(key) : une ligne redit la phrase d'état")
+                if case .generic = fiche.head {
+                    let card = ProgressionConceptModel.card(concept, progress: served, game: game)
+                    let head = Set([card.valueFact] + (fiche.heroLine?.facts ?? []))
+                    XCTAssertTrue(Set(ids).isDisjoint(with: head), "\(key) : une ligne redit la tête")
+                    XCTAssertTrue(Set(fiche.state?.facts ?? []).isDisjoint(with: head), "\(key) : la phrase d'état redit la tête")
                 }
             }
         }
     }
 
-    func test_rule1_eachSharedDatum_hasOneOwner() {
-        XCTAssertEqual(ProgressionConceptModel.owner(of: .score), .points)
-        XCTAssertEqual(ProgressionConceptModel.owner(of: .mintMissing), .points)
-        XCTAssertEqual(ProgressionConceptModel.owner(of: .factor), .elans)
-        XCTAssertEqual(ProgressionConceptModel.owner(of: .prestigeStars), .prestige)
-        XCTAssertEqual(ProgressionConceptModel.owner(of: .mintPrice), .meesh)
-        let all = Set(ProgressionConcept.allCases)
-        for datum in ProgressionSharedDatum.allCases {
-            let owner = ProgressionConceptModel.owner(of: datum)
-            XCTAssertEqual(ProgressionConcept.allCases.filter { ProgressionConceptModel.says(datum, in: $0, served: all) }, [owner],
-                           "\(datum) : une donnée se dit dans UN concept quand tous sont servis")
-            XCTAssertTrue(ProgressionConceptModel.says(datum, in: .level, served: all.subtracting([owner])),
-                          "\(datum) : son propriétaire absent (ancien serveur), un autre concept la garde")
+    func test_theFrontPage_saysEachFactOnce() {
+        let full = GameWave2Fixture.game()
+        for (label, game) in [("jeu complet", Optional(full)), ("jeu sans vague 2", Optional(GameFixture.game())), ("ancien serveur", nil)] {
+            let facts = ProgressionConceptModel.cards(progress: progress(game), game: game).flatMap(\.facts)
+            let twice = Dictionary(grouping: facts, by: { $0 }).filter { $0.value.count > 1 }.keys.map(\.rawValue).sorted()
+            XCTAssertEqual(twice, [], "\(label) : un fait dit par deux cartes")
         }
     }
 
-    func test_rule1_theScoreLeavesTheLevel_andWhatIsMissingToMintLeavesTheMeeshes() {
+    /// Le prix et le manque de la prochaine Meesh appartiennent à l'Héritage : ni la carte ni la fiche des Étincelles
+    /// ne les disent.
+    func test_thePriceAndTheMissing_liveInTheHeritage_notInTheSparks() {
         let poor = GameFixture.game(score: 400, debitable: 400, held: 0)
         XCTAssertFalse(poor.mint.canMint, "le témoin veut une frappe impossible")
         let served = progress(poor, meesh: GameFixture.meesh(balance: 0, minted: 0, debitable: 400))
 
-        XCTAssertFalse(ProgressionConceptModel.facts(.level, progress: served, game: poor).contains { $0.detail == .score },
-                       "le score est aux Points")
-        XCTAssertTrue(ProgressionConceptModel.facts(.points, progress: served, game: poor).contains { $0.detail == .mintMissing },
-                      "ce qui manque pour frapper est aux Points")
-        XCTAssertFalse(ProgressionConceptModel.facts(.meesh, progress: served, game: poor).contains { $0.detail == .mintMissing })
-        XCTAssertFalse(ProgressionConceptModel.chips(.meesh, progress: served, game: poor)
-            .contains(ConceptText.chipToMeesh(number: GameCopy.formatCount(poor.mint.number), missing: GameCopy.formatCount(poor.mint.missingPoints))),
-                       "la carte des Meeshes ne redit pas ce qui manque")
-        XCTAssertFalse(ProgressionConceptModel.chips(.points, progress: served, game: poor)
-            .contains(GameText.bannerLevel(level: GameCopy.formatCount(poor.level.level))), "la carte des Points ne redit pas le niveau")
+        let sparks = ProgressionConceptModel.card(.points, progress: served, game: poor)
+        XCTAssertFalse(sparks.facts.contains(.mintPrice) || sparks.facts.contains(.mintMissing), "\(sparks.facts)")
+        let fiche = ProgressionConceptFiche.make(.points, progress: served, game: poor)
+        XCTAssertTrue(fiche.facts.isEmpty, "\(fiche.facts)")
+        XCTAssertNil(fiche.state, "la phrase des Étincelles redit ta lumière, que la tête montre")
+        let frame = GameMintFrameModel(mint: poor.mint, pocket: poor.level.sparkFacts.pocket)
+        XCTAssertEqual(frame.missing?.text, GameFicheCopy.mintMissing(GameCopy.formatCount(poor.mint.missingPoints)))
 
         let old = progress(nil)
-        XCTAssertTrue(ProgressionConceptModel.chips(.level, progress: old, game: nil).contains(GameCopy.points(old.level.scale.value)),
-                      "devant un ancien serveur, sans carte des Points, le niveau garde le score")
+        XCTAssertEqual(ProgressionConceptModel.card(.level, progress: old, game: nil).value,
+                       GameText.bannerLevel(level: GameCopy.formatCount(old.level.level)), "devant un ancien serveur, le niveau garde son nombre")
     }
 
-    func test_rule3_aGamePiece_replacesTheHero_andTheSheetDoesNotRepeatIt() {
+    func test_aGamePiece_replacesTheHero_andTheSheetDoesNotRepeatIt() {
         let game = GameWave2Fixture.game()
         let served = progress(game)
-        func facts(_ concept: ProgressionConcept) -> [ProgressionConceptFact] {
-            ProgressionConceptModel.facts(concept, progress: served, game: game)
+        func fiche(_ concept: ProgressionConcept) -> ProgressionConceptFiche {
+            ProgressionConceptFiche.make(concept, progress: served, game: game)
         }
         for concept in [ProgressionConcept.level, .meesh, .league, .elans] {
             XCTAssertTrue(ProgressionConceptGestures.isHero(for: concept, progress: served, game: game), "\(concept.rawValue) : sa pièce est son héros")
+            XCTAssertEqual(fiche(concept).head, .piece)
         }
-        XCTAssertFalse(facts(.level).contains { [.tier, .levelNext, .levelRecord, .score].contains($0.detail) },
-                       "l'anneau du niveau dit déjà palier, reste et record")
-        XCTAssertFalse(facts(.meesh).contains { [.mintPrice, .mintNext, .mintMissing].contains($0.detail) }, "la frappe dit déjà la pièce et son prix")
-        XCTAssertFalse(facts(.league).contains { [.weekPoints, .leagueCloses, .leaguePlace].contains($0.detail) }, "le détail de ligue dit déjà la place, la semaine et la fermeture")
-        XCTAssertTrue(facts(.elans).isEmpty, "les Élans disent tout dans leur pièce")
-        XCTAssertFalse(ProgressionConceptGestures.isHero(for: .points, progress: served, game: game), "les Points n'ont pas de pièce : le héros générique")
+        XCTAssertTrue(fiche(.level).facts.isEmpty && fiche(.level).state == nil, "l'anneau du niveau dit tout")
+        XCTAssertTrue(fiche(.meesh).facts.isEmpty && fiche(.meesh).state == nil, "l'Héritage et sa frappe disent tout : « Où j'en suis » disparaît")
+        XCTAssertFalse(fiche(.league).facts.contains { [.weekPoints, .leagueCloses, .leaguePlace, .league].contains($0.identity) },
+                       "le détail de la joute dit déjà la place, la semaine et la fermeture")
+        XCTAssertTrue(fiche(.elans).facts.isEmpty, "les Élans disent tout dans leur pièce")
+        XCTAssertEqual(fiche(.points).head, .sparks(GameSparksHeadModel(game.level)), "les Étincelles ont leur tête : ta lumière")
+    }
+
+    func test_theFlameSheet_letsItsTilesSayTheFormAndTheVeilleuses() {
+        let game = GameFixture.game(flameDays: 23, flameStatus: .lit, freezes: 1)
+        let fiche = ProgressionConceptFiche.make(.flame, progress: progress(game), game: game)
+
+        XCTAssertNil(fiche.heroLine, "les tuiles de la fiche disent déjà la forme : la tête ne la redit pas")
+        XCTAssertFalse(fiche.facts.contains { [.flameForm, .freezes, .streak].contains($0.identity) }, "\(fiche.facts)")
     }
 
     func test_theCard_showsFirstWhatAsksForAnAction() {
         let rich = GameFixture.game()
         XCTAssertTrue(rich.mint.canMint, "le témoin veut une frappe possible")
         let card = ProgressionConceptModel.card(.meesh, progress: progress(rich), game: rich)
-        XCTAssertEqual(card.chips.first, ConceptText.chipMintReady, "la frappe possible se lit en premier sur la carte des Meeshes")
+        XCTAssertEqual(card.line?.text, ConceptText.chipMintReady, "la frappe possible prend la ligne de la carte de l'Héritage")
         XCTAssertTrue(card.urgent)
         for concept in [ProgressionConcept.level, .points, .glory, .badges] {
             XCTAssertFalse(ProgressionConceptModel.card(concept, progress: progress(rich), game: rich).urgent, "\(concept.rawValue) : rien à faire")
         }
+    }
+
+    func test_theHeritageCard_saysTheContainerAndTheNextOne() {
+        let game = GameFixture.game(score: 400, debitable: 400, held: 88)
+        let card = ProgressionConceptModel.card(.meesh, progress: progress(game, meesh: GameFixture.meesh(balance: 88, minted: 91, debitable: 400)), game: game)
+
+        XCTAssertEqual(card.value, GameCopy.meeshes(88))
+        XCTAssertEqual(card.line, ProgressionFactText(GameCopy.treasuryName(.coffret) + " · " + GameFicheCopy.opens(.coffre, at: 100), .treasuryTier, .treasuryNext))
     }
 
     // MARK: - Les sous-pages et les ancres
@@ -515,9 +539,9 @@ final class ProgressionConceptModelTests: XCTestCase {
         XCTAssertEqual(state(.atlas, game), ConceptText.stateAtlasProgress(stamped: n(1), total: n(GameAtlas.total), pending: n(1)))
     }
 
-    /// Chaque concept dont la donnée est servie a SA phrase : jamais vide, jamais un trou de chaîne resté nu, et la
-    /// carte comme le lecteur d'écran lisent la même. Les Élans et les défis n'en ont que si leur donnée est servie.
-    func test_state_everyServedConcept_hasItsSentence_andTheCardCarriesIt() {
+    /// Chaque concept dont la donnée est servie a SA phrase, et elle dit les faits qu'elle enchâsse : jamais vide,
+    /// jamais un trou de chaîne resté nu. Les Élans et les défis n'en ont que si leur donnée est servie.
+    func test_state_everyServedConcept_hasItsSentence_andNamesTheFactsItCarries() {
         let alwaysSaid: Set<ProgressionConcept> = [.level, .points, .meesh, .glory, .flame, .missions, .league, .season, .prestige,
                                                    .badges, .succes, .showcase, .atlas]
         let cases: [(String, GameBlock, APIEngagementProgress.Meesh)] = [
@@ -528,7 +552,7 @@ final class ProgressionConceptModelTests: XCTestCase {
             for card in ProgressionConceptModel.cards(progress: served, game: game) {
                 let key = "\(card.concept.rawValue) (\(label))"
                 let line = ProgressionConceptModel.state(card.concept, progress: served, game: game)
-                XCTAssertEqual(card.state, line, "\(key) : la carte lit la phrase de la loi")
+                XCTAssertEqual(ProgressionConceptModel.stateLine(card.concept, progress: served, game: game)?.text, line)
                 if alwaysSaid.contains(card.concept) {
                     XCTAssertNotNil(line, "\(key) : pas de phrase d'état")
                 }
@@ -537,7 +561,6 @@ final class ProgressionConceptModelTests: XCTestCase {
                 for naked in ["%@", "%1$", "%2$", "%3$", "%%", "{", "game."] {
                     XCTAssertFalse(line.contains(naked), "\(key) : « \(naked) » nu dans « \(line) »")
                 }
-                XCTAssertTrue(card.accessibilityLabel.contains(line), "\(key) : VoiceOver dit aussi la phrase d'état")
             }
         }
     }
@@ -566,22 +589,15 @@ final class ProgressionConceptModelTests: XCTestCase {
         }
     }
 
-    /// Les pastilles et les lignes de la carte nomment leur cible : le niveau visé, la pièce visée, le rang visé.
-    func test_theChipsAndTheFacts_nameTheTargetOfWhatIsMissing() {
+    /// Les lignes nomment leur cible : le niveau visé, la pièce visée, le rang visé.
+    func test_theLinesAndTheFacts_nameTheTargetOfWhatIsMissing() {
         let served = progress(jcnm, meesh: jcnmWallet)
-        XCTAssertTrue(ProgressionConceptModel.chips(.level, progress: served, game: jcnm)
-            .contains(ConceptText.chipToLevel(level: n(28), points: GameCopy.points(1_301))))
-        XCTAssertEqual(ProgressionConceptModel.chips(.points, progress: served, game: jcnm), [
-            GameCopy.convertiblePoints(5_823), ConceptText.chipToMeesh(number: n(79), missing: n(1_839)),
-        ])
-        let facts = ProgressionConceptModel.facts(.points, progress: served, game: jcnm)
-        XCTAssertEqual(facts, [
-            ProgressionConceptFact(label: ConceptText.factConvertible, value: GameCopy.points(5_823), detail: .convertible),
-            ProgressionConceptFact(label: ConceptText.missingForMeesh(number: n(79)), value: GameCopy.convertiblePoints(1_839), detail: .mintMissing),
-        ])
-        let rich = GameFixture.game()
-        XCTAssertTrue(ProgressionConceptModel.chips(.points, progress: progress(rich), game: rich).contains(ConceptText.chipMintCovered))
-        let glory = ProgressionConceptModel.facts(.glory, progress: served, game: jcnm)
+        XCTAssertEqual(ProgressionConceptModel.card(.level, progress: served, game: jcnm).line?.text,
+                       ConceptText.chipToLevel(level: n(28), points: GameCopy.points(1_301)))
+        let frame = GameMintFrameModel(mint: jcnm.mint, pocket: jcnm.level.sparkFacts.pocket)
+        XCTAssertEqual(frame.title.text, String(localized: "game.mint.next_title", defaultValue: "La Meesh n° \(n(79))", bundle: .main))
+        XCTAssertEqual(frame.missing?.text, GameFicheCopy.mintMissing(n(1_839)), "le manque vise la pièce du cadre")
+        let glory = ProgressionConceptFiche.make(.glory, progress: served, game: jcnm).facts
         XCTAssertEqual(glory.first { $0.detail == .gloryMissing }?.label,
                        jcnm.glory.next.map { ConceptText.missingForRank(rank: GameCopy.rankLabel($0.rank, division5: $0.shownDivision)) })
     }
@@ -594,7 +610,7 @@ final class ProgressionConceptModelTests: XCTestCase {
         let game = GameFixture.game()
         func tailwind(_ factor: Double) -> ProgressionConceptFact? {
             let windy = game.replacing(boosts: game.boosts.replacing(tailwind: factor))
-            return ProgressionConceptModel.facts(.elans, progress: progress(windy), game: windy).first { $0.detail == .tailwind }
+            return ProgressionConceptFiche.make(.elans, progress: progress(windy), game: windy).facts.first { $0.detail == .tailwind }
         }
         XCTAssertNil(tailwind(1), "le Vent arrière éteint ne se dit pas")
         let blowing = try? XCTUnwrap(tailwind(1.25))

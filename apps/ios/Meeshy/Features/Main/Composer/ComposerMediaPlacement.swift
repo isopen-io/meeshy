@@ -54,7 +54,7 @@ nonisolated enum ComposerScenePicking {
     /// **La photothèque s'ouvre TOUT DE SUITE** à la création d'un post, d'une
     /// story ou d'un réel — la porte d'où l'on part pour composer, jamais
     /// celle qui reprend un contenu (brouillon, édition, republication, partage,
-    /// média d'une conversation, retouche d'image) ni l'humeur, qui est un texte.
+    /// média d'une conversation) ni l'humeur, qui est un texte.
     /// Et seulement sur une composition VIERGE : un brouillon restauré a déjà
     /// sa matière.
     static func opensOnPicker(origin: ComposerOrigin, compositionIsEmpty: Bool) -> Bool {
@@ -62,8 +62,7 @@ nonisolated enum ComposerScenePicking {
         switch origin {
         case .storyTray, .feedComposer:
             return true
-        case .moodChip, .repost, .edit, .draft, .share, .conversationMedia, .socialMedia,
-             .conversationDraftMedia:
+        case .moodChip, .repost, .edit, .draft, .share, .conversationMedia, .socialMedia:
             return false
         }
     }

@@ -24,7 +24,7 @@ final class ShareExtractionReductionTests: XCTestCase {
         XCTAssertNil(reduced.url)
     }
 
-    func test_staging_sortsByIndex_andReportsTheFirstFailureByIndex() {
+    func test_staging_sortsByIndex_andReportsEveryFailureByIndex() {
         let results = [
             ShareStagingResult(index: 2, outcome: .success(media("m2"))),
             ShareStagingResult(index: 0, outcome: .success(media("m0"))),
@@ -35,13 +35,13 @@ final class ShareExtractionReductionTests: XCTestCase {
         let reduced = ShareExtractionReduction.staging(from: results)
 
         XCTAssertEqual(reduced.media, [media("m0"), media("m2")])
-        XCTAssertEqual(reduced.failure, .copyFailed("e1"))
+        XCTAssertEqual(reduced.failures, [.copyFailed("e1"), .copyFailed("e3")])
     }
 
     func test_staging_withoutResults_isEmptyWithoutFailure() {
         let reduced = ShareExtractionReduction.staging(from: [])
 
         XCTAssertEqual(reduced.media, [])
-        XCTAssertNil(reduced.failure)
+        XCTAssertEqual(reduced.failures, [])
     }
 }

@@ -4152,10 +4152,17 @@ model PostMedia {
   thumbnailPath String?
   thumbnailUrl  String?
   thumbHash    String?  // Base64-encoded ThumbHash (~28 chars) — instant placeholder
+  /// Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — MÊME forme que
+  /// `MessageAttachment.imageVariants`, écrites par la fabrique `media-renditions.ts` que le
+  /// chemin résumable et le multipart partagent (#11260). OPTIONNEL : une ligne héritée n'en
+  /// porte pas, et une image déjà petite non plus. Images non chiffrées uniquement.
+  imageVariants Json?
 
   // Metadata audio/vidéo
   duration     Int?     // ms
   codec        String?
+  /// Codec de la piste vidéo (ffprobe), jumeau de `MessageAttachment.videoCodec` (#11260).
+  videoCodec   String?
 
   // Ordering dans le carousel
   order        Int      @default(0)
