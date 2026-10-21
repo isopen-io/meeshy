@@ -33,7 +33,7 @@ public final class BindingWriteThrottle<Value> {
 
     private let write: (Value) -> Void
     private let clock: () -> TimeInterval
-    private let schedule: (TimeInterval, @escaping @MainActor () -> Void) -> () -> Void
+    private let schedule: @MainActor (TimeInterval, @escaping @MainActor () -> Void) -> () -> Void
     private var lastWrite: TimeInterval?
     private var pending: Value?
     private var cancelTrailing: (() -> Void)?
@@ -41,7 +41,7 @@ public final class BindingWriteThrottle<Value> {
     public init(
         write: @escaping (Value) -> Void,
         clock: @escaping () -> TimeInterval = { CACurrentMediaTime() },
-        schedule: @escaping (TimeInterval, @escaping @MainActor () -> Void) -> () -> Void = trailingMainSchedule
+        schedule: @escaping @MainActor (TimeInterval, @escaping @MainActor () -> Void) -> () -> Void = trailingMainSchedule
     ) {
         self.write = write
         self.clock = clock
