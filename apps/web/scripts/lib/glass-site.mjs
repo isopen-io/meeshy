@@ -45,6 +45,13 @@ export const GLASS_INVENTORY = {
         "le VOILE du menu du message : un scrim qui floute le fil ENTIER derrière le menu ouvert, sans texte ni contrôle — pas une surface de verre",
     },
   },
+  'src/styles/conversation-peek.css': {
+    blur: {
+      count: 1,
+      reason:
+        "le VOILE de l'aperçu d'une conversation tenue (#11211) : un scrim qui floute la liste ENTIÈRE derrière la grappe, sans texte ni contrôle — pas une surface de verre, le même que celui du menu du message",
+    },
+  },
   'src/components/conversation-preview-sheet.tsx': {
     blur: {
       count: 2,

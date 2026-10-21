@@ -1045,8 +1045,8 @@ for (const scheme of ['light', 'dark']) {
   const labels = opened ? await enPage.$$eval('[role="menu"] [role="menuitem"]', (els) => els.map((el) => (el.textContent ?? '').trim())) : [];
   check(
     JSON.stringify(labels) ===
-      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Rename', 'Favorite', 'Move to…', 'Archive', 'Delete']),
-    `en anglais, le menu d'une ligne est entièrement anglais — « Conversation actions » (${JSON.stringify(labels)})`,
+      JSON.stringify(['Voice call', 'Video call', 'Pin', 'Mute', 'Read', 'Details', 'Favorite', 'Move to…', 'Archive', 'Leave', 'Delete']),
+    `en anglais, le menu d'une ligne — ouvert par le clic droit, sous l'aperçu (#11211) — est entièrement anglais, et un simple membre y quitte sans renommer (${JSON.stringify(labels)})`,
   );
   await enContext.close();
 }

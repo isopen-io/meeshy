@@ -109,9 +109,7 @@ struct EmailCodeEntry: View {
             }
         }
         .focused($isFocused)
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { isFocused = true }
-        }
+        .onAppear(after: .milliseconds(300)) { isFocused = true }
         .disabled(viewModel.isVerifying || viewModel.verificationSuccess)
         // Sans label, VoiceOver lit le placeholder « 000000 » comme intitulé du
         // champ — inintelligible. On pose un label + un indice explicites.

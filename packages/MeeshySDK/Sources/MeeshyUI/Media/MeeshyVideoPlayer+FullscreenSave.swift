@@ -44,17 +44,11 @@ extension _FullscreenRenderer {
                     } else {
                         HapticFeedback.error()
                     }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             } catch {
                 await MainActor.run {
                     withAnimation { saveState = .failed }
                     HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
                 }
             }
         }
