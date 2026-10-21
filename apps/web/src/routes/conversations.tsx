@@ -16,7 +16,7 @@ import { LensPaginationFooter } from '@/components/lens-pagination-footer';
 import { LensSection } from '@/components/lens-sticker';
 import { LensSkeletonRows } from '@/components/lens-skeleton';
 import { PullIndicator } from '@/components/pull-indicator';
-import { useScene } from '@/lib/lens/scene';
+import { useListReorderFlip, useScene } from '@/lib/lens/scene';
 import { PINNED_RAIL_RELEASE_RATIO, PINNED_RAIL_REVEAL_RATIO } from '@/lib/lens/pinned-rail';
 import { loadMoreRootMargin, paginationStateOf, showsAllLoadedHint } from '@/lib/lens/pagination';
 import { publicWebOrigin } from '@/lib/links/public-origin';
@@ -505,6 +505,7 @@ export default function ConversationsScreen() {
     // volontaire — elle y est la clé qui fait ré-évaluer `new Date()`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, selection, search, viewer.id, overrides, categories, timeZone, minute]);
+  useListReorderFlip(frame, visible);
 
   /**
    * LE PLIAGE DES SECTIONS (#8694, toute section depuis #10103) — Épingles et

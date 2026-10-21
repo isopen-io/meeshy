@@ -32,6 +32,7 @@
 @import './admin.css';
 @import './glass.css';
 @import './ui.css';
+@import './press-feedback.css';
 
 /* Le schema SOMBRE est le defaut de la table (`:root, :root.dark`) ; le clair
    s'obtient par la classe `.light`. La variante ci-dessous sert les rares cas
