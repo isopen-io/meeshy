@@ -471,7 +471,7 @@ extension StoryComposerView {
         Task {
             let samples: [Float]
             do {
-                samples = try await WaveformCache.shared.samples(from: url)
+                samples = try await WaveformScale.peakNormalized(WaveformCache.shared.samples(from: url))
             } catch {
                 samples = []  // waveform cosmétique : barres plates si l'analyse échoue
             }
