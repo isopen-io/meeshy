@@ -35,4 +35,21 @@ final class LockedTests: XCTestCase {
         locked.mutateUnchecked { $0.append("b") }
         XCTAssertEqual(locked.mutateUnchecked { $0 as String }, "ab")
     }
+
+    func test_uncheckedSubscript_readsAndWritesThroughKeyPath() {
+        struct Box { var count = 0; var label = "a" }
+        let locked = Locked(uncheckedState: Box())
+        locked[unchecked: \.count] = 7
+        locked[unchecked: \.label] = "b"
+        XCTAssertEqual(locked[unchecked: \.count], 7)
+        XCTAssertEqual(locked[unchecked: \.label], "b")
+    }
+
+    func test_uncheckedSubscript_supportsWeakReferenceKeyPath() {
+        struct State { weak var target: NSObject? }
+        let object = NSObject()
+        let locked = Locked(uncheckedState: State())
+        locked[unchecked: \.target] = object
+        XCTAssertTrue(locked[unchecked: \.target] === object)
+    }
 }
