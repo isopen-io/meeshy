@@ -38,7 +38,7 @@ normal.
 
 | itération | date | branche de travail | PR | état |
 |---|---|---|---|---|
-| **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | _(à ouvrir vers `dev`)_ | ⏳ CI |
+| **74w** | 2026-10-21 | `claude/practical-fermat-to2xb3` | [#11384](https://github.com/isopen-io/meeshy/pull/11384) → `dev` | ⏳ CI |
 
 **74w** — i18n du flux de connexion par lien magique (`magic-link-{validation,
 panel,flow}.tsx`) : 11 clés `magicLink.*` ×7 langues + câblage `translate` +
