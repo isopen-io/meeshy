@@ -387,6 +387,22 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "DELETE")
     }
 
+    // MARK: - hideForMe (#11221)
+
+    /// « Supprimer pour moi » vaut PARTOUT : la même route que le web
+    /// (`DELETE /messages/:id/delete-for-me`), qui diffuse
+    /// `message:hidden-for-me` aux autres appareils du lecteur.
+    func testHideForMeDeletesForTheReaderOnly() async throws {
+        mock.stub("/messages/\(msgId)/delete-for-me", result: APIResponse(success: true, data: ["hidden": true], error: nil))
+
+        try await service.hideForMe(messageId: msgId)
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/messages/\(msgId)/delete-for-me")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertNil(mock.lastRequest?.bodyJSON)
+    }
+
     // MARK: - consumeViewOnce
 
     func testConsumeViewOnceReturnsResponse() async throws {

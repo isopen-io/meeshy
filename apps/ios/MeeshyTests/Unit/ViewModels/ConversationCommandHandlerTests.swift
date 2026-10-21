@@ -148,6 +148,25 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let outbox: MockReactionOutbox
         let attachments: MockAttachmentDeleting
         let clock: TestClock
+        let hiding: FakePersonalHiding
+        let hidden: LocallyHiddenMessagesStore
+    }
+
+    /// Le masquage PERSONNEL côté serveur (#11221) : il note ce qu'on lui
+    /// demande et ce que l'écran montrait à l'instant de l'appel.
+    final class FakePersonalHiding: PersonalMessageHiding, @unchecked Sendable {
+        var hidden: [String] = []
+        var failure: Error?
+        var probe: (store: LocallyHiddenMessagesStore, localId: String)?
+        var probedHidden: Bool?
+
+        func hideForMe(messageId: String) async throws {
+            hidden.append(messageId)
+            if let probe {
+                probedHidden = await MainActor.run { probe.store.isHidden(probe.localId) }
+            }
+            if let failure { throw failure }
+        }
     }
 
     private func makeRig(isOnline: Bool = true) -> Rig {
@@ -158,6 +177,9 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let outbox = MockReactionOutbox()
         let attachments = MockAttachmentDeleting()
         let clock = TestClock()
+        let hiding = FakePersonalHiding()
+        let hidden = LocallyHiddenMessagesStore(userDefaults: UserDefaults(suiteName: "ConversationCommandHandlerTests")!)
+        hidden.clearAll()
         let sut = ConversationCommandHandler(
             state: ConversationStateStore(),
             conversationId: conversationId,
@@ -167,11 +189,14 @@ final class ConversationCommandHandlerTests: XCTestCase {
             networkMonitor: network,
             reactionOutbox: outbox,
             attachments: attachments,
+            personalHiding: hiding,
+            hiddenMessages: hidden,
             now: { clock.now }
         )
         return Rig(
             sut: sut, persistence: persistence, service: service, queue: queue,
-            network: network, outbox: outbox, attachments: attachments, clock: clock
+            network: network, outbox: outbox, attachments: attachments, clock: clock,
+            hiding: hiding, hidden: hidden
         )
     }
 
@@ -259,6 +284,48 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let calls = await rig.persistence.calls
         XCTAssertNotNil(failure)
         XCTAssertTrue(calls.isEmpty)
+    }
+
+    // MARK: - Supprimer pour moi, PARTOUT (#11221)
+
+    func test_deleteForMe_online_leavesTheThreadAtOnce_thenAsksTheServerWithTheServerId() async {
+        let rig = makeRig()
+        rig.hiding.probe = (store: rig.hidden, localId: "m1")
+
+        let failure = await rig.sut.deleteForMe(messageId: "m1", serverId: "s1") { _ in
+            XCTFail("rien à restaurer sur un succès")
+        }
+
+        let calls = await rig.persistence.calls
+        XCTAssertNil(failure)
+        XCTAssertEqual(rig.hiding.probedHidden, true, "optimiste : le message a quitté l'écran AVANT la réponse du serveur")
+        XCTAssertEqual(calls, [.purgeMessages(ids: ["m1"])])
+        XCTAssertEqual(rig.hiding.hidden, ["s1"], "le serveur reçoit l'id SERVEUR — les autres appareils du lecteur suivent")
+        XCTAssertTrue(rig.hidden.isHidden("m1"))
+    }
+
+    func test_deleteForMe_serverRefuses_bringsTheMessageBack_andSaysWhy() async {
+        let rig = makeRig()
+        rig.hiding.failure = NSError(domain: "t", code: 1, userInfo: [NSLocalizedDescriptionKey: "refus"])
+        var restored: [String] = []
+
+        let failure = await rig.sut.deleteForMe(messageId: "m1", serverId: "s1") { restored.append($0) }
+
+        XCTAssertEqual(failure?.userMessage, "refus")
+        XCTAssertFalse(rig.hidden.isHidden("m1"), "le retour arrière rend le message au fil")
+        XCTAssertEqual(restored, ["s1"], "la ligne purgée se relit depuis le serveur")
+    }
+
+    func test_deleteForMe_offline_refusesWithoutHidingAnything() async {
+        let rig = makeRig(isOnline: false)
+
+        let failure = await rig.sut.deleteForMe(messageId: "m1", serverId: "s1") { _ in }
+
+        let calls = await rig.persistence.calls
+        XCTAssertNotNil(failure, "hors ligne, un masquage qui ne partirait jamais reviendrait au prochain chargement")
+        XCTAssertTrue(calls.isEmpty)
+        XCTAssertTrue(rig.hiding.hidden.isEmpty)
+        XCTAssertFalse(rig.hidden.isHidden("m1"))
     }
 
     // MARK: - Retrait d'une sélection (#11159)
