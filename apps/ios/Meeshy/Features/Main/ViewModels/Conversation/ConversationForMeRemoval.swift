@@ -14,7 +14,7 @@ nonisolated struct ForMeTarget: Equatable, Sendable {
 /// posséder : cacher avant la réponse, rendre au refus.
 struct ForMeProjection {
     let conceal: ([String]) -> Void
-    let reveal: ([String]) async -> Void
+    let reveal: @MainActor ([String]) async -> Void
 }
 
 /// **Le retrait optimiste se fait dans la PROJECTION du fil, jamais en base.**
