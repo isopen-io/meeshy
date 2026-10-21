@@ -210,7 +210,11 @@ final class ProfileDecorTests: XCTestCase {
         }
         XCTAssertEqual(catalog.frameName("haussmannien", language: "fr"), "Haussmannien")
         XCTAssertEqual(catalog.frameName("haussmannien", language: "xx"), "Haussmannien", "langue inconnue : le français")
-        XCTAssertFalse(catalog.framePacks.contains { $0.installedByDefault })
+        XCTAssertEqual(
+            Set(catalog.framePacks.filter(\.installedByDefault).map(\.slug)),
+            ["cadres-haussmannien", "cadres-ancestral"],
+            "deux packs de cadres installés d'office, les cinq autres en boutique (#11165)"
+        )
     }
 
     func test_frameCatalog_anUnreadableFrameFallsAlone() throws {

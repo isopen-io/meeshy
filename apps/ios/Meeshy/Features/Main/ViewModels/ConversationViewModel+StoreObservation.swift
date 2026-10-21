@@ -54,52 +54,7 @@ extension ConversationViewModel {
         for (tempId, serverId) in mapping {
             LocallyHiddenMessagesStore.shared.migrate(from: tempId, to: serverId)
         }
-        let snapshot = messages
-        let rewritten: [Message] = snapshot.map { msg -> Message in
-            guard let serverId = mapping[msg.id] else { return msg }
-            // Message.id is `let` — copy via init with overridden id.
-            return Message(
-                id: serverId,
-                conversationId: msg.conversationId,
-                senderId: msg.senderId,
-                content: msg.content,
-                originalLanguage: msg.originalLanguage,
-                messageType: msg.messageType,
-                messageSource: msg.messageSource,
-                isEdited: msg.isEdited,
-                editedAt: msg.editedAt,
-                deletedAt: msg.deletedAt,
-                replyToId: msg.replyToId,
-                storyReplyToId: msg.storyReplyToId,
-                forwardedFromId: msg.forwardedFromId,
-                forwardedFromConversationId: msg.forwardedFromConversationId,
-                expiresAt: msg.expiresAt,
-                effects: msg.effects,
-                maxViewOnceCount: msg.maxViewOnceCount,
-                viewOnceCount: msg.viewOnceCount,
-                pinnedAt: msg.pinnedAt,
-                pinnedBy: msg.pinnedBy,
-                isEncrypted: msg.isEncrypted,
-                encryptionMode: msg.encryptionMode,
-                createdAt: msg.createdAt,
-                updatedAt: msg.updatedAt,
-                attachments: msg.attachments,
-                reactions: msg.reactions,
-                replyTo: msg.replyTo,
-                forwardedFrom: msg.forwardedFrom,
-                senderName: msg.senderName,
-                senderUsername: msg.senderUsername,
-                senderColor: msg.senderColor,
-                senderAvatarURL: msg.senderAvatarURL,
-                senderUserId: msg.senderUserId,
-                deliveryStatus: msg.deliveryStatus,
-                isMe: msg.isMe,
-                deliveredToAllAt: msg.deliveredToAllAt,
-                readByAllAt: msg.readByAllAt,
-                deliveredCount: msg.deliveredCount,
-                readCount: msg.readCount
-            )
-        }
+        let rewritten = MessageServerIdRekey.rewrite(messages, mapping: mapping)
         try? await CacheCoordinator.shared.messages.save(rewritten, for: convId)
     }
 
@@ -157,91 +112,26 @@ extension ConversationViewModel {
             }
     }
 
-    /// Re-clé les métadonnées audio LOCALES quand l'écho serveur donne son id
-    /// définitif à une bulle optimiste (#4948).
-    ///
-    /// La transcription faite SUR L'APPAREIL à l'arrêt de l'enregistrement est
-    /// posée sous le `tempId` de la bulle (`attachLocalTranscriptions`). À
-    /// l'accusé, `MessageRecord.toMessage` expose `serverId ?? localId` : la
-    /// bulle mono-audio lit alors `messageTranscriptions[message.id]` sous l'id
-    /// SERVEUR, la clé `tempId` n'est plus jamais consultée — et le karaoké
-    /// disparaissait à l'instant précis où le message était confirmé, pour ne
-    /// revenir qu'avec la transcription Whisper, plusieurs secondes plus tard.
-    ///
-    /// Ce sont les MÊMES métadonnées vues sous un autre nom : on RECOPIE, on
-    /// n'écrase pas — une transcription serveur déjà arrivée sous l'id serveur
-    /// fait autorité. Idempotent, donc rejouable à chaque publication.
-    ///
-    /// La table parcourue est `pendingServerIds` (une entrée par envoi de cette
-    /// session), jamais la fenêtre : le coût est celui des envois, pas celui de
-    /// l'historique affiché. Elle est renseignée AVANT l'écriture GRDB qui
-    /// déclenche cette publication (`finalizeSuccessfulSend`, l'accusé socket,
-    /// `OfflineQueue.retrySucceeded`), donc la correspondance est toujours là
-    /// quand on en a besoin. `messageTranscriptionsByAttachment` n'a rien à
-    /// re-clé : un `attachmentId` ne change pas.
+    /// Re-clé les métadonnées audio LOCALES quand l'écho serveur donne son id définitif à une bulle
+    /// optimiste (#4948) : sans cela le karaoké disparaît à l'instant où le message est confirmé. La table
+    /// parcourue est `pendingServerIds` (les envois de cette session), renseignée AVANT l'écriture GRDB.
     func rekeyLocalAudioMetadataToServerIds() {
         guard !pendingServerIds.isEmpty else { return }
-        for (localId, serverId) in pendingServerIds where localId != serverId {
-            if messageTranscriptions[serverId] == nil,
-               let localTranscription = messageTranscriptions[localId] {
-                messageTranscriptions[serverId] = localTranscription
-            }
-            if messageTranslatedAudios[serverId] == nil,
-               let localAudios = messageTranslatedAudios[localId] {
-                messageTranslatedAudios[serverId] = localAudios
-            }
-        }
+        adoptAudioMetadata(AttachmentAudioMetadata.rekeyed(audioMetadataState, mapping: pendingServerIds))
     }
 
-    /// Merges `incoming` messages into the current `messages` array, preserving
-    /// any in-memory messages not yet reflected in the GRDB snapshot (e.g., a
-    /// socket delivery that raced the REST load). Deduplicates by `id` so a
-    /// message received from both the initial REST response and the socket
-    /// never appears twice. Result is sorted by `createdAt`.
-    ///
-    /// Duplicate prevention: when a server ACK flips a message's display id from
-    /// localId (e.g. "cid_…") to serverId (e.g. "mongo_…"), `incoming` contains
-    /// the server-id version but the OLD optimistic row is still in `messages`
-    /// under its original id. Without correction, the preserve-logic keeps the
-    /// old row alongside the new one → duplicate bubble. `pendingServerIds`
-    /// maps localId → serverId synchronously before `applyEvent` fires the GRDB
-    /// refresh, so it is always populated in time.
+    /// Fusionne le snapshot du store dans `messages` (`ConversationMessageMerge`), puis repose les révélations
+    /// de vue unique et les combustions en cours, qui vivent chez l'hôte.
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
-        let incomingIds = Set(incoming.map(\.id))
-
-        // Detect optimistic rows superseded by a server-ack id-flip:
-        // if pendingServerIds maps msg.id → some id that IS in incoming, the
-        // old optimistic row must not be preserved (it would duplicate the
-        // acked row, which is already in incoming under the server id).
-        let supersededIds = Set(messages.compactMap { msg -> String? in
-            guard let sid = pendingServerIds[msg.id], incomingIds.contains(sid) else { return nil }
-            return msg.id
-        })
-
-        let preserved = messages.filter { !incomingIds.contains($0.id) && !supersededIds.contains($0.id) }
-        let result = applyingEphemeralBurns(applyingViewOnceReveals(
-            preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
-        ))
-
-        // Diagnostic: log when a message disappears from the display unexpectedly.
-        // Superseded rows (known id-flip) are EXPECTED drops and logged at info.
-        // Unknown drops are bugs and logged at error.
-        let beforeIds = Set(messages.map(\.id))
-        let resultIds = Set(result.map(\.id))
-        let allDroppedIds = beforeIds.subtracting(resultIds)
-        if !allDroppedIds.isEmpty {
-            let trueDrops = allDroppedIds.subtracting(supersededIds)
-            if !trueDrops.isEmpty {
-                let inFlight = messages.filter { trueDrops.contains($0.id) }
-                    .filter { m in
-                        let s = String(describing: m.deliveryStatus)
-                        return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
-                    }
-                Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(trueDrops.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(trueDrops.sorted().prefix(8).joined(separator: ","))")
-            }
-            if !supersededIds.isEmpty {
-                Logger.messages.info("[ConversationViewModel] merge suppressed \(supersededIds.count) superseded optimistic row(s) after server-ack id-flip ids=\(supersededIds.sorted().prefix(8).joined(separator: ","))")
-            }
+        let outcome = ConversationMessageMerge.merge(current: messages, incoming: incoming, pendingServerIds: pendingServerIds)
+        let result = applyingEphemeralBurns(applyingViewOnceReveals(outcome.messages))
+        let drops = ConversationMessageMerge.drops(before: messages, after: result, superseded: outcome.superseded)
+        guard !drops.all.isEmpty else { return result }
+        if !drops.unexpected.isEmpty {
+            Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(drops.unexpected.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(drops.inFlightOrSent) ids=\(drops.unexpected.sorted().prefix(8).joined(separator: ","))")
+        }
+        if !outcome.superseded.isEmpty {
+            Logger.messages.info("[ConversationViewModel] merge suppressed \(outcome.superseded.count) superseded optimistic row(s) after server-ack id-flip ids=\(outcome.superseded.sorted().prefix(8).joined(separator: ","))")
         }
         return result
     }
@@ -301,55 +191,11 @@ extension ConversationViewModel {
     /// awaitable in tests.
     func handleRetryExhausted(_ payload: OfflineRetryExhausted) async {
         guard payload.conversationId == self.conversationId else { return }
-        switch payload.kind {
-        case .sendMessage:
-            _ = try? await messagePersistence.applyEvent(
-                localId: payload.tempId, event: .retryExhausted
-            )
-        case .sendReaction:
-            guard let reaction = payload.reaction else { return }
-            // Same canonical sentinel the optimistic add used (see toggleReaction):
-            // the rollback must match the key that was actually written.
-            let participantId = currentUserId
-            let localId = reaction.messageId
-            let emoji = reaction.emoji
-            switch reaction.action {
-            case .add:
-                // Optimistic add failed permanently — remove the reaction we wrote.
-                try? await messagePersistence.removeReaction(
-                    localId: localId, emoji: emoji, participantId: participantId
-                )
-            case .remove:
-                // Optimistic remove failed permanently — restore the reaction we erased.
-                let remoteId = serverId(for: localId)
-                try? await messagePersistence.appendReaction(
-                    localId: localId, reactionId: UUID().uuidString,
-                    messageId: remoteId, participantId: participantId, emoji: emoji
-                )
-            }
-        case .editMessage:
-            // S3 — an offline edit that exhausted its retries never reached the
-            // server; restore the pre-edit content (captured in EditHistoryStore
-            // when the edit was applied) and drop the phantom revision. Mirrors
-            // the online edit rollback in `editMessage`.
-            let localId = payload.tempId
-            let canonicalId = serverId(for: localId)
-            if let original = EditHistoryStore.shared.revisions(for: canonicalId).last?.content {
-                _ = try? await messagePersistence.markEditedLocally(
-                    localId: localId, newContent: original
-                )
-                EditHistoryStore.shared.removeHistory(for: canonicalId)
-            }
-        case .deleteMessage:
-            // S3 — an offline delete that exhausted never reached the server;
-            // un-delete locally so the message stops showing as deleted on this
-            // device only. Mirrors the online delete rollback (`markUndeleted`).
-            try? await messagePersistence.markUndeleted(localId: payload.tempId)
-        default:
-            // Other outbox kinds (blockUser, friendRequest, etc.) reconcile
-            // through their own dedicated ViewModels.
-            break
+        guard payload.kind != .sendMessage else {
+            _ = try? await messagePersistence.applyEvent(localId: payload.tempId, event: .retryExhausted)
+            return
         }
+        await commands.compensate(payload, currentUserId: currentUserId, serverId: { self.serverId(for: $0) })
     }
 
     // MARK: - Message Processing Pipeline
