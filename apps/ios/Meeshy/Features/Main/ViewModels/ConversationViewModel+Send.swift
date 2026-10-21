@@ -315,131 +315,34 @@ extension ConversationViewModel {
     /// bulle passe en `.failed` : l'utilisateur peut renvoyer.
     func stageOffline(_ outgoing: OutgoingMessage, intent: MessageProtectionIntent) async -> Result<SentMessageReceipt, SendFailure> {
         let clientMessageId = outgoing.reusedClientMessageId ?? MessageID(ClientMessageId.generate())
-        let offlineMessage = await insertOfflineRow(outgoing, clientMessageId: clientMessageId, intent: intent)
-
-        let convId = conversationId
-        Task.detached(priority: .utility) {
-            await CacheCoordinator.shared.messages.mergeUpdate(for: convId) { cached in
-                let cachedIds = Set(cached.map(\.id))
-                guard !cachedIds.contains(offlineMessage.id) else { return cached }
-                return (cached + [offlineMessage]).sorted { $0.createdAt < $1.createdAt }
-            }
-        }
-
-        let offlineFacet = LastMessageFacet(message: offlineMessage, preview: outgoing.text)
-        Task {
-            await ConversationSyncEngine.shared.updateConversationAfterSend(offlineFacet, conversationId: convId)
-        }
-
+        _ = await collaborators.stager.stageOffline(
+            outgoing, clientMessageId: clientMessageId, intent: intent, author: optimisticAuthor,
+            conversationId: conversationId, language: composedLanguage(of: outgoing),
+            effectFlags: optimisticEffectFlags(intent).rawValue
+        )
         return await sendCoordinator.enqueueOffline(outgoing, clientMessageId: clientMessageId, intent: intent)
-    }
-
-    private func insertOfflineRow(_ outgoing: OutgoingMessage, clientMessageId: MessageID, intent: MessageProtectionIntent) async -> Message {
-        let localId = clientMessageId.rawValue
-        let relation = outgoing.relation
-        let offlineMessage = Message(
-            id: localId,
-            conversationId: conversationId,
-            senderId: currentUserId,
-            content: outgoing.text,
-            messageType: .text,
-            replyToId: relation.replyToId,
-            forwardedFromId: relation.forwardedFromId,
-            forwardedFromConversationId: relation.forwardedFromConversationId,
-            createdAt: Date(),
-            updatedAt: Date(),
-            deliveryStatus: .sending,
-            isMe: true,
-            location: outgoing.location,
-            sticker: outgoing.sticker
-        )
-        let offlineRecord = OptimisticTextRecordBuilder.record(
-            localId: localId,
-            conversationId: conversationId,
-            senderId: currentUserId,
-            sender: authManager.currentUser,
-            text: outgoing.text,
-            originalLanguage: composedLanguage(of: outgoing),
-            messageType: "text",
-            replyToId: relation.replyToId,
-            storyReplyToId: relation.storyReplyToId,
-            forwardedFromId: relation.forwardedFromId,
-            forwardedFromConversationId: relation.forwardedFromConversationId,
-            replyToJson: nil,
-            effectFlags: optimisticEffectFlags(intent).rawValue,
-            maxViewOnceCount: intent.maxViewOnceCount,
-            locationJson: OptimisticRecordColumns.locationJson(outgoing.location, id: localId),
-            stickerJson: OptimisticRecordColumns.stickerJson(outgoing.sticker, id: localId),
-            now: Date(),
-            ephemeralDuration: intent.ephemeralDurationSeconds
-        )
-        do {
-            try await messagePersistence.insertOptimistic(offlineRecord)
-        } catch {
-            Logger.messages.error("offline insertOptimistic failed: \(error.localizedDescription, privacy: .public)")
-        }
-        return offlineMessage
     }
 
     // MARK: En ligne
 
-    /// La ligne optimiste d'un envoi en ligne, posée dans GRDB (la
-    /// observation du store la fait apparaître) puis l'aperçu de liste, avant
-    /// tout ACK. Un renvoi (`reusesExistingRow`) garde sa ligne.
+    /// La ligne optimiste d'un envoi en ligne, avant tout ACK. Un renvoi
+    /// (`reusesExistingRow`) garde sa ligne.
     func stageOptimistic(_ outgoing: OutgoingMessage, context: SendAttemptContext) async {
         guard !context.reusesExistingRow else { return }
-        let tempId = context.clientMessageId.rawValue
-        let intent = context.intent
         let relation = outgoing.relation
-        let resolvedAttachments = outgoing.attachments.previews ?? []
-        let resolvedEphemeralDuration = intent.ephemeralDurationSeconds
         let replyRef = makeReplyReference(
             storyReplyReference: relation.storyReference,
             replyToId: relation.replyToId,
             citingAttachmentId: relation.attachmentReplyTo?.attachmentId
         )
-        let persistence = messagePersistence
-        let optimisticRecord = OptimisticTextRecordBuilder.record(
-            localId: tempId,
-            conversationId: conversationId,
-            senderId: currentUserId,
-            sender: authManager.currentUser,
-            text: outgoing.text,
-            originalLanguage: context.language,
-            messageType: outgoing.optimisticMessageType.rawValue,
-            replyToId: relation.replyToId,
-            storyReplyToId: relation.storyReplyToId,
-            forwardedFromId: relation.forwardedFromId,
-            forwardedFromConversationId: relation.forwardedFromConversationId,
-            replyToJson: replyRef.flatMap(encodedReplyReference),
-            effectFlags: optimisticEffectFlags(intent).rawValue,
-            maxViewOnceCount: intent.maxViewOnceCount,
-            locationJson: OptimisticRecordColumns.locationJson(outgoing.location, id: tempId),
-            stickerJson: OptimisticRecordColumns.stickerJson(outgoing.sticker, id: tempId),
-            now: Date(),
-            ephemeralDuration: resolvedEphemeralDuration
+        await collaborators.stager.stageOnline(
+            outgoing, context: context, author: optimisticAuthor, conversationId: conversationId,
+            replyReference: replyRef, effectFlags: optimisticEffectFlags(context.intent).rawValue
         )
-        Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
-        do {
-            try await persistence.insertOptimistic(optimisticRecord)
-            Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
-            await ConversationSyncEngine.shared.updateConversationAfterSend(
-                LastMessageFacet.sent(
-                    id: tempId,
-                    text: outgoing.text,
-                    at: optimisticRecord.createdAt,
-                    attachments: resolvedAttachments,
-                    isBlurred: intent.wireIsBlurred ?? false,
-                    isViewOnce: intent.isViewOnce,
-                    ephemeralDuration: resolvedEphemeralDuration,
-                    originalLanguage: optimisticRecord.originalLanguage,
-                    location: outgoing.location
-                ),
-                conversationId: conversationId
-            )
-        } catch {
-            Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-        }
+    }
+
+    private var optimisticAuthor: OptimisticAuthor {
+        OptimisticAuthor(senderId: currentUserId, sender: authManager.currentUser)
     }
 
     /// Prépare ce qui quitte l'appareil : le chiffrement E2EE d'une
@@ -523,71 +426,22 @@ extension ConversationViewModel {
         payload: SealedOutgoingPayload,
         context: SendAttemptContext
     ) async -> Result<SentMessageReceipt, SendFailure> {
-        let tempId = context.clientMessageId.rawValue
-        if let refusal = await classifyRefusal(error, tempId: tempId) { return .failure(refusal) }
-
-        let failElapsedMs = Int(Date().timeIntervalSince(context.startedAt) * 1000)
-        Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-
-        if outgoing.socketFallbackEligible(intent: context.intent, hasPendingEffects: pendingEffects.hasAnyEffect),
-           let receipt = await emitSocketFallback(outgoing, payload: payload, context: context, failedAfterMs: failElapsedMs) {
-            return .success(receipt)
-        }
-
-        await sendCoordinator.recordFailure(error, localId: tempId)
-        return .failure(await sendCoordinator.enqueueForRetry(outgoing, context: context, cause: error))
-    }
-
-    /// Refus DÉFINITIFS : retenter ne réussirait jamais, donc ni repli socket
-    /// ni outbox. Un blocage entrant, lui, n'est pas visible d'avance.
-    private func classifyRefusal(_ error: any Error, tempId: String) async -> SendFailure? {
-        if let restriction = ConversationWriteRestriction(refusal: error), restriction.closesComposer {
-            await withdrawRefusedMessage(tempId: tempId, restriction: restriction)
-            return .writeRestricted(restriction)
-        }
-        if let slowMode = NewcomerSlowMode.from(error) {
-            await holdForSlowMode(tempId: tempId, slowMode: slowMode, error: error)
-            return .slowMode(slowMode)
-        }
-        guard error.isUserBlockedError else { return nil }
-        Logger.messages.warning("perf:ios.send.fail.blocked clientMessageId=\(tempId, privacy: .public)")
-        await sendCoordinator.recordFailure(error, localId: tempId)
-        FeedbackToastManager.shared.showError(
-            String(localized: "conversation.send.blocked", defaultValue: "Vous ne pouvez pas écrire à cet utilisateur.", bundle: .main)
+        await collaborators.failureRecovery.recover(
+            from: error, outgoing: outgoing, payload: payload, context: context,
+            fallbackEligible: outgoing.socketFallbackEligible(intent: context.intent, hasPendingEffects: pendingEffects.hasAnyEffect),
+            coordinator: sendCoordinator,
+            hooks: SendRecoveryHooks(
+                withdraw: { [weak self] in await self?.withdrawRefusedMessage(tempId: $0, restriction: $1) },
+                holdSlowMode: { [weak self] in await self?.holdForSlowMode(tempId: $0, slowMode: $1, error: $2) },
+                registerServerId: { [weak self] in self?.pendingServerIds[$0] = $1 }
+            )
         )
-        return .recipientBlocked
-    }
-
-    /// Repli socket : le POST REST a échoué — le coordinateur réémet UNE fois
-    /// avec le MÊME clientMessageId (dedup gateway). Les envois que le canal
-    /// perdrait en silence restent sur le retry REST de l'outbox, qui les
-    /// préserve. `pendingServerIds` est posé AVANT l'acquittement GRDB : un
-    /// `message:new` qui arrive pendant l'attente se réconcilie sans doublon.
-    private func emitSocketFallback(
-        _ outgoing: OutgoingMessage,
-        payload: SealedOutgoingPayload,
-        context: SendAttemptContext,
-        failedAfterMs: Int
-    ) async -> SentMessageReceipt? {
-        guard let receipt = await sendCoordinator.emitSocketFallback(outgoing, payload: payload, context: context),
-              case .acknowledged(let serverId, let at, _) = receipt.delivery else { return nil }
-        let tempId = context.clientMessageId.rawValue
-        pendingServerIds[tempId] = serverId.rawValue
-        _ = await sendCoordinator.acknowledge(localId: tempId, serverId: serverId.rawValue, at: at)
-        Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId.rawValue, privacy: .public) transport=socket-fallback durationMs=\(failedAfterMs, privacy: .public)")
-        return receipt
     }
 
     /// Les vues qui pilotent leur propre envoi (média, sticker) rapportent
     /// l'échec de leur upload par ici, pour qu'il soit journalisé.
     func recordSendFailure(tempId: String, error: any Error) async {
         await sendCoordinator.recordFailure(error, localId: tempId)
-    }
-
-    /// Un JSON qui ne s'encode pas ne bloque pas la ligne optimiste : il est
-    /// journalisé, et la colonne reste vide.
-    private func encodedReplyReference(_ reference: ReplyReference) -> Data? {
-        bestEffort("send.replyToJson", category: .messages) { try JSONEncoder().encode(reference) }
     }
 
     // MARK: - Retry Failed Message
@@ -609,35 +463,13 @@ extension ConversationViewModel {
         // (Phase 4 §6.2), so the gateway dedup `(conversationId,
         // clientMessageId)` catches a prior attempt that DID reach the server.
         await sendCoordinator.markRetrying(localId: messageId)
-        let succeeded = await send(retryOutgoing(of: failedMsg, messageId: messageId)).isAccepted
+        let succeeded = await send(FailedMessageReplay.outgoing(of: failedMsg, conversationId: conversationId)).isAccepted
         // #4042 — un retry RÉUSSI fait disparaître la ligne outbox D'ORIGINE
         // (même clientMessageId) que `SyncPillViewModel` surface tant qu'elle
         // reste `.failed`/`.exhausted`.
         if succeeded {
             await offlineQueue.clearSendMessageRow(clientMessageId: messageId)
         }
-    }
-
-    /// Ce que le renvoi d'un message en échec rejoue : son contenu, sa langue
-    /// d'ORIGINE (le Prisme ne se réécrit pas à chaque retry), sa relation —
-    /// réponse ou transfert — et son lieu.
-    private func retryOutgoing(of failedMsg: Message, messageId: String) -> OutgoingMessage {
-        OutgoingMessage(
-            conversationId: ConversationID(conversationId),
-            content: failedMsg.content,
-            relation: .legacy(
-                replyToId: failedMsg.replyToId,
-                storyReplyToId: nil,
-                storyReference: nil,
-                forwardedFromId: failedMsg.forwardedFromId,
-                forwardedFromConversationId: failedMsg.forwardedFromConversationId,
-                attachmentReplyTo: nil
-            ),
-            attachments: .none,
-            originalLanguage: failedMsg.originalLanguage,
-            reusedClientMessageId: MessageID(messageId),
-            location: failedMsg.location
-        )
     }
 
     /// Un message média en échec rejoue par l'outbox durable : elle seule
@@ -676,15 +508,6 @@ extension ConversationViewModel {
         await sendCoordinator.markFailed(localId: tempId, reason: reason)
     }
 
-    /// Insère un MessageRecord optimiste GRDB pour un message média (image,
-    /// vidéo, audio, fichier) AVANT que l'upload TUS ne soit terminé. Les
-    /// attachments fournis pointent sur les fichiers locaux (file:// URLs)
-    /// pour que la bulle affiche l'image / le player audio immédiatement —
-    /// y compris hors-ligne. Le store observation surface la nouvelle ligne
-    /// dans `messages` automatiquement, donc l'appelant n'a PAS besoin de
-    /// faire `messages.append(...)` en parallèle (cela serait écrasé à la
-    /// prochaine emission du publisher).
-    ///
     /// `tempId` est la clé locale (= `MessageRecord.localId` dans GRDB).
     /// Préfixes attendus : `temp_<UUID>` (envoi en ligne), `offline_<UUID>`
     /// (queue offline), `retry_<UUID>` (queue retry).
@@ -706,58 +529,25 @@ extension ConversationViewModel {
         sticker: MessageSticker? = nil,
         protection: MessageProtectionIntent
     ) {
-        let now = Date()
-        let attachmentsJson = attachments.isEmpty ? nil : bestEffort("send.attachmentsJson", category: .messages) { try JSONEncoder().encode(attachments) }
-        // Construit le ReplyReference riche AVANT l'insert : si `replyReference`
-        // est fourni (story reply), on l'utilise ; sinon on resout via
-        // `replyToId` depuis `self.messages`. Garantit que `replyToJson` est
-        // non-nil des que `replyToId` ou `replyReference` n'est pas nil.
-        let resolvedReplyRef = makeReplyReference(
-            storyReplyReference: replyReference,
-            replyToId: replyToId
+        collaborators.stager.stageMedia(
+            OptimisticMediaDraft(
+                conversationId: conversationId,
+                tempId: tempId,
+                content: content,
+                attachments: attachments,
+                messageType: messageType,
+                replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
+                // Construit le ReplyReference riche AVANT l'insert : si `replyReference`
+                // est fourni (story reply), on l'utilise ; sinon on resout via
+                // `replyToId` depuis `self.messages`. Garantit que `replyToJson` est
+                // non-nil des que `replyToId` ou `replyReference` n'est pas nil.
+                replyReference: makeReplyReference(storyReplyReference: replyReference, replyToId: replyToId),
+                originalLanguage: originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages),
+                sticker: sticker,
+                protection: protection
+            ),
+            author: optimisticAuthor
         )
-        let replyToJson = resolvedReplyRef.flatMap(encodedReplyReference)
-        let resolvedOriginalLanguage = originalLanguage ?? Self.composeLanguage(for: content, preferred: preferredLanguages)
-        let record = OptimisticMediaRecordBuilder.record(
-            tempId: tempId,
-            conversationId: conversationId,
-            senderId: currentUserId,
-            sender: authManager.currentUser,
-            content: content,
-            originalLanguage: resolvedOriginalLanguage,
-            messageType: messageType,
-            replyToId: replyToId,
-            storyReplyToId: storyReplyToId,
-            replyToJson: replyToJson,
-            attachmentsJson: attachmentsJson,
-            stickerJson: OptimisticRecordColumns.stickerJson(sticker, id: tempId),
-            protection: protection,
-            now: now
-        )
-        let persistence = messagePersistence
-        let recordConversationId = record.conversationId
-        let attachmentCount = attachments.count
-        // Captured for the conversation-list optimistic update below (computed on
-        // the MainActor before the detached insert).
-        let listFacet = LastMessageFacet.sent(
-            id: tempId,
-            text: content,
-            at: now,
-            attachments: attachments,
-            ephemeralDuration: protection.ephemeralDurationSeconds,
-            originalLanguage: resolvedOriginalLanguage
-        )
-        Task.detached(priority: .userInitiated) {
-            do {
-                try await persistence.insertOptimistic(record)
-                Logger.messages.debug("SendFlow insertOptimisticMedia OK tempId=\(tempId, privacy: .public) convId=\(recordConversationId, privacy: .public) attachments=\(attachmentCount, privacy: .public)")
-                // Local-first: surface the media message in the conversation list
-                // immediately (preview + bump to top), before any server ACK —
-                // the media path previously never updated the list optimistically.
-                await ConversationSyncEngine.shared.updateConversationAfterSend(listFacet, conversationId: recordConversationId)
-            } catch {
-                Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
-            }
-        }
     }
 }
