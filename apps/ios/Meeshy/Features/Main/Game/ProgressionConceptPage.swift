@@ -421,7 +421,8 @@ struct ProgressionConceptGestures: View {
                 GameMintPreviewView(
                     game: game, online: viewModel.isOnline,
                     minting: viewModel.isMinting, error: viewModel.mintError,
-                    celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
+                    celebration: viewModel.celebration, settlement: viewModel.mintSettlement,
+                    onMint: { Task { await viewModel.mint() } }
                 )
             } else if let meesh = progress.meesh {
                 ProgressionMeeshDetail(

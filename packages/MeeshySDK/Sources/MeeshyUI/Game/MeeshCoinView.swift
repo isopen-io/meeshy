@@ -20,6 +20,9 @@ import MeeshySDK
 public struct MeeshCoinView: View {
 
     public enum Face: Sendable, Equatable {
+        /// Le FLAN : la pièce avant la frappe, son métal, sa tranche et ses décors, sans couronne ni Signature — ce que la
+        /// cérémonie de la frappe forme et pose sur l'enclume (#11177).
+        case blank
         case obverse
         /// Le revers porte le numéro gravé et l'année de frappe.
         case reverse(number: Int, year: Int)
@@ -48,7 +51,7 @@ public struct MeeshCoinView: View {
 
     var painter: MeeshCoinPainter {
         let geometry = MeeshCoinGeometry.shared
-        let side: MeeshCoinPainter.Side = face == .obverse ? .obverse : .reverse
+        let side: MeeshCoinPainter.Side = face == .obverse || face == .blank ? .obverse : .reverse
         return MeeshCoinPainter(geometry: geometry, edition: geometry.edition(edition), side: side)
     }
 
@@ -62,6 +65,7 @@ public struct MeeshCoinView: View {
                 context.scaleBy(x: size.width / painter.geometry.frame, y: size.width / painter.geometry.frame)
                 painter.drawBlank(in: &context)
                 switch face {
+                case .blank: break
                 case .obverse: painter.drawObverse(in: &context)
                 case .reverse(let number, let year): painter.drawReverse(number: number, year: year, in: &context)
                 }
