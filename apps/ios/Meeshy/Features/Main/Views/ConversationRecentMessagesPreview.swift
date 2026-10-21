@@ -119,7 +119,9 @@ enum ConversationPreviewRenderer {
     /// son drapeau voyage (`ConversationListPreviewLoader.snapshot`). Il se dit
     /// « Message chiffré », jamais une bulle vide.
     static func isSealed(_ message: Message) -> Bool {
-        message.isEncrypted && message.content.isEmpty
+        let sealedBurn = ConversationListPreviewLoader.holdsBurnOnRead(message)
+            && message.content.isEmpty && message.attachments.isEmpty
+        return (message.isEncrypted && message.content.isEmpty) || sealedBurn
     }
 
     static func contentWidth(cardWidth: CGFloat) -> CGFloat {
@@ -450,9 +452,11 @@ struct ConversationRecentMessagesPreview: View {
         HStack(spacing: 0) {
             if message.isMe { Spacer(minLength: MeeshySpacing.xl) }
             Label {
-                Text(String(localized: "protection.encrypted", bundle: .main))
+                Text(message.isEncrypted
+                     ? String(localized: "protection.encrypted", bundle: .main)
+                     : String(localized: "protection.afterRead", bundle: .main))
             } icon: {
-                Image(systemName: "lock.fill")
+                Image(systemName: message.isEncrypted ? "lock.fill" : "flame.fill")
             }
             .font(.footnote.weight(.medium))
             .foregroundColor(isDark ? MeeshyColors.indigo50.opacity(MeeshyOpacity.intense) : MeeshyColors.indigo950.opacity(MeeshyOpacity.intense))

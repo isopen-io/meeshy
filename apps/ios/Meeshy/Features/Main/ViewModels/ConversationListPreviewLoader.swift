@@ -276,8 +276,8 @@ final class ConversationListPreviewLoader: ObservableObject {
         prism: [String]
     ) -> ConversationPreviewSnapshot {
         let sealed = messages.map { Self.isReadableOnDevice($0) ? $0 : Self.sealedForPreview($0) }
-        let encryptedIds = Set(sealed.filter { $0.isEncrypted }.map(\.id))
-        let readable = translations.filter { !encryptedIds.contains($0.key) }
+        let withheldIds = Set(sealed.filter { $0.isEncrypted || Self.holdsBurnOnRead($0) }.map(\.id))
+        let readable = translations.filter { !withheldIds.contains($0.key) }
         let served = sealed.reduce(into: [String: MessageTranslation]()) { served, message in
             guard let candidates = readable[message.id],
                   let elected = Self.servedTranslation(of: message, among: candidates, prism: prism) else { return }
@@ -286,10 +286,21 @@ final class ConversationListPreviewLoader: ObservableObject {
         return ConversationPreviewSnapshot(messages: sealed, translations: readable, served: served)
     }
 
+    /// **Une flamme « après lecture » reçue ne se lit pas dans la liste.** La
+    /// liste n'est pas une lecture : l'ouvrir au fil la consomme, l'aperçu la
+    /// livrerait répétable, sans jamais déclencher la combustion (même loi que
+    /// l'appui long d'un message, qui ne montre ni ne consomme ce qui brûle).
+    /// Les vues uniques, les supprimés et les échus se disent d'eux-mêmes dans
+    /// la bulle (`BubbleContent.Kind`) ; la flamme à durée se lit comme le fil.
+    static func holdsBurnOnRead(_ message: Message) -> Bool {
+        !message.isMe && message.exitOffer.nature == .afterReadFlame
+    }
+
     private static func sealedForPreview(_ message: Message) -> Message {
-        guard message.isEncrypted else { return message }
+        guard message.isEncrypted || holdsBurnOnRead(message) else { return message }
         var sealed = message
         sealed.content = ""
+        if holdsBurnOnRead(message) { sealed.attachments = [] }
         return sealed
     }
 
