@@ -24,7 +24,7 @@ struct RootEnvironmentLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .meeshyRouter(router)
+            .modifier(MeeshyRouterInjection(router: router))
             .modifier(PublishesSceneNavigation(router: router, role: .main))
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
@@ -50,7 +50,7 @@ struct RootEnvironmentLayer: ViewModifier {
                         onOpenFullConversation(conv)
                     }
                 })
-                    .meeshyRouter(router)
+                    .modifier(MeeshyRouterInjection(router: router))
                     .environmentObject(storyViewModel)
                     .environmentObject(statusViewModel)
                     .meeshyConversationList(conversationViewModel)

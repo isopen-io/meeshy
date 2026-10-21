@@ -52,9 +52,12 @@ extension EnvironmentValues {
     }
 }
 
-extension View {
-    func meeshyRouter(_ router: Router) -> some View {
-        environmentObject(router)
+struct MeeshyRouterInjection: ViewModifier {
+    let router: Router
+
+    func body(content: Content) -> some View {
+        content
+            .environmentObject(router)
             .environment(\.routerCommands, router.commands)
     }
 }

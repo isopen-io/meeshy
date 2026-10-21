@@ -43,7 +43,7 @@ final class RouterInjectionGuardTests: XCTestCase {
     func test_injectionSites_poseBothChannels() throws {
         for path in Self.injectionSites {
             let source = try code(path)
-            XCTAssertTrue(source.contains(".meeshyRouter(router)"), "\(path) ne pose pas les commandes")
+            XCTAssertTrue(source.contains(".modifier(MeeshyRouterInjection(router: router))"), "\(path) ne pose pas les commandes")
             XCTAssertFalse(source.contains(".environmentObject(router)"), "\(path) pose l'objet seul")
         }
     }
