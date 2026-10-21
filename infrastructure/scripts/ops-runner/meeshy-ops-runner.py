@@ -12,8 +12,9 @@ systemd .path reveille ce runner, qui :
   - deplace la demande vers done/ ou rejected/ AVANT toute execution, et ne
     recopie jamais le contenu d'une demande refusee ;
   - applique les delais (sauvegarde 6 h, purge 1 h), memorises dans l'etat ;
-  - n'execute que deux gestes fixes : la sauvegarde de l'environnement (son
-    unite systemd) et la purge des images Docker inutilisees (jamais un volume,
+  - n'execute que deux gestes fixes : la sauvegarde de l'environnement (l'instance
+    @on-demand de son unite systemd, qui a sa propre rotation et ne fait jamais
+    sortir une sauvegarde nocturne, #11450) et la purge des images Docker inutilisees (jamais un volume,
     jamais `system prune`) ; la purge vaut pour tout l'hote, production comprise :
     elle prend le verrou de la promotion de la production, pour ne jamais
     effacer l'image qu'une promotion vient de tirer et n'a pas encore demarree ;
@@ -97,7 +98,7 @@ class Paths:
         self.docker_file = os.path.join(self.state, "docker.json")
         self.containers_file = os.path.join(self.state, "containers.json")
         self.compose_dir = os.environ.get("OPS_COMPOSE_DIR") or "/opt/meeshy/%s" % env
-        self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup.service" % env
+        self.backup_unit = os.environ.get("OPS_BACKUP_UNIT") or "meeshy-%s-backup@on-demand.service" % env
         self.backup_status = os.environ.get("OPS_BACKUP_STATUS_FILE") or "/opt/meeshy/%s/backup-status/etat.json" % env
 
 
