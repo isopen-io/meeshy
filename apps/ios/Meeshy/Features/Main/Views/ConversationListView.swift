@@ -308,6 +308,7 @@ struct ConversationListView: View {
                 )
             }
         }
+        .modifier(ConversationListReorderAnimation(order: orderedConversationIds, scrollRelay: scrollOffsetRelay))
         .modifier(ConversationListKeyboardNavigation(
             visibleIds: conversationViewModel.groupedConversations
                 .filter { isSectionContentVisible($0.section.id) }.flatMap { $0.conversations.map(\.id) },
@@ -422,7 +423,8 @@ struct ConversationListView: View {
             // time. Re-evaluates when AuthManager publishes a new currentUser
             // because the parent body re-runs on @Published changes.
             preferredContentLanguages: passContext.preferredContentLanguages,
-            cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
+            previewFingerprint: conversationViewModel.previewLoader.fingerprint(for: conversation.id),
+            previewLoader: conversationViewModel.previewLoader,
             leadingActions: swipeActions.leadingSwipeActions(for: conversation),
             trailingActions: swipeActions.trailingSwipeActions(for: conversation),
             onViewStory: { handleStoryView(conversation) },
@@ -433,9 +435,7 @@ struct ConversationListView: View {
                 sheetTargets.inviteSheet = conversation
             } : nil,
             onTap: { openConversation(conversation) },
-            onLoadPreview: {
-                await conversationViewModel.loadPreviewMessages(for: conversation.id)
-            },
+            onLoadPreview: { await conversationViewModel.loadPreviewMessages(for: conversation.id, intent: $0) },
             enableAutoPreviewLoad: passContext.autoPreviewIds.contains(conversation.id),
             onLongPress: { sourceFrame in
                 Task { await conversationViewModel.loadPreviewMessages(for: conversation.id, refresh: true) }
