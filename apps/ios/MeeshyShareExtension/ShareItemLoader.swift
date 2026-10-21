@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 import UniformTypeIdentifiers
 
 /// Les chargements lancés, un par fournisseur, dans l'ordre des fournisseurs.
@@ -23,9 +24,10 @@ nonisolated struct ShareItemLoads: Sendable {
 /// Chaque fichier est copié DANS la complétion de `loadFileRepresentation` :
 /// l'URL fournie est supprimée à son retour. Le dossier du partage n'est créé
 /// qu'au premier fichier à copier, sinon un partage de texte laisserait un
-/// dossier que rien n'efface. Les plafonds communs (D10 : 20 fichiers,
-/// 500 Mo) ne refusent rien ici : l'écran unique les DIT (V9) ; la copie
-/// reste gardée par l'espace libre, fichier par fichier.
+/// dossier que rien n'efface. Le plafond d'octets commun (D10 : 500 Mo) se
+/// réserve ICI, pour toutes les copies ensemble (`ShareByteBudget`, #11429) :
+/// ce qui le dépasse n'est pas copié, et l'écran unique le DIT (V9), comme il
+/// dit le plafond de 20 fichiers. La copie reste gardée par l'espace libre.
 nonisolated enum ShareItemLoader {
     typealias PrepareMediaRoot = @Sendable (String) -> URL?
     typealias Deliver = @Sendable (ShareLoadOutcome) -> Void
@@ -35,9 +37,10 @@ nonisolated enum ShareItemLoader {
         _ providers: [NSItemProvider],
         shareId: String,
         prepareMediaRoot: @escaping PrepareMediaRoot = { ShareMediaStaging.prepareMediaRoot(shareId: $0) },
-        sourcePolicy: ShareSourcePolicy = .live
+        sourcePolicy: ShareSourcePolicy = .live,
+        budget: ShareByteBudget = ShareByteBudget(limit: ShareLimits.maxTotalBytes)
     ) -> ShareItemLoads {
-        let context = ShareStagingContext(shareId: shareId, prepareMediaRoot: prepareMediaRoot, sourcePolicy: sourcePolicy)
+        let context = ShareStagingContext(shareId: shareId, prepareMediaRoot: prepareMediaRoot, sourcePolicy: sourcePolicy, budget: budget)
         return ShareItemLoads(tasks: providers.enumerated().map { index, provider in
             awaiting { deliver in load(provider, index: index, context: context, deliver: deliver) }
         })
@@ -135,6 +138,7 @@ nonisolated struct ShareStagingContext: Sendable {
     let shareId: String
     let prepareMediaRoot: ShareItemLoader.PrepareMediaRoot
     let sourcePolicy: ShareSourcePolicy
+    let budget: ShareByteBudget
 
     func stage(_ url: URL?, error: (any Error)?, typeIdentifier: String?, index: Int) -> ShareStagingResult {
         ShareStagingResult(index: index, outcome: copy(url, error: error, typeIdentifier: typeIdentifier, index: index))
@@ -160,7 +164,8 @@ nonisolated struct ShareStagingContext: Sendable {
                 shareId: shareId,
                 index: index,
                 mime: ShareMediaStaging.mimeType(typeIdentifier: typeIdentifier, fileExtension: url.pathExtension),
-                freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot)
+                freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot),
+                budget: budget
             ))
         } catch let error as ShareMediaStagingError {
             return .failure(error)

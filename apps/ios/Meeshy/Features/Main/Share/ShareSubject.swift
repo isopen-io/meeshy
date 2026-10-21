@@ -52,8 +52,8 @@ enum ShareSubject {
 nonisolated struct ShareIncoming: Equatable, Sendable {
     var media: [ShareIncomingMedia]
     var text: String?
-    /// Une pièce au moins n'a pas pu être copiée (iCloud non téléchargé, disque plein).
-    var preparationFailed = false
+    /// Ce que la feuille n'a pas pu copier, et pourquoi : l'écran le DIT (V9).
+    var shortfalls: [ShareShortfall] = []
     /// Un partage RELAYÉ par l'extension (`ShareRelayHandoff`) rouvre l'écran
     /// sur les conversations que l'auteur y avait déjà choisies.
     var preselectedConversationIds: [String] = []
@@ -64,6 +64,15 @@ nonisolated struct ShareIncoming: Equatable, Sendable {
               !text.contains(where: \.isWhitespace) else { return nil }
         return URL(string: text)
     }
+}
+
+/// Pourquoi des pièces remises par une autre app ne partent pas.
+nonisolated enum ShareShortfall: Hashable, Sendable {
+    /// iCloud non téléchargé, disque plein, copie échouée.
+    case unprepared
+    /// Ces pièces n'ont pas été copiées : elles dépassaient les 500 Mo d'un
+    /// partage (D10, #11429).
+    case overBudget(uncopied: Int)
 }
 
 /// Une pièce venue d'une autre app — son fichier local sert l'aperçu.

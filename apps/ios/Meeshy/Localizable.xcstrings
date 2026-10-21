@@ -146055,6 +146055,53 @@
         }
       }
     },
+    "share.sheet.content.over-budget": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ملفات لم تُنسخ: %d. تحمل المشاركة 20 ملفًا و500 ميغابايت على الأكثر."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht kopierte Dateien: %d. Ein Teilen umfasst höchstens 20 Dateien und 500 MB."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Files not copied: %d. A share carries at most 20 files and 500 MB."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Archivos no copiados: %d. Un envío lleva como máximo 20 archivos y 500 MB."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fichiers non copiés : %d. Un partage emporte au plus 20 fichiers et 500 Mo."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File non copiati: %d. Una condivisione porta al massimo 20 file e 500 MB."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arquivos não copiados: %d. Um compartilhamento leva no máximo 20 arquivos e 500 MB."
+          }
+        }
+      }
+    },
     "share.sheet.content.over-limit": {
       "extractionState": "manual",
       "localizations": {

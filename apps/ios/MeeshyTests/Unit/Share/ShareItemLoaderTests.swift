@@ -1,4 +1,5 @@
 import XCTest
+@testable import Meeshy
 import UniformTypeIdentifiers
 
 /// Le chargement RÉEL, à travers de vrais `NSItemProvider` : ce que reçoit
@@ -30,11 +31,15 @@ final class ShareItemLoaderTests: XCTestCase {
         return provider
     }
 
-    private func load(_ providers: [NSItemProvider], into root: URL) async -> ShareGathered {
+    private func load(
+        _ providers: [NSItemProvider],
+        into root: URL,
+        budget: ShareByteBudget = ShareByteBudget(limit: .max)
+    ) async -> ShareGathered {
         await ShareItemLoader.start(providers, shareId: "share-1", prepareMediaRoot: { shareId in
             try? FileManager.default.createDirectory(at: root.appendingPathComponent(shareId), withIntermediateDirectories: true)
             return root
-        }).gather()
+        }, budget: budget).gather()
     }
 
     func test_gather_googlePhotosPhotoAndVideo_copiesBothMediaAndSendsNoPath() async throws {
@@ -57,6 +62,27 @@ final class ShareItemLoaderTests: XCTestCase {
             try Data(contentsOf: root.appendingPathComponent(gathered.media[1].relPath)),
             try Data(contentsOf: video)
         )
+    }
+
+    // MARK: - Plafond d'octets cumulé (#11429)
+
+    /// Trois photos de 4 Kio sous un plafond de 10 Kio : deux sont copiées,
+    /// la troisième ne l'est pas, et l'écran le dit.
+    func test_gather_beyondTheCumulativeBudget_copiesWhatFits_andTheScreenSaysWhatWasLeft() async throws {
+        let source = try makeDirectory()
+        let root = try makeDirectory()
+        let providers = try (0..<3).map { index in
+            googlePhotosProvider(file: try makeFile(named: "IMG_\(index).jpg", bytes: 4096, in: source), typeIdentifier: UTType.jpeg.identifier)
+        }
+
+        let gathered = await load(providers, into: root, budget: ShareByteBudget(limit: 10 * 1024))
+
+        XCTAssertEqual(gathered.media.count, 2)
+        XCTAssertEqual(gathered.failures.count, 1)
+        XCTAssertTrue(gathered.failures.allSatisfy(\.isOverBudget))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.appendingPathComponent("share-1").path).count, 2)
+        let incoming = ShareExtensionIncoming.make(text: nil, media: gathered.media, mediaRoot: root, failures: gathered.failures)
+        XCTAssertEqual(incoming.shortfalls, [.overBudget(uncopied: 1)])
     }
 
     // MARK: - Député abusé (revue de sécurité #11134)
