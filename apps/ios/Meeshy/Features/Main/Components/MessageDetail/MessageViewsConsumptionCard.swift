@@ -42,13 +42,13 @@ struct MessageViewsConsumptionCard: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     if let duration = attachment.duration {
                         Text(LocalizedNumber.duration(seconds: duration / 1000))
                             .font(.system(.caption2, design: .monospaced).weight(.medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
 
@@ -65,7 +65,7 @@ struct MessageViewsConsumptionCard: View {
             if users.isEmpty {
                 Text(Self.notConsumedLabel(for: family))
                     .font(.caption)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .padding(.vertical, MeeshySpacing.xs)
             } else {
                 // User consumption rows
@@ -89,12 +89,12 @@ struct MessageViewsConsumptionCard: View {
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(user.username)
                                     .font(.caption.weight(.medium))
-                                    .foregroundColor(theme.textPrimary)
+                                    .foregroundStyle(theme.textPrimary)
 
                                 if let date = reading.consumedAt {
                                     Text(RelativeTimeFormatter.longString(for: date))
                                         .font(.caption2)
-                                        .foregroundColor(theme.textMuted)
+                                        .foregroundStyle(theme.textMuted)
                                 }
                             }
 
@@ -125,7 +125,7 @@ struct MessageViewsConsumptionCard: View {
                                     Text(RelativeTimeFormatter.longString(for: downloadedAt))
                                         .font(.caption2.weight(.semibold))
                                 }
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .accessibilityElement(children: .combine)
                                 .accessibilityLabel(
                                     String(
@@ -144,11 +144,11 @@ struct MessageViewsConsumptionCard: View {
                                         Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
                                             .font(.caption2.weight(.semibold))
                                     }
-                                    .foregroundColor(MeeshyColors.success)
+                                    .foregroundStyle(MeeshyColors.success)
                                 } else if let pos = reading.positionMs, pos > 0 {
                                     Text(LocalizedNumber.duration(seconds: pos / 1000))
                                         .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                        .foregroundColor(theme.textMuted)
+                                        .foregroundStyle(theme.textMuted)
                                         .padding(.horizontal, MeeshySpacing.xsPlus)
                                         .padding(.vertical, MeeshySpacing.xxs)
                                         .background(
@@ -168,7 +168,7 @@ struct MessageViewsConsumptionCard: View {
                                     .tint(accent)
                                 Text("\(Int((fraction * 100).rounded()))%")
                                     .font(.system(.caption2, design: .monospaced).weight(.semibold))
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                                     .frame(minWidth: 30, alignment: .trailing)
                             }
                             .padding(.leading, 54)

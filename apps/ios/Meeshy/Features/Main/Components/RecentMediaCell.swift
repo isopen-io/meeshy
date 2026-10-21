@@ -53,7 +53,7 @@ struct RecentMediaCell: View {
                                 .font(.caption2.weight(.semibold))
                             Spacer()
                         }
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .bottom, endPoint: .top))
@@ -175,7 +175,7 @@ struct RecentMediaCell: View {
                     if let selectionIndex {
                         Text("\(selectionIndex + 1)")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                     }
                 }
                 .padding(MeeshySpacing.xs)
