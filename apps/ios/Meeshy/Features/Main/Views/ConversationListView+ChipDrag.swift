@@ -62,6 +62,24 @@ enum ChipAutoScroll {
         return 0
     }
 
+    /// Plus long pas de temps crédité à un tick (s). Après un hoquet de
+    /// l'horloge (app suspendue, frame perdue) le temps RÉEL écoulé est grand :
+    /// le créditer en entier ferait sauter la liste sous la chip.
+    static let maxStep: TimeInterval = 1.0 / 20.0
+
+    /// Déplacement (pt) pour `elapsed` secondes à `speed` pt/s. Le pas suit le
+    /// temps RÉEL entre deux images, pas une fraction nominale : à 30, 60 ou
+    /// 120 Hz la liste défile à la même vitesse (#9883).
+    static func displacement(speed: CGFloat, elapsed: TimeInterval) -> CGFloat {
+        speed * CGFloat(min(max(0, elapsed), maxStep))
+    }
+
+    /// L'horloge ne tourne que tant que le doigt est dans une zone de bord :
+    /// à vitesse nulle il n'y a rien à défiler, ni à hit-tester.
+    static func shouldRun(speed: CGFloat) -> Bool {
+        speed != 0
+    }
+
     /// Offset proposé, ramené dans [-topInset, fin de contenu] — l'auto-scroll
     /// ne doit jamais produire d'overscroll (qui armerait visuellement le
     /// pull-to-refresh ou ferait rebondir la liste sous la chip).
@@ -103,41 +121,77 @@ final class ChipAutoScrollDriver {
     /// dès que la liste est en butée ou le doigt hors zone.
     private(set) var isActivelyScrolling = false
 
-    private var timer: Timer?
+    private var link: CADisplayLink?
     private var fingerLocation: CGPoint = .zero
 
+    /// Le doigt a bougé. L'horloge d'affichage naît au premier appel, tourne
+    /// tant que le doigt est dans une zone de bord, et dort (`isPaused`) dès
+    /// qu'il en sort : `update` est rappelé à chaque mouvement du doigt, donc le
+    /// réveil n'attend jamais un tick.
+    ///
+    /// Le drapeau `isActivelyScrolling` retombe ICI quand le doigt sort de la
+    /// zone : l'horloge endormie ne tique plus, et le drop qui suit sur une
+    /// section serait sinon rendu inerte par un défilement déjà arrêté.
     func update(fingerLocation location: CGPoint) {
         fingerLocation = location
-        guard timer == nil else { return }
-        let tick = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] firing in
-            guard self != nil else { return firing.invalidate() }
-            MainActor.assumeIsolated { self?.tick() }
-        }
-        RunLoop.main.add(tick, forMode: .common)
-        timer = tick
+        let running = ChipAutoScroll.shouldRun(speed: currentSpeed())
+        if !running { isActivelyScrolling = false }
+        ensureLink().isPaused = !running
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        link?.invalidate()
+        link = nil
         onScrollTick = nil
         isActivelyScrolling = false
     }
 
-    private func tick() {
-        guard let scrollView else { return }
+    private func ensureLink() -> CADisplayLink {
+        if let link { return link }
+        // Proxy weak (WeakDisplayLinkTarget) : un link `target: self` retiendrait
+        // le driver, donc la View par `onScrollTick`. Plage 30…60 Hz : le doigt
+        // ne demande pas 120 Hz de défilement.
+        let created = WeakDisplayLinkTarget.makeLink(frameRateRange: .clock) { [weak self] link in
+            guard let self else {
+                link.invalidate()
+                return
+            }
+            self.tick(link)
+        }
+        created.add(to: .main, forMode: .common)
+        link = created
+        return created
+    }
+
+    private func currentSpeed() -> CGFloat {
+        guard let scrollView else { return 0 }
         let viewport = scrollView.convert(scrollView.bounds, to: nil)
-        let speed = ChipAutoScroll.speed(
+        return ChipAutoScroll.speed(
             fingerY: fingerLocation.y,
             viewportMinY: viewport.minY,
             viewportMaxY: viewport.maxY
         )
-        guard speed != 0 else {
+    }
+
+    private func tick(_ link: CADisplayLink) {
+        link.isPaused = !advance(elapsed: link.targetTimestamp - link.timestamp)
+    }
+
+    /// Un pas d'auto-scroll de `elapsed` secondes. Rend `false` quand il n'y a
+    /// plus rien à défiler (doigt hors zone, liste absente) : l'horloge peut
+    /// alors dormir jusqu'au prochain mouvement du doigt.
+    @discardableResult
+    func advance(elapsed: TimeInterval) -> Bool {
+        let speed = currentSpeed()
+        guard let scrollView, ChipAutoScroll.shouldRun(speed: speed) else {
             isActivelyScrolling = false
-            return
+            return false
         }
         let clamped = ChipAutoScroll.clampedOffset(
-            scrollView.contentOffset.y + speed / 60.0,
+            scrollView.contentOffset.y + ChipAutoScroll.displacement(
+                speed: speed,
+                elapsed: elapsed
+            ),
             contentHeight: scrollView.contentSize.height,
             viewportHeight: scrollView.bounds.height,
             topInset: scrollView.adjustedContentInset.top,
@@ -145,11 +199,12 @@ final class ChipAutoScrollDriver {
         )
         guard clamped != scrollView.contentOffset.y else {
             isActivelyScrolling = false
-            return
+            return true
         }
         isActivelyScrolling = true
         scrollView.contentOffset.y = clamped
         onScrollTick?(fingerLocation)
+        return true
     }
 }
 

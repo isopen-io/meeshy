@@ -48,7 +48,7 @@ extension SignupView {
         )
         .overlay {
             if isCelebrating {
-                ArrivalFireworksCanvas(startDate: celebrationStart, stopsAfterShow: true)
+                ArrivalFireworksCanvas(startDate: celebrationStart)
                     .clipShape(Self.cardShape)
             }
         }
