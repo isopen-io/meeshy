@@ -403,6 +403,30 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertNil(mock.lastRequest?.bodyJSON)
     }
 
+    /// Une SÉLECTION part en UNE requête (`bulk/delete-for-me`, 100 ids au
+    /// plus), jamais en cent appels en série — et la passerelle n'en diffuse
+    /// qu'un événement aux autres appareils du lecteur.
+    func testHideForMeManyGoesInOneBulkRequest() async throws {
+        mock.stub("/messages/bulk/delete-for-me", result: APIResponse(
+            success: true, data: PersonalHidingAcknowledgement(deletedCount: 2), error: nil
+        ))
+
+        try await service.hideForMe(messageIds: ["a", "b"])
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/messages/bulk/delete-for-me")
+        XCTAssertEqual(mock.lastRequest?.method, "DELETE")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["messageIds"] as? [String], ["a", "b"])
+    }
+
+    /// La passerelle sert `{ message, deletedCount, requestedCount }` : la
+    /// réponse se décode sans exiger plus que le compte.
+    func testPersonalHidingAcknowledgementDecodesTheServedShape() throws {
+        let json = #"{"success":true,"data":{"message":"2 messages deleted from your view","deletedCount":2,"requestedCount":3}}"#
+        let decoded = try JSONDecoder().decode(APIResponse<PersonalHidingAcknowledgement>.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.data.deletedCount, 2)
+    }
+
     // MARK: - consumeViewOnce
 
     func testConsumeViewOnceReturnsResponse() async throws {

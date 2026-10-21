@@ -505,6 +505,7 @@ struct RiverBubbleView: View, Equatable {
         .accessibilityActions {
             quotedMediaAccessibilityAction
             openInThreadAccessibilityAction
+            menuAccessibilityAction
         }
         .simultaneousGesture(
             // Le geste de la rangée du Fil (`ConditionalBubbleLongPress`) : même
@@ -518,6 +519,17 @@ struct RiverBubbleView: View, Equatable {
             },
             including: onLongPress == nil ? .subviews : .all
         )
+    }
+
+    /// L'appui long d'un élément COMBINÉ n'est pas garanti sous VoiceOver : le
+    /// menu s'ouvre aussi par une action nommée, comme la rangée du Fil.
+    @ViewBuilder
+    private var menuAccessibilityAction: some View {
+        if let onLongPress {
+            Button(String(localized: "a11y.message.actions.long_press", bundle: .main)) {
+                onLongPress(content.bubble.messageId)
+            }
+        }
     }
 
     @ViewBuilder

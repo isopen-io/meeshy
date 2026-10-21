@@ -347,7 +347,7 @@ extension ConversationView {
 
     private func quickReactionActionsRow(messageId: String) -> some View {
         HStack(spacing: MeeshySpacing.sm) {
-            messageActionButton(icon: "arrowshape.turn.up.left.fill", label: String(localized: "action.reply", defaultValue: "Répondre"), color: MeeshyColors.indigo300Hex) {
+            messageActionButton(icon: MessageActionVerb.reply.filledSymbol, label: MessageActionVerb.reply.label, color: MeeshyColors.indigo300Hex) {
                 if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                     triggerReply(for: msg)
                 }
@@ -356,7 +356,7 @@ extension ConversationView {
             // La loi de sortie décide (#9573) : un contenu qui disparaît, ou
             // flouté, ne se copie pas — le bouton n'est pas rendu.
             if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].exitOffer.offers(.copy) }) ?? false {
-                messageActionButton(icon: "doc.on.doc.fill", label: String(localized: "action.copy", defaultValue: "Copier"), color: MeeshyColors.trackingAccentHex) {
+                messageActionButton(icon: MessageActionVerb.copy.filledSymbol, label: MessageActionVerb.copy.label, color: MeeshyColors.trackingAccentHex) {
                     if let msg = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] }) {
                         // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
                         MessageExitTransport.copyDisplayed(msg, in: viewModel)
@@ -367,12 +367,12 @@ extension ConversationView {
             // Le bouton disparaît plutôt que d'offrir une action condamnée
             // (`Message.isForwardable`, projection de la loi de sortie).
             if viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0].isForwardable }) ?? false {
-                messageActionButton(icon: "arrowshape.turn.up.forward.fill", label: String(localized: "action.forward", defaultValue: "Transférer"), color: MeeshyColors.warningHex) {
+                messageActionButton(icon: MessageActionVerb.forward.filledSymbol, label: MessageActionVerb.forward.label, color: MeeshyColors.warningHex) {
                     composerState.forwardMessage = viewModel.messageIndex(for: messageId).map({ viewModel.messages[$0] })
                     closeReactionBar()
                 }
             }
-            messageActionButton(icon: "trash.fill", label: String(localized: "action.delete", defaultValue: "Supprimer"), color: MeeshyColors.errorHex) {
+            messageActionButton(icon: MessageActionVerb.delete.filledSymbol, label: MessageActionVerb.delete.label, color: MeeshyColors.errorHex) {
                 requestDeleteMessage(messageId)
                 closeReactionBar()
             }

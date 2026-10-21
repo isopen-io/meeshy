@@ -25,12 +25,18 @@ enum MessageExitTransport {
     /// lu là où la cellule le lit, jamais recomposé par le site d'appel.
     @discardableResult
     static func copyDisplayed(_ message: Message, in viewModel: ConversationViewModel) -> Bool {
-        copy(BubbleContent.displayedText(
+        copy(displayedText(message, in: viewModel), of: message)
+    }
+
+    /// Ce que la bulle affiche, dans TOUS les modes de lecture : la Rivière le
+    /// lit aussi, pour que « Copier » copie ce qu'elle montre.
+    static func displayedText(_ message: Message, in viewModel: ConversationViewModel) -> String {
+        BubbleContent.displayedText(
             of: message,
             translations: viewModel.messageTranslations[message.id] ?? [],
             preferredTranslation: viewModel.preferredTranslation(for: message.id),
             activeDisplayLangCode: viewModel.bubbleLanguageSelections[message.id]?.activeDisplayLangCode
-        ), of: message)
+        )
     }
 
     /// La requête d'enregistrement de la pièce que le menu désigne — la pièce

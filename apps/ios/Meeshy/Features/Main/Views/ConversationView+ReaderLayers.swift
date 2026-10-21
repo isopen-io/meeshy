@@ -115,9 +115,9 @@ struct ConversationRiverLayer: View {
             onReachPresent: {
                 viewModel.markCaughtUpFromSummaryOrRiver()
             },
-            text: { message in
-                viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
-            }
+            // #11233 — le texte que la bulle du Fil AFFICHE (drapeau compris) :
+            // « Copier », ouvert depuis la Rivière, copie ce qu'elle montre.
+            text: { message in MessageExitTransport.displayedText(message, in: viewModel) }
         ))
     }
 }

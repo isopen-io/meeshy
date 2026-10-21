@@ -60,6 +60,19 @@ public struct ConsumeAfterReadResponse: Decodable, Sendable {
 /// n'ont pas à connaître un geste qu'un seul site déclenche.
 public protocol PersonalMessageHiding: Sendable {
     func hideForMe(messageId: String) async throws
+    /// Une SÉLECTION en UNE requête (`DELETE /messages/bulk/delete-for-me`,
+    /// 100 ids au plus) : un seul événement part aux autres appareils.
+    func hideForMe(messageIds: [String]) async throws
+}
+
+/// La réponse de `bulk/delete-for-me` : le compte que la passerelle a
+/// effectivement retiré de la vue du lecteur.
+public struct PersonalHidingAcknowledgement: Decodable, Sendable {
+    public let deletedCount: Int?
+
+    public init(deletedCount: Int?) {
+        self.deletedCount = deletedCount
+    }
 }
 
 public final class MessageService: MessageServiceProviding, AfterReadConsuming, PersonalMessageHiding, Sendable {
@@ -225,6 +238,13 @@ public final class MessageService: MessageServiceProviding, AfterReadConsuming, 
 
     public func hideForMe(messageId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(MessagesEndpoint.byMessageIdDeleteForMe(messageId: messageId))
+    }
+
+    public func hideForMe(messageIds: [String]) async throws {
+        struct Body: Encodable { let messageIds: [String] }
+        let _: APIResponse<PersonalHidingAcknowledgement> = try await api.delete(
+            MessagesEndpoint.bulkDeleteForMe, body: Body(messageIds: messageIds)
+        )
     }
 
     public func pin(conversationId: String, messageId: String) async throws {

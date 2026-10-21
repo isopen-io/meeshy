@@ -110,6 +110,10 @@ enum MessageActionVerb: CaseIterable {
         case .report: return "exclamationmark.triangle"
         }
     }
+
+    /// La variante PLEINE du symbole, pour la barre rapide qui dessine des
+    /// pastilles colorées — le même glyphe, jamais un autre.
+    var filledSymbol: String { "\(symbol).fill" }
 }
 
 extension PrimaryAction {

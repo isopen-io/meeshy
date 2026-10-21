@@ -149,23 +149,50 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let attachments: MockAttachmentDeleting
         let clock: TestClock
         let hiding: FakePersonalHiding
-        let hidden: LocallyHiddenMessagesStore
+        let projection: ProjectionLog
     }
 
     /// Le masquage PERSONNEL côté serveur (#11221) : il note ce qu'on lui
-    /// demande et ce que l'écran montrait à l'instant de l'appel.
-    final class FakePersonalHiding: PersonalMessageHiding, @unchecked Sendable {
+    /// demande, ce que l'écran montrait et ce que la base avait déjà subi à
+    /// l'instant de l'appel.
+    nonisolated final class FakePersonalHiding: PersonalMessageHiding, @unchecked Sendable {
         var hidden: [String] = []
+        var bulk: [[String]] = []
         var failure: Error?
-        var probe: (store: LocallyHiddenMessagesStore, localId: String)?
-        var probedHidden: Bool?
+        var probe: (log: ProjectionLog, persistence: MockConversationCommandPersistence)?
+        var concealedAtCall: [String]?
+        var storeCallsAtCall: [MockConversationCommandPersistence.Call]?
 
         func hideForMe(messageId: String) async throws {
             hidden.append(messageId)
+            try await answer()
+        }
+
+        func hideForMe(messageIds: [String]) async throws {
+            bulk.append(messageIds)
+            try await answer()
+        }
+
+        private func answer() async throws {
             if let probe {
-                probedHidden = await MainActor.run { probe.store.isHidden(probe.localId) }
+                concealedAtCall = await MainActor.run { probe.log.concealed }
+                storeCallsAtCall = await probe.persistence.calls
             }
             if let failure { throw failure }
+        }
+    }
+
+    /// La projection du fil telle que le handler la commande : ce qui est
+    /// caché, ce qui est rendu.
+    @MainActor final class ProjectionLog {
+        var concealed: [String] = []
+        var revealed: [String] = []
+
+        var projection: ForMeProjection {
+            ForMeProjection(
+                conceal: { self.concealed += $0 },
+                reveal: { self.revealed += $0 }
+            )
         }
     }
 
@@ -178,8 +205,6 @@ final class ConversationCommandHandlerTests: XCTestCase {
         let attachments = MockAttachmentDeleting()
         let clock = TestClock()
         let hiding = FakePersonalHiding()
-        let hidden = LocallyHiddenMessagesStore(userDefaults: UserDefaults(suiteName: "ConversationCommandHandlerTests")!)
-        hidden.clearAll()
         let sut = ConversationCommandHandler(
             state: ConversationStateStore(),
             conversationId: conversationId,
@@ -190,13 +215,12 @@ final class ConversationCommandHandlerTests: XCTestCase {
             reactionOutbox: outbox,
             attachments: attachments,
             personalHiding: hiding,
-            hiddenMessages: hidden,
             now: { clock.now }
         )
         return Rig(
             sut: sut, persistence: persistence, service: service, queue: queue,
             network: network, outbox: outbox, attachments: attachments, clock: clock,
-            hiding: hiding, hidden: hidden
+            hiding: hiding, projection: ProjectionLog()
         )
     }
 
@@ -288,44 +312,88 @@ final class ConversationCommandHandlerTests: XCTestCase {
 
     // MARK: - Supprimer pour moi, PARTOUT (#11221)
 
-    func test_deleteForMe_online_leavesTheThreadAtOnce_thenAsksTheServerWithTheServerId() async {
-        let rig = makeRig()
-        rig.hiding.probe = (store: rig.hidden, localId: "m1")
+    private func forMe(_ id: String) -> ForMeTarget {
+        ForMeTarget(messageId: id, serverId: "srv-\(id)")
+    }
 
-        let failure = await rig.sut.deleteForMe(messageId: "m1", serverId: "s1") { _ in
-            XCTFail("rien à restaurer sur un succès")
-        }
+    func test_deleteForMe_online_concealsAtOnce_andTouchesTheStoreOnlyAfterTheServerAgreed() async {
+        let rig = makeRig()
+        rig.hiding.probe = (log: rig.projection, persistence: rig.persistence)
+
+        let failure = await rig.sut.deleteForMe([forMe("m1")], projection: rig.projection.projection)
 
         let calls = await rig.persistence.calls
         XCTAssertNil(failure)
-        XCTAssertEqual(rig.hiding.probedHidden, true, "optimiste : le message a quitté l'écran AVANT la réponse du serveur")
-        XCTAssertEqual(calls, [.purgeMessages(ids: ["m1"])])
-        XCTAssertEqual(rig.hiding.hidden, ["s1"], "le serveur reçoit l'id SERVEUR — les autres appareils du lecteur suivent")
-        XCTAssertTrue(rig.hidden.isHidden("m1"))
+        XCTAssertEqual(rig.hiding.concealedAtCall, ["m1"], "optimiste : le message a quitté l'écran AVANT la réponse du serveur")
+        XCTAssertEqual(rig.hiding.storeCallsAtCall, [], "la base n'est jamais purgée avant l'accord du serveur")
+        XCTAssertEqual(rig.hiding.hidden, ["srv-m1"], "le serveur reçoit l'id SERVEUR — les autres appareils du lecteur suivent")
+        XCTAssertEqual(calls, [.purgeMessages(ids: ["m1"])], "la base n'est purgée qu'après l'accord")
+        XCTAssertTrue(rig.projection.revealed.isEmpty)
     }
 
-    func test_deleteForMe_serverRefuses_bringsTheMessageBack_andSaysWhy() async {
+    /// Le constat de la revue : refus du serveur ET relecture impossible ne
+    /// doivent jamais faire perdre un message — il n'y a rien à relire sur le
+    /// réseau, la ligne n'a pas quitté la base.
+    func test_deleteForMe_serverRefuses_revealsFromMemory_andTheRowNeverLeftTheStore() async {
         let rig = makeRig()
         rig.hiding.failure = NSError(domain: "t", code: 1, userInfo: [NSLocalizedDescriptionKey: "refus"])
-        var restored: [String] = []
 
-        let failure = await rig.sut.deleteForMe(messageId: "m1", serverId: "s1") { restored.append($0) }
+        let failure = await rig.sut.deleteForMe([forMe("m1")], projection: rig.projection.projection)
 
+        let calls = await rig.persistence.calls
         XCTAssertEqual(failure?.userMessage, "refus")
-        XCTAssertFalse(rig.hidden.isHidden("m1"), "le retour arrière rend le message au fil")
-        XCTAssertEqual(restored, ["s1"], "la ligne purgée se relit depuis le serveur")
+        XCTAssertEqual(rig.projection.revealed, ["m1"], "le retour arrière rend le message au fil")
+        XCTAssertTrue(calls.isEmpty, "aucune purge sur refus : la ligne, ses traductions et son outbox sont intactes")
     }
 
-    func test_deleteForMe_offline_refusesWithoutHidingAnything() async {
+    func test_deleteForMe_offline_refusesWithoutConcealingAnything() async {
         let rig = makeRig(isOnline: false)
 
-        let failure = await rig.sut.deleteForMe(messageId: "m1", serverId: "s1") { _ in }
+        let failure = await rig.sut.deleteForMe([forMe("m1")], projection: rig.projection.projection)
 
         let calls = await rig.persistence.calls
         XCTAssertNotNil(failure, "hors ligne, un masquage qui ne partirait jamais reviendrait au prochain chargement")
         XCTAssertTrue(calls.isEmpty)
         XCTAssertTrue(rig.hiding.hidden.isEmpty)
-        XCTAssertFalse(rig.hidden.isHidden("m1"))
+        XCTAssertTrue(rig.projection.concealed.isEmpty)
+    }
+
+    /// Une SÉLECTION part en UNE requête (`bulk/delete-for-me`, 100 au plus),
+    /// jamais en cent appels en série.
+    func test_deleteForMe_selection_leavesInOneBulkRequest() async {
+        let rig = makeRig()
+
+        let failure = await rig.sut.deleteForMe([forMe("a"), forMe("b"), forMe("c")], projection: rig.projection.projection)
+
+        let calls = await rig.persistence.calls
+        XCTAssertNil(failure)
+        XCTAssertTrue(rig.hiding.hidden.isEmpty, "aucun appel unitaire pour une sélection")
+        XCTAssertEqual(rig.hiding.bulk, [["srv-a", "srv-b", "srv-c"]])
+        XCTAssertEqual(rig.projection.concealed, ["a", "b", "c"])
+        XCTAssertEqual(calls, [.purgeMessages(ids: ["a", "b", "c"])])
+    }
+
+    func test_deleteForMe_selectionRefused_revealsEveryMessage() async {
+        let rig = makeRig()
+        rig.hiding.failure = NSError(domain: "t", code: 403, userInfo: [NSLocalizedDescriptionKey: "Not a member"])
+
+        let failure = await rig.sut.deleteForMe([forMe("a"), forMe("b")], projection: rig.projection.projection)
+
+        let calls = await rig.persistence.calls
+        XCTAssertNotNil(failure)
+        XCTAssertEqual(rig.projection.revealed, ["a", "b"])
+        XCTAssertTrue(calls.isEmpty)
+    }
+
+    func test_deleteForMe_nothingAdmitted_isANoOp() async {
+        let rig = makeRig()
+
+        let failure = await rig.sut.deleteForMe([], projection: rig.projection.projection)
+
+        XCTAssertNil(failure)
+        XCTAssertTrue(rig.hiding.hidden.isEmpty)
+        XCTAssertTrue(rig.hiding.bulk.isEmpty)
+        XCTAssertTrue(rig.projection.concealed.isEmpty)
     }
 
     // MARK: - Retrait d'une sélection (#11159)

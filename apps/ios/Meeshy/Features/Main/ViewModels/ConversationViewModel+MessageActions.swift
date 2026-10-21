@@ -185,8 +185,7 @@ extension ConversationViewModel {
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
-        // Un message `.failed` n'a pas d'id serveur : une requête viserait un id bidon et son
-        // rollback ressusciterait le message. Retrait local seulement, outbox annulée d'abord.
+        // `.failed` : pas d'id serveur, donc retrait local seulement, outbox annulée d'abord.
         guard outgoingState(of: messageId)?.isFailed != true else {
             await commands.withdrawUnsent(messageId: messageId)
             removeFailedMessage(messageId: messageId)
@@ -194,7 +193,7 @@ extension ConversationViewModel {
         }
         switch mode {
         case .local:
-            report(await commands.deleteForMe(messageId: messageId, serverId: serverId(for: messageId)) { await self.restoreMessagesForMe(ids: [$0]) })
+            report(await ConversationForMeRemoval(viewModel: self).run(messageId))
         case .everyone:
             report(await commands.deleteForEveryone(messageId: messageId, serverId: serverId(for: messageId)))
         }

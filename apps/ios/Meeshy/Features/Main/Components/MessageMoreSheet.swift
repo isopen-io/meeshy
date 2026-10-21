@@ -117,13 +117,13 @@ struct MessageMoreSheet: View {
             titleVisibility: .visible
         ) {
             if message.exitOffer.offers(.save), message.attachments.filter({ $0.type != .location }).count == 1 {
-                Button(String(localized: "media.save.title", defaultValue: "Enregistrer", bundle: .main)) {
+                Button(MessageActionVerb.saveMedia.label) {
                     onSaveMedia?()
                     dismiss()
                 }
             }
             if allMoreItems.contains(.forward) {
-                Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
+                Button(MessageActionVerb.forward.label) {
                     onForward?()
                     dismiss()
                 }
@@ -131,7 +131,7 @@ struct MessageMoreSheet: View {
             // #9906 — un LOT sans pièce visée ne désigne rien : l'entrée
             // n'existe pas plutôt que d'effacer la première pièce.
             if MessagePieceTarget.deletableMedia(in: message, targeted: nil) != nil {
-                Button(String(localized: "action.delete_media", defaultValue: "Supprimer le média", bundle: .main), role: .destructive) {
+                Button(MessageActionVerb.deleteMedia.label, role: .destructive) {
                     onDeleteMedia?()
                     dismiss()
                 }
