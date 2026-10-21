@@ -3,6 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 
 import type { Conversation } from '@/lib/api/types';
+import { departureStore } from '@/lib/conversation-departure';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import type { RowIntent } from '@/lib/view/row-actions';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -27,6 +28,7 @@ const group = {
   updatedAt: new Date('2026-01-01'),
   unreadCount: 0,
   userPreferences: [{ reaction: '🏆' }],
+  currentUserRole: 'creator',
 } as unknown as Conversation;
 
 const direct = {
@@ -100,10 +102,25 @@ describe('LensRow — le favori et les entrées d’iOS', () => {
     expect(favorite?.getAttribute('aria-label')).toBe('Favori 🏆');
   });
 
-  test('un groupe : Détails ouvre la fiche, Renommer et « Déplacer vers… › Travail » partent vers l’écran', () => {
+  test('un groupe que l’on a créé : Détails ouvre la fiche, Renommer et « Déplacer vers… › Travail » partent vers l’écran', () => {
     const { intents, details } = mount(group);
     openMenu();
-    expect(labels()).toEqual(['Appel vocal', 'Appel vidéo', 'Épingler', 'Silence', 'Non lu', 'Détails', 'Renommer', 'Favori', 'Déplacer vers…', 'Archiver', 'Supprimer']);
+    expect(labels()).toEqual([
+      'Appel vocal',
+      'Appel vidéo',
+      'Épingler',
+      'Silence',
+      'Non lu',
+      'Détails',
+      'Renommer',
+      'Inviter',
+      'Gérer les membres',
+      'Favori',
+      'Déplacer vers…',
+      'Archiver',
+      'Quitter',
+      'Supprimer',
+    ]);
     act(() => entry('Détails')?.click());
     openMenu();
     act(() => entry('Renommer')?.click());
@@ -115,6 +132,36 @@ describe('LensRow — le favori et les entrées d’iOS', () => {
       ['c-lyon', { kind: 'rename' }],
       ['c-lyon', { kind: 'moveTo', categoryId: 'cat-a' }],
     ]);
+  });
+
+  test('« Inviter » ouvre la fiche sur l’ajout, « Gérer les membres » sur les membres — pas sur sa tête comme « Détails » (revue #11211)', () => {
+    const { intents, details } = mount(group);
+    openMenu();
+    act(() => entry('Inviter')?.click());
+    openMenu();
+    act(() => entry('Gérer les membres')?.click());
+    expect(details).toEqual([]);
+    expect(intents).toEqual([
+      ['c-lyon', { kind: 'details', focus: 'invite' }],
+      ['c-lyon', { kind: 'details', focus: 'members' }],
+    ]);
+  });
+
+  test('un membre ordinaire d’un groupe ne renomme ni n’invite (#11211)', () => {
+    mount({ ...group, currentUserRole: 'member' } as unknown as Conversation);
+    openMenu();
+    expect(labels()).not.toContain('Renommer');
+    expect(labels()).not.toContain('Inviter');
+    expect(labels()).toContain('Quitter');
+  });
+
+  test('« Quitter » demande le départ (#11211)', () => {
+    departureStore.setState({ request: null, failure: null });
+    mount(group);
+    openMenu();
+    act(() => entry('Quitter')?.click());
+    expect(departureStore.getState().request).toEqual({ conversationId: 'c-lyon', kind: 'leave', returnToList: false });
+    departureStore.setState({ request: null, failure: null });
   });
 
   test('un direct : pas de Renommer, Détails ouvre aussi sa fiche, « Bloquer » demande le blocage', () => {

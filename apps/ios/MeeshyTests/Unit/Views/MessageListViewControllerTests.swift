@@ -100,6 +100,50 @@ final class MessageListViewControllerTests: XCTestCase {
             "la visée doit se solder (settled/giveUp) — jamais rester pendante")
     }
 
+    /// CONC-13 : le `scrollToBottom(animated: false)` rend le drapeau au tour
+    /// suivant. Un saut animé lancé dans le MÊME tour ne doit pas le voir
+    /// retomber pendant son animation.
+    func test_scrollToBottomSec_puisSautAnimeDansLeMemeTour_leDrapeauResteLeve() async throws {
+        let store = try await makeSeededStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        for _ in 0..<20 where vc.focalCollectionViewForTesting?.numberOfItems(inSection: 0) == 0 {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        vc.scrollToBottom(animated: false)
+        vc.scrollToMessage(localId: "m1")
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertTrue(vc.isIntentionalProgrammaticScroll,
+            "le relâchement du scrollToBottom sec ne doit pas écraser un saut animé en vol")
+    }
+
+    func test_scrollToBottomSec_seul_rendLeDrapeauAuTourSuivant() async throws {
+        let store = try await makeSeededStore()
+        let vc = makeSUT(store: store)
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        vc.view.layoutIfNeeded()
+
+        for _ in 0..<20 where vc.focalCollectionViewForTesting?.numberOfItems(inSection: 0) == 0 {
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        vc.scrollToBottom(animated: false)
+        XCTAssertTrue(vc.isIntentionalProgrammaticScroll)
+
+        for _ in 0..<5 where vc.isIntentionalProgrammaticScroll {
+            await Task.yield()
+        }
+        XCTAssertFalse(vc.isIntentionalProgrammaticScroll)
+    }
+
     /// Cible ABSENTE du snapshot : aucune visée armée (le chemin parent
     /// jumpToQuotedMessage reprend la main avec son propre trigger).
     func test_scrollToMessage_targetAbsent_doesNotArmPendingTarget() throws {

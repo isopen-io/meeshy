@@ -271,11 +271,7 @@ struct MagicLinkView: View {
             Spacer()
             Spacer()
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isEmailFocused = true
-            }
-        }
+        .onAppear(after: .milliseconds(300)) { isEmailFocused = true }
     }
 
     // MARK: - Waiting Step
