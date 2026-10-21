@@ -110,24 +110,14 @@ struct HardwareReturnModifiers: ViewModifier {
     }
 }
 
-/// Un relais par composer : l'action publiée reste la même d'un rendu à
-/// l'autre, et envoie toujours avec la dernière fermeture reçue.
-final class ComposerSendRelay {
-    var send: () -> Void = {}
-
-    var action: MeeshySceneAction {
-        MeeshySceneAction(owner: self) { [weak self] in self?.send() }
-    }
-
-    nonisolated deinit {}
-}
-
+/// Un relais par composer (`SceneActionRelay`) : l'action publiée reste la
+/// même d'un rendu à l'autre, et envoie toujours avec la dernière fermeture.
 struct PublishesComposerSend: ViewModifier {
     let send: () -> Void
-    @State private var relay = ComposerSendRelay()
+    @State private var relay = SceneActionRelay()
 
     func body(content: Content) -> some View {
-        relay.send = send
+        relay.perform = send
         return content.focusedValue(\.meeshySendMessage, relay.action)
     }
 }

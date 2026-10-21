@@ -49,6 +49,16 @@ RULES = (
         ("apps/ios/Meeshy/Features/Main/Services/SocialEventsV2Reporter.swift",),
     ),
     _pattern("plural-s", r'\?\s*"s"\s*:\s*""'),
+    _pattern("foreground-color", r"\.foregroundColor\("),
+    _pattern("corner-radius-modifier", r"(?<!\w)\.cornerRadius\("),
+    _pattern("status-bar-hidden", r"\.statusBar\(hidden:"),
+    _pattern("autocapitalization", r"\.autocapitalization\("),
+    _pattern("disable-autocorrection", r"\.disableAutocorrection\("),
+    _pattern(
+        "onchange-single",
+        r"\.onChange\(of:(?:[^\n{]*\)\s*\{(?:\s*\w+\s+in\b|[^\n}]*\$0)|[^\n)]*perform:)",
+        ("packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift",),
+    ),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
 )

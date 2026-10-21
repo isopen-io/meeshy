@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 import os
 
 // **LE COMPOSEUR NE PASSE JAMAIS SOUS L'EN-TÊTE DE LA FEUILLE** (#9736).
@@ -94,7 +95,7 @@ extension View {
             self.frame(width: area.size.width, height: area.size.height, alignment: .bottom)
                 .environment(\.composerPanelYieldsToHost, true)
                 .onAppear { CommentSheetFit.trace("zone", area.frame(in: .global)) }
-                .onChange(of: area.size.height) { _ in CommentSheetFit.trace("zone", area.frame(in: .global)) }
+                .adaptiveOnChange(of: area.size.height) { _, _ in CommentSheetFit.trace("zone", area.frame(in: .global)) }
         }
         .coordinateSpace(name: CommentSheetFit.space)
     }

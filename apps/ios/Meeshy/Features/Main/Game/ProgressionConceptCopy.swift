@@ -221,7 +221,10 @@ enum ConceptText {
 
     static var factPrismHour: String { String(localized: "game.concept.fact.prism_hour", defaultValue: "Heure Prisme", bundle: .main) }
 
-    static var factStars: String { String(localized: "game.concept.fact.stars", defaultValue: "Étoiles", bundle: .main) }
+    /// Le Voyage compte des pas, la Renaissance des renaissances : « étoile » n'appartient qu'au ciel des aïeux (épopée § 4, #11173).
+    static var factStrides: String { String(localized: "game.fact.strides", defaultValue: "Pas", bundle: .main) }
+
+    static var factRebirths: String { String(localized: "game.fact.rebirths", defaultValue: "Renaissances", bundle: .main) }
 
     static var factConvertible: String { String(localized: "game.concept.fact.convertible", defaultValue: "Étincelles", bundle: .main) }
 
@@ -355,9 +358,9 @@ enum ConceptText {
         case .missions: String(localized: "game.concept.missions.use", defaultValue: "Ouvre un acte pour voir où tu en es. Tu peux en changer un par jour avec une Meesh. Les trois réalisés, ouvre l’Offrande : des étincelles, de la gloire, parfois une prime, un fragment d’étoile ou une Veilleuse.", bundle: .main)
         case .league: String(localized: "game.concept.league.use", defaultValue: "Regarde ta place et ta zone : les 7 premiers gravissent le cercle suivant, les 5 derniers redescendent. Tout repart de zéro chaque lundi. La joute publique demande ton accord ; la Joute des amis reste toujours ouverte.", bundle: .main)
         case .season: String(localized: "game.concept.season.use", defaultValue: "Avance de quelques pas, puis réclame chaque halte atteinte : des étincelles, un fragment d’étoile, une Veilleuse. Le voyage fini donne la coupe du voyage. Le Sceau du voyage est un objet à collectionner, pris avec des Meeshes.", bundle: .main)
-        case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées.", bundle: .main)
+        case .prestige: String(localized: "game.concept.prestige.use", defaultValue: "Au niveau 100, choisis : renaître, ou continuer à briller. Renaître remet ton niveau à 1 et ta lumière à zéro. Tu gardes tes étincelles reçues depuis toujours, ta plus haute lumière, ton rang, ta gloire, tes Meeshes, ta Flamme et tes trophées ; ta joute et ton alliance restent ouvertes.", bundle: .main)
         case .elans: String(localized: "game.concept.elans.use", defaultValue: "Regarde quelles familles sont actives, puis fais un geste dans une famille qui manque. Tant que l’élan tient, chaque geste fait jaillir plus d’étincelles.", bundle: .main)
-        case .badges: String(localized: "game.concept.badges.use", defaultValue: "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’éteint aucune médaille.", bundle: .main)
+        case .badges: String(localized: "game.concept.badges.use", defaultValue: "Touche une médaille pour voir ce qu’elle suit, sa matière et ce qu’il manque pour la prochaine étoile. Une frappe n’en éteint aucune : une médaille dit ton total réel.", bundle: .main)
         case .defis: String(localized: "game.concept.defis.use", defaultValue: "Ouvre la liste, repère le palier le plus proche et avance vers lui. Chaque palier dit sa rareté.", bundle: .main)
         case .succes: String(localized: "game.concept.succes.use", defaultValue: "Ouvre un haut fait pour lire ce qu’il demande. Accompli, il fait grandir ta gloire : plus il est rare, plus elle grandit.", bundle: .main)
         case .showcase: String(localized: "game.concept.showcase.use", defaultValue: "Range tes trophées dans l’ordre que tu veux et choisis qui les voit : tout le monde, tes amis ou toi seul. Un trophée ne rapporte rien : il se montre.", bundle: .main)

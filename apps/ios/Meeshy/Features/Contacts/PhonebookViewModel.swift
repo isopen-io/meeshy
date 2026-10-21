@@ -62,7 +62,7 @@ final class PhonebookViewModel: ObservableObject {
         self.searchDebounce = searchDebounce
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
         platformSearchTask?.cancel()
     }

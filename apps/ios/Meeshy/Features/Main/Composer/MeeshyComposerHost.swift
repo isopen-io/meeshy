@@ -160,20 +160,6 @@ struct MeeshyComposerHost: View {
     let onPreview: ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void
     let onDismiss: () -> Void
 
-    /// **Rendre le média composé au lieu de le publier** (#8416, #9124) — posé
-    /// par la retouche d'une pièce du brouillon d'un message.
-    /// `nil` pour toute autre porte, qui publie.
-    let onReturnMedia: ((ComposerReturnedMedia) -> Void)?
-
-    /// **Toutes les pièces du message, une scène chacune** (#9126) — posé par
-    /// « Éditer » sur une pièce en attente ; « Terminé » rend les retouchées.
-    let retouchSeries: ComposerRetouchSeed?
-    let onReturnSeries: (([ComposerRetouchedPiece]) -> Void)?
-    /// L'empreinte de chaque scène à son départ — `nil` tant que les mesures
-    /// vidéo ne sont pas arrivées.
-    @State var retouchBaselines: [String: Data]?
-    @State var retouchSeriesIngested = false
-
     /// L'atelier et le meuble lisent le MÊME état de composition. Le host le
     /// possède pour que le gate du réel (`ComposerReelGate`) lise la composition
     /// RÉELLE sans redemander quoi que ce soit à l'atelier — c'est ce qui fait
@@ -739,14 +725,8 @@ struct MeeshyComposerHost: View {
         moodSeed: ComposerMoodSeed?,
         mediaSeed: StoryComposerSeed?,
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void,
-        onDismiss: @escaping () -> Void,
-        onReturnMedia: ((ComposerReturnedMedia) -> Void)? = nil,
-        retouchSeries: ComposerRetouchSeed? = nil,
-        onReturnSeries: (([ComposerRetouchedPiece]) -> Void)? = nil
+        onDismiss: @escaping () -> Void
     ) {
-        self.onReturnMedia = onReturnMedia
-        self.retouchSeries = retouchSeries
-        self.onReturnSeries = onReturnSeries
         self.intent = intent
         self.initialVisibility = initialVisibility
         // **La PORTE peut porter le brouillon** (#4611). `draftId` était le
@@ -935,16 +915,10 @@ struct MeeshyComposerHost: View {
         // `StoryComposerSeed` n'est pas Equatable (elle porte un `UIImage`),
         // donc il n'y a rien à observer. Le loquet tient la répétition.
         .onAppear { ingestSeedIntoDocumentIfNeeded() }
-        .onAppear { ingestRetouchSeriesIfNeeded() }
         // **La caméra se prépare à l'ouverture** (#10307) : un format qui filme
         // configure sa session sans la lancer — l'armement n'a plus qu'à démarrer.
         .adaptiveOnChange(of: ComposerSceneCamera.initialMode(for: selectedFormat) != nil, initial: true) { _, filme in
             if filme { sceneCapture.prewarm() }
-        }
-        // Une scène fondée en retouche prend son état de départ après ses
-        // mesures vidéo (#9126, #9131).
-        .adaptiveOnChange(of: slideIdByMediaURL.count) { _, _ in
-            settleReturnedScenes()
         }
         // B3 (#3926) — le report du contenu vers la scène, en UN seul site :
         // dès que `mountedSurface` DEVIENT `.scene` (par l'éventail STORY/RÉEL

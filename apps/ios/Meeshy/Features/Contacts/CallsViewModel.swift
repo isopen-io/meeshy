@@ -103,7 +103,7 @@ final class CallsViewModel: ObservableObject {
         self.networkMonitor = networkMonitor
     }
 
-    deinit {
+    nonisolated deinit {
         revalidationTask?.cancel()
     }
 

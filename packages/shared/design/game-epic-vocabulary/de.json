@@ -125,7 +125,9 @@
       "instead": "„Schritte“ (die Reise); „Zeitalter“ (die Wiedergeburt)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -314,6 +316,8 @@
     "game.gauge.level": "Licht",
     "game.gauge.rank": "Rang",
     "game.gauge.treasury": "Erbe",
-    "game.gauge.flame": "Flamme"
+    "game.gauge.flame": "Flamme",
+    "game.fact.strides": "Schritte",
+    "game.fact.rebirths": "Wiedergeburten"
   }
 }

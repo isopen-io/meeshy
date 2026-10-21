@@ -42,7 +42,7 @@ final class ShareViewController: UIViewController {
         let loads = ShareItemLoader.start(inputProviders, shareId: shareId)
         loading = Task { @MainActor [weak self] in
             let gathered = await loads.gather()
-            self?.installInterface(content: gathered.content, media: gathered.media, failure: gathered.failure)
+            self?.installInterface(content: gathered.content, media: gathered.media, failures: gathered.failures)
         }
     }
 
@@ -55,11 +55,11 @@ final class ShareViewController: UIViewController {
     private func installInterface(
         content: String?,
         media: [ShareStagedMedia],
-        failure: ShareMediaStagingError?
+        failures: [ShareMediaStagingError]
     ) {
         let session = ShareSession.resolveLive()
         let mediaRoot = ShareMediaStaging.mediaRootURL()
-        let incoming = ShareExtensionIncoming.make(text: content, media: media, mediaRoot: mediaRoot, preparationFailed: failure != nil)
+        let incoming = ShareExtensionIncoming.make(text: content, media: media, mediaRoot: mediaRoot, failures: failures)
         let dispatcher = ExtensionShareDispatcher(shareId: shareId, session: session, staged: media)
         self.dispatcher = dispatcher
         let model = ShareSheetViewModel(
@@ -76,7 +76,7 @@ final class ShareViewController: UIViewController {
         // pas — elle DÉCRIT (les fichiers sont déjà copiés) et rend la main.
         // Une préparation échouée le retire : composer une pièce qui n'a pas été
         // copiée ouvrirait un studio vide.
-        if failure == nil {
+        if failures.isEmpty {
             actions.onCompose = { [weak self, weak model] in
                 guard let self, let model else { return }
                 self.handOffToStudio(subject: model.subject, media: dispatcher.keptMedia(of: model.subject), ownerUserId: session?.userId)

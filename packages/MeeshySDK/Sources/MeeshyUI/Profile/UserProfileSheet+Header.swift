@@ -200,7 +200,7 @@ extension UserProfileSheet {
         // call site legacy (nil) → anneau décoratif historique.
         let ringState: StoryRingState = showRing ? (storyRingState ?? .read) : .none
 
-        MeeshyAvatar(
+        MeeshyLivePresence { MeeshyAvatar(
             name: avatarName,
             context: .profileSheet,
             accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
@@ -210,7 +210,7 @@ extension UserProfileSheet {
             presenceState: isBlockedByTarget ? nil : resolvedPresence,
             onViewStory: (showRing && ringState != .none) ? onViewStory : nil,
             onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
-        )
+        ) }
         .avatarRing(
             shownAvatarRing,
             avatarSize: AvatarContext.profileSheet.size,
@@ -347,7 +347,7 @@ extension UserProfileSheet {
     @ViewBuilder
     var compactPinnedBar: some View {
         HStack(spacing: MeeshySpacing.smPlus) {
-            MeeshyAvatar(
+            MeeshyLivePresence { MeeshyAvatar(
                 name: displayUser.resolvedDisplayName,
                 context: .custom(32),
                 accentColor: isBlockedByTarget ? MeeshyColors.blockedNeutralHex : profileAccent,
@@ -356,7 +356,7 @@ extension UserProfileSheet {
                 moodEmoji: shownMoodEmoji,
                 presenceState: isBlockedByTarget ? nil : resolvedPresence,
                 onMoodTap: shownMoodEmoji == nil ? nil : onMoodTap
-            )
+            ) }
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(displayUser.resolvedDisplayName)

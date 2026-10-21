@@ -76,7 +76,7 @@ final class ContactsListViewModel: ObservableObject {
             }
     }
 
-    deinit {
+    nonisolated deinit {
         reconcileTask?.cancel()
     }
 

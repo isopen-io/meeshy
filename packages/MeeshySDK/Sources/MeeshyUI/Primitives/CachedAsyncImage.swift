@@ -315,7 +315,7 @@ public struct CachedAvatarImage: View {
             LinearGradient(colors: [color, color.opacity(MeeshyOpacity.heavy)], startPoint: .topLeading, endPoint: .bottomTrailing)
             Text(initials.isEmpty ? "?" : initials)
                 .font(.system(size: size * 0.38, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         }
     }
 

@@ -125,7 +125,9 @@
       "instead": "«passi» (il viaggio); «Ere» (la rinascita)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -322,6 +324,8 @@
     "game.gauge.level": "Luce",
     "game.gauge.rank": "Rango",
     "game.gauge.treasury": "Eredità",
-    "game.gauge.flame": "Fiamma"
+    "game.gauge.flame": "Fiamma",
+    "game.fact.strides": "Passi",
+    "game.fact.rebirths": "Rinascite"
   }
 }
