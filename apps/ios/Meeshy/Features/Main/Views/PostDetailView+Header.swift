@@ -20,14 +20,14 @@ extension PostDetailView {
                 selectedProfileUser = .from(feedPost: post)
             } label: {
                 HStack(spacing: MeeshySpacing.sm) {
-                    MeeshyAvatar(
+                    LivePresence { MeeshyAvatar(
                         name: post.author,
                         context: .custom(26),
                         accentColor: post.authorColor,
                         avatarURL: post.authorAvatarURL,
                         presenceState: PresenceManager.shared.knownPresenceState(for: post.authorId),
                         ring: post.authorRing
-                    )
+                    ) }
                     .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(post.author)

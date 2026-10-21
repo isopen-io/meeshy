@@ -457,7 +457,7 @@ struct MediumConversationView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(WidgetColors.brandPrimary.opacity(0.2))
-                        .cornerRadius(8)
+                        .clipShape(.rect(cornerRadius: 8))
                 }
             }
 
@@ -539,7 +539,7 @@ struct LargeConversationView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(WidgetColors.brandPrimary.opacity(0.2))
-                        .cornerRadius(8)
+                        .clipShape(.rect(cornerRadius: 8))
                 }
             }
 
@@ -818,7 +818,7 @@ struct QuickReplyButton: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(WidgetColors.brandPrimary.opacity(0.15))
-                .cornerRadius(12)
+                .clipShape(.rect(cornerRadius: 12))
         }
     }
 }

@@ -109,7 +109,7 @@ struct StickerPackShopScreen: View {
         } label: {
             Label(String(localized: "sticker.sheet.shopMore", defaultValue: "Plus dans la boutique", bundle: .main), systemImage: "bag")
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo500)
+                .foregroundStyle(MeeshyColors.indigo500)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .contentShape(Rectangle())
         }

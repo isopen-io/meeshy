@@ -231,7 +231,7 @@ struct CommentsSheetView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(topLevel) { comment in
-                                ThreadedCommentSection(
+                                LivePresence { ThreadedCommentSection(
                                     comment: comment,
                                     replies: repliesMap[comment.id] ?? [],
                                     isExpanded: expandedThreads.contains(comment.id),
@@ -261,14 +261,14 @@ struct CommentsSheetView: View {
                                     onRequestTranslation: { requestTranslation(of: $0) },
                                     moodEmoji: moodEmojiResolver?(comment.authorId),
                                     storyState: storyRingResolver?(comment.authorId) ?? .none,
-                                    presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
+                                    presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
                                     replyMoodResolver: { moodEmojiResolver?($0) },
                                     replyStoryResolver: { storyRingResolver?($0) ?? .none },
-                                    replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+                                    replyPresenceResolver: { PresenceManager.shared.knownPresenceState(for: $0) },
                                     hasMoreReplies: expandedThreads.contains(comment.id) && (repliesHasMore[comment.id] ?? false),
                                     onLoadMoreReplies: { await loadMoreReplies(commentId: comment.id) },
                                     highlightedCommentId: highlightedCommentId
-                                )
+                                ) }
                                 .background(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))

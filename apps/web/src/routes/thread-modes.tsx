@@ -166,6 +166,7 @@ export function ThreadModes({
   reasonOf,
   permanentOf,
   retry,
+  retryableOf,
   displayLanguageOf,
   myReactionsOf,
   contentWithheld,
@@ -177,6 +178,7 @@ export function ThreadModes({
   onSwipeAction,
   onPickLanguage,
   onReact,
+  reactableOf,
   onExpandReactions,
   onOpenDetail,
   storyRingOf,
@@ -244,6 +246,8 @@ export function ThreadModes({
   readonly reasonOf?: (messageId: string) => string | undefined;
   readonly permanentOf?: (messageId: string) => boolean;
   readonly retry?: (messageId: string) => void;
+  /** Le web sait-il renvoyer CE message d'ici (#11372, `useMessageMenu.retryableOf`) ? Absent : aucun bouton. */
+  readonly retryableOf?: (messageId: string) => boolean;
   readonly displayLanguageOf?: (messageId: string) => string | undefined;
   readonly myReactionsOf?: (messageId: string) => readonly string[] | undefined;
   /**
@@ -273,6 +277,8 @@ export function ThreadModes({
   /** Bascule MA réaction (#5865, #10583) — même geste que `onPickLanguage`,
    * une seule loi vers `useMessageMenu.onMenuReact`. */
   readonly onReact?: (messageId: string, emoji: string) => void;
+  /** CE LECTEUR PEUT-IL RÉAGIR À CE MESSAGE (#11372, `useMessageMenu.reactableOf`, verdict `canReact`) ? Absent ⇒ non : ni pastille à basculer, ni capsule. */
+  readonly reactableOf?: (message: Message) => boolean;
   /** « ＋ » de la barre rapide (#10583) : la feuille d'emojis complète, pour ce
    * message. Sans elle, la capsule « + » ne se pose pas. */
   readonly onExpandReactions?: (messageId: string) => void;
@@ -535,8 +541,10 @@ export function ThreadModes({
                        permanent. Le bouton disparaît ; la cause reste affichée.
                        `permanentOf` absent retombe sur « permanent » pour la même
                        raison — fail-closed sur l'affordance, jamais un bouton qui
-                       promet un rejeu que l'hôte ne sait pas jouer. */
-                    ...(rowPermanent || retry === undefined ? {} : { onRetry: () => retry(p.message.id) }),
+                       promet un rejeu que l'hôte ne sait pas jouer. Même
+                       loi que le menu (#11372) : `retryableOf` dit si le web
+                       sait renvoyer d'ici — jamais en bout en bout. */
+                    ...(rowPermanent || retry === undefined || retryableOf?.(p.message.id) !== true ? {} : { onRetry: () => retry(p.message.id) }),
                     ...(rowStartedAt === undefined ? {} : { sendStartedAt: rowStartedAt }),
                     ...(rowReason === undefined ? {} : { sendFailureReason: rowReason }),
                   };
@@ -628,8 +636,9 @@ export function ThreadModes({
               contentWithheld: rowWithheld,
               phase: revealPhases.get(p.message.id) ?? { phase: 'hidden' },
             });
+            const rowReact = onReact !== undefined && reactableOf?.(p.message) === true ? onReact : undefined;
             const rowOffersReactionCapsule =
-              onReact !== undefined &&
+              rowReact !== undefined &&
               onExpandReactions !== undefined &&
               rowSelected === undefined &&
               rowProtection !== 'deleted' &&
@@ -812,7 +821,7 @@ export function ThreadModes({
                             : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                           {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
                           {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                          {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                          {...(rowReact === undefined ? {} : { onReact: (emoji: string) => rowReact(p.message.id, emoji) })}
                           {...(rowSelected === undefined || onRowTap === undefined
                             ? {}
                             : { selected: rowSelected, onToggleSelect: onRowTap })}
@@ -838,7 +847,7 @@ export function ThreadModes({
                             : { onPickLanguage: (code: string) => onPickLanguage(p.message.id, code) })}
                           {...(rowMyReactions === undefined ? {} : { myReactions: rowMyReactions })}
                           {...(rowStoryRing === undefined ? {} : { senderStoryRing: rowStoryRing })}
-                          {...(onReact === undefined ? {} : { onReact: (emoji: string) => onReact(p.message.id, emoji) })}
+                          {...(rowReact === undefined ? {} : { onReact: (emoji: string) => rowReact(p.message.id, emoji) })}
                           {...(rowSelected === undefined || onRowTap === undefined
                             ? {}
                             : { selected: rowSelected, onToggleSelect: onRowTap })}
@@ -859,7 +868,7 @@ export function ThreadModes({
                     style={{ paddingInlineStart: reactionCapsuleInset({ flat: usesFlatRow(mode) }) }}
                   >
                     <ReactionAddCapsule
-                      onReact={(emoji) => onReact?.(p.message.id, emoji)}
+                      onReact={(emoji) => rowReact?.(p.message.id, emoji)}
                       onExpand={() => onExpandReactions?.(p.message.id)}
                     />
                   </div>

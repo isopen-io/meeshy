@@ -130,7 +130,9 @@
       "instead": "«pasos» (el viaje); «edades» (el renacimiento)",
       "keys": [
         "game.season.",
-        "game.prestige."
+        "game.prestige.",
+        "game.fact.strides",
+        "game.fact.rebirths"
       ]
     },
     {
@@ -359,6 +361,8 @@
     "game.gauge.level": "Luz",
     "game.gauge.rank": "Rango",
     "game.gauge.treasury": "Legado",
-    "game.gauge.flame": "Llama"
+    "game.gauge.flame": "Llama",
+    "game.fact.strides": "Pasos",
+    "game.fact.rebirths": "Renacimientos"
   }
 }

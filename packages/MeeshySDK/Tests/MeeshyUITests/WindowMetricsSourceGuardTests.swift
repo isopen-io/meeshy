@@ -28,21 +28,13 @@ final class WindowMetricsSourceGuardTests: XCTestCase {
 
     // MARK: - Test réel (fichiers du repo)
 
-    func test_meeshyUI_confinesTheMainScreenToWindowMetricsAndTheShrinkingDebt() throws {
-        let debt: Set<String> = [
-            "SlideMiniPreview.swift",
-            "StickerPickerView+Templates.swift",
-            "BannerFrameRenderer.swift",
-            "AudioWaveform.swift",
-            "VideoFilmstrip.swift",
-        ]
-
+    func test_meeshyUI_confinesTheMainScreenToWindowMetrics() throws {
         let found = try Self.allMeeshyUISources()
             .filter { $0.code.contains("UIScreen.main") }
             .map { ($0.path as NSString).lastPathComponent }
 
         XCTAssertEqual(
-            Set(found), debt.union(["WindowMetrics.swift"]),
+            Set(found), ["WindowMetrics.swift"],
             "Nouvelle lecture de l'écran principal : le layout lit WindowMetrics.windowSize, le décodage DecodeBudget."
         )
     }

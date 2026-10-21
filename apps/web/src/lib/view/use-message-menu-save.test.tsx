@@ -13,6 +13,7 @@ import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { MessageMenu } from '@/components/message-menu';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { useMessageMenu } from './use-message-menu';
 
@@ -96,8 +97,8 @@ function mount(lot: Message): { api: () => MenuApi; announced: string[]; chosen:
       messages: [lot],
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: (text) => announced.push(text),
       queryClient,
@@ -150,9 +151,9 @@ function mount(lot: Message): { api: () => MenuApi; announced: string[]; chosen:
 const actionsOf = (api: () => MenuApi): readonly string[] => (api().menuData?.items ?? []).map((item) => item.id);
 
 describe('« Enregistrer » au menu d’un message (#10599)', () => {
-  test('une photo seule : l’entrée est offerte, juste avant « Plus… »', () => {
+  test('une photo seule : l’entrée est offerte, en fin du groupe principal (#11210)', () => {
     const { api } = mount(messageWith([piece('a-1')]));
-    expect(actionsOf(api).slice(-2)).toEqual(['save', 'more']);
+    expect(actionsOf(api).slice(0, 4)).toEqual(['reply', 'forward', 'save', 'select']);
   });
 
   test('le menu la dit « Enregistrer » et la remet à son hôte', () => {

@@ -436,7 +436,7 @@ struct StoryViewerView: View {
             // primitives (règle « Zero Unnecessary Re-render » : pas
             // d'@ObservedObject sur ces singletons dans la face du cube).
             neighborPresence: neighborCubeGroup.flatMap {
-                PresenceManager.shared.presenceMap[$0.id] ?? $0.authorPresence
+                PresenceManager.shared.servedPresence(for: $0.id, fallback: $0.authorPresence)
             },
             neighborIsFriend: neighborCubeGroup.map { FriendshipCache.shared.isFriend($0.id) } ?? false,
             isPresented: $isPresented,

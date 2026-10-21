@@ -3,15 +3,22 @@ import * as uploadsEndpoints from '@meeshy/shared/api/endpoints/uploads';
 import { anySignal, timeoutSignal } from './abort';
 import type { DataSource } from './config';
 import { credentialHeaders, type ApiFailure, type ApiResult, type Credential } from './http';
+import { TUS_CHECKPOINT_MAX_AGE_MS, claimTusLease, idbTusCheckpointStore, tusFingerprint, type TusCheckpointStore } from './tus-checkpoint';
 
 /**
  * LE CLIENT TUS D'UN `PostMedia` (#6900, § 1.5 de la spécification) — le
  * MÊME protocole que `TusUploadManager.swift` (`:180-196`, `:288-520`,
  * `:520-582`) : `POST uploads.root` (201 + `Location`), `PATCH` par
  * tranches (`Upload-Offset`), `HEAD` pour se réaligner sur un 409, une
- * nouvelle création sur un 404/410. Sans checkpoint disque (question 9.5 : la
- * reprise ne survit pas à un rechargement de page) ni rafraîchissement de
- * jeton (web-v2 n'en a aucun).
+ * nouvelle création sur un 404/410. Sans rafraîchissement de jeton (web-v2
+ * n'en a aucun).
+ *
+ * **La reprise SURVIT à un rechargement (#11311).** Un checkpoint IndexedDB
+ * (`tus-checkpoint.ts` : adresse de session, offset accepté, empreinte du
+ * fichier) est écrit après la création puis après chaque tranche ; un envoi du
+ * même fichier, d'une autre page, relit l'offset du SERVEUR (`HEAD`) et repart de
+ * là au lieu de recréer une session. Une panne réseau ou une annulation GARDE le
+ * checkpoint, un refus définitif de la passerelle le PURGE.
  *
  * Ne CRÉE de `PostMedia` que pour un contexte `{post, story, status, comment}`
  * — `isPostMediaUploadContext`, `packages/shared/types/attachment.ts:477-480` —
@@ -53,6 +60,8 @@ export type PostMediaUploadParams = PostMediaUploadDeps & {
   readonly onProgress?: (fraction: number) => void;
   /** Injectée par les témoins ; `WEB_TUS_CHUNK_BYTES` en production. */
   readonly chunkSize?: number;
+  readonly checkpoints?: TusCheckpointStore | null;
+  readonly now?: () => number;
 };
 
 /**
@@ -208,12 +217,85 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
     return failure(403, 'Post media upload requires an identifiable registered account', 'POST_MEDIA_REQUIRES_ACCOUNT');
   }
 
+  const store = params.checkpoints === undefined ? idbTusCheckpointStore() : params.checkpoints;
+  const fingerprint = tusFingerprint(params);
+  const release = store === null ? null : claimTusLease(fingerprint);
+  const checkpoints = release === null ? null : store;
+  try {
+    const result = await transmit(params, credential, { checkpoints, fingerprint });
+    if (checkpoints !== null && settlesCheckpoint(result)) await checkpoints.remove(fingerprint);
+    return result;
+  } finally {
+    release?.();
+  }
+}
+
+type CheckpointContext = { readonly checkpoints: TusCheckpointStore | null; readonly fingerprint: string };
+
+/** Ce qui rend un checkpoint inutile : l'envoi est fini, tous ses octets sont partis, ou la passerelle a refusé
+ * pour de bon (4xx hors authentification, délai et débit). Une panne réseau, une annulation, un 5xx ou un jeton
+ * absent le GARDENT — c'est tout le but de la reprise. */
+function settlesCheckpoint(result: ApiResult<PostMediaUploadResult>): boolean {
+  if (result.ok) return true;
+  const { status } = result;
+  return (status >= 200 && status < 300) || (status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429);
+}
+
+const isDefinitiveRefusal = (status: number): boolean => status >= 400 && status < 500 && status !== 401 && status !== 408 && status !== 429;
+
+type Session = { readonly location: string; readonly offset: number };
+
+/** La session d'un envoi précédent du même fichier, relue côté serveur — le checkpoint n'est qu'un REPÈRE, l'offset
+ * de la passerelle fait foi. `null` : repartir d'une session neuve (checkpoint périmé, d'une autre taille, déjà
+ * entièrement envoyé, ou session oubliée du serveur). Un `HEAD` en panne rend la panne et GARDE le checkpoint. */
+async function resumedSession(
+  params: PostMediaUploadParams,
+  credential: Credential,
+  context: CheckpointContext & { readonly checkpoints: TusCheckpointStore },
+): Promise<Session | ApiFailure | null> {
+  const { checkpoints, fingerprint } = context;
+  const total = params.file.size;
+  const found = await checkpoints.find(fingerprint);
+  if (found === null) return null;
+  const age = (params.now ?? Date.now)() - found.savedAt;
+  if (age > TUS_CHECKPOINT_MAX_AGE_MS || found.fileSize !== total || found.offset >= total) {
+    await checkpoints.remove(fingerprint);
+    return null;
+  }
+  const location = resolvedLocation(found.location, params.base);
+  const head = await exchange(location, { method: 'HEAD', headers: { ...credentialHeaders(credential), 'Tus-Resumable': TUS_RESUMABLE } }, params);
+  if (head.kind === 'failure') return head.failure;
+  const { response } = head;
+  if (response.status === 200) {
+    const served = offsetOf(response);
+    if (served !== null && served < total) return { location, offset: served };
+    await checkpoints.remove(fingerprint);
+    return null;
+  }
+  if (!isDefinitiveRefusal(response.status)) return refusal(response);
+  await checkpoints.remove(fingerprint);
+  return null;
+}
+
+async function transmit(
+  params: PostMediaUploadParams,
+  credential: Credential,
+  context: CheckpointContext,
+): Promise<ApiResult<PostMediaUploadResult>> {
+  const total = params.file.size;
   const chunkSize = Math.max(1, params.chunkSize ?? WEB_TUS_CHUNK_BYTES);
-  const created = await createUpload(params, credential);
+  const { checkpoints, fingerprint } = context;
+  const remember = (location: string, offset: number): Promise<void> =>
+    checkpoints === null ? Promise.resolve() : checkpoints.save({ location, offset, fileSize: total, fingerprint, savedAt: (params.now ?? Date.now)() });
+
+  const resumed = checkpoints === null ? null : await resumedSession(params, credential, { checkpoints, fingerprint });
+  if (resumed !== null && 'ok' in resumed) return resumed;
+  const created = resumed === null ? await createUpload(params, credential) : resumed.location;
   if (typeof created !== 'string') return created;
 
   let location = created;
-  let offset = 0;
+  let offset = resumed === null ? 0 : resumed.offset;
+  if (resumed === null) await remember(location, 0);
   let realignments = 0;
   let restarted = false;
 
@@ -248,6 +330,7 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
         return media === null ? failure(response.status, 'Réponse de fin de téléversement illisible', 'TUS_FINISH_UNREADABLE') : { ok: true, data: media };
       }
       offset = next;
+      await remember(location, offset);
       continue;
     }
 
@@ -261,6 +344,7 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
       const served = head.response.status === 200 ? offsetOf(head.response) : null;
       if (served === null) return failure(409, 'Décalage serveur illisible', 'TUS_OFFSET_UNKNOWN');
       offset = served;
+      await remember(location, offset);
       continue;
     }
 
@@ -273,6 +357,7 @@ export async function uploadPostMedia(params: PostMediaUploadParams): Promise<Ap
       if (typeof recreated !== 'string') return recreated;
       location = recreated;
       offset = 0;
+      await remember(location, 0);
       continue;
     }
 

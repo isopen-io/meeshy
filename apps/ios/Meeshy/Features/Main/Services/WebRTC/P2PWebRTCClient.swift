@@ -964,7 +964,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
-    deinit {
+    nonisolated deinit {
         // disconnect() is MainActor-isolated; callers must call it explicitly
         // before release. ARC handles per-property cleanup here.
         //

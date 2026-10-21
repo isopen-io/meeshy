@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { message, minutesAgo } from '@/lib/api/fixtures-base';
 import type { Message } from '@/lib/api/types';
+import { menuScope } from '@/test-support/menu-viewer';
 
 import { deleteOfferOf } from './message-deletion';
 
@@ -23,7 +24,7 @@ const row = (overrides: Partial<Message> = {}): Message =>
     ...overrides,
   });
 
-const viewer = { id: 'u-moi', hasAccount: true } as const;
+const viewer = menuScope({ id: 'u-moi' });
 
 describe('deleteOfferOf — un message', () => {
   test('le mien ⇒ pour tous ET pour moi', () => {
@@ -51,7 +52,7 @@ describe('deleteOfferOf — un message', () => {
   });
 
   test('un invité ⇒ rien : ni route « pour moi », ni auteur reconnu', () => {
-    expect(deleteOfferOf([row()], { id: 'u-moi', hasAccount: false })).toEqual({ forEveryone: false, forMe: false, remove: false });
+    expect(deleteOfferOf([row()], menuScope({ id: 'u-moi', hasAccount: false }))).toEqual({ forEveryone: false, forMe: false, remove: false });
   });
 });
 
@@ -74,7 +75,7 @@ describe('deleteOfferOf — plusieurs messages', () => {
 });
 
 describe('deleteOfferOf — retirer le message d’un autre (#11150)', () => {
-  const moderator = { id: 'u-moi', hasAccount: true, moderates: true } as const;
+  const moderator = menuScope({ id: 'u-moi', conversationRole: 'moderator' });
 
   test('celui d’un autre, quand je modère la conversation ⇒ « Retirer », en plus de « pour moi »', () => {
     expect(deleteOfferOf([row({ senderId: 'u-autre' })], moderator)).toEqual({ forEveryone: false, forMe: true, remove: true });
@@ -95,5 +96,9 @@ describe('deleteOfferOf — retirer le message d’un autre (#11150)', () => {
 
   test('sans modération de la conversation ⇒ jamais', () => {
     expect(deleteOfferOf([row({ senderId: 'u-autre' })], viewer).remove).toBe(false);
+  });
+
+  test('jamais dans une conversation directe, même pour un rôle de plateforme (#11210)', () => {
+    expect(deleteOfferOf([row({ senderId: 'u-autre' })], menuScope({ id: 'u-moi', platformRole: 'BIGBOSS' }, { type: 'direct' })).remove).toBe(false);
   });
 });

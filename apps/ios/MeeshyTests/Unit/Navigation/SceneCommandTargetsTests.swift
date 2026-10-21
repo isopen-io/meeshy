@@ -8,6 +8,13 @@ final class SceneCommandTargetsTests: XCTestCase {
         var count = 0
     }
 
+    /// Une action publiée naît toujours d'un relais (#11238).
+    private func relayed(_ perform: @escaping () -> Void) -> MeeshySceneAction {
+        let relay = SceneActionRelay()
+        relay.perform = perform
+        return relay.action
+    }
+
     private func makeTargets(
         router: Router? = Router(),
         role: MeeshySceneRole = .main,
@@ -89,9 +96,9 @@ final class SceneCommandTargetsTests: XCTestCase {
         let searched = Counter()
         let closed = Counter()
         let targets = makeTargets(
-            newConversation: MeeshySceneAction { created.count += 1 },
-            search: MeeshySceneAction { searched.count += 1 },
-            closeWindow: MeeshySceneAction { closed.count += 1 }
+            newConversation: relayed { created.count += 1 },
+            search: relayed { searched.count += 1 },
+            closeWindow: relayed { closed.count += 1 }
         )
         targets.action(for: .newConversation)?()
         targets.action(for: .search)?()
@@ -101,7 +108,7 @@ final class SceneCommandTargetsTests: XCTestCase {
 
     func test_sendMessage_withPublishedAction_runsIt() {
         let sent = Counter()
-        let targets = makeTargets(sendMessage: MeeshySceneAction { sent.count += 1 })
+        let targets = makeTargets(sendMessage: relayed { sent.count += 1 })
         targets.action(for: .sendMessage)?()
         XCTAssertEqual(sent.count, 1)
     }

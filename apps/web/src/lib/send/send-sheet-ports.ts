@@ -4,6 +4,7 @@ import { createDirectConversation, createGroupConversation, type ConversationsDe
 import { uploadAttachments } from '@/lib/api/attachments';
 import { newClientMessageId } from '@/lib/api/client-message-id';
 import { browserImagePreparer, type ImagePreparer } from '@/lib/media/prepare-image-upload';
+import { servedMediaFile } from '@/lib/media/served-media';
 import type { ApiResult } from '@/lib/api/http';
 import { sendMessage } from '@/lib/api/messages';
 import type { PostMediaUploadDeps } from '@/lib/api/post-media-upload';
@@ -56,7 +57,7 @@ async function downloadFile(
     const response = await fetchImpl(media.url);
     if (!response.ok) return null;
     const blob = await response.blob();
-    return new File([blob], media.name, { type: media.mime !== '' ? media.mime : blob.type });
+    return servedMediaFile(blob, media.name, { type: media.mime !== '' ? media.mime : blob.type });
   } catch {
     return null;
   }

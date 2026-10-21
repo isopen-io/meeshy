@@ -341,6 +341,15 @@ const THREAD_MENU = [
   'chat-text',
   'caret-left',
   'caret-right',
+  // Les gestes du TYPE et du RÔLE (#11210) : réessayer un envoi, ouvrir un
+  // lien, un lieu dans une carte, épingler, retirer le message d'un autre, et
+  // la mention discrète du bout en bout dans « Plus ».
+  'arrow-clockwise',
+  'arrow-square-out',
+  'map-pin',
+  'push-pin',
+  'prohibit',
+  'lock-simple',
 ];
 
 emit({

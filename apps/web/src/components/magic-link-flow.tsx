@@ -1,3 +1,6 @@
+import { translate } from '@/lib/i18n-catalog';
+import { currentInterfaceLanguage } from '@/lib/interface-language';
+
 import { AuthBrandFooter } from './auth-chrome';
 import { AuthColumn, AuthColumnBar } from './auth-column';
 import { MagicLinkPanel, type MagicLinkPanelDeps } from './magic-link-panel';
@@ -25,7 +28,7 @@ export type MagicLinkFlowDeps = MagicLinkPanelDeps;
 export function MagicLinkFlow({ deps, next = null }: { deps?: MagicLinkFlowDeps; readonly next?: string | null }) {
   return (
     <AuthColumn>
-      <AuthColumnBar to="login" title="Connexion par e-mail" />
+      <AuthColumnBar to="login" title={translate(currentInterfaceLanguage(), 'magicLink.flowTitle')} />
       <MagicLinkPanel {...(deps === undefined ? {} : { deps })} autoFocus next={next} />
       <AuthBrandFooter />
     </AuthColumn>

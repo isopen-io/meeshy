@@ -212,6 +212,17 @@ describe('decodeConversation — invariant sansNull, SAUF currentUserRole (#6826
     const admin = { ...base, currentUserRole: 'admin' } as unknown as Conversation;
     expect(decodeConversation(admin).currentUserRole).toBe('admin');
   });
+  test('encryptionMode: null (une conversation EN CLAIR) SURVIT — le menu distingue « en clair » de « pas servi » (#11372)', () => {
+    const clear = { ...base, encryptionMode: null } as unknown as Conversation;
+    const decoded = decodeConversation(clear);
+    expect('encryptionMode' in decoded).toBe(true);
+    expect(decoded.encryptionMode).toBeNull();
+  });
+
+  test('encryptionMode ABSENT (non servi) reste ABSENT — jamais lu « en clair »', () => {
+    const { encryptionMode: _served, ...unserved } = base;
+    expect('encryptionMode' in decodeConversation(unserved as Conversation)).toBe(false);
+  });
 });
 
 describe('decodeMessage', () => {
