@@ -88,8 +88,8 @@ final class DisplayLinkCadenceSourceGuardTests: XCTestCase {
         )
         XCTAssertFalse(recorder.contains("Timer.scheduledTimer"), "le niveau du micro suit l'écran, pas un minuteur à 20 Hz")
         XCTAssertTrue(
-            recorder.contains("WeakDisplayLinkTarget.makeLink(frameRateRange:.pinned(fps:30))"),
-            "le niveau du micro est un lien d'affichage plafonné à 30 Hz"
+            recorder.contains("WeakDisplayLinkTarget.makeLink(frameRateRange:.meter)"),
+            "le niveau du micro est un lien d'affichage à la loi du vumètre, plafonnée à 30 Hz"
         )
     }
 

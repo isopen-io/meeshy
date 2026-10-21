@@ -2,6 +2,7 @@ import AVFoundation
 import Combine
 import MeeshySDK
 import os
+import QuartzCore
 
 @MainActor
 final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, CallInterruptibleRecorder {
@@ -119,9 +120,10 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         RecorderCallGuard.shared.register(self)
 
         // Un second démarrage sans arrêt entre les deux laissait l'ancien lien tourner
-        // jusqu'à la fin du processus. Le niveau suit l'écran, plafonné à 30 Hz.
+        // jusqu'à la fin du processus. Le niveau suit l'écran, plafonné à 30 Hz ;
+        // en arrière-plan le lien ne tire plus, l'îlot relève lui-même le niveau.
         displayLink?.invalidate()
-        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .pinned(fps: 30)) { [weak self] link in
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .meter) { [weak self] link in
             guard let self else {
                 link.invalidate()
                 return
@@ -179,6 +181,7 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         guard isRecording, let recorder, recorder.isRecording else { return }
         displayLink?.invalidate()
         displayLink = nil
+        duration = recorder.currentTime
         recorder.stop()
     }
 
@@ -186,6 +189,9 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
     func stopRecording() -> URL? {
         displayLink?.invalidate()
         displayLink = nil
+        // Le lien ne tire pas en arrière-plan : la durée se relève à l'arrêt,
+        // sinon un vocal arrêté depuis l'îlot gardait celle du dernier écran.
+        if let recorder, recorder.isRecording { duration = recorder.currentTime }
         recorder?.stop()
         isRecording = false
 
@@ -237,7 +243,9 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding, Cal
         return AudioRecordingResult(url: url, duration: duration, data: data)
     }
 
-    private func updateMetering() {
+    /// Relève durée et niveau. Appelé par le lien d'affichage à l'écran, et
+    /// par l'îlot (`VoiceRecordingLiveActivityCoordinator`) en arrière-plan.
+    func updateMetering() {
         guard let recorder, recorder.isRecording else { return }
 
         duration = recorder.currentTime
