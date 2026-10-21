@@ -168,7 +168,7 @@ struct GameRulesAtlasView: View {
         ForEach(GameRulesAtlas.ranks, id: \.self) { rank in
             cell(
                 GameCopy.rankName(rank),
-                rank.minGlory.map { String(localized: "game.rank.glory", defaultValue: "Gloire \(GameCopy.formatCount($0))", bundle: .main) }
+                rank.minGlory.map { String(localized: "game.rank.glory", defaultValue: "\(GameCopy.formatCount($0)) de gloire", bundle: .main) }
                     ?? GameAtlasCopy.mythRank
             ) {
                 RankBlasonView(rank: rank, division5: GameRulesAtlas.division(of: rank), title: GameCopy.rankName(rank), figures: .standard)
@@ -264,7 +264,7 @@ struct GameRulesAtlasView: View {
             cell(
                 GameText.rarityName(rarity),
                 GameAtlasCopy.share(rarity) + " · "
-                    + String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(GameRulesAtlas.glory(of: rarity))) Gloire", bundle: .main)
+                    + String(localized: "game.mint.chip.glory", defaultValue: "+\(GameCopy.formatCount(GameRulesAtlas.glory(of: rarity))) de gloire", bundle: .main)
             ) {
                 SignatureMark(style: .flat, color: theme.textMuted, strokeWidth: 100)
                     .padding(14)

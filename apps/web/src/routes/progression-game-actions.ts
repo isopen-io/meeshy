@@ -44,6 +44,8 @@ import { strikeGate, type StrikeGate } from '@/lib/game/strike-gate';
  * qu'elle change à l'écran — le compteur de Meeshes, le niveau, le rang —
  * n'est posé qu'APRÈS la fin du geste de Mee et Meo (`strikeGate`), jamais
  * avant. Un refus de la passerelle ouvre la porte et restaure ce qui l'a été.
+ * La porte porte la réponse jusqu'à la scène (#11177) : la confirmation laisse
+ * tomber le marteau, le refus ramène la lumière et Mee dit ce qui bloque.
  */
 
 export type GameActions = {
@@ -85,6 +87,9 @@ const messageOf = (error: unknown): string => gameErrorMessage(error instanceof 
 
 /** Un identifiant que la passerelle dit déjà pris par UNE AUTRE écriture ne sert plus : le prochain geste en génère un neuf. */
 const isIdConflict = (error: unknown): boolean => error instanceof ApiError && error.code === GAME_ERROR_CODES.requestIdConflict;
+
+/** Ce que la scène doit savoir d'un refus : son code, et un réseau absent se dit `NETWORK` (Mee le dit, #11177). */
+const refusalCode = (error: unknown): string => (error instanceof ApiError ? error.code ?? (error.status === 0 ? 'NETWORK' : 'UNKNOWN') : 'NETWORK');
 
 const withShownPrice = (price: number | undefined): { readonly maxPrice?: number } => (price !== undefined && price > 0 ? { maxPrice: price } : {});
 
@@ -156,10 +161,14 @@ export function useGameActions(
       if (isIdConflict(error)) spent('mint');
       if (context !== undefined) context.attempt.failed = true;
       if (context?.attempt.applied === true) restore(context);
-      gate.cancel();
+      gate.refuse(refusalCode(error));
     },
     onSuccess: async (result, _vars, context) => {
       spent('mint');
+      if (result.status === 'insufficient') {
+        if (context !== undefined) context.attempt.failed = true;
+        gate.refuse(GAME_ERROR_CODES.insufficientPoints);
+      } else gate.confirm(result.number !== undefined && result.edition !== undefined ? { number: result.number, edition: result.edition } : undefined);
       await gate.opened();
       // La frappe confirmée relève la révision en cache (#10900) : aucune lecture partie avant elle ne la repeint.
       const confirmed = result.gameRevision;

@@ -56,18 +56,18 @@ const FRENCH = /Tchak|toute neuve|Tu en as|Niveau|On fête|Succès débloqué|Te
 describe('la mascotte, interface en', () => {
   test('chaque ligne parle anglais, accordée au nombre', () => {
     document.documentElement.lang = 'en';
-    expect(mascotSay({ kind: 'meesh-minted', balance: 3 })).toBe('Clack! A brand-new Meesh. You have 3.');
-    expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Level 3! Let’s celebrate.');
+    expect(mascotSay({ kind: 'meesh-minted', balance: 3 })).toBe('Clack! A brand-new Meesh joins your legacy. You have 3.');
+    expect(mascotSay({ kind: 'level-up', level: 3 })).toBe('Level 3! Your light grows, let’s cheer!');
     expect(mascotSay({ kind: 'achievement', key: 'achievement.first_voice' })).toBe(
-      `Achievement unlocked: ${achievementCopy('achievement.first_voice', 'en').title}!`,
+      `Great deed done: ${achievementCopy('achievement.first_voice', 'en').title}!`,
     );
-    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Your sparks are ready: shall we mint a Meesh for 1,221 sparks?');
-    expect(mascotSay({ kind: 'first-step' })).toBe('Hi, I’m Mee! Send your first message and I’ll count your sparks.');
-    expect(mascotSay({ kind: 'streak', days: 4 })).toBe('4 days in a row, keep it up!');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('1 more spark and I’ll mint your next Meesh.');
-    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('821 more sparks and I’ll mint your next Meesh.');
-    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('90 more sparks before level 3.');
-    expect(mascotSay({ kind: 'top-level' })).toBe('You’re at the top. Well done!');
+    expect(mascotSay({ kind: 'can-mint', mintCost: 1221 })).toBe('Your light is ready: shall we bind 1,221 sparks into a Meesh?');
+    expect(mascotSay({ kind: 'first-step' })).toBe('Hi, I’m Mee! Send your first message and watch your sparks fly.');
+    expect(mascotSay({ kind: 'streak', days: 4 })).toBe('Your Flame has burned for 4 days, keep it up!');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 1 })).toBe('1 more spark, and I’ll mint your next Meesh.');
+    expect(mascotSay({ kind: 'meesh-missing', missing: 821 })).toBe('821 more sparks, and I’ll mint your next Meesh.');
+    expect(mascotSay({ kind: 'level-missing', missing: 90, nextLevel: 3 })).toBe('90 more sparks, and your light reaches level 3.');
+    expect(mascotSay({ kind: 'top-level' })).toBe('Your light is at its peak. Well done!');
   });
 
   test('aucune ligne ne laisse passer un mot de français', () => {
@@ -88,6 +88,6 @@ describe('la mascotte, interface en', () => {
 
   test('en arabe, le duel a sa forme', () => {
     document.documentElement.lang = 'ar';
-    expect(mascotSay({ kind: 'streak', days: 2 })).toBe('يومان متتاليان، واصل هكذا!');
+    expect(mascotSay({ kind: 'streak', days: 2 })).toBe('لهبك مشتعل منذ يومين، واصل هكذا!');
   });
 });

@@ -1,0 +1,332 @@
+{
+  "$doc": "O LÉXICO DA EPOPEIA, PORTUGUÊS DO BRASIL (#11174 ; tradução termo a termo de fr.json, a fonte ; concepção docs/superpowers/specs/2026-10-20-epopee-du-jeu-design.md § 3.1 e § 4 ; glossário docs/product/epopee/glossaire/pt.md). Formato: docs/product/epopee/glossaire/README.md. Lido pela guarda web (apps/web/src/lib/game/epic-vocabulary.test.ts) e pela guarda iOS (#11179). `banned`: os padrões que NENHUM valor dos catálogos do jogo traz, parâmetros {…} postos de lado ; `names`: o valor exato de cada chave de nome.",
+  "language": "pt",
+  "banned": [
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])aument\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "crescer, alimentar, despertar, brilhar mais forte"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])contador(?:es|as?)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "o nome do conceito: « sua glória », « sua Chama » ; o título se chama Narrador"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])valor(?:es)?(?:\\s+reais|\\s+real)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« sua luz »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])convers[íi]ve(?:l|is)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« sua luz »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])bolsos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« sua luz » (a Bolsa, primeiro recipiente da Herança, continua)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])potenciai?s?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada: diz-se o que se tem"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:d[íi]vidas?|d[ée]bitos?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« uma sombra cobre N faíscas da sua luz » (a Sombra)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])recordes?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« recebidas desde sempre », « o auge da sua luz », « sua Chama mais longa », « cunhadas desde sempre »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])ainda(?![\\p{L}\\p{N}])[^.!?:;]*(?<![\\p{L}\\p{N}])antes(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "em pequeno, « N até X »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])cust\\p{L}*(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "uma frase: « ela cristaliza N faíscas da sua luz » ; o cálculo vai para as regras"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:restar[áa]|sobrar[áa])(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada: nenhuma subtração numa ficha"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])tabelas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« cada gesto faz saltar as suas »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])pre[çc]o[\\s-]+(?:de\\s+)?base(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada numa ficha: o cálculo vive nas regras",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:porcentage(?:m|ns)|percentua(?:l|is))(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada numa ficha: o cálculo vive nas regras",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])fator(?:es)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "nada numa ficha: o cálculo vive nas regras",
+      "except": [
+        "game.rules."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])ligas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« torneio »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])rank(?:s|ing|ings)?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« título » (o nome do herói) ; no torneio, « lugar »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])pseud[ôo]nimos?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« nome de torneio »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])duplas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« aliança »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])temporadas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« viagem » ; suas estrelas são « passos », suas etapas « paradas »"
+    },
+    {
+      "pattern": "(?<!de\\s)(?<![\\p{L}\\p{N}])estrelas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« passos » (a viagem) ; « eras » (o renascimento)",
+      "keys": [
+        "game.season.",
+        "game.prestige."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])prest[íi]gios?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« renascimento »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:congel\\p{L}*|gelos?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« Lamparina »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])sequ[êe]ncias?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« Chama »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])miss(?:ão|ao|ões|oes)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« o sonho » ; uma missão é um « ato »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])ba[úu]s?\\s+do\\s+dia(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« a Oferenda »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])conquistas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« façanhas »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:selos?|Selos|[Ee]mblemas?|[Ii]ns[íi]gnias?)(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "« medalhas » (« Selo », com maiúscula, só nomeia o Selo da viagem)"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])cadernos?(?![\\p{L}\\p{N}])(?!\\s+de\\s+regras)",
+      "flags": "iu",
+      "instead": "« a Crônica »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])constela(?:ção|cao|ções|coes)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« o céu dos ancestrais » (Constelação só nomeia o nono estado da luz)",
+      "except": [
+        "game.tier.constellation"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:celebra|comemora)(?:ção|cao|ções|coes)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« sinal dos ancestrais »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])etapas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« prova » (as dezenas de níveis), « parada » (a viagem) ; « etapa » só nomeia a acolhida",
+      "keys": [
+        "game."
+      ],
+      "except": [
+        "game.guide.step_of",
+        "game.rules.section_steps"
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])faixas?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« estado » (a luz), « recipiente » (a Herança)",
+      "keys": [
+        "game."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])vitrines?(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« troféus »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])tesouros?(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "« a Herança » (o Tesouro, com maiúscula, só nomeia a quinta reserva)"
+    },
+    {
+      "pattern": "\\+\\s*\\S+\\s+(?:de\\s+)?Glória(?![\\p{L}\\p{N}])",
+      "flags": "u",
+      "instead": "« +250 de glória »: minúscula numa frase, ligada por « de »"
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])(?:tu|teus?|tuas?)(?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "« você », « seu », « sua »: o jogo trata por você (português do Brasil)",
+      "keys": [
+        "game."
+      ]
+    }
+  ],
+  "names": {
+    "game.tier.etincelle": "Faísca",
+    "game.tier.lueur": "Lampejo",
+    "game.tier.lumiere": "Claridade",
+    "game.tier.eclat": "Brilho",
+    "game.tier.rayon": "Raio",
+    "game.tier.aurore": "Aurora",
+    "game.tier.comete": "Cometa",
+    "game.tier.etoile": "Estrela",
+    "game.tier.constellation": "Constelação",
+    "game.tier.galaxie": "Galáxia",
+    "game.tier.nebuleuse": "Nebulosa",
+    "game.tier.pulsar": "Pulsar",
+    "game.tier.quasar": "Quasar",
+    "game.tier.supernova": "Supernova",
+    "game.tier.magnetar": "Magnetar",
+    "game.tier.amas": "Aglomerado",
+    "game.tier.superamas": "Superaglomerado",
+    "game.tier.cosmos": "Cosmos",
+    "game.tier.infini": "Infinito",
+    "game.tier.singularite": "Singularidade",
+    "game.rank.murmure": "Sussurro",
+    "game.rank.echo": "Eco",
+    "game.rank.voix": "Voz",
+    "game.rank.conteur": "Narrador",
+    "game.rank.passeur": "Intérprete",
+    "game.rank.polyglotte": "Poliglota",
+    "game.rank.ambassadeur": "Embaixador",
+    "game.rank.orateur": "Orador",
+    "game.rank.oracle": "Oráculo",
+    "game.rank.legende": "Lenda",
+    "game.rank.mythe": "Mito",
+    "game.treasury.bourse": "Bolsa",
+    "game.treasury.escarcelle": "Escarcela",
+    "game.treasury.coffret": "Cofrinho",
+    "game.treasury.coffre": "Baú",
+    "game.treasury.tresor": "Tesouro",
+    "game.treasury.reserve": "Reserva",
+    "game.flame.form.braise": "Brasa",
+    "game.flame.form.flamme": "Chama",
+    "game.flame.form.brasier": "Fogueira",
+    "game.flame.form.astre": "Astro",
+    "game.flame.form.soleil": "Sol",
+    "game.league.name.quartz": "Quartzo",
+    "game.league.name.ambre": "Âmbar",
+    "game.league.name.jade": "Jade",
+    "game.league.name.saphir": "Safira",
+    "game.league.name.rubis": "Rubi",
+    "game.league.name.amethyste": "Ametista",
+    "game.league.name.diamant": "Diamante",
+    "game.league.name.prisme": "Prisma",
+    "game.edition.silver": "prata",
+    "game.edition.gold": "ouro",
+    "game.edition.prism": "prisma",
+    "game.difficulty.easy": "Ato I",
+    "game.difficulty.medium": "Ato II",
+    "game.difficulty.hard": "Ato III",
+    "game.difficulty.gold": "Ato de ouro",
+    "game.material.copper": "Cobre",
+    "game.material.bronze": "Bronze",
+    "game.material.silver": "Prata",
+    "game.material.gold": "Ouro",
+    "game.material.platinum": "Platina",
+    "game.material.obsidian": "Obsidiana",
+    "game.material.prism": "Prisma",
+    "game.concept.level.name": "A Luz",
+    "game.concept.points.name": "Faíscas",
+    "game.concept.meesh.name": "A Herança",
+    "game.concept.glory.name": "O Título",
+    "game.concept.flame.name": "A Chama",
+    "game.concept.missions.name": "O Sonho",
+    "game.concept.league.name": "O Torneio",
+    "game.concept.season.name": "A Viagem",
+    "game.concept.prestige.name": "O Renascimento",
+    "game.concept.elans.name": "Impulsos",
+    "game.concept.badges.name": "Medalhas",
+    "game.concept.defis.name": "Desafios",
+    "game.concept.succes.name": "Façanhas",
+    "game.concept.showcase.name": "Troféus",
+    "game.concept.atlas.name": "O Atlas",
+    "game.rules.concept.level.name": "A Luz",
+    "game.rules.concept.points.name": "Faíscas",
+    "game.rules.concept.meesh.name": "A Meesh",
+    "game.rules.concept.glory.name": "O Título",
+    "game.rules.concept.flame.name": "A Chama",
+    "game.rules.concept.missions.name": "O Sonho",
+    "game.rules.concept.league.name": "O Torneio",
+    "game.rules.concept.season.name": "A Viagem",
+    "game.rules.concept.prestige.name": "O Renascimento",
+    "game.rules.concept.elans.name": "Impulsos",
+    "game.rules.concept.badges.name": "Medalhas",
+    "game.rules.concept.defis.name": "Desafios",
+    "game.rules.concept.succes.name": "Façanhas",
+    "game.rules.concept.showcase.name": "Troféus",
+    "game.rules.concept.atlas.name": "O Atlas",
+    "game.rules.concept.chest.name": "A Oferenda",
+    "game.rules.concept.treasury.name": "A Herança",
+    "game.rules.concept.steps.name": "As provas",
+    "game.rules.concept.duo.name": "A Aliança",
+    "game.chest.title": "A Oferenda",
+    "game.notebook.page_title": "A Crônica",
+    "game.door.notebook": "A Crônica",
+    "game.constellation.title": "O céu dos ancestrais",
+    "game.league.title": "Torneio",
+    "game.duo.title": "Aliança",
+    "game.season.title": "Viagem",
+    "game.prestige.title": "Renascimento",
+    "game.gauge.level": "Luz",
+    "game.gauge.rank": "Título",
+    "game.gauge.treasury": "Herança",
+    "game.gauge.flame": "Chama"
+  }
+}

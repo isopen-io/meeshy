@@ -75,11 +75,11 @@ enum PlayerBannerCopy {
         case .mission:
             let mission = banner.dailyMission ?? .init(done: 0, total: 0)
             return String(localized: "game2.banner.mission.a11y",
-                          defaultValue: "Missions du jour : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
+                          defaultValue: "Rêve : \(GameCopy.formatCount(mission.done)) sur \(GameCopy.formatCount(mission.total))",
                           bundle: .main)
         case .season:
             return String(localized: "game2.banner.season.a11y",
-                          defaultValue: "Saison \(GameCopy.formatCount(banner.season?.number ?? 0))", bundle: .main)
+                          defaultValue: "Voyage \(GameCopy.formatCount(banner.season?.number ?? 0))", bundle: .main)
         }
     }
 
