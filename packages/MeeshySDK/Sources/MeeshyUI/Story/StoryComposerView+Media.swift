@@ -149,7 +149,7 @@ extension StoryComposerView {
         // la réponse de l'utilisateur à l'alerte d'autorisation.
         .photosPicker(isPresented: $showGalleryPicker,
                       selection: $fgMediaItem,
-                      matching: .any(of: [.images, .videos]))
+                      matching: .any(of: [.images, .videos]), preferredItemEncoding: .current)
         .sheet(isPresented: $showTransitionSheet) {
             NavigationStack {
                 transitionPicker
@@ -193,64 +193,55 @@ extension StoryComposerView {
             }
             let objectId = UUID().uuidString
             if kind == .video {
-                guard let data = try? await item.loadTransferable(type: Data.self) else {
+                // Un FICHIER nommé `{objectId}.<ext>`, jamais `Data` : le film ne
+                // traverse pas la mémoire et rien n'est écrit sur le fil principal (#9870).
+                guard let tempURL = try? await PickedMedia.loadVideoFile(item, stem: objectId) else {
                     mediaLoadFailed = true  // C16 — l'échec parle
                     return
                 }
-                mediaLoadProgress = 0.3
-                let ext = item.supportedContentTypes
-                    .first { $0.conforms(to: .audiovisualContent) }?
-                    .preferredFilenameExtension ?? "mp4"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(objectId + "." + ext)
-                do {
-                    try data.write(to: tempURL)
-                    mediaLoadProgress = 0.5
-                    // Async thumbnail extraction via StoryMediaLoader (cached, off main thread)
-                    let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: tempURL, maxDimension: 400)
-                    mediaLoadProgress = 0.7
-                    let asset = AVURLAsset(url: tempURL)
-                    var mediaDuration: Float?
-                    if let cmDur = try? await asset.load(.duration) {
-                        let secs = CMTimeGetSeconds(cmDur)
-                        if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
-                    }
-                    // Mesure de l'aspectRatio natural de la vidéo via le
-                    // track vidéo (naturalSize × preferredTransform). Sans
-                    // ça, la layer rend la vidéo en carré 540×540 (cf. fix
-                    // B1 review Opus 2026-05-20).
-                    var videoAspectRatio: Double?
-                    if let track = try? await asset.loadTracks(withMediaType: .video).first,
-                       let natural = try? await track.load(.naturalSize),
-                       let transform = try? await track.load(.preferredTransform) {
-                        let effective = natural.applying(transform)
-                        let w = abs(effective.width)
-                        let h = abs(effective.height)
-                        if w > 0, h > 0 { videoAspectRatio = Double(w / h) }
-                    }
-                    mediaLoadProgress = 1.0
-                    await MainActor.run { () -> Void in
-                        // `id: objectId` : aligne `obj.id` sur le fichier `{objectId}.<ext>`
-                        // (même raison que le chemin image — cf. addMediaObject(id:)).
-                        // Toute la pose (vignette, mediaURL, ratio, durée native +
-                        // extension de slide) vit désormais dans le ViewModel : le
-                        // chemin caméra emprunte le MÊME code, pas un jumeau.
-                        viewModel.insertForegroundVideo(
-                            url: tempURL,
-                            thumbnail: thumbnail,
-                            aspectRatio: videoAspectRatio,
-                            duration: mediaDuration,
-                            intoSlideId: targetSlideId,
-                            objectId: objectId
-                        )
-                    }
-                } catch {
-                    Logger.media.error("[StoryComposer] Video write error: \(error.localizedDescription)")
-                    mediaLoadFailed = true  // C16 — l'échec parle
+                mediaLoadProgress = 0.5
+                // Async thumbnail extraction via StoryMediaLoader (cached, off main thread)
+                let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: tempURL, maxDimension: 400)
+                mediaLoadProgress = 0.7
+                let asset = AVURLAsset(url: tempURL)
+                var mediaDuration: Float?
+                if let cmDur = try? await asset.load(.duration) {
+                    let secs = CMTimeGetSeconds(cmDur)
+                    if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
+                }
+                // Mesure de l'aspectRatio natural de la vidéo via le
+                // track vidéo (naturalSize × preferredTransform). Sans
+                // ça, la layer rend la vidéo en carré 540×540 (cf. fix
+                // B1 review Opus 2026-05-20).
+                var videoAspectRatio: Double?
+                if let track = try? await asset.loadTracks(withMediaType: .video).first,
+                   let natural = try? await track.load(.naturalSize),
+                   let transform = try? await track.load(.preferredTransform) {
+                    let effective = natural.applying(transform)
+                    let w = abs(effective.width)
+                    let h = abs(effective.height)
+                    if w > 0, h > 0 { videoAspectRatio = Double(w / h) }
+                }
+                mediaLoadProgress = 1.0
+                await MainActor.run { () -> Void in
+                    // `id: objectId` : aligne `obj.id` sur le fichier `{objectId}.<ext>`
+                    // (même raison que le chemin image — cf. addMediaObject(id:)).
+                    // Toute la pose (vignette, mediaURL, ratio, durée native +
+                    // extension de slide) vit désormais dans le ViewModel : le
+                    // chemin caméra emprunte le MÊME code, pas un jumeau.
+                    viewModel.insertForegroundVideo(
+                        url: tempURL,
+                        thumbnail: thumbnail,
+                        aspectRatio: videoAspectRatio,
+                        duration: mediaDuration,
+                        intoSlideId: targetSlideId,
+                        objectId: objectId
+                    )
                 }
             } else {
                 // ImageIO downsample for foreground images (max 1080px)
                 mediaLoadProgress = 0.3
-                guard let data = try? await item.loadTransferable(type: Data.self),
+                guard let data = try? await PickedMedia.loadImageData(item),
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else {
                     mediaLoadFailed = true  // C16 — l'échec parle
                     return
@@ -471,7 +462,7 @@ extension StoryComposerView {
         Task {
             let samples: [Float]
             do {
-                samples = try await WaveformCache.shared.samples(from: url)
+                samples = try await WaveformScale.peakNormalized(WaveformCache.shared.samples(from: url))
             } catch {
                 samples = []  // waveform cosmétique : barres plates si l'analyse échoue
             }

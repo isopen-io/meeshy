@@ -418,7 +418,7 @@ struct ProgressionSectionPage: View {
     @StateObject private var viewModel = ProgressionViewModel()
 
     /// Lu au seul toucher de « Comprendre les badges » (#9640), jamais dans le corps.
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var progress: EngagementProgress? { viewModel.progress }

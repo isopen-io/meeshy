@@ -29,7 +29,7 @@ struct ProgressionConceptPage: View {
     let section: ProgressionConceptSection?
 
     @StateObject private var viewModel: ProgressionViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var reveal: ProgressionRevealRequest?

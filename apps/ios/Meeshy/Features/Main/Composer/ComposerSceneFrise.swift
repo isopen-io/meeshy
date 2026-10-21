@@ -59,10 +59,14 @@ struct ComposerSceneFrise: View {
             .buttonStyle(.plain)
             .accessibilityLabel(Text(timeline.isPlaying ? ComposerSceneFriseCopy.pause : ComposerSceneFriseCopy.play))
 
-            Text(ComposerSceneFriseMetrics.timeLabel(current: timeline.currentTime, total: duree))
-                .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold).monospacedDigit())
-                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
-                .frame(maxWidth: .infinity, alignment: .leading)
+            // Seul ce libellé lit la tête (#9874) : le reste de la frise ne
+            // se réévalue plus à chaque tick du moteur.
+            PlayheadTimeReader(clock: timeline.playhead) { maintenant in
+                Text(ComposerSceneFriseMetrics.timeLabel(current: maintenant, total: duree))
+                    .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold).monospacedDigit())
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             // Choisir une piste pendant la lecture est permis (retour porteur
             // 2026-09-28) : les jetons suivent la sélection, pas le transport.
@@ -116,22 +120,24 @@ struct ComposerSceneFrise: View {
     }
 
     private var regle: some View {
-        GeometryReader { geo in
-            Capsule()
-                .fill(Color.white.opacity(0.12))
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0).onChanged { valeur in
-                    timeline.scrub(to: temps(x: valeur.location.x, largeur: geo.size.width))
-                })
-        }
-        .frame(height: 14)
-        .padding(.leading, ComposerSceneFriseMetrics.labelLane)
-        .accessibilityElement()
-        .accessibilityLabel(Text(ComposerSceneFriseCopy.ruler))
-        .accessibilityValue(Text(ComposerSceneFriseMetrics.timeLabel(current: timeline.currentTime, total: duree)))
-        .accessibilityAdjustableAction { sens in
-            let pas: Float = sens == .increment ? 0.5 : -0.5
-            timeline.scrub(to: max(0, min(duree, timeline.currentTime + pas)))
+        PlayheadTimeReader(clock: timeline.playhead) { maintenant in
+            GeometryReader { geo in
+                Capsule()
+                    .fill(Color.white.opacity(0.12))
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0).onChanged { valeur in
+                        timeline.scrub(to: temps(x: valeur.location.x, largeur: geo.size.width))
+                    })
+            }
+            .frame(height: 14)
+            .padding(.leading, ComposerSceneFriseMetrics.labelLane)
+            .accessibilityElement()
+            .accessibilityLabel(Text(ComposerSceneFriseCopy.ruler))
+            .accessibilityValue(Text(ComposerSceneFriseMetrics.timeLabel(current: maintenant, total: duree)))
+            .accessibilityAdjustableAction { sens in
+                let pas: Float = sens == .increment ? 0.5 : -0.5
+                timeline.scrub(to: max(0, min(duree, timeline.currentTime + pas)))
+            }
         }
     }
 
@@ -258,16 +264,18 @@ struct ComposerSceneFrise: View {
     /// La tête AMBRE (`#fbbf24` de la maquette) court sur la règle et les
     /// pistes, sans jamais intercepter un toucher.
     private var tete: some View {
-        GeometryReader { geo in
-            let piste = geo.size.width - ComposerSceneFriseMetrics.labelLane
-            Capsule()
-                .fill(MeeshyColors.warning)
-                .frame(width: 2, height: geo.size.height)
-                .offset(x: ComposerSceneFriseMetrics.labelLane
-                        + CGFloat(ComposerSceneFriseMetrics.fraction(timeline.currentTime, of: duree)) * max(0, piste) - 1)
+        PlayheadTimeReader(clock: timeline.playhead) { maintenant in
+            GeometryReader { geo in
+                let piste = geo.size.width - ComposerSceneFriseMetrics.labelLane
+                Capsule()
+                    .fill(MeeshyColors.warning)
+                    .frame(width: 2, height: geo.size.height)
+                    .offset(x: ComposerSceneFriseMetrics.labelLane
+                            + CGFloat(ComposerSceneFriseMetrics.fraction(maintenant, of: duree)) * max(0, piste) - 1)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     // MARK: - Lecture du projet

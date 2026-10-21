@@ -152,6 +152,63 @@ class Exclusions(unittest.TestCase):
         self.assertEqual(count("idiom", "UIDevice.current.userInterfaceIdiom\n"), 1)
 
 
+class ScopedRules(unittest.TestCase):
+    SRC = "_ = Foo.shared\nlet b = AuthManager.shared.user\n"
+
+    def test_viewmodel_shared_counts_in_files_named_viewmodel(self):
+        for rel in (
+            "apps/ios/Meeshy/Features/X/FooViewModel.swift",
+            "apps/ios/Meeshy/Features/X/FooViewModel+Loading.swift",
+            "packages/MeeshySDK/Sources/MeeshyUI/Community/CommunityListViewModel.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("viewmodel-shared", self.SRC, rel), 2)
+
+    def test_viewmodel_shared_ignores_other_files_whatever_their_folder(self):
+        for rel in (
+            "apps/ios/Meeshy/Features/Sample.swift",
+            "apps/ios/Meeshy/Features/Main/ViewModels/Helper.swift",
+        ):
+            with self.subTest(rel=rel):
+                self.assertEqual(count("viewmodel-shared", self.SRC, rel), 0)
+
+    def test_viewmodel_shared_ignores_lookalikes(self):
+        src = "x.sharedInstance\nisShared\n// Foo.shared\n"
+        self.assertEqual(count("viewmodel-shared", src, "apps/ios/Meeshy/Features/X/FooViewModel.swift"), 0)
+
+
+class ObservedThemeSingleton(unittest.TestCase):
+    HITS = (
+        "@ObservedObject private var theme = ThemeManager.shared\n",
+        "@StateObject var theme = ThemeManager.shared\n",
+        "@ObservedObject private var theme: ThemeManager = .shared\n",
+        "@ObservedObject\n    private var theme = ThemeManager.shared\n",
+    )
+    MISSES = (
+        "@Environment(\\.colorScheme) private var colorScheme\n",
+        "private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }\n",
+        "@Environment(\\.theme) var theme\n",
+        "let m = ThemeManager.shared.mode\n",
+        "@ObservedObject var theme: ThemeManager\n",
+        "@ObservedObject private var vm = FooViewModel.shared\n",
+    )
+
+    def test_each_observing_form_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-theme-singleton", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("observed-theme-singleton", src), 0)
+
+    def test_app_entry_point_is_exempt(self):
+        src = self.HITS[0]
+        self.assertEqual(count("observed-theme-singleton", src, "apps/ios/Meeshy/MeeshyApp.swift"), 0)
+        self.assertEqual(count("observed-theme-singleton", src), 1)
+
+
 class Scope(unittest.TestCase):
     def test_each_root_counts(self):
         for root in ENGINE.SCOPE:

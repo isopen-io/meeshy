@@ -15,7 +15,7 @@ struct PhonebookListView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     @State private var invitationTarget: PhonebookInvitation?
     @State private var isOfferingPhone = false

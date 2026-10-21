@@ -14,7 +14,6 @@ struct ConversationListBottomBar: View {
     let userCommunities: [MeeshyCommunity]
 
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
-    @EnvironmentObject var router: Router
 
     @State private var searchBounce = false
     /// La VACUITÉ du texte de recherche, remontée par l'hôte du champ — la

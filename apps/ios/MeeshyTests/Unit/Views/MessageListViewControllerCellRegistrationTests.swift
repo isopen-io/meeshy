@@ -44,15 +44,21 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
     }
 
     func test_chaqueTypeDeLigne_aSonPoolDeReutilisation() async throws {
-        let (vc, _) = try await makeMountedList(count: 6)
+        let (vc, window) = try await makeMountedList(count: 6)
+        defer { withExtendedLifetime(window) {} }
         vc.conversationViewModel = try await makeConversationViewModel()
         let typers = [TypingParticipant(id: "user_other", displayName: "Autre")]
         vc.conversationViewModel?.typingParticipants = typers
         vc.applySnapshot(reconfigure: .allItems)
-        vc.focalCollectionViewForTesting?.layoutIfNeeded()
+        let isDay: (MessageListItem) -> Bool = { if case .dayHeader = $0 { return true } else { return false } }
+        for _ in 0..<40 {
+            vc.focalCollectionViewForTesting?.layoutIfNeeded()
+            if cell(of: .typingIndicator, in: vc) != nil, cell(ofKind: isDay, in: vc) != nil { break }
+            try await Task.sleep(for: .milliseconds(25))
+        }
 
         let message = try XCTUnwrap(cell(of: .message(localId: "m3"), in: vc))
-        let day = try XCTUnwrap(cell(ofKind: { if case .dayHeader = $0 { return true } else { return false } }, in: vc))
+        let day = try XCTUnwrap(cell(ofKind: isDay, in: vc))
         let typing = try XCTUnwrap(cell(of: .typingIndicator, in: vc))
 
         let identifiers = [message.reuseIdentifier, day.reuseIdentifier, typing.reuseIdentifier]
@@ -61,12 +67,16 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
 
     // MARK: - Une registration par fichier
 
+    /// Une CONSTRUCTION, jamais le type de retour de la fabrique qui la rend :
+    /// `func make…() -> UICollectionView.CellRegistration<…> {` se termine par la
+    /// même chaîne, et compter les deux rendrait 2 partout.
     func test_chaqueRegistration_vitDansSonFichier() throws {
         let construction = "UICollectionView.CellRegistration<MessageListCell, MessageListItem> {"
         let urls = AppSourceGuard.unitURLs("Meeshy/Features/Main/Views/MessageListViewController.swift")
         let counts = try Dictionary(uniqueKeysWithValues: urls.map { url -> (String, Int) in
             let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
-            return (url.lastPathComponent, source.components(separatedBy: construction).count - 1)
+            let returnTypes = source.components(separatedBy: "-> " + construction).count - 1
+            return (url.lastPathComponent, source.components(separatedBy: construction).count - 1 - returnTypes)
         })
         let owners = ["+Rows", "+TypingCell", "+DayHeaderCell", "+ConversationStartCell", "+UnreadSeparator"]
             .map { "MessageListViewController\($0).swift" }
@@ -85,11 +95,13 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
         let (collectionView, dataSource, window) = makeHarness(registration: vc.makeDayHeaderRegistration())
         defer { withExtendedLifetime(window) {} }
 
+        // Lu AVANT le second dequeue : la cellule libérée par le premier item
+        // retourne au pool et peut être celle que le second reçoit.
         let day = try XCTUnwrap(dequeue(.dayHeader(dayStart: Date()), collectionView, dataSource))
-        let other = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
-
         XCTAssertNotNil(day.contentConfiguration)
         XCTAssertEqual(day.backgroundColor, .clear)
+
+        let other = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
         XCTAssertNil(other.contentConfiguration)
     }
 
@@ -99,9 +111,9 @@ final class MessageListViewControllerCellRegistrationTests: XCTestCase {
         defer { withExtendedLifetime(window) {} }
 
         let start = try XCTUnwrap(dequeue(.conversationStart, collectionView, dataSource))
-        let other = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
-
         XCTAssertNotNil(start.contentConfiguration)
+
+        let other = try XCTUnwrap(dequeue(.typingIndicator, collectionView, dataSource))
         XCTAssertNil(other.contentConfiguration)
     }
 

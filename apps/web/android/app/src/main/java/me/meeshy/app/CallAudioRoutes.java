@@ -24,7 +24,9 @@ public final class CallAudioRoutes {
     static final int TYPE_WIRED_HEADSET = 3;
     static final int TYPE_WIRED_HEADPHONES = 4;
     static final int TYPE_BLUETOOTH_SCO = 7;
+    static final int TYPE_USB_DEVICE = 11;
     static final int TYPE_USB_HEADSET = 22;
+    static final int TYPE_HEARING_AID = 23;
     static final int TYPE_BLE_HEADSET = 26;
     static final int TYPE_BLE_SPEAKER = 27;
 
@@ -44,14 +46,26 @@ public final class CallAudioRoutes {
             case TYPE_WIRED_HEADSET:
             case TYPE_WIRED_HEADPHONES:
             case TYPE_USB_HEADSET:
+            case TYPE_USB_DEVICE:
                 return WIRED;
             case TYPE_BLUETOOTH_SCO:
+            case TYPE_HEARING_AID:
             case TYPE_BLE_HEADSET:
             case TYPE_BLE_SPEAKER:
                 return BLUETOOTH;
             default:
                 return null;
         }
+    }
+
+    /**
+     * Les appareils que la coque peut viser. Sous l'API 31, la seule sortie
+     * Bluetooth qu'elle sait forcer est le SCO : un appareil auditif (ASHA) y
+     * reste au routage d'Android, comme dans le navigateur (#11186).
+     */
+    public static int[] routableTypes(int[] deviceTypes, int sdk) {
+        if (sdk >= API_COMMUNICATION_DEVICE) return deviceTypes;
+        return Arrays.stream(deviceTypes).filter(type -> type != TYPE_HEARING_AID).toArray();
     }
 
     /** Les sorties offertes, dans un ordre stable, sans doublon. */

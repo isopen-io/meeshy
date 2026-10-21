@@ -5,7 +5,8 @@ import MeeshySDK
 
 public struct ConversationSettingsView: View {
     @StateObject private var viewModel: ConversationSettingsViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.meeshyPresenceResolver) private var presenceResolver
 

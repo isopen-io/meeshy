@@ -49,6 +49,9 @@ struct MessageMoreSheet: View {
     var translationRequestFailedPublisher: AnyPublisher<ConversationViewModel.TranslationRequestFailure, Never>? = nil
     var onRequestTextTranslation: ((_ targetLanguage: String, _ sourceLanguage: String) -> Void)? = nil
     var onRequestAudioTranslation: ((_ targetLanguage: String, _ attachmentId: String) -> Void)? = nil
+    /// Chiffrée de bout en bout (#11214) : la feuille DIT pourquoi la
+    /// traduction et la transcription par le serveur n'y figurent pas.
+    var serverFeaturesAbsent: Bool = false
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
@@ -91,6 +94,7 @@ struct MessageMoreSheet: View {
                         glassGridCard
                             .padding(.horizontal, MeeshySpacing.mdPlus)
                             .padding(.top, MeeshySpacing.sm)
+                        if serverFeaturesAbsent { endToEndNotice }
                     }
                 }
                 .padding(.bottom, MeeshySpacing.xxl)
@@ -118,7 +122,7 @@ struct MessageMoreSheet: View {
                     dismiss()
                 }
             }
-            if message.isForwardable {
+            if allMoreItems.contains(.forward) {
                 Button(String(localized: "message-detail.tab.forward", defaultValue: "Transférer", bundle: .main)) {
                     onForward?()
                     dismiss()
@@ -134,6 +138,24 @@ struct MessageMoreSheet: View {
             }
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
         }
+    }
+
+    /// La mention de ce qui est ABSENT en E2EE — l'absence s'explique, elle
+    /// ne se devine pas (#9224).
+    private var endToEndNotice: some View {
+        Label(
+            String(
+                localized: "message-more.e2ee.notice",
+                defaultValue: "Chiffrée de bout en bout : la traduction et la transcription par le serveur ne sont pas disponibles dans cette conversation.",
+                bundle: .main
+            ),
+            systemImage: "lock.fill"
+        )
+        .font(.footnote)
+        .foregroundStyle(theme.textMuted)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, MeeshySpacing.lg)
+        .accessibilityElement(children: .combine)
     }
 
     // MARK: - Close Button (Liquid Glass, haut-droite)

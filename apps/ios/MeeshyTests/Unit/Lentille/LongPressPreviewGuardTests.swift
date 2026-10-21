@@ -179,7 +179,8 @@ final class LongPressPreviewGuardTests: XCTestCase {
         XCTAssertTrue(normalized.contains("isInteractive: false"))
         let helpers = normalizedCode(try source(Self.helpersPath))
         XCTAssertTrue(
-            helpers.contains("if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) { ViewThatFits(in: .horizontal) { headerActions("),
+            helpers.contains("if ConversationPreviewRenderer.showsHeaderActions(isInteractive: isInteractive) { foldingHeaderActions }")
+                && helpers.contains("private var foldingHeaderActions: some View { ViewThatFits(in: .horizontal) { headerActions("),
             "`headerActions` n'est monté que si l'aperçu est interactif"
         )
     }

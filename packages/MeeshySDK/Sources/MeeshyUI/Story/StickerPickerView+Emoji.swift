@@ -99,7 +99,7 @@ extension StickerPickerView {
                 // détourage fantôme après chaque geste.
                 guard let liftSelection, let stickerLibrary else { return }
                 defer { self.liftSelection = nil }
-                guard let data = try? await liftSelection.loadTransferable(type: Data.self) else { return }
+                guard let data = try? await PickedMedia.loadImageData(liftSelection) else { return }
                 // `nil` du détourage = aucun sujet trouvé : c'est l'APP qui le
                 // dit à l'utilisateur (elle possède le toast), la grille
                 // reste simplement inchangée.

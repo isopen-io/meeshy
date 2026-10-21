@@ -3,7 +3,8 @@ import QuartzCore
 @testable import MeeshyUI
 
 /// Issue #11285 — la fabrique applique la plage qu'on lui remet, et les
-/// plages nommées portent la cadence décidée (horloge 30/60, geste 60/120).
+/// plages nommées portent la cadence décidée (horloge 30/60, geste 60/120,
+/// vumètre 20 plafonné à 30).
 @MainActor
 final class WeakDisplayLinkTargetTests: XCTestCase {
 
@@ -21,6 +22,14 @@ final class WeakDisplayLinkTargetTests: XCTestCase {
         XCTAssertEqual(link.preferredFrameRateRange.minimum, 30)
         XCTAssertEqual(link.preferredFrameRateRange.maximum, 60)
         XCTAssertEqual(link.preferredFrameRateRange.preferred, 60)
+    }
+
+    func test_makeLink_withMeterRange_isCappedAt30HzAndPrefers20Hz() {
+        let link = WeakDisplayLinkTarget.makeLink(frameRateRange: .meter) { _ in }
+        defer { link.invalidate() }
+        XCTAssertEqual(link.preferredFrameRateRange.maximum, 30, "le vumètre ne tire jamais au-delà de 30 Hz")
+        XCTAssertEqual(link.preferredFrameRateRange.preferred, 20, "les 15 barres couvrent 0,75 s, comme au temps du minuteur")
+        XCTAssertLessThanOrEqual(link.preferredFrameRateRange.minimum, link.preferredFrameRateRange.preferred)
     }
 
     func test_pinnedRange_withFps_pinsMinimumMaximumAndPreferredToFps() {
