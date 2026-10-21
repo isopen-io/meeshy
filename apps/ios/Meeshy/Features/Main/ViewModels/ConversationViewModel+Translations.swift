@@ -368,49 +368,10 @@ extension ConversationViewModel {
 
     // MARK: - Transcription Retry for Audio Messages
 
-    /// When Whisper has not finished transcribing an audio attachment by the
-    /// time the REST response arrives, `attachment.transcription` is nil.
-    /// This method collects those message IDs and schedules a single retry
-    /// fetch after 5 seconds so the transcription is surfaced on the second
-    /// attempt (Whisper typically completes within 3–15 s).
     func scheduleTranscriptionRetry(for apiMessages: [APIMessage]) {
-        let audioMissingTranscription = apiMessages.filter { msg in
-            msg.attachments?.contains(where: { att in
-                guard let mime = att.mimeType, mime.hasPrefix("audio/") else { return false }
-                return att.transcription == nil
-            }) ?? false
-        }
-        guard !audioMissingTranscription.isEmpty else { return }
-
-        let msgIds = audioMissingTranscription.map(\.id)
-        let convId = conversationId
-        Logger.messages.info("[TranscriptionRetry] Scheduling retry for \(msgIds.count) audio message(s) missing transcription")
-
-        Task { [weak self, messageService] in
-            try? await Task.sleep(for: .seconds(5))
-            guard let self, !Task.isCancelled else { return }
-
-            // Re-fetch the same messages from REST; by now Whisper should have
-            // finished transcribing. We use `listAround` with the first message
-            // to get a window that includes the missing ones.
-            for msgId in msgIds {
-                guard !Task.isCancelled else { return }
-                do {
-                    let response = try await messageService.listAround(
-                        conversationId: convId,
-                        around: msgId,
-                        limit: 5,
-                        includeReplies: false,
-                        includeTranslations: true
-                    )
-                    await MainActor.run {
-                        self.extractAttachmentTranscriptions(from: response.data)
-                    }
-                } catch {
-                    Logger.messages.warning("[TranscriptionRetry] Retry failed for \(msgId): \(error.localizedDescription)")
-                }
-            }
-        }
+        let scheduler: any TranscriptionRetryScheduling = startupDependencies.transcriptionRetry
+            ?? TranscriptionRetryScheduler(messageService: messageService)
+        scheduler.schedule(for: apiMessages, conversationId: conversationId, receiver: self)
     }
 
     // MARK: - Extract Transcription/Translation Data from REST Responses
