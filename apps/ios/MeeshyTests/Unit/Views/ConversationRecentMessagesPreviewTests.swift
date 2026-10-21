@@ -252,6 +252,108 @@ final class ConversationRecentMessagesPreviewTests: XCTestCase {
         XCTAssertTrue(ConversationPreviewRenderer.isEndToEnd(conversation))
     }
 
+    // MARK: - Le fond de la conversation sous ses bulles (#11231)
+
+    /// L'aperçu dessinait toujours le dégradé de la carte : une conversation
+    /// au fond uni, à motif ou à photo montrait, sous le doigt, des bulles sur
+    /// un fond que le fil ne peint jamais. Il peint désormais le fond RÉSOLU de
+    /// la conversation — la même résolution que le fil.
+    private func conversation(
+        _ id: String = "c-backdrop-\(UUID().uuidString)",
+        appearance: ConversationAppearance?
+    ) -> Conversation {
+        var conversation = Conversation(id: id, identifier: id, type: .group, title: "T",
+                                        lastMessageAt: start, createdAt: start, updatedAt: start)
+        conversation.userState.appearance = appearance
+        return conversation
+    }
+
+    private func backdrop(_ appearance: ConversationAppearance?, isDark: Bool = false) -> ConversationPreviewRenderer.Backdrop {
+        ConversationPreviewRenderer.backdrop(for: conversation(appearance: appearance), computedAccentHex: "#123456", isDark: isDark)
+    }
+
+    func test_backdrop_signature_keepsTheCardsOwnBackground() {
+        XCTAssertEqual(backdrop(nil).resolution, .signature)
+        XCTAssertFalse(backdrop(nil).paintsOverTheCard)
+    }
+
+    func test_backdrop_solid_paintsTheConversationsColor_inBothSchemes() {
+        let solid = ConversationAppearance(background: .solid(color: "indigo"))
+
+        XCTAssertEqual(backdrop(solid).resolution, .solid(hex: "#EEF0FF"))
+        XCTAssertEqual(backdrop(solid, isDark: true).resolution, .solid(hex: "#14152E"))
+        XCTAssertTrue(backdrop(solid).paintsOverTheCard)
+    }
+
+    func test_backdrop_design_isTheThreadsBundledModel() {
+        guard case .design(let design) = backdrop(ConversationAppearance(background: .design(pack: "heritages", design: "zellige"))).resolution else {
+            return XCTFail("un motif du catalogue embarqué se peint sous les bulles de l'aperçu")
+        }
+        XCTAssertEqual(design.key, "zellige")
+    }
+
+    func test_backdrop_photo_keepsItsVeilAndBlur() {
+        let photo = ConversationAppearance(background: .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.4, blur: 6))
+
+        XCTAssertEqual(backdrop(photo).resolution, .photo(attachmentId: "64b7f0c2a1b2c3d4e5f60718", veil: 0.4, blur: 6))
+    }
+
+    /// Un choix illisible (motif inconnu, couleur hors gamme) retombe sur la
+    /// carte, jamais sur un fond vide.
+    func test_backdrop_unreadableChoice_fallsBackToTheCard() {
+        XCTAssertEqual(backdrop(ConversationAppearance(background: .solid(color: "fuchsia"))).resolution, .signature)
+    }
+
+    /// Le fil ouvert relève l'apparence la plus récente : l'aperçu la suit
+    /// plutôt que la ligne de liste, qui peut encore porter l'ancienne.
+    func test_backdrop_threadsLatestChoice_winsOverTheListRow() {
+        let id = "c-backdrop-ledger-\(UUID().uuidString)"
+        BubbleSkinLedger.record(ConversationAppearance(background: .solid(color: "indigo")), for: id)
+        defer { BubbleSkinLedger.record(nil, for: id) }
+
+        let resolved = ConversationPreviewRenderer.backdrop(for: conversation(id, appearance: nil), computedAccentHex: "#123456", isDark: false)
+
+        XCTAssertEqual(resolved.resolution, .solid(hex: "#EEF0FF"))
+    }
+
+    func test_backdrop_accent_isThePersonalOneWhenChosen_otherwiseTheComputedOne() {
+        XCTAssertEqual(backdrop(ConversationAppearance(accent: "corail")).accentHex, "#E0604E")
+        XCTAssertEqual(backdrop(nil).accentHex, "#123456")
+    }
+
+    /// Une pièce CHIFFRÉE n'est jamais demandée au réseau : le serveur n'en sert
+    /// que le chiffré. L'aperçu garde alors le voile sur le fond neutre.
+    func test_backdropPhoto_encryptedPiece_isNeverRequested() {
+        var piece = MeeshyMessageAttachment.image()
+        piece.isEncrypted = true
+        var carrier = message("m1")
+        carrier.attachments = [piece]
+
+        XCTAssertNil(ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: piece.id, among: [carrier], remembered: nil, serverOrigin: "https://gate.test"
+        ))
+    }
+
+    func test_backdropPhoto_knownClearPiece_usesItsOwnUrls() {
+        let piece = MeeshyMessageAttachment.image()
+        var carrier = message("m1")
+        carrier.attachments = [piece]
+
+        let photo = ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: piece.id, among: [carrier], remembered: nil, serverOrigin: "https://gate.test"
+        )
+
+        XCTAssertEqual(photo?.fullUrl, piece.fileUrl)
+    }
+
+    func test_backdropPhoto_unknownPiece_usesTheDownloadRouteThatChecksMembership() {
+        let photo = ConversationPreviewRenderer.backdropPhoto(
+            attachmentId: "64b7f0c2a1b2c3d4e5f60718", among: [], remembered: nil, serverOrigin: "https://gate.test"
+        )
+
+        XCTAssertEqual(photo?.fullUrl, "https://gate.test/api/v1/attachments/64b7f0c2a1b2c3d4e5f60718")
+    }
+
     // MARK: - Le repli < iOS 26 : l'entrée sous Réduire les animations
 
     func test_entrance_reduceMotion_neverStartsFromTheRow() {
