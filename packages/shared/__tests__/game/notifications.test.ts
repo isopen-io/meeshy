@@ -107,7 +107,7 @@ describe('les textes', () => {
       expect(text, lang).not.toContain('{');
     }
     expect(notificationString('fr', 'game.missionWindow', { mission: 'envoyer des stickers', start: '18:00', end: '20:00' })).toBe(
-      'Ta mission du jour : envoyer des stickers, entre 18:00 et 20:00.',
+      'Un acte rien que pour toi : envoyer des stickers, entre 18:00 et 20:00.',
     );
   });
 

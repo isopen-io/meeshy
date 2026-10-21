@@ -14,6 +14,8 @@ final class GameWave2CatalogGuardTests: XCTestCase {
         "game2.league.name.quartz", "game2.door.prestige",
         // « S1 » : l'abréviation de la saison s'écrit pareil en anglais (#10846).
         "game2.banner.season.short",
+        // « Alliance » : le nom du concept s'écrit pareil en anglais, comme sur le web (glossaire, #11179).
+        "game2.duo.title",
     ]
 
     private func entries() throws -> [String: [String: String]] {

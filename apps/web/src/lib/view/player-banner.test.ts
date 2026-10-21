@@ -151,7 +151,7 @@ describe('ce que lit le lecteur d’écran — une phrase complète', () => {
 
   test('en : l’ordinal anglais de la place', () => {
     const model = shownExtras({ balance: 12, streak: 23 });
-    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Flame 23 days, .*, Daily missions: \d+ of \d+, Jade league \d+(st|nd|rd|th), .*$/);
+    expect(playerBannerLabel(model, 'en')).toMatch(/^Level \d+, .*, Flame 23 days, .*, Dream: \d+ of \d+, Jade joust · \d+(st|nd|rd|th), .*$/);
   });
 
   test('aucune langue ne laisse une clé nue, un paramètre en clair ou un « undefined »', () => {

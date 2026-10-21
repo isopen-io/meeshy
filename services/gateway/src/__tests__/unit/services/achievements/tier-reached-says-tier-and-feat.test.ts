@@ -90,7 +90,7 @@ describe('la notification de palier dit le palier ET l’exploit (#10298)', () =
 
     // 10 conversations rejointes = le DEUXIÈME palier de l'échelle de volume (1, 10, 100…).
     expect(args.title).toBe('🏆 Palier 2 atteint');
-    expect(args.content).toBe('10 conversations rejointes — bravo, vous êtes au palier 2 !');
+    expect(args.content).toBe('10 conversations rejointes — bravo, tu atteins le palier 2 !');
   });
 
   it('se compose dans la langue du LECTEUR', async () => {

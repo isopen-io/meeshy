@@ -19,7 +19,7 @@ enum GameMintCostCopy {
     static func costLineText(base: Int, percent: Double, level: Int) -> String {
         let rate = percent.formatted(.number.precision(.fractionLength(0...1)))
         return String(localized: "game.mint.cost.line",
-                      defaultValue: "Prix de base \(GameCopy.formatCount(base)) · \(rate) % au niveau \(GameCopy.formatCount(level))",
+                      defaultValue: "Pièce entière \(GameCopy.formatCount(base)) · \(rate) % au niveau \(GameCopy.formatCount(level))",
                       bundle: .main)
     }
 
@@ -68,11 +68,11 @@ enum GameMintCostCopy {
     static func debtText(_ debt: Int) -> String {
         guard debt > 0 else {
             return String(localized: "game.mint.blocked.debt_plain",
-                          defaultValue: "Une dette d’étincelles bloque la frappe : tes prochains gains la règlent d’abord.",
+                          defaultValue: "Une ombre voile ta lumière : tes prochaines étincelles la dissiperont. Tant qu’elle est là, on ne frappe pas.",
                           bundle: .main)
         }
         return String(localized: "game.mint.blocked.debt",
-                      defaultValue: "Tu dois encore \(GameCopy.formatCount(debt)) étincelles : la frappe reprendra une fois la dette réglée.",
+                      defaultValue: "Une ombre voile \(GameCopy.formatCount(debt)) étincelles de ta lumière : tes prochaines étincelles la dissiperont, puis tu pourras frapper.",
                       bundle: .main)
     }
 

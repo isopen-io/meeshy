@@ -1,5 +1,10 @@
 # Les étincelles — l'économie des points du Jeu Meeshy
 
+> **Voix de l'épopée (2026-10-20, jalon #194, #11172).** Ce que VOIT le joueur — les noms, la voix, la hiérarchie des fiches, la pièce et la frappe —
+> suit [la conception de l'épopée](../superpowers/specs/2026-10-20-epopee-du-jeu-design.md) (§ 3 à § 7) et son
+> [glossaire français](epopee/glossaire/fr.md). Ce document garde les RÈGLES : les nombres, les champs, les clés du fil et les fonctions
+> ne changent pas. En cas d'écart sur un texte affiché, la conception de l'épopée a raison.
+
 > Décision du porteur du **2026-10-16**. Issues : [#10845](https://github.com/isopen-io/meeshy/issues/10845) (badges d'axe),
 > [#10846](https://github.com/isopen-io/meeshy/issues/10846) (poche, total à vie, niveau),
 > [#10847](https://github.com/isopen-io/meeshy/issues/10847) (coût de frappe),
@@ -8,15 +13,33 @@
 > Loi pure : `packages/shared/utils/game/sparks.ts`, `treasury.ts`. Passerelle : `MeeshService`, `EngagementService`,
 > `PrestigeService`. Rattrapage : `scripts/backfill-engagement-sparks.ts`.
 
-« **Étincelle** » est le nom des **points**. La monnaie reste la **Meesh**.
+« **Étincelle** » est le nom des **points**. La monnaie reste la **Meesh**. Chaque vrai échange fait jaillir des étincelles ;
+ensemble, elles forment **ta lumière**.
+
+## Ce que voit le joueur (l'épopée, § 3.3 et § 4)
+
+| fait | champ | ce que lit le joueur |
+|---|---|---|
+| la poche | `sparks` | **« Ta lumière »** : *108 233 étincelles*, en grand. C'est la tête de la fiche Étincelles |
+| le cycle | `sparksCycle` | « depuis ta dernière renaissance », en petit, s'il est montré |
+| le total à vie | `sparksLifetime` | « 377 752 reçues depuis toujours », en petit, sous la tête |
+| la dette | `sparksDebt` | **l'Ombre** : « Une ombre voile N étincelles de ta lumière : tes prochaines étincelles la dissiperont. Tant qu'elle est là, on ne frappe pas. » Une ligne, avant tout le reste de la fiche |
+| la frappe | `mint.price` | « La Meesh n° 92 — Elle fige 10 423 étincelles de ta lumière, qui en compte 108 233. » Jamais « coûte », jamais « restera » |
+| le niveau max à vie | `levelMaxLifetime` | « ta plus haute lumière » |
+| le prestige | `prestige` | **la Renaissance**, qui fait entrer la légende dans un nouvel **Âge** |
+
+Une fiche met en tête ce qu'on POSSÈDE, ne dit chaque chiffre qu'une fois et ne montre aucun calcul : le prix de base, le facteur et le
+pourcentage du § 3 vivent dans les règles (leçon `tasks/lessons/2026-10-20-une-fiche-met-en-tete-ce-qu-on-possede-et-ne-dit-chaque-chiffre-qu-une-fois.md`).
+Les mots « convertibles », « en poche », « valeur réelle », « potentiel », « record », « dette », « coûte », « restera » et « barème » ne
+s'affichent plus ; la garde `apps/web/src/lib/game/epic-vocabulary.test.ts` les refuse dans les catalogues du jeu.
 
 ## 1. Trois nombres, un seul solde dépensable
 
 | nom | colonne | sur le fil | ce qu'il fait |
 |---|---|---|---|
-| la **poche** | `User.engagementScore` | `sparks` (et `engagementScore`, `debitablePoints`, `points`) | ce que la frappe dépense. **Tout est convertible** : plus de « points à convertir », plus de plancher inaliénable |
-| le **cycle** | `User.sparksSincePrestige` (`BigInt`) | `sparksCycle` (et `level.score`) | les étincelles accumulées depuis le dernier prestige. **Indicatif** depuis #10892 (le potentiel du profil) |
-| le **total à vie** | `User.sparksEarnedLifetime` (`BigInt`) | `sparksLifetime` | tout ce qu'un compte a gagné. Ne baisse ni à la frappe ni au prestige |
+| la **poche** (« ta lumière ») | `User.engagementScore` | `sparks` (et `engagementScore`, `debitablePoints`, `points`) | ce que la frappe fige. **Tout peut se figer dans une Meesh** : plus de « points à convertir », plus de plancher inaliénable |
+| le **cycle** (« depuis ta dernière renaissance ») | `User.sparksSincePrestige` (`BigInt`) | `sparksCycle` (et `level.score`) | les étincelles accumulées depuis le dernier prestige. **Indicatif** depuis #10892 (ce que le profil a reçu depuis sa dernière renaissance) |
+| le **total à vie** (« reçues depuis toujours ») | `User.sparksEarnedLifetime` (`BigInt`) | `sparksLifetime` | tout ce qu'un compte a gagné. Ne baisse ni à la frappe ni au prestige |
 
 Invariant : **poche ≤ cycle ≤ total à vie.** La frappe retire de la poche seule ; le prestige vide la poche et le cycle seuls.
 Un compte d'avant le rattrapage n'a pas les deux derniers champs : ils se lisent sur la poche (`sparksOf`), jamais sous elle.
@@ -41,7 +64,9 @@ réponse reçue, saison, duo). Chaque `$max` relève un cycle en retard sur la p
 « publier, dépenser dans une Meesh, supprimer » garderait les étincelles dans le total et dans le niveau. La poche ne passe
 pas sous zéro. La Meesh déjà frappée avec ces étincelles reste frappée : c'est la **dette** qui ferme la triche (section suivante).
 
-### La dette d'étincelles (porteur, 2026-10-16)
+### La dette d'étincelles — l'Ombre (porteur, 2026-10-16)
+
+Le joueur ne lit jamais « dette » : il lit **l'Ombre**, qui voile une part de sa lumière (§ « Ce que voit le joueur »).
 
 Quand une reprise ne peut plus être prélevée parce que la **poche est déjà dépensée**, la part manquante devient une **dette**
 (`User.sparksDebt`, `BigInt?`, `sparksDebt` sur le fil) :
@@ -64,21 +89,26 @@ Quand une reprise ne peut plus être prélevée parce que la **poche est déjà 
 Le niveau se calculait sur le **cycle**. La frappe ne le faisait donc **plus jamais baisser** (`levelsLost` valait toujours 0, champ
 conservé pour les clients publiés ; la remise à zéro des paliers `level:` à la frappe est supprimée).
 
-- **Niveau max à vie** (`User.levelMaxLifetime`, `levelMaxLifetime`) : il **survit au prestige**. Il ouvre les ligues (niveau 10) et le
+- **Niveau max à vie** (`User.levelMaxLifetime`, `levelMaxLifetime` ; « ta plus haute lumière » pour le joueur) : il **survit au prestige**. Il ouvre les ligues (niveau 10) et le
   duo (niveau 20) : un prestige ne les ferme plus. La « décision porteur attendue » de `PrestigeService` (conformité G-5) est tranchée dans ce sens.
 - **Record du cycle** (`User.levelRecord`, `level.record`) : il repart à 1 au prestige (c'est ce que rejouent les vecteurs `prestige` de
   `game.vectors.json` : `levelRecordAfter: 1`).
-- **Prestige** : poche → 0, cycle → 0, niveau actuel → 1, étoile +1. Total à vie et niveau max à vie **ne bougent pas**. Les compteurs
+- **Prestige** (la **Renaissance** pour le joueur) : poche → 0, cycle → 0, niveau actuel → 1, étoile +1 (un nouvel **Âge**). Total à vie et niveau max à vie **ne bougent pas**. Les compteurs
   par axe ne sont plus remis à zéro.
 - **Vent arrière** : **éteint**. Il compensait la descente du niveau à la frappe ; le niveau ne descend plus qu'au prestige, où le record
   du cycle repart à 1 avec lui. Le garder après un prestige donnerait +25 % pendant les cent niveaux d'une boucle neuve : incohérent.
   Depuis #10892, la frappe refait descendre le niveau : rallumer le Vent arrière est une décision produit à part, non prise.
   `boosts.tailwind` est servi à `1` ; la loi pure (`tailwindFactor`) reste pour les clients publiés.
-- **Palier 1 à 9** : s'affiche **« Braise »** (porteur, 2026-10-16 ; « étincelle » désigne les points). Ordre affiché : Braise (1-9), Lueur (10-19),
-  puis la suite inchangée. La **clé du fil reste `etincelle`** — les clients publiés la décodent strictement (iOS `LevelTierKey`, une clé
-  inconnue fait tomber tout le bloc) ; seul le nom AFFICHÉ change (`game.tier.etincelle` dans les catalogues).
+- **Palier 1 à 9** : s'affiche de nouveau **« Étincelle »** depuis l'épopée (porteur, 2026-10-20 : « puisque les points sont des étincelles ») ;
+  « Braise » ne nomme plus que la première forme de la Flamme. Il s'était affiché « Braise » du 2026-10-16 au 2026-10-20. Le palier 20-29
+  (clé `lumiere`) s'affiche **« Clarté »** : « Lumière » nomme désormais le fil entier, « ta lumière ». Ordre affiché : Étincelle (1-9), Lueur (10-19),
+  Clarté (20-29), puis la suite inchangée. Les **clés du fil restent `etincelle` et `lumiere`** — les clients publiés les décodent strictement
+  (iOS `LevelTierKey`, une clé inconnue fait tomber tout le bloc) ; seul le nom AFFICHÉ change (`game.tier.etincelle`, `game.tier.lumiere` dans les catalogues).
 
 ## 3. Le coût d'une frappe
+
+Ce calcul est une RÈGLE : il vit dans le carnet des règles, jamais sur une fiche. Le joueur lit seulement ce que la Meesh fige :
+« Elle fige 10 423 étincelles de ta lumière, qui en compte 108 233. » (épopée § 5).
 
 ```
 prix effectif(n, niveau) = round( prix(n) × facteur(niveau) )
@@ -91,7 +121,10 @@ facteur(niveau)          = borné(0,5 + niveau ÷ 200 ; 0,5 ; 1)      — 50 % a
   millièmes entiers (`mintCostFactorPermille`) : iOS rejoue la loi sans flottant. Le serveur recalcule toujours le prix.
 - L'aperçu annonce le numéro de la **prochaine pièce** (`meeshMintedLifetime + 1`), indépendamment du solde de la bourse ou des coffres.
 
-## 4. Les réserves du trésor s'ouvrent par le rang
+## 4. Les contenants de l'Héritage s'ouvrent par le rang
+
+Le joueur lit **l'Héritage** (les pièces gardées pour la lignée) ; les contenants gardent leurs noms, et « Trésor » ne nomme plus que le cinquième.
+Le code dit toujours `treasury`.
 
 | réserve | gardées | accès |
 |---|---|---|
@@ -109,7 +142,9 @@ refusée : `409 TREASURY_LOCKED` + `{ tier, minHeld, requires: { rank, division,
 `missingPoints: 0`) et `treasury.access[]` l'annoncent avant. Un compte qui tenait déjà plus que son rang n'est pas dépossédé : il ne frappe plus
 tant que son rang ne l'a pas rattrapé. Le Mythe a tout ouvert.
 
-## 5. Les badges d'axe disent le total réel (#10845)
+## 5. Les médailles d'axe disent le total réel (#10845)
+
+Le joueur lit des **Médailles** ; le code dit badges (`EngagementCounter`, paliers d'axe).
 
 Causes : `EngagementCounter.count` est parti de 0 le 2026-09-07 sans rattrapage ; la frappe le débitait et supprimait les badges, qui se
 regagnaient et se renotifiaient ; les gardes de `recordActivity` ne créditent pas tout.
@@ -158,12 +193,15 @@ Ne se reconstruisent pas : les points repris par la suppression d'un contenu, ce
 
 ## 8. Le lot web (porteur, 2026-10-16)
 
+> Lot du 2026-10-16, gardé pour l'histoire. Depuis l'épopée (2026-10-20), les noms affichés suivent le
+> [glossaire](epopee/glossaire/fr.md) : le palier 1-9 redevient « Étincelle », la poche se lit « ta lumière », la dette « l'Ombre ».
+
 - **Vocabulaire** : « points » devient « étincelles » dans les textes affichés du Jeu, de l'onboarding, de l'engagement et du bandeau, sur les sept langues
   (`catalog-game-*`, `catalog-*-engagement`, `catalog-onboarding-*`). La notion « points à convertir » disparaît (une poche, tout est dépensable) ; le palier 1-9
   s'affiche **Braise** (en Ember, es Brasa, de Glut, it Brace, pt Brasa, ar جمرة) ; le Vent arrière, la perte de niveau et l'extinction des badges à la frappe ne se disent plus.
-- **Profil** (`game-profile-banner.tsx`) : la poche en grand, le total à vie en petit dessous ; le niveau actuel, le niveau max à vie dessous. Plus d'arrondi au bord de DÉBUT
+- **Profil** (`game-profile-banner.tsx`) : la poche (« ta lumière ») en grand, le total à vie (« reçues depuis toujours ») en petit dessous ; le niveau actuel, le niveau max à vie dessous. Plus d'arrondi au bord de DÉBUT
   de la pastille des étincelles ni au bord de FIN de celle des rangs (`rounded-se-card` / `rounded-ss-card`, coins logiques, RTL compris).
 - **Progression** (`game-hero.tsx`, fiche Étincelles) : la même paire, TOUJOURS affichée, même quand le max égale le niveau.
 - **Bandeau d'ouverture** (`player-banner.tsx`) : un groupe de liens, chacun vers sa fiche — étincelles → `points`, rang → `glory`, niveau → `level`, Meesh → `meesh`, flamme → `flame`,
   ligue → `league`, et les trois pièces neuves : trophées → `showcase`, mission du jour → `missions`, saison → `season` —, chacun avec son nom accessible (`playerBannerPieceLabels`).
-- **Frappe fermée** : `409 TREASURY_LOCKED` (la réserve et le rang requis) et `409 MINT_BLOCKED_BY_DEBT` (la dette) se disent clairement, dans l'aperçu (`data-game-mint-blocked`) comme dans le message d'erreur.
+- **Frappe fermée** : `409 TREASURY_LOCKED` (la réserve et le rang requis) et `409 MINT_BLOCKED_BY_DEBT` (l'Ombre) se disent clairement, dans l'aperçu (`data-game-mint-blocked`) comme dans le message d'erreur.

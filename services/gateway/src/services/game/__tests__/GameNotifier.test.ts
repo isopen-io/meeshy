@@ -366,7 +366,7 @@ describe('la mission personnelle du jour (#9539)', () => {
       lang: 'fr',
       priority: 'normal',
       collapseId: 'game-mission-2026-10-14',
-      content: 'Ta mission du jour : envoyer des messages vocaux, entre 18:00 et 20:00.',
+      content: 'Un acte rien que pour toi : envoyer des messages vocaux, entre 18:00 et 20:00.',
     });
     expect(sent[0]!.actor).toBeUndefined();
   });

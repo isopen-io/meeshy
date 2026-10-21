@@ -50,7 +50,7 @@ struct GameMissionsView: View {
     }
 
     var body: some View {
-        GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Missions du jour", bundle: .main)) {
+        GameCard(anchor: .missions, title: String(localized: "game.missions.title", defaultValue: "Le rêve de cette nuit", bundle: .main)) {
             if !missions.unlocked {
                 GameNote(text: GameCopy.missionsLocked(level: GameCopy.formatCount(game.level.shown.level)))
                 GameFactChipRow(
@@ -62,14 +62,14 @@ struct GameMissionsView: View {
                 if missions.prismDay {
                     GameNote(text: String(
                         localized: "game.missions.prism_day",
-                        defaultValue: "Jour du Prisme : une des missions se joue dans une autre langue que la tienne.",
+                        defaultValue: "Jour du Prisme : un des actes se joue dans une autre langue que la tienne.",
                         bundle: .main
                     ))
                 }
                 if let hour = game.boosts.prismHour {
                     GameNote(text: String(
                         localized: "game.missions.prism_hour",
-                        defaultValue: "Heure du Prisme : \(GameCopy.clock(minuteOfDay: hour.startMinute)) – \(GameCopy.clock(minuteOfDay: hour.endMinute)) — tes missions comptent double.",
+                        defaultValue: "Heure du Prisme : \(GameCopy.clock(minuteOfDay: hour.startMinute)) – \(GameCopy.clock(minuteOfDay: hour.endMinute)) — chaque acte compte double.",
                         bundle: .main
                     ))
                 }
@@ -112,7 +112,7 @@ struct GameMissionsView: View {
                 if !online {
                     GameNote(text: String(
                         localized: "game.missions.offline",
-                        defaultValue: "Hors ligne : changer une mission ou ouvrir le coffre reprendra en ligne.",
+                        defaultValue: "Hors ligne : changer un acte ou ouvrir l’Offrande reprendra en ligne.",
                         bundle: .main
                     ))
                 }
@@ -185,7 +185,7 @@ private struct GameMissionRow: View {
                         if let ending = GameCopy.missionEnding(phase) {
                             GameChip(text: ending.text, tint: ending.isSuccess ? MeeshyColors.success : MeeshyColors.warning)
                         } else if done {
-                            GameChip(text: String(localized: "game.mission.done", defaultValue: "Faite", bundle: .main), tint: MeeshyColors.success)
+                            GameChip(text: String(localized: "game.mission.done", defaultValue: "Réalisé", bundle: .main), tint: MeeshyColors.success)
                         }
                     }
                     Text(title)
@@ -245,7 +245,7 @@ private struct GameMissionRow: View {
         }
         return String(
             localized: "game.mission.progress_glory",
-            defaultValue: "\(current) / \(target) · \(reward) · +\(GameCopy.formatCount(mission.glory)) Gloire",
+            defaultValue: "\(current) / \(target) · \(reward) · +\(GameCopy.formatCount(mission.glory)) de gloire",
             bundle: .main
         )
     }
@@ -284,7 +284,7 @@ private struct GameMissionRow: View {
         .opacity(!online || pending || !affordable ? 0.5 : 1)
         .accessibilityLabel(String(
             localized: "game.mission.reroll.a11y",
-            defaultValue: "Changer la mission « \(title) » contre \(GameCopy.meeshes(GameMissions.rerollPrice))",
+            defaultValue: "Changer l’acte « \(title) » contre \(GameCopy.meeshes(GameMissions.rerollPrice))",
             bundle: .main
         ))
         .accessibilityIdentifier("game.mission.reroll")
@@ -347,7 +347,7 @@ private struct GameChestCard: View {
             Group {
                 VStack(spacing: MeeshySpacing.sm) {
                     ChestStage(reward: chest.reward, isOpen: phase == .opening || phase == .claimed, play: play)
-                    Text(String(localized: "game.chest.title", defaultValue: "Coffre du jour", bundle: .main))
+                    Text(String(localized: "game.chest.title", defaultValue: "L’Offrande", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -356,17 +356,17 @@ private struct GameChestCard: View {
             .gameElement(GameElementDetails.chest(chest, missions: missions))
             switch phase {
             case .locked:
-                GameNote(text: String(localized: "game.chest.locked", defaultValue: "Termine les missions du jour pour l’ouvrir.", bundle: .main))
+                GameNote(text: String(localized: "game.chest.locked", defaultValue: "Réalise les trois actes du rêve pour la faire apparaître.", bundle: .main))
                 GameFactChipRow(concept: .missions, items: [doneItem], identifier: "game.chest.requirement")
             case .opening:
                 GameNote(text: String(localized: "game.chest.opening", defaultValue: "Ouverture en cours…", bundle: .main))
             case .ready:
                 GameActionButton(
-                    title: String(localized: "game.chest.open", defaultValue: "Ouvrir le coffre", bundle: .main),
+                    title: String(localized: "game.chest.open", defaultValue: "Ouvrir l’Offrande", bundle: .main),
                     disabled: !online, identifier: "game.chest.open", action: onClaim
                 )
             case .claimed:
-                GameNote(text: String(localized: "game.chest.claimed", defaultValue: "Reviens demain pour le prochain.", bundle: .main))
+                GameNote(text: String(localized: "game.chest.claimed", defaultValue: "Une nouvelle Offrande t’attend au bout du prochain rêve.", bundle: .main))
             }
             if let starFragments {
                 GameNote(text: GameCopy.starFragments(starFragments.collected))
