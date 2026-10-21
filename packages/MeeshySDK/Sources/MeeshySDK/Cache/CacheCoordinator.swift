@@ -61,7 +61,9 @@ public actor CacheCoordinator {
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
     /// #9612 — Sécurité > Sessions s'ouvre sur la dernière liste connue. Chiffré : adresses et villes.
-    public let sessions: GRDBCacheStore<String, UserSession>
+    /// `nonisolated` : un acteur ne protège rien d'une constante Sendable, et la
+    /// lecture reste synchrone hors du module sous Swift 6.2 comme sous 6.4.
+    nonisolated public let sessions: GRDBCacheStore<String, UserSession>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
     /// Répertoire — carnet d'adresses synchronisé. Chiffré : ce sont les
     /// contacts de l'utilisateur, la donnée la plus personnelle du cache.
