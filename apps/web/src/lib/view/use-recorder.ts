@@ -51,7 +51,8 @@ function speechRecorderOptions(): MediaRecorderOptions {
 /**
  * LE MOTEUR NAVIGATEUR RÉEL — `getUserMedia` + `MediaRecorder` +
  * `AnalyserNode` (RMS temporel échantillonné toutes les 50 ms, miroir
- * `AudioRecorderManager.swift:128-130`). Jamais appelé par un témoin.
+ * `AudioRecorderManager.swift:128-130`). Seul `recording-codec-wiring.test.ts`
+ * le construit, sous un `MediaRecorder` simulé, pour relever ses options.
  */
 export function createBrowserRecorderEngine(): RecorderEngine {
   let recorder: MediaRecorder | null = null;

@@ -7,6 +7,8 @@
  * Repli WebKit (Safari, WKWebView) : il n'écrit pas le WebM, le vocal y tombe
  * sur `audio/mp4` (AAC) et la vidéo sur `video/mp4`. Un navigateur qui
  * n'annonce rien reçoit des options sans `mimeType` et choisit lui-même.
+ * `audioBitsPerSecond` est une INDICATION de la spécification MediaRecorder :
+ * un moteur qui ne l'honore pas garde son débit par défaut, sans erreur.
  */
 
 export type RecordingKind = 'audio' | 'video';
