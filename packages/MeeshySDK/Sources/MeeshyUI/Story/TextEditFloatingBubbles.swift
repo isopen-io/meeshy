@@ -44,10 +44,7 @@ struct TextEditFloatingBubbles: View {
                    height: TextEditToolbarMetrics.bubbleSize)
             .modifier(BubbleGlass(isActive: isActive))
             .contentShape(Circle())
-            .onTapGesture {
-                StoryTextAttributeCycle.advance(tool, on: &textObject)
-                HapticFeedback.light()
-            }
+            .onTapGesture { cycle(tool) }
             .onLongPressGesture(minimumDuration: 0.4) {
                 HapticFeedback.medium()
                 onOpenPanel(tool)
@@ -55,7 +52,13 @@ struct TextEditFloatingBubbles: View {
             .modifier(CycleButtonAccessibility(
                 label: tool.accessibilityLabel,
                 value: StoryTextEditTopBar.spokenValue(tool, of: textObject),
+                onActivate: { cycle(tool) },
                 onOpenPanel: { onOpenPanel(tool) }))
+    }
+
+    private func cycle(_ tool: TextEditTool) {
+        StoryTextAttributeCycle.advance(tool, on: &textObject)
+        HapticFeedback.light()
     }
 
     @ViewBuilder

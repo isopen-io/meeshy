@@ -264,28 +264,34 @@ public struct AudioRecorderSheet<Recorder: AudioRecordingProviding>: View {
     // MARK: - Record Button
 
     private var recordButton: some View {
-        ZStack {
-            Circle()
-                .fill(recorder.isRecording ? AnyShapeStyle(MeeshyColors.brandPrimary) : AnyShapeStyle(controlFill))
-                .frame(width: 72, height: 72)
-                .scaleEffect(recorder.isRecording ? 1.1 : 1.0)
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
+        Button {
+            toggleRecording()
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(recorder.isRecording ? AnyShapeStyle(MeeshyColors.brandPrimary) : AnyShapeStyle(controlFill))
+                    .frame(width: 72, height: 72)
+                    .scaleEffect(recorder.isRecording ? 1.1 : 1.0)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
 
-            Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
-                .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
-                .foregroundColor(recorder.isRecording ? .white : controlIcon)
-        }
-        .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)
-        .onTapGesture {
-            if recorder.isRecording {
-                stopRecording()
-            } else {
-                startRecording()
+                Image(systemName: recorder.isRecording ? "stop.fill" : "mic.fill")
+                    .font(.system(size: MeeshyIconSize.xxxl, weight: .semibold))
+                    .foregroundColor(recorder.isRecording ? .white : controlIcon)
             }
+            .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)
         }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .circle))
         .accessibilityLabel(recorder.isRecording
             ? String(localized: "story.voiceRecorder.stop", defaultValue: "Arr\u{00EA}ter l'enregistrement", bundle: .module)
             : String(localized: "story.voiceRecorder.start", defaultValue: "Enregistrer", bundle: .module))
+    }
+
+    private func toggleRecording() {
+        if recorder.isRecording {
+            stopRecording()
+        } else {
+            startRecording()
+        }
     }
 
     // MARK: - Recording Logic

@@ -259,6 +259,19 @@ private struct VibrantCommunityCard: View, Equatable {
     }
 
     var body: some View {
+        Button {
+            withAnimation { isPressed = true }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                withAnimation { isPressed = false }
+            }
+            onTap()
+        } label: {
+            cardContent
+        }
+        .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: MeeshyRadius.xl)))
+    }
+
+    private var cardContent: some View {
         ZStack(alignment: .bottomLeading) {
             // Banner image — full-bleed. Falls back to the community's
             // derived accent colour gradient when no banner is set.
@@ -316,12 +329,5 @@ private struct VibrantCommunityCard: View, Equatable {
         .shadow(color: Color(hex: accentColor).opacity(0.3), radius: 8, y: 4)
         .scaleEffect(isPressed ? 0.95 : 1)
         .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isPressed)
-        .onTapGesture {
-            withAnimation { isPressed = true }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                withAnimation { isPressed = false }
-            }
-            onTap()
-        }
     }
 }
