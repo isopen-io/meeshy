@@ -109,8 +109,14 @@ enum StoryMediaLayerRules {
     /// chaîne du fond (`StoryLookBake`, #9873).
     static func filtered(_ image: UIImage?, for media: StoryMediaObject) -> UIImage? {
         guard let image else { return nil }
-        return StoryLookBake.image(image, filter: media.parsedFilter, intensity: 1,
-                                   adjustments: media.adjustments, imageId: media.id)
+        return StoryLookBake.bake(lookRequest(image, for: media))
+    }
+
+    /// La demande de cuisson du look de l'objet — la même, qu'elle se cuise
+    /// sur place ou hors du fil principal.
+    static func lookRequest(_ image: UIImage, for media: StoryMediaObject) -> StoryLookBakeRequest {
+        StoryLookBakeRequest(image: image, filter: media.parsedFilter, intensity: 1,
+                             adjustments: media.adjustments, imageId: media.id)
     }
 
     // MARK: - URL resolution

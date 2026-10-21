@@ -17,7 +17,9 @@ extension StoryMediaLayer {
         let resolvedURL = StoryMediaLayerRules.resolvedMediaURL(for: media, resolver: resolver)
         let cacheKey = media.postMediaId.isEmpty ? media.id : media.postMediaId
 
-        if applyComposerCachedImage(media, cacheKey: cacheKey, imageCache: imageCache) { return }
+        if applyComposerCachedImage(media, cacheKey: cacheKey, imageCache: imageCache,
+                                    decodeTiming: decodeTiming) { return }
+        liveLookStorage?.supersede()
 
         if let url = resolvedURL, url.isFileURL {
             loadFileImage(media, url: url, decodeTiming: decodeTiming)
@@ -26,16 +28,41 @@ extension StoryMediaLayer {
         scheduleCachedOrRemoteImageLoad(media, cacheKey: cacheKey, resolvedURL: resolvedURL, imageCache: imageCache)
     }
 
+    /// L'image du composer, look cuit. **Repeinte en place** — la couche
+    /// montre déjà un bitmap, le canvas décode hors du fil principal et ce
+    /// look n'est pas encore cuit —, la cuisson quitte le MainActor (#9873) :
+    /// le bitmap affiché reste jusqu'au suivant, et un curseur de réglage de
+    /// l'objet ne cuit plus rien dans l'image où le doigt bouge. La première
+    /// pose reste synchrone : une couche neuve ne montre jamais un trou.
     @MainActor
     private func applyComposerCachedImage(_ media: StoryMediaObject,
                                           cacheKey: String,
-                                          imageCache: ImageCacheReader?) -> Bool {
+                                          imageCache: ImageCacheReader?,
+                                          decodeTiming: StoryImageDecodeTiming) -> Bool {
         guard let reader = imageCache as? ComposerImageCacheReader,
-              let cached = CanvasImageOrientation.displayCGImage(Self.filtered(reader.images[cacheKey], for: media)) else {
+              let image = reader.images[cacheKey] else { return false }
+        let request = StoryMediaLayerRules.lookRequest(image, for: media)
+        if decodeTiming == .offMainActor, contents != nil, StoryLookBake.ready(request) == nil {
+            repaintLookOffMainThread(request, mediaId: media.id)
+            return true
+        }
+        liveLookStorage?.supersede()
+        guard let cached = CanvasImageOrientation.displayCGImage(Self.filtered(image, for: media)) else {
             return false
         }
         contents = cached
         return true
+    }
+
+    @MainActor
+    private func repaintLookOffMainThread(_ request: StoryLookBakeRequest, mediaId: String) {
+        let outil = liveLookStorage ?? StoryLiveLook()
+        liveLookStorage = outil
+        outil.bake(request) { [weak self] cuit in
+            guard let self, self.media?.id == mediaId,
+                  let cg = CanvasImageOrientation.displayCGImage(cuit) else { return }
+            StoryBackgroundLayer.withDisabledCAActions { self.contents = cg }
+        }
     }
 
     @MainActor

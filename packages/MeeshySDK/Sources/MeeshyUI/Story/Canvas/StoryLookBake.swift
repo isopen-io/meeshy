@@ -47,6 +47,23 @@ public nonisolated enum StoryLookBake {
         return rendu
     }
 
+    /// **La cuisson d'une demande** — la forme que la boucle d'un curseur
+    /// rejoue hors du fil principal (`StoryLiveLook`).
+    public static func bake(_ request: StoryLookBakeRequest) -> UIImage {
+        image(request.image, filter: request.filter, intensity: request.intensity,
+              adjustments: request.adjustments, imageId: request.imageId)
+    }
+
+    /// **Ce qui se pose SANS cuire** : l'image elle-même quand il n'y a rien à
+    /// peindre, le bitmap déjà cuit pour ces valeurs ; `nil` quand il faut un
+    /// rendu. Un curseur qui revient sur une valeur vue se repeint sur place.
+    public static func ready(_ request: StoryLookBakeRequest) -> UIImage? {
+        let reglages = request.adjustments.flatMap { $0.activeCount > 0 ? $0 : nil }
+        guard request.filter != nil || reglages != nil else { return request.image }
+        return cache.object(forKey: key(request.image, filter: request.filter, intensity: request.intensity,
+                                        adjustments: reglages, imageId: request.imageId))
+    }
+
     /// Une clé DÉTERMINISTE : l'instance, l'identifiant de l'appelant, le
     /// filtre au centième et la signature des réglages — jamais `hashValue`
     /// d'un état, qui peut collisionner.
@@ -57,5 +74,24 @@ public nonisolated enum StoryLookBake {
         let look = filter.map { "\($0.rawValue)@\(centieme)" } ?? "-"
         let reglages = adjustments.map(StoryMediaAdjustmentsProcessor.signature) ?? "-"
         return "\(instance)|\(look)|\(reglages)" as NSString
+    }
+}
+
+/// **Ce qu'une cuisson demande** : l'image et son look, de quoi la rejouer
+/// hors du fil principal.
+public nonisolated struct StoryLookBakeRequest: Sendable {
+    public let image: UIImage
+    public let filter: StoryFilter?
+    public let intensity: Float
+    public let adjustments: ImageAdjustments?
+    public let imageId: String?
+
+    public init(image: UIImage, filter: StoryFilter?, intensity: Float,
+                adjustments: ImageAdjustments?, imageId: String?) {
+        self.image = image
+        self.filter = filter
+        self.intensity = intensity
+        self.adjustments = adjustments
+        self.imageId = imageId
     }
 }

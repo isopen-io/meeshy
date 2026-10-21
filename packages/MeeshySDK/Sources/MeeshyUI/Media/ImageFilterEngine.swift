@@ -6,7 +6,7 @@ import MeeshySDK
 // MARK: - Image Filter
 
 /// Look-preset applied as the first stage of the render pipeline.
-public enum ImageFilter: String, CaseIterable, Identifiable, Codable, Sendable {
+public nonisolated enum ImageFilter: String, CaseIterable, Identifiable, Codable, Sendable {
     case original, vivid, dramatic, mono, noir, sepia
     case warm, cool, fade, chrome, process, instant
 
@@ -42,7 +42,7 @@ public enum ImageFilter: String, CaseIterable, Identifiable, Codable, Sendable {
 
 /// One-tap creative effect applied as the final pipeline stage. Distinct from
 /// the fine-grained `ImageAdjustments` sliders — effects are bold presets.
-public enum ImageEffect: String, CaseIterable, Identifiable, Codable, Sendable {
+public nonisolated enum ImageEffect: String, CaseIterable, Identifiable, Codable, Sendable {
     case none, blur, vignette, sharpen, bloom, grain
 
     public var id: String { rawValue }
@@ -80,7 +80,10 @@ public enum ImageEffect: String, CaseIterable, Identifiable, Codable, Sendable {
 /// holds presentation concerns, and this type only knows how to draw pixels.
 /// The same `render` runs on a small working copy for live preview and on the
 /// full-resolution original for export, so previews are always faithful.
-public final class ImageFilterEngine {
+///
+/// `nonisolated` and `Sendable` (#9873): it holds nothing mutable, so the
+/// editor's render loop runs it off the main thread.
+public nonisolated final class ImageFilterEngine: Sendable {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free `pointer being freed was not allocated` (abrt)
     // au démontage hors d'une tâche (test XCTest synchrone, vue démontée).

@@ -182,6 +182,14 @@ public final class StoryBackgroundLayer: CALayer {
     /// changement de rendu seul (filtre, réglages) repeint en place, sans
     /// repasser par le chargement ni par le ThumbHash.
     @MainActor var stampedSource: (image: UIImage, imageId: String?)?
+    /// **Le canvas INTERACTIF lève ce drapeau** (#9873) : un changement de
+    /// rendu seul (curseur de filtre, d'intensité, de réglage) se cuit alors
+    /// HORS du fil principal, le bitmap affiché restant à l'écran jusqu'au
+    /// suivant (`StoryBackgroundLayer+Look`). Baissé — lecteur, export,
+    /// instantanés —, le repeint reste synchrone.
+    @MainActor public var bakesLookOffMainThread = false
+    /// L'outil de cuisson hors du fil principal, monté au premier glissé.
+    @MainActor var liveLookStorage: StoryLiveLook?
     /// La composition posée sur les items du player de fond : quel player, pour
     /// quels réglages — rien ne se refait tant que les deux sont les mêmes.
     nonisolated(unsafe) var appliedBackgroundVideoLook: (player: ObjectIdentifier, signature: String)?
@@ -229,8 +237,15 @@ public final class StoryBackgroundLayer: CALayer {
     @MainActor
     func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
         stampedSource = (image, imageId)
-        let display = StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
-                                                adjustments: activeAdjustments, imageId: imageId)
+        liveLookStorage?.supersede()
+        stampDisplay(StoryBackgroundLook.image(image, filter: activeFilter, intensity: activeFilterIntensity,
+                                               adjustments: activeAdjustments, imageId: imageId), on: img)
+    }
+
+    /// Pose un bitmap DÉJÀ peint — par `stampFinalImage`, ou par la cuisson
+    /// hors du fil principal d'un curseur (#9873).
+    @MainActor
+    func stampDisplay(_ display: UIImage, on img: CALayer?) {
         Self.withDisabledCAActions {
             // **Le FOND porte l'orientation comme les autres couches**
             // (2026-09-05). Ce site était resté sur `.cgImage` nu au premier
@@ -592,6 +607,7 @@ extension StoryBackgroundLayer {
         avPlayerLooper = nil
         contentLayer = nil
         stampedSource = nil
+        liveLookStorage?.supersede()
         backgroundVideoLookTask?.cancel()
         backgroundVideoLookTask = nil
         appliedBackgroundVideoLook = nil

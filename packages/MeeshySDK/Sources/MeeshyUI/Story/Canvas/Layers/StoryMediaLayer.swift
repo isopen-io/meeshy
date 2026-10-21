@@ -168,6 +168,10 @@ public final class StoryMediaLayer: CALayer {
     /// swallows all errors — it either sets `contents` or no-ops.
     nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
 
+    /// La cuisson hors du fil principal du look d'une image REPEINTE en place
+    /// pendant qu'un curseur glisse (#9873) — `StoryMediaLayer+ImageLoading`.
+    @MainActor var liveLookStorage: StoryLiveLook?
+
     /// In-flight video load (pré-cache + AVPlayer setup). Annulé à chaque
     /// `configureVideo` pour éviter qu'une URL obsolète stamp la layer après
     /// une re-configure (live composer, scrub).
