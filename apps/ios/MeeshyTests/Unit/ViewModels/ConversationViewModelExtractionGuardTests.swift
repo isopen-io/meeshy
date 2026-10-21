@@ -94,6 +94,23 @@ final class ConversationViewModelExtractionGuardTests: XCTestCase {
             "func playAudio(attachmentId:", "func audioQueueTail(after attachmentId:",
             "func queuedAudio(for attachment:",
         ]),
+        ("Conversation/ConversationCommandHandler.swift", [
+            "func deleteForEveryone(", "func removeForModeration(", "func togglePin(", "func compensate(",
+        ]),
+        ("Conversation/ConversationHistoryLoader.swift", [
+            "func refreshLatest(", "func fetchOlder(", "func fetchMissed(", "static func fetchMissedPages(",
+        ]),
+        ("Conversation/MessageTranslationMerge.swift", ["static func merging("]),
+        ("Conversation/ConversationTranslationSource.swift", ["func recentPersisted("]),
+        ("Conversation/AttachmentAudioMetadata.swift", ["static func merged(", "static func rekeyed("]),
+        ("Conversation/ConversationMessageMerge.swift", ["static func merge(", "static func drops("]),
+        ("Conversation/MessageServerIdRekey.swift", ["static func rewrite("]),
+        ("Conversation/ConversationDerivedCache.swift", ["func invalidate(previous:"]),
+        ("Conversation/QuotedReferenceFactory.swift", ["static func reference("]),
+        ("Conversation/EphemeralExpiryLaw.swift", ["static func deadlines(", "static func elapsedIds("]),
+        ("Conversation/MediaConsumptionSeeder.swift", ["static func seed("]),
+        ("Conversation/QuotedAudioResolver.swift", ["static func inWindow(", "static func outOfWindow("]),
+        ("Conversation/StarredSnapshotFactory.swift", ["static func snapshot("]),
     ]
 
     // MARK: - Lecture
