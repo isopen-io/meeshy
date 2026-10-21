@@ -48,7 +48,7 @@ public struct AudioClipBar: View, Equatable {
     public let onTrimEndDelta: (CGFloat) -> Void
     /// URL locale du fichier — quand `waveformSamples` est vide (draft
     /// restauré, repost), la barre extrait elle-même sa forme d'onde
-    /// (AudioWaveform, RMS + cache). Sans ça la lane audio était un aplat.
+    /// (WaveformCache, RMS + cache). Sans ça la lane audio était un aplat.
     public let audioURL: URL?
     /// Points d'automation du clip — seule leur composante `volume` est
     /// tracée, en lecture seule. L'édition passe par la fiche.
@@ -75,6 +75,12 @@ public struct AudioClipBar: View, Equatable {
     /// des brouillons restaurés, pour qui aucun fichier local n'existe.
     nonisolated static func resolveSamples(local: [Float], published: [Float]) -> [Float] {
         local.isEmpty ? published : local
+    }
+
+    /// L'échelle de la source retenue : la mesure locale en décibels, le repli
+    /// publié (normalisé au pic) en linéaire (#9886).
+    nonisolated static func resolveReading(local: [Float]) -> WaveformReading {
+        local.isEmpty ? .published : .measured
     }
 
     public init(
@@ -150,7 +156,8 @@ public struct AudioClipBar: View, Equatable {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(MeeshyColors.warning.opacity(isDark ? 0.32 : 0.22))
-            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85))
+            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85),
+                          reading: Self.resolveReading(local: loadedSamples))
             volumeCurve
             titleOverlay
             if onToggleMute != nil {
@@ -189,7 +196,7 @@ public struct AudioClipBar: View, Equatable {
         .clipBarAccessibility(accessibilityModel, callbacks: accessibilityCallbacks)
         .task(id: audioURL) {
             guard waveformSamples.isEmpty, let audioURL else { return }
-            loadedSamples = await AudioWaveform.samples(url: audioURL, count: 80)
+            loadedSamples = (try? await WaveformCache.shared.samples(from: audioURL, count: 80)) ?? []
         }
     }
 

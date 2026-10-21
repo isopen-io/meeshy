@@ -61,7 +61,7 @@ extension ConversationView {
     }
 
     /// #4024 — « pour tous » n'est proposé QUE si TOUS les messages
-    /// sélectionnés sont éligibles (miens ET encore dans la fenêtre) ;
+    /// sélectionnés sont éligibles (miens, non supprimés — sans fenêtre, #11214) ;
     /// une sélection vide n'autorise rien.
     var selectionAllowsDeleteForAll: Bool {
         let selected = selectedMessagesInThreadOrder

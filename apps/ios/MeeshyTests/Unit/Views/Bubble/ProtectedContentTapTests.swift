@@ -360,6 +360,14 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         .deletingLastPathComponent()   // .../apps/ios
         .appendingPathComponent("Meeshy/Features/Main")
 
+    /// Le balayage CLASSE fichier par fichier : il lit le FICHIER, jamais
+    /// l'unité d'un type découpé (`AppSourceGuard.text(at:)`). Lue comme son
+    /// unité, `ConversationView.swift` emportait les boucliers de chacune de
+    /// ses extensions et passait pour une surface de plus (#11411).
+    private static func fileOnly(_ url: URL) throws -> String {
+        try String(contentsOf: url, encoding: .utf8)
+    }
+
     private func code(_ relative: String) throws -> String {
         let text = try AppSourceGuard.text(at: Self.mainRoot.appendingPathComponent(relative))
         XCTAssertGreaterThan(text.count, 200, "\(relative) introuvable — ce témoin ne mesurerait rien")
@@ -440,7 +448,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var shields = 0
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
+            let text = AppSourceGuard.stripComments(try Self.fileOnly(url))
                 .components(separatedBy: .whitespacesAndNewlines).joined()
             for chunk in text.components(separatedBy: "captureShield(").dropFirst() {
                 let argument = Self.balancedArgument(chunk)
@@ -457,9 +465,8 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
     /// Une surface ne se dit « qui annonce » que si elle est ENREGISTRÉE
     /// auprès du détecteur — sinon sa flamme serait en clair ET muette.
     private static let announcingSurfaces: [(file: String, registrationFile: String, registration: String)] = [
-        ("Views/MessageListViewController.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
-        // Extension du MÊME contrôleur (la construction des rangées en est sortie au découpage de budget,
-        // 54d5b6871e) : même surface, même enregistrement.
+        // Le contrôleur du fil : sa construction des rangées — qui annonce — est sortie dans son extension
+        // au découpage de budget (54d5b6871e), et le balayage lit chaque FICHIER. Même surface, même enregistrement.
         ("Views/MessageListViewController+Rows.swift", "Views/MessageListView.swift", "ContentCaptureReporter.shared.register(vc)"),
         ("Views/ConversationView+MediaGallery.swift", "Views/ConversationView+MediaGallery.swift", "ContentCaptureReporter.shared.register(surface)"),
     ]
@@ -469,7 +476,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var announcing: Set<String> = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
+            let text = AppSourceGuard.stripComments(try Self.fileOnly(url))
                 .components(separatedBy: .whitespacesAndNewlines).joined()
                 .replacingOccurrences(of: "funcannouncesCaptures()", with: "")
             if text.contains(".announcesCaptures()") || text.contains("surfaceAnnounces:true") {
@@ -525,7 +532,7 @@ final class CaptureShieldCoverageGuardTests: XCTestCase {
         var shielding: Set<String> = []
         for case let url as URL in enumerator where url.pathExtension == "swift" {
             let relative = url.path.replacingOccurrences(of: Self.mainRoot.path + "/", with: "")
-            let text = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
+            let text = AppSourceGuard.stripComments(try Self.fileOnly(url))
                 .components(separatedBy: .whitespacesAndNewlines).joined()
             let poses = text.replacingOccurrences(of: "funccaptureShield(", with: "")
                 .replacingOccurrences(of: "funccaptureShieldScope(", with: "")

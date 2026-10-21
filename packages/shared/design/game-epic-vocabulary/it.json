@@ -122,12 +122,13 @@
     {
       "pattern": "(?<!di )(?<![\\p{L}\\p{N}])stell[ae](?![\\p{L}\\p{N}])",
       "flags": "iu",
-      "instead": "«passi» (il viaggio); «Ere» (la rinascita)",
+      "instead": "«passi» (il viaggio); «Ere» (la rinascita); «gradini» (una medaglia)",
       "keys": [
         "game.season.",
         "game.prestige.",
         "game.fact.strides",
-        "game.fact.rebirths"
+        "game.fact.rebirths",
+        "game.badge.stars_label"
       ]
     },
     {
@@ -211,6 +212,14 @@
       "instead": "«tuo», «tua», «tuoi», «tue»: il gioco dà del tu",
       "except": [
         "onboarding.global.template."
+      ]
+    },
+    {
+      "pattern": "(?<![\\p{L}\\p{N}])fiamm[ae](?![\\p{L}\\p{N}])",
+      "flags": "iu",
+      "instead": "«N giorni» sotto 🔥: la Fiamma è quella dell’eroe, mai di una conversazione",
+      "keys": [
+        "engagement.pill.streak."
       ]
     }
   ],
@@ -326,6 +335,8 @@
     "game.gauge.treasury": "Eredità",
     "game.gauge.flame": "Fiamma",
     "game.fact.strides": "Passi",
-    "game.fact.rebirths": "Rinascite"
+    "game.fact.rebirths": "Rinascite",
+    "game.badge.stars_label": "Gradini",
+    "game.badge.ladder_title": "I sette gradini"
   }
 }

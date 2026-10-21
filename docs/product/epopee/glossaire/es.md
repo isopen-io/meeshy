@@ -26,7 +26,7 @@ Cada intercambio de verdad hace **brotar** **chispas**. Juntas forman **tu luz**
 
 | Voz | Dónde | Forma | Ejemplo |
 |---|---|---|---|
-| **A, la síntesis** | banda del jugador, pastillas, blasón junto a un nombre, marcos de la vista principal de Progreso | un nombre corto y su cifra | «Pasador IV», «12 Meeshes · Escarcela», «Jade · 4.º» |
+| **A, la síntesis** | banda del jugador, pastillas, blasón junto a un nombre, marcos de la vista principal de Progreso | un nombre corto y su cifra | «Barquero IV», «12 Meeshes · Escarcela», «Jade · 4.º» |
 | **B, el relato primero** | página de Progreso detallada, fichas de concepto, tarjetas de Mee y Meo, señales de los ancestros, hojas de detalles, cuaderno de las reglas | la frase manda, la cifra exacta sigue en pequeño | «Tu Escarcela guarda 12 Meeshes», y en pequeño «el Cofrecillo a 50» |
 
 Una superficie sin clasificar: si cabe una frase, B; si no, A. Las palabras prohibidas desaparecen en las dos voces.
@@ -98,10 +98,10 @@ El tono: se tutea (nunca «usted», nunca «vuestro»), se escribe para un chico
 ### El Rango (la gloria — `game.glory.*`, `game.rank.*`)
 
 - **Qué es**: el nombre que el mundo da al héroe. La gloria lo da, y nunca retrocede.
-- **Los rangos**: Murmullo, Eco, Voz, Narrador, Pasador, Políglota, Embajador, Orador, Oráculo, Leyenda, y luego el **Mito** (cien elegidos).
+- **Los rangos**: Murmullo, Eco, Voz, Narrador, Barquero, Políglota, Embajador, Orador, Oráculo, Leyenda, y luego el **Mito** (cien elegidos).
 - **Los peldaños**: cinco por rango, de V (el primero) a I (el más alto).
-- **A**: «Pasador IV»; «gloria 44 600».
-- **B**: «Te llaman Pasador», y en pequeño «segundo peldaño · gloria 44 600».
+- **A**: «Barquero IV»; «gloria 44 600».
+- **B**: «Te llaman Barquero», y en pequeño «segundo peldaño · gloria 44 600».
 - **Prohibidas**: «faltan N de Gloria para X» → «N de gloria hasta X»; «+250 Gloria», «+250 de Gloria» → «+250 de gloria»; «contador» → «tu gloria».
 
 ### El Legado (`game.treasury.*`, `game.meesh.*`, `game.mint.*`)
@@ -189,4 +189,4 @@ La Luz · Chispas · El Legado · El Rango · La Llama · El Sueño · La Justa 
 - **Legado** para «Héritage»: «herencia» suena a notaría; el legado se deja al linaje.
 - **Hacer brotar** para «faire jaillir», **fijar** para «figer», **hacer realidad** para «réaliser» (un sueño, un acto).
 - **Etapa** queda para la bienvenida y **paso** para el viaje: el antiguo «Paso 2 de 5» de la bienvenida pasa a «Etapa 2 de 5» para que «paso» tenga un solo sentido.
-- **Pasador** (rango `passeur`) se conserva tal como estaba traducido: no choca con ningún otro término. Que «barquero» lo diría mejor queda para una revisión de los nombres de rango, que tocaría también iOS y la pasarela.
+- **Barquero** (rango `passeur`, la clave no cambia): el que hace pasar de una orilla a otra. Sustituye a «Pasador», que evocaba un pasador de cerrojo o un pasador clandestino (#11444, decisión 4; web, iOS y pasarela).

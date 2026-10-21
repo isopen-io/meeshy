@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react';
 
-import type { MeeshEdition } from '@meeshy/shared/utils/game/mint';
+import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 
 import { MintScene } from '@/components/game';
 import type { MintCeremonyProps } from '@/components/game/mint-ceremony';
@@ -23,7 +23,9 @@ import { registerStrikeStage, strikeGate, type StrikeGate } from '@/lib/game/str
  *
  * Le numéro montré est celui de la pièce EN TRAIN d'être frappée — l'aperçu d'avant le geste, que le compteur fait
  * avancer ensuite — puis celui que la passerelle confirme POUR CE GESTE : la confirmation de la frappe précédente
- * ne reprend pas la scène d'une seconde frappe. DÉCORATIVE (`aria-hidden`) : l'hôte dit le résultat.
+ * ne reprend pas la scène d'une seconde frappe. La pièce se DESSINE dans la plus haute édition atteinte
+ * (`meeshDisplayEdition`, #11483) ; la cérémonie en reçoit la LOI (`edition`) et lit le dessin sur le numéro.
+ * DÉCORATIVE (`aria-hidden`) : l'hôte dit le résultat.
  */
 export type MintStrikeCoin = { readonly number: number; readonly edition: MeeshEdition };
 
@@ -99,7 +101,7 @@ export function MintStrike({ size, strikeKey, next, confirmed = null, gate = str
   return (
     <>
       <span ref={stage} data-game-strike-stage="" style={{ display: 'inline-block' }}>
-        <MintScene size={size} face={coin === null ? 'obverse' : 'reverse'} edition={shown.edition} number={shown.number} playKey={inlineKey} />
+        <MintScene size={size} face={coin === null ? 'obverse' : 'reverse'} edition={meeshDisplayEdition(shown.number)} number={shown.number} playKey={inlineKey} />
       </span>
       {ceremony === null || Scene === undefined ? null : (
         <Scene key={ceremony.key} edition={ceremony.coin.edition} number={ceremony.coin.number} gate={gate} target={() => stage.current} onDone={() => setCeremony(null)} />

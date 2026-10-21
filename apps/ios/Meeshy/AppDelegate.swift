@@ -794,7 +794,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 /// outbox), et une copie de `tmp` n'est plus que du poids.
 nonisolated enum TemporaryMediaSweeper {
     static let prefixes = ["composer_camera_", "composer_file_", "composer_photo_", "composer_sound_",
-                           "recent_", "retouche-", "video_look_", "meeshy-imagine-"]
+                           "recent_", "retouche-", "video_look_", "meeshy-imagine-", PickedMediaStaging.filePrefix]
     static let maximumAge: TimeInterval = 7 * 24 * 3600
 
     /// Les noms à retirer parmi `entries` (nom, date de modification) à l'instant `now`.

@@ -434,7 +434,7 @@ struct FeedComposerSheet: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
-        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]))
+        .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItems, maxSelectionCount: 10, matching: .any(of: [.images, .videos]), preferredItemEncoding: .current)
         .fileImporter(isPresented: $showFilePicker, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
             handleFileImport(result)
         }
@@ -532,9 +532,7 @@ struct FeedComposerSheet: View {
                 // puis mise en file ; « Terminé » la prépare comme une prise
                 // de la caméra (`handleCameraVideo`).
                 Task {
-                    if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent("video_raw_\(UUID().uuidString).mp4")
-                        try? movieData.write(to: rawURL)
+                    if let rawURL = try? await PickedMedia.loadVideoFile(item) {
                         let compressedURL: URL
                         do {
                             compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)

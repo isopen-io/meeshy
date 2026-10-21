@@ -19,8 +19,6 @@ final class IndexForceUnwrapGuardTests: XCTestCase {
         "DiskCacheStore.swift": 1,
         // Groupes construits non vides par `splitIntoRawGroups` (un message au moins chacun).
         "EpisodeSegmenter.swift": 8,
-        // `bucketTiers` : tableau constant non vide.
-        "AudioWaveform.swift": 1,
     ]
 
     private static var repoRoot: URL {

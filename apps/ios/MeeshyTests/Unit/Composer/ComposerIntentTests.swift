@@ -870,7 +870,8 @@ final class ComposerIntentTests: XCTestCase {
             }
             var trouve = false
             for case let url as URL in enumerateur where url.lastPathComponent == "\(site).swift" {
-                let source = AppSourceGuard.stripComments(try String(contentsOf: url, encoding: .utf8))
+                // Un type découpé se lit comme son UNITÉ (`FeedViewModel+PostActions.swift`…).
+                let source = AppSourceGuard.stripComments(try AppSourceGuard.text(at: url))
                 trouve = true
                 XCTAssertTrue(
                     source.contains("targetType"),

@@ -28,8 +28,13 @@ export const COMMENTS_ZONE_SHARE: Readonly<Record<CommentsComposerPresence, numb
 /** L'air laissé sous l'encoche quand la zone remplit l'espace libre. */
 export const COMMENTS_ZONE_TOP_GAP_PX = 8;
 
-/** La courbe et la durée du clavier iOS, pour monter et descendre avec lui. */
-export const COMMENTS_ZONE_TRANSITION = 'height 250ms cubic-bezier(0.2, 0.8, 0.2, 1), bottom 250ms cubic-bezier(0.2, 0.8, 0.2, 1)';
+/**
+ * La courbe et la durée du clavier iOS, pour monter et descendre avec lui.
+ * Le mouvement est un FLIP du bord haut (`use-flip.ts`) : la hauteur et le
+ * bord bas passent d'un coup à leur valeur finale, aucune géométrie n'est
+ * animée (#11314).
+ */
+export const COMMENTS_ZONE_MOTION = { duration: 250, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' } as const;
 
 export function commentsZoneStageOf({
   composer,
@@ -44,30 +49,26 @@ export function commentsZoneStageOf({
 
 export type CommentsZone = {
   readonly height: string;
-  readonly bottom: number;
+  /** Le bord bas, posé en `translate` : la zone est ancrée au bas du cadre et remonte du retrait du clavier. */
+  readonly translate: string;
   readonly paddingBottom: string;
-  readonly transition: string;
 };
 
 export function commentsZoneOf({
   stage,
   keyboardInset,
-  reducedMotion,
 }: {
   readonly stage: CommentsZoneStage;
   readonly keyboardInset: number;
-  readonly reducedMotion: boolean;
 }): CommentsZone {
-  const transition = reducedMotion ? 'none' : COMMENTS_ZONE_TRANSITION;
   if (stage === 'typing') {
     return {
       height: `calc(100% - ${keyboardInset}px - env(safe-area-inset-top, 0px) - ${COMMENTS_ZONE_TOP_GAP_PX}px)`,
-      bottom: keyboardInset,
+      translate: `0px ${-keyboardInset}px`,
       paddingBottom: '0px',
-      transition,
     };
   }
-  return { height: `${COMMENTS_ZONE_SHARE[stage] * 100}%`, bottom: 0, paddingBottom: 'env(safe-area-inset-bottom, 0px)', transition };
+  return { height: `${COMMENTS_ZONE_SHARE[stage] * 100}%`, translate: '0px 0px', paddingBottom: 'env(safe-area-inset-bottom, 0px)' };
 }
 
 /** En deçà, c'est la barre d'adresse qui se replie, pas un clavier. */

@@ -1,9 +1,10 @@
-import { useLayoutEffect, useMemo, useRef, type ComponentProps } from 'react';
+import { useMemo, useRef, type ComponentProps } from 'react';
 
 import { longMessageExcerpt } from '@meeshy/shared/utils/long-message';
 import { FOCAL_METRICS, focalExpandEasingCss } from '@meeshy/shared/utils/focal-metrics';
 
 import { translate } from '@/lib/i18n-catalog';
+import { useFlip } from '@/lib/use-flip';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import { toggleUnfolded, useIsUnfolded } from '@/lib/view/unfold-store';
 
@@ -23,11 +24,12 @@ import { RichText } from './rich-text';
  * l'extrait et le dépliage portent sur ce que le lecteur lit, jamais sur
  * l'original quand une traduction est servie.
  *
- * LA HAUTEUR S'ANIME, ET RIEN D'AUTRE. Mesurée avant et après la bascule, elle
- * est jouée par une animation Web (`height`, au tempo `expandDurationMs` et sur
- * la courbe `expandCurve` que joue aussi iOS, #8232) sur
- * le conteneur — jamais une transition CSS sur `height: auto`, qu'aucun
- * moteur n'interpole. Réduire le mouvement ⇒ la bascule est sèche.
+ * LE DÉPLIAGE SE JOUE EN FLIP, ET RIEN NE S'ANIME EN GÉOMÉTRIE (#11314).
+ * Le texte intégral prend sa place d'un coup ; le bouton — seul élément qui
+ * change de place — repart de son ancienne position en `transform`, et le
+ * corps s'allume en `opacity` (`useFlip`, au tempo `expandDurationMs` et sur
+ * la courbe `expandCurve` que joue aussi iOS, #8232). Réduire le mouvement ⇒
+ * la bascule est sèche.
  *
  * L'ACCESSIBILITÉ : le texte intégral est DÉJÀ dans le libellé de la rangée
  * (`composeMessageLabel`, d'où `plainTextHidden` chez les deux peaux) ; le
@@ -36,8 +38,8 @@ import { RichText } from './rich-text';
  */
 type RichTextProps = ComponentProps<typeof RichText>;
 
-const prefersReducedMotion = (): boolean =>
-  typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Opacité de départ du corps qui se déplie ou se replie. */
+const FOLD_FADE_FROM = 0.4;
 
 export function LongMessageText({
   messageId,
@@ -52,26 +54,16 @@ export function LongMessageText({
   const { truncated, excerpt } = useMemo(() => longMessageExcerpt(text), [text]);
   const unfolded = useIsUnfolded(messageId);
   const box = useRef<HTMLDivElement>(null);
-  const heightBefore = useRef<number | null>(null);
-
-  useLayoutEffect(() => {
-    const element = box.current;
-    const from = heightBefore.current;
-    heightBefore.current = null;
-    if (element === null || from === null || prefersReducedMotion() || typeof element.animate !== 'function') return;
-    const to = element.offsetHeight;
-    element.animate([{ height: `${from}px`, overflow: 'hidden' }, { height: `${to}px`, overflow: 'hidden' }], {
-      duration: FOCAL_METRICS.expandDurationMs,
-      easing: focalExpandEasingCss(),
-    });
-  }, [unfolded]);
+  const toggleButton = useRef<HTMLButtonElement>(null);
+  const motion = { key: unfolded ? 'unfolded' : 'folded', duration: FOCAL_METRICS.expandDurationMs, easing: focalExpandEasingCss() };
+  useFlip(toggleButton, motion);
+  useFlip(box, { ...motion, fadeFrom: FOLD_FADE_FROM });
 
   if (!truncated) return <RichText text={text} {...richText} />;
 
   const language = currentInterfaceLanguage();
   const toggle = (event: { stopPropagation: () => void }) => {
     event.stopPropagation();
-    heightBefore.current = box.current?.offsetHeight ?? null;
     toggleUnfolded(messageId);
   };
 
@@ -79,6 +71,7 @@ export function LongMessageText({
     <div ref={box} data-long-message={unfolded ? 'unfolded' : 'folded'}>
       <RichText text={unfolded ? text : `${excerpt}…`} {...richText} />
       <button
+        ref={toggleButton}
         type="button"
         data-long-message-toggle=""
         aria-expanded={unfolded}

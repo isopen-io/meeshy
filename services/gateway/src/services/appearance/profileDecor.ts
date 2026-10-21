@@ -14,6 +14,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { isPackOwned, type PackDomain } from '@meeshy/shared/types/content-pack';
 import { frameUsageOf, type PackIndexEntry } from '@meeshy/shared/types/content-pack-index';
+import { ownedPackKeys } from '@meeshy/shared/types/pack-ownership';
 import { canUseFrame, type FrameUseContext } from '@meeshy/shared/types/frame-usage';
 import {
   EMPTY_PROFILE_DECOR,
@@ -124,10 +125,9 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 
 export async function validateProfileDecorWrite({ prisma, index, userId, input }: ProfileDecorWriteParams): Promise<ProfileDecorWriteOutcome> {
   if (!isRecord(input)) return { kind: 'invalid' };
-  const owned = new Set<string>();
-  const loadOwned = async () => {
-    if (owned.size === 0) (await prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } })).forEach((row) => owned.add(row.packKey));
-  };
+  let ownedRead: Promise<ReadonlySet<string>> | undefined;
+  const ownedKeys = (): Promise<ReadonlySet<string>> =>
+    (ownedRead ??= prisma.userPackOwnership.findMany({ where: { userId }, select: { packKey: true } }).then(ownedPackKeys));
 
   const data: { -readonly [F in keyof StoredProfileDecor]: StoredProfileDecor[F] } = {};
   for (const side of SIDES) {
@@ -141,7 +141,7 @@ export async function validateProfileDecorWrite({ prisma, index, userId, input }
     if (!parsed.success) return { kind: 'invalid' };
     const entry = resolvePack(index, side.domain, parsed.data, 'equipped');
     if (entry === undefined) return { kind: 'not-owned' };
-    if (entry.price !== undefined) await loadOwned();
+    const owned = entry.price === undefined ? new Set<string>() : await ownedKeys();
     if (!isPackOwned({ domain: side.domain, slug: entry.slug, price: entry.price }, owned)) return { kind: 'not-owned' };
     if (!index.itemKeys(entry).includes(parsed.data.item)) return { kind: 'item-not-found' };
     if (side.frameContext !== null) {

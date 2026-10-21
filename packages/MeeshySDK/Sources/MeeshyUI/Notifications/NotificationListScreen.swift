@@ -5,7 +5,8 @@ import MeeshySDK
 // MARK: - NotificationListScreen
 
 public struct NotificationListScreen<ViewModel: NotificationListModeling>: View {
-    @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemePalette { ThemePalette(colorScheme: colorScheme) }
     @ObservedObject private var viewModel: ViewModel
 
     public var onNotificationTap: ((APINotification) -> Void)?

@@ -1,23 +1,25 @@
 {
   "rules": {
-    "anyview": 97,
+    "anyview": 96,
     "autocapitalization": 0,
-    "available-floor": 3,
+    "available-floor": 0,
     "corner-radius-modifier": 0,
     "disable-autocorrection": 0,
-    "fixed-font": 790,
-    "foreground-color": 3121,
+    "fixed-font": 768,
+    "foreground-color": 3103,
     "idiom": 0,
     "logger-subsystem": 5,
-    "nonisolated-unsafe": 152,
+    "nonisolated-unsafe": 151,
     "nslock": 48,
     "nslog": 0,
+    "observed-theme-singleton": 16,
     "onchange-single": 0,
     "plural-s": 0,
     "status-bar-hidden": 0,
     "try-sleep": 220,
     "uiscreen-main": 1,
-    "unchecked-sendable": 132
+    "unchecked-sendable": 132,
+    "viewmodel-shared": 599
   },
   "version": 1
 }

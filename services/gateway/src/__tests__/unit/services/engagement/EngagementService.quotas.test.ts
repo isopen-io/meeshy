@@ -212,7 +212,7 @@ describe('les gros poids', () => {
     expect(JSON.stringify(last.update)).toContain('1000');
   });
 
-  it('ne reprennent rien après la fenêtre', async () => {
+  it('se reprennent encore au-delà des 24 h du barème — l’âge se juge sur la publication, chez l’appelant (#11467)', async () => {
     const { prisma, quotas } = makePrisma({ verified: true });
     const service = new EngagementService(prisma, scaled());
     await service.recordActivity('u1', 'content.reel', { targetId: 'r1' });
@@ -220,7 +220,7 @@ describe('les gros poids', () => {
       quotas.rows.set(key, { ...row, createdAt: new Date(Date.now() - 48 * 3_600_000) });
     }
 
-    expect(await service.reclaimContent('u1', 'content.reel', 'r1')).toBe(0);
+    expect(await service.reclaimContent('u1', 'content.reel', 'r1')).toBeGreaterThan(0);
   });
 });
 

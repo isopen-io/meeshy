@@ -107,15 +107,22 @@ struct ComposerLookRail: View {
             ? AnyLayout(VStackLayout(alignment: .leading,
                                      spacing: alignedWithCells ? ComposerLookStripRule.spacing : MeeshySpacing.sm))
             : AnyLayout(HStackLayout(spacing: editTools.isEmpty ? MeeshySpacing.xl : MeeshySpacing.md))
+        // Les entrées se construisent ICI, sur le fil principal : en retouche, le
+        // rail est un candidat de `ViewThatFits` (`ComposerEditRailFit`), que le
+        // rendu asynchrone d'iOS 26 mesure hors du main (#9135, #11411).
+        let familles = ComposerLookFamily.allCases.map { famille in
+            AsyncRenderRow(id: famille, content: tool(symbol: ComposerCaptureCopy.familySymbol(famille),
+                                                      name: ComposerCaptureCopy.familyName(famille),
+                                                      selected: open == famille) { onSelect(famille) })
+        }
+        let outils = editTools.map { outil in
+            AsyncRenderRow(id: outil, content: tool(symbol: ComposerCaptureCopy.editToolSymbol(outil),
+                                                    name: ComposerCaptureCopy.editToolName(outil),
+                                                    selected: shownTools.contains(outil)) { onTool(outil) })
+        }
         disposition {
-            ForEach(ComposerLookFamily.allCases, id: \.self) { famille in
-                tool(symbol: ComposerCaptureCopy.familySymbol(famille), name: ComposerCaptureCopy.familyName(famille),
-                     selected: open == famille) { onSelect(famille) }
-            }
-            ForEach(editTools, id: \.self) { outil in
-                tool(symbol: ComposerCaptureCopy.editToolSymbol(outil), name: ComposerCaptureCopy.editToolName(outil),
-                     selected: shownTools.contains(outil)) { onTool(outil) }
-            }
+            ForEach(familles, content: asyncRenderRowContent)
+            ForEach(outils, content: asyncRenderRowContent)
         }
     }
 

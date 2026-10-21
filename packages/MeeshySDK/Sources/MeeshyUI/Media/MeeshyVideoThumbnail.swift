@@ -67,6 +67,9 @@ public struct MeeshyVideoThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
         .contentShape(Rectangle())
         .onTapGesture { onTap?() }
+        .accessibilityAddTraits(onTap == nil ? [] : .isButton)
+        .accessibilityAction { onTap?() }
+        .accessibilityLabel(onTap == nil ? "" : String(localized: "media.video.play", bundle: .module))
         .task(id: videoUrlString) { await extractThumbnailIfNeeded() }
     }
 
