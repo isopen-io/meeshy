@@ -50,3 +50,23 @@ public enum WaveformScale {
         max(0, min(1, value))
     }
 }
+
+// MARK: - La lecture d'une série
+
+/// **Ce qu'une série de valeurs EST décide de l'échelle qui la lit.** Une vue qui
+/// reçoit tantôt la mesure, tantôt le champ publié (une barre de timeline dont le
+/// repli est le champ d'un repost) déclare laquelle elle dessine.
+public enum WaveformReading: Sendable, Equatable {
+    /// La mesure du cache, RMS absolu : échelle décibel.
+    case measured
+    /// Le champ publié, normalisé au pic : linéaire.
+    case published
+
+    /// Hauteur `0...1` d'une valeur de la série.
+    public func height(_ value: Float) -> Float {
+        switch self {
+        case .measured: return WaveformScale.displayHeight(rms: value)
+        case .published: return WaveformScale.publishedHeight(value)
+        }
+    }
+}

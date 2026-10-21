@@ -19,9 +19,15 @@ public actor WaveformCache {
         self.cacheDirectory = FileManager.default.cachesDirectory
             .appendingPathComponent("com.meeshy.waveforms.v2", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-        try? FileManager.default.removeItem(at: FileManager.default.cachesDirectory
-            .appendingPathComponent("com.meeshy.waveforms", isDirectory: true))
+        Self.retiredDirectories.forEach { name in
+            try? FileManager.default.removeItem(at: FileManager.default.cachesDirectory
+                .appendingPathComponent(name, isDirectory: true))
+        }
     }
+
+    /// Les caches des mesures d'avant (normalisées au pic ; la seconde boucle
+    /// d'`AudioWaveform`) : leurs valeurs ne sont plus lisibles, rien ne les relit.
+    private static let retiredDirectories = ["com.meeshy.waveforms", "story-waveforms"]
 
     private let cacheDirectory: URL
     // Borné (éviction FIFO) : une éviction mémoire ne coûte qu'une relecture du disque.
@@ -44,7 +50,10 @@ public actor WaveformCache {
         let key = cacheKey(for: identity, count: count)
         if let cached = cachedSamples(for: key) { return cached }
 
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("waveform_\(identity).caf")
+        // Un nom par appel : deux mesures concurrentes du même son (l'acteur est
+        // réentrant pendant `measure`) ne se retirent pas le fichier l'une à l'autre.
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("waveform_\(identity)_\(UUID().uuidString).caf")
         defer { try? FileManager.default.removeItem(at: tempURL) }
         try data.write(to: tempURL)
 

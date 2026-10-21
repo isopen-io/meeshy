@@ -108,10 +108,7 @@ struct ComposerSoundTraceRow: View {
     /// le son n'est pas — la sinusoïde dit « du son, dont on ne connaît pas
     /// encore le tracé ».
     ///
-    /// **L'échelle est celle du champ.** `waveformSamples` est le champ PUBLIÉ,
-    /// normalisé au pic : il se lit en linéaire (`WaveformScale.publishedHeight`).
-    /// L'échelle décibel est celle de la MESURE brute — posée ici, elle écrasait
-    /// les barres vers le haut (#9886).
+    /// **L'échelle est celle du champ** : voir `barHeight(sample:in:)`.
     private var wave: some View {
         Canvas { context, size in
             let releve = sound.waveformSamples
@@ -124,7 +121,7 @@ struct ComposerSoundTraceRow: View {
                     hauteur = size.height * (0.35 + 0.45 * abs(sin(phase)))
                 } else {
                     let index = min(releve.count - 1, i * releve.count / Self.barCount)
-                    hauteur = max(3, CGFloat(WaveformScale.publishedHeight(releve[index])) * size.height)
+                    hauteur = Self.barHeight(sample: releve[index], in: size.height)
                 }
                 let x = CGFloat(i) * step + (step - barWidth) / 2
                 let rect = CGRect(x: x, y: (size.height - hauteur) / 2,
@@ -134,5 +131,12 @@ struct ComposerSoundTraceRow: View {
             }
         }
         .accessibilityHidden(true)
+    }
+
+    /// Hauteur d'une barre du relevé. `waveformSamples` est le champ PUBLIÉ,
+    /// normalisé au pic : il se lit en linéaire. L'échelle décibel est celle de
+    /// la MESURE brute — posée ici, elle écrasait les barres vers le haut (#9886).
+    nonisolated static func barHeight(sample: Float, in height: CGFloat) -> CGFloat {
+        max(3, CGFloat(WaveformReading.published.height(sample)) * height)
     }
 }

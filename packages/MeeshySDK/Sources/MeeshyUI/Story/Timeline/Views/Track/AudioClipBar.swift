@@ -77,6 +77,12 @@ public struct AudioClipBar: View, Equatable {
         local.isEmpty ? published : local
     }
 
+    /// L'échelle de la source retenue : la mesure locale en décibels, le repli
+    /// publié (normalisé au pic) en linéaire (#9886).
+    nonisolated static func resolveReading(local: [Float]) -> WaveformReading {
+        local.isEmpty ? .published : .measured
+    }
+
     public init(
         clipId: String, title: String, startTime: Float, duration: Float,
         volume: Float, isMuted: Bool, isSelected: Bool, isLocked: Bool,
@@ -150,7 +156,8 @@ public struct AudioClipBar: View, Equatable {
         ZStack(alignment: .leading) {
             Rectangle()
                 .fill(MeeshyColors.warning.opacity(isDark ? 0.32 : 0.22))
-            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85))
+            WaveformStrip(samples: effectiveSamples, tint: Color.white.opacity(0.85),
+                          reading: Self.resolveReading(local: loadedSamples))
             volumeCurve
             titleOverlay
             if onToggleMute != nil {
