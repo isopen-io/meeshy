@@ -87,7 +87,7 @@
     "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Messages.swift::OutboxDispatcher.dispatchSendMessage": 217,
     "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher+Publications.swift::OutboxDispatcher.dispatchCreatePost": 298,
     "apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift::OutboxDispatcher.route": 86,
-    "apps/ios/Meeshy/Features/Main/Services/PresenceManager.swift::PresenceManager.init": 101,
+    "apps/ios/Meeshy/Features/Main/Services/PresenceManager.swift::PresenceManager.init": 93,
     "apps/ios/Meeshy/Features/Main/Services/PublishIntent.swift::PublishIntent.document": 102,
     "apps/ios/Meeshy/Features/Main/Services/StoryPhotoSaveService.swift::StoryPhotoSaveService.bakeThenSave": 118,
     "apps/ios/Meeshy/Features/Main/Services/StoryVideoExportService.swift::StoryVideoExportService.prepareExport": 124,

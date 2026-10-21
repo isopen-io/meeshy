@@ -19,7 +19,7 @@ struct PostDetailCommentThread: View {
     @EnvironmentObject private var storyViewModel: StoryViewModel
 
     var body: some View {
-        ThreadedCommentSection(
+        LivePresence { ThreadedCommentSection(
             comment: comment,
             replies: viewModel.repliesFor(comment.id),
             isExpanded: viewModel.expandedThreads.contains(comment.id),
@@ -65,7 +65,7 @@ struct PostDetailCommentThread: View {
                 && (viewModel.repliesHasMore[comment.id] ?? false),
             onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },
             highlightedCommentId: highlightedCommentId
-        )
+        ) }
         .padding(.horizontal, MeeshySpacing.lg)
         .padding(.vertical, highlightedCommentId == comment.id ? 6 : 0)
         .background(

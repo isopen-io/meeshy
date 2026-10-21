@@ -231,7 +231,7 @@ struct CommentsSheetView: View {
                     ScrollView(showsIndicators: false) {
                         LazyVStack(spacing: 0) {
                             ForEach(topLevel) { comment in
-                                ThreadedCommentSection(
+                                LivePresence { ThreadedCommentSection(
                                     comment: comment,
                                     replies: repliesMap[comment.id] ?? [],
                                     isExpanded: expandedThreads.contains(comment.id),
@@ -268,7 +268,7 @@ struct CommentsSheetView: View {
                                     hasMoreReplies: expandedThreads.contains(comment.id) && (repliesHasMore[comment.id] ?? false),
                                     onLoadMoreReplies: { await loadMoreReplies(commentId: comment.id) },
                                     highlightedCommentId: highlightedCommentId
-                                )
+                                ) }
                                 .background(
                                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
                                         .fill(Color(hex: accentColor).opacity(highlightedCommentId == comment.id ? 0.12 : 0))
