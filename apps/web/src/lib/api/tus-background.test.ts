@@ -55,6 +55,21 @@ describe('backgroundUploadPort — seulement où Background Fetch existe', () =>
   });
 });
 
+describe('backgroundUploadPort.reaches — Background Fetch refuse toute requête qui exige un pré-vol CORS', () => {
+  test('seule une session de l’origine de la page est confiée au navigateur', async () => {
+    const port = await backgroundUploadPort(fakeWorld().container, 'https://meeshy.me');
+    expect(port?.reaches('https://meeshy.me/api/v1/uploads/up-1')).toBe(true);
+    expect(port?.reaches('https://gate.meeshy.me/api/v1/uploads/up-1')).toBe(false);
+    expect(port?.reaches('http://meeshy.me/api/v1/uploads/up-1')).toBe(false);
+    expect(port?.reaches('pas une adresse')).toBe(false);
+  });
+
+  test('origine de la page inconnue : aucune session n’est confiée au navigateur', async () => {
+    const port = await backgroundUploadPort(fakeWorld().container);
+    expect(port?.reaches('https://gate.meeshy.me/api/v1/uploads/up-1')).toBe(false);
+  });
+});
+
 describe('backgroundUploadPort.start — le reste du fichier part dans le navigateur', () => {
   test('inscrit UN PATCH à l’offset donné, avec les octets de là et les en-têtes fournis', async () => {
     const world = fakeWorld();

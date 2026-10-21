@@ -397,7 +397,8 @@ async function transmit(
   let restarted = false;
 
   /* La page cachée annule la tranche EN VOL (jamais l'envoi) : `wire` porte ce signal en plus de celui de
-     l'appelant. Une annulation de l'APPELANT reste une annulation. */
+     l'appelant. Une annulation de l'APPELANT reste une annulation. Une session que le navigateur ne peut pas
+     poursuivre (autre origine, pré-vol CORS) n'est jamais interrompue. */
   const hidden = new AbortController();
   let backgrounded = false;
   let wire: PostMediaUploadParams =
@@ -406,6 +407,7 @@ async function transmit(
     port === null
       ? () => undefined
       : (params.visibility ?? documentVisibility).onHidden(() => {
+          if (!port.reaches(location)) return;
           backgrounded = true;
           hidden.abort();
         });

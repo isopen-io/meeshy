@@ -52,7 +52,7 @@ function visibility() {
 }
 
 /** Un port de Background Fetch que le témoin pilote : `settleWith` joue le worker qui rend la main. */
-function fakePort(options: { readonly accepts?: boolean; readonly running?: boolean } = {}) {
+function fakePort(options: { readonly accepts?: boolean; readonly running?: boolean; readonly reaches?: boolean } = {}) {
   const started: BackgroundUploadStart[] = [];
   let before: (start: BackgroundUploadStart) => void | Promise<void> = () => undefined;
   let effect: () => Promise<void> | void = () => undefined;
@@ -62,6 +62,7 @@ function fakePort(options: { readonly accepts?: boolean; readonly running?: bool
       await before(start);
       return options.accepts !== false;
     },
+    reaches: () => options.reaches !== false,
     isRunning: async () => options.running === true,
     settled: async () => {
       await effect();
@@ -174,6 +175,21 @@ describe('uploadPostMedia — la page passe à l’arrière-plan (Background Fet
 
     expect(result).toMatchObject({ ok: true, data: { postMediaId: 'pm-fg' } });
     expect(server.methods).toEqual(['POST', 'PATCH', 'PATCH', 'PATCH']);
+    expect(page.count()).toBe(0);
+  });
+
+  test('une passerelle d’une AUTRE origine (pré-vol CORS refusé par Background Fetch) : la page cachée n’annule rien et l’envoi reste au premier plan', async () => {
+    const idb = fakeIndexedDb();
+    const server = tusServer();
+    const page = visibility();
+    const background = fakePort({ reaches: false });
+
+    const result = await uploadPostMedia(paramsOf(idb, { fetchImpl: hidingOnSecondPatch(server, page), background: background.port, visibility: page.api }));
+
+    expect(result).toMatchObject({ ok: true, data: { postMediaId: 'pm-fg' } });
+    expect(server.methods).toEqual(['POST', 'PATCH', 'PATCH', 'PATCH']);
+    expect(background.started).toHaveLength(0);
+    expect(rows(idb).size).toBe(0);
     expect(page.count()).toBe(0);
   });
 

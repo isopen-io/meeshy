@@ -55,6 +55,11 @@ export type BackgroundUploadStart = {
 };
 
 export type BackgroundUploadPort = {
+  /** Le navigateur peut-il envoyer à cette adresse ? Chromium refuse toute requête Background Fetch qui exige un
+   * pré-vol CORS (`background_fetch_manager.cc`, crbug.com/40515511) — et un `PATCH` TUS en exige toujours un hors
+   * de l'origine de la page (méthode, `Authorization`, `Content-Type`). Faux : la page cachée n'annule rien, l'envoi
+   * reste au premier plan comme sans Background Fetch. */
+  readonly reaches: (location: string) => boolean;
   /** Confie le reste du fichier au navigateur. `false` : refusé (identifiant déjà pris, quota) — rester au premier plan. */
   readonly start: (start: BackgroundUploadStart) => Promise<boolean>;
   /** Un envoi de fond de cette empreinte est-il encore en cours ? */
@@ -90,7 +95,18 @@ const isSettledMessage = (data: unknown, fingerprint: string): boolean => {
   return message['type'] === TUS_BACKGROUND_MESSAGE && message['fingerprint'] === fingerprint;
 };
 
-export async function backgroundUploadPort(container: BackgroundContainer | undefined): Promise<BackgroundUploadPort | null> {
+const originOf = (location: string): string | null => {
+  try {
+    return new URL(location).origin;
+  } catch {
+    return null;
+  }
+};
+
+export async function backgroundUploadPort(
+  container: BackgroundContainer | undefined,
+  pageOrigin?: string,
+): Promise<BackgroundUploadPort | null> {
   if (container === undefined) return null;
   const registration = await container.getRegistration().catch((): undefined => undefined);
   const backgroundFetch = registration?.backgroundFetch;
@@ -106,6 +122,7 @@ export async function backgroundUploadPort(container: BackgroundContainer | unde
   };
 
   return {
+    reaches: (location) => pageOrigin !== undefined && originOf(location) === pageOrigin,
     start: async ({ fingerprint, location, offset, file, headers, title }) => {
       try {
         const request = new Request(location, { method: 'PATCH', headers: { ...headers }, body: file.slice(offset) });
@@ -141,6 +158,9 @@ let defaultPort: Promise<BackgroundUploadPort | null> | undefined;
 
 /** Le port du navigateur courant, résolu UNE fois : `null` partout où Background Fetch n'existe pas. */
 export function defaultBackgroundUploadPort(): Promise<BackgroundUploadPort | null> {
-  defaultPort ??= backgroundUploadPort(typeof navigator === 'undefined' ? undefined : (navigator.serviceWorker as unknown as BackgroundContainer | undefined));
+  defaultPort ??= backgroundUploadPort(
+    typeof navigator === 'undefined' ? undefined : (navigator.serviceWorker as unknown as BackgroundContainer | undefined),
+    typeof location === 'undefined' ? undefined : location.origin,
+  );
   return defaultPort;
 }
