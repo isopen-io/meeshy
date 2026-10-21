@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 
 /// L'effet Focal d'un message long DÉPLIÉ sur la peau BULLE (#8147).
 ///
@@ -62,7 +63,7 @@ private struct LongMessageLoupe: ViewModifier {
                     GeometryReader { proxy in
                         Color.clear
                             .onAppear { size = proxy.size }
-                            .onChange(of: proxy.size) { newSize in size = newSize }
+                            .adaptiveOnChange(of: proxy.size) { _, newSize in size = newSize }
                     }
                 }
             }

@@ -316,7 +316,7 @@ public struct ImageFullscreen: View {
                 .transition(.opacity)
             }
         }
-        .statusBar(hidden: true)
+        .statusBarHidden(true)
         .onAppear { viewStartTime = Date() }
         .onDisappear { reportImageViewed() }
         .settling($saveState, to: .idle, after: .seconds(2), animation: .default, when: { $0 == .saved || $0 == .failed })

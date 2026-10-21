@@ -280,7 +280,7 @@ struct ProgressionConceptContent: View {
     private func sentence(_ text: String, strong: Bool = false) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: strong ? .semibold : .regular))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
@@ -332,10 +332,10 @@ struct ProgressionConceptHero: View {
                     Text(card.name)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .textCase(.uppercase)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Text(card.value)
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .modifier(GameValueRoll(value: card.value))
@@ -343,7 +343,7 @@ struct ProgressionConceptHero: View {
                     if let line {
                         Text(line.text)
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .multilineTextAlignment(.leading)
                             .fixedSize(horizontal: false, vertical: true)
                             .modifier(GameFactsTag(line.facts))
@@ -421,7 +421,8 @@ struct ProgressionConceptGestures: View {
                 GameMintPreviewView(
                     game: game, online: viewModel.isOnline,
                     minting: viewModel.isMinting, error: viewModel.mintError,
-                    celebration: viewModel.celebration, onMint: { Task { await viewModel.mint() } }
+                    celebration: viewModel.celebration, settlement: viewModel.mintSettlement,
+                    onMint: { Task { await viewModel.mint() } }
                 )
             } else if let meesh = progress.meesh {
                 ProgressionMeeshDetail(
@@ -492,12 +493,12 @@ struct GameElementTile: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(detail.name)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(detail.statusLine)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                         .modifier(GameValueRoll(value: detail.statusLine))

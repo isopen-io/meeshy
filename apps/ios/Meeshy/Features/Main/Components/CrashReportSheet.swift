@@ -71,7 +71,7 @@ struct CrashReportSheet: View {
         }
         Text(kind.localizedLabel)
             .font(.caption2.weight(.bold))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xsPlus)
             .padding(.vertical, MeeshySpacing.xxs)
             .background(Capsule().fill(color))

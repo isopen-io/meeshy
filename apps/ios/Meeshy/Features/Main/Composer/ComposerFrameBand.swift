@@ -48,7 +48,7 @@ struct ComposerFrameBand: View {
         } label: {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(choisi ? MeeshyColors.brandPrimary : Color.white.opacity(0.08)))
         }
