@@ -10,6 +10,7 @@ import type { Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
 
 import { installHapticsDriver, type HapticCue } from './haptics';
 import { LONG_PRESS_MS } from './long-press';
@@ -78,8 +79,8 @@ function mount(lot: readonly Message[]): { api: () => MenuApi; cues: HapticCue[]
       messages: lot,
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: () => {},
       queryClient,

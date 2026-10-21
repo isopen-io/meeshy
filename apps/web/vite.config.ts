@@ -326,9 +326,13 @@ const prerenderLanding = (): Plugin => {
  *    image, une vidéo ou un lien partagé depuis une autre application arrive
  *    sur la feuille d'envoi. Le `share_target` du manifeste (plus bas) l'y
  *    adresse ; la coque Android reçoit le même partage par un intent, pas par
- *    ce worker.
+ *    ce worker ;
+ *  - `sw-background-upload.js` range l'issue d'un envoi de fond (#11311) : quand
+ *    la page passe à l'arrière-plan en plein envoi, le navigateur poursuit le
+ *    reste du fichier (Background Fetch, Chrome et PWA Chromium) et ce worker
+ *    inscrit l'accusé sur le checkpoint IndexedDB de l'envoi.
  */
-const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js'] as const;
+const SERVICE_WORKER_SCRIPTS = ['sw-institutional.js', 'sw-legacy-purge.js', 'sw-push.js', 'sw-share-target.js', 'sw-background-upload.js'] as const;
 
 /**
  * LES SCRIPTS DU SERVICE WORKER N'ENTRENT PAS DANS LA COQUE (#5604,
@@ -689,9 +693,9 @@ export default defineConfig({
                * ne croise pas les `/`, donc l'`index.html` de la racine — la
                * coquille de l'application — n'est PAS exclu.
                *
-               * Trois SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
-               * étendu #7305, #8884) : `sw-legacy-purge.js`, `sw-push.js` et
-               * `sw-share-target.js`, tous
+               * Quatre SCRIPTS IMPORTÉS n'y entrent pas non plus (#6702,
+               * étendu #7305, #8884, #11311) : `sw-legacy-purge.js`, `sw-push.js`,
+               * `sw-share-target.js` et `sw-background-upload.js`, tous
                * chargés par `importScripts` — le navigateur garde déjà
                * les scripts importés avec le worker. Les précacher ferait
                * payer leurs octets une seconde fois, à chaque installation,
@@ -750,6 +754,7 @@ export default defineConfig({
                 'sw-legacy-purge.js',
                 'sw-push.js',
                 'sw-share-target.js',
+                'sw-background-upload.js',
                 'assets/*.woff2',
                 /* Le flou d'arrière-plan par segmentation (#8471) : MediaPipe
                    et son chargeur WebAssembly ne se téléchargent qu'au premier

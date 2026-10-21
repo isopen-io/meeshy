@@ -1,4 +1,4 @@
-import { hasMinimumMemberRole, MemberRole } from '@meeshy/shared/types/role-types';
+import { platformModerates } from '@meeshy/shared/utils/message-action-policy';
 
 /**
  * **RETIRER LE CONTENU D'UN AUTRE** (#11150) — la loi du client, reflet du
@@ -29,17 +29,15 @@ export function removalBody(reason: string | undefined): { readonly body?: { rea
   return reason === undefined ? {} : { body: { reason } };
 }
 
-const PLATFORM_MODERATOR_ROLES: ReadonlySet<string> = new Set(['MODERATOR', 'ADMIN', 'BIGBOSS']);
-
-const MODERATED_CONVERSATION_TYPES: ReadonlySet<string> = new Set(['group', 'public', 'global', 'broadcast']);
-
-export const moderatesPlatformContent = (platformRole: string | null | undefined): boolean => PLATFORM_MODERATOR_ROLES.has(platformRole ?? '');
-
-export function moderatesConversation(params: {
-  readonly conversation: { readonly type: string; readonly currentUserRole?: string | null | undefined };
-  readonly platformRole: string | null | undefined;
-}): boolean {
-  const { conversation, platformRole } = params;
-  if (!MODERATED_CONVERSATION_TYPES.has(conversation.type)) return false;
-  return hasMinimumMemberRole(conversation.currentUserRole ?? '', MemberRole.MODERATOR) || moderatesPlatformContent(platformRole);
-}
+/** Rôle de plateforme MODERATOR, ADMIN ou BIGBOSS, comparé EXACTEMENT (`platformModerates`, `@meeshy/shared`). Le retrait d'un MESSAGE se lit sur `verdicts.remove` (`messageActionsOf`). */
+export const moderatesPlatformContent = (platformRole: string | null | undefined): boolean =>
+  platformModerates({
+    id: '',
+    hasAccount: true,
+    isAnonymous: false,
+    platformRole: platformRole ?? null,
+    conversationRole: null,
+    canSendMessages: true,
+    isActiveMember: true,
+    isDeclaredMinor: false,
+  });

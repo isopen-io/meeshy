@@ -12,6 +12,7 @@ import { transcriptionOffered } from '@/lib/view/audio-on-demand';
 import { attachmentSendRequest, mediaPageOffers, type MediaViewerCapabilities } from '@/lib/view/viewer-page-offers';
 import { conversationEncrypted } from '@/lib/send/share-entry';
 import { isMineOf } from '@/lib/view/message';
+import { mediaOffersWithin, messageActionsOf } from '@/lib/view/message-action-scope';
 import { ThreadMediaContext } from '@/lib/view/thread-media-context';
 import { threadMediaEntriesOf } from '@/lib/view/thread-media-list';
 import { useMediaHubIndex } from '@/lib/view/use-media-hub-index';
@@ -32,7 +33,9 @@ import { revealedAttachment } from './view-once-opened';
  * suivante — la visionneuse suit sa page par identité.
  *
  * Les cinq actions (Enregistrer, Réagir, Répondre, Partager, Créer avec ce média) sont
- * décidées page par page par `mediaPageOffers`, sur la pièce ORIGINALE.
+ * décidées page par page par `mediaPageOffers`, sur la pièce ORIGINALE, puis
+ * bornées par les verdicts du message pour CE lecteur (`mediaOffersWithin`,
+ * #11372) : Réagir, Répondre et Partager s'y lisent comme au menu du message.
  */
 const NO_LIFTED_IDS: ReadonlySet<string> = new Set();
 
@@ -130,7 +133,8 @@ export default function ThreadMediaViewer({
           if (entry === undefined) return null;
           const now = Date.now();
           const quoted = openedIsQuote && entry.message.id === opened.id;
-          const offers = mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities, now, quoted });
+          const actions = thread?.actionScope === undefined ? null : messageActionsOf(entry.message, thread.actionScope, { now });
+          const offers = mediaOffersWithin(mediaPageOffers({ attachment: entry.attachment, message: entry.message, capabilities, now, quoted }), actions);
           return {
             attachment: entry.attachment,
             messageId: entry.message.id,

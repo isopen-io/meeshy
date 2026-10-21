@@ -171,7 +171,7 @@ public enum AudioWaveform {
 
 /// Vignette FIXE (image) pour les lanes — pendant du filmstrip vidéo.
 /// `CGImageSourceCreateThumbnailAtIndex` décode à la taille cible (jamais le
-/// bitmap plein format en mémoire), cache keyé URL+hauteur.
+/// bitmap plein format en mémoire), cache keyé URL+hauteur+échelle.
 enum ImageStill {
 
     private nonisolated(unsafe) static let cache: NSCache<NSString, UIImage> = {
@@ -182,10 +182,9 @@ enum ImageStill {
         return cache
     }()
 
-    static func thumbnail(url: URL, maxHeight: CGFloat) async -> UIImage? {
-        let key = "\(url.absoluteString)|\(Int(maxHeight))" as NSString
+    static func thumbnail(url: URL, maxHeight: CGFloat, scale: CGFloat) async -> UIImage? {
+        let key = "\(url.absoluteString)|\(Int(maxHeight))|\(scale)" as NSString
         if let cached = cache.object(forKey: key) { return cached }
-        let scale = UIScreen.main.scale
         let image: UIImage? = await Task.detached(priority: .utility) {
             guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
             let options: [CFString: Any] = [

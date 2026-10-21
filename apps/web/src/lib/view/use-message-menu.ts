@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from 'react';
 import type { QueryClient } from '@tanstack/react-query';
 import type { MessageSticker } from '@meeshy/shared/types/message-sticker';
+import type { ActionConversation } from '@meeshy/shared/utils/message-action-policy';
+import { isContactCardAttachment } from '@meeshy/shared/utils/vcard';
 import { useStore } from 'zustand/react';
 
 import { prismFor, served, type Served } from '@/lib/api/prism';
@@ -23,6 +25,8 @@ import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { stickerAddable } from '@/lib/stickers/received';
 import { useStickerLibrary } from '@/lib/stickers/use-sticker-library';
 import { safeLocalStorage } from '@/lib/storage';
+import { saveContactFile } from '@/lib/contact-card/save-contact-file';
+import { coqueCourante } from '@/lib/native-shell';
 
 import {
   forwardMenuItems,
@@ -30,10 +34,13 @@ import {
   messageMenuContextOf,
   messageMenuItems,
   translationChoices,
+  type MenuViewer,
   type MessageActionId,
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
+import { menuViewerRegistered, messageActionsOf, webRepliesToMessage, webSendsHere, type ActionScope } from './message-action-scope';
+import { deviceTranslationPorts, deviceTranslationWanted, requestDeviceTranslation, type DeviceTranslationPorts } from './device-translation-request';
 import { contentExitOf, exitOffers } from './content-exit';
 import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
@@ -42,7 +49,7 @@ import { PIECE_ATTRIBUTE, pieceIdAt, soleSaveablePieceOf, targetedPieceOf } from
 import { prewarmPieceReaction, usePieceMenu, type PieceMenuData } from './use-piece-menu';
 import { copyPlainText } from './copy-text';
 import { isMineOf } from './message';
-import { stickerOf } from './message-body';
+import { mapsUrlOf, stickerOf } from './message-body';
 import { editOffered } from './message-edit';
 import { useDoubleTap, type DoubleTap } from './use-double-tap';
 import { SELECTION_CAP, copyTextOf, orderedIds, selectionReducer, type SelectionState } from './selection';
@@ -59,10 +66,14 @@ import { useMessageStar, type MessageStarEntry } from './use-message-star';
  * rend, motif `useSend`/`useThreadScene`.
  *
  * SANS RÈGLE PROPRE — la loi vient d'ailleurs à chaque fois : `served()`
- * (D-14, le Prisme), `messageMenuItems`/`translationChoices`
- * (`message-actions.ts`), `selectionReducer` (`selection.ts`), `reactAction`
- * (`api/query.ts`, qui délègue à `performReaction`). Ce fichier ne fait que
- * les COMPOSER derrière une surface stable pour l'hôte.
+ * (D-14, le Prisme), `messageActionsFor` (`@meeshy/shared`, #11210) pour TOUT
+ * ce qu'un rôle, un auteur, un compte ou le chiffrement décide — lu par
+ * `message-action-scope.ts` et projeté par `messageMenuItems` —,
+ * `translationChoices` (`message-actions.ts`), `selectionReducer`
+ * (`selection.ts`), `reactAction` (`api/query.ts`, qui délègue à
+ * `performReaction`). Le lecteur et la conversation lui sont REMIS par
+ * l'hôte (`menuViewerOf`, `menuConversationOf`) : il n'en déduit rien. Ce
+ * fichier ne fait que COMPOSER ces lois derrière une surface stable.
  */
 
 type PieceMenuTransport = { readonly request: <T>(request: HttpRequest) => Promise<ApiResult<T>> };
@@ -100,6 +111,11 @@ export type QuickReactionTarget = {
   readonly pieceId?: string;
 };
 
+/** LES GESTES DU TYPE (#11210) — ce que le contenu EST ajoute au menu : un lien, un lieu, une carte de contact. */
+type TypeActionId = Extract<MessageActionId, 'openLink' | 'copyLink' | 'openInMaps' | 'copyAddress' | 'saveContact'>;
+const TYPE_ACTIONS: ReadonlySet<MessageActionId> = new Set<TypeActionId>(['openLink', 'copyLink', 'openInMaps', 'copyAddress', 'saveContact']);
+const isTypeAction = (id: MessageActionId): id is TypeActionId => TYPE_ACTIONS.has(id);
+
 /** Le menu d'un STICKER (#10630) : hors bibliothèque tant qu'elle n'est pas lue, l'ajout est offert — le doublon se déduplique côté serveur. */
 const stickerContextOf = (
   message: Message,
@@ -115,9 +131,17 @@ export function useMessageMenu(params: {
   readonly messages: readonly Message[];
   readonly readerLanguages: readonly string[];
   readonly readerLocale: string;
-  readonly viewerId: string;
-  /** Le lecteur a un COMPTE : le favori est réservé aux inscrits (#7377), l'invité d'un lien n'en a pas. */
-  readonly canStar: boolean;
+  /**
+   * QUI LIT (#11210) — explicite : son compte, son rôle de plateforme, son rôle
+   * dans la conversation, sa permission d'écrire (`menuViewerOf`). Le hook n'en
+   * déduit rien : le favori, l'épingle, la suppression et la modération lisent
+   * les verdicts de `messageActionsFor`.
+   */
+  readonly viewer: MenuViewer;
+  /** LA CONVERSATION (#11210, `menuConversationOf`) — type, régime de chiffrement, écriture ; non lue, son régime est inconnu, donc chiffré. */
+  readonly conversation: ActionConversation;
+  /** L'ENVOI DU FIL (#11210, `useSend`) — « Réessayer » relance un envoi en échec ; absent, rien ne s'offre. */
+  readonly send?: { readonly retry: (messageId: string) => void; readonly failed: (messageId: string) => boolean };
   /**
    * ARME LA RÉPONSE — au message (`setReplyTarget`, `onCompose` jusqu'à #7555,
    * où le mot est rendu au sens iOS) ou à UNE pièce (`setReplyToMedia`, #9908,
@@ -138,15 +162,43 @@ export function useMessageMenu(params: {
    * `use-live-announcer.ts`).
    */
   readonly announce: (message: string) => void;
-  /** LE LECTEUR MODÈRE CETTE CONVERSATION (#11150, `moderatesConversation`) : « Retirer » s'offre sur le message d'un autre. */
-  readonly moderates?: boolean;
   /** INJECTABLES pour les témoins — le cache et le transport de l'application par défaut. */
   readonly queryClient?: QueryClient;
   readonly transport?: PieceMenuTransport;
   /** La source servie au signalement (`reports.ts` se tait sur les fixtures) — celle de l'application par défaut. */
   readonly source?: DataSource;
+  /** « Traduire sur l'appareil » (#11210) — le consentement et le moteur de l'application par défaut. */
+  readonly deviceTranslation?: DeviceTranslationPorts;
 }) {
-  const { conversationId, messages, readerLanguages, viewerId, announce } = params;
+  const { conversationId, messages, readerLanguages, announce, viewer, send } = params;
+  const viewerId = viewer.id;
+  const { conversation } = params;
+  /* LE LECTEUR ET LA CONVERSATION, PAR LEURS VALEURS — l'hôte les recompose à chaque rendu. */
+  const scope = useMemo<ActionScope>(
+    () => ({ viewer, conversation }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [viewer.id, viewer.participantId, viewer.hasAccount, viewer.isAnonymous, viewer.platformRole, viewer.conversationRole, viewer.canSendMessages, viewer.isActiveMember,
+      conversation.type, conversation.encryptionMode, conversation.isActive, conversation.closedAt, conversation.isAnnouncementChannel, conversation.defaultWriteRole],
+  );
+  const registered = menuViewerRegistered(viewer);
+  const failedOf = useCallback((messageId: string): boolean => send?.failed(messageId) === true, [send]);
+  /**
+   * LES VERDICTS D'UN MESSAGE (#11210) — la loi partagée, lue par TOUTES les
+   * portes du menu : le menu rapide, celui d'une pièce, la barre de sélection,
+   * le rail et le double toucher. Aucune ne garde une règle à elle.
+   */
+  const actionsOf = useCallback(
+    (message: Message) => messageActionsOf(message, scope, { now: Date.now(), failed: failedOf(message.id) }),
+    [scope, failedOf],
+  );
+  /**
+   * LE CONTEXTE DU MENU D'UN MESSAGE, POUR CE LECTEUR (#11372) — « Plus… »,
+   * les exports et les gestes du type le lisent avec les verdicts, jamais sans.
+   */
+  const menuContextOf = useCallback(
+    (message: Message) => messageMenuContextOf(message, { now: Date.now(), scope, failed: failedOf(message.id) }),
+    [scope, failedOf],
+  );
 
   const [menuTarget, setMenuTarget] = useState<MessageMenuTargetState | null>(null);
   const [displayLanguages, setDisplayLanguages] = useState<ReadonlyMap<string, string>>(new Map());
@@ -158,6 +210,31 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+  /**
+   * RÉPONDRE À CE MESSAGE EST-IL POSSIBLE D'ICI ? (#11372) — le droit d'écrire
+   * et un envoi que le web sait faire (`webRepliesToMessage` : jamais en bout en
+   * bout). Le menu, le glissé, le résumé et la visionneuse lisent cette réponse.
+   */
+  const replyableOf = useCallback(
+    (messageId: string): boolean => {
+      const message = messageOf(messageId);
+      return message !== undefined && webRepliesToMessage(message, scope, { now: Date.now(), failed: failedOf(messageId) });
+    },
+    [messageOf, scope, failedOf],
+  );
+  /**
+   * « RÉESSAYER » EST-IL POSSIBLE D'ICI ? (#11372) — un envoi en échec ET un
+   * envoi que le web sait faire (`webSendsHere`) : en bout en bout, le rejeu
+   * partirait en clair. Le menu, le bouton en ligne de la rangée et le geste
+   * lisent cette réponse.
+   */
+  const retryableOf = useCallback(
+    (messageId: string): boolean => {
+      const message = messageOf(messageId);
+      return message !== undefined && failedOf(messageId) && webSendsHere(actionsOf(message));
+    },
+    [messageOf, failedOf, actionsOf],
+  );
   /* D7 — la source est-elle chiffrée ? Lu dans le cache de la conversation, au moment du geste. */
   const sourceEncrypted = useCallback(
     () => conversationEncrypted(findCachedConversation(params.queryClient ?? appQueryClient, conversationId)),
@@ -170,6 +247,7 @@ export function useMessageMenu(params: {
     conversationId,
     viewerId,
     messageOf,
+    actionsOf,
     onReplyToMedia: params.reply.setReplyToMedia,
     announce,
     queryClient: params.queryClient ?? appQueryClient,
@@ -182,7 +260,7 @@ export function useMessageMenu(params: {
   }, []);
 
   /** LE FAVORI (#7378) — l'état CONNU dès l'ouverture du fil, offert par « Plus… » (`use-message-star.ts`). */
-  const starEntryOf = useMessageStar({ enabled: params.canStar, announce });
+  const starEntryOf = useMessageStar({ enabled: registered, announce });
   const starOf = useCallback((messageId: string): MessageStarEntry | null => starEntryOf(messageOf(messageId)), [starEntryOf, messageOf]);
 
   /** Le texte SERVI d'UN message, `displayLanguage` inséré au rang 0 du
@@ -210,16 +288,15 @@ export function useMessageMenu(params: {
    * et « Plus… » lisent cette même réponse.
    */
   const beginEdit = params.reply.beginEdit;
-  const hasAccount = params.canStar;
   const editOf = useCallback(
     (messageId: string): (() => void) | null => {
       const message = messageOf(messageId);
       if (message === undefined || beginEdit === undefined) return null;
       if (!isMessagePiecesCatalogLoaded(currentInterfaceLanguage())) return null;
-      if (!editOffered(message, { id: viewerId, hasAccount }, { now: Date.now() })) return null;
+      if (!editOffered(message, scope, { now: Date.now() })) return null;
       return () => beginEdit(messageId);
     },
-    [messageOf, beginEdit, viewerId, hasAccount],
+    [messageOf, beginEdit, scope],
   );
 
   /**
@@ -227,19 +304,17 @@ export function useMessageMenu(params: {
    * offerts à « Plus… » pour un message et à la barre pour la sélection. Le
    * geste parti, la sélection se termine.
    */
-  const moderates = params.moderates === true;
-  const deleteViewer = useMemo(() => ({ id: viewerId, hasAccount, moderates }), [viewerId, hasAccount, moderates]);
   const endSelection = useCallback(() => setSelection(null), []);
   const deletion = useMessageDelete({
     conversationId,
     messageOf,
-    viewer: deleteViewer,
+    scope,
     announce,
     queryClient: params.queryClient ?? appQueryClient,
     transport: params.transport ?? apiDeps.transport,
     onConfirmed: endSelection,
   });
-  const { ask: askDelete, offerOf: deleteOfferFor } = deletion;
+  const { ask: askDelete, askRemove, offerOf: deleteOfferFor } = deletion;
   const deleteOf = useCallback(
     (messageId: string): (() => void) | null => (deleteOfferFor([messageId]) === null ? null : () => askDelete([messageId])),
     [deleteOfferFor, askDelete],
@@ -251,11 +326,11 @@ export function useMessageMenu(params: {
    * (`use-message-report.ts`).
    */
   const transport = params.transport ?? apiDeps.transport;
-  const pinEntryOf = useMessagePin({ conversationId, viewer: deleteViewer, announce, queryClient: params.queryClient ?? appQueryClient, transport });
+  const pinEntryOf = useMessagePin({ conversationId, scope, announce, queryClient: params.queryClient ?? appQueryClient, transport });
   const pinOf = useCallback((messageId: string): MessagePinEntry | null => pinEntryOf(messageOf(messageId)), [pinEntryOf, messageOf]);
   const source = params.source ?? apiDeps.source;
   const reportDeps = useMemo(() => ({ source, transport }), [source, transport]);
-  const reporting = useMessageReport({ messageOf, viewer: deleteViewer, announce, deps: reportDeps });
+  const reporting = useMessageReport({ messageOf, scope, announce, deps: reportDeps });
 
   /** L'ordre est celui du FIL (`orderedIds`), comme pour le transfert : la boucle « pour tous » supprime dans l'ordre où on lit. */
   const onDeleteSelection = useCallback(
@@ -395,6 +470,8 @@ export function useMessageMenu(params: {
    * ouvert, la barre ouverte et la sélection le neutralisent.
    */
   const [quickReactionFor, setQuickReactionFor] = useState<QuickReactionTarget | null>(null);
+  /** Réagir : la loi du double toucher (ni supprimé, ni échu, ni envoi local) ET le verdict `canReact` (membre, droit d'envoi). */
+  const reactableOf = useCallback((message: Message): boolean => doubleTapReactable(message, Date.now()) && actionsOf(message).verdicts.canReact, [actionsOf]);
   const onCloseQuickReaction = useCallback(() => setQuickReactionFor(null), []);
   const blockedRef = useRef(false);
   blockedRef.current = selection !== null || menuTarget !== null || quickReactionFor !== null;
@@ -402,7 +479,7 @@ export function useMessageMenu(params: {
     ({ row, origin, x }: DoubleTap) => {
       const messageId = row.dataset.row;
       const message = messageId === undefined ? undefined : messageOf(messageId);
-      if (message === undefined || !doubleTapReactable(message, Date.now())) return;
+      if (message === undefined || !reactableOf(message)) return;
       const pieceId = pieceIdAt(origin, row);
       const reactsOnPiece = pieceId !== undefined && pieceDataOf(message.id, pieceId)?.canReact === true;
       if (reactsOnPiece) prewarmPieceReaction();
@@ -414,7 +491,7 @@ export function useMessageMenu(params: {
         ...(reactsOnPiece ? { pieceId } : {}),
       });
     },
-    [messageOf, pieceDataOf],
+    [messageOf, pieceDataOf, reactableOf],
   );
   const doubleTap = useDoubleTap({ enabled: () => !blockedRef.current, onDoubleTap });
 
@@ -462,6 +539,38 @@ export function useMessageMenu(params: {
     });
   }, []);
 
+  /**
+   * LES GESTES DU TYPE (#11210) — un lien s'ouvre ou se copie, un lieu s'ouvre
+   * dans une carte ou se copie, une carte de contact s'enregistre. Ce qui SORT
+   * de Meeshy repasse par la loi de sortie, comme « Copier ».
+   */
+  const runTypeAction = useCallback(
+    (id: TypeActionId, message: Message) => {
+      const lang = currentInterfaceLanguage();
+      const ctx = menuContextOf(message);
+      const leaves = !ctx.isProtected && ctx.leaves !== false;
+      const link = ctx.link ?? null;
+      const place = ctx.place ?? null;
+      const card = message.attachments?.find((piece) => isContactCardAttachment({ mimeType: piece.mimeType, fileName: piece.originalName ?? piece.fileName }));
+      const open = (url: string) => void window.open(url, '_blank', 'noopener,noreferrer');
+      const copy = (text: string, done: 'message.link.copied' | 'message.location.copied') =>
+        void copyPlainText(text).then((outcome) => announce(outcome === 'copied' ? translateMessagePieces(lang, done) : translate(lang, 'feed.post.copy_failed')));
+      const saveCard = (attachment: NonNullable<typeof card>) =>
+        void saveContactFile({ attachment }).then((outcome) => {
+          if (outcome === 'failed') announce(translate(lang, 'contactCard.downloadFailed'));
+        });
+      const gestures: Readonly<Record<TypeActionId, (() => void) | null>> = {
+        openLink: link === null ? null : () => open(link),
+        copyLink: link === null || !leaves ? null : () => copy(link, 'message.link.copied'),
+        openInMaps: place === null ? null : () => open(mapsUrlOf(place, { platform: coqueCourante()?.getPlatform?.() })),
+        copyAddress: place === null || !leaves ? null : () => copy(place.address ?? place.name ?? `${place.latitude}, ${place.longitude}`, 'message.location.copied'),
+        saveContact: card === undefined || !leaves ? null : () => saveCard(card),
+      };
+      gestures[id]?.();
+    },
+    [announce, menuContextOf],
+  );
+
   const onMenuAction = useCallback(
     (messageId: string, id: MessageActionId) => {
       if (id === 'copy') {
@@ -476,6 +585,7 @@ export function useMessageMenu(params: {
         return;
       }
       if (id === 'reply') {
+        if (!replyableOf(messageId)) return;
         focusTakenRef.current = true;
         params.reply.setReplyTarget(messageId);
         return;
@@ -487,6 +597,47 @@ export function useMessageMenu(params: {
         edit();
         return;
       }
+      if (id === 'retry') {
+        if (retryableOf(messageId)) send?.retry(messageId);
+        return;
+      }
+      if (id === 'translateOnDevice') {
+        const message = messageOf(messageId);
+        if (message === undefined || actionsOf(message).verdicts.translate !== 'device') return;
+        if (!deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null })) return;
+        void requestDeviceTranslation({
+          ports: params.deviceTranslation ?? deviceTranslationPorts,
+          queryClient: params.queryClient ?? appQueryClient,
+          params: { messages: [message], viewerId, preferredLanguages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null },
+        })
+          .then((outcome) =>
+            announce(
+              translateMessagePieces(
+                currentInterfaceLanguage(),
+                outcome === 'queued' ? 'message.menu.translateOnDevice.queued' : 'message.menu.translateOnDevice.consent',
+              ),
+            ),
+          )
+          .catch(() => undefined);
+        return;
+      }
+      if (isTypeAction(id)) {
+        const message = messageOf(messageId);
+        if (message !== undefined) runTypeAction(id, message);
+        return;
+      }
+      if (id === 'pin' || id === 'unpin') {
+        pinOf(messageId)?.onToggle();
+        return;
+      }
+      if (id === 'delete') {
+        askDelete([messageId]);
+        return;
+      }
+      if (id === 'remove') {
+        askRemove([messageId]);
+        return;
+      }
       /**
        * « TRANSFÉRER » OUVRE L'ÉCRAN DE PARTAGE (D1, #10949, porteur
        * 2026-10-18 — supplante #5989) — depuis toutes les portes, avec CE
@@ -495,7 +646,7 @@ export function useMessageMenu(params: {
       if (id === 'forward') {
         const message = messageOf(messageId);
         const now = Date.now();
-        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, now);
+        const refusal = message === undefined ? 'unavailable' : forwardRefusalOf(message, now) ?? (actionsOf(message).verdicts.forward ? null : 'unavailable');
         if (message === undefined || refusal !== null) {
           announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[refusal ?? 'unavailable']));
           return;
@@ -532,7 +683,7 @@ export function useMessageMenu(params: {
       }
       if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
         const message = messageOf(messageId);
-        if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
+        if (message === undefined || !imageableOf(menuContextOf(message))) return;
         if (id === 'exportDiscussion' && !discussionImageableOf(messageId)) return;
         focusTakenRef.current = true;
         setExportFor(id === 'exportDiscussion' ? { messageId, quick: false, scope: 'discussion' } : { messageId, quick: id === 'exportQuick' });
@@ -541,7 +692,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation, replyableOf, retryableOf, menuContextOf],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -563,6 +714,19 @@ export function useMessageMenu(params: {
 
   const onEndSelection = useCallback(() => setSelection(null), []);
 
+  /**
+   * LA LOI PARTAGÉE BORNE LA SÉLECTION (#11210) — `verdicts.forward` (bout en
+   * bout, avis système, envoi local) s'ajoute à la loi de sortie. Un protégé
+   * (vue unique, flamme) reste dans la demande : l'écran de partage le RETIRE
+   * avec son motif (D6). Ce que la loi refuse pour une autre raison n'y entre
+   * pas : une sélection dont rien n'est transférable n'est pas admise.
+   */
+  const forwardableOf = useCallback((message: Message): boolean => actionsOf(message).verdicts.forward, [actionsOf]);
+  const forwardCandidatesOf = useCallback(
+    (picked: readonly Message[], now: number): readonly Message[] =>
+      picked.filter((m) => forwardableOf(m) || forwardRefusalOf(m, now) !== null),
+    [forwardableOf],
+  );
   /**
    * LE GESTE DE LA BARRE (#5866, #8884) — il ADMET d'abord, il ouvre ensuite.
    *
@@ -588,8 +752,11 @@ export function useMessageMenu(params: {
     (placed: readonly { readonly message: { readonly id: string } }[]) => {
       if (selection === null) return;
       const ids = orderedIds(placed, new Set(selection.ids));
-      const candidates = ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
       const now = Date.now();
+      const candidates = forwardCandidatesOf(
+        ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined),
+        now,
+      );
       const admission = admitForward(candidates, now);
       if (!admission.admitted) {
         announce(translate(currentInterfaceLanguage(), FORWARD_REFUSAL_KEY[admission.reason]));
@@ -598,7 +765,7 @@ export function useMessageMenu(params: {
       setSelection(null);
       openSendSheet(forwardRequestOf({ conversationId, messages: candidates, now, sourceEncrypted: sourceEncrypted() }));
     },
-    [selection, messageOf, announce, conversationId, sourceEncrypted],
+    [selection, messageOf, announce, conversationId, sourceEncrypted, forwardCandidatesOf],
   );
 
   /**
@@ -611,7 +778,7 @@ export function useMessageMenu(params: {
     if (selection === null) return { forward: false, copy: false, delete: false };
     const picked = selection.ids.map((id) => messageOf(id)).filter((m): m is Message => m !== undefined);
     return {
-      forward: admitForward(picked, Date.now()).admitted,
+      forward: admitForward(forwardCandidatesOf(picked, Date.now()), Date.now()).admitted,
       copy: selection.ids.some((id) => (copyableTextOf(id) ?? '') !== ''),
       delete: deleteOfferFor(selection.ids) !== null,
     };
@@ -646,10 +813,10 @@ export function useMessageMenu(params: {
   const swipeActionsOf = useCallback(
     (message: Message): { readonly canReply: boolean; readonly canForward: boolean } | undefined => {
       if (selection !== null) return undefined;
-      const ids = messageMenuItems(messageMenuContextOf(message, { now: Date.now() })).map((item) => item.id);
+      const ids = messageMenuItems(menuContextOf(message)).map((item) => item.id);
       return { canReply: ids.includes('reply'), canForward: ids.includes('forward') };
     },
-    [selection],
+    [selection, menuContextOf],
   );
 
   /** Les données du menu OUVERT — `undefined` tant qu'aucun message n'est
@@ -680,8 +847,12 @@ export function useMessageMenu(params: {
     if (menuTarget === null) return undefined;
     const message = messageOf(menuTarget.messageId);
     if (message === undefined) return undefined;
+    const lang = currentInterfaceLanguage();
     const ctx = {
-      ...messageMenuContextOf(message, { now: Date.now() }),
+      ...menuContextOf(message),
+      canRetry: send !== undefined,
+      deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages, conversationEncryptionMode: conversation.encryptionMode ?? null }),
+      piecesLabels: isMessagePiecesCatalogLoaded(lang),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
       canEdit: editOf(menuTarget.messageId) !== null,
@@ -689,7 +860,6 @@ export function useMessageMenu(params: {
       ...stickerContextOf(message, stickerLibrary),
     };
     const servedLanguage = servedOf(menuTarget.messageId)?.language ?? '';
-    const lang = currentInterfaceLanguage();
     const author = message.sender?.displayName ?? translate(lang, 'message.author.self');
     const text = copyableTextOf(menuTarget.messageId);
     const excerpt =
@@ -700,7 +870,7 @@ export function useMessageMenu(params: {
       forwardItems: forwardMenuItems(ctx),
       choices: translationChoices({ message, preferredLanguages: readerLanguages, servedLanguage }),
       subjectLabel: translate(lang, 'a11y.message.menu.subject', { author, excerpt }),
-      canReact: doubleTapReactable(message, Date.now()),
+      canReact: reactableOf(message),
       ...(pieceData === undefined ? {} : { piece: pieceData }),
     };
   })();
@@ -745,6 +915,11 @@ export function useMessageMenu(params: {
     onPickReportReason: reporting.onPickReportReason,
     onDismissReport: reporting.onDismissReport,
     swipeActionsOf,
+    scope,
+    menuContextOf,
+    replyableOf,
+    retryableOf,
+    reactableOf,
   };
 }
 

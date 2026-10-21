@@ -14,6 +14,8 @@ import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
 
 import { DOUBLE_TAP_GAP_MS } from './double-tap';
+import { menuConversation, menuViewer } from '@/test-support/menu-viewer';
+
 import { useMessageMenu } from './use-message-menu';
 
 /**
@@ -98,8 +100,8 @@ function mount(lot: Message): { api: () => MenuApi; opened: string[]; controls: 
       messages: [lot],
       readerLanguages: ['fr'],
       readerLocale: 'fr-FR',
-      viewerId: 'u-viewer',
-      canStar: false,
+      viewer: menuViewer({ hasAccount: false }),
+      conversation: menuConversation(),
       reply: { setReplyTarget: () => {}, setReplyToMedia: () => {} },
       announce: () => {},
       queryClient,
