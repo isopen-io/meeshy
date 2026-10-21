@@ -52,7 +52,7 @@ extension GameText {
     static var bannerTop: String { String(localized: "game2.banner.top", defaultValue: "au sommet", bundle: .main) }
 
     static func bannerLeague(league: String, place: String) -> String {
-        String(localized: "game2.banner.league", defaultValue: "ligue \(league) \(place)", bundle: .main)
+        String(localized: "game2.banner.league", defaultValue: "joute de \(league) · \(place)", bundle: .main)
     }
 
     static func bannerFlame(days: String) -> String {
@@ -75,23 +75,23 @@ extension GameText {
     static var bannerHint: String { String(localized: "game2.banner.hint", defaultValue: "Ouvre ta progression", bundle: .main) }
 
     static func bannerPoints(points: String) -> String {
-        String(localized: "game2.banner.points", defaultValue: "\(points) pts", bundle: .main)
+        String(localized: "game2.banner.points", defaultValue: "\(points) étincelles", bundle: .main)
     }
 
     /// Ce qu'il reste nomme le niveau visé (#10540) : « encore 1 301 vers le 28 », jamais « encore 1 301 » à côté
     /// d'un total de points.
     static func bannerMissing(points: String, level: String) -> String {
-        String(localized: "game2.banner.missing", defaultValue: "\(points) vers le \(level)", bundle: .main)
+        String(localized: "game2.banner.missing", defaultValue: "\(points) jusqu’au niveau \(level)", bundle: .main)
     }
 
     /// « 466 vers Voix I » — ce qui manque au rang suivant (#11125).
     static func bannerGloryMissing(points: String, rank: String) -> String {
-        String(localized: "game2.banner.glory.missing", defaultValue: "\(points) vers \(rank)", bundle: .main)
+        String(localized: "game2.banner.glory.missing", defaultValue: "\(points) jusqu’à \(rank)", bundle: .main)
     }
 
     /// « Gloire 990 000 » — au sommet, le total remplace ce qui manque.
     static func bannerGloryTotal(points: String) -> String {
-        String(localized: "game.rank.glory", defaultValue: "Gloire \(points)", bundle: .main)
+        String(localized: "game.rank.glory", defaultValue: "\(points) de gloire", bundle: .main)
     }
 
     static var bannerSeparator: String { String(localized: "game2.banner.separator", defaultValue: ", ", bundle: .main) }
@@ -114,29 +114,29 @@ extension GameText {
 
     static var visibilityMe: String { String(localized: "game2.visibility.me", defaultValue: "Moi seul", bundle: .main) }
 
-    static var doorLeague: String { String(localized: "game2.door.league", defaultValue: "Ligue", bundle: .main) }
+    static var doorLeague: String { String(localized: "game2.door.league", defaultValue: "Joute", bundle: .main) }
 
     static func doorLeagueLocked(level: String) -> String {
         String(localized: "game2.door.league.locked", defaultValue: "Dès le niveau \(level)", bundle: .main)
     }
 
-    static var doorLeagueOpen: String { String(localized: "game2.door.league.open", defaultValue: "Classement de la semaine", bundle: .main) }
+    static var doorLeagueOpen: String { String(localized: "game2.door.league.open", defaultValue: "La joute de la semaine", bundle: .main) }
 
     static func doorSeason(number: String) -> String {
-        String(localized: "game2.door.season", defaultValue: "Saison \(number)", bundle: .main)
+        String(localized: "game2.door.season", defaultValue: "Voyage \(number)", bundle: .main)
     }
 
     static func doorSeasonSteps(steps: String, total: String) -> String {
-        String(localized: "game2.door.season.steps", defaultValue: "Étape \(steps) sur \(total)", bundle: .main)
+        String(localized: "game2.door.season.steps", defaultValue: "Halte \(steps) sur \(total)", bundle: .main)
     }
 
-    static var doorSeasonNone: String { String(localized: "game2.door.season.none", defaultValue: "Aucune saison ouverte pour le moment", bundle: .main) }
+    static var doorSeasonNone: String { String(localized: "game2.door.season.none", defaultValue: "Aucun voyage en cours pour le moment", bundle: .main) }
     /// « Ouvre le 21 décembre 2026 » — la saison à venir (#10014).
     static func doorSeasonUpcoming(date: String) -> String {
         String(localized: "game2.door.season.upcoming", defaultValue: "Ouvre le \(date)", bundle: .main)
     }
 
-    static var doorShowcase: String { String(localized: "game2.door.showcase", defaultValue: "Vitrine de trophées", bundle: .main) }
+    static var doorShowcase: String { String(localized: "game2.door.showcase", defaultValue: "Trophées", bundle: .main) }
 
     static func doorShowcaseCount(count: Int) -> String {
         let number = GameCopy.formatCount(count)
@@ -153,9 +153,9 @@ extension GameText {
         String(localized: "game2.door.atlas.count", defaultValue: "\(stamped) langues sur \(total)", bundle: .main)
     }
 
-    static var doorPrestige: String { String(localized: "game2.door.prestige", defaultValue: "Prestige", bundle: .main) }
+    static var doorPrestige: String { String(localized: "game2.door.prestige", defaultValue: "Renaissance", bundle: .main) }
 
-    static var doorPrestigeReady: String { String(localized: "game2.door.prestige.ready", defaultValue: "Tu peux passer en Prestige", bundle: .main) }
+    static var doorPrestigeReady: String { String(localized: "game2.door.prestige.ready", defaultValue: "Ta lumière peut renaître", bundle: .main) }
 
     static var doorPrestigeLocked: String { String(localized: "game2.door.prestige.locked", defaultValue: "Au niveau 100", bundle: .main) }
 
@@ -167,11 +167,11 @@ extension GameText {
 
     static var doorsLabel: String { String(localized: "game2.doors.label", defaultValue: "Le jeu", bundle: .main) }
 
-    static var visibilityFieldShowcase: String { String(localized: "game2.visibility.field.showcase", defaultValue: "Vitrine de trophées", bundle: .main) }
+    static var visibilityFieldShowcase: String { String(localized: "game2.visibility.field.showcase", defaultValue: "Trophées", bundle: .main) }
 
     static var visibilityFieldRank: String { String(localized: "game2.visibility.field.rank", defaultValue: "Rang et niveau", bundle: .main) }
 
-    static var visibilityFieldTreasury: String { String(localized: "game2.visibility.field.treasury", defaultValue: "Trésor et Flamme", bundle: .main) }
+    static var visibilityFieldTreasury: String { String(localized: "game2.visibility.field.treasury", defaultValue: "Héritage et Flamme", bundle: .main) }
 
     static var visibilityFieldAtlas: String { String(localized: "game2.visibility.field.atlas", defaultValue: "Atlas des langues", bundle: .main) }
 

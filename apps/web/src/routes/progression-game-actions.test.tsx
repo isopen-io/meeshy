@@ -382,6 +382,41 @@ describe('la frappe séquencée', () => {
     expect(actions().pending.mint).toBe(false);
   });
 
+  test('la confirmation arrive à la scène pendant le geste, avec la pièce frappée (#11177)', async () => {
+    const before = seed();
+    const { gate } = staged();
+    const { actions } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'minted', balance: 5, mintedLifetime: 4, number: 4, edition: 'silver' }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'confirmed', coin: { number: 4, edition: 'silver' } });
+  });
+
+  test('un refus arrive à la scène avec son code : Mee dira ce qui bloque (#11177)', async () => {
+    const { gate } = staged();
+    const { actions } = await bench(seed(), (req) => (mintPath(req) ? refused('MINT_BLOCKED_BY_DEBT') : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'refused', code: 'MINT_BLOCKED_BY_DEBT' });
+  });
+
+  test('la passerelle injoignable : la scène l’apprend comme un refus réseau (#11177)', async () => {
+    const { gate } = staged();
+    const { actions } = await bench(seed(), (req) => (mintPath(req) ? { ok: false, status: 0, error: 'hors ligne' } : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'refused', code: 'NETWORK' });
+  });
+
+  test('une frappe que la passerelle juge impossible est un refus, pas une fête (#11177)', async () => {
+    const before = seed();
+    const { gate } = staged();
+    const { actions, cached } = await bench(before, (req) => (mintPath(req) ? ok({ status: 'insufficient', balance: 5 }) : undefined), undefined, gate);
+    await act(async () => actions().mint());
+    await settle();
+    expect(gate.answer()).toEqual({ kind: 'refused', code: 'INSUFFICIENT_POINTS' });
+    expect(gameOf(cached()).treasury.held).toBe(gameOf(before).treasury.held);
+  });
+
   test('sans scène à l’écran, rien n’attend : le compteur monte tout de suite', async () => {
     const before = seed();
     const gate = createStrikeGate({ staged: () => false });

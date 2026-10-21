@@ -132,11 +132,11 @@ enum FrameUsageCopy {
 
     static func momentFamilyName(_ family: FrameMomentFamily) -> String {
         switch family {
-        case .tier: String(localized: "game.frame.family.tier", defaultValue: "Palier de niveau", bundle: .main)
+        case .tier: String(localized: "game.frame.family.tier", defaultValue: "État de lumière", bundle: .main)
         case .meesh: String(localized: "game.frame.family.meesh", defaultValue: "Meesh frappée", bundle: .main)
-        case .treasury: String(localized: "game.frame.family.treasury", defaultValue: "Palier du trésor", bundle: .main)
+        case .treasury: String(localized: "game.frame.family.treasury", defaultValue: "Contenant de l’Héritage", bundle: .main)
         case .flame: String(localized: "game.frame.family.flame", defaultValue: "Flamme", bundle: .main)
-        case .day: String(localized: "game.frame.family.day", defaultValue: "Réalisation du jour", bundle: .main)
+        case .day: String(localized: "game.frame.family.day", defaultValue: "Rêve réalisé", bundle: .main)
         case .level100: String(localized: "game.frame.family.level-100", defaultValue: "Niveau 100", bundle: .main)
         }
     }

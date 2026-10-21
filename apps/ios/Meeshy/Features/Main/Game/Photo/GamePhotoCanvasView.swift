@@ -185,7 +185,7 @@ struct GamePhotoEmblem: View {
             TrophyView(material: trophyMaterial, label: moment.kicker.uppercased())
         case .mission:
             // La plaque de la coupe est courte (≈ 12 signes) : « Mission accomplie » n'y tient pas.
-            TrophyView(material: trophyMaterial, label: String(localized: "game.photo.trophy.mission", defaultValue: "Mission", bundle: .main).uppercased())
+            TrophyView(material: trophyMaterial, label: String(localized: "game.photo.trophy.mission", defaultValue: "Rêve", bundle: .main).uppercased())
         case .trophy(let key):
             if let view = GameTrophyPresentation.of(key: key) {
                 TrophyView(material: view.material, label: view.plate, figures: view.kind == .prestige ? GameFigures.standard : nil)

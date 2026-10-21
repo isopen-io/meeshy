@@ -84,7 +84,7 @@ describe('la plaque complète', () => {
     const plate = authorPlateOf(achievement('legendary'), author('atabeth'), 'fr');
     expect(plate).toMatchObject({ family: 'achievement', finish: 'emboss', metal: 'gold', caption: 'Haut fait de', name: '@atabeth', monogram: 'AT', label: 'Haut fait de @atabeth' });
     expect(authorPlateOf({ kind: 'rank', rank: 'voix', division: 2, mythic: null }, author('atabeth'), 'en')?.caption).toBe('Rank reached by');
-    expect(authorPlateOf({ kind: 'mission', templateKey: 'send_voice', target: 3 }, author('atabeth'), 'de')?.caption).toBe('Mission erfüllt von');
+    expect(authorPlateOf({ kind: 'mission', templateKey: 'send_voice', target: 3 }, author('atabeth'), 'de')?.caption).toBe('Traum erfüllt von');
   });
 
   test('la photo de profil voyage avec la plaque quand elle existe', () => {

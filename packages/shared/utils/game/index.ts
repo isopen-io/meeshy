@@ -2,6 +2,7 @@
 export * from './day-prng.js';
 export * from './levels.js';
 export * from './mint.js';
+export * from './mint-ceremony.js';
 export * from './glory.js';
 export * from './treasury.js';
 export * from './flame.js';

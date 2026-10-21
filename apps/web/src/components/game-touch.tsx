@@ -171,13 +171,17 @@ export type GameSpendLineProps = {
   readonly missing: GameMissingLine;
 };
 
+/**
+ * CE QU'UN GESTE DÉPENSE : ce qu'on a, ce qu'il faut, et ce qu'il manque quand il manque. Jamais ce qui RESTERA
+ * (#11178, épopée § 3.3) : une soustraction n'est pas un fait de la fiche, et le solde d'après se lit, après le
+ * geste, à sa place.
+ */
 export function GameSpendLine({ concept, held, cost, spendable, format, formatMissing = format, heldFact = 'spend_held', between, missing }: GameSpendLineProps) {
   const spend = spendPreview(spendable === undefined ? { held, cost } : { held, cost, spendable });
   const chips: readonly GameFactChip[] = [
     { fact: heldFact, label: gameText('game.fact.balance'), value: format(spend.held) },
     ...(between === undefined ? [] : [between]),
     { fact: 'spend_cost', label: gameText('game.fact.cost'), value: format(spend.cost) },
-    ...(spend.affordable ? [{ fact: 'spend_after', label: gameText('game.fact.after'), value: format(spend.after) } satisfies GameFactChip] : []),
   ];
   return (
     <>
