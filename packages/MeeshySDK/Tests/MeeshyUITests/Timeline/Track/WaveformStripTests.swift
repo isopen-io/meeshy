@@ -1,5 +1,6 @@
 import XCTest
 import CoreGraphics
+import MeeshySDK
 @testable import MeeshyUI
 
 /// La bande de forme d'onde est partagée par les pistes audio et vidéo. On
