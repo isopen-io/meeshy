@@ -60,7 +60,7 @@ export async function sweepPendingPostMedia(
 ): Promise<{ swept: number; reclaimed: number }> {
   const rows = await prisma.postMedia.findMany({
     where: { ...unclaimedMediaWhere(), createdAt: { lt: options.olderThan } },
-    select: { id: true, fileUrl: true, thumbnailUrl: true },
+    select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
     take: options.batchSize ?? DEFAULT_BATCH_SIZE,
   });
 

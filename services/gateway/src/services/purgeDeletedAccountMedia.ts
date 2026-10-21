@@ -133,7 +133,7 @@ async function purgePostMedia(
   for (;;) {
     const rows = await prisma.postMedia.findMany({
       where: { uploaderId: userId },
-      select: { id: true, fileUrl: true, thumbnailUrl: true },
+      select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
       take: batchSize,
     });
     if (rows.length === 0) break;

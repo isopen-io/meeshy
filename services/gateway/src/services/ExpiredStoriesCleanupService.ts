@@ -327,7 +327,7 @@ export class ExpiredStoriesCleanupService {
               { commentId: { in: commentIds } },
             ],
           },
-          select: { id: true, fileUrl: true, thumbnailUrl: true },
+          select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
         });
 
         // Clear PostComments BEFORE deleting the posts. The cascade from

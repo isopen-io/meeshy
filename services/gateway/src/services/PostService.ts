@@ -1030,6 +1030,7 @@ export class PostService {
             duration: true,
             fileUrl: true,
             thumbnailUrl: true,
+            imageVariants: true,
           },
         },
       },

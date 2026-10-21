@@ -62,7 +62,7 @@ export function registerPostMediaRoutes(
 
         const media = await prisma.postMedia.findFirst({
           where: { id: mediaId, ...claimableMediaWhere(userId) },
-          select: { id: true, fileUrl: true, thumbnailUrl: true },
+          select: { id: true, fileUrl: true, thumbnailUrl: true, imageVariants: true },
         });
 
         if (!media) {

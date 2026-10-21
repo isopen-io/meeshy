@@ -1,5 +1,6 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { imageVariantKeys } from '../attachments/derivedAttachmentFiles';
 
 const log = enhancedLogger.child({ module: 'reclaimPostMediaBytes' });
 
@@ -78,10 +79,15 @@ export interface PostMediaByteRemover {
  */
 export type ReclaimMediaPrisma = Pick<PrismaClient, 'sound'>;
 
-/** Les deux seules colonnes d'une ligne `PostMedia` qui désignent des octets. */
+/**
+ * Les colonnes d'une ligne `PostMedia` qui désignent des octets. `imageVariants`
+ * (#11260) est du JSON jamais validé par la base : une ligne héritée n'en porte
+ * pas, et ce qui n'a pas la forme attendue est ignoré, jamais deviné.
+ */
 export interface PostMediaFileRow {
   readonly fileUrl: string | null;
   readonly thumbnailUrl?: string | null;
+  readonly imageVariants?: unknown;
 }
 
 /**
@@ -98,7 +104,7 @@ export interface PostMediaFileRow {
  *
  * Un module qui requêterait pour son compte servirait mal les deux.
  *
- * @returns le nombre de fichiers effectivement effacés (vignettes comprises).
+ * @returns le nombre de fichiers effectivement effacés (vignettes et variantes comprises).
  */
 export async function reclaimMediaRowBytes(
   prisma: ReclaimMediaPrisma,
@@ -110,7 +116,9 @@ export async function reclaimMediaRowBytes(
   // qui serait sans effet mais compterait pour un succès.
   const urls = [
     ...new Set(
-      rows.flatMap((row) => [row.fileUrl, row.thumbnailUrl]).filter((url): url is string => !!url),
+      rows
+        .flatMap((row) => [row.fileUrl, row.thumbnailUrl, ...imageVariantKeys(row.imageVariants)])
+        .filter((url): url is string => !!url),
     ),
   ];
   if (urls.length === 0) return 0;
