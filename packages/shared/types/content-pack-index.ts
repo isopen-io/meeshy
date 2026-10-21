@@ -8,6 +8,8 @@
 import * as z from 'zod/mini';
 import { FrameUsageSchema, type FrameUsage, type FreeFrameSurface } from './frame-usage.js';
 import { GLORY_ATMOSPHERES } from './glory-atmospheres.js';
+import { type PackEligibilityRule } from './pack-ownership.js';
+import { GLORY_RANKS, type GloryRankKey } from '../utils/game/glory.js';
 import { PACK_DOMAINS, PACK_PRICE_MAX, PACK_LANGUAGES, PACK_LIMITS, PACK_SLUG_PATTERN, type PackAssetRef, type PackDefault, type PackDomain } from './content-pack.js';
 
 // ── Les fichiers adressés par contenu ───────────────────────────────────
@@ -40,8 +42,20 @@ const collectionSchema = z.object({
 /** Les domaines dont les packs portent des cadres, donc un usage. */
 const FRAME_DOMAINS: readonly PackDomain[] = ['glory-frame', 'capture-frame', 'avatar-ring', 'banner-frame'];
 
-/** Les domaines LIBRES (jamais une récompense du jeu). */
+/** Les domaines dont les cadres sont LIBRES par défaut (usage `free`). */
 const FREE_FRAME_DOMAINS: readonly PackDomain[] = ['capture-frame', 'avatar-ring', 'banner-frame'];
+
+/** Les domaines qu'un jeu peut récompenser (#11273) : un contour d'avatar ou un cadre de bannière, jamais un cadre de capture. */
+const REWARDABLE_FRAME_DOMAINS: readonly PackDomain[] = ['avatar-ring', 'banner-frame'];
+
+const GLORY_RANK_KEYS = GLORY_RANKS.map((rank) => rank.key) as unknown as readonly [GloryRankKey, ...GloryRankKey[]];
+
+/** La récompense d'un pack : le rang, le trophée ou la saison du jeu qui le donne (#11273). Même forme que l'éligibilité de la possession (#11272). */
+export const PackEligibilityRuleSchema: z.ZodMiniType<PackEligibilityRule> = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('rank'), rank: z.enum(GLORY_RANK_KEYS) }),
+  z.object({ kind: z.literal('trophy'), key: z.string().check(z.minLength(1), z.maxLength(96)) }),
+  z.object({ kind: z.literal('season'), number: z.int().check(z.minimum(1)) }),
+]);
 
 /**
  * Les surfaces RÉSERVÉES : chacune n'est déclarée que par son domaine, et ce
@@ -73,10 +87,14 @@ const usageFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain }
  * fail-closed (`glory-frame-pack.ts`), et la boutique l'affiche cadre par
  * cadre (#10154). Jamais un usage de pack qui mentirait sur ses cadres.
  */
-const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage }): boolean => {
+const packUsageDeclared = (entry: { readonly domain: PackDomain; readonly usage?: FrameUsage; readonly reward?: PackEligibilityRule }): boolean => {
   if (!FRAME_DOMAINS.includes(entry.domain)) return entry.usage === undefined;
-  return entry.domain === 'glory-frame' || entry.usage !== undefined;
+  return entry.domain === 'glory-frame' || entry.usage !== undefined || entry.reward !== undefined;
 };
+
+/** Un pack récompensé est gagné, jamais libre : il ne déclare aucun usage (pack ni collection) ; seul un contour d'avatar ou une bannière peut l'être (#11273). */
+const rewardFitsDomain = (entry: DeclaredUsages & { readonly domain: PackDomain; readonly reward?: PackEligibilityRule }): boolean =>
+  entry.reward === undefined || (REWARDABLE_FRAME_DOMAINS.includes(entry.domain) && declaredUsages(entry).length === 0);
 
 const sameSurfaces = (surfaces: readonly string[], expected: readonly string[]): boolean =>
   surfaces.length === expected.length && expected.every((surface) => surfaces.includes(surface));
@@ -115,6 +133,8 @@ export const PackIndexEntrySchema = z
     downloadBytes: z.object({ story: z.int().check(z.minimum(0)), square: z.nullable(z.int().check(z.minimum(0))) }),
     names: z.partialRecord(z.enum(PACK_LANGUAGES), nameSchema),
     usage: z.optional(FrameUsageSchema),
+    /** La récompense du jeu qui donne le pack (#11273) ; absente = le pack se possède par l'achat, l'octroi ou un événement (#11272). */
+    reward: z.optional(PackEligibilityRuleSchema),
     /** Le prix en Meeshes (#10632) : absent = gratuit, jamais 0 ; jamais sur un pack intégré. */
     price: z.optional(z.int().check(z.minimum(1), z.maximum(PACK_PRICE_MAX))),
     collections: z.optional(z.array(collectionSchema)),
@@ -123,6 +143,7 @@ export const PackIndexEntrySchema = z
   .check(
     z.refine(packUsageDeclared),
     z.refine(usageFitsDomain),
+    z.refine(rewardFitsDomain),
     z.refine((entry) => entry.atmosphere === undefined || entry.domain === 'glory-frame'),
     z.refine((entry) => entry.removable || entry.installedByDefault),
     z.refine((entry) => entry.price === undefined || entry.origin !== 'builtin'),
