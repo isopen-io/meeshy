@@ -10,10 +10,10 @@ protocol ConversationCacheReaderProviding {
 /// sa ligne de liste (nom, avatar, couleur du mini-player) et son fil.
 /// `.fresh` et `.stale` servent ; `.expired` et `.empty` ne rendent rien.
 struct ConversationCacheReader: ConversationCacheReaderProviding {
-    var loadConversations: () async -> CacheResult<[MeeshyConversation]> = {
+    var loadConversations: @MainActor () async -> CacheResult<[MeeshyConversation]> = {
         await CacheCoordinator.shared.conversations.load(for: "list")
     }
-    var loadThread: (String) async -> CacheResult<[Message]> = {
+    var loadThread: @MainActor (String) async -> CacheResult<[Message]> = {
         await CacheCoordinator.shared.messages.load(for: $0)
     }
 
