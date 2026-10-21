@@ -16,10 +16,10 @@ struct QuotedPlayableAttachmentTests {
 
     private static func reference(
         _ kind: String, fileUrl: String? = QuotedPlayableAttachmentTests.url,
-        protected: Bool? = nil, story: Bool = false, mime: String? = nil
+        protected: Bool? = nil, story: Bool = false, mime: String? = nil, anchor: String? = nil
     ) -> ReplyReference {
         ReplyReference(
-            messageId: "m1", authorName: "Bob", previewText: "", attachmentType: kind,
+            messageId: "m1", authorName: "Bob", previewText: "", attachmentType: kind, attachmentId: anchor,
             attachmentFileUrl: fileUrl, attachmentIsProtected: protected, isStoryReply: story,
             attachmentFacts: mime.map {
                 ReplyReference.QuotedAttachmentFacts(
@@ -73,5 +73,31 @@ struct QuotedPlayableAttachmentTests {
     func theOrdinaryReconstructionIsUntouched() throws {
         let piece = try #require(Self.reference("audio", mime: "audio/mpeg").quotedAttachment)
         #expect(piece.type == .audio, "seule la projection jouable change le rangement")
+    }
+
+    // MARK: - Ce que la lecture d'une citation rapporte au serveur
+
+    @Test("une vidéo citée ancrée rapporte son visionnage, sur sa vraie pièce")
+    func anchoredVideoReportsItsWatch() {
+        #expect(Self.reference("video", anchor: "att1").quotedPlaybackReportsConsumption)
+    }
+
+    @Test("un son cité ne rapporte rien : le moteur partagé l'annoncerait « vu » comme une vidéo")
+    func audioNeverReportsAWatch() {
+        #expect(!Self.reference("audio", anchor: "att1").quotedPlaybackReportsConsumption)
+        #expect(!Self.reference("audio", mime: "audio/mpeg", anchor: "att1").quotedPlaybackReportsConsumption)
+    }
+
+    @Test("sans ancre, la pièce porte un identifiant dérivé que le serveur ne connaît pas : rien ne part")
+    func unanchoredPieceReportsNothing() {
+        #expect(!Self.reference("video").quotedPlaybackReportsConsumption)
+        #expect(!Self.reference("video", anchor: "").quotedPlaybackReportsConsumption)
+    }
+
+    @Test("rien à jouer, rien à rapporter")
+    func nothingPlayableReportsNothing() {
+        #expect(!Self.reference("video", protected: true, anchor: "att1").quotedPlaybackReportsConsumption)
+        #expect(!Self.reference("video", fileUrl: nil, anchor: "att1").quotedPlaybackReportsConsumption)
+        #expect(!Self.reference("image", anchor: "att1").quotedPlaybackReportsConsumption)
     }
 }

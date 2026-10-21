@@ -156,6 +156,16 @@ final class ConversationScreenTypeIdentityGuardTests: XCTestCase {
         XCTAssertEqual(ComposerQuotedMediaTarget.playback(reply: audio)?.type, "audio")
     }
 
+    func test_quotedMediaPlayback_reportsOnlyAnAnchoredVideo() {
+        let video = ReplyReference(messageId: "m1", authorName: "Bob", previewText: "", attachmentType: "video",
+                                   attachmentId: "att1", attachmentFileUrl: "https://gate.meeshy.me/u/v.mp4")
+        let audio = ReplyReference(messageId: "m2", authorName: "Bob", previewText: "", attachmentType: "audio",
+                                   attachmentId: "att2", attachmentFileUrl: "https://gate.meeshy.me/u/a.m4a")
+        XCTAssertEqual(ComposerQuotedMediaTarget.playback(reply: video)?.reportsConsumption, true)
+        XCTAssertEqual(ComposerQuotedMediaTarget.playback(reply: audio)?.reportsConsumption, false,
+                       "un son joue par le moteur video serait rapporte « vu » sur sa piece audio")
+    }
+
     func test_quotedMediaPlayback_opensNothingDishonest() {
         let protected = ReplyReference(messageId: "m3", authorName: "Bob", previewText: "", attachmentType: "video",
                                        attachmentFileUrl: "https://gate.meeshy.me/u/v.mp4", attachmentIsProtected: true)
