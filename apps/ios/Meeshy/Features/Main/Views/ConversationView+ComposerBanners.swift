@@ -335,7 +335,7 @@ extension ConversationView {
             case .video:
                 if let thumbUrl = reply.attachmentThumbnailUrl, !thumbUrl.isEmpty {
                     ComposerQuotedMediaButton(
-                        target: ComposerQuotedMediaTarget.preview(thumbUrl: thumbUrl, type: "video"),
+                        target: ComposerQuotedMediaTarget.playback(reply: reply),
                         onOpen: { composerState.previewMedia = $0 }
                     ) {
                         ZStack {
@@ -359,7 +359,7 @@ extension ConversationView {
 
             case .audio:
                 ComposerQuotedMediaButton(
-                    target: ComposerQuotedMediaTarget.preview(thumbUrl: reply.attachmentThumbnailUrl, type: "audio"),
+                    target: ComposerQuotedMediaTarget.playback(reply: reply),
                     onOpen: { composerState.previewMedia = $0 }
                 ) {
                     replyAudioBadge(accent: accent)

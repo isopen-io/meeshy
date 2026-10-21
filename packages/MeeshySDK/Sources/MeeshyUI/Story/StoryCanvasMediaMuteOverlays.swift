@@ -35,8 +35,8 @@ struct StoryCanvasMediaMuteOverlays: View {
     /// `isBackground != true`). La position vient du modèle (`x`/`y`
     /// normalisés) ; le drag local est éphémère et ne pousse que sur release
     /// pour éviter le scintillement des vues observant le VM. L'icône absente
-    /// venait du fait que `StoryAudioPlayerView` n'était wired nulle part —
-    /// ce chip est plus léger et dédié à la composition.
+    /// venait du fait que l'ancienne pastille de lecture n'était wired nulle
+    /// part (retirée, #9890) — ce chip est plus léger et dédié à la composition.
     @ViewBuilder
     private var audioForegroundOverlay: some View {
         if !viewModel.isDrawingActive {
