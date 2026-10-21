@@ -215,7 +215,7 @@ public struct ImageFullscreen: View {
     @State private var saveState: SaveState = .idle
     @State private var viewStartTime: Date?
 
-    private enum SaveState {
+    private nonisolated enum SaveState: Equatable, Sendable {
         case idle, saving, saved, failed
     }
 

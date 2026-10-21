@@ -203,7 +203,7 @@ public struct DocumentFullSheet: View {
     @Environment(\.contentExitGate) private var exitGate
     @State private var saveState: SaveState = .idle
 
-    private enum SaveState { case idle, saving, saved, failed }
+    private nonisolated enum SaveState: Equatable, Sendable { case idle, saving, saved, failed }
 
     private var isDark: Bool { colorScheme == .dark }
 

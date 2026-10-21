@@ -446,7 +446,7 @@ struct TimelineExportPreviewSheet: View {
     @State private var loopObserver: NSObjectProtocol?
     @State private var saveState: SaveState = .idle
 
-    internal enum SaveState { case idle, saving, saved, failed }
+    internal nonisolated enum SaveState: Equatable, Sendable { case idle, saving, saved, failed }
 
     init(url: URL) {
         self.url = url
