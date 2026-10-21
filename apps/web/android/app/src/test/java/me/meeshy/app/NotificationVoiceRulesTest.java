@@ -242,7 +242,7 @@ public class NotificationVoiceRulesTest {
 
     @Test
     public void anUnknownDurationAnEmptyTraceAndAnInvalidLanguageAreOmitted() {
-        // `language` exige deux lettres et `stretches` des segments non vides :
+        // `language` exige le format de la passerelle et `stretches` des segments non vides :
         // les envoyer vides ferait rejeter le rapport ENTIER (400).
         assertEquals(
             "{\"action\":\"listened\",\"playPositionMs\":4000,\"complete\":false}",
