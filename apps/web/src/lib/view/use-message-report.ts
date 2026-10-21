@@ -6,6 +6,7 @@ import { translate } from '@/lib/i18n-catalog';
 import { isMessagePiecesCatalogLoaded } from '@/lib/i18n-message-pieces-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
+import type { ActionScope } from './message-action-scope';
 import { reportOffered } from './message-actions';
 
 /**
@@ -30,20 +31,20 @@ const NOTICE: Readonly<Record<ReportOutcome, 'report.done' | 'report.throttled' 
 
 export function useMessageReport(params: {
   readonly messageOf: (id: string) => Message | undefined;
-  readonly viewer: { readonly id: string; readonly hasAccount: boolean };
+  readonly scope: ActionScope;
   readonly announce: (text: string) => void;
   readonly deps: ReportDeps;
 }) {
-  const { messageOf, viewer, announce, deps } = params;
+  const { messageOf, scope, announce, deps } = params;
   const [reportFor, setReportFor] = useState<string | null>(null);
 
   const reportOf = useCallback(
     (messageId: string): (() => void) | null => {
       const message = messageOf(messageId);
       if (message === undefined || !isMessagePiecesCatalogLoaded(currentInterfaceLanguage())) return null;
-      return reportOffered(message, viewer) ? () => setReportFor(messageId) : null;
+      return reportOffered(message, scope) ? () => setReportFor(messageId) : null;
     },
-    [messageOf, viewer],
+    [messageOf, scope],
   );
 
   const onPickReportReason = useCallback(

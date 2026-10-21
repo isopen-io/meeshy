@@ -36,6 +36,17 @@ const frPublicEntry = {
   'magicLink.offline': 'Pas de connexion. Vérifiez votre réseau et réessayez.',
   'magicLink.submit': 'Recevoir le lien',
   'magicLink.submit.busy': 'Envoi…',
+  'magicLink.flowTitle': 'Connexion par e-mail',
+  'magicLink.validating': 'Vérification du lien…',
+  'magicLink.invalid.title': 'Lien invalide ou expiré',
+  'magicLink.invalid.body': 'Un lien de connexion expire après 10 minutes et ne sert qu’une fois.',
+  'magicLink.requestNew': 'Demander un nouveau lien',
+  'magicLink.backToLogin': 'Retour à la connexion',
+  'magicLink.retry': 'Réessayer',
+  'magicLink.resend': 'Renvoyer',
+  'magicLink.resend.label': 'Renvoyer le lien',
+  'magicLink.cancel': 'Annuler',
+  'magicLink.linkExpired': 'Lien expiré, renvoyez-en un nouveau',
 } as const;
 
 export default frPublicEntry;
