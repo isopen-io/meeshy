@@ -178,7 +178,7 @@ struct ConversationRecentMessagesPreview: View {
     let served: [String: MessageTranslation]
     let phase: ConversationPreviewPhase
     let readingMode: ConversationReadingMode
-    let accentHex: String
+    let accentColor: String
     let skin: BubbleSkin
     let isDirect: Bool
     let isDark: Bool
@@ -269,7 +269,7 @@ struct ConversationRecentMessagesPreview: View {
             message: message,
             translations: translations[message.id] ?? [],
             servedTranslation: served[message.id],
-            accentHex: accentHex,
+            accentHex: accentColor,
             density: ConversationPreviewRenderer.density(mode: readingMode),
             context: FocalRowInput.PreviewContext(
                 currentUserId: currentUserId,
@@ -290,7 +290,7 @@ struct ConversationRecentMessagesPreview: View {
     private func bubble(_ message: Message, layout: ConversationPreviewRenderer.RowLayout) -> some View {
         ThemedMessageBubble(
             message: message,
-            contactColor: accentHex,
+            contactColor: accentColor,
             isDirect: isDirect,
             isDark: isDark,
             textTranslations: translations[message.id] ?? [],
@@ -319,7 +319,7 @@ struct ConversationRecentMessagesPreview: View {
             .padding(.vertical, MeeshySpacing.sm)
             .background(
                 RoundedRectangle(cornerRadius: MeeshyRadius.lg, style: .continuous)
-                    .fill(Color(hex: accentHex).opacity(isDark ? 0.18 : 0.10))
+                    .fill(Color(hex: accentColor).opacity(isDark ? 0.18 : 0.10))
             )
             if !message.isMe { Spacer(minLength: MeeshySpacing.xl) }
         }

@@ -310,7 +310,7 @@ struct ConversationPreviewView: View {
             served: served,
             phase: phase,
             readingMode: readingMode,
-            accentHex: accentColor,
+            accentColor: accentColor,
             skin: ConversationPreviewRenderer.skin(for: conversation, isDark: isDark),
             isDirect: isDirect,
             isDark: isDark,
