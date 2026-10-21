@@ -13,6 +13,7 @@ import { openSendSheet } from '@/lib/send/send-sheet-store';
 import { conversationEncrypted } from '@/lib/send/share-entry';
 
 import type { AttachmentReactionOutcome } from './attachment-reaction';
+import { mediaOffersWithin } from './message-action-scope';
 import { kindOf } from './message';
 import { pieceDeletable, pieceMenuItems, targetedPieceOf, type PieceActionId, type PieceMenuItem } from './message-piece';
 import { attachmentSendRequest, mediaPageOffers, type MediaPageOffers } from './viewer-page-offers';
@@ -100,9 +101,7 @@ export function usePieceMenu(params: {
   const offersOf = useCallback(
     (message: Message, piece: Attachment): MediaPageOffers => {
       const now = Date.now();
-      const offers = mediaPageOffers({ attachment: piece, message, capabilities: THREAD_CAPABILITIES, now });
-      const { verdicts } = actionsOf(message);
-      return { ...offers, reply: offers.reply && verdicts.canReply, share: offers.share && verdicts.forward, react: offers.react && verdicts.canReact };
+      return mediaOffersWithin(mediaPageOffers({ attachment: piece, message, capabilities: THREAD_CAPABILITIES, now }), actionsOf(message));
     },
     [actionsOf],
   );

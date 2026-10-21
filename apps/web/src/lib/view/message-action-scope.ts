@@ -9,6 +9,8 @@ import {
 
 import type { Conversation, Message } from '@/lib/api/types';
 
+import type { MediaPageOffers } from './viewer-page-offers';
+
 import { placeOf, stickerOf } from './message-body';
 import { metadataOf } from './message-metadata';
 
@@ -96,12 +98,17 @@ const UNREAD_REGIME = 'unread';
  */
 export const menuRegimeKnown = (conversation: ActionConversation): boolean => conversation.encryptionMode !== UNREAD_REGIME;
 
-/** La conversation que la loi lit — un type inconnu n'ouvre rien qui dépende du type. */
+/**
+ * La conversation que la loi lit — un type inconnu n'ouvre rien qui dépende du
+ * type, et un régime que la passerelle n'a pas SERVI (champ absent, forme
+ * allégée d'un cache) est inconnu, jamais en clair : seul un `null` servi dit
+ * « sans chiffrement » (#11372).
+ */
 export const menuConversationOf = (
   conversation: Pick<Conversation, 'type' | 'encryptionMode' | 'isActive' | 'isAnnouncementChannel' | 'defaultWriteRole'> | undefined,
 ): ActionConversation => ({
   type: conversation?.type ?? 'unknown',
-  encryptionMode: conversation === undefined ? UNREAD_REGIME : conversation.encryptionMode ?? null,
+  encryptionMode: conversation === undefined || !('encryptionMode' in conversation) ? UNREAD_REGIME : conversation.encryptionMode ?? null,
   isActive: conversation?.isActive ?? null,
   isAnnouncementChannel: conversation?.isAnnouncementChannel ?? null,
   defaultWriteRole: conversation?.defaultWriteRole ?? null,
@@ -162,3 +169,36 @@ export function messageActionsOf(message: ActionMessage, scope: ActionScope, inp
     now: input.now,
   });
 }
+
+/**
+ * LE WEB NE CHIFFRE PAS SES ENVOIS (#9224, #11372) — là où la loi dit que le
+ * serveur ne lit pas le clair (bout en bout, régime inconnu, message chiffré),
+ * une réponse ou un nouvel essai partirait en clair et serait refusé
+ * (fail-closed) : ni l'un ni l'autre ne s'offre, et la mention du bout en bout
+ * (`e2eeNotice`) dit pourquoi.
+ */
+export const webSendsHere = (actions: MessageActions): boolean => actions.verdicts.serverFeatureAbsence === null;
+
+/** Répondre depuis le web : le droit d'écrire (`canReply`) ET un envoi que le web sait faire ici. */
+export const webRepliesTo = (actions: MessageActions): boolean => actions.verdicts.canReply && webSendsHere(actions);
+
+/**
+ * MODIFIER DEPUIS LE WEB, EN AUTEUR SEULEMENT (#11372) — la loi admet qu'un
+ * rôle de plateforme réécrive le message d'un autre (`edit.asModerator`), mais
+ * la passerelle n'enregistre pas l'auteur de la modification et l'interface ne
+ * l'affiche pas : ce serait une réécriture silencieuse. Le web ne l'offre pas.
+ */
+export const webEditsAsAuthor = (actions: MessageActions): boolean => actions.verdicts.edit !== null && !actions.verdicts.edit.asModerator;
+
+/**
+ * LES OFFRES D'UNE PIÈCE, DANS CE QUE LE MESSAGE ADMET (#11210, #11372) — la
+ * visionneuse et le menu d'une pièce lisent ici les mêmes verdicts que le menu
+ * du message entier : réagir (`canReact`), répondre (`webRepliesTo`),
+ * partager (`forward`). Sans verdict, rien de ce qu'un rôle décide ne s'offre.
+ */
+export const mediaOffersWithin = (offers: MediaPageOffers, actions: MessageActions | null): MediaPageOffers => ({
+  ...offers,
+  react: offers.react && actions !== null && actions.verdicts.canReact,
+  reply: offers.reply && actions !== null && webRepliesTo(actions),
+  share: offers.share && actions !== null && actions.verdicts.forward,
+});

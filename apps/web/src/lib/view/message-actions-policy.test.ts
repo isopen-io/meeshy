@@ -105,7 +105,7 @@ describe('le chiffrement de bout en bout retire ce que le serveur lirait', () =>
   const e2ee = scopeOf({ conversation: { encryptionMode: 'e2ee' } });
 
   test('sans traduction encore, « Traduire sur l’appareil » est offert — même d’une seule langue (#11210, revue)', () => {
-    const all = ids(messageMenuItems(ctxOf(row({ translations: [] }), e2ee)));
+    const all = ids(messageMenuItems(ctxOf(row({ translations: [] }), e2ee, { deviceTranslationWanted: true })));
     expect(all).toContain('translateOnDevice');
     expect(all).not.toContain('translate');
   });
@@ -117,7 +117,7 @@ describe('le chiffrement de bout en bout retire ce que le serveur lirait', () =>
   });
 
   test('un message sans clair sur cet appareil (chiffré) ne s’offre pas à la traduction de l’appareil', () => {
-    const all = ids(messageMenuItems(ctxOf(row({ translations: [], isEncrypted: true }), e2ee)));
+    const all = ids(messageMenuItems(ctxOf(row({ translations: [], isEncrypted: true }), e2ee, { deviceTranslationWanted: true })));
     expect(all).not.toContain('translateOnDevice');
     expect(all).not.toContain('translate');
   });
@@ -320,5 +320,50 @@ describe('menuViewerOf — le lecteur explicite, composé une fois pour l’écr
       isActiveMember: false,
       canSendMessages: false,
     });
+  });
+});
+
+describe('audit #11372 — ce que le web ne sait pas servir honnêtement ne s’offre pas', () => {
+  test('B1 — un MODERATOR de plateforme ne MODIFIE pas le message d’un autre : la réécriture serait silencieuse', () => {
+    const ctx = ctxOf(row(), scopeOf({ viewer: { platformRole: 'MODERATOR' } }), { canEdit: true });
+    expect(ctx.actions?.verdicts.edit?.asModerator).toBe(true);
+    expect(ids(messageMenuItems(ctx))).not.toContain('edit');
+  });
+
+  test('B1 — l’auteur garde « Modifier » sur son propre message', () => {
+    expect(ids(messageMenuItems(ctxOf(row({ senderId: 'u-viewer' }), scopeOf(), { canEdit: true })))).toContain('edit');
+  });
+
+  test('M1 — en bout en bout, le web ne chiffre pas ses envois : ni « Répondre » ni « Réessayer », et la mention dit pourquoi', () => {
+    const e2ee = scopeOf({ conversation: { encryptionMode: 'e2ee' } });
+    const all = ids(messageMenuItems(ctxOf(row(), e2ee)));
+    expect(all).not.toContain('reply');
+    expect(all).toContain('e2eeNotice');
+    const failed = row({ id: 'cid_1', senderId: 'u-viewer' });
+    expect(ids(messageMenuItems(ctxOf(failed, e2ee, { canRetry: true }, true)))).not.toContain('retry');
+  });
+
+  test('M1 — un régime encore inconnu ne laisse pas répondre (fermé par défaut)', () => {
+    const unread: ActionScope = { viewer: menuScope().viewer, conversation: menuConversationOf(undefined) };
+    expect(ids(messageMenuItems(ctxOf(row(), unread)))).not.toContain('reply');
+  });
+
+  test('m2 — un message de bout en bout servi sans `isEncrypted` n’a pas de clair ici : pas de « Traduire sur l’appareil »', () => {
+    const e2ee = scopeOf({ conversation: { encryptionMode: 'e2ee' } });
+    const subject = row({ translations: [], isEncrypted: false, encryptionMode: 'e2ee' });
+    const ctx = ctxOf(subject, e2ee, { deviceTranslationWanted: true });
+    expect(ctx.deviceClear).toBe(false);
+    expect(ids(messageMenuItems(ctx))).not.toContain('translateOnDevice');
+  });
+
+  test('m1 — sans le feu vert de l’hôte (message qui ne voyage pas, ou déjà dans la langue du lecteur), pas de « Traduire sur l’appareil »', () => {
+    const e2ee = scopeOf({ conversation: { encryptionMode: 'e2ee' } });
+    expect(ids(messageMenuItems(ctxOf(row({ translations: [] }), e2ee)))).not.toContain('translateOnDevice');
+    expect(ids(messageMenuItems(ctxOf(row({ translations: [] }), e2ee, { deviceTranslationWanted: false })))).not.toContain('translateOnDevice');
+  });
+
+  test('m4 — une conversation dont le régime n’est pas SERVI est inconnue, jamais en clair', () => {
+    expect(menuConversationOf({ type: 'group', isActive: true }).encryptionMode).toBe('unread');
+    expect(menuConversationOf({ type: 'group', isActive: true, encryptionMode: null }).encryptionMode).toBeNull();
   });
 });

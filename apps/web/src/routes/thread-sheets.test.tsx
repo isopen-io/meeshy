@@ -9,6 +9,7 @@ import type { Attachment, Message } from '@/lib/api/types';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadExportCardCatalog } from '@/lib/i18n-export-card-catalog';
 import { loadMessagePiecesCatalog } from '@/lib/i18n-message-pieces-catalog';
+import { messageMenuContextOf } from '@/lib/view/message-actions';
 import { closeReactorsSheet, openReactorsSheet, reactorsSheetStore } from '@/lib/view/reactors-sheet-store';
 import { createActMounter } from '@/test-support/act-mount';
 import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
@@ -113,6 +114,7 @@ const menuOf = (overrides: Partial<ThreadSheetsMenu> = {}): ThreadSheetsMenu => 
   reportFor: null,
   onPickReportReason: () => {},
   onDismissReport: () => {},
+  menuContextOf: (m) => messageMenuContextOf(m, { now: Date.now() }),
   ...overrides,
 });
 
@@ -191,6 +193,27 @@ describe('ThreadMessageSheets — les feuilles du message (#7429, extrait de rou
     expect(has(host, '[data-message-receipts-title]')).toBe(true);
     expect(offersLanguage(host, 'Français (original)')).toBe(false);
     expect(has(host, '[data-message-receipts-attachment]')).toBe(false);
+  });
+
+  test('« Plus… » offre « Imager » quand le contexte du menu l’admet', async () => {
+    const offered = await mountSheets(menuOf({ detailFor: SERVER_MESSAGE_ID }), [ownMessage()]);
+    expect(has(offered, '[data-message-create="image"]')).toBe(true);
+  });
+
+  test('« Plus… » lit le contexte du MENU, celui du lecteur (#11372) : ce que le menu retient, la fiche le retient', async () => {
+    const seen: string[] = [];
+    const held = await mountSheets(
+      menuOf({
+        detailFor: SERVER_MESSAGE_ID,
+        menuContextOf: (m) => {
+          seen.push(m.id);
+          return { ...messageMenuContextOf(m, { now: Date.now() }), leaves: false };
+        },
+      }),
+      [ownMessage()],
+    );
+    expect(seen.includes(SERVER_MESSAGE_ID)).toBe(true);
+    expect(has(held, '[data-message-create="image"]')).toBe(false);
   });
 
   test('la fiche d’un message d’AUTRUI n’a pas d’accusé nominatif (delivery nul ⇒ aucun « Infos du message »)', async () => {

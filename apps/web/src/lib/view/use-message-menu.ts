@@ -39,8 +39,8 @@ import {
   type MessageMenuItem,
   type TranslationChoice,
 } from './message-actions';
-import { menuViewerRegistered, messageActionsOf, type ActionScope } from './message-action-scope';
-import { deviceTranslationPorts, requestDeviceTranslation, type DeviceTranslationPorts } from './device-translation-request';
+import { menuViewerRegistered, messageActionsOf, webRepliesTo, type ActionScope } from './message-action-scope';
+import { deviceTranslationPorts, deviceTranslationWanted, requestDeviceTranslation, type DeviceTranslationPorts } from './device-translation-request';
 import { contentExitOf, exitOffers } from './content-exit';
 import { doubleTapReactable } from './double-tap';
 import { admitForward, forwardRefusalOf, forwardRequestOf, type ForwardRefusal } from './forward';
@@ -191,6 +191,14 @@ export function useMessageMenu(params: {
     (message: Message) => messageActionsOf(message, scope, { now: Date.now(), failed: failedOf(message.id) }),
     [scope, failedOf],
   );
+  /**
+   * LE CONTEXTE DU MENU D'UN MESSAGE, POUR CE LECTEUR (#11372) — « Plus… »,
+   * les exports et les gestes du type le lisent avec les verdicts, jamais sans.
+   */
+  const menuContextOf = useCallback(
+    (message: Message) => messageMenuContextOf(message, { now: Date.now(), scope, failed: failedOf(message.id) }),
+    [scope, failedOf],
+  );
 
   const [menuTarget, setMenuTarget] = useState<MessageMenuTargetState | null>(null);
   const [displayLanguages, setDisplayLanguages] = useState<ReadonlyMap<string, string>>(new Map());
@@ -202,6 +210,18 @@ export function useMessageMenu(params: {
   const mine = useStore(reactionStore, (s) => s.mine);
 
   const messageOf = useCallback((id: string) => messages.find((m) => m.id === id), [messages]);
+  /**
+   * RÉPONDRE À CE MESSAGE EST-IL POSSIBLE D'ICI ? (#11372) — le droit d'écrire
+   * et un envoi que le web sait faire (`webRepliesTo` : jamais en bout en
+   * bout). Le menu, le glissé, le résumé et la visionneuse lisent cette réponse.
+   */
+  const replyableOf = useCallback(
+    (messageId: string): boolean => {
+      const message = messageOf(messageId);
+      return message !== undefined && message.isViewOnce !== true && webRepliesTo(actionsOf(message));
+    },
+    [messageOf, actionsOf],
+  );
   /* D7 — la source est-elle chiffrée ? Lu dans le cache de la conversation, au moment du geste. */
   const sourceEncrypted = useCallback(
     () => conversationEncrypted(findCachedConversation(params.queryClient ?? appQueryClient, conversationId)),
@@ -514,7 +534,7 @@ export function useMessageMenu(params: {
   const runTypeAction = useCallback(
     (id: TypeActionId, message: Message) => {
       const lang = currentInterfaceLanguage();
-      const ctx = messageMenuContextOf(message, { now: Date.now() });
+      const ctx = menuContextOf(message);
       const leaves = !ctx.isProtected && ctx.leaves !== false;
       const link = ctx.link ?? null;
       const place = ctx.place ?? null;
@@ -535,7 +555,7 @@ export function useMessageMenu(params: {
       };
       gestures[id]?.();
     },
-    [announce],
+    [announce, menuContextOf],
   );
 
   const onMenuAction = useCallback(
@@ -552,6 +572,7 @@ export function useMessageMenu(params: {
         return;
       }
       if (id === 'reply') {
+        if (!replyableOf(messageId)) return;
         focusTakenRef.current = true;
         params.reply.setReplyTarget(messageId);
         return;
@@ -570,6 +591,7 @@ export function useMessageMenu(params: {
       if (id === 'translateOnDevice') {
         const message = messageOf(messageId);
         if (message === undefined || actionsOf(message).verdicts.translate !== 'device') return;
+        if (!deviceTranslationWanted(message, { viewerId, languages: readerLanguages })) return;
         void requestDeviceTranslation({
           ports: params.deviceTranslation ?? deviceTranslationPorts,
           queryClient: params.queryClient ?? appQueryClient,
@@ -648,7 +670,7 @@ export function useMessageMenu(params: {
       }
       if (id === 'export' || id === 'exportQuick' || id === 'exportDiscussion') {
         const message = messageOf(messageId);
-        if (message === undefined || !imageableOf(messageMenuContextOf(message, { now: Date.now() }))) return;
+        if (message === undefined || !imageableOf(menuContextOf(message))) return;
         if (id === 'exportDiscussion' && !discussionImageableOf(messageId)) return;
         focusTakenRef.current = true;
         setExportFor(id === 'exportDiscussion' ? { messageId, quick: false, scope: 'discussion' } : { messageId, quick: id === 'exportQuick' });
@@ -657,7 +679,7 @@ export function useMessageMenu(params: {
       // `translate` ne passe jamais ici — `MessageMenu` l'intercepte en
       // interne et bascule sur son sous-menu (`onPickLanguage`).
     },
-    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation],
+    [copyableTextOf, params, announce, messageOf, discussionImageableOf, editOf, onPieceAction, stickerLibrary, failedOf, send, runTypeAction, pinOf, askDelete, askRemove, actionsOf, viewerId, readerLanguages, conversation, replyableOf, menuContextOf],
   );
 
   /** Le tap d'une rangée EN MODE SÉLECTION — bascule la coche ; le 101ᵉ id
@@ -778,10 +800,10 @@ export function useMessageMenu(params: {
   const swipeActionsOf = useCallback(
     (message: Message): { readonly canReply: boolean; readonly canForward: boolean } | undefined => {
       if (selection !== null) return undefined;
-      const ids = messageMenuItems(messageMenuContextOf(message, { now: Date.now(), scope, failed: failedOf(message.id) })).map((item) => item.id);
+      const ids = messageMenuItems(menuContextOf(message)).map((item) => item.id);
       return { canReply: ids.includes('reply'), canForward: ids.includes('forward') };
     },
-    [selection, scope, failedOf],
+    [selection, menuContextOf],
   );
 
   /** Les données du menu OUVERT — `undefined` tant qu'aucun message n'est
@@ -814,8 +836,9 @@ export function useMessageMenu(params: {
     if (message === undefined) return undefined;
     const lang = currentInterfaceLanguage();
     const ctx = {
-      ...messageMenuContextOf(message, { now: Date.now(), scope, failed: failedOf(message.id) }),
+      ...menuContextOf(message),
       canRetry: send !== undefined,
+      deviceTranslationWanted: deviceTranslationWanted(message, { viewerId, languages: readerLanguages }),
       piecesLabels: isMessagePiecesCatalogLoaded(lang),
       hasDefaultExportFormat: readDefaultMessageCardFormat(safeLocalStorage()) !== null,
       discussionImageable: discussionImageableOf(menuTarget.messageId),
@@ -879,6 +902,10 @@ export function useMessageMenu(params: {
     onPickReportReason: reporting.onPickReportReason,
     onDismissReport: reporting.onDismissReport,
     swipeActionsOf,
+    scope,
+    menuContextOf,
+    replyableOf,
+    reactableOf,
   };
 }
 

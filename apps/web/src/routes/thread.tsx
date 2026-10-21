@@ -505,12 +505,6 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
    * ne fait plus que CÂBLER le JSX sur ce qu'il rend (§5 étape 0 : le budget
    * de taille interdit d'ajouter une seconde machine ici).
    */
-  /**
-   * LA VISIONNEUSE DU FIL (#6303) — une tuile touchée dans le fil ouvre la
-   * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
-   * la PIÈCE ; valeur STABLE, lue par chaque grille de médias (`Attachments`).
-   */
-  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation });
   const platformRole = useServedGlobalRole();
 
   const messageMenu = useMessageMenu({
@@ -524,6 +518,13 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     reply: compose,
     announce: announcer.announce,
   });
+  /**
+   * LA VISIONNEUSE DU FIL (#6303) — une tuile touchée dans le fil ouvre la
+   * visionneuse de TOUTE la conversation, et « Répondre » y arme la citation de
+   * la PIÈCE quand les verdicts du menu l'admettent (#11372) ; valeur STABLE,
+   * lue par chaque grille de médias (`Attachments`).
+   */
+  const threadMedia = useThreadMediaValue({ viewerId: viewer.id ?? '', onReplyToMedia: compose.setReplyToMedia, conversation, actionScope: messageMenu.scope });
 
   /**
    * LES TROIS SORTIES DU RÉSUMÉ VIVANT (#5695, #7429) — miroir
@@ -540,6 +541,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
     selectMode: reading.selectReadingMode,
     requestJump: jump.requestJump,
     setReplyTarget: compose.setReplyTarget,
+    replyable: messageMenu.replyableOf,
     resumeTarget: () => resumeThreadTarget({ unreadBoundary, messages, viewerId: viewer.id ?? '' }),
   });
 
@@ -848,7 +850,7 @@ export default function ThreadScreen({ preview, focus }: ThreadScreenProps = {})
             swipeActionsOf={messageMenu.swipeActionsOf}
             onSwipeAction={messageMenu.onMenuAction}
             onPickLanguage={messageMenu.onPickLanguage}
-            onReact={messageMenu.onMenuReact} onExpandReactions={messageMenu.setReactionSheetFor}
+            onReact={messageMenu.onMenuReact} reactableOf={messageMenu.reactableOf} onExpandReactions={messageMenu.setReactionSheetFor}
             onOpenDetail={messageMenu.setDetailFor}
             typists={typing.typists}
             typistAvatarOf={typistAvatarOf}

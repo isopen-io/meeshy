@@ -13,7 +13,7 @@ import type { PlainMessagePiecesKey } from '@/lib/i18n-message-pieces-catalog';
 import { kindOf, translationsOf } from '@/lib/view/message';
 import { protectionOf } from '@/lib/reading-mode/protection';
 
-import { menuRegimeKnown, messageActionsOf, type ActionMessage, type ActionScope } from './message-action-scope';
+import { menuRegimeKnown, messageActionsOf, webEditsAsAuthor, webSendsHere, type ActionMessage, type ActionScope } from './message-action-scope';
 import { placeOf, type SharedPlace } from './message-body';
 
 export { menuConversationOf, menuViewerOf, type ActionScope, type MenuViewer } from './message-action-scope';
@@ -228,6 +228,12 @@ export type MessageMenuContext = {
   readonly regimeKnown?: boolean;
   /** LE MESSAGE A UN CLAIR SUR CET APPAREIL — le web ne déchiffre pas le bout en bout (`offeredMessagesOf`). */
   readonly deviceClear?: boolean;
+  /**
+   * L'APPAREIL A UNE RAISON DE LE TRADUIRE (#11372, posé par l'hôte,
+   * `deviceTranslationWanted`) : le message voyage (`translationMayTravel`) et
+   * n'est pas déjà écrit dans la langue primaire du lecteur. Absent ⇒ non.
+   */
+  readonly deviceTranslationWanted?: boolean;
 };
 
 type MenuPiece = {
@@ -287,6 +293,10 @@ export function messageMenuContextOf(
   const open = leaves ? (message.attachments ?? []).map((piece) => (pieceIsOpen(piece) ? kindOf(piece) : 'file')) : [];
   const composable = exitOffers(exit, 'compose') ? open.findIndex((form) => form === 'image' || form === 'video') : -1;
   const subject = input.scope === undefined ? null : actionMessageOf(message);
+  const actions =
+    subject === null || input.scope === undefined
+      ? undefined
+      : messageActionsOf(subject, input.scope, { now: input.now, ...(input.failed === undefined ? {} : { failed: input.failed }) });
   const gone = message.deletedAt != null || (message.expiresAt != null && new Date(message.expiresAt).getTime() <= input.now);
   return {
     hasText: message.content.trim().length > 0,
@@ -301,11 +311,9 @@ export function messageMenuContextOf(
     composableIndex: composable === -1 ? null : composable,
     link: firstLinkOf(message.content),
     place: placeOf(message),
-    deviceClear: message.isEncrypted !== true,
+    deviceClear: actions !== undefined && !actions.content.flags.encrypted,
     ...(input.scope === undefined ? {} : { regimeKnown: menuRegimeKnown(input.scope.conversation) }),
-    ...(subject === null || input.scope === undefined
-      ? {}
-      : { actions: messageActionsOf(subject, input.scope, { now: input.now, ...(input.failed === undefined ? {} : { failed: input.failed }) }) }),
+    ...(actions === undefined ? {} : { actions }),
   };
 }
 
@@ -328,19 +336,23 @@ export const imageableOf = (ctx: MessageMenuContext): boolean =>
 const copyable = (ctx: MessageMenuContext): boolean => ctx.hasText && !ctx.isProtected && ctx.leaves !== false;
 const labels = (ctx: MessageMenuContext): boolean => ctx.piecesLabels === true;
 const exportsOut = (ctx: MessageMenuContext): boolean => !ctx.isProtected && ctx.leaves !== false;
+/** Un envoi que le web sait faire ici (`webSendsHere`) — jamais sans la loi. */
+const sends = (ctx: MessageMenuContext): boolean => ctx.actions !== undefined && webSendsHere(ctx.actions);
+/** « Modifier » en AUTEUR seulement (`webEditsAsAuthor`) — jamais le message d'un autre au titre d'un rôle. */
+const editsAsAuthor = (ctx: MessageMenuContext): boolean => ctx.actions !== undefined && webEditsAsAuthor(ctx.actions);
 
 type Servable = { readonly id: InterfaceId | PiecesId; readonly offered: (ctx: MessageMenuContext) => boolean };
 
 /** Les gestes PRINCIPAUX que la loi range (`groups.primary` puis `groups.more`) et ce que l'écran sait en servir. */
 const SERVABLE: Readonly<Partial<Record<PolicyActionId, Servable>>> = {
-  retry: { id: 'retry', offered: (ctx) => ctx.canRetry === true && labels(ctx) },
-  reply: { id: 'reply', offered: (ctx) => ctx.isViewOnce !== true },
+  retry: { id: 'retry', offered: (ctx) => ctx.canRetry === true && labels(ctx) && sends(ctx) },
+  reply: { id: 'reply', offered: (ctx) => ctx.isViewOnce !== true && sends(ctx) },
   openLink: { id: 'openLink', offered: (ctx) => ctx.link != null && labels(ctx) },
   copyLink: { id: 'copyLink', offered: (ctx) => ctx.link != null && labels(ctx) && exportsOut(ctx) },
   openInMaps: { id: 'openInMaps', offered: (ctx) => ctx.place != null && labels(ctx) },
   copyAddress: { id: 'copyAddress', offered: (ctx) => ctx.place != null && labels(ctx) && exportsOut(ctx) },
   saveContact: { id: 'saveContact', offered: exportsOut },
-  edit: { id: 'edit', offered: (ctx) => ctx.canEdit === true && ctx.hasText },
+  edit: { id: 'edit', offered: (ctx) => ctx.canEdit === true && ctx.hasText && editsAsAuthor(ctx) },
   copy: { id: 'copy', offered: copyable },
   forward: { id: 'forward', offered: (ctx) => ctx.canForward },
   translate: { id: 'translate', offered: (ctx) => ctx.hasText && !ctx.isProtected && (ctx.languageCount > 1 || deviceTranslatable(ctx)) },
@@ -352,12 +364,19 @@ const EXIT_ONLY: readonly PolicyActionId[] = ['copy', 'forward', 'translate', 's
 
 /**
  * L'APPAREIL PEUT TRADUIRE CE MESSAGE (#11210) — le verdict de la loi le dit
- * (`translate: 'device'`), le régime est CONNU, le message a un clair ici, et
- * aucune traduction n'est encore là : « Traduire sur l'appareil » la demande
+ * (`translate: 'device'`), le régime est CONNU, le message a un clair ici
+ * (`content.flags.encrypted`, la loi partagée), l'hôte dit qu'il voyage et
+ * n'est pas déjà dans la langue du lecteur (#11372), et aucune traduction
+ * n'est encore là : « Traduire sur l'appareil » la demande
  * (`device-translation-request.ts`). Une traduction déjà présente se BASCULE.
  */
 const deviceTranslatable = (ctx: MessageMenuContext): boolean =>
-  ctx.actions?.verdicts.translate === 'device' && ctx.regimeKnown === true && ctx.deviceClear !== false && ctx.languageCount <= 1 && labels(ctx);
+  ctx.actions?.verdicts.translate === 'device' &&
+  ctx.regimeKnown === true &&
+  ctx.deviceClear === true &&
+  ctx.deviceTranslationWanted === true &&
+  ctx.languageCount <= 1 &&
+  labels(ctx);
 
 /**
  * « Traduire » BASCULE entre les traductions présentes, servies ou faites par

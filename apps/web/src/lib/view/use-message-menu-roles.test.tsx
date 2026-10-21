@@ -58,7 +58,8 @@ const PLACE = row({
   messageType: 'location',
   metadata: { location: { latitude: 48.8566, longitude: 2.3522, name: 'Hôtel de Ville', address: 'Place de l’Hôtel de Ville, Paris' } },
 });
-const MESSAGES = [THEIRS, MINE, FAILED, LINK, PLACE];
+const FOREIGN = row({ id: 'm-foreign', content: 'See you tomorrow', originalLanguage: 'en' });
+const MESSAGES = [THEIRS, MINE, FAILED, LINK, PLACE, FOREIGN];
 
 type MenuApi = ReturnType<typeof useMessageMenu>;
 
@@ -78,6 +79,7 @@ function mount(
   } = {},
 ) {
   const retried: string[] = [];
+  const replied: string[] = [];
   const announced: string[] = [];
   const queryClient = new QueryClient();
   let latest!: MenuApi;
@@ -89,7 +91,7 @@ function mount(
       readerLocale: 'fr-FR',
       viewer: menuViewer(options.viewer),
       conversation: { type: 'group', encryptionMode: null, isActive: true, ...options.conversation },
-      reply: { setReplyTarget: () => {}, setReplyToMedia: () => {}, beginEdit: () => {} },
+      reply: { setReplyTarget: (id) => replied.push(id), setReplyToMedia: () => {}, beginEdit: () => {} },
       send: { retry: (id) => retried.push(id), failed: (id) => id === 'cid_failed' },
       announce: (text) => announced.push(text),
       queryClient,
@@ -118,7 +120,7 @@ function mount(
     act(() => {
       container.querySelector(`[data-row="${id}"]`)?.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
-  return { api: () => latest, open, retried, announced };
+  return { api: () => latest, open, retried, replied, announced };
 }
 
 const ids = (api: MenuApi): readonly string[] => api.menuData?.items.map((item) => item.id) ?? [];
@@ -250,11 +252,11 @@ describe('useMessageMenu — « Traduire sur l’appareil » mène à la traduct
   test('accordée, l’appareil reçoit CE message, avec le régime de la conversation et le Prisme du lecteur — et le geste le dit', async () => {
     const { deviceTranslation, offered, settings } = ports(true);
     const { api, open, announced } = mount({ conversation: { encryptionMode: 'e2ee' }, deviceTranslation });
-    open('m-theirs');
+    open('m-foreign');
     expect(ids(api())).toContain('translateOnDevice');
-    act(() => api().onMenuAction('m-theirs', 'translateOnDevice'));
+    act(() => api().onMenuAction('m-foreign', 'translateOnDevice'));
     await settle();
-    expect(offered).toEqual([{ ids: ['m-theirs'], mode: 'e2ee', viewerId: 'u-viewer', languages: ['fr'] }]);
+    expect(offered).toEqual([{ ids: ['m-foreign'], mode: 'e2ee', viewerId: 'u-viewer', languages: ['fr'] }]);
     expect(settings).toEqual([]);
     expect(announced).toEqual(['Traduction demandée à cet appareil']);
   });
@@ -262,10 +264,66 @@ describe('useMessageMenu — « Traduire sur l’appareil » mène à la traduct
   test('sans accord, rien ne se télécharge : le geste mène aux réglages où l’accord se donne, et le dit', async () => {
     const { deviceTranslation, offered, settings } = ports(false);
     const { api, announced } = mount({ conversation: { encryptionMode: 'e2ee' }, deviceTranslation });
-    act(() => api().onMenuAction('m-theirs', 'translateOnDevice'));
+    act(() => api().onMenuAction('m-foreign', 'translateOnDevice'));
     await settle();
     expect(offered).toEqual([]);
     expect(settings).toEqual([1]);
     expect(announced).toEqual(['Activez « Traduire sur cet appareil » dans les réglages']);
+  });
+});
+
+describe('useMessageMenu — audit #11372', () => {
+  test('m1 — un message déjà dans la langue primaire du lecteur, ou le mien, ne s’offre pas à l’appareil — ni au geste', async () => {
+    const offered: string[] = [];
+    const deviceTranslation: DeviceTranslationPorts = {
+      granted: async () => true,
+      offer: async (_queryClient, params) => {
+        offered.push(...params.messages.map((m) => m.id));
+      },
+      openSettings: () => {},
+    };
+    const { api, open } = mount({ conversation: { encryptionMode: 'e2ee' }, deviceTranslation });
+    open('m-theirs');
+    expect(ids(api())).not.toContain('translateOnDevice');
+    act(() => api().onCloseMenu());
+    open('m-mine');
+    expect(ids(api())).not.toContain('translateOnDevice');
+    act(() => api().onMenuAction('m-theirs', 'translateOnDevice'));
+    await act(async () => new Promise((r) => setTimeout(r, 0)));
+    expect(offered).toEqual([]);
+  });
+
+  test('B1 — un MODERATOR de plateforme ne modifie pas le message d’un autre ; il modifie le sien', () => {
+    const { api } = mount({ viewer: { platformRole: 'MODERATOR' } });
+    expect(api().editOf('m-theirs')).toBeNull();
+    expect(api().editOf('m-mine')).not.toBeNull();
+  });
+
+  test('M1 — en bout en bout, ni le menu, ni le glissé, ni le geste ne répondent', () => {
+    const { api, open, replied } = mount({ conversation: { encryptionMode: 'e2ee' } });
+    open('m-theirs');
+    expect(ids(api())).not.toContain('reply');
+    expect(api().swipeActionsOf(THEIRS)?.canReply).toBe(false);
+    expect(api().replyableOf('m-theirs')).toBe(false);
+    act(() => api().onMenuAction('m-theirs', 'reply'));
+    expect(replied).toEqual([]);
+  });
+
+  test('M1 — en clair, la réponse s’arme', () => {
+    const { api, replied } = mount();
+    expect(api().replyableOf('m-theirs')).toBe(true);
+    act(() => api().onMenuAction('m-theirs', 'reply'));
+    expect(replied).toEqual(['m-theirs']);
+  });
+
+  test('M4 — réagir se lit sur `canReact` : un lecteur qui n’est plus membre ne réagit pas', () => {
+    expect(mount().api().reactableOf(THEIRS)).toBe(true);
+    act(() => root.unmount());
+    expect(mount({ viewer: { isActiveMember: false } }).api().reactableOf(THEIRS)).toBe(false);
+  });
+
+  test('M4 — le contexte remis à « Plus… » et aux exports porte les verdicts du lecteur', () => {
+    const { api } = mount({ viewer: { platformRole: 'MODERATOR' } });
+    expect(api().menuContextOf(THEIRS).actions?.verdicts.remove).not.toBeNull();
   });
 });

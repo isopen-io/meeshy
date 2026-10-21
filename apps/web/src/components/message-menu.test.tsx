@@ -564,6 +564,7 @@ describe('MessageMenu — les groupes (#11210)', () => {
     const items = messageMenuItems({
       ...messageMenuContextOf(subject('u-autre'), { now: Date.now(), scope: menuScope({}, { encryptionMode: 'e2ee' }) }),
       piecesLabels: true,
+      deviceTranslationWanted: true,
     });
     const el = mount({ items, events: { onAction: (id) => actions.push(id) } });
     act(() => {
