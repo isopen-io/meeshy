@@ -38,7 +38,7 @@ import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
 import { conversationAvatarDoor } from '@/lib/view/thread-header-offer';
-import { currentInterfaceLanguage } from '@/lib/interface-language';
+import { currentInterfaceLanguage, interfaceLanguageOf } from '@/lib/interface-language';
 import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@/lib/view/conversation';
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
@@ -401,6 +401,7 @@ function LensRowImpl({
    */
   const previewText = status.magnified ? 'line-clamp-2' : 'truncate';
   const language = interfaceLanguage ?? currentInterfaceLanguage();
+  const labelLanguage = (interfaceLanguage ? interfaceLanguageOf(interfaceLanguage) : null) ?? currentInterfaceLanguage();
   const preview = useConversationPreview({
     conversation,
     viewerId,
@@ -780,8 +781,8 @@ function LensRowImpl({
                 color: 'var(--color-ios-ink-3)',
               }}
             >
-              <span>{rowDateLabel(at, language)}</span>
-              {group ? <span>· {memberCountLabel(conversation.memberCount, language)}</span> : null}
+              <span>{rowDateLabel(at, labelLanguage)}</span>
+              {group ? <span>· {memberCountLabel(conversation.memberCount, labelLanguage)}</span> : null}
             </span>
             {/*
               L'HEURE (#5694, écarts 1 et 8) — `LentilleMetrics.Time.size` = 12
