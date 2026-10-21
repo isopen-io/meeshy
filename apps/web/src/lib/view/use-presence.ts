@@ -7,6 +7,7 @@ import type { Participant } from '@/lib/api/types';
 
 import { createIntervalClock, type IntervalClock } from './interval-clock';
 import { presenceKeyOf, presenceOf } from './conversation';
+import { useViewer } from './use-viewer';
 
 /**
  * L'HORLOGE DE LA PRÉSENCE (#10571) — un SEUL minuteur à 30 s pour toutes les
@@ -26,13 +27,21 @@ export type PresenceSubject = {
   readonly participant: Participant | undefined;
 };
 
-/** La présence SERVIE : la carte vivante d'abord (par l'identifiant nommé, sinon la clé du participant), la charge REST sinon. */
+/**
+ * La présence SERVIE : la carte vivante d'abord (par l'identifiant nommé, sinon
+ * la clé du participant), la charge REST sinon. SA PROPRE pastille ne se peint
+ * jamais (décision porteur 2026-10-21, #11412) : la passerelle sert sa présence
+ * à soi-même, et son propre post ou son message en groupe la portaient.
+ */
 function servedPresenceOfSubject(
   state: Pick<PresenceState, 'byUser'>,
   { userId, participant }: PresenceSubject,
   now: number,
+  selfId: string | null,
 ): UserPresenceStatus {
-  return livePresenceOf(state, userId ?? presenceKeyOf(participant), now) ?? presenceOf(participant, now);
+  const key = userId ?? presenceKeyOf(participant);
+  if (key !== undefined && key === selfId) return 'offline';
+  return livePresenceOf(state, key, now) ?? presenceOf(participant, now);
 }
 
 type PresenceHookOptions = {
@@ -93,7 +102,8 @@ export function usePresencesOf(
   subjects: readonly PresenceSubject[],
   options: PresenceHookOptions = {},
 ): readonly UserPresenceStatus[] {
-  return useResolvedPresences((state, at) => subjects.map((subject) => servedPresenceOfSubject(state, subject, at)), options);
+  const selfId = useViewer().id;
+  return useResolvedPresences((state, at) => subjects.map((subject) => servedPresenceOfSubject(state, subject, at, selfId)), options);
 }
 
 export function usePresenceOf(subject: PresenceSubject, options?: PresenceHookOptions): UserPresenceStatus {
@@ -111,7 +121,11 @@ export function usePresencesOfUsers(
   userIds: readonly (string | undefined)[],
   options: PresenceHookOptions = {},
 ): readonly UserPresenceStatus[] {
-  return useResolvedPresences((state, at) => userIds.map((userId) => livePresenceOf(state, userId, at) ?? 'offline'), options);
+  const selfId = useViewer().id;
+  return useResolvedPresences(
+    (state, at) => userIds.map((userId) => (userId === selfId ? 'offline' : (livePresenceOf(state, userId, at) ?? 'offline'))),
+    options,
+  );
 }
 
 export function usePresenceOfUser(userId: string | undefined, options?: PresenceHookOptions): UserPresenceStatus {

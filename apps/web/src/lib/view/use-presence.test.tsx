@@ -276,3 +276,35 @@ describe('usePresenceOf', () => {
     expect(view.renders()).toBe(before);
   });
 });
+
+/**
+ * SA PROPRE PASTILLE NE SE PEINT JAMAIS (décision porteur 2026-10-21, #11412) —
+ * la passerelle sert sa présence à soi-même (`presence-audience.ts`), et son
+ * propre post, son propre commentaire ou son message en groupe portaient donc
+ * sa pastille. Le lecteur des témoins est `u-viewer` (`resolveViewer` sous
+ * fixtures).
+ */
+describe('la pastille du lecteur lui-même', () => {
+  test('n’est jamais peinte depuis la carte vivante', () => {
+    const view = mountUser('u-viewer');
+
+    act(() => view.store.getState().put('u-viewer', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.status()).toBe('offline');
+  });
+
+  test('ni depuis la charge REST de son participant', () => {
+    const view = mount(participant({ id: 'p-me', userId: 'u-viewer', isOnline: true, lastActiveAt: new Date(T0) }));
+
+    expect(view.status()).toBe('offline');
+  });
+
+  test('ni par son identifiant nommé', () => {
+    const view = mountSubject({ userId: 'u-viewer', participant: undefined });
+
+    act(() => view.store.getState().put('u-viewer', { isOnline: true, lastActiveAt: new Date(T0).toISOString() }));
+
+    expect(view.status()).toBe('offline');
+  });
+});
+

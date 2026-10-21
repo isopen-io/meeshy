@@ -102,6 +102,7 @@ final class PresenceManagerTests: XCTestCase {
         "Main/Views/ProfileOwnAvatar.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootFloatingChrome.swift": "soi — l'avatar du compte connecté",
         "Main/Views/RootViewComponents.swift": "soi — l'avatar du compte connecté",
+        "Main/Views/SettingsView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/FeedComposerSheet.swift": "soi — l'avatar du compte connecté",
         "Main/Views/StoryTrayView.swift": "soi — l'avatar du compte connecté",
         "Main/Views/GlobalSearchView.swift": "entité — groupe, communauté, conversation, message sans compte",
@@ -320,6 +321,40 @@ final class PresenceManagerTests: XCTestCase {
         sut.noteActivity(userId: "me-id")
 
         XCTAssertNil(sut.presenceMap["me-id"])
+    }
+
+    // MARK: - Sa propre pastille ne se peint jamais (décision porteur 2026-10-21, #11412)
+
+    func test_knownPresenceState_currentUserInTheMap_isOfflineSoNoDot() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+        sut.presenceMap["me-id"] = AppUserPresence(isOnline: true, lastActiveAt: Date())
+
+        XCTAssertEqual(sut.knownPresenceState(for: "me-id"), .offline)
+        XCTAssertEqual(sut.presenceState(for: "me-id"), .offline)
+    }
+
+    func test_resolvedState_currentUserServedOnlineByREST_isOffline() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        XCTAssertEqual(sut.resolvedState(userId: "me-id", isOnline: true, lastActiveAt: Date()), .offline)
+        XCTAssertEqual(sut.presenceState(for: "me-id", served: AppUserPresence(isOnline: true, lastActiveAt: Date())), .offline)
+    }
+
+    func test_resolvedState_otherUserServedOnline_keepsTheDot() {
+        let previous = AuthManager.shared.currentUser
+        defer { AuthManager.shared.currentUser = previous }
+        AuthManager.shared.currentUser = MeeshyUser(id: "me-id", username: "me", displayName: "Moi")
+
+        XCTAssertEqual(sut.resolvedState(userId: "friend-9", isOnline: true, lastActiveAt: Date()), .online)
+    }
+
+    func test_settingsAvatar_neverHardcodesItsOwnPresence() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/SettingsView.swift"))
+        XCTAssertFalse(source.contains("presenceState: .online"), "les Réglages ne peignent pas la pastille du compte connecté")
     }
 
     // MARK: - noteSocketDisconnected() — la coupure éteint sans figer le vert (#11412)

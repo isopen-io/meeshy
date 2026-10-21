@@ -122,7 +122,7 @@ final class LivePresenceRepaintGuardTests: XCTestCase {
         "Features/Main/Share/ShareSheetViewModel.swift": "écran de partage unique (#10947/#10948) — sa présence est l'affaire de son lot",
     ]
 
-    private static let presenceRead = #"knownPresenceState\(|presenceState\(for|resolvedState\(|presenceMap\["#
+    private static let presenceRead = #"knownPresenceState\(|presenceState\(for|resolvedState\(|servedPresence\(for|presenceMap\["#
     private static let liveRepaint = #"LivePresence \{|presencePulse|refreshSignal\.\$presenceVersion"#
 
     private var appRoot: URL {

@@ -57,10 +57,10 @@ struct PostDetailCommentThread: View {
             },
             moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
             storyState: storyViewModel.storyRingState(forUserId: comment.authorId),
-            presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state,
+            presenceState: PresenceManager.shared.knownPresenceState(for: comment.authorId),
             replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
             replyStoryResolver: { storyViewModel.storyRingState(forUserId: $0) },
-            replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state },
+            replyPresenceResolver: { PresenceManager.shared.knownPresenceState(for: $0) },
             hasMoreReplies: viewModel.expandedThreads.contains(comment.id)
                 && (viewModel.repliesHasMore[comment.id] ?? false),
             onLoadMoreReplies: { await viewModel.loadMoreReplies(comment.id, postId: postId) },

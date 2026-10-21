@@ -231,7 +231,6 @@ struct SettingsView: View {
                     name: authManager.currentUser?.displayName ?? "?",
                     context: .conversationList,
                     avatarURL: authManager.currentUser?.avatar,
-                    presenceState: .online,
                     ring: authManager.currentUser?.profileDecor?.avatarRing
                 )
 

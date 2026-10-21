@@ -216,7 +216,7 @@ final class PresenceManager: ObservableObject {
     }
 
     func presenceState(for userId: String) -> PresenceState {
-        presenceMap[userId]?.state ?? .offline
+        knownPresenceState(for: userId) ?? .offline
     }
 
     /// La présence SERVIE de l'auteur d'un message (#10944) : `senderId` est
@@ -341,8 +341,21 @@ final class PresenceManager: ObservableObject {
     /// profil affiche la MÊME pastille que la liste de conversations quand la
     /// donnée live existe, et retombe sur son snapshot REST `isOnline` pour
     /// les profils hors du périmètre suivi (contacts jamais croisés).
+    ///
+    /// SA PROPRE pastille ne se peint jamais (décision porteur 2026-10-21,
+    /// #11412) : la passerelle sert sa présence à soi-même, et son propre post ou
+    /// son message en groupe la portaient. `.offline` — connue, sans point — et
+    /// non `nil`, pour qu'aucun appelant ne retombe sur la présence REST.
     func knownPresenceState(for userId: String) -> PresenceState? {
-        presenceMap[userId]?.state
+        if !userId.isEmpty, userId == AuthManager.shared.currentUser?.id { return .offline }
+        return presenceMap[userId]?.state
+    }
+
+    /// La présence d'un compte que la vue reçoit déjà servie (payload stories) :
+    /// la carte vivante d'abord, la charge sinon — jamais la sienne (#11412).
+    func servedPresence(for userId: String, fallback: UserPresence?) -> UserPresence? {
+        if !userId.isEmpty, userId == AuthManager.shared.currentUser?.id { return nil }
+        return presenceMap[userId] ?? fallback
     }
 
     /// Pastille tri-state pour les listes : présence temps réel du manager si
