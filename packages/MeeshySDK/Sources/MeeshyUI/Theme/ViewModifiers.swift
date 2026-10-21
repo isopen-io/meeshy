@@ -43,22 +43,6 @@ public extension View {
     }
 }
 
-// MARK: - Glowing Border
-
-public struct GlowingBorder: ViewModifier {
-    public let gradient: LinearGradient
-    public var cornerRadius: CGFloat = 20
-    public var lineWidth: CGFloat = 2
-
-    public func body(content: Content) -> some View {
-        content
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(gradient, lineWidth: lineWidth)
-            )
-    }
-}
-
 // MARK: - Pressable Button
 
 public struct PressableButton: ViewModifier {
@@ -119,41 +103,6 @@ public struct PulseEffect: ViewModifier {
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isPulsing = false
-                }
-            }
-    }
-}
-
-// MARK: - Breathing Glow Effect
-
-public struct BreathingGlow: ViewModifier {
-    public let color: Color
-    public let intensity: Double
-    @State private var isGlowing = false
-    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
-    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
-    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
-
-    public init(color: Color, intensity: Double = 0.5) {
-        self.color = color
-        self.intensity = intensity
-    }
-
-    public func body(content: Content) -> some View {
-        content
-            .shadow(
-                color: color.opacity(isGlowing ? intensity : intensity * 0.3),
-                radius: isGlowing ? 12 : 6,
-                y: isGlowing ? 6 : 3
-            )
-            .animation(
-                .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
-                value: isGlowing
-            )
-            .onAppear { guard !reduceMotion else { return }; isGlowing = true }
-            .onDisappear {
-                withTransaction(Transaction(animation: nil)) {
-                    isGlowing = false
                 }
             }
     }
@@ -314,10 +263,6 @@ extension View {
         modifier(GlassCard(cornerRadius: cornerRadius))
     }
 
-    public func glowingBorder(_ gradient: LinearGradient = MeeshyColors.brandGradient, cornerRadius: CGFloat = 20, lineWidth: CGFloat = 2) -> some View {
-        modifier(GlowingBorder(gradient: gradient, cornerRadius: cornerRadius, lineWidth: lineWidth))
-    }
-
     public func pressable() -> some View {
         modifier(PressableButton())
     }
@@ -328,10 +273,6 @@ extension View {
 
     public func pulse(intensity: CGFloat = 0.04) -> some View {
         modifier(PulseEffect(intensity: intensity))
-    }
-
-    public func breathingGlow(color: Color, intensity: Double = 0.5) -> some View {
-        modifier(BreathingGlow(color: color, intensity: intensity))
     }
 
     public func staggeredAppear(index: Int, baseDelay: Double = 0.05) -> some View {

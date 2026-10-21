@@ -195,9 +195,9 @@ public struct AudienceUserPickerView: View {
                 .font(MeeshyFont.relative(16, weight: .semibold))
                 .lineLimit(1)
             HStack {
-                Button(String(localized: "common.cancel", defaultValue: "Annuler")) { dismiss() }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .module)) { dismiss() }
                 Spacer()
-                Button(String(localized: "common.done", defaultValue: "OK")) {
+                Button(String(localized: "common.done", defaultValue: "OK", bundle: .module)) {
                     onDone(vm.selectedIds)
                     dismiss()
                 }

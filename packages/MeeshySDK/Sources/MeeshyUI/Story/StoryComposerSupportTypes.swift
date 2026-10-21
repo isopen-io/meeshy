@@ -62,12 +62,6 @@ struct StoryComposerDraft: Codable {
     static let userDefaultsKey = "storyComposerDraft"
 }
 
-// MARK: - Slide Publish Action
-
-public enum SlidePublishAction: Sendable {
-    case retry, skip, cancel
-}
-
 // MARK: - Audio Editor Item Wrapper
 
 struct AudioEditorItemWrapper: Identifiable {
