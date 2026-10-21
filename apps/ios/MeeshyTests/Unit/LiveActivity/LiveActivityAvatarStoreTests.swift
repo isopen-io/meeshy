@@ -74,13 +74,22 @@ final class LiveActivityAvatarStoreTests: XCTestCase {
         let (store, _) = try makeStore()
         try store.write(imageData: try makePNG(width: 200, height: 200), forActivityID: "A")
 
+        XCTAssertTrue(
+            LiveActivityAvatarStore.writingOptions.contains(.completeFileProtectionUntilFirstUserAuthentication),
+            "la miniature s'écrit lisible appareil verrouillé"
+        )
+        XCTAssertFalse(LiveActivityAvatarStore.writingOptions.contains(.completeFileProtection),
+                       "jamais `complete` : l'îlot ne pourrait plus la lire écran verrouillé")
+
+        // Le simulateur n'enregistre pas la classe de protection d'un fichier
+        // (`DependencyContainerTests` le constate aussi) : l'attribut se relit là
+        // où la plateforme le tient — sur l'appareil, il doit être exactement
+        // celui que l'écriture déclare.
         let url = try XCTUnwrap(store.fileURL(forActivityID: "A"))
         let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-
-        XCTAssertEqual(
-            attributes[.protectionKey] as? FileProtectionType,
-            .completeUntilFirstUserAuthentication
-        )
+        if let protection = attributes[.protectionKey] as? FileProtectionType {
+            XCTAssertEqual(protection, .completeUntilFirstUserAuthentication)
+        }
     }
 
     func test_removeAllKeeping_deletesOnlyOrphans() throws {

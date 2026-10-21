@@ -132,6 +132,14 @@ nonisolated enum ComposerOrigin: Equatable {
     /// plein écran, hors scène, et verse sa prise au message
     /// (`ComposerReturnedMedia(capture:)`). Sa porte d'origine (#9123) a été
     /// retirée avec ce qui n'existait que pour elle (#9298).
+    ///
+    /// **Porte DÉCLARÉE SANS APPELANT depuis le 2026-10-20** :
+    /// la retouche d'une pièce passe par la caméra — une pièce en attente du message
+    /// (263d9c3c86, cb0d932b24), d'un commentaire (d4baaa5037) ou d'un post du
+    /// fil (34420e170b) ouvre la retouche d'après la prise, et la série de
+    /// scènes du composer a disparu (décision porteur : pas de Studio). Son
+    /// retrait, avec le mode retouche du meuble qui n'existe que pour elle, est
+    /// un lot à lui (#11422). Inventaire gardé : `ComposerDoorInventoryGuardTests`.
     case conversationDraftMedia(staged: Bool)
 }
 
