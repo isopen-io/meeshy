@@ -3,7 +3,7 @@
  * l'appel. Un appel direct en tient une, un appel de groupe une par membre
  * (maillage, `mode: 'p2p'` : la passerelle relaie, elle ne mixe rien).
  *
- * Trois règles, reprises d'iOS (`CallManager.swift` § 3.5) pour que le web
+ * Quatre règles, reprises d'iOS (`CallManager.swift` § 3.5) pour que le web
  * parle la même langue que l'app :
  *
  * - **négociation parfaite (W3C)** : le plus petit identifiant est POLI et
@@ -14,7 +14,13 @@
  * - **aucun codec injecté dans le SDP** : Opus + RED passent par
  *   `setCodecPreferences` (ADR-4 iOS — un RED injecté dans le SDP a rendu
  *   l'audio muet après ICE). Seuls les paramètres `fmtp` d'Opus de la
- *   description ENVOYÉE sont réglés (`shapeSdp`, #8697).
+ *   description ENVOYÉE sont réglés (`shapeSdp`, #8697). La vidéo suit
+ *   H264 > VP8 > VP9 (#11319) sur chaque ligne vidéo, qu'elle vienne de
+ *   l'offre, de la réponse ou d'une caméra allumée en cours d'appel ; un
+ *   navigateur sans `setCodecPreferences` ni `getCapabilities` (Firefox avant
+ *   128, WebView ancienne) garde sa négociation par défaut, sans erreur ;
+ * - **connexion comme iOS** (`P2PWebRTCClient.swift`) : max-bundle, RTCP
+ *   multiplexé, pool ICE de 4 (`peerConfiguration`).
  *
  * La reprise ICE : `disconnected` attend 3 s avant de relancer, `failed`
  * relance tout de suite, puis 2 → 16 s entre deux tentatives, 5 au plus.
@@ -331,6 +337,7 @@ export function createPeerLink(deps: PeerLinkDeps): PeerLink {
       if (videoTransceiver === null) {
         if (track === null) return;
         videoTransceiver = pc.addTransceiver(track, { direction: 'sendrecv', streams: [deps.localStream] });
+        preferVideoCodecs(videoTransceiver);
         return;
       }
       await videoTransceiver.sender.replaceTrack(track);
