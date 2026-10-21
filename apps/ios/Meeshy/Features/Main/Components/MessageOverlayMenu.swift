@@ -25,11 +25,15 @@ struct MessageOverlayMenu: View {
     // rangée plate en Script et en Focal, la bulle ailleurs — entière, sans
     // capture (`MessageOverlayCellPreview`).
     @Binding var isPresented: Bool
-    var canDelete: Bool = false
-    var canEdit: Bool = false
+    /// Le contexte du menu, posé par la fabrique UNIQUE (`MessageMenuContext.make`,
+    /// #11214) : l'overlay ne recompose aucun verdict. `.closed` hors hôte.
+    var menuContext: MessageMenuContext = .closed
     var onCopy: (() -> Void)?
     var onEdit: (() -> Void)?
-    var isStarred: Bool = false
+    /// Répondre (#11214) — l'hôte compose la citation, comme la feuille « Plus… ».
+    var onReply: (() -> Void)? = nil
+    /// Réessayer un envoi raté.
+    var onRetry: (() -> Void)? = nil
     var textTranslations: [MessageTranslation] = []
     var transcription: MessageTranscription? = nil
     var translatedAudios: [MessageTranslatedAudio] = []
@@ -76,6 +80,7 @@ struct MessageOverlayMenu: View {
     var onExpandFullPicker: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
     @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
     /// « Réduire les animations » (#11208) : l'entrée et la sortie deviennent un
@@ -167,45 +172,18 @@ struct MessageOverlayMenu: View {
 
     // MARK: - Primary Actions (liste verticale native-lean)
 
-    private var menuContext: MessageMenuContext {
-        let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasMedia = !message.attachments.isEmpty
-        let hasTimebased = message.attachments.contains {
-            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
-        }
-        return MessageMenuContext(
-            isMine: message.isMe,
-            canEdit: canEdit,
-            canDelete: canDelete,
-            hasText: hasText,
-            hasMedia: hasMedia,
-            hasTimebasedMedia: hasTimebased,
-            isPinned: message.pinnedAt != nil,
-            isStarred: isStarred,
-            isEdited: message.isEdited,
-            // Inerte ici : `menuContext` n'alimente que `primaryActions`, qui
-            // n'utilise PAS `hasEditRevisions`. Ce champ ne pilote que l'item
-            // `.history` de la feuille « Plus… », dont le contexte est construit
-            // séparément (ConversationView) avec la vraie valeur
-            // `!editRevisions(for:).isEmpty`.
-            hasEditRevisions: true,
-            hasCallSummary: message.callSummary != nil,
-            saveableAttachmentCount: message.attachments.filter { $0.type != .location }.count,
-            canComposeMedia: ComposableAttachment.offers(message: message),
-            stickerFavorite: MessageStickerFavorite.state(for: message.sticker),
-            isSticker: message.sticker != nil, stickerAddable: ReceivedSticker.offersAdd(for: message, known: ReceivedStickerLedger.shared.ids),
-            showReadReceipts: UserPreferencesManager.shared.privacy.showReadReceipts,
-            exits: message.exitOffer, isViewOnce: message.holdsViewOnce, isBlurred: message.holdsBlur,
-            hasDefaultExportFormat: MessageCardExportMenu.hasDefaultFormat, hasPaintableMedia: !MessageCardSubject.paintableMedia(of: message).isEmpty
-        )
-    }
-
     private var primaryActions: [PrimaryAction] {
         MessageActionResolver.primaryActions(menuContext)
     }
 
     private func handlePrimaryAction(_ action: PrimaryAction) {
         switch action {
+        case .reply:
+            onReply?()
+        case .retry:
+            onRetry?()
+        case .openLink, .copyLink, .openInMaps, .copyAddress:
+            performKindAction(action)
         case .edit:
             onEdit?()
         case .translate:
@@ -233,6 +211,25 @@ struct MessageOverlayMenu: View {
             return
         }
         dismiss()
+    }
+
+    /// Les actions du TYPE (#11214) : la cible se relit sur le message, et la
+    /// copie passe par la loi de sortie, comme « Copier ».
+    private func performKindAction(_ action: PrimaryAction) {
+        let place = message.location
+        switch action {
+        case .openLink:
+            if let link = MessageKindTarget.openableLink(of: message) { openURL(link) }
+        case .copyLink:
+            if let link = MessageKindTarget.firstRawLink(in: message.content),
+               MessageExitTransport.copy(link, of: message) { HapticFeedback.success() }
+        case .openInMaps:
+            if let url = place.flatMap({ MessageKindTarget.mapsURL(for: $0) }) { openURL(url) }
+        case .copyAddress:
+            if let place, MessageExitTransport.copy(MessageKindTarget.address(of: place), of: message) { HapticFeedback.success() }
+        default:
+            return
+        }
     }
 
     var body: some View {

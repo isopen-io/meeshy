@@ -6,9 +6,11 @@ import Foundation
 ///
 /// Les rôles arrivent en CHAÎNES, dans la casse que le serveur a servie, et se
 /// lisent comme la loi les lit :
-/// - `memberRole` EXACT, en minuscules comme `Participant.role` — plier la casse
-///   offrirait ce que la passerelle refuse ; un rang illisible vaut 0, sous
-///   `member` ;
+/// - `memberRole` EXACT, en minuscules comme `Participant.role`, pour les gestes
+///   sur un MESSAGE — `admitMessageDelete` et `admitConversationWriteFor`
+///   comparent ainsi ; un rang illisible vaut 0, sous `member` ;
+/// - `effectiveRole` casse PLIÉE, pour les gestes sur la CONVERSATION — comme
+///   `effectiveConversationRole`, car des lignes `CREATOR` héritées existent ;
 /// - `platformRole` EXACT pour modérer, sans casse pour administrer
 ///   (`PlatformRole`).
 ///
@@ -76,10 +78,10 @@ public struct ConversationViewerAuthority: Equatable, Sendable {
     /// Le niveau de la LIGNE — 0 hors membre actif ou rang illisible.
     public var memberRank: Int { isActiveMember ? memberRole?.level ?? 0 : 0 }
 
-    /// `effectiveConversationRole` : `nil` hors membre actif.
+    /// `effectiveConversationRole` : `nil` hors membre actif, rang de la ligne casse pliée.
     public var effectiveRole: MemberRole? {
         guard isActiveMember else { return nil }
-        return administersPlatform ? .creator : memberRole
+        return administersPlatform ? .creator : conversationRoleRaw.flatMap { MemberRole(rawValue: $0.lowercased()) }
     }
 
     public var effectiveRank: Int { effectiveRole?.level ?? 0 }

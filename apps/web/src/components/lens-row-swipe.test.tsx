@@ -369,8 +369,8 @@ describe('LensRow — le retour en place', () => {
 
   test('la durée du retour est celle de la feuille de style', () => {
     const css = readFileSync(new URL('../styles/conversation-row-swipe.css', import.meta.url).pathname, 'utf8');
-    const durations = [...css.matchAll(/(?:translate|width) (\d+)ms/g)].map((found) => Number(found[1]));
-    expect(durations.length).toBe(2);
+    const durations = [...css.matchAll(/translate (\d+)ms/g)].map((found) => Number(found[1]));
+    expect(durations.length).toBe(3);
     expect(durations.every((duration) => duration === ROW_SWIPE_SETTLE_MS)).toBe(true);
   });
 

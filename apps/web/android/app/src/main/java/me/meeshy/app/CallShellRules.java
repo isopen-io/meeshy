@@ -42,7 +42,16 @@ public final class CallShellRules {
      * systeme sans la fonction PiP la refuse.
      */
     public static boolean entersPictureInPicture(int sdk, boolean callActive, boolean video, boolean systemSupports) {
-        return sdk >= 26 && systemSupports && callActive && video;
+        return entersPictureInPicture(sdk, callActive, video, false, systemSupports);
+    }
+
+    /**
+     * #11346 — et un appel VOCAL flotte aussi quand une video est a l'ecran
+     * ({@code floats}, `pipSource` de `call-pip.ts`) : la camera d'un pair ou
+     * son ecran partage, comme l'image dans l'image du web.
+     */
+    public static boolean entersPictureInPicture(int sdk, boolean callActive, boolean video, boolean floats, boolean systemSupports) {
+        return sdk >= 26 && systemSupports && callActive && (video || floats);
     }
 
     /** #8144 — les boutons de la fenetre flottante, dans l'ordre : le micro (dans son etat), puis raccrocher. */

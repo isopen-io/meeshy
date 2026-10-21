@@ -180,8 +180,8 @@ extension ConversationViewModel {
     /// serveur et diffuse `message:deleted`. L'UI conditionne `everyone` à `canDeleteForEveryone(_:)`.
     typealias DeleteMode = MessageDeleteMode
 
-    func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        commands.canDeleteForEveryone(message, window: window)
+    func canDeleteForEveryone(_ message: Message) -> Bool {
+        commands.canDeleteForEveryone(message)
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {

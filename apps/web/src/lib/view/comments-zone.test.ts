@@ -4,6 +4,7 @@ import {
   COMMENTS_ZONE_SHARE,
   COMMENTS_ZONE_TOP_GAP_PX,
   KEYBOARD_MIN_PX,
+  COMMENTS_ZONE_MOTION,
   commentsZoneOf,
   commentsZoneStageOf,
   nextKeyboardBaseline,
@@ -36,38 +37,43 @@ describe('commentsZoneStageOf — l’état de la zone', () => {
 });
 
 describe('commentsZoneOf — la hauteur de la zone sur les quatre états', () => {
-  const share = (stage: 'absent' | 'folded' | 'open') => Number.parseFloat(commentsZoneOf({ stage, keyboardInset: 0, reducedMotion: false }).height);
+  const share = (stage: 'absent' | 'folded' | 'open') => Number.parseFloat(commentsZoneOf({ stage, keyboardInset: 0 }).height);
 
   test('la zone MONTE quand le composeur paraît : absent ≤ bulle < visible', () => {
     expect(share('absent')).toBeLessThanOrEqual(share('folded'));
     expect(share('folded')).toBeLessThan(share('open'));
-    expect(commentsZoneOf({ stage: 'open', keyboardInset: 0, reducedMotion: false }).height).toBe(`${COMMENTS_ZONE_SHARE.open * 100}%`);
+    expect(commentsZoneOf({ stage: 'open', keyboardInset: 0 }).height).toBe(`${COMMENTS_ZONE_SHARE.open * 100}%`);
   });
 
   test('hors clavier, la zone se pose au bas du cadre, au-dessus de l’indicateur d’accueil', () => {
-    const zone = commentsZoneOf({ stage: 'folded', keyboardInset: 0, reducedMotion: false });
-    expect(zone.bottom).toBe(0);
+    const zone = commentsZoneOf({ stage: 'folded', keyboardInset: 0 });
+    expect(zone.translate).toBe('0px 0px');
     expect(zone.paddingBottom).toBe('env(safe-area-inset-bottom, 0px)');
   });
 
   test('clavier ouvert : la zone occupe TOUT l’espace libre au-dessus du clavier, sous l’encoche', () => {
-    const zone = commentsZoneOf({ stage: 'typing', keyboardInset: 320, reducedMotion: false });
-    expect(zone.bottom).toBe(320);
+    const zone = commentsZoneOf({ stage: 'typing', keyboardInset: 320 });
+    expect(zone.translate).toBe('0px -320px');
     expect(zone.height).toBe(`calc(100% - 320px - env(safe-area-inset-top, 0px) - ${COMMENTS_ZONE_TOP_GAP_PX}px)`);
     expect(zone.paddingBottom).toBe('0px');
   });
 
   test('coque Android (la WebView rétrécit, aucun retrait) : la zone remplit le cadre réduit', () => {
-    const zone = commentsZoneOf({ stage: 'typing', keyboardInset: 0, reducedMotion: false });
-    expect(zone.bottom).toBe(0);
+    const zone = commentsZoneOf({ stage: 'typing', keyboardInset: 0 });
+    expect(zone.translate).toBe('0px 0px');
     expect(zone.height).toBe(`calc(100% - 0px - env(safe-area-inset-top, 0px) - ${COMMENTS_ZONE_TOP_GAP_PX}px)`);
   });
 
-  test('sans saut : hauteur et bord bas glissent ensemble ; aucun mouvement si on le refuse', () => {
-    const moving = commentsZoneOf({ stage: 'open', keyboardInset: 0, reducedMotion: false }).transition;
-    expect(moving).toContain('height');
-    expect(moving).toContain('bottom');
-    expect(commentsZoneOf({ stage: 'open', keyboardInset: 0, reducedMotion: true }).transition).toBe('none');
+  test('le bord bas se pose en `translate` (jamais `bottom`) : le clavier ouvert remonte la zone de sa hauteur', () => {
+    expect(commentsZoneOf({ stage: 'typing', keyboardInset: 320 }).translate).toBe('0px -320px');
+    expect(commentsZoneOf({ stage: 'open', keyboardInset: 0 }).translate).toBe('0px 0px');
+  });
+
+  test('la zone ne porte plus aucune transition de géométrie : le mouvement est un FLIP du bord haut', () => {
+    const zone = commentsZoneOf({ stage: 'open', keyboardInset: 0 });
+    expect(Object.keys(zone)).not.toContain('transition');
+    expect(Object.keys(zone)).not.toContain('bottom');
+    expect(COMMENTS_ZONE_MOTION).toEqual({ duration: 250, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
   });
 });
 

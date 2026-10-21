@@ -63,6 +63,12 @@ struct ConversationListSheetTargets {
     /// — la preuve qu'un regroupement se relit après coup, champ par champ.
     @Indirect var rename: Conversation? = nil
 
+    /// Celle que le lecteur s'apprête à quitter (menu de la rangée, #11215).
+    @Indirect var leaveTarget: Conversation? = nil
+
+    /// Celle dont le signalement est présenté (menu de la rangée, #11215).
+    @Indirect var reportTarget: Conversation? = nil
+
     /// La recherche demandée sur une conversation verrouillée, armée seulement
     /// une fois le PIN franchi (`ConversationOpenRoute.searchesAfterUnlock`).
     var searchAfterUnlock: Bool = false

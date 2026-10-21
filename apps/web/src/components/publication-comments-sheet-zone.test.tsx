@@ -125,7 +125,7 @@ describe('PublicationCommentsSheet — la zone de commentaires d’une story mon
     });
     await settle();
     expect(sheetOf(host).getAttribute('data-comments-zone')).toBe('typing');
-    expect(sheetOf(host).style.bottom).toBe('300px');
+    expect(sheetOf(host).style.translate).toBe('0px -300px');
     expect(sheetOf(host).style.height).toContain('calc(100% - 300px');
     expect(list(host)?.hidden).toBe(false);
   });
@@ -146,7 +146,7 @@ describe('PublicationCommentsSheet — la zone de commentaires d’une story mon
     });
     await settle();
     expect(sheetOf(host).getAttribute('data-comments-zone')).toBe('folded');
-    expect(sheetOf(host).style.bottom).toBe('0px');
+    expect(sheetOf(host).style.translate).toBe('0px 0px');
   });
 
   test('coque Android : la WebView rétrécit sous le clavier — la zone remplit le cadre réduit', async () => {
@@ -163,7 +163,7 @@ describe('PublicationCommentsSheet — la zone de commentaires d’une story mon
       });
       await settle();
       expect(sheetOf(host).getAttribute('data-comments-zone')).toBe('typing');
-      expect(sheetOf(host).style.bottom).toBe('0px');
+      expect(sheetOf(host).style.translate).toBe('0px 0px');
     } finally {
       if (realInner === undefined) Reflect.deleteProperty(window, 'innerHeight');
       else Object.defineProperty(window, 'innerHeight', realInner);

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 /// Bande de forme d'onde, partagée par les pistes audio et vidéo.
 ///
@@ -9,6 +10,8 @@ struct WaveformStrip: View {
 
     let samples: [Float]
     let tint: Color
+    /// Ce que `samples` EST : la mesure (décibels) ou le champ publié (linéaire).
+    var reading: WaveformReading = .measured
 
     var body: some View {
         GeometryReader { geo in
@@ -19,7 +22,8 @@ struct WaveformStrip: View {
             if !samples.isEmpty {
                 let stepX = geo.size.width / CGFloat(samples.count)
                 let heights = Self.barHeights(samples: samples,
-                                              availableHeight: geo.size.height)
+                                              availableHeight: geo.size.height,
+                                              reading: reading)
                 HStack(alignment: .center, spacing: 1) {
                     ForEach(samples.indices, id: \.self) { i in
                         Capsule()
@@ -37,15 +41,16 @@ struct WaveformStrip: View {
 
     /// Hauteur en points de chaque barre.
     ///
-    /// C'est LE point unique où l'échelle décibel entre en jeu : les valeurs
-    /// stockées restent des RMS linéaires, et `displayHeight` les rend
-    /// lisibles. Le plancher à 2 pt garde un trait visible sur le silence, pour
+    /// C'est LE point unique où l'échelle entre en jeu : la mesure (RMS
+    /// linéaire) se lit en décibels, le champ publié (normalisé au pic) en
+    /// linéaire — jamais l'une sur l'autre (#9886). Le plancher à 2 pt garde un trait visible sur le silence, pour
     /// qu'une piste muette se distingue d'une piste pas encore analysée.
     nonisolated static func barHeights(samples: [Float],
-                                       availableHeight: CGFloat) -> [CGFloat] {
+                                       availableHeight: CGFloat,
+                                       reading: WaveformReading = .measured) -> [CGFloat] {
         let usable = max(0, availableHeight - 6)
         return samples.map { sample in
-            max(2, CGFloat(AudioWaveform.displayHeight(rms: sample)) * usable)
+            max(2, CGFloat(reading.height(sample)) * usable)
         }
     }
 }

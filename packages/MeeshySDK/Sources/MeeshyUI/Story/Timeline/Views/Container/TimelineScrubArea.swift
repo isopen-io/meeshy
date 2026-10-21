@@ -39,7 +39,10 @@ public struct TimelineScrubArea<TracksContent: View>: View {
 
     public let totalDuration: Float
     public let geometry: TimelineGeometry
-    public let currentTime: Float
+    /// La tête de lecture, observée par ses SEULES feuilles (curseur, ancre
+    /// de suivi, observateur d'auto-scroll) : le scroller et les pistes ne se
+    /// réévaluent plus à chaque tick (#9874).
+    public let playhead: PlayheadClock
     public let isDark: Bool
     public let minLaneWidth: CGFloat
     public let rulerHeight: CGFloat
@@ -80,7 +83,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     public init(
         totalDuration: Float,
         geometry: TimelineGeometry,
-        currentTime: Float,
+        playhead: PlayheadClock,
         isDark: Bool,
         minLaneWidth: CGFloat,
         rulerHeight: CGFloat = 22,
@@ -94,7 +97,7 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     ) {
         self.totalDuration = totalDuration
         self.geometry = geometry
-        self.currentTime = currentTime
+        self.playhead = playhead
         self.isDark = isDark
         self.minLaneWidth = minLaneWidth
         self.rulerHeight = rulerHeight
@@ -166,8 +169,10 @@ public struct TimelineScrubArea<TracksContent: View>: View {
                 .onPreferenceChange(HorizontalScrollOffsetKey.self) { scrollX = $0 }
                 .trackScrollContentOffsetX { scrollX = $0 }
                 .onPreferenceChange(TimelineViewportWidthKey.self) { viewportWidth = $0 }
-                .adaptiveOnChange(of: currentTime) { _, time in
-                    followPlayheadIfPlaying(time: time, proxy: proxy)
+                .background(alignment: .topLeading) {
+                    PlayheadChangeObserver(clock: playhead) { time in
+                        followPlayheadIfPlaying(time: time, proxy: proxy)
+                    }
                 }
                 // L'ancre doit avoir REJOINT sa nouvelle place avant qu'on
                 // recale le scroll dessus : d'où le recalage sur le changement
@@ -245,8 +250,10 @@ public struct TimelineScrubArea<TracksContent: View>: View {
     /// Ancre invisible qui suit le playhead dans l'espace du contenu —
     /// cible du `scrollTo` de l'auto-follow.
     private var playheadAnchor: some View {
-        TimelineScrollAnchor(x: Self.playheadLeadingInset + geometry.x(for: currentTime),
-                             anchorId: Self.playheadAnchorId)
+        PlayheadTimeReader(clock: playhead) { time in
+            TimelineScrollAnchor(x: Self.playheadLeadingInset + geometry.x(for: time),
+                                 anchorId: Self.playheadAnchorId)
+        }
     }
 
     /// Suit le playhead PENDANT LA LECTURE uniquement (un scrub = le doigt de
@@ -283,16 +290,18 @@ public struct TimelineScrubArea<TracksContent: View>: View {
 
     private var playheadOverlay: some View {
         GeometryReader { proxy in
-            PlayheadView(
-                currentTime: currentTime,
-                totalDuration: totalDuration,
-                geometry: geometry,
-                laneHeight: proxy.size.height,
-                isDark: isDark,
-                onScrub: onScrub,
-                onScrubBegan: onScrubBegan,
-                onScrubEnded: onScrubEnded
-            )
+            PlayheadTimeReader(clock: playhead) { time in
+                PlayheadView(
+                    currentTime: time,
+                    totalDuration: totalDuration,
+                    geometry: geometry,
+                    laneHeight: proxy.size.height,
+                    isDark: isDark,
+                    onScrub: onScrub,
+                    onScrubBegan: onScrubBegan,
+                    onScrubEnded: onScrubEnded
+                )
+            }
             .offset(x: Self.playheadLeadingInset)
         }
     }
