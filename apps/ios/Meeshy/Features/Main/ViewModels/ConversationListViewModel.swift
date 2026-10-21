@@ -113,9 +113,9 @@ class ConversationListViewModel: ObservableObject {
     /// `typingUsers` par `applyTypingSelection`.
     private let typingTracker = ConversationListTypingTracker()
     typealias TypingUser = ConversationListTypingTracker.TypingUser
-    /// Aperçu du menu contextuel (conversationId → derniers messages) — non
-    /// publié, seul le menu le lit. Chargé par `ConversationListPreviewLoader`.
-    private let previewLoader: ConversationListPreviewLoader
+    /// Aperçu d'appui long — publié par `ConversationListPreviewLoader`, que seule la
+    /// sous-vue feuille de l'aperçu observe : la liste le tient sans s'y abonner.
+    let previewLoader: ConversationListPreviewLoader
     var previewMessages: [String: [Message]] { previewLoader.messages }
     /// Écriture du cache disque de la liste : voir `ConversationListPersister`.
     private let persister = ConversationListPersister()
@@ -402,8 +402,7 @@ class ConversationListViewModel: ObservableObject {
         }
         var updated = conversations[idx]
         updated.applyLastMessage(facet)
-        conversations.remove(at: idx)
-        conversations.insert(updated, at: 0)
+        conversations = [updated] + conversations.enumerated().filter { $0.offset != idx }.map(\.element)
         schedulePersist()
     }
 
@@ -667,8 +666,8 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Preview Messages
 
-    func loadPreviewMessages(for conversationId: String, refresh: Bool = false) async {
-        await previewLoader.load(for: conversationId, refresh: refresh, currentUserId: { [weak self] in self?.currentUserId ?? "" })
+    func loadPreviewMessages(for conversationId: String, refresh: Bool = false, intent: ConversationListPreviewLoader.LoadIntent? = nil) async {
+        await previewLoader.load(for: conversationId, intent: intent ?? (refresh ? .open : .ensure), currentUserId: { [weak self] in self?.currentUserId ?? "" })
     }
 
     // MARK: - Mark as Read (local update from ConversationView)

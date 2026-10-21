@@ -273,22 +273,21 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 }
 
 // Thread-safe singleton formatter — avoids per-call DateFormatter allocations.
-// DateFormatter.string(from:) is not thread-safe; NSLock guards concurrent callers.
-public final class TimeStringCache: @unchecked Sendable {
+// DateFormatter.string(from:) is not thread-safe; Locked serializes concurrent callers.
+public final class TimeStringCache: Sendable {
     public static let shared = TimeStringCache()
 
-    private let lock = NSLock()
-    private let formatter: DateFormatter = {
+    private let formatter = Locked(uncheckedState: TimeStringCache.makeFormatter())
+
+    private static func makeFormatter() -> DateFormatter {
         let f = DateFormatter()
         f.dateFormat = "HH:mm"
         f.locale = Locale.current
         return f
-    }()
+    }
 
     public func format(_ date: Date) -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return formatter.string(from: date)
+        formatter.read { $0.string(from: date) }
     }
 }
 

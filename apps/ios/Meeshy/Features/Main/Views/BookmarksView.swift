@@ -73,27 +73,20 @@ struct BookmarksView: View {
         .background(theme.backgroundGradient.ignoresSafeArea())
         .task { await viewModel.loadBookmarks() }
         .onDisappear { Task { await impressions.flushNow() } }
-        .fullScreenCover(isPresented: Binding(
-            get: { storyAuthorUserId != nil },
-            set: { if !$0 { storyAuthorUserId = nil } }
-        )) {
-            StoryViewerContainer(
-                viewModel: storyViewModel,
-                userId: storyAuthorUserId,
-                isPresented: Binding(
-                    get: { storyAuthorUserId != nil },
-                    set: { if !$0 { storyAuthorUserId = nil } }
-                ),
-                singleGroup: true,
-                startAtFirstUnviewed: true,
-                presentationSource: "BookmarksView.authorAvatar"
-            )
-            // fullScreenCover n'hérite pas des EnvironmentObjects — trio
-            // requis par StoryViewerView (SharePickerView interne).
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .conversationListObject(conversationListViewModel)
-        }
+        .modifier(StoryReaderCover(
+            request: Binding(
+                get: { storyAuthorUserId.map { StoryViewerRequest(id: $0, startAtFirstUnviewed: true, singleGroup: true) } },
+                set: { storyAuthorUserId = $0?.id }
+            ),
+            storyViewModel: storyViewModel,
+            statusViewModel: statusViewModel,
+            router: router,
+            conversationList: conversationListViewModel,
+            presentationSource: "BookmarksView.authorAvatar",
+            onReply: { replyContext in
+                router.navigateToStoryReply(replyContext, conversationList: conversationListViewModel)
+            }
+        ))
     }
 
     /// En-tête partagé, FIXE (`scrollOffset: 0`) — même raison que la liste des

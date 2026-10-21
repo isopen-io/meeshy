@@ -87,7 +87,7 @@ extension GameCopy {
         case .none: String(localized: "game.flame.status.none", defaultValue: "Un geste aujourd’hui allume ta Flamme", bundle: .main)
         case .lit: nil
         case .atRisk: String(localized: "game.flame.status.at_risk", defaultValue: "Fais un geste avant minuit", bundle: .main)
-        case .covered: String(localized: "game.flame.status.covered", defaultValue: "Un gel la protège", bundle: .main)
+        case .covered: String(localized: "game.flame.status.covered", defaultValue: "Une Veilleuse la garde", bundle: .main)
         case .out: String(localized: "game.flame.status.out", defaultValue: "Éteinte", bundle: .main)
         }
     }
@@ -95,7 +95,7 @@ extension GameCopy {
     /// « 23 jours », ou « Pas de série » à zéro : une série nulle ne se dit pas « 0 jour ».
     static func flameDays(_ days: Int) -> String {
         days <= 0
-            ? String(localized: "game.flame.no_streak", defaultValue: "Pas de série", bundle: .main)
+            ? String(localized: "game.flame.no_streak", defaultValue: "Flamme à allumer", bundle: .main)
             : GameCopy.days(days)
     }
 

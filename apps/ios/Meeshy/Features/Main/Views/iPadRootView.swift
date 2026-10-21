@@ -82,8 +82,6 @@ struct iPadRootView: View {
     @StateObject var gameTrail = GamePanelTrailStore()
     /// Mood à republier depuis la bulle (hôte racine) — composer pré-rempli.
     @State private var republishStatusEntry: StatusEntry?
-    @State var showStoryViewerFromConv = false
-    @State var selectedStoryUserIdFromConv: String?
     @State var showSharePicker = false
     @State var showNewConversation = false
     @State private var isScrollingDown = false
@@ -239,8 +237,6 @@ struct iPadRootView: View {
             storyViewerCoordinator: storyViewerCoordinator,
             reelsPresenter: reelsPresenter,
             storyZoomNamespace: storyZoomNamespace,
-            showStoryViewerFromConv: $showStoryViewerFromConv,
-            selectedStoryUserIdFromConv: selectedStoryUserIdFromConv,
             activeConversationId: activeConversation?.id,
             visibleConversationId: visibleConversationId,
             rightPanelRoute: rightPanelRoute,
@@ -449,11 +445,9 @@ struct iPadRootView: View {
             feedIsVisible: $feedIsVisible,
             onSelect: { conversation in openConversation(conversation) },
             onStoryViewRequest: { userId, _ in
-                // Chemin coordinator (`fullScreenCover(item:)`) : la requête
-                // porte son uid, contrairement au couple @State legacy
-                // (`selectedStoryUserIdFromConv` + `isPresented`) dont la
-                // course de commit présentait le viewer avec un uid vide —
-                // l'écran « Story introuvable » du tray de la colonne conv.
+                // Chemin coordinator : la requête porte son uid (l'ancien couple
+                // @State uid + `isPresented` présentait le lecteur avec un uid
+                // vide — « Story introuvable »). Couvercle unique : #11197.
                 storyViewerCoordinator.present(
                     StoryViewerRequest(id: userId, startAtFirstUnviewed: true)
                 )

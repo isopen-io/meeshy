@@ -30,13 +30,13 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
     /// trouvé dans un arbre rendu en anglais, et l'hôte de test n'a pas de
     /// langue garantie.
     private var premierSucces: String {
-        String(localized: "progression.hero.first", defaultValue: "Premier succès", bundle: .main)
+        String(localized: "progression.hero.first", defaultValue: "Premier haut fait", bundle: .main)
     }
     private var dernierSucces: String {
-        String(localized: "progression.hero.last", defaultValue: "Dernier succès", bundle: .main)
+        String(localized: "progression.hero.last", defaultValue: "Dernier haut fait", bundle: .main)
     }
     private var prochainSucces: String {
-        String(localized: "progression.hero.next", defaultValue: "Prochain succès", bundle: .main)
+        String(localized: "progression.hero.next", defaultValue: "Prochain haut fait", bundle: .main)
     }
 
     /// La forme que la passerelle sert RÉELLEMENT — fractions comprises.

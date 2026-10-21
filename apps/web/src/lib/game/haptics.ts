@@ -1,10 +1,12 @@
+import { playPattern, type VibrateHost } from '@/lib/view/haptics';
+
 /**
  * L'HAPTIQUE DU JEU ET LA RÉDUCTION DES ANIMATIONS (#9381).
  *
- * `navigator.vibrate` n'existe ni sur Safari ni sur la plupart des bureaux : le
- * jeu vibre quand il peut, et son absence n'est jamais une erreur. Un moteur
- * qui lève (page en arrière-plan, geste utilisateur manquant) ne casse pas la
- * chorégraphie : on rend `false`.
+ * Le jeu garde ses MOTIFS (une chorégraphie qui lui est propre) ; il ne garde
+ * plus son moteur : `vibrate` passe par le site unique de l'haptique du web
+ * (`lib/view/haptics.ts`, #11207), qui sait l'absence du moteur de vibration,
+ * le moteur qui lève, et le plugin natif de la coque.
  */
 
 /** Durées en millisecondes (vibration, pause, vibration…). Courtes : un geste, pas une alarme. */
@@ -17,16 +19,7 @@ export const HAPTIC_PATTERNS = {
 
 export type HapticName = keyof typeof HAPTIC_PATTERNS;
 
-type VibrateHost = { readonly vibrate?: (pattern: number | number[]) => boolean };
-
-export const vibrate = (name: HapticName, host: VibrateHost | undefined = typeof navigator === 'undefined' ? undefined : navigator): boolean => {
-  if (host === undefined || typeof host.vibrate !== 'function') return false;
-  try {
-    return host.vibrate([...HAPTIC_PATTERNS[name]]) !== false;
-  } catch {
-    return false;
-  }
-};
+export const vibrate = (name: HapticName, host?: VibrateHost): boolean => playPattern(HAPTIC_PATTERNS[name], host);
 
 type MediaHost = { readonly matchMedia?: (query: string) => { readonly matches: boolean } };
 

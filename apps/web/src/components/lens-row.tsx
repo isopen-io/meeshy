@@ -1,7 +1,9 @@
-import { memo } from 'react';
+import { memo, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { useStore } from 'zustand/react';
 
+import { ADMIN_PERMISSIONS_QUERY_KEY, type AdminIdentity } from '@/lib/api/admin';
 import { apiConfig } from '@/lib/api/config';
+import { appQueryClient } from '@/lib/api/query-client';
 import type { ListConversation } from '@/lib/api/list-preview';
 import { sessionStore } from '@/lib/api/session';
 import type { Conversation } from '@/lib/api/types';
@@ -15,7 +17,8 @@ import { accentOf, withAccent } from '@/lib/accent';
 import { useColorScheme } from '@/lib/use-color-scheme';
 import { MUTED_OPACITY } from '@/lib/lens/law';
 import { conversationRowSwipeSides } from '@/lib/view/conversation-row-swipe';
-import { isRowCallAction, isRowFlagAction, type RowActionId, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
+import { isRowCallAction, isRowFlagAction, rowConversationActions, type RowActionId, type RowDetailsFocus, type RowFlagActionId, type RowIntent, type RowMenuMore } from '@/lib/view/row-actions';
+import { useLongPress } from '@/lib/view/long-press';
 import { requestDeparture } from '@/lib/conversation-departure';
 import { useSpeaksAsGuest } from '@/lib/view/guest-focus';
 import type { AuthorStoryRing } from '@/lib/view/author-story-ring';
@@ -25,7 +28,7 @@ import { avatarOf, initialsOf, isGroup, peerOf, presenceKeyOf, titleOf } from '@
 import { servedRingOf, useRingDesign } from '@/lib/profile-decor/author-ring';
 import { usePresence } from '@/lib/view/use-presence';
 import { useConversationPreview } from '@/lib/view/use-conversation-preview';
-import { useIsCurrentPath } from '@/lib/router';
+import { navigate, useIsCurrentPath } from '@/lib/router';
 import { Link, href } from '@/routes/route-table';
 
 import { Avatar } from './avatar';
@@ -35,7 +38,7 @@ import { LensTime } from './lens-time';
 import { UnreadBadge } from './unread-badge';
 import { ConversationStreakMark } from './conversation-streak-mark';
 import { ConversationRowSwipeActions, useConversationRowSwipe } from './conversation-row-swipe';
-import { RowActions } from './row-actions';
+import { preloadConversationPeek, RowActions } from './row-actions';
 
 import '@/styles/lens-row-meta.css';
 
@@ -182,6 +185,54 @@ export type LensRowProps = {
   now?: (() => number) | undefined;
 };
 
+/** Le rôle de plateforme que la passerelle a servi, lu sans s'abonner : `null` tant qu'il ne l'a pas été. */
+const servedPlatformRole = (): string | null => appQueryClient.getQueryData<AdminIdentity>(ADMIN_PERMISSIONS_QUERY_KEY)?.role ?? null;
+
+type RowPointerHandler = (event: ReactPointerEvent<HTMLLIElement>) => void;
+type RowSwipeProps = ReturnType<typeof useConversationRowSwipe>['rowProps'];
+type RowPressProps = ReturnType<typeof useLongPress>;
+
+/**
+ * LE BALAYAGE ET L'APPUI LONG SUR LA MÊME LIGNE — chaque geste de pointeur
+ * passe aux deux, et l'appui précharge l'aperçu pendant ses 350 ms. Les
+ * gestionnaires des deux hooks sont stables : la composition l'est aussi.
+ */
+const both =
+  (first: RowPointerHandler, second: RowPointerHandler): RowPointerHandler =>
+  (event) => {
+    if (!startsInRow(event)) return;
+    first(event);
+    second(event);
+  };
+
+/**
+ * UN GESTE NÉ DANS LE PORTAIL N'EST PAS UN GESTE DE LA LIGNE (revue #11211) —
+ * React fait remonter les événements par l'ARBRE des composants : le voile, la
+ * carte et les entrées de l'aperçu, rendus dans `document.body`, atteignent le
+ * `<li>`. Sans ce filtre, toucher le voile relançait le minuteur de la ligne,
+ * et l'aperçu se rouvrait 350 ms après s'être refermé.
+ */
+const startsInRow = (event: ReactPointerEvent<HTMLLIElement>): boolean =>
+  event.target instanceof Node && event.currentTarget.contains(event.target);
+
+function useRowGestures(swipe: RowSwipeProps, press: RowPressProps) {
+  const { ref, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, onClickCapture } = swipe;
+  return useMemo(
+    () => ({
+      ref,
+      onClickCapture,
+      onPointerDown: both(onPointerDown, (event) => {
+        press.onPointerDown(event);
+        if (event.button === 0) preloadConversationPeek();
+      }),
+      onPointerMove: both(onPointerMove, press.onPointerMove),
+      onPointerUp: both(onPointerUp, press.onPointerUp),
+      onPointerCancel: both(onPointerCancel, press.onPointerCancel),
+    }),
+    [ref, onClickCapture, onPointerDown, onPointerMove, onPointerUp, onPointerCancel, press],
+  );
+}
+
 function LensRowImpl({
   conversation,
   languages,
@@ -262,9 +313,10 @@ function LensRowImpl({
   });
   const at = conversation.lastMessageAt ?? conversation.lastMessage?.createdAt;
   const liveCall = (conversation as ListConversation).activeCall ?? null;
-  /* Appeler depuis le menu de la ligne (#8109) : la passerelle refuse l'appel
-     à un invité anonyme (`CallEventsHandler.ts`), comme `ThreadCallButton`. */
-  const canCall = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
+  /* UN COMPTE (#7285, #10593) — supprimer pour soi, favori et catégorie. Il ne
+     décide plus de l'appel (#11211) : la loi partagée le juge sur le rôle,
+     comme `ThreadCallButton` (`canStartCall`). */
+  const account = useStore(sessionStore, (state) => state.session.status === 'authenticated') || apiConfig.source === 'fixtures';
   /* LE FAVORI ET LA CATÉGORIE (#10593) — lus sur la conversation EFFECTIVE
      (`withPreferenceOverrides`) : le geste se voit à l'instant. */
   const favorite = reactionOf(conversation);
@@ -274,13 +326,21 @@ function LensRowImpl({
       : {
           details: onOpenDetails !== undefined,
           rename: group,
-          organize: canCall,
+          organize: account,
           favorite,
           block: group || peerBlocked === undefined ? null : peerBlocked ? 'unblock' : 'block',
         };
+  /* LES VERDICTS DU RÔLE (#11211), lus à l'ouverture du menu : le rôle de
+     plateforme servi (`GET /me`, déjà en cache dès qu'un écran l'a demandé). */
+  const actionsOf = () =>
+    rowConversationActions({ conversation, viewer: { id: viewerId, hasAccount: account, isAnonymous: guest, platformRole: servedPlatformRole() } });
+  const openDetailsOn = (focus: RowDetailsFocus) =>
+    onRowIntent === undefined ? onOpenDetails?.(conversation.id) : onRowIntent(conversation.id, { kind: 'details', focus });
   const onAction = (id: RowActionId) => {
-    if (id === 'delete') return requestDeparture({ conversationId: conversation.id, kind: 'delete', returnToList: false });
+    if (id === 'delete' || id === 'leave') return requestDeparture({ conversationId: conversation.id, kind: id, returnToList: false });
+    if (id === 'invite' || id === 'manageMembers') return openDetailsOn(id === 'invite' ? 'invite' : 'members');
     if (id === 'details') return onOpenDetails?.(conversation.id);
+    if (id === 'adminOpen') return navigate(href('adminConversation', { conversation: conversation.id }));
     if (id === 'rename') return onRowIntent?.(conversation.id, { kind: 'rename' });
     if (id === 'block') return onRowIntent?.(conversation.id, { kind: 'block', intent: peerBlocked === true ? 'unblock' : 'block' });
     if (isRowFlagAction(id)) return onRowAction(conversation.id, id);
@@ -291,8 +351,16 @@ function LensRowImpl({
   /* LE BALAYAGE DE LA LIGNE (#10580) — les actions du menu, rangées par bord.
      Elles ne se calculent qu'au toucher et tant qu'un bord est montré. */
   const swipeSides = () =>
-    conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: canCall });
+    conversationRowSwipeSides({ flags, unread, language: currentInterfaceLanguage(), canDelete: account });
   const swipe = useConversationRowSwipe(swipeSides);
+  /* L'APPUI LONG OUVRE L'APERÇU (#11211) — `useLongPress`, sur la ligne
+     entière, à côté du balayage : un doigt qui bouge de plus de 6 px annule
+     l'appui avant que le balayage ne s'engage. Seuls ses gestes de POINTEUR
+     sont posés ici ; le clic droit et la touche menu sont écoutés par
+     `RowActions`, qui ouvre la même grappe. */
+  const peekOpener = useRef<(() => boolean) | null>(null);
+  const press = useLongPress({ onOpen: () => peekOpener.current?.() ?? false });
+  const rowGestures = useRowGestures(swipe.rowProps, press);
 
   /**
    * LA CLASSE DE TRONCATURE DE L'APERÇU — `truncate` au repos (une ligne,
@@ -342,7 +410,7 @@ function LensRowImpl({
        * visible SANS survol que sur la rangée magnifiée.
        */
       className="group"
-      {...swipe.rowProps}
+      {...rowGestures}
       {...(swipe.shown === null ? {} : { 'data-row-swipe': swipe.shown.phase })}
       /**
        * `flexShrink: 0` n'est pas une précaution : la liste est un conteneur
@@ -735,8 +803,11 @@ function LensRowImpl({
         unread={unread}
         magnified={status.magnified}
         language={currentInterfaceLanguage()}
-        canCall={canCall && callsAvailable()}
-        canDelete={canCall}
+        canCall={callsAvailable()}
+        canDelete={account}
+        actionsOf={actionsOf}
+        peek={{ conversation, viewerId, languages, isAnonymous: guest }}
+        peekOpener={peekOpener}
         {...(menuMore === undefined ? {} : { more: menuMore })}
         categoryId={categoryIdOf(conversation)}
         {...(categories === undefined ? {} : { categories })}

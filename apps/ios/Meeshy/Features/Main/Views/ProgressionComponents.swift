@@ -108,7 +108,7 @@ struct ProgressionStreakCard: View {
                 ProgressionBar(
                     progress: streak.scale.progress,
                     tint: tint,
-                    label: String(localized: "progression.a11y.bar.streak", defaultValue: "Série de jours actifs, vers le prochain jalon", bundle: .main)
+                    label: String(localized: "progression.a11y.bar.streak", defaultValue: "Ta Flamme, vers son prochain jalon", bundle: .main)
                 )
                 .padding(.top, MeeshySpacing.xs)
                 Text(ProgressionCopy.nextStep(for: streak.scale, kind: .streak))
@@ -250,7 +250,7 @@ struct ProgressionNotice: View {
         case .empty:
             return String(
                 localized: "progression.empty",
-                defaultValue: "Aucune activité comptée pour l’instant. Envoyez un message, publiez une story… votre premier badge tombe dès la première action.",
+                defaultValue: "Aucune activité pour l’instant. Envoie un message, publie une story… ta première médaille s’allume dès le premier geste.",
                 bundle: .main
             )
         case .offline(let hasSnapshot):

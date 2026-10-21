@@ -4,6 +4,8 @@ import { placeMessageMenuCluster, placePopover, placePopoverVertical, type Messa
 import {
   MENU_GAP,
   MENU_WIDTH,
+  menuListHeight,
+  PREVIEW_MIN_VISIBLE,
   PREVIEW_SCALE_FLOOR,
   RAIL_GAP,
   RAIL_HEIGHT,
@@ -143,6 +145,7 @@ const clusterInput = (overrides: Partial<MessageMenuClusterInput> = {}): Message
   menuWidth: MENU_WIDTH,
   railWidth: RAIL_WIDTH,
   previewScaleFloor: PREVIEW_SCALE_FLOOR,
+  previewMinHeight: PREVIEW_MIN_VISIBLE,
   ...overrides,
 });
 
@@ -158,7 +161,7 @@ describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais h
     expect(placement.previewScale).toBe(1);
   });
 
-  test('un aperçu trop haut pour la place disponible ⇒ scale réduit, plancher 0.4', () => {
+  test('un aperçu trop haut pour la place disponible ⇒ scale réduit, jamais sous le plancher', () => {
     const placement = placeMessageMenuCluster(
       clusterInput({
         anchor: { top: 400, bottom: 1400, left: 20, right: 370, width: 350, height: 1000 },
@@ -169,7 +172,7 @@ describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais h
     expect(placement.previewScale).toBeGreaterThanOrEqual(PREVIEW_SCALE_FLOOR);
   });
 
-  test('un aperçu ÉNORME est bloqué au plancher 0.4, jamais en dessous', () => {
+  test('un aperçu ÉNORME est bloqué au plancher, jamais en dessous', () => {
     const placement = placeMessageMenuCluster(
       clusterInput({
         anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 },
@@ -201,13 +204,120 @@ describe('placeMessageMenuCluster — rail au-dessus, liste au-dessous, jamais h
     expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
   });
 
-  test('#9043 — un aperçu ÉNORME au plancher dit EXACTEMENT ce que la liste perd sous le bas utile', () => {
+  test('#9043 — sur un écran trop court même tronqué, le cluster dit EXACTEMENT ce que la liste perd sous le bas utile', () => {
     const input = clusterInput({
-      anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 },
-      viewport: { width: 390, height: 800 },
+      anchor: { top: 100, bottom: 5100, left: 20, right: 370, width: 350, height: 5000 },
+      viewport: { width: 640, height: 390 },
     });
     const placement = placeMessageMenuCluster(input);
-    expect(placement.menuHiddenHeight).toBeCloseTo(placement.menuTop + input.menuHeight - (800 - 12), 6);
+    expect(placement.menuHiddenHeight).toBeCloseTo(placement.menuTop + input.menuHeight - (390 - 12), 6);
     expect(placement.menuHiddenHeight).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * NETTETÉ ET MARGES PAR REFLOW (#11206) — l'aperçu ne touche jamais les bords :
+ * une ancre plus large que l'écran moins deux marges se REFLUE à cette largeur,
+ * elle n'est jamais réduite par `scale`. L'échelle ne sert plus qu'au
+ * dépassement de HAUTEUR, plancher 0,75 ; au-delà, l'aperçu est tronqué.
+ */
+describe('placeMessageMenuCluster — marges par reflow, positions au pixel entier (#11206)', () => {
+  const fullWidth = { top: 400, bottom: 488, left: 0, right: 390, width: 390, height: 88 };
+
+  test('une ancre pleine largeur en 390 px donne un aperçu de 358 px à left 16, sans réduction', () => {
+    const placement = placeMessageMenuCluster(clusterInput({ anchor: fullWidth }));
+    expect(placement.previewWidth).toBe(358);
+    expect(placement.previewLeft).toBe(SIDE_PADDING);
+    expect(placement.previewScale).toBe(1);
+  });
+
+  test('une bulle envoyée pleine largeur reste elle aussi à 16 px du bord droit', () => {
+    const placement = placeMessageMenuCluster(clusterInput({ anchor: fullWidth, isMine: true }));
+    expect(placement.previewLeft + placement.previewWidth).toBe(390 - SIDE_PADDING);
+  });
+
+  test('une ancre étroite garde sa largeur et son bord', () => {
+    const placement = placeMessageMenuCluster(clusterInput());
+    expect(placement.previewWidth).toBe(350);
+    expect(placement.previewLeft).toBe(20);
+  });
+
+  test('une ancre débordant à gauche est ramenée dans [16, largeur − 16]', () => {
+    const placement = placeMessageMenuCluster(clusterInput({ anchor: { top: 400, bottom: 488, left: -40, right: 160, width: 200, height: 88 } }));
+    expect(placement.previewLeft).toBe(SIDE_PADDING);
+  });
+
+  test('une ancre trop haute est réduite au plus à 0,75 — jamais un texte rapetissé au-delà', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({ anchor: { top: 400, bottom: 1400, left: 20, right: 370, width: 350, height: 1000 } }),
+    );
+    expect(PREVIEW_SCALE_FLOOR).toBe(0.75);
+    expect(placement.previewScale).toBeGreaterThanOrEqual(0.75);
+    expect(placement.previewScale).toBeLessThan(1);
+  });
+
+  test('sous le plancher, l’aperçu est TRONQUÉ pour que TOUT le cluster tienne — rail, aperçu ET liste', () => {
+    const input = clusterInput({ anchor: { top: 400, bottom: 5400, left: 20, right: 370, width: 350, height: 5000 } });
+    const placement = placeMessageMenuCluster(input);
+    expect(placement.previewHeight).toBe(800 - 24 - RAIL_HEIGHT - RAIL_GAP - MENU_GAP - input.menuHeight);
+    expect(placement.previewClipHeight).toBeCloseTo(placement.previewHeight / placement.previewScale, 6);
+    expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
+  });
+
+  test('iPhone 390×844, deux photos portrait dépliées (954 px) : toute la liste est visible au repos', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({
+        anchor: { top: 300, bottom: 1254, left: 20, right: 370, width: 350, height: 954 },
+        viewport: { width: 390, height: 844 },
+        safe: { top: 47, bottom: 34 },
+        menuHeight: menuListHeight(7),
+      }),
+    );
+    expect(placement.previewClipHeight).not.toBe(null);
+    expect(placement.menuHiddenHeight).toBeLessThanOrEqual(0);
+  });
+
+  test('un écran trop court garde un aperçu d’au moins PREVIEW_MIN_VISIBLE — le glisser dégage le reste', () => {
+    const input = clusterInput({
+      anchor: { top: 100, bottom: 1100, left: 20, right: 370, width: 350, height: 1000 },
+      viewport: { width: 640, height: 390 },
+      menuHeight: menuListHeight(7),
+    });
+    const placement = placeMessageMenuCluster(input);
+    expect(placement.previewHeight).toBe(PREVIEW_MIN_VISIBLE);
+    expect(placement.menuHiddenHeight).toBeGreaterThan(0);
+  });
+
+  test('un aperçu qui tient n’est pas tronqué', () => {
+    const placement = placeMessageMenuCluster(clusterInput());
+    expect(placement.previewClipHeight).toBe(null);
+    expect(placement.previewHeight).toBe(88);
+  });
+
+  test('sans rail (réagir refusé), l’aperçu reste à la place de la rangée', () => {
+    const placement = placeMessageMenuCluster(clusterInput({ railHeight: 0, railGap: 0 }));
+    expect(placement.previewTop).toBe(400);
+    expect(placement.railTop).toBe(placement.previewTop);
+  });
+
+  test('toutes les positions sont des pixels entiers, même sur une ancre fractionnaire', () => {
+    const placement = placeMessageMenuCluster(
+      clusterInput({
+        anchor: { top: 400.37, bottom: 1133.7, left: 21.4, right: 333.9, width: 312.5, height: 733.33 },
+        viewport: { width: 390.5, height: 800.3 },
+        safe: { top: 47.2, bottom: 33.6 },
+      }),
+    );
+    const positions = [
+      placement.railTop,
+      placement.previewTop,
+      placement.menuTop,
+      placement.anchorX,
+      placement.menuLeft,
+      placement.railLeft,
+      placement.previewLeft,
+      placement.previewWidth,
+    ];
+    expect(positions.every(Number.isInteger)).toBe(true);
   });
 });

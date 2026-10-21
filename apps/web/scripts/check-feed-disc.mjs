@@ -56,7 +56,7 @@ const check = (ok, what) => {
 };
 
 const HINT = 'Appui long pour lancer les Réels';
-/** Au-delà de `LONG_PRESS_MS` (500), avec la marge d'un moteur chargé. */
+/** Au-delà de `LONG_PRESS_MS` (350 depuis #11207), avec la marge d'un moteur chargé. */
 const HOLD_MS = 750;
 const DISC = '[data-floating-feed]';
 

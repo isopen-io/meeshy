@@ -7,6 +7,10 @@ import { currentInterfaceLanguage, type InterfaceLanguage } from '@/lib/interfac
 import { translate } from '@/lib/i18n-catalog';
 import { translateMessagePieces } from '@/lib/i18n-message-pieces-catalog';
 import { projectMessagePreview } from '@/lib/view/message-preview';
+import { previewSurfaceOf, readingModeOfRow } from '@/lib/view/message-preview-surface';
+import { liftMotion, liftOffset, playLift, playReturn, type ReturnFlight } from '@/lib/view/message-menu-lift';
+import { veilRow } from '@/lib/view/row-veil';
+import { prefersReducedMotion } from '@/lib/view/reduced-motion';
 import { piecePreviewBox, type PieceActionId, type PieceMenuItem } from '@/lib/view/message-piece';
 import type { PieceMenuData } from '@/lib/view/use-piece-menu';
 import { placeMessageMenuCluster } from '@/lib/view/popover';
@@ -22,6 +26,8 @@ import {
   MENU_ROW_HEIGHT,
   MENU_WIDTH,
   menuListHeight,
+  PREVIEW_CLIP_FADE,
+  PREVIEW_MIN_VISIBLE,
   PREVIEW_SCALE_FLOOR,
   RAIL_GAP,
   RAIL_HEIGHT,
@@ -114,15 +120,29 @@ const CONVERSATION_SKIN_VARS = ['--accent', '--bubble-mine-personal', '--bubble-
 /* La PEAU PERSONNELLE de la bulle envoyée (#10734) voyage avec l'accent : sans
    elle, l'aperçu cloné d'un message envoyé retombait sur l'indigo commun
    au-dessus d'un fil peint à l'accent choisi. */
-function conversationSkinOf(element: HTMLElement): CSSProperties | undefined {
-  if (typeof window === 'undefined') return undefined;
+function conversationSkinEntries(element: HTMLElement): Readonly<Record<string, string>> {
+  if (typeof window === 'undefined') return {};
   const computed = getComputedStyle(element);
-  const entries = CONVERSATION_SKIN_VARS.flatMap((name) => {
-    const value = computed.getPropertyValue(name).trim();
-    return value === '' ? [] : [[name, value] as const];
-  });
-  return entries.length === 0 ? undefined : (Object.fromEntries(entries) as CSSProperties);
+  return Object.fromEntries(
+    CONVERSATION_SKIN_VARS.flatMap((name) => {
+      const value = computed.getPropertyValue(name).trim();
+      return value === '' ? [] : [[name, value] as const];
+    }),
+  );
 }
+
+function conversationSkinOf(element: HTMLElement): CSSProperties | undefined {
+  const entries = conversationSkinEntries(element);
+  return Object.keys(entries).length === 0 ? undefined : (entries as CSSProperties);
+}
+
+/** La couche du cluster (`thread-menu.css`, `.message-menu-cluster`) — celle
+ * du fantôme qui redescend sur la rangée après le démontage. */
+const CLUSTER_LAYER = 41;
+
+/** Le transform de l'aperçu posé : AUCUN à l'échelle 1 (#11206) — un
+ * `scale(1)` laissé en place garde un calque composité et floute le texte. */
+const restTransform = (scale: number): string | undefined => (scale === 1 ? undefined : `scale(${scale})`);
 
 /** `--safe-top`/`--safe-bottom` — posées par `thread-menu.css` depuis
  * `env(safe-area-inset-*)`, seule porte par laquelle une loi PURE
@@ -139,8 +159,13 @@ export function MessageMenu({
   onPickLanguage,
   forwardItems = [],
   piece,
+  canReact = true,
 }: {
   readonly target: MessageMenuTarget;
+  /** RÉAGIR EST-IL PERMIS (#11206) — la loi du double toucher
+   * (`doubleTapReactable`) : faux, le rail n'est pas monté et le cluster se
+   * place sans lui. */
+  readonly canReact?: boolean;
   readonly piece?: MessageMenuPiece;
   readonly items: readonly MessageMenuItem[];
   readonly choices: readonly TranslationChoice[];
@@ -167,6 +192,10 @@ export function MessageMenu({
      (`currentInterfaceLanguage()`), jamais une seconde résolution. */
   const language = currentInterfaceLanguage();
   const previewHostRef = useRef<HTMLDivElement | null>(null);
+  /* L'ENVELOPPE DU CLONE (#11206) — c'est elle qui se tronque et porte le
+     fondu : un `mask-image` posé sur l'hôte s'appliquerait APRÈS son `filter`
+     et emporterait le halo et l'ombre de l'aperçu. */
+  const previewClipRef = useRef<HTMLDivElement | null>(null);
   const listItems: readonly ListItem[] = piece !== undefined ? piece.data.items : panel === 'forward' ? forwardItems : items;
   const listRows = panel === 'translate' && piece === undefined ? choices.length : listItems.length;
   /* LA BOÎTE D'UNE PIÈCE (#9907) — stable pour tout le défilement, centrée. */
@@ -182,8 +211,11 @@ export function MessageMenu({
    * mesuré (`useLayoutEffect` ci-dessous, avant la première peinture).
    */
   const [cloneHeight, setCloneHeight] = useState<number | null>(null);
+  /* LE RAIL N'EXISTE QUE SI RÉAGIR EST PERMIS (#11206) — ses tuiles ouvrent
+     l'ordre du parcours ; sans elles, la liste commence à l'index 0. */
+  const railCount = canReact ? RAIL_ITEM_COUNT : 0;
 
-  const computePlacement = (rows: number) => {
+  const computePlacement = (rows: number, height: number | null = cloneHeight) => {
     const rect = target.element.getBoundingClientRect();
     const safe = safeAreaInsets();
     const menuHeight = menuListHeight(rows);
@@ -198,7 +230,7 @@ export function MessageMenu({
             height: pieceBox.height,
           }
         : ((height: number) => ({ top: rect.top, bottom: rect.top + height, left: rect.left, right: rect.right, width: rect.width, height }))(
-            cloneHeight ?? rect.height,
+            height ?? rect.height,
           );
     return placeMessageMenuCluster({
       anchor,
@@ -206,13 +238,14 @@ export function MessageMenu({
       safe,
       menuHeight,
       isMine: target.isMine,
-      railHeight: RAIL_HEIGHT,
-      railGap: RAIL_GAP,
+      railHeight: canReact ? RAIL_HEIGHT : 0,
+      railGap: canReact ? RAIL_GAP : 0,
       menuGap: MENU_GAP,
       sidePadding: SIDE_PADDING,
       menuWidth: MENU_WIDTH,
       railWidth: railBandWidth(window.innerWidth - 2 * SIDE_PADDING),
       previewScaleFloor: PREVIEW_SCALE_FLOOR,
+      previewMinHeight: PREVIEW_MIN_VISIBLE,
     });
   };
 
@@ -270,20 +303,74 @@ export function MessageMenu({
    * défilements qui bougent la rangée — et parmi eux, ceux que
    * l'application a écrits elle-même.
    */
+  /**
+   * L'APERÇU RETOURNE À SA RANGÉE (#11206) — toute fermeture passe par
+   * `close`, qui lance la descente d'un fantôme (`playReturn`) AVANT de rendre
+   * la main à l'hôte : le menu se démonte aussitôt, la rangée ne réapparaît
+   * qu'à l'arrivée du fantôme (`returning`, lu par le nettoyage du clone).
+   * `close` est STABLE — `useRovingMenu` capture ses rappels à l'ouverture —
+   * et lit la géométrie COURANTE par `latest`.
+   */
+  /* Le rembourrage de la surface de l'aperçu — retranché du FLIP pour que le
+     contenu parte du contenu de la rangée (pas en mode pièce : aucune surface). */
+  const previewInset = (): number => (pieceMode ? 0 : previewSurfaceOf(readingModeOfRow(target.element)).padding);
+  const returning = useRef<ReturnFlight | null>(null);
+  const returnPreview = (): ReturnFlight | null => {
+    const host = previewHostRef.current;
+    const anchor = target.element.getBoundingClientRect();
+    if (host === null || anchor.width <= 0 || anchor.height <= 0) return null;
+    return playReturn(host, {
+      motion: liftMotion({
+        direction: 'out',
+        offset: liftOffset({ anchor, placement, isMine: target.isMine, inset: previewInset() }),
+        rest: host.style.transform === '' ? 'none' : host.style.transform,
+        reduced: prefersReducedMotion(),
+      }),
+      skin: conversationSkinEntries(target.element),
+      layer: CLUSTER_LAYER,
+    });
+  };
+  const latest = useRef({ onClose, returnPreview });
+  latest.current = { onClose, returnPreview };
+  const [close] = useState(() => () => {
+    if (returning.current === null) returning.current = latest.current.returnPreview();
+    latest.current.onClose();
+  });
+
+  /** L'ÉLÉVATION, UNE FOIS (#11206) — depuis la rangée vers la place FINALE,
+   * calculée sur la hauteur que le clone vient de prendre. */
+  const lifted = useRef(false);
+  const liftOnce = (host: HTMLElement, height: number | null) => {
+    if (lifted.current) return;
+    lifted.current = true;
+    const anchor = target.element.getBoundingClientRect();
+    if (anchor.width <= 0 || anchor.height <= 0) return;
+    const final = computePlacement(listRows, height);
+    playLift(
+      host,
+      liftMotion({
+        direction: 'in',
+        offset: liftOffset({ anchor, placement: final, isMine: target.isMine, inset: previewInset() }),
+        rest: restTransform(final.previewScale) ?? 'none',
+        reduced: prefersReducedMotion(),
+      }),
+    );
+  };
+
   const onScrollAway = (event: Event) => {
     if (isProgrammaticScroll(event.target)) return;
-    onClose();
+    close();
   };
 
   const roving = useRovingMenu({
-    itemCount: RAIL_ITEM_COUNT + listRows,
+    itemCount: railCount + listRows,
     returnFocusTo: () => target.element,
     /* L'ANCRE DU MENU EST LA RANGÉE, pas un bouton déclencheur : c'est elle
        que `useRovingMenu` interroge pour savoir si un `scroll` a réellement
        bougé quelque chose (#7293, § « un défilement déjà acquis »). */
     anchor: () => target.element,
     onScroll: onScrollAway,
-    onResize: onClose,
+    onResize: close,
     initialOpen: true,
   });
 
@@ -297,8 +384,8 @@ export function MessageMenu({
       wasOpen.current = true;
       return;
     }
-    if (wasOpen.current) onClose();
-  }, [roving.open, onClose]);
+    if (wasOpen.current) close();
+  }, [roving.open, close]);
 
   /**
    * LE RETOUR MATÉRIEL FERME LE MENU, PAS L'ÉCRAN (revue #5814, défaut
@@ -309,7 +396,7 @@ export function MessageMenu({
    * `Sheet` (`components/sheet.tsx`), désormais extrait dans
    * `use-back-dismiss.ts` pour que les deux le partagent.
    */
-  useBackDismiss(onClose);
+  useBackDismiss(close);
 
   /**
    * L'APERÇU — un CLONE du DOM vivant, jamais un second rendu React. Et la
@@ -327,46 +414,58 @@ export function MessageMenu({
    */
   useLayoutEffect(() => {
     const source = target.element;
-    const previousOpacity = source.style.opacity;
     const host = previewHostRef.current;
+    /* LA RANGÉE NE RÉAPPARAÎT QU'À L'ARRIVÉE DU FANTÔME (#11206) quand la
+       fermeture a lancé un retour ; sinon, tout de suite. L'effacement est
+       tenu par l'ÉLÉMENT (`row-veil.ts`) : un menu rouvert sur la même rangée
+       avant l'arrivée ne prend jamais `'0'` pour l'opacité d'origine. */
+    const veil = veilRow(source);
+    const settle = () => veil.release(returning.current);
     /* EN MODE PIÈCE (#9907), l'aperçu est le défilement des pièces, rendu par
        React : aucun clone, et la rangée reste effacée. */
     if (host === null || pieceMode) {
-      source.style.opacity = '0';
-      return () => {
-        source.style.opacity = previousOpacity;
-      };
+      if (host !== null) liftOnce(host, null);
+      return settle;
     }
+    const clip = previewClipRef.current;
+    if (clip === null) return settle;
     const clone = source.cloneNode(true) as HTMLElement;
-    source.style.opacity = '0';
+    /* LE CLONE NE RECOPIE PAS L'EFFACEMENT (#10733) — il porte l'opacité
+       d'ORIGINE, même quand un retour encore en vol tient la rangée à `'0'`. */
+    clone.style.opacity = veil.original;
     stripPreviewIdentity(clone);
-    /* LA FORME PROTÉGÉE ET LA PROPORTION D'ORIGINE (#8008) : le clone ne
-       recopie jamais une fenêtre de lecture ouverte, et ses pièces reprennent
-       leur rapport d'aspect — `lib/view/message-preview.ts`. */
-    projectMessagePreview(clone);
+    /* LA FORME PROTÉGÉE, LA PROPORTION D'ORIGINE (#8008) ET LE MÉDIA TEL QU'IL
+       EST À L'ÉCRAN (#11206) : le clone ne recopie jamais une fenêtre de
+       lecture ouverte, ses pièces reprennent leur rapport d'aspect, une vidéo
+       y montre sa frame visible — `lib/view/message-preview.ts`. */
+    projectMessagePreview(clone, { source });
     clone.setAttribute('data-message-preview', '');
-    host.replaceChildren(clone);
-    /* `offsetHeight` ignore la mise à l'échelle de l'hôte : c'est la hauteur
-       du clone à la largeur de la rangée, celle que la loi de placement doit
-       faire tenir. Une mesure nulle (aucune mise en page) garde la rangée. */
-    const measured = host.offsetHeight;
-    setCloneHeight(measured > 0 ? measured : null);
+    clip.replaceChildren(clone);
+    /* `scrollHeight` de l'enveloppe ignore la mise à l'échelle ET la
+       troncature : c'est la hauteur du clone REFLUÉ à la largeur imposée, à
+       laquelle s'ajoute le rembourrage de la surface — celle que la loi de
+       placement doit faire tenir. Une mesure nulle (aucune mise en page) garde
+       la rangée. */
+    const padding = previewSurfaceOf(readingModeOfRow(source)).padding;
+    const measured = clip.scrollHeight > 0 ? clip.scrollHeight + 2 * padding : null;
+    setCloneHeight(measured);
+    liftOnce(host, measured);
     return () => {
-      host.replaceChildren();
-      source.style.opacity = previousOpacity;
+      clip.replaceChildren();
+      settle();
     };
   }, [target.element, pieceMode]);
 
   const onTranslateChosen = (code: string) => {
     onPickLanguage(code);
-    onClose();
+    close();
   };
 
   const showPanel = (next: 'actions' | 'translate' | 'forward') => {
     setPanel(next);
-    roving.setActiveIndex(RAIL_ITEM_COUNT);
+    roving.setActiveIndex(railCount);
     requestAnimationFrame(() => {
-      const el = roving.itemRefs.current[RAIL_ITEM_COUNT];
+      const el = roving.itemRefs.current[railCount];
       el?.focus();
     });
   };
@@ -379,7 +478,7 @@ export function MessageMenu({
         return;
       }
       piece.onAction(item.id);
-      onClose();
+      close();
       return;
     }
     if (item.id === 'translate') {
@@ -391,7 +490,7 @@ export function MessageMenu({
       return;
     }
     onAction(item.id);
-    onClose();
+    close();
   };
 
   const returnToActions = () => showPanel('actions');
@@ -425,7 +524,7 @@ export function MessageMenu({
       returnToActions();
       return;
     }
-    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && roving.activeIndex < RAIL_ITEM_COUNT) {
+    if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && roving.activeIndex < railCount) {
       if (roving.handleKey(event.key === 'ArrowRight' ? 'ArrowDown' : 'ArrowUp')) event.preventDefault();
       return;
     }
@@ -448,9 +547,6 @@ export function MessageMenu({
   if (typeof document === 'undefined') return null;
 
   const railWidthUsed = railBandWidth(window.innerWidth - 2 * SIDE_PADDING);
-  // UNE mesure par rendu — deux `getBoundingClientRect()` en ligne dans le
-  // JSX forçaient deux recalculs de layout pour la même ancre.
-  const anchorRect = target.element.getBoundingClientRect();
 
   // Le VOILE est purement visuel. Depuis #9043, la SURFACE DU GLISSEMENT le
   // couvre, DANS `roving.menuRef` : un toucher sans glisser y ferme le menu
@@ -459,32 +555,25 @@ export function MessageMenu({
   const skin = conversationSkinOf(target.element);
 
   /**
-   * LA RANGÉE PLATE (Focal/Script) N'A NI FOND NI RAYON (revue #5814,
-   * défaut majeur 11) — `FocalRow` pose `data-reading-mode` sur SA racine
-   * (`focal-row.tsx`), `Bubble` ne le pose PAS : c'est la seule marque déjà
-   * présente dans le DOM cloné qui distingue les deux peaux SANS dupliquer
-   * la décision « quelle peau est active » ici. En Focal, l'aperçu se
-   * confondait avec le voile flouté (mesuré, schéma clair, `boxShadow:
-   * "none"`, `backgroundColor: "rgba(0, 0, 0, 0)"`) : iOS pose un halo
-   * d'accent (0,28, rayon 22) et une ombre noire (0,26, rayon 16) sur son
-   * `ThemedMessageBubble`, OPAQUE même en Focal (`MessageOverlayMenu.swift
-   * :414-441, :605-616`) — « pour que le preview semble décollé de la
-   * liste ». Une bulle a déjà sa propre surface ; SEULE la rangée plate en
-   * a besoin ici.
+   * LA SURFACE SUIT LE MODE DE LECTURE (revue #5814, défaut majeur 11 ;
+   * décision #11204) — la rangée plate n'a ni fond ni rayon et se confondait
+   * avec le voile flouté (mesuré : `backgroundColor: "rgba(0, 0, 0, 0)"`) :
+   * iOS pose son `ThemedMessageBubble` OPAQUE même en Focal
+   * (`MessageOverlayMenu.swift:414-441`). Le mode se LIT sur le DOM cloné
+   * (`readingModeOfRow`), jamais redécidé ici ; la table dit le reste.
    */
-  const isFlatRow = target.element.querySelector('[data-reading-mode]') !== null;
+  const surface = previewSurfaceOf(readingModeOfRow(target.element));
 
   /* LA RÉDUCTION (#9043) — la hauteur VISIBLE de l'aperçu au repos est ce qui
      se réduit ; ce que la liste perd sous le bas utile, ce qu'il faut dégager. */
-  const previewHeight = pieceBox?.height ?? cloneHeight ?? anchorRect.height;
-  const shrinkableHeight = previewHeight * placement.previewScale;
+  const shrinkableHeight = placement.previewHeight;
   const floor = revealFloor({ hiddenHeight: placement.menuHiddenHeight, shrinkableHeight });
   const committed = Math.min(1, Math.max(floor, committedReveal ?? revealRestingFactor({ floor, assistiveReveal: false })));
-  const previewTransform = (factor: number) => `scale(${placement.previewScale * factor})`;
+  const previewTransform = (factor: number) => restTransform(placement.previewScale * factor);
   const listTop = (factor: number) => placement.menuTop - revealRise({ factor, shrinkableHeight });
   const paintReveal = (factor: number) => {
     const host = previewHostRef.current;
-    if (host !== null) host.style.transform = previewTransform(factor);
+    if (host !== null) host.style.transform = previewTransform(factor) ?? '';
     const list = listRef.current;
     if (list !== null) list.style.top = `${listTop(factor)}px`;
   };
@@ -505,7 +594,7 @@ export function MessageMenu({
     /* UN TOUCHER HORS DU MENU FERME — la surface couvre le voile, elle hérite
        de ce que `useRovingMenu` faisait au `pointerdown` du document. */
     if (Math.abs(event.clientY - drag.startY) < TAP_SLOP) {
-      onClose();
+      close();
       return;
     }
     setCommittedReveal(drag.factor);
@@ -542,6 +631,7 @@ export function MessageMenu({
           onPointerUp={onSurfacePointerUp}
           onPointerCancel={onSurfacePointerCancel}
         />
+        {canReact ? (
         <div
           role="group"
           aria-label={translate(language, 'message.menu.react')}
@@ -572,14 +662,15 @@ export function MessageMenu({
             }}
             onPick={(emoji) => {
               onReact(emoji);
-              onClose();
+              close();
             }}
             onExpand={() => {
               onExpandReactions();
-              onClose();
+              close();
             }}
           />
         </div>
+        ) : null}
 
         {piece !== undefined && pieceBox !== null ? (
           <div
@@ -589,7 +680,7 @@ export function MessageMenu({
             style={{
               position: 'fixed',
               top: placement.previewTop,
-              left: (window.innerWidth - pieceBox.width) / 2,
+              left: placement.previewLeft,
               width: pieceBox.width,
               height: pieceBox.height,
               transform: previewTransform(committed),
@@ -626,20 +717,20 @@ export function MessageMenu({
              seulement les deux boutons trouvés en revue. */
           inert
           data-message-menu-preview-host
+          className={surface.glass ? 'glass' : undefined}
           style={{
             position: 'fixed',
             top: placement.previewTop,
-            left: target.isMine ? undefined : anchorRect.left,
-            right: target.isMine ? window.innerWidth - anchorRect.right : undefined,
-            /* LA LARGEUR DE L'ANCRE, REPRISE (revue #5814) — sans elle,
-               l'hôte fixe n'a aucune contrainte et le clone se re-dispose à
-               sa largeur MAX-CONTENT : une rangée plate en `grid
-               41px 1fr` y étalait sa tuile média sur toute la hauteur de
-               l'écran, et l'aperçu ne ressemblait plus au message pressé —
-               alors que la promesse du clone est justement « les mêmes
-               pixels ». `height` reste libre : le clone la retrouve seul
-               une fois la largeur imposée. */
-            width: anchorRect.width,
+            /* LA LARGEUR IMPOSÉE, BORNÉE AUX MARGES (revue #5814, #11206) —
+               sans largeur, l'hôte fixe laisse le clone se re-disposer à sa
+               largeur MAX-CONTENT (une rangée plate en `grid 41px 1fr` y
+               étalait sa tuile média sur tout l'écran). La largeur est celle
+               de l'ancre, ramenée à l'écran moins deux marges : une rangée
+               pleine largeur se REFLUE à 16 px des bords, à la taille de son
+               texte, au lieu d'être réduite. `height` reste libre. */
+            left: placement.previewLeft,
+            width: placement.previewWidth,
+            boxSizing: 'border-box',
             transform: previewTransform(committed),
             transformOrigin: target.isMine ? 'top right' : 'top left',
             pointerEvents: 'none',
@@ -652,16 +743,32 @@ export function MessageMenu({
                calcul de couleur) et une ombre noire — l'aperçu se décolle
                ainsi du voile flouté sur les DEUX peaux et les DEUX schémas. */
             filter: `drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 28%, transparent)) drop-shadow(0 16px 16px color-mix(in srgb, var(--color-scrim-soft) 65%, transparent))`,
-            /* LA SURFACE (revue #5814, défaut majeur 11) — SEULE la rangée
-               plate (Focal/Script) en a besoin : elle n'a ni fond ni rayon
-               propres, et se confondait avec le voile flouté. Une bulle
-               porte déjà son fond ; lui en ajouter un second, carré, aurait
-               débordé de ses coins arrondis. */
-            ...(isFlatRow
-              ? { backgroundColor: 'var(--color-ios-surface)', borderRadius: 10 }
-              : {}),
+            /* LA SURFACE DU MODE (`message-preview-surface.ts`) : carte opaque
+               en Focal, verre à marges en Script, rien sur une bulle, qui
+               porte déjà la sienne. */
+            ...(surface.padding > 0 ? { padding: surface.padding } : {}),
+            ...(surface.background !== null ? { backgroundColor: surface.background } : {}),
+            ...(surface.radius > 0 ? { borderRadius: surface.radius } : {}),
           }}
-        />
+        >
+          {/* SOUS LE PLANCHER, TRONQUÉ AVEC UN FONDU (#11206) — jamais un texte
+              réduit au-delà de 0,75 pour tout faire tenir. Sur l'ENVELOPPE, pas
+              sur l'hôte : l'hôte garde son élévation. */}
+          <div
+            ref={previewClipRef}
+            data-message-menu-preview-clip
+            style={
+              placement.previewClipHeight !== null
+                ? {
+                    maxHeight: Math.max(0, placement.previewClipHeight - 2 * surface.padding),
+                    overflow: 'hidden',
+                    maskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
+                    WebkitMaskImage: `linear-gradient(to bottom, black calc(100% - ${PREVIEW_CLIP_FADE}px), transparent)`,
+                  }
+                : undefined
+            }
+          />
+        </div>
         )}
 
         {panel !== 'translate' ? (
@@ -680,7 +787,7 @@ export function MessageMenu({
             }}
           >
             {listItems.map((item, i) => {
-              const index = RAIL_ITEM_COUNT + i;
+              const index = railCount + i;
               return (
                 <button
                   key={item.id}
@@ -734,7 +841,7 @@ export function MessageMenu({
             }}
           >
             {choices.map((choice, i) => {
-              const index = RAIL_ITEM_COUNT + i;
+              const index = railCount + i;
               return (
                 <button
                   key={choice.code}
@@ -751,8 +858,9 @@ export function MessageMenu({
                 >
                   <span aria-hidden>{flag(choice.code)}</span>
                   <span className="flex-1">
-                    {languageName(choice.code)}
-                    {choice.isOriginal ? ' (original)' : ''}
+                    {choice.isOriginal
+                      ? translate(language, 'message.detail.language.original', { language: languageName(choice.code) })
+                      : languageName(choice.code)}
                   </span>
                   {/* LA LANGUE SERVIE SE VOIT (revue #5814) — `aria-checked`
                       seul ne dit rien à l'ŒIL : le panneau montrait deux

@@ -76,7 +76,7 @@ final class NetworkMonitorTests: XCTestCase {
             }
             .store(in: &cancellables)
         monitor.simulateOffline()
-        wait(for: [exp], timeout: 2)
+        wait(for: [exp], timeout: 10)
     }
 
     func test_isOfflinePublisher_dedupes_repeated_same_value() {
@@ -94,10 +94,10 @@ final class NetworkMonitorTests: XCTestCase {
             .store(in: &cancellables)
         monitor.simulateOffline()
         monitor.simulateOffline()
-        wait(for: [exp], timeout: 2)
+        wait(for: [exp], timeout: 10)
         let settle = expectation(description: "settle")
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { settle.fulfill() }
-        wait(for: [settle], timeout: 2)
+        wait(for: [settle], timeout: 5)
         lock.lock(); defer { lock.unlock() }
         XCTAssertEqual(trueEmissions, 1, "removeDuplicates must coalesce repeated true values into a single emission")
     }

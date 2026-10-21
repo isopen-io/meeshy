@@ -181,7 +181,7 @@ extension Route {
         case .progressionRules:
             return String(localized: "game.rules.page_title", defaultValue: "Comment ça marche", bundle: .main)
         case .progressionNotebook:
-            return String(localized: "game.notebook.page_title", defaultValue: "Carnet de progression", bundle: .main)
+            return String(localized: "game.notebook.page_title", defaultValue: "La Chronique", bundle: .main)
         case .gamePage(let page, _):
             return page.title
         case .progressionConcept(let concept, _):

@@ -31,8 +31,8 @@ describe('la tuile de série dit des jours, accordés au nombre', () => {
   });
 
   test('anglais : singulier et pluriel', () => {
-    expect(streakText('en', 1)).toBe('Streak: 1 day');
-    expect(streakText('en', 4)).toBe('Streak: 4 days');
+    expect(streakText('en', 1)).toBe('Flame: 1 day');
+    expect(streakText('en', 4)).toBe('Flame: 4 days');
   });
 
   test('chaque langue nomme l’unité, et la change entre 1 et 5 jours', () => {
