@@ -14,6 +14,8 @@ const it = {
   'rowMenu.manageMembers': 'Gestisci i membri',
   'rowMenu.adminOpen': 'Apri nell’amministrazione',
   'rowMenu.leave': 'Esci',
+  'rowMenu.search': 'Cerca',
+  'rowMenu.readingMode': 'Modalità di lettura',
   'rowMenu.peek': 'Anteprima della conversazione',
   'rowMenu.peek.open': 'Apri la conversazione',
   'rowMenu.peek.e2ee': 'Crittografata end-to-end',

@@ -14,6 +14,8 @@ const pt = {
   'rowMenu.manageMembers': 'Gerir os membros',
   'rowMenu.adminOpen': 'Abrir na administração',
   'rowMenu.leave': 'Sair',
+  'rowMenu.search': 'Buscar',
+  'rowMenu.readingMode': 'Modo de leitura',
   'rowMenu.peek': 'Pré-visualização da conversa',
   'rowMenu.peek.open': 'Abrir a conversa',
   'rowMenu.peek.e2ee': 'Criptografada de ponta a ponta',

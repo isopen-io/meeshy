@@ -14,6 +14,8 @@ const ar = {
   'rowMenu.manageMembers': 'إدارة الأعضاء',
   'rowMenu.adminOpen': 'فتح في الإدارة',
   'rowMenu.leave': 'مغادرة',
+  'rowMenu.search': 'بحث',
+  'rowMenu.readingMode': 'وضع القراءة',
   'rowMenu.peek': 'معاينة المحادثة',
   'rowMenu.peek.open': 'فتح المحادثة',
   'rowMenu.peek.e2ee': 'مشفرة من طرف إلى طرف',

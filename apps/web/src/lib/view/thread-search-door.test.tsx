@@ -22,8 +22,8 @@ describe('threadSearchRequested', () => {
 });
 
 const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-let container: HTMLDivElement;
-let root: Root;
+let container: HTMLDivElement | undefined;
+let root: Root | undefined;
 
 beforeAll(() => {
   ensureHappyDomRegistered({ url: 'http://localhost/c/c-lyon?search=1&message=m-9' });
@@ -35,8 +35,10 @@ afterAll(async () => {
   await releaseHappyDomIfRegistered();
 });
 afterEach(() => {
-  act(() => root.unmount());
-  container.remove();
+  act(() => root?.unmount());
+  container?.remove();
+  root = undefined;
+  container = undefined;
 });
 
 function Probe({ search, onOpen }: { readonly search: URLSearchParams | undefined; readonly onOpen: () => void }) {
@@ -48,12 +50,14 @@ describe('useThreadSearchDoor', () => {
   test('la demande ouvre la recherche une fois, puis l’adresse la perd en gardant le reste', () => {
     window.history.replaceState(null, '', '/c/c-lyon?search=1&message=m-9');
     const opened: number[] = [];
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const mounted = createRoot(host);
+    container = host;
+    root = mounted;
     const search = new URLSearchParams(window.location.search);
-    act(() => root.render(<Probe search={search} onOpen={() => opened.push(1)} />));
-    act(() => root.render(<Probe search={search} onOpen={() => opened.push(1)} />));
+    act(() => mounted.render(<Probe search={search} onOpen={() => opened.push(1)} />));
+    act(() => mounted.render(<Probe search={search} onOpen={() => opened.push(1)} />));
     expect(opened).toHaveLength(1);
     expect(`${window.location.pathname}${window.location.search}`).toBe('/c/c-lyon?message=m-9');
   });
@@ -61,10 +65,12 @@ describe('useThreadSearchDoor', () => {
   test('sans demande, rien ne s’ouvre et l’adresse ne bouge pas', () => {
     window.history.replaceState(null, '', '/c/c-lyon');
     const opened: number[] = [];
-    container = document.createElement('div');
-    document.body.appendChild(container);
-    root = createRoot(container);
-    act(() => root.render(<Probe search={new URLSearchParams()} onOpen={() => opened.push(1)} />));
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const mounted = createRoot(host);
+    container = host;
+    root = mounted;
+    act(() => mounted.render(<Probe search={new URLSearchParams()} onOpen={() => opened.push(1)} />));
     expect(opened).toEqual([]);
     expect(window.location.pathname).toBe('/c/c-lyon');
   });

@@ -157,12 +157,16 @@ describe('LensRow — un arrêt de tabulation par rangée, les flèches pour le 
     expect(focusedRow()).toBe('c-amina');
   });
 
-  test('dans le menu ouvert, les flèches restent au menu — elles ne changent pas de rangée', () => {
+  test('dans le menu ouvert, les flèches restent au menu — elles ne changent pas de rangée', async () => {
     mount();
     act(() => primary('c-lyon').focus());
     press('ArrowRight');
     act(() => (document.activeElement as HTMLElement | null)?.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
     const before = document.activeElement;
+    expect(before?.closest('[role="menu"]')).not.toBeNull();
     press('ArrowDown');
     expect(document.activeElement).not.toBe(before);
     expect(document.activeElement?.closest('[role="menu"]')).not.toBeNull();
@@ -170,6 +174,10 @@ describe('LensRow — un arrêt de tabulation par rangée, les flèches pour le 
 });
 
 const openMenuOf = (id: string) => act(() => row(id).querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')?.click());
+const settle = () =>
+  act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
 const entry = (label: string) => [...document.body.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find((b) => b.textContent?.startsWith(label) === true);
 
 describe('LensRow — Rechercher et Mode de lecture ont un effet (#11226)', () => {
@@ -180,26 +188,29 @@ describe('LensRow — Rechercher et Mode de lecture ont un effet (#11226)', () =
     expect(`${window.location.pathname}${window.location.search}`).toBe('/c/c-lyon?search=1');
   });
 
-  test('« Mode de lecture › Bulles » écrit la préférence de CETTE conversation, « Automatique » l’efface', () => {
+  test('« Mode de lecture › Bulles » écrit la préférence de CETTE conversation, « Automatique » l’efface', async () => {
     window.history.replaceState(null, '', '/chats');
     mount();
     openMenuOf('c-paris');
     act(() => entry('Mode de lecture')?.click());
+    await settle();
     act(() => entry('Bulles')?.click());
     expect(readingModeStore.getPreference('u_u-moi', 'c-paris')).toBe('bubbles');
     expect(readingModeStore.getPreference('u_u-moi', 'c-lyon')).toBeNull();
     openMenuOf('c-paris');
     act(() => entry('Mode de lecture')?.click());
+    await settle();
     expect(entry('Bulles')?.getAttribute('aria-checked')).toBe('true');
     act(() => entry('Automatique')?.click());
     expect(readingModeStore.getPreference('u_u-moi', 'c-paris')).toBeNull();
   });
 
-  test('un mode indisponible s’annonce désactivé et ne s’écrit pas', () => {
+  test('un mode indisponible s’annonce désactivé et ne s’écrit pas', async () => {
     window.history.replaceState(null, '', '/chats');
     mount();
     openMenuOf('c-paris');
     act(() => entry('Mode de lecture')?.click());
+    await settle();
     const river = entry('Rivière');
     expect(river?.getAttribute('aria-disabled')).toBe('true');
     act(() => river?.click());

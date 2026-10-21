@@ -3,7 +3,8 @@ import { describe, expect, test } from 'bun:test';
 import { loadInterfaceCatalog } from '@/lib/i18n-catalog';
 import { loadRowMenuCatalog } from '@/lib/i18n-row-menu-catalog';
 
-import { rowMenuItems, rowReadingModeMenu, rowSubmenuItems } from './row-actions';
+import { rowMenuItems, rowSubmenuItems } from './row-actions';
+import { rowReadingModeMenu } from './row-reading-mode';
 
 /**
  * LE MENU D'UNE LIGNE PORTE « RECHERCHER » ET « MODE DE LECTURE › » (#11226) —

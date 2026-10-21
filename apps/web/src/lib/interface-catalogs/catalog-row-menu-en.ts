@@ -14,6 +14,8 @@ const en = {
   'rowMenu.manageMembers': 'Manage members',
   'rowMenu.adminOpen': 'Open in administration',
   'rowMenu.leave': 'Leave',
+  'rowMenu.search': 'Search',
+  'rowMenu.readingMode': 'Reading mode',
   'rowMenu.peek': 'Conversation preview',
   'rowMenu.peek.open': 'Open the conversation',
   'rowMenu.peek.e2ee': 'End-to-end encrypted',
