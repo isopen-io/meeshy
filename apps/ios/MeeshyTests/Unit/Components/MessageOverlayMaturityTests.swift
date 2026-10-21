@@ -92,6 +92,19 @@ final class MessageOverlayMaturityTests: XCTestCase {
         XCTAssertTrue(MessageOverlayMenu.showsEmojiQuickBar(for: open))
     }
 
+    // MARK: - 1 bis. Le favori emporte le texte
+
+    func test_make_starIsOffered_onlyWhenTheContentMayLeaveAndSurviveEncryption() {
+        XCTAssertTrue(make(message(mine: false), authority()).canStar, "témoin : un message ordinaire se met en favori")
+        let flame = message(mine: false, expiresAt: now.addingTimeInterval(600))
+        XCTAssertFalse(make(flame, authority()).canStar, "ce qui brûle ne survit pas dans les favoris")
+        XCTAssertFalse(make(message(mine: false), authority(encryptionMode: "e2ee")).canStar,
+                       "le clair d'une conversation chiffrée ne s'écrit pas dans les favoris")
+        let starred = MessageMenuContext.make(
+            message: flame, facts: MessageMenuFacts(isStarred: true), authority: authority(), now: now)
+        XCTAssertTrue(starred.canStar, "un favori déjà posé reste retirable")
+    }
+
     // MARK: - 2. Le mineur dans Global
 
     private func globalConversation(restriction: ConversationWriteRestriction?) -> Conversation {
@@ -193,17 +206,14 @@ final class MessageOverlayMaturityTests: XCTestCase {
 
     // MARK: - 5. Les formes protégées de l'aperçu
 
-    func test_overlayPreviewProtection_encryptedEphemeralGone_haveDistinctForms() {
+    func test_overlayPreviewProtection_encryptedAndGone_haveDistinctForms() {
         let encrypted = OverlayPreviewProtection.form(for: message(mine: false, content: "", isEncrypted: true), now: now)
-        let ephemeral = OverlayPreviewProtection.form(for: message(mine: false, expiresAt: now.addingTimeInterval(600)), now: now)
         let gone = OverlayPreviewProtection.form(for: message(mine: false, deletedAt: now), now: now)
         XCTAssertEqual(encrypted, .encrypted)
-        XCTAssertEqual(ephemeral, .ephemeral)
         XCTAssertEqual(gone, .gone)
-        XCTAssertEqual(Set([encrypted.chipSymbol, ephemeral.chipSymbol, gone.chipSymbol].compactMap { $0 }).count, 3,
-                       "trois états, trois pictogrammes : on lit POURQUOI l'aperçu ne montre rien")
+        XCTAssertEqual(Set([encrypted.chipSymbol, gone.chipSymbol].compactMap { $0 }).count, 2,
+                       "deux états, deux pictogrammes : on lit POURQUOI l'aperçu ne montre rien")
         XCTAssertNotEqual(ProtectedFormChip.label(for: .encrypted), ProtectedFormChip.label(for: .gone))
-        XCTAssertNotEqual(ProtectedFormChip.label(for: .ephemeral), ProtectedFormChip.label(for: .gone))
     }
 
     func test_overlayPreviewProtection_expiredMessage_isGone_notEphemeral() {
@@ -218,9 +228,17 @@ final class MessageOverlayMaturityTests: XCTestCase {
         XCTAssertEqual(OverlayPreviewProtection.form(for: message(mine: false), now: now), .clear)
     }
 
-    func test_pieceProtection_followsTheNewForms() {
+    func test_overlayPreviewProtection_liveEphemeral_showsAsTheThreadDoes() {
+        XCTAssertEqual(
+            OverlayPreviewProtection.form(for: message(mine: false, expiresAt: now.addingTimeInterval(600)), now: now), .clear,
+            "le fil montre un éphémère vivant avec son contenu et son compte à rebours : l'aperçu aussi")
+        XCTAssertEqual(
+            OverlayPreviewProtection.form(for: message(mine: true, expiresAt: now.addingTimeInterval(600)), now: now), .clear)
+    }
+
+    func test_pieceProtection_liveEphemeral_staysSealedByTheExitLaw() {
         let ephemeral = message(mine: false, expiresAt: now.addingTimeInterval(600))
-        XCTAssertTrue(MessagePieceTarget.messageIsProtected(ephemeral), "ce qui brûle ne se montre pas pièce par pièce")
+        XCTAssertTrue(MessagePieceTarget.messageIsProtected(ephemeral), "ce qui brûle ne s'enregistre pas pièce par pièce : la loi de sortie le dit")
     }
 
     // MARK: - 6. L'échelle a un plancher
@@ -281,5 +299,17 @@ final class MessageOverlayMaturityTests: XCTestCase {
     func test_pieceMenu_protectedPiece_neverOffersReaction() {
         let context = MessagePieceMenu.Context(isProtected: true, exits: .unrestricted, canDelete: false)
         XCTAssertFalse(MessagePieceMenu.offersReaction(context))
+    }
+}
+
+@MainActor
+final class MessageOverlayPreviewFadeTests: XCTestCase {
+    func test_hasContentBelow_fadesOnlyWhileThereIsAContinuation() {
+        typealias Viewport = MessageOverlayPreviewViewport<EmptyView>
+        XCTAssertTrue(Viewport.hasContentBelow(contentHeight: 400, visibleHeight: 300, scrolledOffset: 0))
+        XCTAssertTrue(Viewport.hasContentBelow(contentHeight: 400, visibleHeight: 300, scrolledOffset: 50))
+        XCTAssertFalse(Viewport.hasContentBelow(contentHeight: 400, visibleHeight: 300, scrolledOffset: 100),
+                       "arrivé au bout, la dernière ligne est nette")
+        XCTAssertFalse(Viewport.hasContentBelow(contentHeight: 400, visibleHeight: 300, scrolledOffset: 140))
     }
 }

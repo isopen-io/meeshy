@@ -25,20 +25,16 @@ nonisolated enum OverlayPreviewProtection: Equatable {
     /// n'a pas. Un message chiffré que l'appareil a DÉCHIFFRÉ (il a du texte)
     /// se montre comme le fil le montre.
     case encrypted
-    /// Éphémère (flamme, échéance en cours) : l'appui long ne montre ni ne
-    /// consomme ce qui brûle — la puce dit seulement qu'il disparaîtra.
-    case ephemeral
     /// Disparu : supprimé ou échu. Le fil ne montre plus que sa pierre tombale.
     case gone
 
     /// Trois formes distinctes pour trois états distincts : le lecteur doit
     /// pouvoir lire POURQUOI l'aperçu ne montre rien. La précédence va du plus
-    /// définitif au plus léger : disparu, vue unique, flou, éphémère, chiffré.
+    /// définitif au plus léger : disparu, vue unique, flou, chiffré. Un éphémère VIVANT n'a pas de forme à lui : le fil le montre avec son contenu et son compte à rebours, l'aperçu le montre donc aussi (la loi de sortie, elle, interdit déjà de le copier ou de l'enregistrer).
     static func form(for message: Message, now: Date = Date()) -> OverlayPreviewProtection {
         if message.deletedAt != nil || (message.expiresAt.map { $0 <= now } ?? false) { return .gone }
         if message.holdsViewOnce { return .viewOnce(opened: message.viewOnceOpenedAt != nil) }
         if message.holdsBlur { return .blurred }
-        if message.expiresAt != nil || message.effects.flags.contains(.ephemeral) { return .ephemeral }
         let unreadable = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if message.isEncrypted && unreadable { return .encrypted }
         return .clear
@@ -49,7 +45,6 @@ nonisolated enum OverlayPreviewProtection: Equatable {
         switch self {
         case .clear, .viewOnce, .blurred: return nil
         case .encrypted: return "lock.fill"
-        case .ephemeral: return "flame.fill"
         case .gone: return "trash.slash"
         }
     }
@@ -209,7 +204,7 @@ struct OverlayProtectedPreview: View {
                 .allowsHitTesting(false)
         case .blurred:
             blurred
-        case .encrypted, .ephemeral, .gone:
+        case .encrypted, .gone:
             ProtectedFormChip(form: form, isMe: message.isMe, isDark: isDark, accentHex: accentHex)
         }
     }
@@ -308,7 +303,7 @@ extension MessageOverlayMenu {
 
 // MARK: - La puce des formes qui ne montrent rien d'autre qu'elles-mêmes
 
-/// **Chiffré, éphémère, disparu : une puce, un mot.** Le fil ne montre pas le
+/// **Chiffré, disparu : une puce, un mot.** Le fil ne montre pas le
 /// contenu de ces messages ; l'aperçu ne le dévoile pas non plus, mais il dit
 /// pourquoi — sans quoi un aperçu vide se lirait comme une panne.
 struct ProtectedFormChip: View {
@@ -322,8 +317,6 @@ struct ProtectedFormChip: View {
         switch form {
         case .encrypted:
             return String(localized: "message.overlay.preview.encrypted", defaultValue: "Message chiffré", bundle: .main)
-        case .ephemeral:
-            return String(localized: "message.overlay.preview.ephemeral", defaultValue: "Message éphémère", bundle: .main)
         case .gone:
             return String(localized: "message.overlay.preview.gone", defaultValue: "Message supprimé", bundle: .main)
         case .clear, .viewOnce, .blurred:
