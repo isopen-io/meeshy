@@ -47,7 +47,7 @@ struct GameMintPreviewView: View {
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .accessibilityAddTraits(.updatesFrequently)
                 .accessibilityIdentifier("game.mint.celebration")
             }
@@ -95,7 +95,7 @@ struct GameMintPreviewView: View {
     private func line(_ said: ProgressionFactText, font: Font, identifier: String) -> some View {
         Text(said.text)
             .font(font)
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -130,7 +130,7 @@ struct GameMintPreviewView: View {
             Text(said.text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
                 .italic()
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
