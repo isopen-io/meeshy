@@ -31,7 +31,7 @@ const GEOMETRY =
 
 /**
  * Les sites tolérés, par fichier (relatif à `src/`), une entrée par occurrence.
- * Hors lot #11314, chacun a son issue de suivi. Ne fait que décroître.
+ * Hors lot #11314, tous suivis par #11413. Ne fait que décroître.
  */
 export const KNOWN_GEOMETRY_ANIMATIONS = {
   'components/call-effects-companions.tsx': ['left'],
