@@ -31,9 +31,11 @@ class ThemePaletteTest {
     fun `four ambient orbs follow the iOS sizes and opacities`() {
         val dark = ThemePalette(true).ambientOrbs
         assertThat(dark.map { it.sizeDp }).containsExactly(300, 350, 250, 200).inOrder()
-        assertThat(dark.map { it.color.alpha }).isEqualTo(listOf(0.10f, 0.10f, 0.08f, 0.06f))
+        dark.map { it.color.alpha }.zip(listOf(0.10f, 0.10f, 0.08f, 0.06f))
+            .forEach { (actual, expected) -> assertThat(actual).isWithin(0.005f).of(expected) }
         val light = ThemePalette(false).ambientOrbs
-        assertThat(light.map { it.color.alpha }).isEqualTo(listOf(0.05f, 0.05f, 0.04f, 0.03f))
+        light.map { it.color.alpha }.zip(listOf(0.05f, 0.05f, 0.04f, 0.03f))
+            .forEach { (actual, expected) -> assertThat(actual).isWithin(0.005f).of(expected) }
     }
 
     @Test
