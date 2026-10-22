@@ -20,7 +20,7 @@ import org.junit.Test
  *
  * Only the tokens Android declares are compared. A CSS variable of a family the lot covers
  * (`indigo-*`, `purple-*`, `neutral-*`, `state-*`, `on-media*`, `media-*`, `scrim*`) that has no
- * Android counterpart fails [every color of a covered family is mapped], so a token iOS adds does
+ * Android counterpart fails `every color of a covered family is mapped`, so a token iOS adds does
  * not slip past Android unnoticed.
  */
 class MeeshyIosCssParityTest {
