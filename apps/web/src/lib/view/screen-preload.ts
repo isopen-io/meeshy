@@ -14,8 +14,9 @@ export const PRELOADED_SCREENS = ['list', 'thread', 'feed', 'settings', 'profile
 
 export type PreloadedScreen = (typeof PRELOADED_SCREENS)[number];
 
-/** Rappelle `run` au prochain moment d'inactivité (`requestIdleCallback` ou son repli). */
-export type IdleScheduler = (run: () => void) => void;
+/** Rappelle `run` au prochain moment d'inactivité (`requestIdleCallback` ou son repli) — `lib/view/browser-idle.ts`. */
+export { browserIdle, type IdleScheduler } from './browser-idle';
+import type { IdleScheduler } from './browser-idle';
 
 export type NetworkHints = { readonly saveData?: boolean; readonly effectiveType?: string };
 
@@ -42,12 +43,6 @@ export function preloadScreensWhenIdle({
   };
   next(0);
 }
-
-/** L'inactivité du navigateur ; un délai court là où `requestIdleCallback` manque (Safari). */
-export const browserIdle: IdleScheduler = (run) => {
-  if (typeof requestIdleCallback === 'function') requestIdleCallback(() => run(), { timeout: 2_000 });
-  else setTimeout(run, 200);
-};
 
 /** Les indications réseau de `navigator.connection`, absentes hors Chromium. */
 export function browserNetworkHints(): NetworkHints {
