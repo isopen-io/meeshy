@@ -79,4 +79,13 @@ public nonisolated enum PlayerPoolEviction {
             return left == right ? lhs.offset > rhs.offset : left < right
         }?.element
     }
+
+    /// `false` quand `candidate`, inséré dans un pool plein, en serait aussitôt
+    /// la victime (#9882) : le préparer dépenserait un décodeur pour un lecteur
+    /// jeté à l'insertion. Une vidéo de conversation (aucune distance) cède
+    /// ainsi aux voisins déclarés du réel affiché.
+    public static func admits(candidate: String, order: [String], distances: [String: Int], capacity: Int) -> Bool {
+        guard !order.contains(candidate), order.count >= capacity else { return true }
+        return victim(order: order + [candidate], distances: distances) != candidate
+    }
 }
