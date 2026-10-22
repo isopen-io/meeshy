@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * The base writing direction of a run of story-caption text — left-to-right (Latin,

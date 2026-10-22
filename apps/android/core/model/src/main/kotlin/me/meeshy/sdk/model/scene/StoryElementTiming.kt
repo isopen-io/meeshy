@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * The pure, Compose-agnostic visibility timing of an on-canvas element — parity with the

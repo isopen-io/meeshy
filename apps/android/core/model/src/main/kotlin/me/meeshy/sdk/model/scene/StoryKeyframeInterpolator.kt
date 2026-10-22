@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 import me.meeshy.sdk.model.StoryEasing
 
@@ -8,7 +8,7 @@ import me.meeshy.sdk.model.StoryEasing
  * `eased(0) == 0` and `eased(1) == 1`, so a segment always starts on its lower
  * keyframe's value and ends on its upper one whatever the curve.
  */
-internal fun StoryEasing.eased(t: Float): Float = when (this) {
+fun StoryEasing.eased(t: Float): Float = when (this) {
     StoryEasing.LINEAR -> t
     StoryEasing.EASE_IN -> t * t
     StoryEasing.EASE_OUT -> 1f - (1f - t) * (1f - t)
@@ -20,7 +20,7 @@ internal fun StoryEasing.eased(t: Float): Float = when (this) {
  * relative to the owning clip's start), the channel's `value` at that time, and
  * the [StoryEasing] that governs the segment *starting* at this point.
  */
-internal data class KeyframeChannelSample(
+data class KeyframeChannelSample(
     val time: Float,
     val value: Double,
     val easing: StoryEasing,
@@ -31,6 +31,9 @@ internal data class KeyframeChannelSample(
  * `KeyframeInterpolator` (`MeeshyUI/Story/Timeline/Logic/KeyframeInterpolator.swift`).
  * No Android, no I/O: the reader canvas and any future compositor share this one
  * source of truth for "what is this channel's value at time `t`".
+ *
+ * Shared scene-engine API (`me.meeshy.sdk.model.scene`): the viewer, the composer, the
+ * feed and the repost consume it without depending on any feature module.
  *
  * Contract (identical to iOS):
  * - **0 samples** -> `null`. The caller falls back to the clip's static value.
@@ -45,7 +48,7 @@ internal data class KeyframeChannelSample(
  * sort on the common already-sorted path (this runs per animation frame), and a
  * stable sort otherwise reproduces exactly the order a pre-sorted array had.
  */
-internal object StoryKeyframeInterpolator {
+object StoryKeyframeInterpolator {
 
     fun interpolate(samples: List<KeyframeChannelSample>, at: Float): Double? {
         if (samples.isEmpty()) return null

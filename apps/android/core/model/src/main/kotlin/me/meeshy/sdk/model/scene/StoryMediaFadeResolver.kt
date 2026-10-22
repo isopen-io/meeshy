@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * Pure resolver for a timed canvas clip's own fadeIn/fadeOut opacity envelope —
@@ -9,8 +9,11 @@ package me.meeshy.app.stories
  * `[startTime, startTime + duration)` window the opacity ramps `0 → 1` over the
  * fade-in, holds at `1`, then ramps `1 → 0` over the fade-out. The envelope is a
  * *default* opacity source: iOS combines it as `fade ?? keyframeOpacity ?? base`,
- * so a present envelope value overrides an authored keyframe opacity (see
- * [StoryForegroundMediaView.animated]).
+ * so a present envelope value overrides an authored keyframe opacity (the caller
+ * composes `fade ?: keyframe ?: base`).
+ *
+ * Shared scene-engine API: every input is a primitive (`fadeIn`, `fadeOut`, `startTime`,
+ * `duration`, `currentTime`), never a feature view type.
  *
  * Returns `null` — meaning "this clip authors no envelope opacity at this instant"
  * — when there is no fade at all, or when the playhead sits outside the clip's

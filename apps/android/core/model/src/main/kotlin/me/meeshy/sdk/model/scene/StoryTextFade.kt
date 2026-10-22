@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * The pure, Compose-agnostic fade timing of an on-canvas text element — parity with the

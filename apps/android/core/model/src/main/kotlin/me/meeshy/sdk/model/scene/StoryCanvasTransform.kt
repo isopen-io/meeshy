@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 /**
  * The persisted pan/zoom of one slide's 9:16 canvas content. Unlike the ephemeral
