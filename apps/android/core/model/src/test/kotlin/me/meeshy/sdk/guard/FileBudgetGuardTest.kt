@@ -2,8 +2,9 @@ package me.meeshy.sdk.guard
 
 import com.google.common.truth.Truth.assertThat
 import java.io.File
-import java.nio.file.Files
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 
 /**
  * Garde du budget de taille des sources Kotlin d'`apps/android` (CONVENTIONS.md, règle 13) :
@@ -16,6 +17,9 @@ import org.junit.Test
  * conversation (#11620) ne doit pas se re-gonfler sous le seuil de découpage.
  */
 class FileBudgetGuardTest {
+
+    @get:Rule
+    val temp = TemporaryFolder()
 
     private data class Outcome(val exitCode: Int, val output: String)
 
@@ -44,8 +48,7 @@ class FileBudgetGuardTest {
     private fun lines(count: Int): String = (1..count).joinToString(separator = "\n", postfix = "\n") { "val v$it = $it" }
 
     private fun tree(vararg files: Pair<String, Int>): File {
-        val root = Files.createTempDirectory("file-budget").toFile()
-        root.deleteOnExit()
+        val root = temp.newFolder()
         files.forEach { (relative, count) ->
             val file = File(root, relative)
             file.parentFile.mkdirs()
@@ -55,8 +58,7 @@ class FileBudgetGuardTest {
     }
 
     private fun baseline(vararg entries: Pair<String, Int>): File {
-        val file = Files.createTempFile("file-budget-baseline", ".txt").toFile()
-        file.deleteOnExit()
+        val file = temp.newFile()
         file.writeText("# dette héritée\n" + entries.joinToString("\n") { (path, cap) -> "$path $cap" } + "\n")
         return file
     }
@@ -117,8 +119,7 @@ class FileBudgetGuardTest {
 
     @Test
     fun `a tree without any source fails instead of passing on nothing`() {
-        val root = Files.createTempDirectory("file-budget-empty").toFile()
-        root.deleteOnExit()
+        val root = temp.newFolder()
 
         val outcome = run("--root", root.path, "--baseline", baseline().path)
 

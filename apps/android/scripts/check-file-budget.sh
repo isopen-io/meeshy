@@ -3,8 +3,9 @@
 # (CONVENTIONS.md, règle 13 : plafond dur 1200 lignes par fichier, 1000 = découpage
 # sans discussion ; ajouter à un fichier hors budget est interdit, on extrait d'abord).
 #
-# Périmètre : les sources de production (`*/src/main/**/*.kt`), hors `build/`. Les
-# tests ne sont pas écrits en « un type par fichier » et restent hors budget.
+# Périmètre : les sources de production (`*/src/main/**/*.kt`), hors `build/` — les
+# deux se jugent sur le chemin RELATIF à la racine, car le répertoire temporaire d'un
+# test Gradle vit lui-même sous `build/`. Les tests restent hors budget.
 #
 # Dette héritée : un fichier déjà au-delà du plafond figure dans la baseline
 # (`scripts/file-budget-baseline.txt`, une ligne « chemin plafond »). Il peut RÉTRÉCIR,
@@ -46,8 +47,10 @@ stale=()
 soft=()
 
 while IFS= read -r -d '' file; do
-  scanned=$((scanned + 1))
   rel="${file#"$ROOT"/}"
+  case "/$rel" in */build/*) continue ;; esac
+  case "$rel" in */src/main/*) ;; *) continue ;; esac
+  scanned=$((scanned + 1))
   lines="$(awk 'END { print NR }' "$file")"
   cap="$(baseline_cap "$rel")"
 
@@ -67,7 +70,7 @@ while IFS= read -r -d '' file; do
   elif (( lines > SOFT )); then
     soft+=("$rel ($lines lignes)")
   fi
-done < <(find "$ROOT" -type f -name '*.kt' -path '*/src/main/*' -not -path '*/build/*' -print0)
+done < <(find "$ROOT" -type f -name '*.kt' -print0)
 
 if (( scanned == 0 )); then
   echo "AUCUNE SOURCE trouvée sous $ROOT : le balayage ne protège rien." >&2
