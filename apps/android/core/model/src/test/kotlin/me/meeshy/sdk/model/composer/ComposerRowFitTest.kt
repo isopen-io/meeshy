@@ -56,7 +56,8 @@ class ComposerRowFitTest {
 
     @Test
     fun `at the floor on a narrow screen the last tile still peeks`() {
-        val gap = spacing(available = 320f)
-        assertThat(ComposerRowFit.lastTilePeeks(7, 44f, gap, 16f, 320f)).isTrue()
+        val gap = spacing(available = 360f)
+        assertThat(gap).isEqualTo(8f)
+        assertThat(ComposerRowFit.lastTilePeeks(7, 44f, gap, 16f, 360f)).isTrue()
     }
 }
