@@ -3,6 +3,7 @@ package me.meeshy.ui.theme
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import me.meeshy.ui.component.chrome.LiquidGlassRecipe
 
 /**
  * Theme-aware signature gradients as Compose [Brush]es — the port of iOS
@@ -63,4 +64,26 @@ object MeeshyGradients {
             },
             start = topLeading, end = bottomTrailing,
         )
+
+    /** Reflet du verre fait main : blanc depuis le bord haut jusqu'au centre. */
+    public fun liquidGlassSheen(dark: Boolean): Brush {
+        val sheen = LiquidGlassRecipe.resolve(dark, isTinted = false).sheen
+        return Brush.verticalGradient(
+            0f to Color.White.copy(alpha = sheen),
+            0.5f to Color.White.copy(alpha = 0f),
+        )
+    }
+
+    /** Liseré du verre fait main : plus clair du cote eclaire (haut-gauche) que du cote ombre. */
+    public fun liquidGlassRim(dark: Boolean, isTinted: Boolean): Brush {
+        val r = LiquidGlassRecipe.resolve(dark, isTinted)
+        return Brush.linearGradient(
+            colors = listOf(
+                Color.White.copy(alpha = r.rimLit),
+                Color.White.copy(alpha = r.rimShade),
+                Color.White.copy(alpha = r.rimLit * 0.5f),
+            ),
+            start = topLeading, end = bottomTrailing,
+        )
+    }
 }
