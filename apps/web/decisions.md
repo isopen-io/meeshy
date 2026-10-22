@@ -5408,6 +5408,8 @@ Le prompt des Cadres de gloire (`docs/product/cadres-de-gloire/PROMPT-developpem
 
 **Ce qui reste.** L'avis `conformite-juridique` (OFL, nom réservé) à consigner sur #10158 ; la partie iOS du lot (TTF tels que distribués, enregistrés à la demande) ; le branchement dans le peintre (L7, #10159). **Kotlin natif** : rien (gel).
 
+**Complément (2026-10-21, #10158).** Le cliquet de `measure-weight.mjs` ne compare que ce que Vite ÉMET, donc rien tant qu'aucun peintre n'importe la feuille : pendant cette fenêtre, un septième fichier `glory-*.woff2`, une substitution ou un second importeur de `glory-fonts.css` ne faisaient rougir aucun gate (leçon 231). `scripts/check-glory-fonts.mjs`, au gate juste après la mesure de poids, tient désormais les mêmes nombres sur les SOURCES : inventaire et somme exacte d'octets égaux à `budgets.json › glory_fonts`, chaque fichier servi par une `@font-face` et nommé dans le NOTICE, la feuille importée par `lib/game-photo/glory-fonts.ts` seul, aucune police de cadre au manifeste du service worker quand `dist/` existe. Témoin : `scripts/check-glory-fonts.test.ts` (chaque écart nommé rougit ; le dépôt tel qu'il est rend zéro écart). Rouge prouvé en posant un septième fichier sous `styles/fonts/`.
+
 ## D-202 — Une ligne de conversation se balaie des deux côtés, 3 actions au plus par bord ; le menu « ⋮ » reste le véhicule de la souris, du clavier et du lecteur d'écran (2026-10-14, #10580, complète D-17)
 
 **Contexte.** D-17 faisait du menu ancré le SEUL véhicule des actions de rangée, faute d'un vocabulaire de glissement qui ne se dispute pas avec le défilement. Directive porteur du 2026-10-14 : la liste se manie pareil sur iOS, web et Android — la ligne se balaie, comme `SwipeableRow`.
