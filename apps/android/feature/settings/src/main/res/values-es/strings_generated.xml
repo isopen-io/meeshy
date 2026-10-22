@@ -12,4 +12,9 @@
     <string name="location_precision_neighborhood">Barrio (~1 km)</string>
     <string name="location_precision_section">Precisión del uso compartido</string>
     <string name="location_settings_title">Uso compartido de ubicación</string>
+    <string name="settings_media_capture_header">Al capturar</string>
+    <string name="settings_media_capture_original_subtitle">La foto o el vídeo sin procesar, sin efectos ni marco, se guarda en Fotos con cada toma.</string>
+    <string name="settings_media_capture_original_title">Guardar el original</string>
+    <string name="settings_media_capture_rendered_subtitle">Automáticamente al validar la edición. Si no, la flecha de la edición la guarda cuando quieras.</string>
+    <string name="settings_media_capture_rendered_title">Guardar la versión con efectos y marco</string>
 </resources>

@@ -12,4 +12,9 @@
     <string name="location_precision_neighborhood">Quartiere (~1 km)</string>
     <string name="location_precision_section">Precisione della condivisione</string>
     <string name="location_settings_title">Condivisione della posizione</string>
+    <string name="settings_media_capture_header">Durante lo scatto</string>
+    <string name="settings_media_capture_original_subtitle">La foto o il video originale, senza effetti né cornice, viene salvato in Foto a ogni scatto.</string>
+    <string name="settings_media_capture_original_title">Salva l\'originale</string>
+    <string name="settings_media_capture_rendered_subtitle">Automaticamente quando confermi la modifica. Altrimenti, la freccia della modifica la salva su richiesta.</string>
+    <string name="settings_media_capture_rendered_title">Salva la versione con effetti e cornice</string>
 </resources>
