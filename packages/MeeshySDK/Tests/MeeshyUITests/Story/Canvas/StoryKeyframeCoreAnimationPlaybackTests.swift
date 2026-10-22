@@ -117,7 +117,7 @@ final class StoryKeyframeCoreAnimationPlaybackTests: XCTestCase {
     /// Le verre découpe le dessous au cadre du MODÈLE : un texte vitré animé
     /// garde l'évaluation image par image, sinon sa découpe resterait figée.
     func test_glassText_staysFrameByFrame() throws {
-        let layer = try XCTUnwrap(textLayer(slide(movingText(backgroundStyle: .glass)), at: 0.5,
+        let layer = try XCTUnwrap(textLayer(slide(movingText(backgroundStyle: .glass(radius: 20))), at: 0.5,
                                             cache: cache(coreAnimation: true)))
 
         XCTAssertTrue(keyframeAnimations(on: layer).isEmpty)
