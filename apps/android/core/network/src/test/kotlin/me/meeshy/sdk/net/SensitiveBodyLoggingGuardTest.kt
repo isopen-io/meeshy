@@ -154,6 +154,39 @@ class SensitiveBodyLoggingGuardTest {
     }
 
     /**
+     * Les routes d'authentification qui portent un secret au corps ou dans la
+     * reponse — NOMMEES ici une a une, hors de l'iteration du set : un set auquel on
+     * oublierait d'ajouter la route de demain ne ferait tomber aucun temoin qui
+     * n'itere que sur ce qu'il contient deja.
+     */
+    @Test
+    fun `les secrets de la preuve d'adresse, de la reinitialisation et du telephone ne fuient pas`() {
+        listOf(
+            "/auth/verify-email",
+            "/auth/magic-link/validate",
+            "/auth/verification/status",
+            "/auth/reset-password",
+            "/auth/reset-password/verify-token",
+            "/auth/forgot-password/phone/verify-identity",
+            "/auth/forgot-password/phone/verify-code",
+            "/auth/2fa/verify",
+            "/auth/verify-phone",
+            "/auth/phone-transfer/verify",
+            "/auth/phone-transfer/verify-registration",
+            "/anonymous/refresh",
+        ).forEach { route ->
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
+
+    /**
      * LA COURSE, mesuree. Cinquante appels sensibles et cinquante ordinaires,
      * melanges sur huit fils. Avec un `level` partage et mute par requete, il
      * suffit qu'un seul appel ordinaire repose BODY entre l'ecriture d'un appel

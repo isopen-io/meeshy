@@ -12,6 +12,10 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
         var openings: [Bool] = []
     }
 
+    private final class Stance {
+        var answer: PresentedSurfaceYield = .retains
+    }
+
     private func declare(_ kind: PresentedSurfaceKind,
                          in registry: PresentedSurfaceRegistry,
                          journal: Journal,
@@ -164,10 +168,10 @@ final class PresentedSurfaceRegistryTests: XCTestCase {
     func test_clearForConversation_yieldIsReadAtRequestTime() {
         let registry = PresentedSurfaceRegistry()
         let journal = Journal()
-        var stance = PresentedSurfaceYield.retains
-        _ = registry.declare(.composer, answer: { stance }) { journal.closed.append(.composer) }
+        let stance = Stance()
+        _ = registry.declare(.composer, answer: { stance.answer }) { journal.closed.append(.composer) }
 
-        stance = .closes
+        stance.answer = .closes
         registry.clearForConversation { journal.openings.append($0) }
 
         XCTAssertEqual(journal.closed, [.composer])

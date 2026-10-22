@@ -113,10 +113,10 @@ final class ProgressionMeeshEntryTests: XCTestCase {
         return e
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// **Le harnais doit pouvoir ÉCHOUER.** Un arbre muet rendrait les témoins

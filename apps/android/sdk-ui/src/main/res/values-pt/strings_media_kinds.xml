@@ -14,14 +14,14 @@
     <string name="media_voice_message">Mensagem de voz</string>
     <string name="media_voice_recording">Mensagem de voz (%1$s)</string>
     <plurals name="media_duration_minutes">
-        <item quantity="one">%d minuto</item>
-        <item quantity="many">%d minutos</item>
-        <item quantity="other">%d minutos</item>
+        <item quantity="one">%1$d minuto</item>
+        <item quantity="many">%1$d minutos</item>
+        <item quantity="other">%1$d minutos</item>
     </plurals>
     <plurals name="media_duration_seconds">
-        <item quantity="one">%d segundo</item>
-        <item quantity="many">%d segundos</item>
-        <item quantity="other">%d segundos</item>
+        <item quantity="one">%1$d segundo</item>
+        <item quantity="many">%1$d segundos</item>
+        <item quantity="other">%1$d segundos</item>
     </plurals>
     <string name="media_composer_placeholder_message">Mensagem...</string>
     <string name="media_composer_placeholder_post">O que há de novo?</string>

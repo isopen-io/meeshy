@@ -49,10 +49,6 @@ final class ReadingModeLensCatalogTests: XCTestCase {
 
     func test_displayOrder_legacy_neverIncludesBubbles_RETIRED() throws {
         throw XCTSkip("Remplacé par test_displayOrder_includesBubbles_asARenderChoice (2026-08-21).")
-        XCTAssertFalse(
-            ReadingModeLensCatalog.displayOrder.contains(.bubbles),
-            "`.bubbles` est le mode de repli drapeau OFF — il ne doit JAMAIS apparaître dans le catalogue sélectionnable de la feuille Lentille."
-        )
     }
 
     /// RETRAIT FOCAL iOS (2026-08-18) : Focal sort du catalogue sélectionnable
@@ -63,11 +59,6 @@ final class ReadingModeLensCatalogTests: XCTestCase {
 
     func test_displayOrder_containsExactlyThreeSelectableModes_RETIRED() throws {
         throw XCTSkip("Focal et Bulles sont de retour au catalogue (2026-08-21).")
-        XCTAssertEqual(
-            ReadingModeLensCatalog.displayOrder,
-            [.script, .summary, .river],
-            "Le catalogue doit lister exactement Script, Résumé, Rivière — dans cet ordre (retrait Focal 2026-08-18)."
-        )
     }
 
     // MARK: - Rivière TOUJOURS présente (critère §7 « jamais un écran vide »)
