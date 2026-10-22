@@ -451,17 +451,8 @@ final class AttachmentPreparationService {
     /// land, before the heavier compression pipeline runs. Returns `nil` when
     /// the bytes can't be decoded: the caller then refuses the image.
     nonisolated static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: false
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: maxPixelSize, decodeImmediately: false)
+            .map { UIImage(cgImage: $0) }
     }
 }
 

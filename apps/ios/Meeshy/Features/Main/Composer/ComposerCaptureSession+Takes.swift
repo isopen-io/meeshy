@@ -277,11 +277,8 @@ extension ComposerCaptureSession {
               let proprietes = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
               let largeur = proprietes[kCGImagePropertyPixelWidth] as? Int,
               let hauteur = proprietes[kCGImagePropertyPixelHeight] as? Int else { return nil }
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: max(largeur, hauteur),
-        ] as CFDictionary)
+        return ImageDownsampler.thumbnail(source: source, maxPixelSize: CGFloat(max(largeur, hauteur)),
+                                          decodeImmediately: false)
     }
 
     /// Le RENDU de la vidéo part en galerie. **Sans effet, UN seul fichier**
