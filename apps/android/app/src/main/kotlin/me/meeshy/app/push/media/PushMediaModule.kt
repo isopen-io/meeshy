@@ -29,8 +29,8 @@ internal object PushMediaModule {
                 chain.proceed(
                     chain.request().newBuilder()
                         .header("User-Agent", "Meeshy-Android/${BuildConfig.VERSION_NAME}")
-                        .header("X-Client-Platform", "android")
-                        .header("X-Client-Version", BuildConfig.VERSION_NAME)
+                        .header("X-App-Platform", "android")
+                        .header("X-App-Version", BuildConfig.VERSION_NAME)
                         .build(),
                 )
             }
