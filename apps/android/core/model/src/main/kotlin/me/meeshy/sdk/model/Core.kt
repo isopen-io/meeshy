@@ -192,4 +192,36 @@ data class MeeshyMessageAttachment(
     val thumbnailColor: String = "4ECDC4",
     val transcription: EmbeddedTranscription? = null,
     val audioTranslations: Map<String, EmbeddedAudioTranslation>? = null,
+    /**
+     * Le fichier sort de la caméra ou du micro DE L'APPLICATION (déclaré à l'envoi).
+     * Défaut `false` : une ligne de cache écrite avant ce champ décode en « pas une
+     * capture », la lecture juste — l'absence ne peut pas valoir capture.
+     */
+    val capturedInApp: Boolean = false,
+    /**
+     * Effets de la pièce (confettis, flou animé…), miroir `attachment`-level de
+     * `MeeshyMessage.effectFlags`. Absent avant ce champ : une ligne ancienne décode
+     * en `null` = « pas d'effet connu », jamais « pas d'effet ». Décodé FERMÉ
+     * (voir [AttachmentProtection]).
+     */
+    @Serializable(with = ProtectionFlagsSerializer::class)
+    val effectFlags: Long? = null,
+    /** D4 — variantes WebP réduites ; une variante partielle est écartée, la pièce se relit. */
+    @Serializable(with = LossyMeeshyImageVariantsSerializer::class)
+    val imageVariants: List<MeeshyImageVariant>? = null,
+    /** Réactions par pièce agrégées (emoji → compte), miroir du `reactionSummary` du message. */
+    val reactionSummary: Map<String, Int>? = null,
+    /** Emojis posés par l'utilisateur courant sur cette pièce. */
+    val currentUserReactions: List<String>? = null,
+    // Accusés agrégés « tous les destinataires actifs » : nuls dans une ligne antérieure.
+    val deliveredToAllAt: String? = null,
+    val viewedByAllAt: String? = null,
+    val downloadedByAllAt: String? = null,
+    val listenedByAllAt: String? = null,
+    val watchedByAllAt: String? = null,
+    val viewedCount: Int? = null,
+    val downloadedCount: Int? = null,
+    val consumedCount: Int? = null,
+    /** Progression de consommation du lecteur courant (position + complétion). */
+    val currentUserConsumption: MeeshyMediaConsumption? = null,
 )
