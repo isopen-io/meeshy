@@ -64,7 +64,7 @@ extension PostDetailView {
         let user = AuthManager.shared.currentUser
         var all: [String] = [origLang]
         var seen: Set<String> = [origLang]
-        for lang in user?.preferredContentLanguages ?? [] {
+        for lang in ReaderPrism.resolve(for: user) {
             let l = lang.lowercased()
             if !seen.contains(l), post.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
                 all.append(l); seen.insert(l)

@@ -119,7 +119,7 @@ extension FeedPostCard {
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
                             MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
 
-                            let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                            let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                             let targetLang = userLangs.first?.lowercased() ?? "fr"
                             // Ces trois glyphes ne disent qu'UNE chose : « ce
                             // commentaire a été traduit, de là vers ici ». Lus un

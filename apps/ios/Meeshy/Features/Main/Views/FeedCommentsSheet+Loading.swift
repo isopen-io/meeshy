@@ -87,7 +87,7 @@ extension CommentsSheetView {
     }
 
     private func mapFetchedComments(_ data: [APIPostComment]) -> [FeedComment] {
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         return data.map { FeedComment(api: $0, preferredLanguages: langs) }
     }
 
@@ -198,7 +198,7 @@ extension CommentsSheetView {
     }
 
     private func mapFetchedReplies(_ data: [APIPostComment], parentId: String) -> [FeedComment] {
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         return data.map { FeedComment(api: $0, preferredLanguages: langs, parentId: parentId) }
     }
 }
