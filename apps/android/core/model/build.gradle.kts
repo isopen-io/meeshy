@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
+apply(from = rootProject.file("gradle/call-frames-catalogue.gradle.kts"))
+
 android {
     namespace = "me.meeshy.core.model"
     compileSdk = 37
@@ -30,6 +32,10 @@ android {
         }
     }
 }
+
+android.sourceSets.getByName("main").java.srcDir(
+    files(layout.buildDirectory.dir("generated/callframes")).builtBy("generateCallFrameCatalogue"),
+)
 
 dependencies {
     api(libs.kotlinx.serialization.json)
