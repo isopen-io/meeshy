@@ -208,6 +208,42 @@ final class OutgoingImagePreparerTests: XCTestCase {
         XCTAssertNil(try Self.properties(of: out.data)[kCGImagePropertyGPSDictionary])
     }
 
+    // MARK: - HDR (#11847)
+
+    /// Une source couchée dont la définition doit descendre : la carte de gain,
+    /// relative aux pixels STOCKÉS, ne survivrait pas à leur redressement. Les
+    /// pixels restent couchés, l'orientation voyage, la carte de gain aussi.
+    func test_prepare_rotatedHdrPhoto_keepsItsGainMap_andReportsTheUprightSize() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800, orientation: 6)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 600)))
+        XCTAssertEqual(out.encodedGenerations, 1)
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data), "le HDR d'une prise couchée ne doit pas se perdre")
+        XCTAssertEqual(HDRPhotoFixture.orientation(of: out.data), 6)
+        XCTAssertEqual(out.pixelSize, CGSize(width: 400, height: 600))
+    }
+
+    func test_prepare_uprightHdrPhoto_keepsItsGainMap() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let data = try HDRPhotoFixture.jpeg(width: 1200, height: 800)
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(data, policy: Self.strong(max: 600)))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data))
+        XCTAssertEqual(HDRPhotoFixture.orientation(of: out.data), 1)
+        XCTAssertEqual(out.pixelSize, CGSize(width: 600, height: 400))
+    }
+
+    /// Une prise HDR de l'objectif garde sa carte de gain jusqu'au disque, en une génération.
+    func test_hdrCameraShot_keepsItsGainMapUntilUpload() throws {
+        try HDRPhotoFixture.requireHDREncoding()
+        guard #available(iOS 18.0, macOS 15.0, *) else { return }
+        let raw = try HDRPhotoFixture.jpeg(width: 1600, height: 1200, orientation: 6)
+        let shot = try XCTUnwrap(PhotoCaptureProcessor().process(encoded: raw, settings: .capture))
+        let out = try XCTUnwrap(OutgoingImagePreparer().prepare(shot.data, policy: Self.hd()))
+        XCTAssertTrue(HDRPhotoFixture.hasGainMap(out.data))
+    }
+
     // MARK: - Fabriques
 
     /// Le défaut : HD, une génération perceptuelle, lieu retiré.
