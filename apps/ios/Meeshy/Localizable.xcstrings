@@ -278305,6 +278305,53 @@
         }
       }
     },
+    "composer.capture.trim.keyframeNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "قص دون فقدان: تُضبط البداية على الإطار الرئيسي، حتى ثانية واحدة قبل ذلك"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlustfreier Schnitt: Der Anfang rastet am Keyframe ein, bis zu 1 s früher"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lossless cut: the start snaps to the keyframe, up to 1 s earlier"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corte sin pérdida: el inicio se ajusta al fotograma clave, hasta 1 s antes"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coupe sans perte : le début se cale sur l'image clé, jusqu'à 1 s plus tôt"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Taglio senza perdita: l'inizio si allinea al fotogramma chiave, fino a 1 s prima"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Corte sem perda: o início se ajusta ao quadro-chave, até 1 s antes"
+          }
+        }
+      }
+    },
     "game.concept.section.act": {
       "extractionState": "manual",
       "localizations": {
