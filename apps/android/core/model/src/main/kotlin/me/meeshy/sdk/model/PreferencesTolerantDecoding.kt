@@ -40,7 +40,7 @@ private const val EXTRAS_KEY = "extras"
 /** Keys a block once carried that no gateway reads any more: understood, never adopted, never kept. */
 private val RETIRED_PRIVACY_KEYS = setOf("allowCallsFromNonContacts")
 
-/** The gateway refuses the whole notification category past ±14 h (`dndUtcOffsetMinutes`, GW7). */
+/** The gateway refuses the whole notification category outside UTC-12 h..UTC+14 h (`dndUtcOffsetMinutes`, GW7). */
 private val DND_UTC_OFFSET_RANGE = -720..840
 
 /** The five stamps the gateway declares `z.never` on the application category (#4180, #6624). */

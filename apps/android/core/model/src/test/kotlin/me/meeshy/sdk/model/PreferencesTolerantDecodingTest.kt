@@ -231,7 +231,7 @@ class PreferencesTolerantDecodingTest {
         assertThat(offsetOf("\"60\"")).isEqualTo(0)
         assertThat(offsetOf("60.5")).isEqualTo(0)
         assertThat(offsetOf("null")).isEqualTo(0)
-        // The gateway refuses the whole category past ±14 h: such a value must never be adopted
+        // The gateway refuses the whole category outside UTC-12 h..UTC+14 h: such a value must never be adopted
         // here, or every later notification PATCH would bounce.
         assertThat(offsetOf("841")).isEqualTo(0)
         assertThat(offsetOf("-721")).isEqualTo(0)
