@@ -31,7 +31,7 @@ import retrofit2.Retrofit
 import retrofit2.create
 
 /** Retrofit-backed entry point exposing every typed API surface. */
-class MeeshyApi private constructor(retrofit: Retrofit) {
+class MeeshyApi private constructor(private val retrofit: Retrofit) {
 
     val auth: AuthApi = retrofit.create()
     val conversations: ConversationApi = retrofit.create()
@@ -54,6 +54,13 @@ class MeeshyApi private constructor(retrofit: Retrofit) {
     val dataExport: DataExportApi = retrofit.create()
     val shareLinks: ShareLinkApi = retrofit.create()
     val links: LinkApi = retrofit.create()
+
+    /**
+     * Une interface Retrofit neuve sur le MÊME client authentifié (jeton, rafraîchissement,
+     * expiration de session). Un lot qui apporte son interface l'expose par un module Hilt
+     * qui l'appelle (`CallRoutesModule`), au lieu d'ajouter un champ ici.
+     */
+    fun <T : Any> service(type: Class<T>): T = retrofit.create(type)
 
     companion object {
         val json: Json = Json {
