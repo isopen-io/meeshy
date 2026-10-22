@@ -198,11 +198,18 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      # Verrou de schéma Room : version, schéma JSON et migration doivent évoluer ensemble.
+      - name: Room schema lock (scripts/check-room-schema.sh)
+        run: ./scripts/check-room-schema.sh
+
       # Split from the test step on purpose: a failure here is a compile break,
       # a failure below is a behavioural regression, and the routine's run log
       # needs to tell them apart without reading the raw log.
       - name: Assemble debug (./apps/android/meeshy.sh build)
         run: ./gradlew assembleDebug --no-daemon
+
+      - name: Room schema export matches the committed JSON
+        run: ./scripts/check-room-schema.sh --built
 
       - name: Unit tests (./apps/android/meeshy.sh test)
         run: ./gradlew testDebugUnitTest --no-daemon
