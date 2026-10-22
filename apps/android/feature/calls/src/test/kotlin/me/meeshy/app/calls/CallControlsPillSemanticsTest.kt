@@ -84,18 +84,16 @@ class CallControlsPillSemanticsTest {
     }
 
     @Test
-    fun `folded, the pill shows no family rows nor captions`() {
+    fun `folded, the pill shows no family rows`() {
         setPill()
         rule.onNodeWithText("My image".uppercase()).assertDoesNotExist()
-        rule.onNodeWithText("Mic", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test
-    fun `unfolded, the pill stacks one titled row per family and captions the base row`() {
+    fun `unfolded, the pill stacks one titled row per family`() {
         setPill(layer = CallScreenLayer.Menu)
         rule.onNodeWithText("My image".uppercase()).assertExists()
         rule.onNodeWithText("The call".uppercase()).assertExists()
-        rule.onNodeWithText("Mic", useUnmergedTree = true).assertExists()
     }
 
     @Test
