@@ -8,7 +8,7 @@
 //                                            jamais versionné : c'est l'artefact du job du générateur
 // Options : --only savane,poses · --jobs 3 · --final (garde le 1080×1920, sans descente à l'échelle de design)
 //           --out out · --plates out-plate (les SVG des deux variantes, CADRES_PLATE)
-//           --only et --final EXIGENT --cible (hors --check) : le dossier versionné ne reçoit que l'échantillon complet,
+//           --only et --final EXIGENT --cible, et ne se combinent pas à --check : le dossier versionné ne reçoit que l'échantillon complet,
 //           et un plan vide (collection inconnue, dossier `out` vide) est rouge, jamais un index à zéro cible.
 //
 // Méthode, par cible (Chromium par lib/launch.mjs, 1080×1920, polices aux graisses exactes) :

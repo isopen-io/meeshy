@@ -31,11 +31,14 @@ export function selectCollections({ available, only = null }) {
 
 // Où les cibles s'écrivent. Le dossier VERSIONNÉ (docs/product/cadres-de-gloire/cible/) n'est la destination par défaut
 // que du rendu COMPLET de l'échantillon : `--only` (une partie des collections) et `--final` (1080×1920) y écraseraient
-// les cibles et l'index, ils exigent `--cible`. `--check` compare sans écrire : il rend à part, contre ce dossier.
+// les cibles et l'index, ils exigent `--cible`. `--check` compare sans écrire : il rend à part, contre ce dossier — et il
+// compare l'échantillon ENTIER (l'index compte toutes les collections, en 540×960) : combiné à `--only` ou `--final`, il
+// ne pouvait jamais être vert, donc il est refusé plutôt que de rougir pour une raison qui n'en est pas une.
 export function destinationOf({ here, cible = null, full = false, only = false, final = false, check = false }) {
+  if ((only || final) && check) throw new Error('--check compare l\'échantillon entier aux cibles versionnées : il ne se combine ni à --only ni à --final');
   if (cible) return path.resolve(cible);
   if (full) return path.join(here, '../cible-complete');
-  if ((only || final) && !check) throw new Error('--only et --final exigent --cible : sans lui, ils écraseraient l\'échantillon versionné (docs/product/cadres-de-gloire/cible/)');
+  if (only || final) throw new Error('--only et --final exigent --cible : sans lui, ils écraseraient l\'échantillon versionné (docs/product/cadres-de-gloire/cible/)');
   return path.join(here, '../../cible');
 }
 

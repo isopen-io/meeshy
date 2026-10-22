@@ -95,5 +95,7 @@ test("`--only` et `--final` exigent `--cible` : sans lui, ils écraseraient l'é
   assert.throws(() => destinationOf({ here, only: true }), /--cible/);
   assert.throws(() => destinationOf({ here, final: true }), /--cible/);
   assert.equal(destinationOf({ here, only: true, full: true }), '/repo/docs/product/cadres-de-gloire/generateur/cible-complete');
-  assert.equal(destinationOf({ here, only: true, check: true }), '/repo/docs/product/cadres-de-gloire/cible');
+  assert.throws(() => destinationOf({ here, only: true, check: true }), /--check/);
+  assert.throws(() => destinationOf({ here, final: true, check: true, cible: '/tmp/x' }), /--check/);
+  assert.equal(destinationOf({ here, check: true }), '/repo/docs/product/cadres-de-gloire/cible');
 });
