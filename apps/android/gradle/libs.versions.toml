@@ -108,7 +108,7 @@ androidx-media3-effect = { module = "androidx.media3:media3-effect", version.ref
 androidx-media3-datasource = { module = "androidx.media3:media3-datasource", version.ref = "media3" }
 androidx-exifinterface = { module = "androidx.exifinterface:exifinterface", version.ref = "exifinterface" }
 androidx-window = { module = "androidx.window:window", version.ref = "androidxWindow" }
-compose-material3-windowsizeclass = { module = "androidx.compose.material3:material3-window-size-class" }
+compose-material3-window-size = { module = "androidx.compose.material3:material3-window-size-class" }
 compose-material3-adaptive = { module = "androidx.compose.material3.adaptive:adaptive", version.ref = "material3Adaptive" }
 compose-material3-adaptive-layout = { module = "androidx.compose.material3.adaptive:adaptive-layout", version.ref = "material3Adaptive" }
 compose-material3-adaptive-navigation = { module = "androidx.compose.material3.adaptive:adaptive-navigation", version.ref = "material3Adaptive" }
@@ -122,9 +122,6 @@ okhttp-mockwebserver = { module = "com.squareup.okhttp3:mockwebserver", version.
 androidx-glance-material3 = { module = "androidx.glance:glance-material3", version.ref = "glance" }
 androidx-lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycle" }
 mlkit-subject-segmentation = { module = "com.google.android.gms:play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" }
-
-# lot: persist-outbox-registre-senders
-work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]
