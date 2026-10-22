@@ -1,22 +1,20 @@
 import UIKit
-import AVFoundation
+import MeeshySDK
 
 /// Extraction de vignettes filmstrip pour les clips vidéo de la timeline.
-/// Atome pur : URL locale → N frames réparties sur la durée, cache mémoire
-/// (NSCache, thread-safe) keyé URL+count pour que les rebuilds de lanes ne
-/// relancent jamais une extraction déjà faite.
+/// Atome pur : URL locale → N frames réparties sur la durée, par le générateur
+/// unique (`VideoThumbnailGenerator`, #11844) : en lot, et en cache borné keyé
+/// URL + nombre + taille, pour que les rebuilds de lanes ne relancent jamais
+/// une extraction déjà faite.
 enum VideoFilmstrip {
 
-    private nonisolated(unsafe) static let cache: NSCache<NSString, NSArray> = {
-        let cache = NSCache<NSString, NSArray>()
-        // Sans borne, chaque lane gardait TOUTES ses extractions (N frames
-        // décodées par clip × clips) résidentes pour la durée du process.
-        cache.countLimit = 32
-        return cache
-    }()
-
-    static func cacheKey(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) -> String {
-        "\(url.absoluteString)|\(count)|\(Int(maxHeight))|\(scale)"
+    static func request(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) -> VideoThumbnailRequest {
+        // Tolérance large : le filmstrip est un repère visuel, pas un montage
+        // frame-accurate — les seeks précis coûtent une décompression GOP par frame.
+        VideoThumbnailRequest(url: url,
+                              instants: .evenlySpaced(count: count, atMostOnePerSecond: false),
+                              maximumSize: maximumSize(maxHeight: maxHeight, scale: scale),
+                              tolerance: .seconds(0.5))
     }
 
     static func maximumSize(maxHeight: CGFloat, scale: CGFloat) -> CGSize {
@@ -24,31 +22,6 @@ enum VideoFilmstrip {
     }
 
     static func frames(url: URL, count: Int, maxHeight: CGFloat, scale: CGFloat) async -> [UIImage] {
-        let key = cacheKey(url: url, count: count, maxHeight: maxHeight, scale: scale) as NSString
-        if let cached = cache.object(forKey: key) as? [UIImage] { return cached }
-
-        let asset = AVURLAsset(url: url)
-        guard let duration = try? await asset.load(.duration),
-              duration.seconds.isFinite, duration.seconds > 0 else { return [] }
-
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = maximumSize(maxHeight: maxHeight, scale: scale)
-        // Tolérance large : le filmstrip est un repère visuel, pas un montage
-        // frame-accurate — les seeks précis coûtent une décompression GOP par frame.
-        generator.requestedTimeToleranceBefore = CMTime(seconds: 0.5, preferredTimescale: 600)
-        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.5, preferredTimescale: 600)
-
-        var result: [UIImage] = []
-        for i in 0..<max(1, count) {
-            let fraction = (Double(i) + 0.5) / Double(max(1, count))
-            let time = CMTime(seconds: duration.seconds * fraction, preferredTimescale: 600)
-            guard let cg = try? await generator.image(at: time).image else { continue }
-            result.append(UIImage(cgImage: cg))
-        }
-        if !result.isEmpty {
-            cache.setObject(result as NSArray, forKey: key)
-        }
-        return result
+        await VideoThumbnailGenerator.shared.images(for: request(url: url, count: count, maxHeight: maxHeight, scale: scale))
     }
 }
