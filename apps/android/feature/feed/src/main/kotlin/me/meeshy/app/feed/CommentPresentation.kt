@@ -104,7 +104,7 @@ object CommentProjection {
     ): String? {
         val originalCode = comment.originalLanguage.normalizedCode()
         val preferredCode = LanguageResolver
-            .preferredTranslation(comment.translations.toTranslationRows(), preferences)
+            .preferredTranslation(comment.translations.toTranslationRows(), preferences, comment.originalLanguage)
             ?.targetLanguage?.normalizedCode()
         val requested = override.normalizedCode()?.takeIf { it.hasContentIn(comment, originalCode) }
         return requested ?: (preferredCode ?: originalCode)
