@@ -24,7 +24,7 @@ class MeeshySceneObjectTest {
 
     @Test
     fun `l audio sans geometrie posee prend les defauts du convertisseur`() {
-        val a = MeeshySceneObject.Audio(audio(x = 0.25f, y = 0.75f))
+        val a = MeeshySceneObject.Audio(audio(x = 0.25, y = 0.75))
         assertThat(a.x).isEqualTo(0.25)
         assertThat(a.y).isEqualTo(0.75)
         assertThat(a.scale).isEqualTo(1.0)

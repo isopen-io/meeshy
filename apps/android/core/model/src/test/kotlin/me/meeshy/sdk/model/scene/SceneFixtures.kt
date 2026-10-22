@@ -18,5 +18,5 @@ internal fun sticker(id: String = "s", z: Int = 0) = StorySticker(id = id, emoji
 internal fun place(id: String = "p", z: Int = 0) =
     StoryLocationObject(id = id, place = SharedPlace(1.0, 2.0, name = "Paris"), zIndex = z)
 
-internal fun audio(id: String = "a", z: Int? = null, bg: Boolean? = null, x: Float = 0.5f, y: Float = 0.8f) =
+internal fun audio(id: String = "a", z: Int? = null, bg: Boolean? = null, x: Double = 0.5, y: Double = 0.8) =
     StoryAudioPlayerObject(id = id, zIndex = z, isBackground = bg, x = x, y = y)

@@ -52,7 +52,7 @@ public sealed interface MeeshySceneObject {
             is Media -> value.x
             is Sticker -> value.x
             is Place -> value.x
-            is Audio -> value.x.toDouble()
+            is Audio -> value.x
         }
 
     public val y: Double
@@ -61,7 +61,7 @@ public sealed interface MeeshySceneObject {
             is Media -> value.y
             is Sticker -> value.y
             is Place -> value.y
-            is Audio -> value.y.toDouble()
+            is Audio -> value.y
         }
 
     /** Tout objet se redimensionne : l'audio sans échelle posée vaut 1. */

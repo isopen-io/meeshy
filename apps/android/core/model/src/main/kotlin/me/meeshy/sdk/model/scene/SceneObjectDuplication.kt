@@ -43,8 +43,8 @@ public object SceneObjectDuplication {
                 val clone = source.value.copy(
                     id = newId,
                     isBackground = false,
-                    x = min(1.0f, source.value.x + MEDIA_OFFSET.toFloat()),
-                    y = min(1.0f, source.value.y + MEDIA_OFFSET.toFloat()),
+                    x = min(1.0, source.value.x + MEDIA_OFFSET),
+                    y = min(1.0, source.value.y + MEDIA_OFFSET),
                 )
                 lists.copy(audios = lists.audios + clone)
             }
