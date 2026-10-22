@@ -47,7 +47,7 @@ class HttpClientContributorOrderTest {
     @Test
     fun `le socle s'ordonne guard puis politique puis reessai puis identite`() {
         val ids = HttpClientAssembler.ordered(
-            builtInContributors(MeeshyConfig(enableLogging = true), InMemoryTokenStore(), {}, TokenRefresher { null }),
+            builtInContributors(MeeshyConfig(enableLogging = true), InMemoryTokenStore(), {}, SessionRefresher(InMemoryTokenStore()) { null }),
         ).map { it.id }
         assertThat(ids).containsExactly(
             "url-guard", "endpoint-policy", "retry", "auth", "client-capabilities",

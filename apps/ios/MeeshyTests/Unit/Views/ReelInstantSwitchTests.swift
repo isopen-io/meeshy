@@ -124,6 +124,60 @@ final class ReelInstantSwitchTests: XCTestCase {
         XCTAssertTrue(ReelAudioPrefetch.urls(for: reel, preferredLanguages: ["fr"]).isEmpty)
     }
 
+    // MARK: - Prisme STRICT du lecteur (#9892)
+
+    func test_readerPrism_noAppLanguage_englishDevice_preloadsAndPlaysTheEnglishTrack() {
+        let reel = audioReel(translations: [track("fr"), track("en")], language: "es")
+        let prism = ReaderPrism.resolve(systemLanguage: nil, regionalLanguage: nil,
+                                        customDestinationLanguage: nil, deviceLocale: "en-US")
+        let played = ReelAudioLanguageResolver.preferredAudioLanguage(
+            original: "es", preferredLanguages: prism, availableLanguages: ["fr", "en"])
+
+        XCTAssertEqual(prism, ["en"], "aucune langue applicative : pas de repli « fr » pour ce qu'on JOUE")
+        XCTAssertEqual(played, "en")
+        XCTAssertEqual(ReelAudioPrefetch.urls(for: reel, preferredLanguages: prism).map(\.absoluteString),
+                       ["\(Self.base)/voice-en.m4a"],
+                       "le préchargement élit la piste que la lecture jouera")
+    }
+
+    func test_readerPrism_rankTwoServes_whenRankOneHasNoTrack() {
+        let reel = audioReel(translations: [track("fr"), track("en")], language: "es")
+        let prism = ReaderPrism.resolve(systemLanguage: "de", regionalLanguage: nil,
+                                        customDestinationLanguage: nil, deviceLocale: "en")
+
+        XCTAssertEqual(ReelAudioPrefetch.urls(for: reel, preferredLanguages: prism).map(\.absoluteString),
+                       ["\(Self.base)/voice-en.m4a"])
+        XCTAssertEqual(ReelAudioLanguageResolver.preferredAudioLanguage(
+            original: "es", preferredLanguages: prism, availableLanguages: ["fr", "en"]), "en")
+    }
+
+    func test_readerPrism_everyReelSurfaceReadsTheStrictPrism_neverTheCompositionDefaults() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // Unit/Views
+            .deletingLastPathComponent()   // Unit
+            .deletingLastPathComponent()   // MeeshyTests
+            .deletingLastPathComponent()   // apps/ios
+            .appendingPathComponent("Meeshy/Features/Main")
+        let enumerator = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+        let reelFiles = enumerator.compactMap { $0 as? URL }
+            .filter { $0.pathExtension == "swift" && $0.lastPathComponent.hasPrefix("Reel") }
+        XCTAssertGreaterThanOrEqual(reelFiles.count, 20, "la garde doit voir les fichiers du lecteur de réels")
+
+        for file in reelFiles {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            XCTAssertFalse(source.contains("currentUser?.preferredContentLanguages"),
+                           "\(file.lastPathComponent) élit une langue LUE sur les défauts de composition : ReaderPrism.resolve(for:)")
+        }
+
+        let wired = ["Views/ReelsPlayerView.swift", "Views/ReelsPlayerView+Scene.swift", "Views/ReelFeedCard.swift",
+                     "Views/ReelPrewarm.swift", "ViewModels/ReelsViewModel.swift", "Navigation/ReelNotificationOpener.swift"]
+        for path in wired {
+            let source = try String(contentsOf: appRoot.appendingPathComponent(path), encoding: .utf8)
+            XCTAssertTrue(source.contains("ReaderPrism.resolve(for: AuthManager.shared.currentUser)"),
+                          "\(path) doit lire le Prisme strict du lecteur")
+        }
+    }
+
     // MARK: - Mesure
 
     func test_meter_measuresElectionToFirstMedia_once() {

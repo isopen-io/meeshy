@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -27,14 +26,11 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
-import me.meeshy.app.conversations.LastMessagePreviewLabels
-import me.meeshy.app.conversations.withMediaKinds
-import me.meeshy.ui.component.media.ResourceMediaKindStrings
-import me.meeshy.feature.conversations.R as ConversationsR
+import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetPreviewLabels
 
 /**
  * Home-screen widget — parity target: iOS `MeeshyWidgets.QuickReplyWidget`
@@ -63,17 +59,7 @@ internal class QuickReplyWidget : GlanceAppWidget() {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
-        val labels = LastMessagePreviewLabels(
-            photo = "",
-            video = "",
-            voice = "",
-            file = "",
-            location = "",
-            none = context.getString(ConversationsR.string.conversations_no_messages),
-            you = context.getString(ConversationsR.string.conversations_preview_you),
-            senderFormat = context.getString(ConversationsR.string.conversations_preview_sender_format),
-            draftPrefix = context.getString(ConversationsR.string.conversations_preview_draft_prefix),
-        ).withMediaKinds(ResourceMediaKindStrings(context))
+        val labels = widgetPreviewLabels(context)
         val presentation = QuickReplyWidgetPresentation.from(conversations, currentUserId, labels)
 
         provideContent {
@@ -88,12 +74,12 @@ private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?)
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(WidgetTheme.background)
             .padding(12.dp),
     ) {
         Text(
             text = context.getString(R.string.widget_quick_reply_title),
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color(0xFF4338CA))),
+            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WidgetTheme.title),
         )
         if (presentation == null) {
             Column(
@@ -105,19 +91,19 @@ private fun QuickReplyWidgetContent(presentation: QuickReplyWidgetPresentation?)
             ) {
                 Text(
                     text = context.getString(R.string.widget_quick_reply_empty),
-                    style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color.Gray)),
+                    style = TextStyle(fontSize = 12.sp, color = WidgetTheme.textSecondary),
                 )
             }
         } else {
             Text(
                 text = presentation.title,
-                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = ColorProvider(Color.Black)),
+                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = WidgetTheme.textPrimary),
                 maxLines = 1,
                 modifier = GlanceModifier.padding(top = 8.dp),
             )
             Text(
                 text = presentation.preview,
-                style = TextStyle(fontSize = 11.sp, color = ColorProvider(Color.DarkGray)),
+                style = TextStyle(fontSize = 11.sp, color = WidgetTheme.textSecondary),
                 maxLines = 2,
             )
             Row(modifier = GlanceModifier.fillMaxWidth().padding(top = 8.dp)) {
@@ -145,11 +131,11 @@ private fun QuickReplyChip(text: String, conversationId: String) {
     Box(
         modifier = GlanceModifier
             .padding(end = 6.dp)
-            .background(ColorProvider(Color(0xFFEEF2FF)))
+            .background(WidgetTheme.chipBackground)
             .clickable(actionStartActivityIntent(quickReplyIntent(context, conversationId, text)))
             .padding(horizontal = 10.dp, vertical = 6.dp),
     ) {
-        Text(text = text, style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color(0xFF4338CA))))
+        Text(text = text, style = TextStyle(fontSize = 12.sp, color = WidgetTheme.chipText))
     }
 }
 

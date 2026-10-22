@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -29,15 +28,14 @@ import androidx.glance.layout.size
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
-import me.meeshy.app.conversations.LastMessagePreviewLabels
-import me.meeshy.app.conversations.withMediaKinds
-import me.meeshy.ui.component.media.ResourceMediaKindStrings
-import me.meeshy.feature.conversations.R as ConversationsR
-import me.meeshy.ui.theme.hexColor
+import me.meeshy.app.widget.kit.WidgetAvatarBitmap
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import me.meeshy.app.widget.kit.WidgetTheme
+import me.meeshy.app.widget.kit.widgetPreviewLabels
 import androidx.glance.appwidget.action.actionStartActivity as actionStartActivityIntent
 
 /**
@@ -62,17 +60,7 @@ internal class RecentConversationsWidget : GlanceAppWidget() {
         val entryPoint = EntryPointAccessors.fromApplication(context, WidgetEntryPoint::class.java)
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
-        val labels = LastMessagePreviewLabels(
-            photo = "",
-            video = "",
-            voice = "",
-            file = "",
-            location = "",
-            none = context.getString(ConversationsR.string.conversations_no_messages),
-            you = context.getString(ConversationsR.string.conversations_preview_you),
-            senderFormat = context.getString(ConversationsR.string.conversations_preview_sender_format),
-            draftPrefix = context.getString(ConversationsR.string.conversations_preview_draft_prefix),
-        ).withMediaKinds(ResourceMediaKindStrings(context))
+        val labels = widgetPreviewLabels(context)
         val presentation = RecentConversationsWidgetPresentation.from(conversations, currentUserId, labels)
 
         provideContent {
@@ -87,12 +75,12 @@ private fun RecentConversationsWidgetContent(presentation: RecentConversationsWi
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(WidgetTheme.background)
             .padding(12.dp),
     ) {
         Text(
             text = context.getString(R.string.widget_recent_conversations_title),
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color(0xFF4338CA))),
+            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WidgetTheme.title),
         )
         if (presentation.isEmpty) {
             Column(
@@ -104,7 +92,7 @@ private fun RecentConversationsWidgetContent(presentation: RecentConversationsWi
             ) {
                 Text(
                     text = context.getString(R.string.widget_recent_conversations_empty),
-                    style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color.Gray)),
+                    style = TextStyle(fontSize = 12.sp, color = WidgetTheme.textSecondary),
                 )
             }
         } else {
@@ -127,11 +115,10 @@ private fun RecentConversationRowContent(row: RecentConversationRow) {
             .clickable(actionStartActivityIntent(openConversationIntent(context, row.id))),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
-        Box(
-            modifier = GlanceModifier
-                .size(6.dp)
-                .background(ColorProvider(hexColor(row.accentHex))),
-            content = {},
+        Image(
+            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.title, row.accentHex, AVATAR_DP, presence = null)),
+            contentDescription = null,
+            modifier = GlanceModifier.size(AVATAR_DP.dp),
         )
         Column(modifier = GlanceModifier.padding(start = 8.dp).fillMaxWidth()) {
             Text(
@@ -139,13 +126,13 @@ private fun RecentConversationRowContent(row: RecentConversationRow) {
                 style = TextStyle(
                     fontSize = 13.sp,
                     fontWeight = if (row.isUnread) FontWeight.Bold else FontWeight.Medium,
-                    color = ColorProvider(Color.Black),
+                    color = WidgetTheme.textPrimary,
                 ),
                 maxLines = 1,
             )
             Text(
                 text = row.preview,
-                style = TextStyle(fontSize = 11.sp, color = ColorProvider(Color.DarkGray)),
+                style = TextStyle(fontSize = 11.sp, color = WidgetTheme.textSecondary),
                 maxLines = 1,
             )
         }
@@ -154,12 +141,14 @@ private fun RecentConversationRowContent(row: RecentConversationRow) {
                 modifier = GlanceModifier
                     .padding(start = 6.dp)
                     .size(8.dp)
-                    .background(ColorProvider(Color(0xFF6366F1))),
+                    .background(WidgetTheme.unreadBadge),
                 content = {},
             )
         }
     }
 }
+
+private const val AVATAR_DP = 30
 
 private fun openConversationIntent(context: Context, conversationId: String): Intent =
     Intent(

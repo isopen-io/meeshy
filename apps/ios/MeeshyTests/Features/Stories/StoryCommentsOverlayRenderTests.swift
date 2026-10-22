@@ -22,7 +22,7 @@ final class StoryCommentsOverlayRenderTests: XCTestCase {
         StoryCommentsRenderInputs(
             comments: comments, commentCount: comments.count, replies: replies,
             expandedThreads: [], loadingReplies: [], repliesHasMore: [:],
-            isLoading: false, userLang: "fr", isStoryExpired: false,
+            isLoading: false, readerLanguages: ["fr"], isStoryExpired: false,
             targetCommentId: nil, targetParentCommentId: nil, safeBottom: 34,
             replyingToId: nil, likedIds: likedIds, likeDelta: [:], inFlightIds: []
         )

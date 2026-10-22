@@ -247,7 +247,7 @@ struct PostSceneCardContainer: View {
             document: document,
             isActive: coordinator.activeReelId == post.id,
             accentColor: accentColor,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             onTapPost: onTapPost,
             onTapScene: onTapScene
         )
@@ -292,7 +292,7 @@ struct PostSceneSurface: View {
                 document: document,
                 isActive: false,
                 accentColor: accentColor,
-                preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+                preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
                 onTapPost: onTapPost,
                 onTapScene: onTapScene
             )

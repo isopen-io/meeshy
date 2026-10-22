@@ -83,6 +83,7 @@ struct CallDeclineSheet: View {
     }
 
     private func sendDraft() {
+        // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
         let language = AuthManager.shared.currentUser?.preferredContentLanguages.first
             ?? CallDeclineQuickReply.interfaceLanguage
         decline(with: draft, language: language)

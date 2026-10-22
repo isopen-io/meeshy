@@ -149,6 +149,7 @@ final class NotificationActionHandler: NotificationActionHandling {
             AuthManager.shared.currentUser?.id ?? AuthManager.shared.persistedActiveUserId
         },
         preferredLanguage: @escaping @MainActor () -> String? = {
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             AuthManager.shared.currentUser?.preferredContentLanguages.first
         },
         isRegisteredUser: @escaping @MainActor () -> Bool = {

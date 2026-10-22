@@ -36,6 +36,7 @@ final class CallPreviewCoordinatorTests: XCTestCase {
         func audioLevel() async -> Double? { nil }
         func close() { closeCallCount += 1 }
         func sendControl(_ data: Data) { sentControls.append(data) }
+        func applyVideoBudget(_ budget: CallVideoBudget) {}
 
         var sentAudible: [Bool] {
             sentControls.compactMap { try? JSONDecoder().decode(CallPreviewControlMessage.self, from: $0).audible }

@@ -2,7 +2,6 @@ package me.meeshy.app.widget
 
 import android.content.Context
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -21,11 +20,11 @@ import androidx.glance.layout.padding
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.first
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
+import me.meeshy.app.widget.kit.WidgetTheme
 
 /**
  * Home-screen widget scaffold — first slice of `feature-parity.md`'s "Home-screen
@@ -66,12 +65,12 @@ internal class UnreadCountWidget : GlanceAppWidget() {
 @Composable
 private fun UnreadCountWidgetContent(presentation: UnreadWidgetPresentation) {
     val context = LocalContext.current
-    val white = ColorProvider(Color.White)
+    val white = WidgetTheme.onBrand
 
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(Color(0xFF6366F1))
+            .background(WidgetTheme.brandSurface)
             .padding(12.dp)
             .clickable(actionStartActivity<MainActivity>()),
         horizontalAlignment = Alignment.Horizontal.CenterHorizontally,

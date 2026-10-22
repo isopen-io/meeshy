@@ -4,6 +4,8 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDurationPin
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.StoryObjectPlacement
+import me.meeshy.sdk.model.composer.SceneObjectCaps
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.StoryTextObject
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -600,15 +602,24 @@ data class StorySlideDeck(
         return copy(selectedId = id)
     }
 
+    /**
+     * Où poser un objet NEUF de la slide sélectionnée : jamais sur un texte ou un sticker déjà
+     * posé (cascade de [StoryObjectPlacement], le premier reste au centre).
+     */
+    fun nextObjectPosition(): StoryObjectPlacement.Point = StoryObjectPlacement.next(
+        selectedSlide.elements.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) } +
+            selectedSlide.stickers.map { StoryObjectPlacement.Point(it.x.toDouble(), it.y.toDouble()) },
+    )
+
     companion object {
         /** Maximum slides per story — parity with the iOS composer's `maxSlides`. */
         const val MAX_SLIDES: Int = 10
 
         /** Maximum media attachments per slide — each slide becomes one ≤10-media story (iOS parity). */
-        const val MAX_MEDIA_PER_SLIDE: Int = 10
+        const val MAX_MEDIA_PER_SLIDE: Int = SceneObjectCaps.MEDIA
 
         /** Maximum on-canvas text elements per slide — parity with the iOS composer's ≤5 rule. */
-        const val MAX_TEXT_ELEMENTS_PER_SLIDE: Int = 5
+        const val MAX_TEXT_ELEMENTS_PER_SLIDE: Int = SceneObjectCaps.TEXT
 
         /**
          * Maximum on-canvas stickers per slide. iOS enforces no hard composer cap (its
@@ -616,7 +627,7 @@ data class StorySlideDeck(
          * upper bound that prevents a pathological slide from carrying an unbounded
          * sticker count while never getting in a real user's way.
          */
-        const val MAX_STICKERS_PER_SLIDE: Int = 30
+        const val MAX_STICKERS_PER_SLIDE: Int = SceneObjectCaps.STICKER
 
         /** A fresh deck of a single empty slide, selected. */
         fun single(slideId: String): StorySlideDeck =

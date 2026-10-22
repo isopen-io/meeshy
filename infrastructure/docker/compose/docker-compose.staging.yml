@@ -232,6 +232,76 @@ services:
   # ===========================================================================
   # GATEWAY STAGING - API Service
   # ===========================================================================
+  # ===========================================================================
+  # COTURN STAGING — relais TURN/STUN, joignable sur 443 (#11278)
+  # ===========================================================================
+  # La production le tient en réseau HÔTE sur 3478, 3479, 5349 et toute la
+  # plage 49152-65535 du même serveur physique (#9232) : le staging tourne en
+  # bridge et publie ses propres ports — 3480 (UDP/TCP) et le relais
+  # 40000-40099/udp —, avec SON secret (`TURN_SECRET` du .env de staging, celui
+  # que signe gateway-staging).
+  #
+  # Le 443 : un routeur TCP du Traefik partagé, `HostSNI(turn.staging.<domaine>)`
+  # sur `websecure`, TERMINE le TLS (certificat Let's Encrypt de Traefik) et
+  # relaie du TURN-sur-TCP en clair vers le 3478 du conteneur. coturn n'a donc
+  # ni certificat ni clé : aucun secret de la production ne lui est monté. Le
+  # client voit un relais `relayProtocol=tls` sur 443, ce que laisse passer un
+  # pare-feu qui n'ouvre que le web. Les autres routeurs de `websecure` ne sont
+  # pas touchés : un routeur TCP ne capte que SON nom SNI, et Traefik répond
+  # lui-même au défi ACME TLS-ALPN avant tout routage TCP.
+  #
+  # Démarrage à la main, une fois (le déploiement de la CI ne relance que les
+  # services applicatifs) : DNS `turn.staging.<domaine>` → l'hôte, pare-feu de
+  # l'hôte ouvert sur 3480/udp, 3480/tcp et 40000-40099/udp,
+  # `TURN_EXTERNAL_IP` posée dans le .env de staging, puis
+  # `docker compose up -d coturn-staging gateway-staging`.
+  coturn-staging:
+    image: coturn/coturn:4.6
+    container_name: meeshy-coturn-staging
+    restart: unless-stopped
+    logging: *journald-logging
+    volumes:
+      - ../../config/turnserver.staging.conf:/etc/turnserver.template.conf:ro
+    environment:
+      - TURN_SECRET=${TURN_SECRET}
+      - TURN_EXTERNAL_IP=${TURN_EXTERNAL_IP:-}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        if [ -z "$$TURN_SECRET" ] || [ "$$TURN_SECRET" = "__TURN_SECRET__" ] || [ "$$TURN_SECRET" = "meeshy-turn-secret-CHANGE-IN-PRODUCTION" ]; then
+          echo "[FATAL] TURN_SECRET must be set to the staging gateway's strong, non-default secret before starting coturn." >&2
+          exit 1
+        fi
+        if [ -z "$$TURN_EXTERNAL_IP" ]; then
+          echo "[FATAL] TURN_EXTERNAL_IP must carry the host's public IP: in bridge mode coturn would otherwise announce its container address as relay." >&2
+          exit 1
+        fi
+        sed -e "s|__TURN_SECRET__|$$TURN_SECRET|g" -e "s|__TURN_EXTERNAL_IP__|$$TURN_EXTERNAL_IP|g" /etc/turnserver.template.conf > /tmp/turnserver.conf
+        exec turnserver -c /tmp/turnserver.conf
+    ports:
+      - "3480:3478/udp"
+      - "3480:3478/tcp"
+      - "40000-40099:40000-40099/udp"
+    networks:
+      - meeshy-network
+    healthcheck:
+      test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=meeshy_meeshy-network"
+      - "traefik.tcp.routers.turn-staging.rule=HostSNI(`turn.staging.${DOMAIN:-meeshy.me}`)"
+      - "traefik.tcp.routers.turn-staging.entrypoints=websecure"
+      - "traefik.tcp.routers.turn-staging.tls=true"
+      - "traefik.tcp.routers.turn-staging.tls.certresolver=letsencrypt"
+      - "traefik.tcp.routers.turn-staging.service=turn-staging"
+      - "traefik.tcp.services.turn-staging.loadbalancer.server.port=3478"
+
   gateway-staging:
     image: ${GATEWAY_IMAGE:-isopen/meeshy-gateway:staging}
     container_name: meeshy-gateway-staging
@@ -268,7 +338,11 @@ services:
       - SOUND_LIBRARY_ENABLED=true
       - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - TURN_SECRET=${TURN_SECRET}
-      - TURN_SERVERS=${TURN_SERVERS:-}
+      # #11278 — le relais de coturn-staging : TURN en clair sur 3480, TLS sur
+      # 443 par le routeur TCP de Traefik ; aucun 5349 au staging.
+      - TURN_SERVERS=${TURN_SERVERS:-turn.staging.${DOMAIN:-meeshy.me}:3480}
+      - TURN_TLS_SERVERS=${TURN_TLS_SERVERS:-turn.staging.${DOMAIN:-meeshy.me}:443}
+      - TURN_TLS_PORT=${TURN_TLS_PORT:-0}
       - TURN_CREDENTIAL_TTL=${TURN_CREDENTIAL_TTL:-86400}
       - MAX_TRANSLATION_LENGTH=10000
       # Lecture exacte (#7356) : un message créé après cette date n'est servi

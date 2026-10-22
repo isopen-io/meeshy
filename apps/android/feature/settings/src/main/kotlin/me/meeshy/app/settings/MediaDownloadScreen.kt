@@ -18,6 +18,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Audiotrack
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.PhotoFilter
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.RecordVoiceOver
@@ -28,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -39,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -48,6 +52,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.AutoDownloadPolicy
 import me.meeshy.sdk.model.MediaKind
+import me.meeshy.sdk.model.composer.capture.CaptureRenderedSaveMode
 import me.meeshy.ui.component.chrome.MeeshyBackground
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyRadius
@@ -126,6 +131,12 @@ fun MediaDownloadScreen(
                     iconColor = MeeshyPalette.Error,
                     selected = state.preferences.video,
                     onSelect = { viewModel.setPolicy(MediaKind.VIDEO, it) },
+                )
+                CaptureSaveSection(
+                    savesOriginal = state.capturePolicy.savesOriginal,
+                    renderedAutomatic = state.capturePolicy.renderedMode == CaptureRenderedSaveMode.AUTOMATIC,
+                    onSavesOriginal = viewModel::setSavesOriginal,
+                    onRenderedAutomatic = viewModel::setRenderedAutomatic,
                 )
                 Spacer(Modifier.height(MeeshySpacing.xl))
             }
@@ -235,3 +246,85 @@ private fun policyLabel(policy: AutoDownloadPolicy): String = stringResource(
         AutoDownloadPolicy.NEVER -> R.string.media_policy_never
     },
 )
+
+@Composable
+private fun CaptureSaveSection(
+    savesOriginal: Boolean,
+    renderedAutomatic: Boolean,
+    onSavesOriginal: (Boolean) -> Unit,
+    onRenderedAutomatic: (Boolean) -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.CameraAlt,
+                contentDescription = null,
+                tint = MeeshyPalette.Indigo500,
+                modifier = Modifier.size(18.dp),
+            )
+            Spacer(Modifier.width(MeeshySpacing.sm))
+            Text(
+                text = stringResource(R.string.settings_media_capture_header),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MeeshyPalette.Indigo500,
+            )
+        }
+        CaptureToggleRow(
+            icon = Icons.Filled.Image,
+            title = stringResource(R.string.settings_media_capture_original_title),
+            subtitle = stringResource(R.string.settings_media_capture_original_subtitle),
+            checked = savesOriginal,
+            onCheckedChange = onSavesOriginal,
+        )
+        CaptureToggleRow(
+            icon = Icons.Filled.PhotoFilter,
+            title = stringResource(R.string.settings_media_capture_rendered_title),
+            subtitle = stringResource(R.string.settings_media_capture_rendered_subtitle),
+            checked = renderedAutomatic,
+            onCheckedChange = onRenderedAutomatic,
+        )
+    }
+}
+
+@Composable
+private fun CaptureToggleRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MeeshyTheme.tokens.textSecondary,
+            modifier = Modifier.size(22.dp),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MeeshyTheme.tokens.textPrimary,
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall,
+                color = MeeshyTheme.tokens.textSecondary,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}

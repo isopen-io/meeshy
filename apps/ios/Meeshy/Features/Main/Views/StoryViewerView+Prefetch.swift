@@ -4,13 +4,19 @@ import MeeshyUI
 
 /// Ce que la fenêtre des voisines retient d'un passage à l'autre : la dernière
 /// slide préparée (d'où se lit le sens du geste) et la tâche en vol, annulée
-/// dès que la slide change (#10348).
+/// dès que la slide change (#10348) — et suspendue tant que l'app n'est pas au
+/// premier plan, relancée à son retour (#11284).
 @MainActor
 final class StoryNeighborPrefetchQueue {
     private var lastPosition: StorySlidePosition?
     private var preparedPosition: StorySlidePosition?
     private var direction: StoryNavigationDirection = .forward
     private var task: Task<Void, Never>?
+    private let activity: PreloadActivityGate
+
+    init(activity: PreloadActivityGate = .shared) {
+        self.activity = activity
+    }
 
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
     // défaut) → double-free au démontage hors d'une tâche.
@@ -27,9 +33,15 @@ final class StoryNeighborPrefetchQueue {
         return direction
     }
 
-    func run(_ task: Task<Void, Never>) {
+    /// Lance le plan de la fenêtre sous le portier d'activité, en annulant le
+    /// précédent ; rend la tâche pour que le lecteur l'annule en se fermant.
+    @discardableResult
+    func run(_ plan: @escaping @MainActor @Sendable () async -> Void) -> Task<Void, Never> {
         self.task?.cancel()
+        let gate = activity
+        let task = Task { await gate.runWhileActive(plan) }
         self.task = task
+        return task
     }
 
     /// La slide change : ce qui n'a pas encore démarré ne démarre plus. Un
@@ -105,7 +117,7 @@ extension StoryViewerView {
         }
         let extended = plan.filter { $0.distance == nil }.map { Self.prefetchSources(of: story(at: $0.position)) }
 
-        let task = Task {
+        let task = neighborPrefetch.run {
             for neighbor in ring {
                 guard !Task.isCancelled else { return }
                 await Self.prepare(neighbor.sources, decodingImages: true, preparingPlayers: neighbor.preparesPlayer)
@@ -119,7 +131,6 @@ extension StoryViewerView {
                 }
             }
         }
-        neighborPrefetch.run(task)
         prefetchTasks.append(task)
     }
 

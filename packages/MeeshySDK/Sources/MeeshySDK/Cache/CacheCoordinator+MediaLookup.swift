@@ -80,6 +80,12 @@ extension CacheCoordinator {
         shared.images.warmedImage(for: urlString)
     }
 
+    /// Même sonde, décodée au palier de la taille AFFICHÉE (#9872) : un avatar
+    /// de liste ne paie plus le plafond d'écran.
+    nonisolated public static func warmedImage(for urlString: String, maxPixelSize: CGFloat) -> UIImage? {
+        shared.images.warmedImage(for: urlString, maxPixelSize: maxPixelSize)
+    }
+
     /// Check image disk cache synchronously. Returns local file URL if cached
     /// on disk (even when the decoded NSCache entry has been evicted). Used by
     /// the rendering pipeline to bypass the media policy gate for media that
