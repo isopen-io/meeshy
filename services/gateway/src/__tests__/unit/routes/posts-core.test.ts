@@ -520,7 +520,7 @@ describe('DELETE /posts/:postId — retrait par la modération (#11149)', () => 
     expect(mockCreateNotification).toHaveBeenCalledWith(expect.objectContaining({
       userId: AUTHOR_ID,
       type: 'content_removed',
-      title: 'Votre réel a été retiré par un administrateur',
+      title: 'Votre réel a été retiré par la modération',
       metadata: { contentType: 'reel', contentId: POST_ID, postId: POST_ID, reason: 'Contenu violent' },
     }));
     expect(mockCreateNotification.mock.calls[0][0].actor).toBeUndefined();

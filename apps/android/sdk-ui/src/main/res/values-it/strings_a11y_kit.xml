@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Kit d'accessibilité partagé (lot accessibilite-annonces-haptique-et-sens-de-lecture). -->
+    <string name="a11y_kit_toggle_on">Attivo</string>
+    <string name="a11y_kit_toggle_off">Disattivo</string>
+    <string name="a11y_kit_increase">Aumenta</string>
+    <string name="a11y_kit_decrease">Diminuisci</string>
+</resources>
