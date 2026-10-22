@@ -14,8 +14,8 @@ protocol VoiceConsentGateProviding {
 /// lieu sur cet appareil.
 struct VoiceConsentGate: VoiceConsentGateProviding {
     var knownGranted: () -> Bool = { UserPreferencesManager.shared.voiceConsentGranted }
-    var fetchHasConsent: () async throws -> Bool = { try await VoiceProfileService.shared.getConsentStatus().hasConsent }
-    var route: () async throws -> Void = { try await UserPreferencesManager.shared.grantVoiceAutoTranslationConsent() }
+    var fetchHasConsent: @MainActor () async throws -> Bool = { try await VoiceProfileService.shared.getConsentStatus().hasConsent }
+    var route: @MainActor () async throws -> Void = { try await UserPreferencesManager.shared.grantVoiceAutoTranslationConsent() }
 
     var isKnownGranted: Bool { knownGranted() }
 

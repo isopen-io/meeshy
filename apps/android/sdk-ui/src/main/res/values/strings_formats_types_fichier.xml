@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Lot formats-localises-et-types-de-fichier : libellés courts des familles de pièce jointe. -->
+    <string name="attachment_kind_pdf">PDF</string>
+    <string name="attachment_kind_excel">Excel</string>
+    <string name="attachment_kind_word">Word</string>
+    <string name="attachment_kind_powerpoint">PowerPoint</string>
+    <string name="attachment_kind_archive">Archive</string>
+    <string name="attachment_kind_code">Code</string>
+    <string name="attachment_kind_text">Text</string>
+</resources>

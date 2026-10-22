@@ -121,10 +121,9 @@ class SplashThemeGuardTest {
 
     @Test
     fun `MeeshyApp wires the splash screen with a version label and credit sourced from BuildConfig`() {
-        val meeshyApp = File(
-            appModuleDir(),
-            "src/main/kotlin/me/meeshy/app/navigation/MeeshyApp.kt",
-        ).readText()
+        val navDir = File(appModuleDir(), "src/main/kotlin/me/meeshy/app/navigation")
+        assertThat(File(navDir, "MeeshyApp.kt").readText()).contains("SplashOverlay()")
+        val meeshyApp = File(navDir, "SplashOverlay.kt").readText()
 
         assertThat(meeshyApp).contains("MeeshySplashScreen(")
         assertThat(meeshyApp).contains("versionLabel =")

@@ -57,7 +57,7 @@ struct UploadProgressBar: View {
                 if let name = currentFileName {
                     Text(name)
                         .font(.caption2.weight(.medium))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                 }
@@ -94,11 +94,11 @@ struct UploadProgressBar: View {
             HStack {
                 Text(filesCountLabel)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 Spacer()
                 Text(formatMediaFileSize(progress.uploadedBytes) + " / " + formatMediaFileSize(progress.totalBytes))
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium, design: .monospaced))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .padding(.horizontal, MeeshySpacing.md)

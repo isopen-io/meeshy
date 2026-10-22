@@ -133,11 +133,7 @@ extension StoryViewerView {
         }
 
         restartTimer()
-        DispatchQueue.main.asyncAfter(deadline: .now() + animDuration + 0.04) {
-            outgoingStory = nil
-            isTransitioning = false
-            closingScale = 1.0
-        }
+        delays.run(after: .seconds(animDuration + 0.04)) { outgoingStory = nil; isTransitioning = false; closingScale = 1.0 }
     }
 
     /// Transition cube entre groupes d'auteurs (Lot 3). Pendant le drag, les
@@ -169,7 +165,7 @@ extension StoryViewerView {
 
         // Swap APRÈS la fin de la courbe (#11192) : la face entrante est
         // exactement à l'identité, la vraie carte la remplace sans saut.
-        DispatchQueue.main.asyncAfter(deadline: .now() + StoryGroupCube.swapDelay) {
+        delays.run(after: .seconds(StoryGroupCube.swapDelay)) {
             update()
             // Pas de `markCurrentViewed()` ici : l'interlude du nouvel auteur
             // n'est décidé qu'ensuite, par l'`adaptiveOnChange(of:
@@ -183,9 +179,7 @@ extension StoryViewerView {
             groupSlide = 0
             neighborPreviewDirection = 0
             restartTimer()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                isTransitioning = false
-            }
+            delays.run(after: .milliseconds(50)) { isTransitioning = false }
         }
     }
 
@@ -328,7 +322,7 @@ extension StoryViewerView {
     func triggerInitialActionIfNeeded() {
         guard let action = initialAction, !hasTriggeredInitialAction else { return }
         hasTriggeredInitialAction = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        delays.run(after: .milliseconds(250)) {
             switch action {
             case .showCommentsOverlay:
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {

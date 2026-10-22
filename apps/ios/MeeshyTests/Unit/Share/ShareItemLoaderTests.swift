@@ -261,3 +261,111 @@ final class ShareItemLoaderTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path), [], "aucun dossier pour un partage sans fichier")
     }
 }
+
+/// Le nom d'ORIGINE d'un fichier partagé (#11531) : il voyage en métadonnée,
+/// assaini, et n'entre jamais dans un chemin (#11134).
+final class ShareOriginalNameTests: XCTestCase {
+
+    private func name(_ candidates: [String?], ext: String = "jpeg") -> String? {
+        ShareMediaStaging.sanitizedOriginalName(candidates: candidates, fallbackExt: ext)
+    }
+
+    func test_stage_systemCopyNamedLikeThePhoto_keepsTheNameAndTheFlatPath() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("IMG_0111.jpeg")
+        try Data(repeating: 7, count: 64).write(to: source)
+        let root = dir.appendingPathComponent("root", isDirectory: true)
+
+        let staged = try ShareMediaStaging.stage(
+            source: source, into: root, shareId: "share-1", index: 0,
+            mime: "image/jpeg", freeBytes: .max / 2)
+
+        XCTAssertEqual(staged.originalName, "IMG_0111.jpeg")
+        XCTAssertEqual(staged.relPath, "share-1/0.jpeg", "le chemin disque ne change pas")
+        XCTAssertEqual(staged.uploadFileName, "IMG_0111.jpeg")
+    }
+
+    func test_stage_aSourceWithoutUsableName_fallsBackOnTheSuggestedName() throws {
+        let dir = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let source = dir.appendingPathComponent("\u{202E}")
+        try Data(repeating: 7, count: 8).write(to: source)
+
+        let staged = try ShareMediaStaging.stage(
+            source: source, into: dir.appendingPathComponent("root", isDirectory: true), shareId: "share-1",
+            index: 2, mime: "image/jpeg", freeBytes: .max / 2, suggestedName: "Vacances")
+
+        XCTAssertEqual(staged.originalName, "Vacances.jpeg")
+        XCTAssertEqual(staged.relPath, "share-1/2.jpeg")
+    }
+
+    func test_gather_theLoaderCarriesTheSystemCopyName() async throws {
+        let source = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-src-\(UUID().uuidString)", isDirectory: true)
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("share-name-root-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: source, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: source); try? FileManager.default.removeItem(at: root) }
+        let photo = source.appendingPathComponent("IMG_0111.jpg")
+        try Data(repeating: 3, count: 128).write(to: photo)
+        let provider = NSItemProvider()
+        provider.registerFileRepresentation(forTypeIdentifier: UTType.jpeg.identifier, fileOptions: [], visibility: .all) { completion in
+            completion(photo, false, nil)
+            return nil
+        }
+
+        let gathered = await ShareItemLoader.start([provider], shareId: "share-1", prepareMediaRoot: { shareId in
+            try? FileManager.default.createDirectory(at: root.appendingPathComponent(shareId), withIntermediateDirectories: true)
+            return root
+        }).gather()
+
+        XCTAssertEqual(gathered.media.map(\.originalName), ["IMG_0111.jpg"])
+        XCTAssertEqual(gathered.media.map(\.relPath), ["share-1/0.jpg"])
+    }
+
+    func test_sanitized_aPathTraversal_keepsOnlyTheLastComponent_andGetsASafeExtension() {
+        XCTAssertEqual(name(["../../etc/passwd"]), "passwd.jpeg")
+        XCTAssertEqual(name(["..\\..\\boot.ini"], ext: "bin"), "boot.ini")
+    }
+
+    func test_sanitized_bidiAndControlCharacters_areStripped() {
+        XCTAssertEqual(name(["photo\u{202E}gpj.exe"]), "photogpj.exe")
+        XCTAssertEqual(name(["a\u{0000}b\u{0007}\u{200F}c.jpg"]), "abc.jpg")
+        XCTAssertEqual(name(["12:30 réunion.png"]), "12_30 réunion.png")
+    }
+
+    func test_sanitized_leadingDotsAndSpaces_areTrimmed() {
+        XCTAssertEqual(name(["  ..cache.jpg  "]), "cache.jpg")
+    }
+
+    /// Un point final ne laisse pas un double point devant l'extension :
+    /// `photo.` devient `photo.jpeg`, jamais `photo..jpeg`.
+    func test_sanitized_trailingDots_doNotDoubleTheExtensionDot() {
+        XCTAssertEqual(name(["photo."]), "photo.jpeg")
+        XCTAssertEqual(name(["notes . "], ext: "txt"), "notes.txt")
+        XCTAssertNil(name(["...", " . "]))
+    }
+
+    func test_sanitized_aLongName_isCappedAndKeepsItsExtension() throws {
+        let result = try XCTUnwrap(name([String(repeating: "é", count: 300) + ".MOV"], ext: "mov"))
+
+        XCTAssertLessThanOrEqual(result.utf8.count, ShareMediaStaging.maxOriginalNameBytes)
+        XCTAssertTrue(result.hasSuffix(".MOV"))
+    }
+
+    func test_sanitized_aMissingOrUnsafeExtension_getsTheMimeExtension() {
+        XCTAssertEqual(name(["Document"], ext: "pdf"), "Document.pdf")
+        XCTAssertEqual(name(["clip.m$v"], ext: "mp4"), "clip.m$v.mp4")
+    }
+
+    func test_sanitized_nothingUsable_isNil_andTheNextCandidateWins() {
+        XCTAssertNil(name([nil, "", "   ", "\u{202E}", "..", "/"]))
+        XCTAssertEqual(name(["", "IMG_2.heic"]), "IMG_2.heic")
+    }
+}
+

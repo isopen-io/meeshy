@@ -34,6 +34,17 @@ export const userIdParams = {
   properties: { userId: { type: 'string', pattern: OBJECT_ID_PATTERN } },
 } as const;
 
+/**
+ * `:conversationId` au même régime : sur MongoDB, un identifiant malformé fait
+ * lever `findUnique` (P2023), que le gestionnaire rendrait en 500 — un 400 dit
+ * la vérité, et n'ouvre ni requête ni ligne d'audit.
+ */
+export const conversationIdParams = {
+  type: 'object',
+  required: ['conversationId'],
+  properties: { conversationId: { type: 'string', pattern: OBJECT_ID_PATTERN } },
+} as const;
+
 export const adminErrorResponses = {
   400: errorResponseSchema,
   401: errorResponseSchema,

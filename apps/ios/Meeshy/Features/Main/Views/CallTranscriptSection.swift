@@ -72,7 +72,7 @@ struct CallTranscriptSection: View {
             HStack {
                 Text(String(localized: "calls.detail.transcript", defaultValue: "Transcription", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Button {
                     withAnimation { showOriginalText.toggle() }
@@ -102,7 +102,7 @@ struct CallTranscriptSection: View {
                 Text(String(localized: "call.transcript.disclaimer", defaultValue: "Transcription locale à cet appareil, jamais envoyée au serveur Meeshy — peut figurer dans une sauvegarde iCloud/Finder de cet appareil. Inclut les paroles de votre interlocuteur, telles que reçues pendant l'appel.", bundle: .main))
                     .font(.caption2)
             }
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
 
             Button(role: .destructive) {
                 showDeleteConfirmation = true
@@ -137,11 +137,11 @@ struct CallTranscriptSection: View {
                 Spacer()
                 Text(elapsedLabel)
                     .font(.caption2.monospacedDigit())
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             Text(displayText)
                 .font(.callout)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(segment.speakerName), \(elapsedLabel) : \(displayText)")

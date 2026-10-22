@@ -106,6 +106,27 @@ describe('lecture de l’état publié par le runner', () => {
     expect(await readOpsState(d.state)).toBeNull();
   });
 
+  it('ce que le runner publie est borné champ par champ : un demandeur de plus de 128 caractères invalide l’état entier (#10459)', async () => {
+    const d = dirs();
+    writeState(d.state, { v: 1, runs: { backup: run({ requestedBy: 'x'.repeat(129) }), 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': null } });
+    expect(await readOpsState(d.state)).toBeNull();
+    writeState(d.state, { v: 1, runs: { backup: run({ code: 'c'.repeat(65) }), 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': null } });
+    expect(await readOpsState(d.state)).toBeNull();
+  });
+
+  it('la borne de lecture est celle des OCTETS LUS : un état d’un octet au-dessus du plafond vaut null, un dossier à la place du fichier aussi', async () => {
+    const d = dirs();
+    const ok = { v: 1, runs: { backup: run(), 'image-prune': null }, lastAcceptedAt: { backup: null, 'image-prune': null } };
+    const body = JSON.stringify(ok);
+    writeFileSync(path.join(d.state, 'ops.json'), body + ' '.repeat(64 * 1024 - body.length));
+    expect(await readOpsState(d.state)).toEqual(ok);
+    writeFileSync(path.join(d.state, 'ops.json'), body + ' '.repeat(64 * 1024 - body.length + 1));
+    expect(await readOpsState(d.state)).toBeNull();
+    const other = dirs();
+    mkdirSync(path.join(other.state, 'ops.json'));
+    expect(await readOpsState(other.state)).toBeNull();
+  });
+
   it('lit l’usage Docker validé', async () => {
     const d = dirs();
     const docker = {

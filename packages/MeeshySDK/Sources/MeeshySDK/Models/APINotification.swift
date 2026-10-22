@@ -235,7 +235,7 @@ public struct APINotification: Codable, Identifiable, Sendable, Equatable, Cache
         case .messageForwarded:
             return "Message transfere"
         case .reportResolved: return "Signalement traité"
-        case .contentRemoved: return String(localized: "notification.contentRemoved.fallbackTitle", defaultValue: "Votre contenu a été retiré par un administrateur", bundle: .main)
+        case .contentRemoved: return String(localized: "notification.contentRemoved.fallbackTitle", defaultValue: "Votre contenu a été retiré par la modération", bundle: .main)
         case .system, .maintenance, .updateAvailable:
             return content ?? "Notification systeme"
         }

@@ -40,6 +40,7 @@ private struct RevealItem: Identifiable {
 
 struct EngagementRevealHost: ViewModifier {
     @ObservedObject var router: Router
+    @ObservedObject private var onboarding = OnboardingPresenceSignal.shared
     @State private var file = EngagementRevealQueue()
     /// La carte du succès qu'on vient de célébrer (#7742) : le déroulé photo, ouvert PAR-DESSUS la révélation.
     @State private var photo: GamePhotoSession?
@@ -83,10 +84,13 @@ struct EngagementRevealHost: ViewModifier {
             }
             // #7914 — l'onboarding passe d'abord : les célébrations tombées
             // pendant le parcours attendent en file et se jouent une fois le
-            // calque parti. `@Published` livre sa valeur courante à
-            // l'abonnement : un calque déjà présenté suspend dès le montage.
-            .onReceive(OnboardingPresenceSignal.shared.$isPresented.removeDuplicates()) { présent in
-                file.suspends(présent)
+            // calque parti. `initial: true` : un calque déjà présenté suspend
+            // dès le montage. Observé par VALEUR, jamais par un éditeur
+            // reconstruit à chaque rendu (#11556) : il se réabonnait, rejouait
+            // sa valeur, réécrivait la file et rebouclait sur le rendu.
+            .adaptiveOnChange(of: onboarding.isPresented, initial: true) { _, présent in
+                guard let suivante = file.enSuspendant(présent) else { return }
+                file = suivante
             }
             // #9821 — la célébration à l'écran se DÉCLARE : un `fullScreenCover`
             // ne prévient pas l'écran qu'il recouvre (la story s'y fige).

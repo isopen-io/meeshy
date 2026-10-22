@@ -89,7 +89,7 @@ extension VitrineInteractions {
         try? await Task.sleep(for: avantLaTraduction)
         VitrineTournage.etape("traduction")
         if let traduction = serveur.traductionArrivee() { SocialSocketManager.shared.commentMediaUpdated.send(traduction) }
-        try? await Task.sleep(for: tenueDeLaTraduction)
+        guard await cancellableSleep(for: tenueDeLaTraduction) else { return }
     }
 
     /// L'appui long sur le cœur ouvre la palette, l'émoji s'y choisit — les deux par les fonctions du geste.
@@ -106,7 +106,7 @@ extension VitrineInteractions {
         }
         VitrineTournage.etape("choix")
         choisir(emojiDuPost)
-        try? await Task.sleep(for: tenueDeLaReaction)
+        guard await cancellableSleep(for: tenueDeLaReaction) else { return }
     }
 
     /// Le commentaire envoyé efface ses fichiers locaux une fois servi : il emporte une COPIE, jamais le média du kit.

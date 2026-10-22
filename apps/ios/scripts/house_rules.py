@@ -22,7 +22,7 @@ TOKEN = re.compile(r'//|/\*|#*"')
 class Rule:
     id: str
     pattern: re.Pattern
-    kind: Literal["pattern", "unchecked", "floor"] = "pattern"
+    kind: Literal["pattern", "unchecked", "floor", "comment"] = "pattern"
     excluded: tuple = ()
     file_name: re.Pattern | None = None
 
@@ -40,10 +40,15 @@ RULES = (
     _pattern("nslock", r"\bNSLock\(\)"),
     _pattern("nonisolated-unsafe", r"nonisolated\(unsafe\)"),
     _pattern("try-sleep", r"try\?\s*await\s+Task\.sleep"),
+    _pattern("async-after", r"[\w)\]]\.asyncAfter\("),
+    _pattern("sleep-nanoseconds", r"Task\.sleep\(nanoseconds:"),
     _pattern(
         "logger-subsystem",
         r"\bLogger\(subsystem:",
-        ("packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift",),
+        (
+            "packages/MeeshySDK/Sources/MeeshySDK/Logging/MeeshyLog.swift",
+            "apps/ios/MeeshyBroadcastExtension/SampleHandler.swift",
+        ),
     ),
     _pattern("nslog", r"\bNSLog\("),
     _pattern("fixed-font", r"\.font\(\.system\(size:"),
@@ -72,6 +77,14 @@ RULES = (
     _named("viewmodel-shared", r"\.shared\b", r"ViewModel[^/]*\.swift$"),
     Rule("unchecked-sendable", re.compile(r"@unchecked\s+Sendable"), "unchecked"),
     Rule("available-floor", re.compile(r"#available\(\s*iOS\s+(\d+)(?:\.(\d+))?"), "floor"),
+    _pattern("environment-router", r"@EnvironmentObject\s+(?:\w+(?:\(set\))?\s+)*var\s+\w+\s*:\s*Router\b"),
+    Rule(
+        "narrative-comment",
+        re.compile(r"\b\d{4}-\d{2}-\d{2}\b"),
+        "comment",
+        (),
+        re.compile(r"^(?:apps/ios/Meeshy/|packages/MeeshySDK/Sources/)"),
+    ),
 )
 
 SCOPE = (
@@ -197,6 +210,14 @@ def _count_floor(rule, rel, stripped):
     return sum(1 for m in rule.pattern.finditer(stripped) if _version(m) <= floor)
 
 
+def _count_comment(rule, src, stripped):
+    return sum(
+        1
+        for raw, code in zip(src.split("\n"), stripped.split("\n"))
+        if len(rule.pattern.findall(raw)) > len(rule.pattern.findall(code))
+    )
+
+
 def count_stripped(rule, rel, src, stripped):
     if rel in rule.excluded:
         return 0
@@ -206,6 +227,8 @@ def count_stripped(rule, rel, src, stripped):
         return _count_unchecked(rule, src, stripped)
     if rule.kind == "floor":
         return _count_floor(rule, rel, stripped)
+    if rule.kind == "comment":
+        return _count_comment(rule, src, stripped)
     return len(rule.pattern.findall(stripped))
 
 

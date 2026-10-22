@@ -41,6 +41,8 @@ class NotificationTypeToggleTest {
         commentReplyEnabled = false,
         commentLikeEnabled = false,
         friendContentEnabled = false,
+        contactActivityEnabled = false,
+        gameEnabled = false,
     )
 
     /**
@@ -53,8 +55,8 @@ class NotificationTypeToggleTest {
     private val alwaysOn = setOf(
         "translation_completed", "translation_ready", "TRANSLATION_READY",
         "transcription_completed", "voice_clone_ready",
-        "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned",
-        "AFFILIATE_SIGNUP", "STATUS_UPDATE",
+        "achievement_unlocked", "ACHIEVEMENT_UNLOCKED", "streak_milestone", "badge_earned", "level_up",
+        "AFFILIATE_SIGNUP", "STATUS_UPDATE", "report_resolved", "content_removed",
     )
 
     /** Wire types iOS routes to `systemEnabled`. */
@@ -254,5 +256,40 @@ class NotificationTypeToggleTest {
     fun aBlankWireTypeCollapsesOntoTheSystemToggle() {
         assertThat(NotificationTypeToggle.isEnabled("", allOn.copy(systemEnabled = false))).isFalse()
         assertThat(NotificationTypeToggle.isEnabled("", allOn)).isTrue()
+    }
+
+    @Test
+    fun theTableCoversEveryKnownType() {
+        val orphans = NotificationTypeVocabulary.KNOWN_TYPES - NotificationTypeToggle.coveredTypes
+        assertThat(orphans).isEmpty()
+    }
+
+    @Test
+    fun dsaTypesAreAlwaysOnAndNeverFollowSystemEnabled() {
+        listOf("report_resolved", "content_removed").forEach { type ->
+            assertThat(NotificationTypeToggle.isEnabled(type, allOff)).isTrue()
+            assertThat(NotificationTypeToggle.isEnabled(type, allOn.copy(systemEnabled = false))).isTrue()
+        }
+        assertThat(NotificationTypeToggle.isEnabled("type_inconnu", allOn.copy(systemEnabled = false))).isFalse()
+    }
+
+    @Test
+    fun contactJoinedFollowsContactRequestAndRecentlyActiveFollowsContactActivity() {
+        assertThat(NotificationTypeToggle.isEnabled("contact_joined", allOn.copy(contactRequestEnabled = false))).isFalse()
+        assertThat(NotificationTypeToggle.isEnabled("contact_joined", allOn.copy(contactActivityEnabled = false))).isTrue()
+        assertThat(NotificationTypeToggle.isEnabled("contact_recently_active", allOn.copy(contactActivityEnabled = false)))
+            .isFalse()
+        assertThat(NotificationTypeToggle.isEnabled("contact_recently_active", allOn.copy(contactRequestEnabled = false)))
+            .isTrue()
+    }
+
+    @Test
+    fun gameTypesFollowGameEnabledAndLevelUpStaysOn() {
+        val off = allOn.copy(gameEnabled = false)
+        listOf(
+            "game_duo_invited", "game_duo_accepted", "game_league_result", "game_season_step", "game_mission_window",
+        ).forEach { assertThat(NotificationTypeToggle.isEnabled(it, off)).isFalse() }
+        assertThat(NotificationTypeToggle.isEnabled("level_up", off)).isTrue()
+        assertThat(NotificationTypeToggle.isEnabled("badge_earned", off)).isTrue()
     }
 }

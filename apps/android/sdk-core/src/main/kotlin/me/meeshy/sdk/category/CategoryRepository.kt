@@ -9,11 +9,15 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.cache.valueOrNull
 import me.meeshy.sdk.model.CategoryOption
+import me.meeshy.sdk.model.CategoryPatchBody
 import me.meeshy.sdk.model.CreateCategoryBody
 import me.meeshy.sdk.model.toOption
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.PreferencesApi
 import me.meeshy.sdk.net.apiCall
+import me.meeshy.sdk.net.apiCallUnit
+import kotlinx.serialization.json.Json
+import me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,11 +37,13 @@ class CategoryRepository @Inject constructor(
     private val preferencesApi: PreferencesApi,
     private val store: CategorySnapshotStore,
     private val clock: CacheClock = SystemCacheClock,
+    private val expansion: CategoryExpansionStore = CategoryExpansionStore(InMemoryPreferenceSnapshotStore(), Json),
 ) {
     private val cacheSource = CategoryCacheSource(
         store = store,
         preferencesApi = preferencesApi,
         clock = clock,
+        expansion = expansion,
     )
 
     /**
@@ -72,4 +78,22 @@ class CategoryRepository @Inject constructor(
             }
             is NetworkResult.Failure -> result
         }
+
+    /** Fold state per category id, persisted: a missing id keeps the section's default (unfolded). */
+    fun expansionStream(): Flow<Map<String, Boolean>> = expansion.observe()
+
+    /**
+     * Folds or unfolds a category section (iOS `patchCategory`): the new state is persisted
+     * at once and sent. A definitive refusal restores the previous state; a network failure
+     * keeps what the user chose — the next revalidation reconciles it with the gateway.
+     */
+    suspend fun setExpanded(categoryId: String, expanded: Boolean): NetworkResult<Unit> {
+        val previous = expansion.observe().first()[categoryId]
+        expansion.set(categoryId, expanded)
+        val result = apiCallUnit { preferencesApi.patchCategory(categoryId, CategoryPatchBody(expanded)) }
+        if (result is NetworkResult.Failure && result.error.code != "NETWORK") {
+            previous?.let { expansion.set(categoryId, it) } ?: expansion.remove(categoryId)
+        }
+        return result
+    }
 }

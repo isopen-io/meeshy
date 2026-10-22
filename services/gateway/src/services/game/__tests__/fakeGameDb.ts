@@ -326,7 +326,7 @@ export function fakeGameDb(): FakeGameDb {
   const mythicSeat = flattenCompound(new Model({ uniques: [['id'], ['number'], ['userId'], ['edition']] }));
   const mythicEdition = flattenCompound(new Model({ uniques: [['id'], ['edition']] }));
   // `_id` dérivé de (userId, stepId) (`photoMomentId`), plus l'unique posé par la migration du registre.
-  const gamePhotoMoment = flattenCompound(new Model({ uniques: [['id'], ['userId', 'stepId']], optional: ['detectedAt', 'presentedAt', 'notifiedAt'] }));
+  const gamePhotoMoment = flattenCompound(new Model({ uniques: [['id'], ['userId', 'stepId']], optional: ['detectedAt', 'presentedAt', 'notifiedAt', 'keptAt'] }));
   const userStickerPack = flattenCompound(new Model({ uniques: [['userId', 'packSlug']], optional: ['installedAt'] }));
   // La série de chaque acte (#10389).
   const engagementActStreak = flattenCompound(new Model({ uniques: [['userId', 'act']] }));

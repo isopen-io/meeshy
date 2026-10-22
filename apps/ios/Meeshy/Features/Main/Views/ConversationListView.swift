@@ -51,7 +51,7 @@ struct ConversationListView: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
 
     // Status
     @State private var showStatusComposer = false
@@ -128,15 +128,7 @@ struct ConversationListView: View {
     /// interdit.
     @State private var visibleSectionId: String? = nil
 
-    // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
-    // brand-coherent qui combine `.refreshable` natif iOS + animation
-    // Meeshy custom : logo dashes, degrade indigo, haptic au seuil et au
-    // success). L'ancien state machine custom (pullPhase, peakPullDistance,
-    // simultaneousGesture, startPullRefresh, completePullRefresh) ne
-    // declenchait pas l'haptic ni le refresh sur device — `simultaneousGesture`
-    // ne firait pas systematiquement parce que le ScrollView consomme le
-    // drag vertical en priorite. Le wrapper utilise `.refreshable` qui est
-    // robuste.
+    // Pull-to-refresh : délégué à `MeeshyRefreshableScroll` (`.refreshable` natif + animation Meeshy).
 
     // UI states
     /// LES SEPT CIBLES DE FEUILLES, SUR LE TAS (#6221, suite) — elles étaient
@@ -506,7 +498,7 @@ struct ConversationListView: View {
 
     func openConversation(_ conversation: Conversation, searching: Bool = false) {
         let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
-        if route.armsSearchNow { router.pendingOpenSearch = true }
+        if route.armsSearchNow { router.armSearch() }
         guard route.presentsLockSheet else { return onSelect(conversation) }
         sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
         lockSheetMode = .openConversation
@@ -572,7 +564,7 @@ struct ConversationListView: View {
             .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
                 if let user = newValue {
                     selectedProfileUser = nil
-                    router.deepLinkProfileUser = user
+                    router.openProfileSheet(user)
                 }
             }
             .modifier(ConversationListCreationSheets(
@@ -879,7 +871,14 @@ struct ConversationListView: View {
 
     // MARK: - Handle Conversation Info View
     private func handleConversationInfoView(_ conversation: Conversation) {
-        // Open conversation info sheet (works for all conversation types)
+        presentInfo(of: conversation)
+    }
+
+    /// Conversation verrouillée : la fiche passe par la porte d'ouverture (PIN).
+    func presentInfo(of conversation: Conversation) {
+        guard ConversationOpenRoute.mayShowInfo(conversation.id) else {
+            return openConversation(conversation)
+        }
         sheetTargets.info = conversation
     }
 

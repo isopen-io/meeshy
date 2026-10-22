@@ -662,6 +662,7 @@ struct StoryViewerView: View {
     /// scrub, or full-screen picker). Drives the heart-button bounce in the
     /// sidebar.
     @State private var heartBouncePulse: Int = 0
+    @State var delays = DelayedActions() // internal : extensions cross-fichiers
     @State var sharedContentWrapper: SharedContentWrapper? // internal : cause de boucle (#9821)
     /// Lieu de la story ouvert plein écran (tap sur une pastille de position).
     @State private var readerFullscreenPlace: StoryReaderPlaceWrapper?
@@ -802,7 +803,7 @@ struct StoryViewerView: View {
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },
-            deleteCurrentStory: { deleteCurrentStory(reason: $0) },
+            storyWithdrawal: StoryWithdrawalActions(delete: { deleteCurrentStory(reason: $0) }, makePrivate: { StoryPrivatization.makePrivate(currentStory, of: currentGroup, reason: $0, viewModel: viewModel, dismiss: dismissViewer) }),
             dismissViewer: { dismissViewer() },
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)

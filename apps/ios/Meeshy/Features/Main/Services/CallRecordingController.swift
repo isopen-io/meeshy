@@ -123,7 +123,7 @@ final class CallRecordingController: ObservableObject {
         self.uploader = uploader ?? CallRecordingTusUploader()
         self.remote = remote ?? CallRecordingRemoteService.shared
         self.viewerId = viewerId ?? { AuthManager.shared.currentUser?.id }
-        self.wait = wait ?? { try? await Task.sleep(nanoseconds: $0) }
+        self.wait = wait ?? { _ = await cancellableSleep(for: .nanoseconds($0)) }
         self.fileDirectory = fileDirectory ?? FileManager.default.temporaryDirectory
         subscription = (events ?? resolvedSocket.callRecordingEvents)
             .receive(on: DispatchQueue.main)

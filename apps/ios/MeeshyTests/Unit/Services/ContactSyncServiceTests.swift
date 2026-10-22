@@ -342,3 +342,46 @@ final class ContactSyncServiceTests: XCTestCase {
         XCTAssertTrue(match.requests.isEmpty, "rien à rapprocher : aucune requête")
     }
 }
+
+// MARK: - #11558 — le carnet ne naît qu'au premier usage
+
+/// `CNContactStore()` interroge TCC par XPC SYNCHRONE. `ContactSyncService.shared`
+/// est construit au lancement (valeur par défaut de l'onboarding) : le store
+/// créé dans l'init du carnet bloquait le fil principal avant le premier écran.
+final class CNDeviceContactBookLazyStoreTests: XCTestCase {
+
+    func test_init_doesNotBuildTheContactStore() {
+        let built = StoreBuildCounter()
+
+        _ = CNDeviceContactBook(makeStore: { built.bump(); return CNContactStore() })
+
+        XCTAssertEqual(built.count, 0)
+    }
+
+    @MainActor
+    func test_contactSyncService_init_doesNotBuildTheContactStore() {
+        let built = StoreBuildCounter()
+
+        _ = ContactSyncService(book: CNDeviceContactBook(makeStore: { built.bump(); return CNContactStore() }))
+
+        XCTAssertEqual(built.count, 0)
+    }
+
+    func test_store_isBuiltOnce_atFirstUse() {
+        let built = StoreBuildCounter()
+        let book = CNDeviceContactBook(makeStore: { built.bump(); return CNContactStore() })
+
+        let first = book.store
+        let second = book.store
+
+        XCTAssertEqual(built.count, 1)
+        XCTAssertTrue(first === second)
+    }
+}
+
+private nonisolated final class StoreBuildCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value = 0
+    var count: Int { lock.withLock { value } }
+    func bump() { lock.withLock { value += 1 } }
+}

@@ -41,9 +41,12 @@ class SensitiveBodyLoggingGuard(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val path = chain.request().url.encodedPath
-        val logger = if (SENSITIVE_PATHS.any { path.endsWith(it) }) sensitive else full
+        val logger = if (isSensitive(path)) sensitive else full
         return logger.intercept(chain)
     }
+
+    private fun isSensitive(path: String): Boolean =
+        SENSITIVE_PATHS.any { path.endsWith(it) } || SENSITIVE_SEGMENTS.any { it in path }
 
     companion object {
         /**
@@ -52,7 +55,12 @@ class SensitiveBodyLoggingGuard(
          * de passe choisi) ; `/auth/login/2fa` (le code de second facteur,
          * #4843) ; `/auth/2fa/disable` (confirmation par mot de passe) ;
          * `/users/me/password` (l'ancien ET le nouveau) ; `/me/account/deletion`
-         * (#4811 — le site qui a declenche cette garde).
+         * (#4811 — le site qui a declenche cette garde). Puis le reste des portes
+         * qui portent un SECRET d'authentification au corps ou dans la reponse : le
+         * code et le mot de passe de la preuve d'adresse, le jeton d'un lien
+         * magique, le nouveau mot de passe d'une reinitialisation et son jeton, le
+         * jeton d'attente, un code de second facteur, un code SMS, l'identite
+         * complete de la recuperation par telephone, la session d'invite.
          */
         // api-path: ces six chemins ne sont PAS des appels — ce garde n'en emet
         // aucun. Il INSPECTE le chemin d'une requete deja formee, comme
@@ -68,7 +76,37 @@ class SensitiveBodyLoggingGuard(
             "/auth/2fa/disable",
             "/users/me/password",
             "/me/account/deletion",
+            // api-path: inspection — le jeton FCM est un identifiant d'appareil que
+            // la passerelle route vers lui, il ne part dans aucun journal.
+            "/users/register-device-token",
+            // api-path: inspection — le texte d'une transcription d'appel est une
+            // donnee sensible (la passerelle non plus ne le journalise jamais).
+            "/transcript",
+            // api-path: inspection, pas emission — preuve d'adresse et lien magique.
+            "/auth/verify-email",
+            "/auth/magic-link/validate",
+            "/auth/verification/status",
+            // api-path: inspection, pas emission — reinitialisation du mot de passe.
+            "/auth/reset-password",
+            "/auth/reset-password/verify-token",
+            "/auth/forgot-password/phone/verify-identity",
+            "/auth/forgot-password/phone/verify-code",
+            // api-path: inspection, pas emission — second facteur, SMS, session d'invite.
+            "/auth/2fa/verify",
+            "/auth/verify-phone",
+            "/auth/phone-transfer/verify",
+            "/auth/phone-transfer/verify-registration",
+            "/anonymous/refresh",
         )
+
+        /**
+         * Familles de routes dont NI la requete NI la reponse ne se journalisent :
+         * le protocole Signal publie et lit des paquets de cles et etablit des
+         * sessions chiffrees. Une famille se reconnait a un SEGMENT, pas a un
+         * suffixe, parce que `/signal/keys/{userId}` porte un identifiant.
+         */
+        // api-path: inspection, pas emission — comme les chemins ci-dessus.
+        internal val SENSITIVE_SEGMENTS = setOf("/signal/")
 
         /**
          * Le garde arme avec ses deux niveaux fixes — le seul montage correct.

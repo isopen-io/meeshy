@@ -143,7 +143,7 @@ struct FocalIdentityHeader: View, Equatable {
                 if senderIsAnonymous {
                     Image(systemName: "theatermasks.fill")
                         .font(MeeshyFont.relative(nameSize * 0.8, weight: .semibold))
-                        .foregroundColor(.purple)
+                        .foregroundStyle(Color.purple)
                         .accessibilityLabel(String(
                             localized: "focal.row.anonymousSender",
                             defaultValue: "Sans compte",

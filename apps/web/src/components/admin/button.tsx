@@ -4,11 +4,15 @@ import { BRAND, EDGE, INK, SURFACE } from './tone';
 
 export type AdminButtonTone = 'primary' | 'secondary' | 'danger';
 
-/** `'md'` (défaut) : 44 px, le geste d'une ligne. `'lg'` : 52 px, le GROS bouton d'une carte ou d'une feuille (#10562). */
+/**
+ * `'md'` (défaut) : 44 px, le geste d'une ligne — son libellé ne se replie JAMAIS (#10461) : dans une
+ * cellule serrée, c'est le groupe qui passe à la ligne entre deux gestes, pas « Mettre hors / ligne ».
+ * `'lg'` : 52 px, le GROS bouton d'une carte ou d'une feuille (#10562), qui peut replier un long libellé.
+ */
 export type AdminButtonSize = 'md' | 'lg';
 
 const SIZE: Readonly<Record<AdminButtonSize, { readonly height: number; readonly className: string }>> = {
-  md: { height: 44, className: 'rounded-chip px-4' },
+  md: { height: 44, className: 'rounded-chip px-4 whitespace-nowrap' },
   lg: { height: 52, className: 'rounded-card px-5' },
 };
 

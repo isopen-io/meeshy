@@ -140,6 +140,7 @@ const gameExportSchema = {
           detectedAt: { type: 'string', nullable: true },
           presentedAt: { type: 'string', nullable: true },
           notifiedAt: { type: 'string', nullable: true },
+          keptAt: { type: 'string', nullable: true },
         },
       },
     },

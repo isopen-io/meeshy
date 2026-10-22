@@ -10,9 +10,13 @@ import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.BlockedUserDao
 import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.DirectoryContactDao
+import me.meeshy.core.database.dao.EditRevisionDao
+import me.meeshy.core.database.dao.EphemeralReceiptDao
 import me.meeshy.core.database.dao.FriendDao
 import me.meeshy.core.database.dao.FriendRequestDao
 import me.meeshy.core.database.dao.MediaBlobDao
+import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.ProfileStatsCacheDao
@@ -21,6 +25,7 @@ import me.meeshy.core.database.dao.StoryDao
 import me.meeshy.core.database.dao.SuggestionDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.dao.TusUploadCheckpointDao
+import me.meeshy.core.database.migration.MeeshyMigrations
 import javax.inject.Singleton
 
 @Module
@@ -31,7 +36,8 @@ internal object DatabaseModule {
     @Singleton
     fun providesDatabase(@ApplicationContext context: Context): MeeshyDatabase =
         Room.databaseBuilder(context, MeeshyDatabase::class.java, DATABASE_NAME)
-            .fallbackToDestructiveMigration()
+            .addMigrations(*MeeshyMigrations.all)
+            .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
             .build()
 
     @Provides
@@ -90,5 +96,24 @@ internal object DatabaseModule {
     fun providesBlockedUserDao(database: MeeshyDatabase): BlockedUserDao =
         database.blockedUserDao()
 
+    @Provides
+    fun providesEphemeralReceiptDao(database: MeeshyDatabase): EphemeralReceiptDao =
+        database.ephemeralReceiptDao()
+
+    @Provides
+    fun providesEditRevisionDao(database: MeeshyDatabase): EditRevisionDao =
+        database.editRevisionDao()
+
+    @Provides
+    fun providesDirectoryContactDao(database: MeeshyDatabase): DirectoryContactDao =
+        database.directoryContactDao()
+
+    @Provides
+    fun providesMediaIndexDao(database: MeeshyDatabase): MediaIndexDao =
+        database.mediaIndexDao()
+
     private const val DATABASE_NAME = "meeshy.db"
+
+    /** Builds older than the exported v16 baseline predate the schema lock; they alone are wiped. */
+    private val PRE_BASELINE_VERSIONS: IntArray = IntArray(MeeshyMigrations.BASELINE_VERSION - 1) { it + 1 }
 }

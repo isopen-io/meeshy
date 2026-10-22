@@ -109,6 +109,20 @@ final class AttachmentDownloadCenter {
             .eraseToAnyPublisher()
     }
 
+    /// Le premier événement de `key` qui satisfait `predicate`, attendu sans
+    /// bloquer — `nil` si la tâche qui attend est annulée (#11550).
+    ///
+    /// Le tri se fait AVANT le passage en `async` : `.values` ne redemande un
+    /// élément qu'une fois le précédent consommé, et le sujet sans tampon
+    /// jette ce qu'il émet entre-temps — la fin qui suit de près une
+    /// progression se perdait, et la case restait floue.
+    func firstEvent(for key: String, where predicate: @escaping (Event) -> Bool) async -> Event? {
+        for await event in events(for: key).first(where: predicate).values {
+            return event
+        }
+        return nil
+    }
+
     /// Point d'émission UNIQUE : met à jour l'état tenu puis diffuse.
     func publish(_ event: Event, for key: String) {
         switch event {
@@ -383,6 +397,60 @@ extension AttachmentDownloadCenter {
     nonisolated private static func imageCandidates(_ attachment: MessageAttachment, displayedURL: String?) -> [String] {
         let variants = (attachment.imageVariants ?? []).map { $0.url }
         return ([attachment.fileUrl, displayedURL ?? ""] + variants).filter { !$0.isEmpty }
+    }
+}
+
+// MARK: - Bubble Image Source Law (ce qui est sur l'appareil d'abord)
+
+/// **La source qu'une case d'image AFFICHE** : une forme déjà sur l'appareil
+/// passe avant la variante qu'il faudrait encore télécharger.
+///
+/// La case choisissait la plus petite variante qui couvre sa largeur
+/// (`ImageVariantSelector`, bande passante 5.2), alors que le bouton
+/// « télécharger » de la bulle rapatrie l'ORIGINAL. Tant que la politique
+/// d'auto-téléchargement refusait, la variante restait absente et la photo
+/// restait sur son aperçu flou — nette en plein écran, floue dans le fil.
+/// L'ordre : la variante élue pour le réseau si elle est déjà là, sinon la
+/// plus légère variante DÉJÀ LÀ qui couvre encore la case, sinon l'original
+/// s'il est là, sinon la variante élue.
+enum BubbleImageSourceLaw {
+    nonisolated static func displayedURL(
+        variants: [MeeshyImageVariant],
+        originalURL: String,
+        originalWidth: Int?,
+        targetWidthPx: Int,
+        isOnDevice: (String) -> Bool
+    ) -> String? {
+        guard !originalURL.isEmpty else { return nil }
+        let networkPick = ImageVariantSelector.bestImageURL(
+            variants: variants,
+            originalURL: originalURL,
+            originalWidth: originalWidth,
+            targetWidthPx: targetWidthPx
+        )
+        if isOnDevice(networkPick) { return networkPick }
+        let coveringOnDevice = variants
+            .filter { !$0.url.isEmpty && $0.width >= targetWidthPx && $0.url != networkPick }
+            .sorted { ($0.width, $0.url) < ($1.width, $1.url) }
+            .map(\.url)
+            .first(where: isOnDevice)
+        if let coveringOnDevice { return coveringOnDevice }
+        if originalURL != networkPick, isOnDevice(originalURL) { return originalURL }
+        return networkPick
+    }
+
+    /// Le critère de production : celui-là même qui lève la politique dans
+    /// `ProgressiveCachedImage` — une forme élue « sur l'appareil » se charge
+    /// donc sans attendre un geste. Une forme `file://` est une lecture locale.
+    nonisolated static func isOnDevice(_ urlString: String) -> Bool {
+        urlString.hasPrefix("file://")
+            || LocalImagePresence.isOnDevice(resolvedURL: AttachmentDownloadCenter.key(for: urlString))
+    }
+
+    /// Seule la FIN d'un téléchargement pose l'original sur l'appareil.
+    nonisolated static func marksOriginalLanding(_ event: AttachmentDownloadCenter.Event) -> Bool {
+        if case .finished = event { return true }
+        return false
     }
 }
 

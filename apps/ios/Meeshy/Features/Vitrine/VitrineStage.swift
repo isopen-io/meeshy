@@ -36,6 +36,8 @@ enum VitrineStage {
             try? FileManager.default.removeItem(at: VitrineLaunch.marqueurPret)
             VitrineTournage.effacerLesMarqueurs()
             servir(scene == .interactionInvite ? (f.lienSav ?? f.lienInvitation) : f.lienInvitation)
+            // Le compte actif est écrit sans `AuthManager`, qui le tient en mémoire (#11558).
+            defer { AuthManager.shared.rereadPersistedActiveUser() }
             if scene.ouvreUneSession {
                 try VitrineSession.poser(f.lecteur)
             } else {

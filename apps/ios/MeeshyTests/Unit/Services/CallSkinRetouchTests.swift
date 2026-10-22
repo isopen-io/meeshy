@@ -174,7 +174,7 @@ final class CallSkinRetouchTests: XCTestCase {
     // MARK: - Kernel
 
     func test_kernel_loadsFromTheAppLibrary() {
-        XCTAssertNotNil(CallSkinRetouchKernel.shared, "MTL_COMPILER_FLAGS -fcikernel / MTLLINKER_FLAGS -cikernel manquants ?")
+        XCTAssertNotNil(CallSkinRetouchKernel.shared, "MTL_COMPILER_FLAGS / MTLLINKER_FLAGS -fcikernel manquants ?")
     }
 
     private static let lightSkin = (r: 0.85, g: 0.65, b: 0.55)

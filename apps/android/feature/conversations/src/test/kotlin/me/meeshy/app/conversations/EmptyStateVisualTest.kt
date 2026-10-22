@@ -71,7 +71,7 @@ class EmptyStateVisualTest {
     }
 
     @Test
-    fun `cold-empty arm becomes a no-conversations card with no retry`() {
+    fun `cold-empty arm becomes a no-conversations card with a New conversation CTA`() {
         val visual = EmptyStateVisual.of(ConversationListContent.ColdEmpty)
 
         assertThat(visual).isEqualTo(
@@ -79,9 +79,32 @@ class EmptyStateVisualTest {
                 glyph = EmptyStateGlyph.NoConversations,
                 title = EmptyStateCopy.ColdTitle,
                 subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.ColdSubtitle),
-                cta = null,
+                cta = EmptyStateCopy.NewConversation,
             ),
         )
+    }
+
+    @Test
+    fun `search-no-results arm is a compact no-results card with no CTA`() {
+        val visual = EmptyStateVisual.of(ConversationListContent.SearchNoResults)
+
+        assertThat(visual).isEqualTo(
+            EmptyStateVisual(
+                glyph = EmptyStateGlyph.SearchNoResults,
+                title = EmptyStateCopy.SearchNoResultsTitle,
+                subtitle = EmptyStateSubtitle.Resource(EmptyStateCopy.SearchNoResultsSubtitle),
+                cta = null,
+                compact = true,
+            ),
+        )
+    }
+
+    @Test
+    fun `search and filter empties carry different copy`() {
+        val search = EmptyStateVisual.of(ConversationListContent.SearchNoResults)
+        val filter = EmptyStateVisual.of(ConversationListContent.FilteredEmpty)
+
+        assertThat(search?.title).isNotEqualTo(filter?.title)
     }
 
     @Test

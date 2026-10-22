@@ -64,6 +64,56 @@ private fun message(
 )
 
 class BubbleContentBuilderTest {
+    private fun built(msg: ApiMessage, isSlowSend: Boolean = false) =
+        BubbleContentBuilder.build(msg, currentUserId = "me", preferences = french, isSlowSend = isSlowSend)
+
+    @Test
+    fun `video attachments are counted and flagged apart from documents`() {
+        val content = built(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "v", mimeType = "video/mp4", originalName = "c.mp4"),
+                    ApiMessageAttachment(id = "d", mimeType = "application/pdf", originalName = "a.pdf"),
+                ),
+            ),
+        )
+        assertThat(content.videoCount).isEqualTo(1)
+        assertThat(content.files.map { it.isVideo }).containsExactly(true, false).inOrder()
+    }
+
+    @Test
+    fun `a vcard attachment becomes a contact card named after its file`() {
+        val content = built(
+            message().copy(
+                attachments = listOf(
+                    ApiMessageAttachment(id = "c", mimeType = "text/vcard", originalName = "Bob Martin.vcf"),
+                ),
+            ),
+        )
+        assertThat(content.contactCards.map { it.name }).containsExactly("Bob Martin")
+        assertThat(content.files.single().isContactCard).isTrue()
+    }
+
+    @Test
+    fun `a blurred message flags isBlurred and a plain one does not`() {
+        assertThat(built(message(effectFlags = MessageEffectFlags.BLURRED.toInt())).isBlurred).isTrue()
+        assertThat(built(message()).isBlurred).isFalse()
+    }
+
+    @Test
+    fun `a reply to a message written by the current user flags replyToIsMe`() {
+        val own = built(message().copy(replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(id = "r", content = "x", senderId = "me")))
+        val other = built(message().copy(replyTo = me.meeshy.sdk.model.ApiMessageReplyPreview(id = "r", content = "x", senderId = "bob")))
+        assertThat(own.replyToIsMe).isTrue()
+        assertThat(other.replyToIsMe).isFalse()
+    }
+
+    @Test
+    fun `slow send is carried only for an outgoing message`() {
+        assertThat(built(message(senderId = "me"), isSlowSend = true).isSlowSend).isTrue()
+        assertThat(built(message(senderId = "bob"), isSlowSend = true).isSlowSend).isFalse()
+    }
+
 
     private val french = Prefs(systemLanguage = "fr")
 
@@ -1235,7 +1285,26 @@ class BubbleContentBuilderTest {
     }
 
     @Test
-    fun `a forward from a group names the source conversation`() {
+    fun `a forward from a public conversation names the source conversation`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Team Meeshy",
+                    type = "public",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+    }
+
+    @Test
+    fun `a forward from a private group never names the source conversation`() {
         val content = BubbleContentBuilder.build(
             message(
                 forwardedFromId = "orig-msg",
@@ -1250,7 +1319,28 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardedFromName).isNull()
+    }
+
+    @Test
+    fun `a forward whose source conversation type is unknown never names it`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Legacy",
+                    type = null,
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardedFromName).isNull()
     }
 
     @Test
@@ -1311,7 +1401,7 @@ class BubbleContentBuilderTest {
             message(
                 deletedAt = "2026-07-08T09:00:00Z",
                 forwardedFromId = "orig-msg",
-                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "group"),
+                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "public"),
             ),
             currentUserId = "me",
             preferences = french,

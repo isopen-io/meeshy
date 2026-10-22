@@ -66,6 +66,7 @@ import coil.compose.AsyncImage
 import me.meeshy.feature.feed.R
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.sdk.model.PostAbsenceReason
 import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.component.bubble.LanguageChip
 import me.meeshy.ui.component.chrome.MeeshyBackground
@@ -99,7 +100,8 @@ fun PostDetailScreen(
     val snackbar = remember { SnackbarHostState() }
 
     LaunchedEffect(state.errorMessage) {
-        state.errorMessage?.let { snackbar.showSnackbar(it) }
+        // Sans post, l'echec a son propre ecran (PostDetailAbsenceView) : pas de snackbar doublon.
+        if (state.post != null) state.errorMessage?.let { snackbar.showSnackbar(it) }
     }
 
     // Leaving the detail closes the dwell session, recording the measured watch-time against
@@ -144,11 +146,15 @@ fun PostDetailScreen(
             ) {
                 when {
                     state.showSkeleton -> PostDetailSkeleton()
-                    state.post == null -> PostDetailPlaceholder(
-                        message = stringResource(
-                            if (state.notFound) R.string.post_detail_not_found
-                            else R.string.post_detail_empty,
+                    state.post == null -> PostDetailAbsenceView(
+                        reason = PostAbsenceReason.resolve(
+                            hasPost = false,
+                            isLoading = state.isLoading,
+                            failure = state.loadFailure,
                         ),
+                        failure = state.loadFailure,
+                        onRetry = viewModel::retryLoad,
+                        onBack = onBack,
                     )
                     else -> PostDetailContent(
                         post = state.post!!,
@@ -488,17 +494,6 @@ private fun DetailLanguageStrip(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun PostDetailPlaceholder(message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MeeshyTheme.tokens.textSecondary,
-        )
     }
 }
 

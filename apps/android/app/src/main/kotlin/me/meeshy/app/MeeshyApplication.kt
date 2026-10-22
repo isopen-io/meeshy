@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.app.push.NotificationChannelInstaller
 import me.meeshy.app.settings.CrashDiagnosticsRecorder
+import me.meeshy.app.startup.AppInitializerRunner
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.SocketManager
@@ -42,6 +43,9 @@ class MeeshyApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var notificationChannelInstaller: NotificationChannelInstaller
 
+    @Inject
+    lateinit var appInitializerRunner: AppInitializerRunner
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -59,6 +63,7 @@ class MeeshyApplication : Application(), Configuration.Provider {
         // needed most. See NotificationChannelIds for the full gateway-drift rationale.
         notificationChannelInstaller.install()
         installAppStatePresence()
+        appInitializerRunner.runAll()
     }
 
     /**

@@ -20,6 +20,9 @@ export const HOST_METRICS_BUFFER_SIZE = 720;
 
 const byteCount = z.number().int().nonnegative();
 const isoInstant = z.iso.datetime();
+/** Le demandeur, borné à l'identique du runner (`validate`, 1 à 128 caractères) : les deux validateurs du relais disent la même chose (#10459). */
+export const OPS_REQUESTED_BY_MAX_LENGTH = 128;
+const requestedBy = z.string().min(1).max(OPS_REQUESTED_BY_MAX_LENGTH);
 
 export const OPS_ENVIRONMENTS = ['staging', 'production', 'local'] as const;
 export const opsEnvironmentSchema = z.enum(OPS_ENVIRONMENTS);
@@ -127,7 +130,7 @@ export const serverOperationRunSchema = z.object({
   requestId: z.uuid(),
   operation: serverOperationSchema,
   status: serverOperationRunStatusSchema,
-  requestedBy: z.string(),
+  requestedBy,
   requestedAt: isoInstant,
   startedAt: isoInstant.nullable(),
   finishedAt: isoInstant.nullable(),
@@ -153,7 +156,7 @@ export const opsRequestFileSchema = z
     id: z.uuid(),
     action: serverOperationSchema,
     environment: opsEnvironmentSchema,
-    requestedBy: z.string(),
+    requestedBy,
     requestedAt: isoInstant,
   })
   .strict();
@@ -201,4 +204,4 @@ export type ServerOperationStateFile = z.infer<typeof serverOperationStateFileSc
 
 export type AdminMetricsSubscribeAck =
   | { readonly ok: true; readonly snapshot: HostMetricsSnapshot }
-  | { readonly ok: false; readonly code: 'FORBIDDEN' };
+  | { readonly ok: false; readonly code: 'FORBIDDEN' | 'RATE_LIMITED' };

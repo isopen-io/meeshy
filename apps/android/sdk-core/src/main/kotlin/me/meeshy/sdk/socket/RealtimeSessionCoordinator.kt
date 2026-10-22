@@ -2,6 +2,7 @@ package me.meeshy.sdk.socket
 
 import javax.inject.Inject
 import javax.inject.Singleton
+import timber.log.Timber
 
 /**
  * App-lifetime owner of the realtime socket's session binding: the single place
@@ -29,6 +30,7 @@ class RealtimeSessionCoordinator @Inject constructor(
     private val preferencesSocketManager: PreferencesSocketManager,
     private val preferencesSyncCoordinator: me.meeshy.sdk.preferences.PreferencesSyncCoordinator,
     private val callSignalManager: CallSignalManager,
+    private val bindings: Set<@JvmSuppressWildcards RealtimeBinding> = emptySet(),
 ) {
     private var lastAuthenticated = false
 
@@ -44,6 +46,7 @@ class RealtimeSessionCoordinator @Inject constructor(
             RealtimeCommand.Connect -> socketManager.connect()
             RealtimeCommand.Attach -> attachAll()
             RealtimeCommand.Disconnect -> {
+                detachBindings()
                 preferencesSyncCoordinator.stop()
                 socketManager.disconnect()
             }
@@ -61,5 +64,18 @@ class RealtimeSessionCoordinator @Inject constructor(
         // des preferences user-level vit ici, pour la session, et non dans un ecran de
         // reglages qui ne serait ouvert qu'au moment ou l'on en a le moins besoin.
         preferencesSyncCoordinator.start()
+        bindings.forEach { binding -> isolated(binding) { binding.attach() } }
+    }
+
+    private fun detachBindings() {
+        bindings.forEach { binding -> isolated(binding) { binding.detach() } }
+    }
+
+    private inline fun isolated(binding: RealtimeBinding, action: () -> Unit) {
+        try {
+            action()
+        } catch (failure: Exception) {
+            Timber.e(failure, "RealtimeBinding %s en echec", binding.javaClass.name)
+        }
     }
 }

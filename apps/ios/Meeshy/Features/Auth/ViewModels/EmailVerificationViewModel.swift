@@ -106,7 +106,7 @@ final class EmailVerificationViewModel: ObservableObject {
             case .pending, nil:
                 break
             }
-            try? await Task.sleep(for: watchInterval)
+            _ = await cancellableSleep(for: watchInterval)
         }
     }
 
@@ -154,7 +154,7 @@ final class EmailVerificationViewModel: ObservableObject {
         do {
             try await authService.resendVerificationEmail(email: email)
             resendSuccess = true
-            try? await Task.sleep(for: .seconds(3))
+            _ = await cancellableSleep(for: .seconds(3))
             resendSuccess = false
         } catch {
             self.error = EmailProofErrorText.resendMessage(for: error)

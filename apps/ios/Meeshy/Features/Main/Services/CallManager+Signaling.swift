@@ -211,6 +211,7 @@ extension CallManager {
                 let message = CallRefusalMessage.localized(forCode: event.code) ?? event.message
                     ?? String(localized: "call.error.generic", defaultValue: "Erreur lors de l'appel", bundle: .main)
                 Logger.calls.error("call:error received: code=\(event.code ?? "?") message=\(message)")
+                let accessoryRequest = CallAccessoryRequestLog.shared.request(answeredBy: event.callId)
                 let disposition = CallErrorDisposition.resolve(
                     code: event.code,
                     errorCallId: event.callId,
@@ -218,11 +219,12 @@ extension CallManager {
                     isTransientDuringResume: CallResumePolicy.isTransientDuringResume(
                         code: event.code, isResuming: self.isResumingCall
                     ),
+                    answersAccessoryRequest: accessoryRequest != nil,
                     callIsActive: self.callState.isActive
                 )
                 switch disposition {
                 case .ignore:
-                    Logger.calls.warning("call:error ignored (code=\(event.code ?? "?", privacy: .public), callId=\(event.callId ?? "nil", privacy: .public))")
+                    Logger.calls.warning("call:error ignored (code=\(event.code ?? "?", privacy: .public), callId=\(event.callId ?? "nil", privacy: .public), accessory=\(accessoryRequest?.rawValue ?? "none", privacy: .public))")
                 case .reconcileEnd(let callId):
                     Logger.calls.info("call:error CALL_ENDED — reconciling to ended (benign terminal race, #12)")
                     self.handleRemoteEnd(callId: callId)
@@ -320,12 +322,12 @@ extension CallManager {
                 guard let self else { return }
                 self.clearPendingIncomingCall(ifMatching: event.callId)
                 guard self.currentCallId == event.callId,
-                      case .ringing = self.callState else { return }
+                      CallResumePolicy.yieldsToAnotherDevice(callState: self.callState) else { return }
                 Logger.calls.info("call:already-answered received — dismissing local ring (callId=\(event.callId))")
                 if let uuid = self.activeCallUUID {
                     self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
                 }
-                self.endCallInternal(reason: .remote)
+                self.endCallInternal(reason: .remote, reportsAnalytics: false)
             }
             .store(in: &cancellables)
     }
@@ -444,8 +446,7 @@ extension CallManager {
     private func scheduleRemoteQualityReset() {
         remoteQualityResetTask?.cancel()
         remoteQualityResetTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(QualityThresholds.remoteQualityResetSeconds)), !Task.isCancelled else { return }
             guard let self else { return }
             self.remoteMedia = self.remoteMedia.applying(.qualityDegraded(false))
         }

@@ -48,6 +48,8 @@ public sealed interface SignupSubmitError {
         val refusal: SignupRefusal,
         /** Le texte de la passerelle, quand elle en donne un de plus précis. */
         val serverMessage: String?,
+        /** Les pseudos LIBRES proposés par la passerelle avec `USERNAME_TAKEN` ; vide sinon. */
+        val suggestions: List<String> = emptyList(),
     ) : SignupSubmitError
 
     /** Le réseau n'a pas répondu — rien n'a été tenté côté serveur. */
@@ -100,6 +102,7 @@ public object SignupErrorRouter {
         fieldName: String? = null,
         message: String? = null,
         violations: List<ApiViolation> = emptyList(),
+        suggestions: List<String> = emptyList(),
     ): SignupSubmitError {
         val normalizedCode = code?.trim()?.uppercase()
         if (normalizedCode == CODE_NETWORK) return SignupSubmitError.Network
@@ -111,7 +114,8 @@ public object SignupErrorRouter {
             else -> null
         }
         if (typed != null) {
-            return SignupSubmitError.Field(typed.first, typed.second, message)
+            val offered = if (typed.second == SignupRefusal.NAME_TAKEN) suggestions else emptyList()
+            return SignupSubmitError.Field(typed.first, typed.second, message, offered)
         }
 
         fieldFor(fieldName)?.let { return SignupSubmitError.Field(it, SignupRefusal.INVALID, message) }

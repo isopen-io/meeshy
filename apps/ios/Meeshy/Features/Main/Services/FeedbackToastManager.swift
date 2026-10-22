@@ -104,8 +104,7 @@ final class FeedbackToastManager: ObservableObject {
 
     private func scheduleDismiss(duration: UInt64 = 3_000_000_000) {
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: duration)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .nanoseconds(duration)), !Task.isCancelled else { return }
             currentToast = nil
             onTapAction = nil
         }

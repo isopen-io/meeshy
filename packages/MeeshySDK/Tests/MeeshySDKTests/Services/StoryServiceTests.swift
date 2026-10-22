@@ -84,7 +84,7 @@ final class StoryServiceTests: XCTestCase {
     }
 
     func test_delete_withReason_sendsReasonInJSONBody() async throws {
-        mock.stub("/posts/\(storyId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+        mock.stub("/posts/\(storyId)", result: try MessageServiceTests.gatewayAcknowledgement(#"{"success":true,"data":{"deleted":true}}"#))
 
         try await service.delete(storyId: storyId, reason: "Nudité")
 

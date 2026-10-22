@@ -73,7 +73,7 @@ struct GameAuthorPlateView: View {
             } else {
                 Text(plate.monogram)
                     .font(Self.fixedFont(25, .heavy))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
                     .minimumScaleFactor(0.6)
                     .frame(width: 56)
@@ -104,7 +104,7 @@ struct GameAuthorPlateView: View {
                     .frame(width: 220, height: 34)
                     .position(x: 104 + 110, y: 47 + 17)
                 line(plate.name, size: 24, weight: .heavy, baseline: 72)
-                    .foregroundColor(Color.black.opacity(0.7))
+                    .foregroundStyle(Color.black.opacity(0.7))
                     .offset(y: 1.4)
                 line(plate.name, size: 24, weight: .heavy, baseline: 72)
                     .foregroundStyle(GameMaterial.gold.gradient)

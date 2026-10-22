@@ -8,19 +8,19 @@ import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 import { INSTITUTIONAL_PATTERN } from './scripts/lib/institutional-routes.mjs';
-import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from './src/landing/landing-languages';
+import { LANDING_LANGUAGES, LANDING_SUBPATH_PATTERN, landingFiles } from './src/landing/landing-languages.js';
 import { INLINE_INTERFACE_LANGUAGE_BOOTSTRAP } from './src/lib/inline-interface-language-bootstrap.js';
 import { INLINE_APP_SCHEME_BOOTSTRAP } from './src/lib/inline-scheme-bootstrap.js';
-import { declaredBuildFlag } from './src/lib/build-flag';
-import { loadedPreloadDeps } from './src/lib/build-preload-deps';
-import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity';
-import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache';
-import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations';
-import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness';
-import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations';
-import { shellApiOrigin, withApiPreconnect } from './src/lib/net/shell-preconnect';
-import { SHARE_TARGET } from './src/lib/share-incoming/share-target';
-import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches';
+import { declaredBuildFlag } from './src/lib/build-flag.js';
+import { loadedPreloadDeps } from './src/lib/build-preload-deps.js';
+import { apiCacheIdentityPlugin } from './src/lib/net/api-cache-identity.js';
+import { API_RESPONSE_CACHE_PATTERN } from './src/lib/net/api-runtime-cache.js';
+import { EMAIL_TOKEN_NAVIGATIONS } from './src/lib/net/email-token-navigations.js';
+import { mediaCacheFreshnessPlugin } from './src/lib/net/media-cache-freshness.js';
+import { NETWORK_ONLY_NAVIGATIONS } from './src/lib/net/network-only-navigations.js';
+import { shellApiOrigin, withApiPreconnect } from './src/lib/net/shell-preconnect.js';
+import { SHARE_TARGET } from './src/lib/share-incoming/share-target.js';
+import { SW_DEPLOYMENT_CONFIG_CACHE, SW_RUNTIME_CACHES } from './src/lib/sw-caches.js';
 
 /**
  * `index.html` ne porte plus le TEXTE du script d'amorçage du schéma, mais un
@@ -975,6 +975,18 @@ export default defineConfig({
        */
       treeshake: {
         moduleSideEffects: [{ test: FIXTURE_MODULE, sideEffects: false }],
+      },
+      /**
+       * LA DIRECTIVE « use client » D'UNE DÉPENDANCE NE DIT RIEN ICI. Elle
+       * sépare les composants serveur et client d'un framework à rendu
+       * serveur ; cette application ne rend que dans le navigateur, et le
+       * bundler la retire en le signalant (`@tanstack/react-query`). Seul ce
+       * signal-là se tait, et seulement pour `node_modules` : toute autre
+       * alerte, et toute directive écrite dans nos sources, reste visible.
+       */
+      onwarn(warning, warn) {
+        if (warning.code === 'MODULE_LEVEL_DIRECTIVE' && warning.id?.includes('/node_modules/')) return;
+        warn(warning);
       },
       /**
        * DEUX entrées CSS : celle de l'application, et celle — beaucoup plus

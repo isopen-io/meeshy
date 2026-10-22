@@ -46,6 +46,10 @@ exit 0
 args=("$@"); dest="\${args[\${#args[@]}-1]}"; src="\${args[\${#args[@]}-2]}"
 mkdir -p "$dest" && cp -R "$src". "$dest"
 `,
+  date: `#!/usr/bin/env bash
+[[ -n "\${FAKE_STAMP:-}" && "$*" == "-u +%Y%m%dT%H%MZ" ]] && { echo "$FAKE_STAMP"; exit 0; }
+command -p date "$@"
+`,
 };
 
 let root;
@@ -54,6 +58,11 @@ let env;
 const statusFile = () => path.join(env.STATUS_DIR, 'etat.json');
 const verdict = () => JSON.parse(readFileSync(statusFile(), 'utf8'));
 const run = (extra = {}) => spawnSync('bash', [SCRIPT], { env: { ...env, ...extra }, encoding: 'utf8' });
+const backups = () => spawnSync('ls', [env.BACKUP_ROOT], { encoding: 'utf8' }).stdout.trim().split('\n').filter((name) => /^\d{8}T\d{4}Z$/.test(name));
+const seedCompleteBackup = (stamp) => {
+  mkdirSync(path.join(env.BACKUP_ROOT, stamp), { recursive: true });
+  writeFileSync(path.join(env.BACKUP_ROOT, stamp, 'COMPLET'), '');
+};
 
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'nightly-backup-'));
@@ -185,5 +194,54 @@ describe('le verdict d’un échec', () => {
     assert.ok(existsSync(statusFile()));
     const leftovers = readFileSync(statusFile(), 'utf8') && spawnSync('ls', ['-A', env.STATUS_DIR], { encoding: 'utf8' }).stdout.trim().split('\n');
     assert.deepEqual(leftovers, ['etat.json']);
+  });
+});
+
+// #11450 : une sauvegarde lancée depuis l'administration passe par le même script, avec
+// BACKUP_ORIGIN=on-demand. Elle ne fait jamais sortir de la rotation la dernière
+// sauvegarde nocturne vérifiée : les deux origines tournent à part.
+describe('la rotation des sauvegardes à la demande (#11450)', () => {
+  it('trois sauvegardes à la demande en 18 h laissent la nocturne de la veille en place', () => {
+    seedCompleteBackup('20261019T0000Z');
+    seedCompleteBackup('20261020T0000Z');
+    for (const stamp of ['20261020T0600Z', '20261020T1200Z', '20261020T1800Z']) {
+      const result = run({ BACKUP_ORIGIN: 'on-demand', FAKE_STAMP: stamp });
+      assert.equal(result.status, 0, result.stderr);
+    }
+
+    assert.deepEqual(backups(), ['20261019T0000Z', '20261020T0000Z', '20261020T1800Z']);
+    assert.ok(existsSync(path.join(env.BACKUP_ROOT, '20261020T1800Z', 'A-LA-DEMANDE')));
+    assert.match(readFileSync(path.join(env.BACKUP_ROOT, '20261020T1800Z', 'MANIFESTE'), 'utf8'), /^origine=on-demand$/m);
+  });
+
+  it('la rotation nocturne ne compte ni ne supprime les sauvegardes à la demande, et une sauvegarde sans marque est nocturne', () => {
+    seedCompleteBackup('20261018T0000Z');
+    seedCompleteBackup('20261019T0000Z');
+    seedCompleteBackup('20261020T0000Z');
+    assert.equal(run({ BACKUP_ORIGIN: 'on-demand', FAKE_STAMP: '20261020T0900Z' }).status, 0);
+    const nightly = run({ FAKE_STAMP: '20261021T0000Z' });
+    assert.equal(nightly.status, 0, nightly.stderr);
+
+    assert.deepEqual(backups(), ['20261019T0000Z', '20261020T0000Z', '20261020T0900Z', '20261021T0000Z']);
+    assert.ok(!existsSync(path.join(env.BACKUP_ROOT, '20261021T0000Z', 'A-LA-DEMANDE')));
+    assert.match(readFileSync(path.join(env.BACKUP_ROOT, '20261021T0000Z', 'MANIFESTE'), 'utf8'), /^origine=nightly$/m);
+  });
+
+  it('KEEP_ON_DEMAND borne les sauvegardes à la demande gardées', () => {
+    for (const stamp of ['20261020T0600Z', '20261020T1200Z', '20261020T1800Z']) {
+      assert.equal(run({ BACKUP_ORIGIN: 'on-demand', FAKE_STAMP: stamp, KEEP_ON_DEMAND: '2' }).status, 0);
+    }
+    assert.deepEqual(backups(), ['20261020T1200Z', '20261020T1800Z']);
+  });
+
+  it('une origine inconnue ou un KEEP_ON_DEMAND invalide est un échec publié, avant toute écriture', () => {
+    const origin = run({ BACKUP_ORIGIN: 'weekly' });
+    assert.equal(origin.status, 1);
+    assert.match(verdict().reason, /BACKUP_ORIGIN/);
+
+    const keep = run({ BACKUP_ORIGIN: 'on-demand', KEEP_ON_DEMAND: '0' });
+    assert.equal(keep.status, 1);
+    assert.match(verdict().reason, /KEEP_ON_DEMAND/);
+    assert.deepEqual(backups(), []);
   });
 });

@@ -350,7 +350,7 @@ struct StoryViewerContainer: View {
         if viewModel.groupIndex(forUserId: uid) != nil { return }
 
         // Give the view a moment for published updates to settle, then give up.
-        try? await Task.sleep(nanoseconds: 2_500_000_000) // 2.5s
+        _ = await cancellableSleep(for: .milliseconds(2500)) // 2.5s
         if !Task.isCancelled, viewModel.groupIndex(forUserId: uid) == nil {
             Logger.messages.error("[StoryViewerContainer] Group still missing after reload uid=\(uid, privacy: .public) availableIds=\(viewModel.storyGroups.map(\.id).joined(separator: ","), privacy: .public)")
             timedOut = true

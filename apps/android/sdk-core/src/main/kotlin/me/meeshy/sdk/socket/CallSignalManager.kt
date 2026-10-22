@@ -52,6 +52,7 @@ import kotlin.coroutines.resume
 @Singleton
 class CallSignalManager @Inject constructor(
     private val socketManager: SocketManager,
+    private val social: CallSocialSignalManager,
 ) {
     private val _events = MutableSharedFlow<CallEvent>(replay = 0, extraBufferCapacity = 64)
     val events: SharedFlow<CallEvent> = _events.asSharedFlow()
@@ -147,6 +148,7 @@ class CallSignalManager @Inject constructor(
 
     fun attach() {
         INBOUND_EVENTS.forEach(::listen)
+        social.attach()
     }
 
     // --- Outbound emit table (parity with iOS MessageSocketManager) ---

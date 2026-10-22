@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 out-plate/
 node_modules/
+cible-complete/
+cible-echantillon/

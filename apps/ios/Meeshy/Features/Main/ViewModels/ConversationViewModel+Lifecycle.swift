@@ -34,6 +34,7 @@ struct ConversationDependencies {
     let dbPool: any DatabaseWriter
     let persistence: MessagePersistenceActor
     var collaborators: ConversationCollaborators? = nil
+    var transcriptionRetry: (any TranscriptionRetryScheduling)? = nil
 
     @MainActor
     static var live: ConversationDependencies {
@@ -87,10 +88,6 @@ struct LiveCallJoinContext {
 extension ConversationViewModel {
 
     // MARK: - Consentement vocal
-
-    nonisolated static func resolveVoiceConsentMissing(_ fetchHasConsent: () async throws -> Bool) async -> Bool {
-        await VoiceConsentGate.missing(fetchHasConsent)
-    }
 
     private func loadVoiceConsentStatus() {
         let gate = collaborators.voiceConsent

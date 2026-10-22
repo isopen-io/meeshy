@@ -82,4 +82,18 @@ class DynamicColorGeneratorTest {
         // White capped at brightness 0.60 → no longer pure white
         assertThat(light).isNotEqualTo("FFFFFF")
     }
+
+    @Test
+    fun profileAccentHex_hashesUserIdWhenPresent() {
+        assertThat(DynamicColorGenerator.profileAccentHex("abc", "Zed"))
+            .isEqualTo(DynamicColorGenerator.colorForName("abc"))
+    }
+
+    @Test
+    fun profileAccentHex_fallsBackToNameWithoutUserId() {
+        assertThat(DynamicColorGenerator.profileAccentHex(null, "Zed"))
+            .isEqualTo(DynamicColorGenerator.colorForName("Zed"))
+        assertThat(DynamicColorGenerator.profileAccentHex("", "Zed"))
+            .isEqualTo(DynamicColorGenerator.colorForName("Zed"))
+    }
 }

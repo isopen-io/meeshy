@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.85.0",
+  "version": "1.88.0",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "engines": {
@@ -43,7 +43,7 @@
     "@meeshy/shared": "workspace:*",
     "@parse/node-apn": "^8.1.0",
     "@prisma/client": "^6.19.3",
-    "@signalapp/libsignal-client": "^0.102.3",
+    "@signalapp/libsignal-client": "0.105.0",
     "@socket.io/redis-adapter": "^8.3.0",
     "@tus/file-store": "^2.1.1",
     "@tus/server": "^2.4.5",
@@ -61,7 +61,7 @@
     "libphonenumber-js": "^1.13.13",
     "mmdb-lib": "^3.0.3",
     "mongodb": "^7.7.0",
-    "music-metadata": "^11.12.3",
+    "music-metadata": "^12.0.0",
     "nice-grpc": "^2.1.17",
     "pdf-parse": "^2.4.5",
     "pino": "^10.4.0",

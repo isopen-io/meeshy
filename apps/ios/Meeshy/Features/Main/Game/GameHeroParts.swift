@@ -40,7 +40,7 @@ struct GameHeroEarn: View {
             Text(String(localized: "game.hero.earn.title", defaultValue: "Comment gagner", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityAddTraits(.isHeader)
             FlowLayout(spacing: 2) {
                 ForEach(GameHero.earnItems()) { item in
@@ -59,10 +59,10 @@ struct GameHeroEarn: View {
                 .accessibilityHidden(true)
             Text(title)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
             Text(String(localized: "game.hero.earn.chip", defaultValue: "jusqu’à \(GameCopy.formatCount(item.weight))", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
         }
         .lineLimit(1)
         .minimumScaleFactor(GameChip.minimumScale)
@@ -99,7 +99,7 @@ struct GameLevelStepRow: View {
                 .foregroundColor(step.met ? MeeshyColors.success : theme.textMuted)
                 .accessibilityHidden(true)
             Text(GameCopy.levelStepLine(step))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: MeeshySpacing.xs)
             Text(GameCopy.levelStepState(step))

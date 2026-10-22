@@ -25,8 +25,8 @@
  * Flamme, événement) multiplie la valeur d'un acte ADMIS et ne consomme aucune
  * place de plus. Aucun total de points n'est plafonné. Deux bornes restent sur
  * une VALEUR, jamais sur un total : `maxFactor` (le plafond du MULTIPLICATEUR)
- * et `abuse.unverifiedMaxPoints` (la valeur d'UN gros acte d'un compte non
- * vérifié, garde d'abus #8959).
+ * et `abuse.unverifiedMaxPoints` (la valeur d'UN gros acte — ou d'UN palier de
+ * série ou de fidélité, #10422 — d'un compte non vérifié, garde d'abus #8959).
  *
  * Garde de frontière écrite à la main, sans Zod, pour la même raison que
  * `isEngagementProgressPayload` : ce module entre dans les chunks web.
@@ -145,14 +145,20 @@ export type EngagementStreakBonus = {
  * LES GARDE-FOUS DES GROS POIDS. Une opération dont les points de base
  * atteignent `heavyPoints` (post, story, reel aux défauts) :
  * - ne crédite qu'une fois par contenu ;
- * - rend ses points si le contenu est supprimé dans les `clawbackHours` ;
+ * - rend ses points si le contenu est supprimé — la fenêtre n'est pas un réglage :
+ *   c'est la loi des 30 jours (`PUBLICATION_RECLAIM_WINDOW_DAYS`, #11467). L'ancien
+ *   `clawbackHours` (#11491) est accepté en entrée et ignoré ;
  * - vaut au plus `unverifiedMaxPoints` PAR ACTE pour un compte sans e-mail ni
  *   téléphone vérifié — une ferme de comptes jetables ne publie pas au prix
  *   fort. C'est la valeur d'un acte, jamais un total.
+ *
+ * La même borne vaut pour UN PALIER de série ou de fidélité qui atteint
+ * `heavyPoints` (`bonusPointsForAccount`, #10422) : un compte sans contact
+ * vérifié ne touche pas un palier au prix fort — la décision est à
+ * `services/gateway/decisions/`, elle se relit le jour où le don de Meeshes s'ouvre.
  */
 export type EngagementAbuseRules = {
   readonly heavyPoints: number;
-  readonly clawbackHours: number;
   readonly unverifiedMaxPoints: number;
 };
 
@@ -238,7 +244,6 @@ export const DEFAULT_STREAK_BONUSES: readonly EngagementStreakBonus[] = [
 
 export const DEFAULT_ABUSE_RULES: EngagementAbuseRules = {
   heavyPoints: 50,
-  clawbackHours: 24,
   unverifiedMaxPoints: 10,
 };
 
@@ -413,11 +418,10 @@ function parseLinkVisits(value: unknown): EngagementLinkVisitRules | null {
 function parseAbuse(value: unknown): EngagementAbuseRules | null {
   if (value === undefined) return DEFAULT_ABUSE_RULES;
   if (!isRecord(value)) return null;
-  const { heavyPoints, clawbackHours, unverifiedMaxPoints } = value;
+  const { heavyPoints, unverifiedMaxPoints } = value;
   if (!isIntIn(heavyPoints, 1, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-  if (!isIntIn(clawbackHours, 0, 24 * 30)) return null;
   if (!isIntIn(unverifiedMaxPoints, 0, ENGAGEMENT_SCALE_POINTS_CEILING)) return null;
-  return { heavyPoints, clawbackHours, unverifiedMaxPoints };
+  return { heavyPoints, unverifiedMaxPoints };
 }
 
 function parsePathCaps(value: unknown): EngagementPathCaps | null {
@@ -638,6 +642,22 @@ export function linkVisitPoints(rules: EngagementLinkVisitRules, visitNumber: nu
 /** Le bonus de constance dû quand la série passe de `previous` à `next` jours — la somme des paliers franchis. */
 export function streakBonusPoints(bonuses: readonly EngagementStreakBonus[], previous: number, next: number): number {
   return bonuses.filter((bonus) => bonus.days > previous && bonus.days <= next).reduce((sum, bonus) => sum + bonus.points, 0);
+}
+
+/**
+ * Ce qu'UN palier de série (globale ou d'acte) ou de fidélité paie à CE compte
+ * (#10422) : un palier dont les points atteignent `abuse.heavyPoints` vaut au
+ * plus `abuse.unverifiedMaxPoints` pour un compte sans e-mail ni téléphone
+ * vérifié — la règle exacte des gros actes, portée aux trois horloges. Sous le
+ * seuil, le palier se paie entier ; la borne ne relève jamais un palier.
+ */
+export function bonusPointsForAccount(params: {
+  readonly points: number;
+  readonly verified: boolean;
+  readonly abuse: EngagementAbuseRules;
+}): number {
+  const { points, verified, abuse } = params;
+  return points >= abuse.heavyPoints && !verified ? Math.min(points, abuse.unverifiedMaxPoints) : points;
 }
 
 /**

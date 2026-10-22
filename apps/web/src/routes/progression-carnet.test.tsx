@@ -189,6 +189,50 @@ describe('les photos gardées', () => {
   });
 });
 
+/**
+ * LA REPRISE (#10166, § 5.13) : « Reprendre » sur une photo gardée rouvre le
+ * déroulé au moment de l'entrée avec sa recette — la même photo si la source
+ * est gardée, sinon selfie neuf ou carte seule — et le carnet se relit à la
+ * fermeture : la ligne est remplacée, jamais doublée.
+ */
+describe('reprendre une photo gardée (#10166)', () => {
+  const voix = rankMoment({ rank: 'voix', division: 2 });
+  const { square: _square, ...neuve } = kept(voix, '2026-10-01T10:00:00.000Z');
+  const withSource: NotebookEntry = { ...neuve, source: new Blob(['src'], { type: 'image/jpeg' }), frameId: 'savane.voix-2', pose: 'pied' };
+
+  test('« Reprendre » rouvre le déroulé du moment, en reprise : la même photo proposée quand la source est gardée', async () => {
+    const { env } = bench([withSource]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-retake'));
+    expect(host.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Photo : Voix II');
+    expect(host.textContent).toContain('On la reprend ?');
+    expect(host.querySelector('[data-photo-choice="same-photo"]')).not.toBeNull();
+    expect(host.querySelector('[data-photo-choice="later"]')).toBeNull();
+  });
+
+  test('une ancienne entrée (deux images, sans source) ne propose que le selfie neuf ou la carte', async () => {
+    const { env } = bench([kept(voix, '2026-10-01T10:00:00.000Z')]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-retake'));
+    expect(host.querySelector('[data-photo-choice="same-photo"]')).toBeNull();
+    expect(host.querySelector('[data-photo-choice="selfie"]')).not.toBeNull();
+  });
+
+  test('fermer la reprise relit le carnet : une ligne par moment', async () => {
+    const { env, state } = bench([withSource]);
+    const host = await mount(<CarnetBody env={env} />);
+    await settle();
+    await click(by(host, 'data-carnet-retake'));
+    state.entries = [{ ...withSource, frameId: 'royaumes.voix-2' }];
+    await click(host.querySelector<HTMLElement>('[data-photo-close]'));
+    await settle();
+    expect(host.querySelectorAll('[data-carnet-entry]')).toHaveLength(1);
+    expect(host.querySelector('[role="dialog"]')).toBeNull();
+  });
+});
+
 describe('les moments en attente', () => {
   const trophy = achievementMoment('achievement.first_voice');
   const entries = [pending(trophy, '2026-10-03T10:00:00.000Z', '2026-10-10T10:00:00.000Z')];

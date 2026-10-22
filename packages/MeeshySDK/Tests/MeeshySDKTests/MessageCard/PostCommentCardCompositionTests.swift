@@ -183,6 +183,28 @@ final class PostCommentCardCompositionTests: XCTestCase {
         }
     }
 
+    /// #11783 — un post ou un réel composé avec la SCÈNE porte `storyEffects` (presque tous ceux
+    /// de production) : il ne disparaît pas. Il restait en tête 20 h, comme une story, puis plus jamais.
+    func test_postHead_aScenePostOrReel_doesNotExpireLikeAStory_andHeadsWithItsOwnVisual() throws {
+        let video = FeedMedia(id: "vid", type: .video, url: "https://cdn.test/v.mp4", width: 1080, height: 1920)
+        for type in ["POST", "REEL"] {
+            var post = Self.makePost(type: type, media: [Self.photo, video])
+            post.storyEffects = StoryEffects()
+            let twoDaysLater = Self.at(0).addingTimeInterval(2 * 24 * 3600)
+            let source = PostCommentCardSource(post: post, target: Self.root, thread: [], viewer: Self.viewer, now: twoDaysLater)
+            XCTAssertEqual(PostCommentCardComposition.modes(of: source), [.postAndComment, .commentAlone], type)
+            let subject = try XCTUnwrap(Self.subject(source, .postAndComment), type)
+            XCTAssertEqual(subject.heroID, "pic", type)
+            XCTAssertEqual(subject.media.first?.fileURL, "https://cdn.test/pic.jpg", type)
+        }
+    }
+
+    func test_postHead_aScenePostWithoutAnyMedia_isNotPutOnTop_likeTheWeb() {
+        var post = Self.makePost(type: "POST")
+        post.storyEffects = StoryEffects()
+        XCTAssertEqual(PostCommentCardComposition.modes(of: Self.source(post: post, target: Self.root)), [.commentAlone])
+    }
+
     func test_postHead_aPostWithOnlyAPhoto_isPutOnTopWithItsThumbnail() throws {
         let photo = FeedMedia(id: "pic", type: .image, url: "https://cdn.test/pic.jpg", width: 400, height: 300)
         let source = Self.source(post: Self.makePost(content: "  ", media: [photo]), target: Self.root)
@@ -318,6 +340,86 @@ final class PostCommentCardCompositionTests: XCTestCase {
                                         formatDate: { _ in "" })
         XCTAssertEqual(input.disposition.heroMediaID, "pic")
         XCTAssertEqual(input.disposition.heroVisual(of: input.media)?.id, "pic")
+    }
+
+    // MARK: - Le média de tête, choisi (#11783)
+
+    private static let clip = FeedMedia(id: "vid", type: .video, url: "https://cdn.test/v.mp4", thumbnailUrl: "https://cdn.test/v.jpg",
+                                        width: 1080, height: 1920, duration: 8)
+    private static let voice = FeedMedia(id: "aud", type: .audio, url: "https://cdn.test/a.m4a", duration: 5)
+
+    private static func subject(_ source: PostCommentCardSource, head: String?) -> MessageCardSubject? {
+        PostCommentCardComposition.subject(of: source, mode: .postAndComment, showsPost: true, title: "Fil",
+                                           foldedLabel: { "+\($0)" }, headMediaID: head)
+    }
+
+    func test_headMedia_offersEveryMediaOfThePost_inItsOrder_imageVideoAndSound() {
+        let source = Self.source(post: Self.makePost(media: [Self.photo, Self.clip, Self.voice]), target: Self.root)
+        XCTAssertEqual(PostCommentCardComposition.headMedia(of: source).map(\.media.id), ["pic", "vid", "aud"])
+        XCTAssertEqual(PostCommentCardComposition.headMedia(of: source).map(\.media.kind), [.image, .video, .audio])
+    }
+
+    func test_headMedia_byDefault_theFirstVisualHeadsTheCard_evenAfterASound() throws {
+        let source = Self.source(post: Self.makePost(media: [Self.voice, Self.clip, Self.photo]), target: Self.root)
+        XCTAssertEqual(PostCommentCardComposition.defaultHeadMediaID(of: source), "vid")
+        XCTAssertEqual(try XCTUnwrap(Self.subject(source, head: nil)).heroID, "vid")
+    }
+
+    func test_headMedia_theChosenVideoBecomesTheHero() throws {
+        let source = Self.source(post: Self.makePost(media: [Self.photo, Self.clip, Self.voice]), target: Self.root)
+        let subject = try XCTUnwrap(Self.subject(source, head: "vid"))
+        XCTAssertEqual(subject.heroID, "vid")
+        XCTAssertEqual(subject.media.first?.media.id, "vid")
+        XCTAssertFalse(subject.media.contains { $0.media.id == "pic" }, "un seul média du support en tête")
+    }
+
+    func test_headMedia_theChosenSoundHeadsTheCardAsASound_notAHero() throws {
+        let source = Self.source(post: Self.makePost(content: " ", media: [Self.photo, Self.voice]), target: Self.root)
+        let subject = try XCTUnwrap(Self.subject(source, head: "aud"))
+        XCTAssertNil(subject.heroID)
+        XCTAssertEqual(subject.media.first?.media.kind, .audio)
+        XCTAssertEqual(subject.media.first?.media.id, "aud")
+        XCTAssertNil(subject.media.first?.author, "le son du support ne porte pas de signature")
+        XCTAssertEqual(subject.quoted, MessageCardPart(author: "Awa", text: "🎤", handle: "awa"))
+    }
+
+    func test_headMedia_aSoundOnlyReel_headsWithItsSound() throws {
+        let source = Self.source(post: Self.makePost(type: "REEL", media: [Self.voice]), target: Self.root)
+        XCTAssertEqual(PostCommentCardComposition.defaultHeadMediaID(of: source), "aud")
+        let subject = try XCTUnwrap(Self.subject(source, head: nil))
+        XCTAssertEqual(subject.media.map(\.media.id), ["aud"])
+    }
+
+    func test_headMedia_anUnknownChoiceFallsBackToTheDefault() throws {
+        let source = Self.source(post: Self.makePost(media: [Self.photo, Self.clip]), target: Self.root)
+        XCTAssertEqual(try XCTUnwrap(Self.subject(source, head: "gone")).heroID, "pic")
+    }
+
+    func test_headMedia_aStoryOffersOnlyTheVisualThatRepresentsIt() {
+        let source = Self.storySource(Self.makeStory(media: [Self.photo, Self.clip]))
+        XCTAssertEqual(PostCommentCardComposition.headMedia(of: source).map(\.media.id), ["pic"])
+    }
+
+    func test_headMedia_nothingWhenTheSupportIsWithheld() {
+        let source = Self.source(post: Self.makePost(media: [Self.photo, Self.clip], visibility: "FRIENDS"), target: Self.root)
+        XCTAssertTrue(PostCommentCardComposition.headMedia(of: source).isEmpty)
+    }
+
+    // MARK: - L'audience qui retient le support se DIT (#11783)
+
+    func test_withheldByAudience_aRestrictedPostOrStory_isSaid() {
+        for visibility in Self.restrictedAudiences {
+            let post = Self.makePost(media: [Self.photo], visibility: visibility)
+            XCTAssertTrue(PostCommentCardComposition.withheldByAudience(Self.source(post: post, target: Self.root)), "\(visibility ?? "nil")")
+            XCTAssertTrue(PostCommentCardComposition.withheldByAudience(Self.storySource(Self.makeStory(media: [Self.photo], visibility: visibility))))
+        }
+    }
+
+    func test_withheldByAudience_neverForAPublicSupport_norForAnotherReason() {
+        XCTAssertFalse(PostCommentCardComposition.withheldByAudience(Self.source(post: Self.makePost(media: [Self.photo]), target: Self.root)))
+        XCTAssertFalse(PostCommentCardComposition.withheldByAudience(Self.source(post: nil, target: Self.root)))
+        let expired = Self.makeStory(media: [Self.photo], expiresAt: Self.now.addingTimeInterval(-1), visibility: "FRIENDS")
+        XCTAssertFalse(PostCommentCardComposition.withheldByAudience(Self.storySource(expired)), "une story échue ne s'imagerait pas même publique")
     }
 
     // MARK: - L'imbrication (#10915)

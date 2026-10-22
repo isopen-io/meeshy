@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.work.WorkManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.net.URLDecoder
+import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -20,79 +21,34 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheClock
-import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.call.ActiveCallRepository
 import me.meeshy.sdk.chat.ConversationDraftStore
-import me.meeshy.sdk.chat.LocallyHiddenMessages
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
 import me.meeshy.sdk.chat.StarredMessagesStore
+import me.meeshy.sdk.composer.SlowModePolicy
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.conversation.LocalMessage
-import me.meeshy.sdk.conversation.LocalSendState
 import me.meeshy.sdk.conversation.MessageRepository
-import me.meeshy.ui.component.bubble.LanguageFlagTapResolver
-import me.meeshy.sdk.composer.ComposerAffordances
-import me.meeshy.sdk.composer.ComposerAttachmentPolicy
-import me.meeshy.sdk.composer.ComposerSendGate
-import me.meeshy.sdk.composer.ComposerSendKind
-import me.meeshy.sdk.composer.SlowModePolicy
-import me.meeshy.sdk.composer.SlowModeState
-import me.meeshy.sdk.lang.ComposeLanguageDetector
 import me.meeshy.sdk.lang.LanguageResolver
-import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.sdk.model.ComposerLanguage
-import me.meeshy.sdk.model.ComposerLanguageState
-import me.meeshy.sdk.model.SentimentAnalyzer
-import me.meeshy.sdk.model.SentimentLevel
-import me.meeshy.sdk.media.MediaUploadItem
 import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.media.NetworkConditionMonitor
-import me.meeshy.sdk.model.ApiMessage
-import me.meeshy.sdk.model.ApiMessageAttachment
-import me.meeshy.sdk.model.AttachmentMessageType
-import me.meeshy.sdk.model.MimeTypeResolver
-import me.meeshy.sdk.model.NetworkCondition
-import me.meeshy.sdk.model.call.ActiveCallSession
-import me.meeshy.sdk.model.ActiveLiveLocation
-import me.meeshy.sdk.model.ConversationDraft
-import me.meeshy.sdk.model.isWorthPersisting
-import me.meeshy.sdk.model.EmojiCatalog
-import me.meeshy.sdk.model.LiveLocationEventFold
-import me.meeshy.sdk.model.LiveLocationSessions
-import me.meeshy.sdk.model.EmojiUsageRanker
-import me.meeshy.sdk.model.MeeshyUser
-import me.meeshy.sdk.mention.MentionAutocompleteState
-import me.meeshy.sdk.mention.MentionComposer
 import me.meeshy.sdk.mention.MentionSearch
-import me.meeshy.sdk.mention.applyRemote
-import me.meeshy.sdk.mention.onTextChange
-import me.meeshy.sdk.mention.reset
-import me.meeshy.sdk.mention.select
-import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.EphemeralDuration
-import me.meeshy.sdk.model.MessageEditability
-import me.meeshy.sdk.model.MessageEffects
-import me.meeshy.sdk.model.MessageEffectsEditor
+import me.meeshy.sdk.model.LiveLocationEventFold
+import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.MessagePinToggle
-import me.meeshy.sdk.model.isoToEpochMillisOrNull
+import me.meeshy.sdk.model.NetworkCondition
 import me.meeshy.sdk.model.PinAction
-import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.StarredAttachmentKind
 import me.meeshy.sdk.model.StarredMessage
-import me.meeshy.sdk.model.isoToEpochMillisOrNull
-import me.meeshy.sdk.model.ParticipantPermissions
-import me.meeshy.sdk.model.ReactionUpdateEvent
-import me.meeshy.sdk.model.UserPresence
-import me.meeshy.sdk.model.UserStatusEvent
+import me.meeshy.sdk.model.report.ReportReason
 import me.meeshy.sdk.net.MeeshyConfig
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.outbox.OutboxFlushWorker
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.reaction.EmojiUsageStore
-import me.meeshy.sdk.model.report.ReportReason
-import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.reaction.ReactionRepository
 import me.meeshy.sdk.report.ReportRepository
-import me.meeshy.sdk.util.resolveMediaUrl
 import me.meeshy.sdk.session.AnonymousSessionStore
 import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
@@ -101,242 +57,26 @@ import me.meeshy.sdk.theme.accentHex
 import me.meeshy.sdk.theme.displayTitle
 import me.meeshy.sdk.theme.otherParticipantUserId
 import me.meeshy.ui.component.bubble.BubbleContent
-import me.meeshy.ui.component.bubble.MessageDetailExplorer
-import me.meeshy.ui.component.bubble.MessageLanguageExplorer
-import javax.inject.Inject
-
-data class ChatUiState(
-    /** This conversation's id — lets header actions (e.g. the admin settings sheet)
-     * bind a sibling ViewModel without re-reading the nav argument. */
-    val conversationId: String = "",
-    val messages: List<BubbleContent> = emptyList(),
-    /** L'appel encore actif serveur-side pour CETTE conversation (probe REST
-     * active-call) — alimente la pill « Rejoindre » du header (parité iOS
-     * b69509366 / bulle call-live web) après un crash/relaunch mid-call. Null
-     * quand aucun appel n'est en cours ou que la sonde échoue. */
-    val activeCall: ActiveCallSession? = null,
-    val draft: String = "",
-    val draftRevision: Int = 0,
-    val isSyncing: Boolean = false,
-    val showSkeleton: Boolean = false,
-    val errorMessage: String? = null,
-    val typingParticipants: List<TypingParticipant> = emptyList(),
-    val conversationTitle: String? = null,
-    val memberCount: Int = 0,
-    val isGroup: Boolean = false,
-    val accentColorHex: String? = null,
-    val actionMessageId: String? = null,
-    val emojiPickerMessageId: String? = null,
-    val quickReactions: List<String> = EmojiCatalog.defaultQuickReactions,
-    val editingMessageId: String? = null,
-    val replyingToMessageId: String? = null,
-    val ownReactions: Map<String, Set<String>> = emptyMap(),
-    val isLoadingOlder: Boolean = false,
-    val hasMoreOlder: Boolean = true,
-    val imageViewer: ConversationGallery? = null,
-    val scrollToMessageId: String? = null,
-    /** The first unread message's id — the "new messages" boundary, latched once
-     * from the initial unread count captured before the conversation is marked
-     * read (null = nothing unread on open). */
-    val firstUnreadMessageId: String? = null,
-    /** Flips true the moment the unread-boundary latch settles — whether it found
-     * a boundary or not. The one-shot open scroll waits for this so it never fires
-     * against an unresolved (possibly empty) window. */
-    val unreadBoundaryResolved: Boolean = false,
-    /** The conversation's encryption posture (e.g. `"e2ee"`), or `null` when the
-     * conversation is not encrypted. Drives the top-of-history E2EE notice. */
-    val encryptionMode: String? = null,
-    val search: ChatSearchState = ChatSearchState(),
-    val mention: MentionAutocompleteState = MentionAutocompleteState(),
-    val mentionDisplayNames: Map<String, String> = emptyMap(),
-    val reactionDetails: ReactionDetailsUiState? = null,
-    val isPinnedSheetOpen: Boolean = false,
-    val replyThreadParentId: String? = null,
-    val forward: ForwardUiState? = null,
-    val explorerMessageId: String? = null,
-    val translatingLanguages: Set<String> = emptySet(),
-    val languageExplorer: MessageLanguageExplorer? = null,
-    /** The open report-a-message sheet, or `null` when it is closed. Drives [ReportMessageForm]. */
-    val reportForm: ReportMessageForm? = null,
-    /** The composer's armed message effects — the selection the effects picker edits
-     * and [ChatViewModel.send] stamps onto the outgoing message. Empty = a plain send. */
-    val pendingEffects: MessageEffects = MessageEffects(),
-    /** Whether the effects-picker bottom sheet is presented. */
-    val isEffectsPickerOpen: Boolean = false,
-    /** A large paste captured into a clipboard-content attachment, previewed above the
-     * composer until sent or removed. Null when no paste has been captured. */
-    val clipboardContent: ClipboardContent? = null,
-    /** Live-location sessions broadcast by conversation participants, folded from the
-     * `location:live-*` socket events (see [LiveLocationEventFold]). Drives the badges
-     * surfaced above the message list. */
-    val liveLocations: LiveLocationSessions = LiveLocationSessions.EMPTY,
-    /** The viewer's hardened send permissions for THIS conversation, or `null` for a
-     * registered member (the full posture). Populated from the anonymous guest
-     * session's [ParticipantPermissions] when the viewer joined via a share link;
-     * a normal member never carries a stored anonymous session, so it stays null. */
-    val composerPermissions: ParticipantPermissions? = null,
-    /** The conversation's slow-mode interval in seconds, or `null`/`0` when off.
-     * Carried from the loaded conversation; feeds [slowModeState]. */
-    val slowModeSeconds: Int? = null,
-    /** Whether the viewer's conversation role (moderator+) bypasses slow mode.
-     * Computed once per conversation load via [SlowModePolicy.isExemptRole]. */
-    val slowModeExempt: Boolean = false,
-    /** When the viewer last sent a message in this conversation (epoch millis),
-     * or `null` if not this session. Advances the slow-mode cooldown. */
-    val lastSelfSentAtMillis: Long? = null,
-    /** The other participant's userId in a direct conversation (`null` for a group,
-     * or before the conversation has loaded) — the key [headerPresence] resolves
-     * against [presenceByUserId]. Port of iOS `ConversationView.headerPresenceState`'s
-     * `conversation?.participantUserId` guard. */
-    val directPeerUserId: String? = null,
-    /** Live `user:status`/`presence:snapshot` frames, keyed by userId — mirrors
-     * `ConversationListUiState.presenceByUserId`. */
-    val presenceByUserId: Map<String, UserStatusEvent> = emptyMap(),
-    /** Mirrors the same `networkConditionMonitor` reading already threaded into
-     * `toBubbles` (the per-message hourglass) — feeds the scroll-to-bottom control's
-     * offline indicator ([ScrollControlContent.of]'s `isOffline`), port of iOS
-     * `ConversationScrollControlsView.isOffline`. */
-    val isOffline: Boolean = false,
-    /** The composer's live source-language state — the "smart context zone" pill.
-     * Follows on-device detection as the viewer types, freezes at the 10-word lock,
-     * and honours a manual pick from the language picker ([ComposerLanguageState]). */
-    val composerLanguage: ComposerLanguageState = ComposerLanguageState(),
-    /** The fallback language the composer pill shows before any detection — the
-     * viewer's resolved content language, seeded once the session loads. Only the
-     * DISPLAY fallback; [ChatViewModel.send] resolves it authoritatively per user. */
-    val composerLanguageSeed: String = ComposerLanguage.DEFAULT,
-    /** The in-flight/last "open"/"share" of a FILE attachment (tap → download → open),
-     * driven by [ChatViewModel.onFileAttachmentOpen] / [ChatViewModel.onFileAttachmentShare].
-     * `null` when nothing is downloading and nothing needs surfacing. */
-    val fileDownload: FileAttachmentDownloadUiState? = null,
-) {
-    val canSend: Boolean get() = draft.isNotBlank() || clipboardContent != null
-
-    /** The composer's live slow-mode posture at [nowMillis] — whether the send
-     * action is allowed and, if not, how many seconds remain. Pure derivation over
-     * [SlowModePolicy]; the Compose screen ticks [nowMillis] to animate the
-     * countdown, the ViewModel reads it to gate [ChatViewModel.send]. */
-    fun slowModeState(nowMillis: Long): SlowModeState =
-        SlowModePolicy.evaluate(
-            slowModeSeconds = slowModeSeconds,
-            lastSelfSentAtMillis = lastSelfSentAtMillis,
-            nowMillis = nowMillis,
-            isExempt = slowModeExempt,
-        )
-
-    /** The concrete affordances the composer may offer, derived from
-     * [composerPermissions] via the pure [ComposerAttachmentPolicy]. A registered
-     * member (null permissions) gets every affordance; a share-link guest is gated
-     * to the capabilities the join hardened. */
-    val composerAffordances: ComposerAffordances
-        get() = ComposerAttachmentPolicy.affordances(composerPermissions)
-    val isEditing: Boolean get() = editingMessageId != null
-
-    /** Whether the end-to-end-encryption notice sits at the top of the list — the
-     * conversation is encrypted, the reader has reached the start of history
-     * ([hasMoreOlder] false), and the cold-start skeleton ([showSkeleton]) is down.
-     * Pure derivation over [EncryptionDisclaimer]. */
-    val showEncryptionDisclaimer: Boolean
-        get() = EncryptionDisclaimer.shouldShow(
-            encryptionMode = encryptionMode,
-            hasOlderMessages = hasMoreOlder,
-            isLoadingInitial = showSkeleton,
-        )
-
-    /** The live-location sessions to render as badges, in registry order. The badge
-     * self-terminates on expiry, so the raw session list is safe to surface directly. */
-    val liveLocationBadges: List<ActiveLiveLocation> get() = liveLocations.sessions.values.toList()
-
-    /** True when at least one effect is armed — drives the composer's active-effects accent. */
-    val hasPendingEffects: Boolean get() = pendingEffects.hasAnyEffect
-
-    /** The composer's live sentiment glyph, derived from the current [draft] via the
-     * pure [SentimentAnalyzer] (parity iOS `TextAnalyzer`/`SmartContextZone`, the
-     * dictionary scorer). Null when the composer is empty — no glyph is shown for a
-     * blank field; a non-blank draft with no sentiment words resolves to
-     * [SentimentLevel.NEUTRAL]. */
-    val composerSentiment: SentimentLevel?
-        get() = draft.takeIf { it.isNotBlank() }
-            ?.let { SentimentLevel.from(SentimentAnalyzer.score(it)) }
-
-    /** The language code the composer pill shows — the live detection/override
-     * resolved against [composerLanguageSeed]. Drives the pill glyph and the picker's
-     * current selection; the same value (resolved per-user) stamps `originalLanguage`. */
-    val composerLanguageCode: String
-        get() = composerLanguage.display(composerLanguageSeed)
-
-    /** Every currently-pinned message, newest-pin first — drives the pinned-messages sheet. */
-    val pinnedMessages: List<PinnedMessageRow> get() = PinnedMessagesList.of(messages.map { it.toPinnable() })
-
-    /** The pinned-message banner surfaced above the list, or null when nothing is pinned. */
-    val pinnedBanner: PinnedBanner? get() = PinnedMessages.of(messages.map { it.toPinnable() })
-
-    /**
-     * The focused reply-thread overlay for [replyThreadParentId], derived live from the
-     * loaded messages (a new reply appears in an open overlay). Null when closed, or when
-     * the parent has drained to no live reply / paged out. See [ReplyThreadOverlay].
-     */
-    val replyThreadOverlay: ReplyThreadOverlayModel? get() =
-        replyThreadParentId?.let { ReplyThreadOverlay.of(it, messages.map { m -> m.toThreadMessage() }) }
-
-    /**
-     * The chat header's live presence dot, or `null` for a group conversation or before any
-     * presence data has arrived for the peer — mirrors
-     * `ConversationListUiState.presenceStateFor`. Port of iOS
-     * `ConversationView.headerPresenceState`; unlike iOS the Android header has no avatar to
-     * dot, so this drives a small standalone indicator instead (see `ChatScreen`).
-     */
-    fun headerPresence(nowEpochMillis: Long): PresenceState? {
-        val id = directPeerUserId ?: return null
-        val event = presenceByUserId[id] ?: return null
-        return UserPresence(isOnline = event.isOnline, lastActiveAt = event.lastActiveAt).state(nowEpochMillis)
-    }
-}
 
 /**
- * State of the forward-picker sheet. `null` in [ChatUiState.forward] means the
- * sheet is closed. [sendingConversationId] gates the picker to one in-flight
- * forward at a time (parity with iOS, which disables every row while sending);
- * [sentConversationIds] keeps a checkmark on rows already forwarded to so the
- * user can forward one message to several conversations in one sitting.
+ * The conversation screen's ViewModel: it owns the single [ChatUiState] and the lifecycle
+ * (init wiring, socket frames, teardown), and delegates each responsibility to a controller
+ * built from its own constructor dependencies — [ChatComposerController] (draft, mentions,
+ * send), [ChatReactionController], [ChatTranslationController] (Prisme gestures) and
+ * [ChatReplyJumpController]. Its public functions keep their signatures; the screen never
+ * knows which controller answers.
+ *
+ * Further slices are contributed as [ChatController]s through the `@IntoSet` multibinding
+ * ([ChatControllerModule]); each holds its own state and is reached from [controllers] — no
+ * lot adds a field to [ChatUiState].
  */
-data class ForwardUiState(
-    val sourceMessageId: String,
-    val query: String = "",
-    val targets: List<ForwardTarget> = emptyList(),
-    val sendingConversationId: String? = null,
-    val sentConversationIds: Set<String> = emptySet(),
-)
-
-private fun BubbleContent.toPinnable(): PinnableMessage = object : PinnableMessage {
-    override val id: String = messageId
-    override val pinnedAtIso: String? = this@toPinnable.pinnedAtIso
-    override val isDeleted: Boolean = this@toPinnable.isDeleted
-    override val isOutgoing: Boolean = this@toPinnable.isOutgoing
-    override val senderName: String? = this@toPinnable.senderName
-    override val text: String = this@toPinnable.text
-    override val hasImage: Boolean = images.isNotEmpty()
-    override val hasFile: Boolean = files.isNotEmpty()
-}
-
-private fun BubbleContent.toThreadMessage(): ThreadMessage = object : ThreadMessage {
-    override val id: String = messageId
-    override val replyToId: String? = this@toThreadMessage.replyToId
-    override val isDeleted: Boolean = this@toThreadMessage.isDeleted
-    override val isOutgoing: Boolean = this@toThreadMessage.isOutgoing
-    override val senderName: String? = this@toThreadMessage.senderName
-    override val text: String = this@toThreadMessage.text
-    override val hasImage: Boolean = images.isNotEmpty()
-    override val hasFile: Boolean = files.isNotEmpty()
-}
-
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val messageRepository: MessageRepository,
     private val conversationRepository: ConversationRepository,
     private val sessionRepository: SessionRepository,
-    private val reactionRepository: ReactionRepository,
-    private val emojiUsageStore: EmojiUsageStore,
+    reactionRepository: ReactionRepository,
+    emojiUsageStore: EmojiUsageStore,
     private val locallyHiddenStore: LocallyHiddenMessagesStore,
     private val starredStore: StarredMessagesStore,
     private val messageSocketManager: MessageSocketManager,
@@ -344,16 +84,17 @@ class ChatViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val config: MeeshyConfig,
     private val clock: CacheClock,
-    private val draftStore: ConversationDraftStore,
+    draftStore: ConversationDraftStore,
     private val activeCallRepository: ActiveCallRepository,
     private val reportRepository: ReportRepository,
-    private val mediaUploadQueue: MediaUploadQueue,
-    private val mentionSearch: MentionSearch,
-    private val anonymousSessionStore: AnonymousSessionStore,
+    mediaUploadQueue: MediaUploadQueue,
+    mentionSearch: MentionSearch,
+    anonymousSessionStore: AnonymousSessionStore,
     private val privacyPreferencesStore: PrivacyPreferencesStore,
     private val networkConditionMonitor: NetworkConditionMonitor,
     private val fileAttachmentDownloader: FileAttachmentDownloader,
     savedStateHandle: SavedStateHandle,
+    contributedControllers: Set<@JvmSuppressWildcards ChatController> = emptySet(),
 ) : ViewModel() {
 
     private val conversationId: String = checkNotNull(savedStateHandle[CONVERSATION_ID_ARG]) {
@@ -363,7 +104,7 @@ class ChatViewModel @Inject constructor(
     /**
      * An incoming quick-reply/deep-link draft (`meeshy://conversation/{id}?draft=...`),
      * e.g. from a future Quick Reply widget. Seeded into [_state] below so it wins over
-     * whatever [DraftAutosave.restore] would otherwise restore from [draftStore] — that
+     * whatever [DraftAutosave.restore] would otherwise restore from the draft store — that
      * function's own idle guard (`currentDraft.isNotBlank() -> null`) already refuses to
      * clobber a non-empty composer, so no separate precedence rule is needed here; a
      * blank/absent arg leaves the composer empty exactly as before, letting the stored
@@ -376,60 +117,24 @@ class ChatViewModel @Inject constructor(
     private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
 
-    private val ownReactions = MutableStateFlow<Map<String, Set<String>>>(emptyMap())
-    private val showingOriginal = MutableStateFlow<Set<String>>(emptySet())
-
-    /**
-     * messageId -> the language code the viewer switched that bubble to via a flag
-     * tap. Absent = default Prisme resolution (preferred translation, or the
-     * original toggled through [showingOriginal]).
-     */
-    private val activeLanguageOverride = MutableStateFlow<Map<String, String>>(emptyMap())
-
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
-    private var latestMessages: List<LocalMessage> = emptyList()
-    private var fileDownloadJob: Job? = null
 
     /**
      * #5189 — per-message memoization for [BubbleContentBuilder.build], owned
      * by this ViewModel instance (one cache per conversation screen). See its
-     * own doc-comment for why the combine chain feeding [toBubbles] must not
+     * own doc-comment for why the combine chain feeding the bubble projection must not
      * re-run Prisme resolution for a message none of the changed inputs concern.
      */
     private val bubbleMemo = BubbleMemoCache()
 
     /**
-     * Attachments already downloaded this session, by [ApiMessageAttachment.id] — a completed
-     * transfer's terminal [FileAttachmentDownloadState.Completed] (the reusable `localUri`).
-     * [startFileDownload] serves straight from here on a repeat tap instead of re-enqueueing a
-     * full system [android.app.DownloadManager] transfer, matching the reuse this ViewModel's
-     * `onFileAttachmentOpen` doc-comment promises.
+     * The cached message window behind the bubbles, mirrored from the cache stream — read
+     * by the controllers and the language-explorer projection, which rebuilds live off it
+     * (a translation landing → new content).
      */
-    private val completedFileDownloads = mutableMapOf<String, FileAttachmentDownloadState.Completed>()
-
-    /**
-     * Reactive mirror of [latestMessages] so the language-explorer projection can
-     * rebuild live off the same cache stream (a translation landing → new content).
-     */
-    private val latestMessagesFlow = MutableStateFlow<List<LocalMessage>>(emptyList())
-    private var allConversations: List<ApiConversation> = emptyList()
-    private var mentionRoster: List<MentionCandidate> = emptyList()
+    private val latestMessages = MutableStateFlow<List<LocalMessage>>(emptyList())
     private var avatarByUserId: Map<String, String?> = emptyMap()
-    private var isEmittingTyping = false
-    private var typingReemitJob: Job? = null
-    private var typingIdleJob: Job? = null
-    private var lastPersistedDraft: ConversationDraft? = null
-    private var draftPersistJob: Job? = null
-    private var mentionSearchJob: Job? = null
-
-    /**
-     * sourceMessageId -> target conversation currently being forwarded to.
-     * Durable across closeForward()/openForward() (unlike ForwardUiState, which
-     * is recreated on open) so a dismiss-and-reopen mid-send can't lose the
-     * in-flight guard and let a second forwardTo() double-send the message.
-     */
-    private val sendingForwards = mutableMapOf<String, String>()
 
     /**
      * The conversation's unread count captured from the cache **before** the open
@@ -437,6 +142,69 @@ class ChatViewModel @Inject constructor(
      * first conversation emission has been read.
      */
     private val initialUnreadCount = MutableStateFlow<Int?>(null)
+
+    private val screenState = ChatStateAccess(_state)
+
+    private val composer = ChatComposerController(
+        scope = viewModelScope,
+        state = screenState,
+        conversationId = conversationId,
+        messages = latestMessages,
+        messageRepository = messageRepository,
+        sessionRepository = sessionRepository,
+        draftStore = draftStore,
+        mediaUploadQueue = mediaUploadQueue,
+        mentionSearch = mentionSearch,
+        anonymousSessionStore = anonymousSessionStore,
+        messageSocketManager = messageSocketManager,
+        workManager = workManager,
+        clock = clock,
+    )
+
+    private val reactions = ChatReactionController(
+        scope = viewModelScope,
+        state = screenState,
+        conversationId = conversationId,
+        messageRepository = messageRepository,
+        reactionRepository = reactionRepository,
+        sessionRepository = sessionRepository,
+        emojiUsageStore = emojiUsageStore,
+        messageSocketManager = messageSocketManager,
+        workManager = workManager,
+    )
+
+    private val translation = ChatTranslationController(
+        scope = viewModelScope,
+        state = screenState,
+        messages = latestMessages,
+        messageRepository = messageRepository,
+        sessionRepository = sessionRepository,
+        messageSocketManager = messageSocketManager,
+        conversationId = conversationId,
+    )
+
+    private val replyJump = ChatReplyJumpController(screenState)
+
+    private val forward = ChatForwardController(
+        scope = viewModelScope,
+        state = screenState,
+        conversationId = conversationId,
+        messages = latestMessages,
+        messageRepository = messageRepository,
+        sessionRepository = sessionRepository,
+        workManager = workManager,
+    )
+
+    private val fileDownload = ChatFileDownloadController(
+        scope = viewModelScope,
+        state = screenState,
+        messages = latestMessages,
+        downloader = fileAttachmentDownloader,
+        config = config,
+    )
+
+    /** The controllers lots contributed to this conversation, looked up by type. */
+    val controllers: ChatControllers = ChatControllers(contributedControllers)
 
     init {
         // Capture the unread count from the cached conversation BEFORE marking it
@@ -460,41 +228,13 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch { loadComposerPermissions() }
+        viewModelScope.launch { composer.loadComposerPermissions() }
 
         refreshActiveCall()
 
-        viewModelScope.launch {
-            val stored = draftStore.load(conversationId)
-            lastPersistedDraft = stored?.takeIf { it.isWorthPersisting }
-            _state.update { current ->
-                val restored = DraftAutosave.restore(stored, current.draft, current.isEditing)
-                if (restored != null) {
-                    current.copy(
-                        draft = restored.text,
-                        draftRevision = current.draftRevision + 1,
-                        replyingToMessageId = restored.replyToId,
-                        pendingEffects = restored.effects,
-                        composerLanguage = restored.selectedLanguage
-                            ?.let { current.composerLanguage.withManualPick(it) }
-                            ?: current.composerLanguage,
-                    )
-                } else {
-                    current
-                }
-            }
-        }
+        viewModelScope.launch { composer.restoreStoredDraft() }
 
-        viewModelScope.launch {
-            emojiUsageStore.usage.collect { usage ->
-                val ordered = EmojiUsageRanker.topEmojis(
-                    usage = usage,
-                    defaults = EmojiCatalog.defaultQuickReactions,
-                    count = QUICK_REACTION_COUNT,
-                )
-                _state.update { it.copy(quickReactions = ordered) }
-            }
-        }
+        reactions.start()
 
         viewModelScope.launch {
             conversationRepository.conversationStream(conversationId).collect { conversation ->
@@ -504,7 +244,7 @@ class ChatViewModel @Inject constructor(
                     participants = conversation.participants,
                     excludeUserId = currentUserId,
                 )
-                mentionRoster = roster
+                composer.updateMentionRoster(roster)
                 avatarByUserId = conversation.participants
                     .associate { (it.userId ?: it.id) to it.avatar }
                 recipientCount.value = conversation.participants
@@ -538,8 +278,7 @@ class ChatViewModel @Inject constructor(
 
         viewModelScope.launch {
             conversationRepository.conversationsStream().collect { result ->
-                allConversations = result.valueOrNull() ?: allConversations
-                recomputeForwardTargets()
+                forward.onConversationsLoaded(result.windowOrNull())
             }
         }
 
@@ -554,8 +293,8 @@ class ChatViewModel @Inject constructor(
                     },
                 ),
                 sessionRepository.currentUser,
-                ownReactions,
-                showingOriginal,
+                reactions.ownReactions,
+                translation.showingOriginal,
                 recipientCount,
             ) { result, user, own, originals, recipients ->
                 BubbleInputs(result, user, own, originals, recipients)
@@ -564,7 +303,7 @@ class ChatViewModel @Inject constructor(
                 .combine(starredStore.starred) { (inputs, hidden), starred ->
                     Triple(inputs, hidden, starred.ids)
                 }
-                .combine(activeLanguageOverride) { triple, overrides -> triple to overrides }
+                .combine(translation.activeLanguageOverride) { triple, overrides -> triple to overrides }
                 .combine(
                     privacyPreferencesStore.preferences
                         .map { it.showReadReceipts }
@@ -580,8 +319,7 @@ class ChatViewModel @Inject constructor(
                     val (triple, overrides) = pair
                     val (inputs, hidden, starredIds) = triple
                     val (result, user, own, originals, recipients) = inputs
-                    latestMessages = result.valueOrNull() ?: latestMessages
-                    latestMessagesFlow.value = latestMessages
+                    latestMessages.value = result.windowOrNull() ?: latestMessages.value
                     _state.update { current ->
                         val next = current.applyResult(
                             result, user, own, originals, config.apiBaseUrl, recipients, hidden, starredIds,
@@ -595,19 +333,7 @@ class ChatViewModel @Inject constructor(
                 }
         }
 
-        viewModelScope.launch {
-            combine(
-                _state.map { it.explorerMessageId }.distinctUntilChanged(),
-                latestMessagesFlow,
-                sessionRepository.currentUser,
-                _state.map { it.translatingLanguages }.distinctUntilChanged(),
-                activeLanguageOverride,
-            ) { explorerId, messages, user, translating, overrides ->
-                buildLanguageExplorer(explorerId, messages, user, translating, overrides)
-            }
-                .distinctUntilChanged()
-                .collect { explorer -> _state.update { it.copy(languageExplorer = explorer) } }
-        }
+        translation.start()
 
         viewModelScope.launch {
             launch {
@@ -657,17 +383,6 @@ class ChatViewModel @Inject constructor(
                 }
             }
             launch {
-                messageSocketManager.translationReceived.collect { event ->
-                    if (event.conversationId == conversationId) {
-                        messageRepository.applyTranslation(
-                            event.messageId,
-                            event.targetLanguage,
-                            event.translatedContent,
-                        )
-                    }
-                }
-            }
-            launch {
                 messageSocketManager.transcriptionReady.collect { event ->
                     if (event.conversationId == conversationId) {
                         messageRepository.applyTranscription(
@@ -699,16 +414,6 @@ class ChatViewModel @Inject constructor(
                             audio.ttsModel,
                         )
                     }
-                }
-            }
-            launch {
-                messageSocketManager.reactionAdded.collect { event ->
-                    applyPeerReactionEvent(event, delta = 1)
-                }
-            }
-            launch {
-                messageSocketManager.reactionRemoved.collect { event ->
-                    applyPeerReactionEvent(event, delta = -1)
                 }
             }
             launch {
@@ -783,6 +488,8 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
+
+        controllers.attachAll(ChatScreenHost(conversationId, viewModelScope, screenState, latestMessages))
     }
 
     /**
@@ -828,24 +535,6 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Fold the viewer's hardened send permissions into the composer state. A
-     * share-link guest carries a persisted [AnonymousSessionStore] context whose
-     * capabilities gate the composer; a registered member has no stored anonymous
-     * session, so the permissions stay `null` and the composer keeps the full
-     * posture. A store failure degrades to the full posture (never a crash).
-     */
-    private suspend fun loadComposerPermissions() {
-        val permissions = try {
-            anonymousSessionStore.load()?.permissions
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            null
-        } ?: return
-        _state.update { it.copy(composerPermissions = permissions) }
-    }
-
-    /**
      * Re-probe the server for a still-active call in this conversation. Called
      * on init and by the screen when it resumes (returning from the call, an
      * app relaunch) so the « Rejoindre » pill reflects the server truth: it
@@ -860,445 +549,142 @@ class ChatViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Own echoes are skipped — the optimistic toggle already moved the cached
-     * summary; replaying the echo would double-count it.
-     */
-    private suspend fun applyPeerReactionEvent(event: ReactionUpdateEvent, delta: Int) {
-        if (event.conversationId != conversationId) return
-        if (event.userId == sessionRepository.currentUser.value?.id) return
-        messageRepository.applyReactionDelta(event.messageId, event.emoji, delta)
-    }
-
     private fun removeTypingUser(userId: String) {
         _state.update { s -> s.copy(typingParticipants = TypingParticipants.stopped(s.typingParticipants, userId)) }
     }
 
-    fun onDraftChange(value: String) {
-        val detection = LargePasteDetector.detect(
-            previous = _state.value.draft,
-            current = value,
-            nowMillis = clock.nowMillis(),
-        )
-        if (detection is PasteDetection.Captured) {
-            _state.update {
-                it.copy(
-                    draft = "",
-                    draftRevision = it.draftRevision + 1,
-                    clipboardContent = detection.content,
-                    mention = it.mention.onTextChange("", mentionRoster),
-                    composerLanguage = it.composerLanguage.onDraftChanged(""),
-                )
-            }
-            mentionSearchJob?.cancel()
-            stopTypingEmission()
-            persistDraft("", _state.value.replyingToMessageId)
-            return
-        }
-        _state.update {
-            it.copy(
-                draft = value,
-                mention = it.mention.onTextChange(value, mentionRoster),
-                composerLanguage = it.composerLanguage.onDraftChanged(value),
-            )
-        }
-        maybeSearchRemoteMentions(_state.value.mention.activeQuery)
-        if (value.isBlank()) {
-            stopTypingEmission()
-        } else {
-            startTypingEmission()
-        }
-        persistDraft(value, _state.value.replyingToMessageId)
-    }
-
-    /** Discards a captured large-paste attachment (the preview chip's remove button). */
-    fun removeClipboardContent() {
-        _state.update { it.copy(clipboardContent = null) }
-    }
-
-    /**
-     * Overrides the composer's source language from the language picker. The pick
-     * wins over live detection and freezes further analysis until the composer is
-     * cleared on send (iOS `TextAnalyzer.setLanguageOverride`).
-     */
-    fun onComposerLanguagePicked(code: String) {
-        _state.update { it.copy(composerLanguage = it.composerLanguage.withManualPick(code)) }
-        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
-    }
-
-    /**
-     * Best-effort auto-save of the new-message composer to the durable
-     * [draftStore] (iOS `ConversationDraftManager`). Never persists while an
-     * edit is in flight — the edit content is not a draft — and skips the write
-     * entirely when the store already matches ([DraftAutosave.resolve] → [DraftPersist.None]).
-     * The single [draftPersistJob] coalesces rapid keystrokes to a last-write-wins.
-     * [replyToId] carries the currently-armed reply so it is persisted alongside the text
-     * (iOS app-side `DraftStore` reply-reference parity); the currently-armed
-     * [ChatUiState.pendingEffects] are read from state and persisted too, so a self-destruct
-     * duration or a confetti effect armed but not yet sent survives navigation (iOS
-     * `MessageDraft.effectFlags`/`isBlurEnabled`/`ephemeralDurationRawValue` parity). The manual
-     * composer-language pick ([ComposerLanguageState.manualOverride]) is likewise read from state
-     * and persisted, so a deliberate language override rides along the draft (iOS
-     * `MessageDraft.selectedLanguage` parity) — live detection is not persisted, it re-derives from
-     * the restored text.
-     */
-    private fun persistDraft(rawText: String, replyToId: String?) {
-        if (_state.value.isEditing) return
-        val decision = DraftAutosave.resolve(
-            conversationId = conversationId,
-            rawText = rawText,
-            replyToId = replyToId,
-            nowIso = java.time.Instant.ofEpochMilli(clock.nowMillis()).toString(),
-            previous = lastPersistedDraft,
-            effects = _state.value.pendingEffects,
-            selectedLanguage = _state.value.composerLanguage.manualOverride,
-        )
-        lastPersistedDraft = when (decision) {
-            is DraftPersist.Save -> decision.draft
-            is DraftPersist.Clear -> null
-            DraftPersist.None -> return
-        }
-        draftPersistJob?.cancel()
-        draftPersistJob = viewModelScope.launch {
-            try {
-                when (decision) {
-                    is DraftPersist.Save -> draftStore.save(decision.draft)
-                    is DraftPersist.Clear -> draftStore.clear(decision.conversationId)
-                    DraftPersist.None -> Unit
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // Draft persistence is best-effort; a failed write never disrupts composing.
-            }
-        }
-    }
-
-    /**
-     * Insert the picked candidate's handle into the draft (replacing the trailing
-     * `@fragment`), record it as a draft mention, and dismiss the suggestion panel.
-     */
-    fun onMentionSelected(candidate: MentionCandidate) {
-        mentionSearchJob?.cancel()
-        _state.update { current ->
-            val (newDraft, newMention) = current.mention.select(candidate, current.draft)
-            current.copy(draft = newDraft, draftRevision = current.draftRevision + 1, mention = newMention)
-        }
-    }
-
-    /**
-     * Fires a debounced directory lookup for the active `@fragment` and folds the
-     * results into the panel below the local roster. Mirrors iOS
-     * `MentionComposerController`: nothing runs for a dismissed panel or a query under
-     * two significant characters (the roster already covers those); a fresh keystroke
-     * cancels the previous in-flight lookup (300 ms debounce). The self-exclusion and
-     * local-first dedup live in the pure [MentionAutocompleteState.applyRemote] merge,
-     * which also drops a slow response whose fragment is already stale.
-     */
-    private fun maybeSearchRemoteMentions(query: String?) {
-        mentionSearchJob?.cancel()
-        if (query == null || !MentionComposer.shouldQueryRemote(query)) return
-        val currentUserId = sessionRepository.currentUser.value?.id
-        mentionSearchJob = viewModelScope.launch {
-            delay(MENTION_SEARCH_DEBOUNCE_MS)
-            val remote = try {
-                mentionSearch.search(query.trim())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                return@launch
-            }.filterNot { it.id == currentUserId }
-            _state.update { it.copy(mention = it.mention.applyRemote(query, remote)) }
-        }
-    }
-
-    /**
-     * Mirrors iOS ConversationSocketHandler: one `typing:start` on the first
-     * keystroke, re-emitted every 3 s while typing continues (server timeouts),
-     * one `typing:stop` after 3 s of silence, an emptied draft, or a send.
-     */
-    private fun startTypingEmission() {
-        if (!isEmittingTyping) {
-            isEmittingTyping = true
-            messageSocketManager.emitTypingStart(conversationId)
-            typingReemitJob = viewModelScope.launch {
-                while (true) {
-                    delay(TYPING_REEMIT_MS)
-                    messageSocketManager.emitTypingStart(conversationId)
-                }
-            }
-        }
-        typingIdleJob?.cancel()
-        typingIdleJob = viewModelScope.launch {
-            delay(TYPING_IDLE_MS)
-            stopTypingEmission()
-        }
-    }
-
-    private fun stopTypingEmission() {
-        typingReemitJob?.cancel()
-        typingReemitJob = null
-        typingIdleJob?.cancel()
-        typingIdleJob = null
-        if (!isEmittingTyping) return
-        isEmittingTyping = false
-        messageSocketManager.emitTypingStop(conversationId)
-    }
-
     override fun onCleared() {
-        stopTypingEmission()
+        composer.release()
+        controllers.detachAll()
         super.onCleared()
     }
 
-    fun send() {
-        val text = _state.value.draft.trim()
-        val clipboard = _state.value.clipboardContent
-        if (text.isEmpty() && clipboard == null) return
-        stopTypingEmission()
-        val editingId = _state.value.editingMessageId
-        if (editingId != null) {
-            applyEdit(editingId, text)
-            return
-        }
-        // Unified send gate: refuse a new send while a slow-mode cooldown is running
-        // or the viewer is read-only (edits above are exempt — they are not new
-        // messages). The draft is kept so the countdown's tick simply re-enables the
-        // send button.
-        val sentAtMillis = clock.nowMillis()
-        val gate = ComposerSendGate.evaluate(
-            ComposerSendKind.TEXT,
-            _state.value.composerAffordances,
-            _state.value.slowModeState(sentAtMillis),
-        )
-        if (!gate.allowed) return
-        val user = sessionRepository.currentUser.value ?: return
-        val replyToId = _state.value.replyingToMessageId
-        val effects = _state.value.pendingEffects
-        // The composer pill is the authoritative source language: its live detection
-        // or the viewer's manual override, resolved against the user's content language.
-        val languageCode = _state.value.composerLanguage.display(
-            fallback = LanguageResolver.resolveUserLanguage(user),
-        )
-        _state.update {
-            it.copy(
-                draft = "",
-                draftRevision = it.draftRevision + 1,
-                clipboardContent = null,
-                replyingToMessageId = null,
-                mention = it.mention.reset(),
-                pendingEffects = MessageEffects(),
-                isEffectsPickerOpen = false,
-                lastSelfSentAtMillis = sentAtMillis,
-                composerLanguage = ComposerLanguageState(),
-            )
-        }
-        persistDraft("", replyToId = null)
-        viewModelScope.launch {
-            try {
-                if (clipboard != null) {
-                    sendClipboardContent(text, clipboard, user, replyToId, effects)
-                } else {
-                    messageRepository.sendOptimistic(
-                        conversationId = conversationId,
-                        content = text,
-                        originalLanguage = languageCode,
-                        sender = user,
-                        replyToId = replyToId,
-                        effects = effects,
-                    )
-                }
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
-            }
-        }
-    }
+    // --- Composer -----------------------------------------------------------------------
 
-    /**
-     * Delivers a captured large paste as a real `text/plain` attachment through the
-     * durable upload→send chain: the bytes are queued for upload, the send is
-     * enqueued gated on that upload and carrying its cmid as a placeholder
-     * attachment id, and the drainer grafts the real gateway id in once the upload
-     * lands ([me.meeshy.sdk.conversation.MessageMediaWriteBack]). Surpasses iOS,
-     * which previews the clipboard chip but never sends it.
-     */
-    private suspend fun sendClipboardContent(
-        text: String,
-        clipboard: ClipboardContent,
-        user: MeeshyUser,
-        replyToId: String?,
-        effects: MessageEffects,
-    ) {
-        val bytes = clipboard.text.toByteArray(Charsets.UTF_8)
-        val uploadCmid = mediaUploadQueue.enqueue(
-            MediaUploadItem(
-                bytes = bytes,
-                fileName = CLIPBOARD_ATTACHMENT_NAME,
-                mimeType = CLIPBOARD_ATTACHMENT_MIME,
-            ),
-        )
-        messageRepository.sendOptimistic(
-            conversationId = conversationId,
-            content = text,
-            originalLanguage = ComposeLanguageDetector.detect(
-                text.ifBlank { clipboard.text },
-                fallback = LanguageResolver.resolveUserLanguage(user),
-            ),
-            sender = user,
-            replyToId = replyToId,
-            effects = effects,
-            messageType = "file",
-            attachmentUploadCmids = listOf(uploadCmid),
-            attachments = listOf(
-                ApiMessageAttachment(
-                    id = uploadCmid,
-                    fileName = CLIPBOARD_ATTACHMENT_NAME,
-                    originalName = CLIPBOARD_ATTACHMENT_NAME,
-                    mimeType = CLIPBOARD_ATTACHMENT_MIME,
-                    fileSize = bytes.size,
-                ),
-            ),
-        )
-    }
+    fun onDraftChange(value: String) = composer.onDraftChange(value)
 
-    /**
-     * Sends a file picked from the system document/photo picker through the same
-     * durable upload→graft→send chain the clipboard path already uses: the bytes
-     * are queued for upload, the send is enqueued gated on that upload and carrying
-     * its cmid as a placeholder attachment id, and the drainer grafts the real
-     * gateway id in once the upload lands. The message's coarse `messageType`
-     * (image/video/audio/file) is inferred from the resolved MIME via
-     * [AttachmentMessageType]; any text already in the composer rides along as the
-     * body and is cleared, mirroring [sendClipboardContent].
-     *
-     * A blank pick ([bytes] empty) or a signed-out session is inert. Note: audio
-     * picked here is delivered over REST like any other file — the socket audio
-     * pipeline (transcription/translation) is a separate slice; this path never
-     * triggers it.
-     */
-    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) {
-        if (bytes.isEmpty()) return
-        val user = sessionRepository.currentUser.value ?: return
-        val safeName = fileName.trim().ifBlank { DEFAULT_ATTACHMENT_NAME }
-        val mime = MimeTypeResolver.resolve(declaredMimeType, safeName)
-        val messageType = AttachmentMessageType.forMime(mime)
-        // Same unified gate the text path uses: a denied attachment capability or a
-        // running slow-mode cooldown refuses the pick before it leaves the composer.
-        // The "+" ladder stays visible during a cooldown, so this is where the block
-        // is really enforced — and a delivered attachment starts the cooldown too.
-        val sentAtMillis = clock.nowMillis()
-        val gate = ComposerSendGate.evaluate(
-            ComposerSendKind.fromMessageType(messageType),
-            _state.value.composerAffordances,
-            _state.value.slowModeState(sentAtMillis),
-        )
-        if (!gate.allowed) return
-        val text = _state.value.draft.trim()
-        val replyToId = _state.value.replyingToMessageId
-        val effects = _state.value.pendingEffects
-        val languageCode = _state.value.composerLanguage.display(
-            fallback = LanguageResolver.resolveUserLanguage(user),
-        )
-        stopTypingEmission()
-        _state.update {
-            it.copy(
-                draft = "",
-                draftRevision = it.draftRevision + 1,
-                replyingToMessageId = null,
-                mention = it.mention.reset(),
-                pendingEffects = MessageEffects(),
-                isEffectsPickerOpen = false,
-                lastSelfSentAtMillis = sentAtMillis,
-                composerLanguage = ComposerLanguageState(),
-            )
-        }
-        persistDraft("", replyToId = null)
-        viewModelScope.launch {
-            try {
-                val uploadCmid = mediaUploadQueue.enqueue(
-                    MediaUploadItem(bytes = bytes, fileName = safeName, mimeType = mime),
-                )
-                messageRepository.sendOptimistic(
-                    conversationId = conversationId,
-                    content = text,
-                    originalLanguage = languageCode,
-                    sender = user,
-                    replyToId = replyToId,
-                    effects = effects,
-                    messageType = messageType,
-                    attachmentUploadCmids = listOf(uploadCmid),
-                    attachments = listOf(
-                        ApiMessageAttachment(
-                            id = uploadCmid,
-                            fileName = safeName,
-                            originalName = safeName,
-                            mimeType = mime,
-                            fileSize = bytes.size,
-                        ),
-                    ),
-                )
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
-            }
-        }
-    }
+    /** Discards a captured large-paste attachment (the preview chip's remove button). */
+    fun removeClipboardContent() = composer.removeClipboardContent()
+
+    /** Overrides the composer's source language from the language picker. */
+    fun onComposerLanguagePicked(code: String) = composer.onComposerLanguagePicked(code)
+
+    /** Insert the picked candidate's handle into the draft and dismiss the suggestion panel. */
+    fun onMentionSelected(candidate: MentionCandidate) = composer.onMentionSelected(candidate)
+
+    fun send() = composer.send()
+
+    /** Sends a file picked from the system document/photo picker through the durable upload chain. */
+    fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
+        composer.sendFileAttachment(bytes, fileName, declaredMimeType)
 
     /** Present the composer's message-effects picker sheet. */
-    fun openEffectsPicker() {
-        _state.update { it.copy(isEffectsPickerOpen = true) }
-    }
+    fun openEffectsPicker() = composer.openEffectsPicker()
 
-    /** Dismiss the effects picker; the armed [ChatUiState.pendingEffects] survive
-     * so a reopened sheet shows the same selection (only a send clears it). */
-    fun dismissEffectsPicker() {
-        _state.update { it.copy(isEffectsPickerOpen = false) }
-    }
+    /** Dismiss the effects picker; the armed effects survive until a send clears them. */
+    fun dismissEffectsPicker() = composer.dismissEffectsPicker()
 
-    /**
-     * Flip an effect chip in the armed selection via the pure [MessageEffectsEditor].
-     * Toggling an already-armed effect off leaves every other bit untouched. The armed
-     * effects are persisted alongside the draft so a selection survives navigation, and
-     * un-arming the last effect on an empty composer purges the stored draft.
-     */
-    fun toggleEffect(flag: Long) {
-        _state.update { it.copy(pendingEffects = MessageEffectsEditor.toggle(it.pendingEffects, flag)) }
-        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
-    }
+    /** Flip an effect chip in the armed selection. */
+    fun toggleEffect(flag: Long) = composer.toggleEffect(flag)
 
     /** Record the chosen ephemeral self-destruct [duration] on the armed selection. */
-    fun selectEphemeralDuration(duration: EphemeralDuration) {
-        _state.update {
-            it.copy(pendingEffects = MessageEffectsEditor.withEphemeralDuration(it.pendingEffects, duration))
-        }
-        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
-    }
+    fun selectEphemeralDuration(duration: EphemeralDuration) = composer.selectEphemeralDuration(duration)
 
     /** The picker's "clear all" — reset the armed selection to no effects. */
-    fun clearEffects() {
-        _state.update { it.copy(pendingEffects = MessageEffectsEditor.cleared()) }
-        persistDraft(_state.value.draft, _state.value.replyingToMessageId)
-    }
+    fun clearEffects() = composer.clearEffects()
+
+    fun startEdit(messageId: String) = composer.startEdit(messageId)
+
+    fun startReply(messageId: String) = composer.startReply(messageId)
+
+    fun cancelReply() = composer.cancelReply()
+
+    fun cancelEdit() = composer.cancelEdit()
+
+    // --- Reactions ----------------------------------------------------------------------
 
     fun onMessageLongPress(messageId: String) {
         _state.update { it.copy(actionMessageId = messageId) }
-        viewModelScope.launch {
-            val details = reactionRepository.fetchDetails(messageId).getOrNull() ?: return@launch
-            ownReactions.update { it + (messageId to details.userReactions.toSet()) }
-        }
+        reactions.refreshOwnReactions(messageId)
     }
 
     fun dismissMessageActions() {
         _state.update { it.copy(actionMessageId = null) }
     }
 
+    fun openEmojiPicker(messageId: String) = reactions.openEmojiPicker(messageId)
+
+    fun dismissEmojiPicker() = reactions.dismissEmojiPicker()
+
+    /** Optimistically adds (or removes) [emoji] on [messageId]; see [ChatReactionController.toggle]. */
+    fun toggleReaction(messageId: String, emoji: String) = reactions.toggle(messageId, emoji)
+
+    /** Open the who-reacted sheet for [messageId]. */
+    fun openReactionDetails(messageId: String) = reactions.openDetails(messageId)
+
+    /** Select a tab in the open who-reacted sheet; an out-of-range index is inert. */
+    fun selectReactionTab(index: Int) = reactions.selectTab(index)
+
+    /** Dismiss the who-reacted sheet. */
+    fun closeReactionDetails() = reactions.closeDetails()
+
+    // --- Prisme (translation gestures) ---------------------------------------------------
+
+    fun toggleShowOriginal(messageId: String) = translation.toggleShowOriginal(messageId)
+
+    /** Tap on a Prisme language-flag chip: switch the bubble's displayed language, or revert. */
+    fun onFlagTap(messageId: String, code: String) = translation.onFlagTap(messageId, code)
+
+    /** Open the per-message language explorer (long-press → "Explore languages"). */
+    fun openLanguageExplorer(messageId: String) = translation.openLanguageExplorer(messageId)
+
+    fun dismissLanguageExplorer() = translation.dismissLanguageExplorer()
+
+    /** Retranslate a language from the explorer — force a fresh translation. */
+    fun onExplorerRetranslate(messageId: String, code: String) =
+        translation.onExplorerRetranslate(messageId, code)
+
+    // --- Reply jump, pins ----------------------------------------------------------------
+
+    /** A quoted-reply preview was tapped: scroll to the loaded original, inert otherwise. */
+    fun onReplyPreviewTap(messageId: String) = replyJump.onReplyPreviewTap(messageId)
+
+    /** The reply-count pill was tapped: scroll to the first reply of its thread. */
+    fun onReplyCountTap(messageId: String) = replyJump.onReplyCountTap(messageId)
+
+    /** Long-press on the reply-count pill: open the focused reply-thread overlay. */
+    fun openReplyThread(messageId: String) = replyJump.openReplyThread(messageId)
+
+    /** Dismisses the reply-thread overlay. */
+    fun closeReplyThread() = replyJump.closeReplyThread()
+
+    /** A reply row in the thread overlay was tapped: scroll to it and close the overlay. */
+    fun onReplyThreadReplyTap(messageId: String) = replyJump.onReplyThreadReplyTap(messageId)
+
+    /** The pinned-message banner was tapped: scroll to the newest pinned message. */
+    fun onPinnedBannerTap() = replyJump.onPinnedBannerTap()
+
+    /** Opens the full pinned-messages sheet; inert when nothing is pinned. */
+    fun openPinnedSheet() = replyJump.openPinnedSheet()
+
+    /** Dismisses the pinned-messages sheet. */
+    fun closePinnedSheet() = replyJump.closePinnedSheet()
+
+    /** A row in the pinned-messages sheet was tapped: scroll to that message and close the sheet. */
+    fun onPinnedMessageTap(messageId: String) = replyJump.onPinnedMessageTap(messageId)
+
+    /** The pending reply-jump scroll has been performed by the screen. */
+    fun onScrollHandled() = replyJump.onScrollHandled()
+
+    // --- Media, files ---------------------------------------------------------------------
+
     fun openImageViewer(messageId: String, imageIndex: Int) {
         val gallery = ConversationMediaGallery.of(_state.value.messages, messageId, imageIndex)
         _state.update { it.copy(imageViewer = gallery.takeUnless(ConversationGallery::isEmpty)) }
+    }
+
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
     }
 
     /** "Ouvrir" on a FILE attachment (document/code/archive) — downloads it (if not
@@ -1307,348 +693,29 @@ class ChatViewModel @Inject constructor(
      * identifies the tapped row when a message carries several file attachments (the
      * bubble passes the id of the row that was actually tapped); `null` (the message
      * actions sheet, which has no single row) falls back to the first file. */
-    fun onFileAttachmentOpen(messageId: String, attachmentId: String? = null) {
-        startFileDownload(messageId, attachmentId, openWhenDone = true)
-    }
+    fun onFileAttachmentOpen(messageId: String, attachmentId: String? = null) =
+        fileDownload.open(messageId, attachmentId)
 
     /** "Partager" on a FILE attachment — same download, but the caller hands the
      * completed file to a share sheet instead of opening it. */
-    fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) {
-        startFileDownload(messageId, attachmentId, openWhenDone = false)
-    }
+    fun onFileAttachmentShare(messageId: String, attachmentId: String? = null) =
+        fileDownload.share(messageId, attachmentId)
 
-    fun dismissFileDownload() {
-        fileDownloadJob?.cancel()
-        fileDownloadJob = null
-        _state.update { it.copy(fileDownload = null) }
-    }
+    fun dismissFileDownload() = fileDownload.dismiss()
 
-    private fun startFileDownload(messageId: String, attachmentId: String?, openWhenDone: Boolean) {
-        val attachment = firstFileAttachment(messageId, attachmentId)
-        val fileUrl = attachment?.fileUrl
-        val fileName = attachment?.originalName ?: attachment?.fileName ?: messageId
-        if (attachment == null || fileUrl.isNullOrBlank()) {
-            _state.update {
-                it.copy(
-                    fileDownload = FileAttachmentDownloadUiState(
-                        messageId = messageId,
-                        attachmentId = attachment?.id.orEmpty(),
-                        fileName = fileName,
-                        state = FileAttachmentDownloadState.Failed(FileAttachmentDownloadFailure.NotAvailable),
-                        openWhenDone = openWhenDone,
-                    ),
-                )
-            }
-            return
-        }
-        fileDownloadJob?.cancel()
+    // --- Forward --------------------------------------------------------------------------
 
-        val alreadyLocal = completedFileDownloads[attachment.id]
-        if (alreadyLocal != null) {
-            _state.update {
-                it.copy(
-                    fileDownload = FileAttachmentDownloadUiState(
-                        messageId = messageId,
-                        attachmentId = attachment.id,
-                        fileName = fileName,
-                        state = alreadyLocal,
-                        openWhenDone = openWhenDone,
-                    ),
-                )
-            }
-            return
-        }
+    /** Open the forward-picker sheet for [messageId], closing the long-press action sheet. */
+    fun openForward(messageId: String) = forward.open(messageId)
 
-        val resolvedUrl = resolveMediaUrl(fileUrl, config.apiBaseUrl)
-        val mimeType = MimeTypeResolver.resolve(attachment.mimeType, fileName)
-        _state.update {
-            it.copy(
-                fileDownload = FileAttachmentDownloadUiState(
-                    messageId = messageId,
-                    attachmentId = attachment.id,
-                    fileName = fileName,
-                    state = FileAttachmentDownloadState.InProgress(progressPercent = null),
-                    openWhenDone = openWhenDone,
-                ),
-            )
-        }
-        fileDownloadJob = viewModelScope.launch {
-            fileAttachmentDownloader.download(resolvedUrl, fileName, mimeType).collect { downloadState ->
-                if (downloadState is FileAttachmentDownloadState.Completed) {
-                    completedFileDownloads[attachment.id] = downloadState
-                }
-                _state.update { current ->
-                    val active = current.fileDownload
-                    if (active == null || active.attachmentId != attachment.id) current
-                    else current.copy(fileDownload = active.copy(state = downloadState))
-                }
-            }
-        }
-    }
+    fun onForwardQueryChange(query: String) = forward.onQueryChange(query)
 
-    /**
-     * Resolves the FILE attachment to act on for [messageId]: when [attachmentId] names
-     * one (the row the viewer actually tapped in the bubble), it wins outright; `null`
-     * (the message actions sheet, which has no single row) falls back to the first
-     * non-image/location/audio attachment, preserving the sheet's existing behaviour.
-     */
-    private fun firstFileAttachment(messageId: String, attachmentId: String? = null): ApiMessageAttachment? {
-        val attachments = latestMessages.firstOrNull { it.message.id == messageId }
-            ?.message?.attachments
-            ?: return null
-        if (attachmentId != null) {
-            return attachments.firstOrNull { it.id == attachmentId }
-        }
-        return attachments.firstOrNull { !it.isImage && !it.isLocation && !it.isAudio }
-    }
+    fun closeForward() = forward.close()
 
-    private val ApiMessageAttachment.isImage: Boolean get() = mimeType?.startsWith("image/") == true
-    private val ApiMessageAttachment.isAudio: Boolean get() = mimeType?.startsWith("audio/") == true
-    private val ApiMessageAttachment.isLocation: Boolean get() = mimeType == "application/x-location"
+    /** Optimistically forward the source message into [targetConversationId]; one at a time. */
+    fun forwardTo(targetConversationId: String) = forward.forwardTo(targetConversationId)
 
-    /**
-     * Open the who-reacted sheet for [messageId]. Shows immediately (cache-first:
-     * the sheet appears with an empty, loading breakdown) then fills in the
-     * reactor list from a fresh detail fetch. A failed fetch leaves the sheet
-     * on an empty (non-loading) breakdown rather than crashing. Reuses the
-     * fetch to refresh `ownReactions` too. See [ReactionBreakdown].
-     */
-    fun openReactionDetails(messageId: String) {
-        _state.update {
-            it.copy(
-                reactionDetails = ReactionDetailsUiState(
-                    messageId = messageId,
-                    isLoading = true,
-                    breakdown = ReactionBreakdown(emptyList()),
-                ),
-            )
-        }
-        viewModelScope.launch {
-            val details = reactionRepository.fetchDetails(messageId).getOrNull()
-            if (details != null) {
-                ownReactions.update { it + (messageId to details.userReactions.toSet()) }
-            }
-            val currentUserId = sessionRepository.currentUser.value?.id.orEmpty()
-            val breakdown = details?.let { ReactionBreakdown.of(it, currentUserId) }
-                ?: ReactionBreakdown(emptyList())
-            _state.update { state ->
-                val open = state.reactionDetails
-                if (open == null || open.messageId != messageId) return@update state
-                state.copy(reactionDetails = open.copy(isLoading = false, breakdown = breakdown))
-            }
-        }
-    }
-
-    /** Select a tab in the open who-reacted sheet; an out-of-range index is inert. */
-    fun selectReactionTab(index: Int) {
-        _state.update { it.copy(reactionDetails = it.reactionDetails?.withSelectedTab(index)) }
-    }
-
-    /** Dismiss the who-reacted sheet. */
-    fun closeReactionDetails() {
-        _state.update { it.copy(reactionDetails = null) }
-    }
-
-    /**
-     * A quoted-reply preview was tapped on the bubble [messageId]. When the quoted
-     * original is currently loaded, request a scroll to it; a paged-out original or a
-     * non-reply is inert (never a crash on an absent target). See [ReplyJumpResolver].
-     */
-    fun onReplyPreviewTap(messageId: String) {
-        val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId) }
-        val target = (ReplyJumpResolver.resolve(messageId, links) as? ReplyJump.Scroll)?.targetMessageId
-            ?: return
-        _state.update { it.copy(scrollToMessageId = target) }
-    }
-
-    /**
-     * The reply-count pill on message [messageId] was tapped: scroll to the first
-     * reply in its thread. A message with no replies has no thread and is inert.
-     * See [ReplyThreads].
-     */
-    fun onReplyCountTap(messageId: String) {
-        val links = _state.value.messages.map { ReplyLink(it.messageId, it.replyToId, it.isDeleted) }
-        val thread = ReplyThreads.of(links).threadFor(messageId) ?: return
-        _state.update { it.copy(scrollToMessageId = thread.firstReplyId) }
-    }
-
-    /**
-     * Long-pressing the reply-count pill on message [messageId] opens the focused
-     * reply-thread overlay (the pill *tap* still scrolls to the first reply). Inert when
-     * the message has no live thread — no empty overlay. See [ReplyThreadOverlay].
-     */
-    fun openReplyThread(messageId: String) {
-        val links = _state.value.messages.map { it.toThreadMessage() }
-        if (ReplyThreadOverlay.of(messageId, links) == null) return
-        _state.update { it.copy(replyThreadParentId = messageId) }
-    }
-
-    /** Dismisses the reply-thread overlay. */
-    fun closeReplyThread() {
-        _state.update { it.copy(replyThreadParentId = null) }
-    }
-
-    /**
-     * A reply row in the thread overlay was tapped: scroll to that reply and close the
-     * overlay. A messageId not among the overlay's current replies is inert (never a
-     * crash on a since-removed / absent target).
-     */
-    fun onReplyThreadReplyTap(messageId: String) {
-        val overlay = _state.value.replyThreadOverlay ?: return
-        if (overlay.replies.none { it.messageId == messageId }) return
-        _state.update { it.copy(scrollToMessageId = messageId, replyThreadParentId = null) }
-    }
-
-    /**
-     * The pinned-message banner was tapped: scroll to the newest pinned message.
-     * When nothing is pinned the banner is absent, so this is inert.
-     * See [PinnedMessages].
-     */
-    fun onPinnedBannerTap() {
-        val target = _state.value.pinnedBanner?.messageId ?: return
-        _state.update { it.copy(scrollToMessageId = target) }
-    }
-
-    /**
-     * Opens the full pinned-messages sheet (the banner shows one at a time; the
-     * sheet lists every pin). Inert when nothing is pinned — no empty sheet.
-     * See [PinnedMessagesList].
-     */
-    fun openPinnedSheet() {
-        if (_state.value.pinnedMessages.isEmpty()) return
-        _state.update { it.copy(isPinnedSheetOpen = true) }
-    }
-
-    /** Dismisses the pinned-messages sheet. */
-    fun closePinnedSheet() {
-        _state.update { it.copy(isPinnedSheetOpen = false) }
-    }
-
-    /**
-     * A row in the pinned-messages sheet was tapped: scroll to that message and
-     * close the sheet. A messageId not among the currently-pinned messages is inert
-     * (never a crash on a since-unpinned/absent target).
-     */
-    fun onPinnedMessageTap(messageId: String) {
-        if (_state.value.pinnedMessages.none { it.messageId == messageId }) return
-        _state.update { it.copy(scrollToMessageId = messageId, isPinnedSheetOpen = false) }
-    }
-
-    /** The pending reply-jump scroll has been performed by the screen. */
-    /**
-     * Open the forward-picker sheet for [messageId]. Dismisses the long-press
-     * action sheet and paints the eligible targets cache-first from whatever
-     * conversation list is already loaded (the collector fills it in live).
-     */
-    fun openForward(messageId: String) {
-        _state.update {
-            it.copy(
-                actionMessageId = null,
-                forward = ForwardUiState(
-                    sourceMessageId = messageId,
-                    sendingConversationId = sendingForwards[messageId],
-                ),
-            )
-        }
-        recomputeForwardTargets()
-    }
-
-    fun onForwardQueryChange(query: String) {
-        _state.update { s -> s.forward?.let { s.copy(forward = it.copy(query = query)) } ?: s }
-        recomputeForwardTargets()
-    }
-
-    fun closeForward() {
-        _state.update { it.copy(forward = null) }
-    }
-
-    /**
-     * Optimistically forward the source message into [targetConversationId]: the
-     * original content is re-sent there carrying the `forwardedFrom` refs (the
-     * gateway resolves attachments from the original). Only a server-acked source
-     * can be forwarded — an unsent bubble has no id the gateway knows. One
-     * forward is in flight at a time; an already-forwarded target is inert.
-     */
-    fun forwardTo(targetConversationId: String) {
-        val forward = _state.value.forward ?: return
-        val sourceMessageId = forward.sourceMessageId
-        if (sendingForwards.containsKey(sourceMessageId)) return
-        if (targetConversationId in forward.sentConversationIds) return
-        val user = sessionRepository.currentUser.value ?: return
-        val source = latestMessages
-            .firstOrNull { it.message.id == sourceMessageId && it.sendState == LocalSendState.SYNCED }
-            ?.message ?: return
-        sendingForwards[sourceMessageId] = targetConversationId
-        _state.update { s ->
-            if (s.forward?.sourceMessageId == sourceMessageId) {
-                s.copy(forward = s.forward.copy(sendingConversationId = targetConversationId))
-            } else {
-                s
-            }
-        }
-        viewModelScope.launch {
-            try {
-                messageRepository.sendOptimistic(
-                    conversationId = targetConversationId,
-                    content = source.content,
-                    originalLanguage = source.originalLanguage ?: LanguageResolver.FALLBACK_LANGUAGE,
-                    sender = user,
-                    forwardedFromId = source.id,
-                    forwardedFromConversationId = conversationId,
-                )
-                workManager.enqueue(OutboxFlushWorker.buildRequest())
-                sendingForwards.remove(sourceMessageId)
-                _state.update { s ->
-                    if (s.forward?.sourceMessageId == sourceMessageId) {
-                        s.copy(
-                            forward = s.forward.copy(
-                                sendingConversationId = null,
-                                sentConversationIds = s.forward.sentConversationIds + targetConversationId,
-                            ),
-                        )
-                    } else {
-                        s
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                sendingForwards.remove(sourceMessageId)
-                _state.update { s ->
-                    val forwardUpdate = if (s.forward?.sourceMessageId == sourceMessageId) {
-                        s.forward.copy(sendingConversationId = null)
-                    } else {
-                        s.forward
-                    }
-                    s.copy(errorMessage = e.message, forward = forwardUpdate)
-                }
-            }
-        }
-    }
-
-    private fun recomputeForwardTargets() {
-        _state.update { s ->
-            val forward = s.forward ?: return@update s
-            s.copy(
-                forward = forward.copy(
-                    targets = ForwardTargets.of(
-                        conversations = allConversations,
-                        sourceConversationId = conversationId,
-                        query = forward.query,
-                        currentUserId = sessionRepository.currentUser.value?.id,
-                    ),
-                ),
-            )
-        }
-    }
-
-    fun onScrollHandled() {
-        _state.update { it.copy(scrollToMessageId = null) }
-    }
-
-    fun dismissImageViewer() {
-        _state.update { it.copy(imageViewer = null) }
-    }
+    // --- Search ---------------------------------------------------------------------------
 
     fun openSearch() {
         _state.update { it.copy(search = it.search.activated()) }
@@ -1670,78 +737,7 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(search = it.search.movedToPrev()) }
     }
 
-    fun toggleShowOriginal(messageId: String) {
-        showingOriginal.update { if (messageId in it) it - messageId else it + messageId }
-        _state.update { it.copy(actionMessageId = null) }
-    }
-
-    /**
-     * Tap on a Prisme language-flag chip: switch the bubble's displayed language,
-     * or revert to the default resolution when the tapped flag is already active.
-     * Delegates the decision to the pure [LanguageFlagTapResolver] so the transition
-     * stays behaviour-tested; here we only apply it to the per-message override map.
-     */
-    fun onFlagTap(messageId: String, code: String) {
-        val message = latestMessages.firstOrNull { it.message.id == messageId }?.message ?: return
-        val prefs = sessionRepository.currentUser.value ?: EmptyContentPreferences
-        val result = LanguageFlagTapResolver.resolve(
-            tappedCode = code,
-            activeCode = resolvedActiveCode(messageId, message, prefs),
-            originalLanguage = message.originalLanguage,
-            translations = message.translations,
-        )
-        when (result) {
-            is LanguageFlagTapResolver.Result.Activate ->
-                activeLanguageOverride.update { it + (messageId to result.code) }
-            LanguageFlagTapResolver.Result.Revert ->
-                activeLanguageOverride.update { it - messageId }
-            is LanguageFlagTapResolver.Result.RequestTranslation ->
-                requestOnDemandTranslation(messageId, result.targetLanguage)
-            LanguageFlagTapResolver.Result.None -> Unit
-        }
-    }
-
-    /**
-     * The viewer tapped a configured language the message has no content for yet:
-     * translate it on demand, then switch the bubble to it. The merged translation
-     * arrives through the cache stream (so the strip's translatable chip becomes a
-     * live content chip), and the active override points the bubble at it. A failed
-     * or inert translation leaves the strip's translatable chip in place to retry;
-     * a second tap while the request is in flight is ignored.
-     */
-    private fun requestOnDemandTranslation(messageId: String, targetLanguage: String) {
-        val key = "$messageId|$targetLanguage"
-        if (key in _state.value.translatingLanguages) return
-        _state.update { it.copy(translatingLanguages = it.translatingLanguages + key) }
-        viewModelScope.launch {
-            try {
-                val stored = messageRepository.requestTranslation(messageId, targetLanguage)
-                if (stored) {
-                    activeLanguageOverride.update { it + (messageId to targetLanguage) }
-                }
-            } catch (cancellation: CancellationException) {
-                throw cancellation
-            } catch (error: Exception) {
-                _state.update { it.copy(errorMessage = error.message) }
-            } finally {
-                _state.update { it.copy(translatingLanguages = it.translatingLanguages - key) }
-            }
-        }
-    }
-
-    /**
-     * Open the per-message language explorer (long-press → "Explore languages"):
-     * the exhaustive Prisme view listing every explorable language with its
-     * translate / retranslate affordance. Closing the action sheet first keeps a
-     * single sheet on screen.
-     */
-    fun openLanguageExplorer(messageId: String) {
-        _state.update { it.copy(explorerMessageId = messageId, actionMessageId = null) }
-    }
-
-    fun dismissLanguageExplorer() {
-        _state.update { it.copy(explorerMessageId = null) }
-    }
+    // --- Report ---------------------------------------------------------------------------
 
     /**
      * Open the report-a-message sheet for [messageId] (long-press → "Report"), closing the action
@@ -1783,148 +779,7 @@ class ChatViewModel @Inject constructor(
         _state.update { it.copy(reportForm = null) }
     }
 
-    /**
-     * Retranslate a language from the explorer — force a fresh translation even when
-     * that language already has content (unlike [onFlagTap], which would merely
-     * switch to the existing text). A refresh that returns identical text is an inert
-     * no-op at the repository; a differing result re-renders live off the cache
-     * stream. A request already in flight for the same language is not duplicated.
-     */
-    fun onExplorerRetranslate(messageId: String, code: String) {
-        val target = code.normalizedCode() ?: return
-        latestMessages.firstOrNull { it.message.id == messageId } ?: return
-        requestOnDemandTranslation(messageId, target)
-    }
-
-    /**
-     * Project the open explorer message into a [MessageLanguageExplorer], or null
-     * when no explorer is open / the target has paged out. The in-flight codes are
-     * the viewer's [ChatUiState.translatingLanguages] keys scoped to this message,
-     * and the selected language is the active flag-tap override — so the explorer
-     * highlights whatever the bubble is currently displaying.
-     */
-    private fun buildLanguageExplorer(
-        explorerMessageId: String?,
-        messages: List<LocalMessage>,
-        user: MeeshyUser?,
-        translating: Set<String>,
-        overrides: Map<String, String>,
-    ): MessageLanguageExplorer? {
-        val id = explorerMessageId ?: return null
-        val message = messages.firstOrNull { it.message.id == id }?.message ?: return null
-        val prefix = "$id|"
-        val translatingCodes = translating
-            .filter { it.startsWith(prefix) }
-            .map { it.removePrefix(prefix) }
-            .toSet()
-        return MessageDetailExplorer.build(
-            originalLanguage = message.originalLanguage,
-            content = message.content,
-            translations = message.translations,
-            preferences = user ?: EmptyContentPreferences,
-            translatingCodes = translatingCodes,
-            selectedCode = overrides[id],
-        )
-    }
-
-    /**
-     * The language code currently displayed for [messageId]: an explicit flag-tap
-     * override if any, else the default Prisme resolution — the original when the
-     * translate toggle is on, otherwise the preferred translation (or the original
-     * when none is preferred).
-     */
-    private fun resolvedActiveCode(
-        messageId: String,
-        message: ApiMessage,
-        prefs: LanguageResolver.ContentLanguagePreferences,
-    ): String? {
-        activeLanguageOverride.value[messageId]?.let { return it.normalizedCode() }
-        val original = message.originalLanguage.normalizedCode()
-        if (messageId in showingOriginal.value) return original
-        return LanguageResolver.preferredTranslation(message.translations, prefs)
-            ?.targetLanguage?.normalizedCode()
-            ?: original
-    }
-
-    fun openEmojiPicker(messageId: String) {
-        _state.update { it.copy(emojiPickerMessageId = messageId, actionMessageId = null) }
-    }
-
-    fun dismissEmojiPicker() {
-        _state.update { it.copy(emojiPickerMessageId = null) }
-    }
-
-    fun toggleReaction(messageId: String, emoji: String) {
-        val mine = ownReactions.value[messageId] ?: emptySet()
-        val isAdding = emoji !in mine
-        if (isAdding) emojiUsageStore.record(emoji)
-        ownReactions.update { it + (messageId to if (isAdding) mine + emoji else mine - emoji) }
-        _state.update { it.copy(actionMessageId = null, emojiPickerMessageId = null) }
-        viewModelScope.launch {
-            try {
-                if (messageRepository.toggleReactionOptimistic(messageId, emoji, isAdding)) {
-                    workManager.enqueue(OutboxFlushWorker.buildRequest())
-                } else {
-                    ownReactions.update { it + (messageId to mine) }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                ownReactions.update { it + (messageId to mine) }
-                _state.update { it.copy(errorMessage = e.message) }
-            }
-        }
-    }
-
-    fun startEdit(messageId: String) {
-        val message = latestMessages.firstOrNull {
-            it.message.id == messageId && it.sendState == LocalSendState.SYNCED
-        }?.message ?: return
-        if (message.deletedAt != null) return
-        val editable = MessageEditability.canEdit(
-            isOwn = message.senderId != null &&
-                message.senderId == sessionRepository.currentUser.value?.id,
-            createdAtMillis = isoToEpochMillisOrNull(message.createdAt),
-            nowMillis = clock.nowMillis(),
-        )
-        if (!editable) return
-        _state.update {
-            it.copy(
-                editingMessageId = messageId,
-                draft = message.content,
-                draftRevision = it.draftRevision + 1,
-                actionMessageId = null,
-                replyingToMessageId = null,
-            )
-        }
-    }
-
-    fun startReply(messageId: String) {
-        val message = latestMessages.firstOrNull {
-            it.message.id == messageId && it.sendState == LocalSendState.SYNCED
-        }?.message ?: return
-        if (message.deletedAt != null) return
-        _state.update {
-            val clearsEdit = it.isEditing
-            it.copy(
-                replyingToMessageId = messageId,
-                actionMessageId = null,
-                editingMessageId = null,
-                draft = if (clearsEdit) "" else it.draft,
-                draftRevision = if (clearsEdit) it.draftRevision + 1 else it.draftRevision,
-            )
-        }
-        persistDraft(_state.value.draft, replyToId = messageId)
-    }
-
-    fun cancelReply() {
-        _state.update { it.copy(replyingToMessageId = null) }
-        persistDraft(_state.value.draft, replyToId = null)
-    }
-
-    fun cancelEdit() {
-        _state.update { it.copy(editingMessageId = null, draft = "", draftRevision = it.draftRevision + 1) }
-    }
+    // --- Message actions, paging ----------------------------------------------------------
 
     /**
      * "Delete for everyone" — a server round-trip that tombstones the message
@@ -2017,21 +872,6 @@ class ChatViewModel @Inject constructor(
         sentAtIso = createdAtIso,
     )
 
-    private fun applyEdit(messageId: String, content: String) {
-        _state.update { it.copy(draft = "", draftRevision = it.draftRevision + 1, editingMessageId = null) }
-        viewModelScope.launch {
-            try {
-                if (messageRepository.editOptimistic(messageId, content)) {
-                    workManager.enqueue(OutboxFlushWorker.buildRequest())
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _state.update { it.copy(errorMessage = e.message) }
-            }
-        }
-    }
-
     fun retryMessage(messageId: String) {
         viewModelScope.launch {
             try {
@@ -2081,168 +921,6 @@ class ChatViewModel @Inject constructor(
 
         /** Optional deep-link query arg (`?draft=...`) — see [initialDraft]. */
         const val DRAFT_ARG: String = "draft"
-        private const val QUICK_REACTION_COUNT = 8
         private const val TYPING_TIMEOUT_MS = 5_000L
-        private const val TYPING_REEMIT_MS = 3_000L
-        private const val TYPING_IDLE_MS = 3_000L
-        private const val MENTION_SEARCH_DEBOUNCE_MS = 300L
-        private const val CLIPBOARD_ATTACHMENT_NAME = "clipboard-content.txt"
-        private const val CLIPBOARD_ATTACHMENT_MIME = "text/plain"
-        private const val DEFAULT_ATTACHMENT_NAME = "attachment"
     }
-}
-
-private data class BubbleInputs(
-    val result: CacheResult<List<LocalMessage>>,
-    val user: MeeshyUser?,
-    val ownReactions: Map<String, Set<String>>,
-    val showingOriginal: Set<String>,
-    val recipientCount: Int,
-)
-
-private fun String?.normalizedCode(): String? =
-    this?.trim()?.lowercase()?.takeIf { it.isNotEmpty() }
-
-private fun <T> CacheResult<List<T>>.valueOrNull(): List<T>? = when (this) {
-    is CacheResult.Fresh -> value
-    is CacheResult.Stale -> value
-    is CacheResult.Syncing -> value
-    CacheResult.Empty -> emptyList()
-}
-
-private fun ChatUiState.applyResult(
-    result: CacheResult<List<LocalMessage>>,
-    currentUser: MeeshyUser?,
-    ownReactions: Map<String, Set<String>>,
-    showingOriginal: Set<String>,
-    mediaBaseUrl: String,
-    recipientCount: Int,
-    hidden: LocallyHiddenMessages,
-    starredIds: Set<String>,
-    activeLanguageOverride: Map<String, String>,
-    showReadReceipts: Boolean,
-    isOffline: Boolean,
-    bubbleMemo: BubbleMemoCache,
-): ChatUiState {
-    val updated = when (result) {
-        is CacheResult.Fresh -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline, bubbleMemo),
-            ownReactions = ownReactions,
-            isSyncing = false,
-            showSkeleton = false,
-            errorMessage = null,
-        )
-        is CacheResult.Stale -> copy(
-            messages = result.value.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline, bubbleMemo),
-            ownReactions = ownReactions,
-            isSyncing = true,
-            showSkeleton = false,
-        )
-        is CacheResult.Syncing -> copy(
-            messages = result.value?.toBubbles(currentUser, ownReactions, showingOriginal, mediaBaseUrl, recipientCount, hidden, starredIds, activeLanguageOverride, showReadReceipts, isOffline, bubbleMemo)
-                ?: messages,
-            ownReactions = ownReactions,
-            isSyncing = true,
-            showSkeleton = result.value == null && messages.isEmpty() && errorMessage == null,
-        )
-        CacheResult.Empty -> copy(
-            messages = emptyList(),
-            ownReactions = ownReactions,
-            isSyncing = false,
-            showSkeleton = errorMessage == null,
-        )
-    }
-    // Standing invariant, not just an open()-time guard (see openPinnedSheet's doc
-    // comment "no empty sheet"): if the last pin drains away — peer/self unpin, or
-    // the pinned message gets deleted — while the sheet is already open, close it
-    // here too. Resetting isPinnedSheetOpen itself (not just hiding the rendering)
-    // matters: a later new pin must require an explicit re-open, not silently
-    // resurrect a sheet the user already dismissed by running out of content.
-    val pinReconciled = if (updated.isPinnedSheetOpen && updated.pinnedMessages.isEmpty()) {
-        updated.copy(isPinnedSheetOpen = false)
-    } else {
-        updated
-    }
-    // Same standing invariant for the reply-thread overlay: if the focused thread drains
-    // to no live reply (every reply deleted) or its parent pages out while the overlay is
-    // open, close it — no dead-end empty overlay, and a later new reply requires an
-    // explicit re-open rather than silently resurrecting a dismissed overlay.
-    return if (pinReconciled.replyThreadParentId != null && pinReconciled.replyThreadOverlay == null) {
-        pinReconciled.copy(replyThreadParentId = null)
-    } else {
-        pinReconciled
-    }
-}
-
-private fun List<LocalMessage>.toBubbles(
-    currentUser: MeeshyUser?,
-    ownReactions: Map<String, Set<String>>,
-    showingOriginal: Set<String>,
-    mediaBaseUrl: String,
-    recipientCount: Int,
-    hidden: LocallyHiddenMessages,
-    starredIds: Set<String>,
-    activeLanguageOverride: Map<String, String>,
-    showReadReceipts: Boolean,
-    isOffline: Boolean,
-    bubbleMemo: BubbleMemoCache,
-): List<BubbleContent> {
-    val visible = MessageOrdering.order(filterNot { hidden.isHidden(it.message.id) }) { local ->
-        MessageOrderInput(createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt))
-    }
-    val groupPositions = MessageGrouping.positions(
-        visible.map { local ->
-            MessageGroupInput(
-                id = local.message.id,
-                senderId = local.message.senderId,
-                isOutgoing = currentUser?.id != null && local.message.senderId == currentUser.id,
-                createdAtMillis = isoToEpochMillisOrNull(local.message.createdAt),
-                isSystem = local.message.isSystemMessage,
-            )
-        },
-    )
-    // #5189 — drop cache entries for messages no longer in the visible window
-    // (hidden, or paged out) before they'd otherwise sit unused forever.
-    bubbleMemo.retain(visible.mapTo(mutableSetOf()) { it.message.id })
-    return visible.map { local ->
-        val position = groupPositions[local.message.id] ?: STANDALONE_GROUP_POSITION
-        bubbleMemo.build(
-            local = local,
-            currentUser = currentUser,
-            showSenderName = position.isFirstInGroup,
-            ownReactions = ownReactions[local.message.id] ?: emptySet(),
-            recipientCount = recipientCount,
-            showOriginal = local.message.id in showingOriginal,
-            activeLanguageCode = activeLanguageOverride[local.message.id],
-            mediaBaseUrl = mediaBaseUrl,
-            showReadReceipts = showReadReceipts,
-            isOffline = isOffline,
-        ).copy(
-            isStarred = local.message.id in starredIds,
-            isFirstInGroup = position.isFirstInGroup,
-            isLastInGroup = position.isLastInGroup,
-        )
-    }
-}
-
-private val STANDALONE_GROUP_POSITION =
-    MessageGroupPosition(isFirstInGroup = true, isLastInGroup = true)
-
-/**
- * Project the visible bubbles into the opaque searchable model. Deleted bubbles
- * (placeholder text) and bubbles with no textual body (image/file only) carry no
- * searchable text and are skipped; the stored original is searched alongside the
- * displayed translation so search stays translation-match aware.
- */
-private fun List<BubbleContent>.toSearchable(): List<SearchableMessage> =
-    mapNotNull { bubble ->
-        if (bubble.isDeleted) return@mapNotNull null
-        val texts = listOfNotNull(bubble.text, bubble.originalText).filter { it.isNotBlank() }
-        if (texts.isEmpty()) null else SearchableMessage(bubble.messageId, texts)
-    }
-
-internal object EmptyContentPreferences : LanguageResolver.ContentLanguagePreferences {
-    override val systemLanguage: String? = null
-    override val regionalLanguage: String? = null
-    override val customDestinationLanguage: String? = null
 }

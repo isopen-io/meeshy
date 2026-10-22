@@ -15,13 +15,22 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -34,6 +43,34 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.ui.R
 import me.meeshy.ui.theme.MeeshyPalette
+
+/**
+ * Consumes the server-side view counter of a view-once message once its text has been
+ * read and closed. The default is absent (inert): the host that owns the conversation
+ * binds the endpoint. Closing is idempotent, so the consumer fires at most once per read.
+ */
+public fun interface ViewOnceConsumer {
+    public fun consume(messageId: String)
+}
+
+public val LocalViewOnceConsumer: androidx.compose.runtime.ProvidableCompositionLocal<ViewOnceConsumer?> =
+    staticCompositionLocalOf { null }
+
+/**
+ * Non-consuming tap on a revealed view-once text — port of iOS `ViewOnceRetouchModifier`
+ * (`simultaneousGesture`): it never swallows the long press nor a tapped link, and an
+ * inactive message gets no gesture at all.
+ */
+internal fun Modifier.viewOnceRetouch(isActive: Boolean, onRetouch: () -> Unit): Modifier =
+    if (!isActive) this else composed {
+        val latest = rememberUpdatedState(onRetouch)
+        pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown(requireUnconsumed = false)
+                if (waitForUpOrCancellation() != null) latest.value()
+            }
+        }
+    }
 
 /**
  * Wraps a message bubble body in a "tap to reveal" fog + blur — Android render of the
@@ -54,9 +91,9 @@ internal fun BubbleBlurReveal(
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(0.dp),
     content: @Composable () -> Unit,
 ) {
-    // A view-once reveal must first consume the server counter (requiresConsume); until
-    // that endpoint is wired the reveal proceeds locally, but the request already drives
-    // the distinct "view once" affordance vs a plain "tap to reveal" blur.
+    // A view-once text is read in place until it is retouched or leaves the screen; it
+    // then burns to "(1) · Already opened" and consumes the server counter through
+    // LocalViewOnceConsumer (inert until the host binds the endpoint).
     val request = remember(messageId, spec) {
         BlurRevealLifecycle.RevealRequest(messageId = messageId, isViewOnce = spec.isViewOnce)
     }
@@ -66,10 +103,40 @@ internal fun BubbleBlurReveal(
     // The transient fog spike that plays during the re-conceal (0 → 1 → 0).
     val fog = remember(spec) { Animatable(0f) }
     var revealToken by remember(spec) { mutableIntStateOf(0) }
-    val isRevealing = revealToken > 0
+    var stage by remember(messageId) { mutableStateOf(BlurRevealLifecycle.ViewOnceStage.Sealed) }
+    val consumer = LocalViewOnceConsumer.current
+    val latestStage = rememberUpdatedState(stage)
+    val latestConsumer = rememberUpdatedState(consumer)
+    val isViewOnceText = request.requiresConsume
+    val isRevealing = if (isViewOnceText) {
+        stage == BlurRevealLifecycle.ViewOnceStage.Revealed
+    } else {
+        revealToken > 0
+    }
+
+    fun closeViewOnce() {
+        val closure = BlurRevealLifecycle.close(stage)
+        stage = closure.stage
+        if (closure.consume) latestConsumer.value?.consume(messageId)
+    }
+
+    // Second door: the bubble leaves the screen (scroll-out, conversation exit, any skin).
+    DisposableEffect(messageId, isViewOnceText) {
+        onDispose {
+            if (!isViewOnceText) return@onDispose
+            val closure = BlurRevealLifecycle.close(latestStage.value)
+            if (closure.consume) latestConsumer.value?.consume(messageId)
+        }
+    }
+
+    androidx.compose.runtime.LaunchedEffect(stage) {
+        if (!isViewOnceText) return@LaunchedEffect
+        val revealed = stage == BlurRevealLifecycle.ViewOnceStage.Revealed
+        reveal.animateTo(if (revealed) 1f else 0f, tween(REVEAL_MILLIS))
+    }
 
     androidx.compose.runtime.LaunchedEffect(spec, revealToken) {
-        if (revealToken == 0) return@LaunchedEffect
+        if (isViewOnceText || revealToken == 0) return@LaunchedEffect
         var last = 0L
         BlurRevealLifecycle.revealTimeline(spec.visibilitySeconds).forEach { step ->
             kotlinx.coroutines.delay((step.atMillis - last).coerceAtLeast(0))
@@ -87,17 +154,27 @@ internal fun BubbleBlurReveal(
     val scrimAlpha = maxOf(restingScrim, fog.value)
     val concealed = reveal.value < 0.5f
 
+    val opened = isViewOnceText && stage == BlurRevealLifecycle.ViewOnceStage.Opened
     Box(modifier.clip(shape)) {
+        if (opened) {
+            OpenedChip()
+            return@Box
+        }
         Box(
-            modifier = if (concealed) {
-                Modifier.blur(CONCEAL_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded)
-            } else {
-                Modifier
-            },
+            modifier = (
+                if (concealed) {
+                    Modifier.blur(CONCEAL_BLUR_RADIUS, BlurredEdgeTreatment.Unbounded)
+                } else {
+                    Modifier
+                }
+                ).viewOnceRetouch(
+                isActive = BlurRevealLifecycle.retouchGestureActive(isViewOnceText, stage),
+                onRetouch = ::closeViewOnce,
+            ),
         ) {
             content()
         }
-        if (scrimAlpha > 0.01f) {
+        if (!opened && scrimAlpha > 0.01f) {
             val revealActionLabel = stringResource(R.string.bubble_blur_reveal_action)
             Box(
                 modifier = Modifier
@@ -107,7 +184,9 @@ internal fun BubbleBlurReveal(
                         if (isRevealing) base
                         else base
                             .semantics { contentDescription = revealActionLabel }
-                            .clickable { revealToken += 1 }
+                            .clickable {
+                                if (isViewOnceText) stage = BlurRevealLifecycle.reveal(stage) else revealToken += 1
+                            }
                     },
                 contentAlignment = Alignment.Center,
             ) {
@@ -117,6 +196,15 @@ internal fun BubbleBlurReveal(
             }
         }
     }
+}
+
+@Composable
+private fun OpenedChip() {
+    Text(
+        text = stringResource(R.string.bubble_view_once_opened),
+        color = MeeshyPalette.White.copy(alpha = 0.7f),
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+    )
 }
 
 @Composable
@@ -148,6 +236,7 @@ private fun RevealHint(isViewOnce: Boolean) {
     }
 }
 
+private const val REVEAL_MILLIS = 300
 private val CONCEAL_BLUR_RADIUS = 18.dp
 private const val RESTING_CONCEAL_ALPHA = 0.94f
 private val FOG_COLOR = Color(0xFF1E1B4B) // indigo950 — the fog reads as a Meeshy-brand veil

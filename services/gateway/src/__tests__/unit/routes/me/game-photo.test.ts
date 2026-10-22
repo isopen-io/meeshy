@@ -8,7 +8,9 @@
  * - hors `GLORY_ATMOSPHERES` ⇒ 400 ;
  * - l'accusé est idempotent (deux POST = une ligne, la date de première présentation ne bouge pas) ;
  * - le pack de l'atmosphère choisie ne se retire pas (409 `PACK_NOT_REMOVABLE`), un autre si ;
- * - l'extension `game.photo` sert les réglages et le registre, et un compte sans réglage se lit « défauts ».
+ * - l'extension `game.photo` sert les réglages et le registre, et un compte sans réglage se lit « défauts » ;
+ * - le signal « immortalisée » (D22 b, #10182) : l'identifiant d'étape seul, idempotent, et une étape immortalisée
+ *   vaut présentée (aucun push ne part pour elle).
  *
  * @jest-environment node
  */
@@ -21,6 +23,7 @@ import {
   gamePhotoBlockSchema,
   parseGameBlock,
   photoInvitationsResponseSchema,
+  photoMomentsKeptResponseSchema,
   photoMomentsPresentedResponseSchema,
 } from '@meeshy/shared/types/game';
 import { fakeGameDb, seedUser, USER, OTHER, type FakeGameDb } from '../../../../services/game/__tests__/fakeGameDb';
@@ -98,11 +101,12 @@ const call = (app: FastifyInstance, method: 'PUT' | 'POST' | 'DELETE', url: stri
 const profileOf = (db: FakeGameDb, userId = USER) => db.gameProfile.rows.find((row) => row.userId === userId);
 
 describe('authentification', () => {
-  it('les trois routes refusent un appel sans compte (401)', async () => {
+  it('les quatre routes refusent un appel sans compte (401)', async () => {
     const { app } = await buildApp(fakeGameDb(), { userId: null });
     expect((await call(app, 'PUT', GAME_PHOTO_ROUTES.frameAtmosphere, { requestId: 'req-00001', atmosphere: 'egypte' })).statusCode).toBe(401);
     expect((await call(app, 'PUT', GAME_PHOTO_ROUTES.photoInvitations, { requestId: 'req-00001', invitations: 'never' })).statusCode).toBe(401);
     expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoPresented, { requestId: 'req-00001', stepIds: ['start'] })).statusCode).toBe(401);
+    expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'req-00001', stepIds: ['start'] })).statusCode).toBe(401);
     await app.close();
   });
 });
@@ -313,6 +317,116 @@ describe('POST /me/game/photo-moments/presented — seules les étapes CONNUES e
   });
 });
 
+describe('POST /me/game/photo-moments/kept — le signal « immortalisée » (D22 b)', () => {
+  it('idempotent : une ligne par étape, la date de PREMIÈRE immortalisation ne bouge pas, et l’étape vaut présentée', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const { app } = await buildApp(db);
+
+    const first = await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00001', stepIds: ['start', 'meesh:1', 'start'] });
+    expect(first.statusCode).toBe(200);
+    const kept = photoMomentsKeptResponseSchema.parse(first.json().data).kept;
+    expect(kept.map((k) => k.stepId)).toEqual(['start', 'meesh:1']);
+    expect(db.gamePhotoMoment.rows.map((row) => [row.id, row.stepId])).toEqual([
+      [photoMomentId(USER, 'start'), 'start'],
+      [photoMomentId(USER, 'meesh:1'), 'meesh:1'],
+    ]);
+    // Immortalisée ⇒ présentée : le job des alertes ne pousse jamais une étape déjà dans le carnet.
+    for (const row of db.gamePhotoMoment.rows) {
+      expect(row.keptAt).toBeInstanceOf(Date);
+      expect(row.presentedAt).toEqual(row.keptAt);
+    }
+    const stamped = db.gamePhotoMoment.rows.map((row) => (row.keptAt as Date).getTime());
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const again = await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00002', stepIds: ['meesh:1', 'start'] });
+    expect(again.statusCode).toBe(200);
+    expect(again.json().data.kept).toEqual(expect.arrayContaining(first.json().data.kept));
+    expect(db.gamePhotoMoment.rows).toHaveLength(2);
+    expect(db.gamePhotoMoment.rows.map((row) => (row.keptAt as Date).getTime())).toEqual(stamped);
+    await app.close();
+  });
+
+  it('une étape déjà PRÉSENTÉE garde sa date de présentation et reçoit sa date d’immortalisation, sur la même ligne', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const presentedAt = new Date('2026-10-11T08:00:00.000Z');
+    db.gamePhotoMoment.rows.push({ id: photoMomentId(USER, 'rank:ambassadeur:4'), userId: USER, stepId: 'rank:ambassadeur:4', presentedAt, updatedAt: presentedAt });
+    const { app } = await buildApp(db);
+    const res = await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00001', stepIds: ['rank:ambassadeur:4'] });
+    expect(res.statusCode).toBe(200);
+    expect(db.gamePhotoMoment.rows).toHaveLength(1);
+    const [row] = db.gamePhotoMoment.rows;
+    expect(row!.presentedAt).toEqual(presentedAt);
+    expect(row!.keptAt).toBeInstanceOf(Date);
+    expect((row!.keptAt as Date).getTime()).toBeGreaterThan(presentedAt.getTime());
+    expect(res.json().data).toEqual({ kept: [{ stepId: 'rank:ambassadeur:4', keptAt: (row!.keptAt as Date).toISOString() }] });
+    await app.close();
+  });
+
+  it('une étape seulement DÉTECTÉE (app fermée) immortalisée depuis le carnet sort de la file du push : présentée et immortalisée', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const detectedAt = new Date('2026-10-11T08:00:00.000Z');
+    db.gamePhotoMoment.rows.push({ id: photoMomentId(USER, 'flame:7'), userId: USER, stepId: 'flame:7', detectedAt, updatedAt: detectedAt });
+    const { app } = await buildApp(db);
+    await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00001', stepIds: ['flame:7'] });
+    const [row] = db.gamePhotoMoment.rows;
+    expect(db.gamePhotoMoment.rows).toHaveLength(1);
+    expect(row!.detectedAt).toEqual(detectedAt);
+    expect(row!.presentedAt).toBeInstanceOf(Date);
+    expect(row!.keptAt).toEqual(row!.presentedAt);
+    await app.close();
+  });
+
+  it('le signal ne porte que des identifiants : plus de 64 ⇒ 400, une identité inconnue ⇒ 400 PHOTO_STEP_UNKNOWN et rien n’est écrit', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const { app } = await buildApp(db);
+    expect((await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00003', stepIds: PHOTO_STATIC_STEP_IDS.slice(0, 65) })).statusCode).toBe(400);
+    const unknown = await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00004', stepIds: ['start', 'invente:1'] });
+    expect(unknown.statusCode).toBe(400);
+    expect(unknown.json()).toMatchObject({ success: false, code: 'PHOTO_STEP_UNKNOWN' });
+    expect(db.gamePhotoMoment.rows).toEqual([]);
+    await app.close();
+  });
+
+  it('une image ou une date de prise glissée dans le corps n’atteint jamais le registre (la passerelle la retire ; le contrat partagé la refuse)', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const { app } = await buildApp(db);
+    const res = await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, {
+      requestId: 'kept-00001',
+      stepIds: ['start'],
+      image: 'data:image/jpeg;base64,AA==',
+      takenAt: '2026-10-21T08:00:00.000Z',
+    });
+    expect(res.statusCode).toBe(200);
+    expect(db.gamePhotoMoment.rows).toHaveLength(1);
+    const [row] = db.gamePhotoMoment.rows;
+    expect(Object.keys(row!).sort()).toEqual(['createdAt', 'id', 'keptAt', 'presentedAt', 'stepId', 'updatedAt', 'userId']);
+    expect((row!.keptAt as Date).toISOString()).not.toBe('2026-10-21T08:00:00.000Z');
+    await app.close();
+  });
+
+  it('plafond atteint ⇒ aucune ligne neuve ; une étape déjà gardée reste immortalisable', async () => {
+    const db = fakeGameDb();
+    seedUser(db);
+    const at = new Date('2026-10-11T08:00:00.000Z');
+    db.gamePhotoMoment.rows.push({ id: photoMomentId(USER, 'start'), userId: USER, stepId: 'start', presentedAt: at, updatedAt: at });
+    for (let i = 1; i < PHOTO_MOMENTS_ACCOUNT_MAX; i += 1) {
+      db.gamePhotoMoment.rows.push({ id: `seed${String(i).padStart(20, '0')}`, userId: USER, stepId: `seed:${i}`, updatedAt: at });
+    }
+    const { app } = await buildApp(db);
+    const res = await call(app, 'POST', GAME_PHOTO_ROUTES.photoKept, { requestId: 'kept-00001', stepIds: ['start', 'meesh:1'] });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.kept.map((k: { stepId: string }) => k.stepId)).toEqual(['start']);
+    expect(db.gamePhotoMoment.rows).toHaveLength(PHOTO_MOMENTS_ACCOUNT_MAX);
+    expect(db.gamePhotoMoment.rows.some((row) => row.stepId === 'meesh:1')).toBe(false);
+    await app.close();
+  });
+});
+
 describe('l’extension game.photo du bloc game', () => {
   const blockOf = async (db: FakeGameDb) => {
     const missions = new MissionService(db.prisma, { creditPoints: async () => undefined });
@@ -336,6 +450,7 @@ describe('l’extension game.photo du bloc game', () => {
     const photo = new GamePhotoService(db.prisma);
     await photo.markPresented(USER, ['start'], new Date('2026-10-11T08:00:00.000Z'));
     await photo.markPresented(USER, ['meesh:1'], new Date('2026-10-11T09:00:00.000Z'));
+    await photo.markKept(USER, ['start'], new Date('2026-10-11T10:00:00.000Z'));
 
     const served = (await blockOf(db)).photo;
     expect(gamePhotoBlockSchema.parse(served)).toEqual({
@@ -345,8 +460,8 @@ describe('l’extension game.photo du bloc game', () => {
       baseline,
       treasuryPeakTier: null,
       moments: [
-        { stepId: 'meesh:1', detectedAt: null, presentedAt: '2026-10-11T09:00:00.000Z', notifiedAt: null },
-        { stepId: 'start', detectedAt: null, presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null },
+        { stepId: 'start', detectedAt: null, presentedAt: '2026-10-11T08:00:00.000Z', notifiedAt: null, keptAt: '2026-10-11T10:00:00.000Z' },
+        { stepId: 'meesh:1', detectedAt: null, presentedAt: '2026-10-11T09:00:00.000Z', notifiedAt: null, keptAt: null },
       ],
     });
   });

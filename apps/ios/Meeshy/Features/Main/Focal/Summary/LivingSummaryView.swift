@@ -75,7 +75,7 @@ struct LivingSummaryView: View {
             if !viewModel.digest.isComplete {
                 Text(partialLine)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
         }
     }
@@ -114,10 +114,10 @@ struct LivingSummaryView: View {
             HStack(spacing: MeeshySpacing.xs) {
                 Text("✦")
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
                 Text(String(localized: "focal.summary.agent.title", defaultValue: "Vue d'ensemble de l'agent", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .heavy))
-                    .foregroundColor(MeeshyColors.indigo500)
+                    .foregroundStyle(MeeshyColors.indigo500)
             }
             Text(summary.text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
@@ -137,7 +137,7 @@ struct LivingSummaryView: View {
         Button(action: onResumeThread) {
             Text(String(localized: "focal.summary.resume_thread", defaultValue: "Reprendre le fil", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, MeeshySpacing.md)
                 .background(Capsule().fill(MeeshyColors.indigo500))

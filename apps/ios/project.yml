@@ -244,8 +244,10 @@ targets:
       # `CallSkinRetouchKernel` depuis `default.metallib`). Sans ces deux
       # drapeaux la bibliothèque compile mais `CIColorKernel` refuse la
       # fonction ; garde : `CallSkinRetouchTests.test_kernel_loadsFromTheAppLibrary`.
+      # L'édition de liens prend `-fcikernel` elle aussi : Xcode 27 déclare
+      # `-cikernel` obsolète (#11568), la bibliothèque produite est la même.
       MTL_COMPILER_FLAGS: "-fcikernel"
-      MTLLINKER_FLAGS: "-cikernel"
+      MTLLINKER_FLAGS: "-fcikernel"
     dependencies:
       - target: MeeshyWidgets
       - target: MeeshyNotificationExtension
@@ -370,6 +372,11 @@ targets:
       - path: MeeshyNotificationExtension/NotificationPayloadHelpers.swift
       - path: MeeshyNotificationExtension/NSETrustedOrigin.swift
     settings:
+      # #11568 — cette cible n'importe pas AppIntents : l'extracteur de
+      # métadonnées App Intents n'y a rien à lire et l'annonçait à chaque build
+      # (« Metadata extraction skipped »). L'app et les widgets, qui en déclarent,
+      # gardent l'extraction. Importer AppIntents ici ⇒ retirer ce réglage.
+      LM_SKIP_METADATA_EXTRACTION: YES
       INFOPLIST_FILE: MeeshyNotificationContentExtension/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.notification-content
       CODE_SIGN_STYLE: Automatic
@@ -432,6 +439,11 @@ targets:
       # Les noms courts des modèles du SDK (`Message`, `MessageAttachment`).
       - path: Meeshy/Features/Main/Models/MessageAliases.swift
     settings:
+      # #11568 — cette cible n'importe pas AppIntents : l'extracteur de
+      # métadonnées App Intents n'y a rien à lire et l'annonçait à chaque build
+      # (« Metadata extraction skipped »). L'app et les widgets, qui en déclarent,
+      # gardent l'extraction. Importer AppIntents ici ⇒ retirer ce réglage.
+      LM_SKIP_METADATA_EXTRACTION: YES
       INFOPLIST_FILE: MeeshyShareExtension/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.share-extension
       CODE_SIGN_STYLE: Automatic
@@ -459,6 +471,11 @@ targets:
     sources:
       - path: MeeshyBroadcastExtension
     settings:
+      # #11568 — cette cible n'importe pas AppIntents : l'extracteur de
+      # métadonnées App Intents n'y a rien à lire et l'annonçait à chaque build
+      # (« Metadata extraction skipped »). L'app et les widgets, qui en déclarent,
+      # gardent l'extraction. Importer AppIntents ici ⇒ retirer ce réglage.
+      LM_SKIP_METADATA_EXTRACTION: YES
       INFOPLIST_FILE: MeeshyBroadcastExtension/Info.plist
       PRODUCT_BUNDLE_IDENTIFIER: me.meeshy.app.broadcast
       CODE_SIGN_STYLE: Automatic

@@ -20,12 +20,12 @@ final class BadgeCountTests: XCTestCase {
 
     private var createdSuiteNames: [String] = []
 
-    override func tearDown() {
+    override func tearDown() async throws {
         for suite in createdSuiteNames {
             UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
         }
         createdSuiteNames.removeAll()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Un registre NEUF par coordinateur : la production partage `.shared`,

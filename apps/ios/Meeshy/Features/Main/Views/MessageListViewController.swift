@@ -7,24 +7,24 @@ import os
 
 final class MessageListViewController: UIViewController {
 
-    // `internal` (et non `private`/`fileprivate`) depuis la sortie du cluster de
-    // suivi de lecture vers `MessageListViewController+SeenTracking.swift`
-    // (#3947) : en Swift, `private` porte sur le FICHIER.
+    // `internal` (et non `private`/`fileprivate`) car le cluster de
+    // suivi de lecture vit dans `MessageListViewController+SeenTracking.swift` :
+    // en Swift, `private` porte sur le FICHIER.
     var collectionView: UICollectionView!
     var dataSource: UICollectionViewDiffableDataSource<MessageListSection, MessageListItem>!
     let store: MessageStore
     let currentUserId: String
     var accentColor: String
     let isDirect: Bool
-    // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
+    // `internal` (pas `private`) car `+UnreadSeparator.swift` y accède :
     // `private` est de portée FICHIER en Swift, même raison que
-    // `cancellables`/`lastTypingRosterFingerprint` (#4944).
+    // `cancellables`/`lastTypingRosterFingerprint`.
     var isDark: Bool
     let router: Router
     let storyViewModel: StoryViewModel
     let statusViewModel: StatusViewModel
     let conversationListViewModel: ConversationListViewModel?  // #7006 — remis aux cellules, jamais lu ici ; nil hors liste montée.
-    /// `internal` depuis la sortie du cluster snapshot (#4944) : en Swift,
+    /// `internal` car le cluster snapshot vit dans un autre fichier : en Swift,
     /// `private` porte sur le FICHIER.
     var cancellables = Set<AnyCancellable>()
     var isLoadingOlder = false
@@ -59,7 +59,7 @@ final class MessageListViewController: UIViewController {
     /// upward (toward older messages).
     let slowScrollSpeed: CGFloat = 80
 
-    /// La dernière préparation de snapshot construite — le MÉMO du #4944.
+    /// La dernière préparation de snapshot construite — le MÉMO.
     ///
     /// Réutilisée telle quelle tant que l'empreinte de la fenêtre ne bouge
     /// pas : un accusé de lecture, une réaction ou une transcription changent
@@ -68,7 +68,7 @@ final class MessageListViewController: UIViewController {
     /// dans l'empreinte — et ce qui n'y entre volontairement pas.
     var lastSnapshotPrep: MessageListSnapshotPrep?
 
-    /// Point d'accès de test (#4944) — `internal`, lu par `@testable import
+    /// Point d'accès de test — `internal`, lu par `@testable import
     /// Meeshy`, jamais par une autre cible app. Compte les préparations
     /// RÉELLEMENT construites : c'est le seul témoin qui distingue « la liste
     /// s'est reposée » de « la liste a tout recalculé ».
@@ -131,7 +131,7 @@ final class MessageListViewController: UIViewController {
         didSet {
             guard isHeaderExpanded != oldValue else { return }
             stickyDayState.isHeaderExpanded = isHeaderExpanded
-            // F-086bis (WS-2) : même règle que la pill de jour — un header
+            // Même règle que la pill de jour — un header
             // déplié retire aussi la pilule jour·heure.
             scrollTimePillState.isHeaderExpanded = isHeaderExpanded
         }
@@ -142,7 +142,7 @@ final class MessageListViewController: UIViewController {
     /// temporelle, qui déclarait lus 200 messages quand 10 tenaient à l'écran.
     ///
     /// Voir `docs/superpowers/specs/2026-07-24-read-exactness-design.md`.
-    /// `(vus, visibles)` — #3902, deux questions distinctes : ce que la liste a
+    /// `(vus, visibles)` — deux questions distinctes : ce que la liste a
     /// vu ASSEZ LONGTEMPS, et ce qu'elle MONTRE. La seconde dit le rattrapage.
     var onMessagesSeen: (([String], [String]) -> Void)?
     /// Invoked when the user taps a story reply preview inside a bubble.
@@ -160,17 +160,16 @@ final class MessageListViewController: UIViewController {
     /// (forward gesture). Receives the message id of the swiped bubble.
     var onSwipeForward: ((String) -> Void)?
     /// Long press on a bubble — opens the contextual options menu. L'aperçu
-    /// élevé est le message NORMAL, dans tous les modes de lecture
-    /// (directive 2026-08-23) : voir la note à l'emplacement de l'ancien
-    /// `focalOverlayPreview`. Carries the message id and the tapped bubble
+    /// élevé est le message NORMAL, dans tous les modes de lecture.
+    /// Carries the message id and the tapped bubble
     /// cell's on-screen frame (window coords; `nil` when the cell is not
-    /// realized), même patron qu'`onAddReaction` — #4004 (2026-08-27) : le
+    /// realized), même patron qu'`onAddReaction` : le
     /// menu longpress ferme le clavier et remonte le message vers le centre
     /// s'il est trop bas, ce qui exige le VRAI frame de la cellule.
     var onLongPress: ((String, CGRect?) -> Void)?
-    /// L'appui long d'une TUILE (#9907) : message, pièce, frame de la cellule.
+    /// L'appui long d'une TUILE : message, pièce, frame de la cellule.
     var onLongPressPiece: ((String, String, CGRect?) -> Void)?
-    /// #9911 — la pièce citée à mettre en évidence quand le saut se pose, et le canal des tuiles.
+    /// La pièce citée à mettre en évidence quand le saut se pose, et le canal des tuiles.
     var pendingPieceSpotlight: (localId: String, pieceId: String)?
     let pieceSpotlight = PassthroughSubject<String, Never>()
     /// id de la bulle présentée dans l'overlay d'appui long. La cellule live
@@ -199,12 +198,12 @@ final class MessageListViewController: UIViewController {
                 // Focal : une reconfiguration remet la cellule à plat et sans
                 // carte (registration) — la passe la repose aussitôt, sinon la
                 // carte du message en focus disparaît jusqu'au prochain tick
-                // (à l'ouverture, avant tout défilement : capture 2026-08-21).
+                // (à l'ouverture, avant tout défilement).
                 self?.applyFocalPerspectiveToVisibleCells()
             }
         }
     }
-    /// **Mode sélection multiple (#4005).** `didSet` gardé (`oldValue !=
+    /// **Mode sélection multiple.** `didSet` gardé (`oldValue !=
     /// newValue`), même patron que `readingMode` : une réaffectation
     /// identique à chaque tick SwiftUI (`updateUIViewController` s'exécute à
     /// chaque re-render) est un no-op — sans la garde, `applySnapshot`
@@ -218,18 +217,17 @@ final class MessageListViewController: UIViewController {
     var selectedMessageIds: Set<String> = [] {
         didSet {
             guard oldValue != selectedMessageIds, isViewLoaded else { return }
-            // Retour porteur 2026-08-27 (#515) : `.allItems` reconfigurait
-            // TOUTE rangée visible pour une coche qui ne change QUE sur UN
-            // message — contraire au gate `.equatable()` (#515) que ce coût
+            // `.allItems` reconfigurerait TOUTE rangée visible pour une coche qui ne
+            // change QUE sur UN message — contraire au gate `.equatable()` que ce coût
             // existe précisément pour éviter. La différence symétrique des
             // deux `Set` est exactement l'ensemble des id dont l'état de
             // coche a changé.
             //
-            // #4022 : la sélection stocke `message.id` (= `serverId ?? localId`,
+            // La sélection stocke `message.id` (= `serverId ?? localId`,
             // cf. MessageRecord+ToMessage:107), mais les items de la data source
             // sont keyés sur le LOCAL id. Pour un message CONFIRMÉ (serverId ≠
-            // localId), `.items(serverId)` ne matchait AUCUNE cellule → la coche
-            // s'incrémentait au compteur sans jamais s'afficher. On traduit donc
+            // localId), `.items(serverId)` ne matcherait AUCUNE cellule → la coche
+            // s'incrémenterait au compteur sans jamais s'afficher. On traduit donc
             // chaque id changé vers son localId (`serverIdToLocalId`, sinon l'id
             // est déjà un localId — message optimiste).
             let changedIds = oldValue.symmetricDifference(selectedMessageIds)
@@ -241,7 +239,7 @@ final class MessageListViewController: UIViewController {
     /// mutation (plafond `ConversationOverlayState.selectionCap` compris),
     /// ce contrôleur ne fait que relayer l'id tapé.
     var onToggleSelection: ((String) -> Void)?
-    /// **Les opérations servies EN PREMIER par le menu système** (#6117 ; « Imager » y remplace « Composer », #8692), plus la porte du GRAND menu.
+    /// **Les opérations servies EN PREMIER par le menu système** (« Imager » y remplace « Composer »), plus la porte du GRAND menu.
     var onEditMessage: ((String) -> Void)?
     var onSelectMessage: ((String) -> Void)?
     var onComposeFromMessage: ((String) -> Void)?
@@ -275,7 +273,7 @@ final class MessageListViewController: UIViewController {
     /// Open the detail sheet on the language / translation tab.
     var onShowTranslationDetail: ((String) -> Void)?
     var longMessageExpansionState = LongMessageExpansionState() // #8147 / #8157
-    /// Lot 3.2 — carte lieu de la rangée plate : plein écran (ConversationView), avec son message (#9621).
+    /// Carte lieu de la rangée plate : plein écran (ConversationView), avec son message.
     var onFocalTapLocation: ((SharedPlace, String) -> Void)?
     /// Lot 3.2 — partage d'un fichier téléchargé depuis la rangée plate.
     var onFocalShareFile: ((URL) -> Void)?
@@ -298,12 +296,12 @@ final class MessageListViewController: UIViewController {
     /// must not retain its parent's state. When nil (deallocating), cells
     /// render with empty translation state — the next `applySnapshot` after
     /// re-attachment will refresh them.
-    /// **Le ViewModel peut arriver APRÈS `viewDidLoad`** (#5947). Toutes les
-    /// observations qui en dépendent vivaient derrière un `guard let` au milieu
+    /// **Le ViewModel peut arriver APRÈS `viewDidLoad`.** Toutes les
+    /// observations qui en dépendent vivraient derrière un `guard let` au milieu
     /// d'`observeStore()`, appelée une seule fois au chargement : quand il
-    /// n'était pas encore posé, la fonction sortait et **rien ne la rappelait**.
+    /// n'est pas encore posé, la fonction sortirait et **rien ne la rappellerait**.
     /// Le roster de frappe, les traductions, les transcriptions, les audios
-    /// traduits et les anneaux de story n'étaient alors JAMAIS observés — sans
+    /// traduits et les anneaux de story ne seraient alors JAMAIS observés — sans
     /// le moindre signe, l'abonnement d'avant le `guard` continuant de rendre
     /// les messages.
     weak var conversationViewModel: ConversationViewModel? {
@@ -323,18 +321,16 @@ final class MessageListViewController: UIViewController {
     /// abonnement doublerait chaque re-snapshot ; le témoin le garde.
     var conversationViewModelObservationCount = 0
 
-    /// L'apparence choisie pour la conversation et la peau des bulles qui s'en déduit (#10753, `+Appearance`).
+    /// L'apparence choisie pour la conversation et la peau des bulles qui s'en déduit (`+Appearance`).
     var conversationAppearance: ConversationAppearance?
     var bubbleSkin: BubbleSkin = .brand
 
     // MARK: - Mode de lecture rendu (Script/bulles)
 
     /// Mode de lecture réellement rendu. Décision de l'orchestrateur,
-    /// clampée par `ReadingModeController` — **RETRAIT FOCAL iOS
-    /// (2026-08-18)** : `.focal` n'atteint plus jamais cet hôte, le pass de
-    /// perspective et ses six sites d'appel sont SUPPRIMÉS (code complet au
-    /// commit `bce87148c`, doc `docs/focal-retrait-ios-2026-08-18.md`).
-    /// Restent DEUX rendus : `.bubbles` (historique) et la rangée plate
+    /// clampée par `ReadingModeController` : `.focal` n'atteint jamais cet hôte
+    /// (il n'y a pas de pass de perspective).
+    /// Deux rendus : `.bubbles` et la rangée plate
     /// uniforme (`usesFlatRow` — Script). Un changement de mode re-registre
     /// toutes les cellules (bulle ↔ rangée plate) et recale les estimations
     /// de hauteur du layout.
@@ -355,7 +351,7 @@ final class MessageListViewController: UIViewController {
     var focalDetailsPendingAfterApply = false
     /// La SCÈNE Focal est active — perspective posée — seulement pendant un
     /// geste utilisateur et `FocalMetrics.Scene.restDelay` après la pose ;
-    /// au repos, tout est Script (directive user 2026-08-21).
+    /// au repos, tout est Script.
     var focalSceneActive = false
     /// Instant d'activation : les ticks de la fenêtre d'entrée animent depuis
     /// la valeur présentée au lieu de sauter.
@@ -364,7 +360,7 @@ final class MessageListViewController: UIViewController {
     /// premier tick d'un nouveau geste.
     var focalFlattenWork: DispatchWorkItem?
     /// Vitesse du défilement en cours — la décélération n'en donne aucune
-    /// autre (`FocalFocusDetailsMotionLaw`, #7624).
+    /// autre (`FocalFocusDetailsMotionLaw`).
     var focalScrollSpeedMeter = ScrollSpeedMeter()
 
     var readingMode: ConversationReadingMode = .bubbles {
@@ -375,7 +371,7 @@ final class MessageListViewController: UIViewController {
             // INTÉGRALE ci-dessous — qui ne sert qu'à redessiner des cellules
             // dans la pose du nouveau mode — n'a personne à qui montrer son
             // résultat. Elle se rejoue au RETOUR, ce `didSet` étant appelé
-            // dans les deux sens (#3947).
+            // dans les deux sens.
             syncThreadQuiescence()
             collectionView.collectionViewLayout.invalidateLayout()
             // #4602 — le mémo de la pastille de jour est aveugle au LAYOUT.
@@ -385,10 +381,10 @@ final class MessageListViewController: UIViewController {
             // géométrie ne bouge pas. Une bascule de mode change les hauteurs
             // de rangée sans changer les items : le même message reste en tête
             // pendant qu'un séparateur de date d'un AUTRE jour entre dans la
-            // bande de la pastille. Le mémo faisait alors garder à la sticky
+            // bande de la pastille. Le mémo ferait alors garder à la sticky
             // le jour d'avant, superposé au séparateur natif — deux pastilles,
             // deux dates, jusqu'au premier défilement qui change l'item de
-            // tête (d'où la résorption spontanée en quelques secondes).
+            // tête.
             //
             // On VIDE plutôt qu'on ne recalcule ici : `invalidateLayout()` est
             // paresseux, la nouvelle géométrie n'existe pas encore. Le
@@ -421,26 +417,25 @@ final class MessageListViewController: UIViewController {
     static let optimisticStates: Set<MessageState> = [.draft, .queued, .sending]
 
     /// Estimations de layout — voir `configureCollectionView` pour le
-    /// raisonnement. Rangée plate : en-tête + une ligne de texte + marges
-    /// (la réserve de barre de focus est retirée avec le mode Focal).
+    /// raisonnement. Rangée plate : en-tête + une ligne de texte + marges.
     /// Bulle : la valeur historique, inchangée.
     /// 150 — le point de fonctionnement PROUVÉ stable du solveur self-sizing
-    /// (l'abaissement d'essai à 120 pendant le retrait Focal densifiait la
+    /// (un abaissement à 120 densifierait la
     /// réalisation de cellules par frame au fling, pression en plus sur la
-    /// cascade de compensations — revenu à 150 le 2026-08-18).
+    /// cascade de compensations).
     private static let estimatedFlatRowLayoutHeight: CGFloat = 150
     private static let estimatedBubbleRowLayoutHeight: CGFloat = 80
 
-    /// **Estimations APPRISES du fil courant** (#4041), une par famille de
+    /// **Estimations APPRISES du fil courant**, une par famille de
     /// rangée : la rangée plate (Focal/Script) et la bulle n'ont pas la même
     /// cote, et une bascule de mode ne doit jamais servir celle de l'autre.
     ///
-    /// Les deux constantes ci-dessus ne sont plus la valeur DÉFINITIVE mais
-    /// le point de DÉPART : 150 est la cote d'une TÊTE DE GROUPE, alors que
+    /// Les deux constantes ci-dessus sont le point de DÉPART, non la valeur
+    /// DÉFINITIVE : 150 est la cote d'une TÊTE DE GROUPE, alors que
     /// la population dominante d'un fil est la rangée DE SUITE (~51 pt
-    /// mesurés). Servir 150 à toutes faisait entrer chaque cellule ~100 pt
-    /// trop haute avant qu'elle ne se rétracte — l'« effet de défilement
-    /// étiré » de la capture du 2026-08-27.
+    /// mesurés). Servir 150 à toutes ferait entrer chaque cellule ~100 pt
+    /// trop haute avant qu'elle ne se rétracte — un « effet de défilement
+    /// étiré ».
     ///
     /// L'adoption passe par `MessageListHeightEstimationLaw` et n'a lieu qu'à
     /// la POSE : changer l'estimation change la hauteur de tout le contenu
@@ -455,7 +450,7 @@ final class MessageListViewController: UIViewController {
             : (learnedBubbleRowHeight ?? Self.estimatedBubbleRowLayoutHeight)
     }
 
-    /// Point d'accès de test (#4041) — `internal`, lu par `@testable import
+    /// Point d'accès de test — `internal`, lu par `@testable import
     /// Meeshy`, jamais par une autre cible app.
     var rowHeightEstimateForTesting: CGFloat { currentRowHeightEstimate }
 
@@ -549,8 +544,8 @@ final class MessageListViewController: UIViewController {
 
     /// Hauteur de la bande status bar / Dynamic Island que la liste recouvre
     /// depuis que le parent SwiftUI l'étend sous la safe area haute
-    /// (`ignoresSafeArea(.container, edges: .top)`, retour user 2026-08-12 :
-    /// « de la transparence jusqu'en bordure d'écran »). Fournie par le parent
+    /// (`ignoresSafeArea(.container, edges: .top)`) pour la transparence
+    /// jusqu'en bordure d'écran. Fournie par le parent
     /// (`DeviceLayout.safeAreaTop`) et JAMAIS lue via `view.safeAreaInsets` :
     /// sous `ignoresSafeArea`, SwiftUI ne propage plus l'inset au contrôleur
     /// hébergé, la vue croirait la bande inexistante et poserait la pill de
@@ -568,20 +563,20 @@ final class MessageListViewController: UIViewController {
     }
 
     /// Hauteur MESURÉE de la bande d'en-tête (grandit avec Dynamic Type) :
-    /// les pilules et la réserve de la rangée plate la suivent (#7998).
+    /// les pilules et la réserve de la rangée plate la suivent.
     var headerBandHeight: CGFloat = 0 {
         didSet { if oldValue != headerBandHeight { applyTopInsetToViews() } }
     }
 
     private func applyTopInsetToViews() {
         guard collectionView != nil else { return }
-        // Rangée plate : le repos réserve la rangée de l'en-tête (#6013).
+        // Rangée plate : le repos réserve la rangée de l'en-tête.
         let restTop = topInset + ThreadHeadClearance.value(usesFlatRow: readingMode.usesFlatRow, headerBandHeight: headerBandHeight)
         if collectionView.contentInset.bottom != restTop {
             collectionView.contentInset.bottom = restTop
             collectionView.verticalScrollIndicatorInsets.bottom = restTop
         }
-        // Garde source ConversationTopChromeFadeTests (#7998 : hauteur mesurée).
+        // Garde source ConversationTopChromeFadeTests (hauteur mesurée).
         stickyDayTopConstraint?.constant = topInset + MessageDayStickyPlacement.topOffset(headerBandHeight: headerBandHeight)
         // F-086bis (WS-2) : ancre de la pilule jour·heure, si montée.
         scrollTimePillTopConstraint?.constant = topInset + MessageDayStickyPlacement.scrollTimePillTop(headerBandHeight: headerBandHeight)
@@ -600,10 +595,9 @@ final class MessageListViewController: UIViewController {
     /// la garde des REPORTS de reconfigure (§4.7ter) : re-mesurer des
     /// cellules pendant que la liste bouge nourrit la cascade self-sizing.
     ///
-    /// Ce signal ne pilote PLUS le chrome : les boutons d'action reviennent
-    /// dès la LEVÉE du doigt (`setChromeHiddenForScroll`, retour user
-    /// 2026-08-18 — « lorsqu'on décélère, les boutons doivent s'afficher
-    /// directement »), pas à l'arrêt complet.
+    /// Ce signal ne pilote PAS le chrome : les boutons d'action reviennent
+    /// dès la LEVÉE du doigt (`setChromeHiddenForScroll`), pas à l'arrêt
+    /// complet — lorsqu'on décélère, les boutons s'affichent directement.
     func setScrollingActive(_ active: Bool) {
         guard store.isUserScrolling != active else { return }
         store.isUserScrolling = active
@@ -617,7 +611,7 @@ final class MessageListViewController: UIViewController {
     /// La pill de jour suit la même règle en rangée plate ; Bulles :
     /// comportement historique, la pilule suit le défilement.
     private var isChromeHiddenForScroll = false
-    /// Le clavier part D'ABORD (#8000) — `KeyboardFirstScroll.swift`.
+    /// Le clavier part D'ABORD — `KeyboardFirstScroll.swift`.
     let keyboardFirst = KeyboardFirstScrollGate()
     /// Offset d'arrivée de la décélération en cours (`nil` hors décélération).
     var decelerationTargetOffsetY: CGFloat?
@@ -625,12 +619,10 @@ final class MessageListViewController: UIViewController {
     func setChromeHiddenForScroll(_ hidden: Bool) {
         guard isChromeHiddenForScroll != hidden else { return }
         isChromeHiddenForScroll = hidden
-        // **Le sticker de date RESTE** (directive 2026-08-24 : « il doit rester
-        // lorsque tous les autres composants disparaissent durant le scroll »).
-        // Il s'effaçait avec le reste du chrome en Script et en Focal — or
-        // c'est pendant le défilement qu'il sert : c'est le seul repère qui
-        // dise OÙ l'on est dans le fil. Le reste du chrome continue de se
-        // retirer (`onScrollingActiveChanged`).
+        // **Le sticker de date RESTE** lorsque tous les autres composants
+        // disparaissent durant le scroll : c'est pendant le défilement qu'il
+        // sert, c'est le seul repère qui dise OÙ l'on est dans le fil. Le reste
+        // du chrome se retire (`onScrollingActiveChanged`).
         stickyDayState.isSuppressed = false
         onScrollingActiveChanged?(hidden)
     }
@@ -645,7 +637,7 @@ final class MessageListViewController: UIViewController {
     /// arrivés PENDANT le geste. Une traduction qui change le nombre de
     /// lignes re-mesure une cellule visible et décale tout ce qui est
     /// au-dessus — exactement le saut que le report du reconfigure GLOBAL
-    /// évitait déjà (audit 2026-08-18 : ce chemin-ci n'était pas gardé).
+    /// évite déjà.
     var deferredTargetedReconfigureIds: Set<String> = []
 
     func flushDeferredReconfigureAtSettle() {
@@ -681,20 +673,20 @@ final class MessageListViewController: UIViewController {
     private func syncFocalOverscan() {
         guard isViewLoaded, let layout = collectionView.collectionViewLayout as? MessageListLayout else { return }
         focalOverscanBoundsHeight = collectionView.bounds.height
-        // 2026-08-25 : sur-réserve NULLE, tous modes. Elle n'a jamais servi
-        // qu'à la COMPACTION (`FocalScrollPerspective.poses` — « des cellules
+        // Sur-réserve NULLE, tous modes. Elle ne servirait qu'à la COMPACTION
+        // (`FocalScrollPerspective.poses` — « des cellules
         // encore hors écran pour UIKit doivent déjà exister pour occuper la
-        // place libérée »), qui n'est plus APPLIQUÉE : la loi reste écrite et
+        // place libérée »), qui n'est pas APPLIQUÉE : la loi reste écrite et
         // testée, la passe ne la joue pas. Tant qu'il en est ainsi, Focal
-        // pré-réalisait 0,3 hauteur d'écran de cellules par frame pour rien.
+        // pré-réaliserait 0,3 hauteur d'écran de cellules par frame pour rien.
         // `overscanFraction` et la machinerie de `MessageListLayout` restent
         // en place : c'est ici que la compaction se rebranche avec elles.
         //
-        // Corollaire (F8, revue adversariale 2026-08-25) : `layout.focalOverscan`
-        // valant désormais TOUJOURS 0, la comptabilité ci-dessus
+        // Corollaire : `layout.focalOverscan`
+        // valant TOUJOURS 0, la comptabilité ci-dessus
         // (`focalOverscanBoundsHeight`, le tracking de `bounds.height`, et le
-        // guard de `viewDidLayoutSubviews` en dessous) ne prévient plus
-        // aucune invalidation parasite — `MessageListLayout.focalOverscan`
+        // guard de `viewDidLayoutSubviews` en dessous) ne prévient aucune
+        // invalidation parasite — `MessageListLayout.focalOverscan`
         // déduplique déjà via son `didSet` (`if oldValue != focalOverscan`).
         // C'est de la cérémonie inoffensive, gardée intacte comme point de
         // rebranchement pour quand la compaction reviendra.
@@ -712,10 +704,10 @@ final class MessageListViewController: UIViewController {
     private var bubbleHostingWidth: CGFloat = 0
 
     /// iPad : fenêtre redimensionnée (Stage Manager, Split View), rotation,
-    /// séparateur de colonnes glissé. Les cellules à l'écran gardaient la
+    /// séparateur de colonnes glissé. Les cellules à l'écran garderaient la
     /// largeur max de leur configuration — bulles rognées ou trop étroites
     /// jusqu'au recyclage — et une cellule configurée avant le premier layout
-    /// (largeur 0) avait pris celle de la FENÊTRE. Elles se reconfigurent.
+    /// (largeur 0) prendrait celle de la FENÊTRE. Elles se reconfigurent.
     private func reconfigureVisibleCellsIfWidthChanged() {
         let width = collectionView.bounds.width
         guard Self.widthChangeRehostsBubbles(from: bubbleHostingWidth, to: width) else { return }
@@ -744,8 +736,8 @@ final class MessageListViewController: UIViewController {
         // lecture est PERSISTANT et arrive AVANT le chargement de la vue, si
         // bien que son `didSet` y sort sur `isViewLoaded`. Une conversation
         // ouverte DIRECTEMENT en Rivière ou en Résumé — le cas nominal, pas un
-        // cas limite — démarrait donc son timer 4 Hz et ne le voyait jamais
-        // s'arrêter, faute de changement de mode ultérieur (#3947).
+        // cas limite — démarrerait donc son timer 4 Hz et ne le verrait jamais
+        // s'arrêter, faute de changement de mode ultérieur.
         syncThreadQuiescence()
         // Apply the initial snapshot from whatever the store already holds.
         // The store's `messagesDidChange` PassthroughSubject is fire-and-forget:
@@ -783,7 +775,7 @@ final class MessageListViewController: UIViewController {
         // reprendre. Ce n'est pas une saccade de rendu, c'est le contenu qui
         // recule.
         //
-        // `80` convenait à la bulle. La rangée Focal, elle, réserve désormais
+        // `80` convient à la bulle. La rangée Focal, elle, réserve
         // en permanence la hauteur d'en-tête focale (34) ET le créneau de la
         // barre de contrôles (28), plus ses marges : elle tourne autour de
         // 150. Supposer 80 garantissait donc une correction de ~70 pt par
@@ -798,9 +790,9 @@ final class MessageListViewController: UIViewController {
         // `visualMidY` étant fonction de `center.y − offset`).
         let layout = MessageListLayout { [weak self] _, _ in
             // L'estimation est APPRISE du fil courant dès que la liste a
-            // posé assez de cellules (#4041) — la constante n'est plus que le
+            // posé assez de cellules — la constante n'est que le
             // point de départ. Repli sur la cote de bulle quand l'hôte est
-            // parti : comportement historique de ce closure, inchangé.
+            // parti.
             let estimate = self?.currentRowHeightEstimate ?? Self.estimatedBubbleRowLayoutHeight
             return MessageListSectionLayout.section(
                 estimate: estimate,
@@ -831,20 +823,15 @@ final class MessageListViewController: UIViewController {
         // the oldest (visual top). We handle status-bar taps manually if needed.
         collectionView.scrollsToTop = false
         collectionView.delegate = self
-        // LE FIL N'EST PLUS VOILÉ (#6537). `ThreadChromeFadeContainer` posait
-        // un masque plein écran pour estomper le fil sous l'en-tête et le
-        // composeur (#6013). Le chrome est fait de PASTILLES FLOTTANTES : la
-        // bande cachait donc aussi tout ce qui se trouve À CÔTÉ d'elles, et un
-        // texte masqué ne se lit ni ne se touche.
-        //
-        // Directive porteur 2026-09-14 : « supprimer ces voiles, non pas
-        // simplement les rendre invisible, mais permettre qu'on manipule les
-        // éléments entre — de l'entête à la frontière de l'universal composer
-        // bar ».
+        // LE FIL N'EST PAS VOILÉ. Un masque plein écran pour estomper le fil sous
+        // l'en-tête et le composeur cacherait tout ce qui se trouve À CÔTÉ des
+        // PASTILLES FLOTTANTES qui font le chrome, et un texte masqué ne se lit ni
+        // ne se touche : le fil se manipule de l'en-tête à la frontière de
+        // l'universal composer bar.
         view.addSubview(collectionView)
     }
 
-    // MARK: - Groupe de rangées (Script/Focal, #3919)
+    // MARK: - Groupe de rangées (Script/Focal)
 
     /// Identifiants (ordre chronologique) du groupe qui se TERMINE au
     /// message `lastLocalId` — remonte `store.messages` tant que le message
@@ -861,15 +848,15 @@ final class MessageListViewController: UIViewController {
     // MARK: - Snapshot
 
     // `SnapshotReconfigureScope` vit dans `MessageListViewController+Snapshot.swift`
-    // avec le reste du cluster (#4944) — le budget de 1000-1200 lignes interdit
+    // avec le reste du cluster — le budget de 1000-1200 lignes interdit
     // d'ajouter à cet hôte sans en avoir d'abord extrait.
 
     /// Versions posées à la DERNIÈRE pose non différée — la base du diff
     /// `.changedRecords`. PAS mise à jour quand le reconfigure est différé
     /// (§4.7ter) : le flush à la pose retrouve ainsi l'intégralité du delta.
     var lastReconfigureBaseline: [String: Int64] = [:]
-    /// `internal` (et non `private`) depuis la sortie du cluster snapshot vers
-    /// `MessageListViewController+Snapshot.swift` (#4944) : le chemin court de
+    /// `internal` (et non `private`) car le cluster snapshot vit dans
+    /// `MessageListViewController+Snapshot.swift` : le chemin court de
     /// la frappe le tient à jour, et en Swift `private` porte sur le FICHIER.
     var lastTypingRosterFingerprint = ""
     var lastConversationStartFingerprint = ""
@@ -886,7 +873,7 @@ final class MessageListViewController: UIViewController {
     /// sur-le-champ en restaurant cette ancre — quel que soit le mécanisme
     /// du saut (re-hosting qui repasse par la hauteur estimée, clamp d'un
     /// contentSize transitoirement effondré, corrections du solveur
-    /// self-sizing : tous reproduits au simulateur 2026-08-18, aucun
+    /// self-sizing : tous reproduits au simulateur, aucun
     /// compensable à sa source car le chemin self-resizing des cellules
     /// hosting ne traverse aucun hook du layout). C'est la loi du ROULEAU :
     /// la scène n'appartient qu'au doigt.
@@ -894,7 +881,7 @@ final class MessageListViewController: UIViewController {
 
     /// Vrai pendant un défilement programmatique VOULU (saut recherche/
     /// citation, slow-scroll de recherche) — le verrou laisse faire.
-    /// `internal` depuis `+UnreadSeparator.swift` (#7222) : même raison que
+    /// `internal` car `+UnreadSeparator.swift` y accède : même raison que
     /// `isDark` juste au-dessus.
     var isIntentionalProgrammaticScroll = false
     var programmaticScrollRelease: Task<Void, Never>?
@@ -905,7 +892,7 @@ final class MessageListViewController: UIViewController {
         isIntentionalProgrammaticScroll = true
     }
 
-    /// La frontière gelée du séparateur de premier non-lu (#7222) — voir
+    /// La frontière gelée du séparateur de premier non-lu — voir
     /// `MessageListViewController+UnreadSeparator.swift`. `internal`, pas
     /// `private` : ce fichier est hors du budget 1000-1200 lignes, la
     /// logique vit dans son extension dédiée.
@@ -958,14 +945,14 @@ final class MessageListViewController: UIViewController {
     /// `visibleIndexPaths` : l'inventaire déjà lu par l'appelant du tour de
     /// frame (`scrollViewDidScroll`) — `nil` ⇒ lecture interne, pour les
     /// appels hors défilement (`scrollToBottom`, `settleAtRest`).
-    // `internal` (pas `private`) depuis `+UnreadSeparator.swift` (#7222) :
+    // `internal` (pas `private`) car `+UnreadSeparator.swift` y accède :
     // tout défilement VOULU rend la scène au verrou en faisant ADOPTER à
     // l'ancre la position atteinte — même raison de portée que `isDark` et
     // `applySnapshot` plus haut (`private` porte sur le FICHIER en Swift).
     func captureSceneLockAnchor(visibleIndexPaths: [IndexPath]? = nil) {
         // Appelé à CHAQUE frame de défilement : une seule lecture d'attributs
         // par cellule visible (le `max(by:)` en relisait deux par comparaison,
-        // soit ~2·n·log n par frame — audit fluidité 2026-08-21).
+        // soit ~2·n·log n par frame).
         var topIndexPath: IndexPath?
         var topAttributes: UICollectionViewLayoutAttributes?
         for indexPath in visibleIndexPaths ?? collectionView.indexPathsForVisibleItems {

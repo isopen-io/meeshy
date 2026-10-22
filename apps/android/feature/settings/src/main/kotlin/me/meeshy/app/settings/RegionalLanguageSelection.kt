@@ -2,6 +2,7 @@ package me.meeshy.app.settings
 
 import me.meeshy.sdk.model.LanguageData
 import me.meeshy.sdk.model.LanguageInfo
+import me.meeshy.sdk.model.search.SearchTextFolder
 
 /** A selectable regional (secondary content) language in the picker. */
 data class RegionalLanguageOption(
@@ -32,8 +33,9 @@ data class RegionalLanguagePresentation(
  *    inconsistency (`regional == system`) never hides the active selection.
  *  - Selection matching is trimmed and case-insensitive; a blank/absent/unknown stored
  *    code yields no label and no marked option (never a crash).
- *  - The search query is trimmed and matches case-insensitively over the English name,
- *    the native name and the code; an empty/whitespace query returns every option.
+ *  - The search query is trimmed and matches case- and accent-insensitively over the
+ *    English name, the native name and the code ("francais" finds "Français"); an
+ *    empty/whitespace query returns every option.
  *  - [selectedLabel] reflects the stored choice regardless of the transient search filter.
  */
 object RegionalLanguageSelection {
@@ -45,7 +47,7 @@ object RegionalLanguageSelection {
     ): RegionalLanguagePresentation {
         val selected = regionalCode.cleaned()
         val primary = systemCode.cleaned()
-        val needle = query.trim()
+        val needle = SearchTextFolder.fold(query.trim())
         val options = LanguageData.allLanguagesCommonFirst
             .filter { it.code.notEquiv(primary) || it.code.equiv(selected) }
             .filter { needle.isEmpty() || it.matches(needle) }
@@ -65,10 +67,10 @@ object RegionalLanguageSelection {
             isSelected = code.equiv(selected),
         )
 
-    private fun LanguageInfo.matches(needle: String): Boolean =
-        name.contains(needle, ignoreCase = true) ||
-            nativeName.contains(needle, ignoreCase = true) ||
-            code.contains(needle, ignoreCase = true)
+    private fun LanguageInfo.matches(foldedNeedle: String): Boolean =
+        SearchTextFolder.fold(name).contains(foldedNeedle) ||
+            SearchTextFolder.fold(nativeName).contains(foldedNeedle) ||
+            SearchTextFolder.fold(code).contains(foldedNeedle)
 
     private fun String.equiv(other: String?): Boolean =
         other != null && equals(other, ignoreCase = true)

@@ -84,6 +84,10 @@ const reportRow = (over: Record<string, unknown> = {}) => ({
 function makePrisma() {
   return {
     adminAuditLog: { create: jest.fn<any>().mockResolvedValue({}) },
+    post: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    postComment: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    message: { findUnique: jest.fn<any>().mockResolvedValue(null) },
+    sound: { findUnique: jest.fn<any>().mockResolvedValue(null) },
     friendRequest: {
       findUnique: jest.fn<any>().mockResolvedValue({ id: INVITATION, status: 'pending', senderId: SENDER, receiverId: RECEIVER }),
       update: jest.fn<any>().mockResolvedValue({
@@ -174,6 +178,57 @@ describe('PATCH /admin/reports/:id — la décision de modération est tracée',
     expect((await app.inject({ method: 'PATCH', url: `/${REPORT}`, payload: { status: 'resolved' } })).statusCode).toBe(500);
 
     expect(prisma.adminAuditLog.create).not.toHaveBeenCalled();
+    await app.close();
+  });
+});
+
+describe("un modérateur ne traite pas un signalement qui vise son propre contenu (#10458)", () => {
+  const deleteReport = jest.fn<any>();
+  const ownPost = () => {
+    const prisma = makePrisma();
+    prisma.post.findUnique.mockResolvedValue({ authorId: ACTOR });
+    getReportById.mockResolvedValue(reportRow({ reportedType: 'post' }));
+    return prisma;
+  };
+
+  it('PATCH : classer, rejeter ou résoudre le signalement de SA publication rend 403 SELF_MODERATION, sans écriture, le refus journalisé', async () => {
+    const prisma = ownPost();
+    const app = await build(prisma, reportRoutes, 'MODERATOR');
+    for (const status of ['dismissed', 'rejected', 'resolved']) {
+      const res = await app.inject({ method: 'PATCH', url: `/${REPORT}`, payload: { status, moderatorNotes: 'rien à voir' } });
+      expect(res.statusCode).toBe(403);
+      expect(res.json().code).toBe('SELF_MODERATION');
+    }
+    expect(updateReport).not.toHaveBeenCalled();
+    expect(auditRows(prisma).map((row: any) => row.action)).toEqual(Array(3).fill('ADMIN_REPORT_SELF_MODERATION_REFUSED'));
+    expect(JSON.parse(auditRows(prisma)[0].metadata)).toEqual({ code: 'SELF_MODERATION', gesture: 'update', reportedType: 'post' });
+    await app.close();
+  });
+
+  it("PATCH : le commentaire de l'acteur est protégé de la même façon ; celui d'un autre se traite", async () => {
+    const prisma = makePrisma();
+    getReportById.mockResolvedValue(reportRow({ reportedType: 'comment' }));
+    prisma.postComment.findUnique.mockResolvedValue({ authorId: ACTOR });
+    const app = await build(prisma, reportRoutes, 'ADMIN');
+    expect((await app.inject({ method: 'PATCH', url: `/${REPORT}`, payload: { status: 'dismissed' } })).statusCode).toBe(403);
+    prisma.postComment.findUnique.mockResolvedValue({ authorId: TARGET });
+    updateReport.mockResolvedValue(reportRow({ reportedType: 'comment', status: 'dismissed', moderatorId: ACTOR }));
+    expect((await app.inject({ method: 'PATCH', url: `/${REPORT}`, payload: { status: 'dismissed' } })).statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("DELETE et assign : même loi — le signalement de SA publication ne s'efface ni ne se prend en charge", async () => {
+    const prisma = ownPost();
+    const app = await build(prisma, reportRoutes, 'ADMIN');
+    const removed = await app.inject({ method: 'DELETE', url: `/${REPORT}` });
+    expect(removed.statusCode).toBe(403);
+    expect(removed.json().code).toBe('SELF_MODERATION');
+    const assigned = await app.inject({ method: 'POST', url: `/${REPORT}/assign` });
+    expect(assigned.statusCode).toBe(403);
+    expect(assigned.json().code).toBe('SELF_MODERATION');
+    expect(deleteReport).not.toHaveBeenCalled();
+    expect(assignModerator).not.toHaveBeenCalled();
+    expect(auditRows(prisma).map((row: any) => JSON.parse(row.metadata).gesture)).toEqual(['delete', 'assign']);
     await app.close();
   });
 });

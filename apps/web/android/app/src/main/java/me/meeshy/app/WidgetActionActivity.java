@@ -41,7 +41,6 @@ public class WidgetActionActivity extends Activity {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             }
         }
-        finish();
-        overridePendingTransition(0, 0);
+        TrampolineExit.finishWithoutAnimation(this);
     }
 }

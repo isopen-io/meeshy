@@ -27,6 +27,7 @@ struct OnboardingOverlay: View {
     @State private var flight: OnboardingReward?
     @State private var flightArrived = false
     @State private var pillBump = false
+    @State private var delays = DelayedActions()
 
     private var isDark: Bool { colorScheme == .dark }
     private var reduceMotion: Bool { MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced) }
@@ -56,6 +57,7 @@ struct OnboardingOverlay: View {
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .accessibilityIdentifier("onboarding.overlay")
+        .onDisappear { delays.cancelAll() }
     }
 
     // MARK: - La barre du haut
@@ -121,7 +123,7 @@ struct OnboardingOverlay: View {
         flight = reward
         let travel = reduceMotion ? Animation.easeOut(duration: 1.2).delay(0.6) : .spring(response: 0.9, dampingFraction: 0.82).delay(0.15)
         withAnimation(travel) { flightArrived = true }
-        DispatchQueue.main.asyncAfter(deadline: .now() + (reduceMotion ? 1.9 : 0.85)) {
+        delays.run(after: .seconds(reduceMotion ? 1.9 : 0.85)) {
             if !reduceMotion {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.45)) { pillBump = true }
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.7).delay(0.2)) { pillBump = false }

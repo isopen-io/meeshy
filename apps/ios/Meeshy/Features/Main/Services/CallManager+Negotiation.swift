@@ -32,7 +32,7 @@ extension CallManager {
             Logger.calls.info("Participant joined call \(callId), creating offer")
             // Ancrage négociation côté appelant : l'appelé vient de décrocher,
             // la sonnerie est finie — tout ce qui suit est du setup technique.
-            self.analyticsNegotiationStartDate = Date()
+            self.analytics.negotiationStartDate = Date()
 
             // Update ICE servers with TURN credentials without recreating the peer connection
             if let servers = event.iceServers, !servers.isEmpty {
@@ -211,7 +211,7 @@ extension CallManager {
             }
             Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
             if attempt < maxAttempts {
-                try? await Task.sleep(for: .seconds(delay))
+                _ = await cancellableSleep(for: .seconds(delay))
                 delay *= 2
             }
         }
@@ -263,7 +263,7 @@ extension CallManager {
                 Logger.calls.info("[CALL-DIAG] answer gen=\(generation) superseded/cancelled — stop retry")
                 return
             }
-            try? await Task.sleep(for: .seconds(delay))
+            _ = await cancellableSleep(for: .seconds(delay))
             delay *= 2
             guard !Task.isCancelled, currentCallId == callId, generation >= negotiationId else { return }
             let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
@@ -303,12 +303,15 @@ extension CallManager {
         // gateway résout `missed` au lieu de `rejected` — le même mislabel
         // que l'arc reject 2026-07-12 fermait déjà sur les autres chemins,
         // ici rouvert par la seule fenêtre "connecté mais jamais livré".
-        Task { [weak self] in
-            let acked = await MessageSocketManager.shared.emitCallRejectWithAck(callId: callId)
-            if !acked {
-                MessageSocketManager.shared.emitCallReject(callId: callId)
-                self?.armPendingEndReconciliation(callId: callId, reason: "rejected")
-                Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+        // Émis ICI, avant le démontage local (D2, #11468) : seul l'accusé attend.
+        MessageSocketManager.shared.emitCallRejectWithAck(callId: callId) { [weak self] acked in
+            let manager = self
+            Task { @MainActor in
+                if !acked {
+                    MessageSocketManager.shared.emitCallReject(callId: callId)
+                    manager?.armPendingEndReconciliation(callId: callId, reason: "rejected")
+                    Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+                }
             }
         }
     }

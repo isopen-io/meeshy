@@ -490,7 +490,7 @@ extension ConversationListView {
                             readingMode: LentilleReadingModeContext.listPreviewMode(for: conversation),
                             onCall: previewCallAction(for: conversation),
                             onSearch: { dismissContextMenu(); openConversation(conversation, searching: true) },
-                            onInfo: { dismissContextMenu(); sheetTargets.info = conversation },
+                            onInfo: { dismissContextMenu(); presentInfo(of: conversation) },
                             onProfileInfo: { dismissContextMenu(); handleProfileView(conversation) }
                         )
                         // Preview STATIQUE (parité `.contextMenu` natif) : le
@@ -812,7 +812,7 @@ extension ConversationRowMenuActions {
                     if unread { await viewModel.markAsRead(conversationId: id) } else { await viewModel.markAsUnread(conversationId: id) }
                 }
             },
-            onDetails: { list.sheetTargets.info = conversation },
+            onDetails: { list.presentInfo(of: conversation) },
             onRename: {
                 list.renameText = conversation.name
                 list.sheetTargets.rename = conversation

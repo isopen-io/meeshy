@@ -5,15 +5,15 @@ import MeeshyUI
 import os
 
 // L'appel établi : disposition audio, disposition vidéo, flux primaire et
-// indicateurs de qualité. Sorti de `CallView.swift` (hors budget, #8276).
+// indicateurs de qualité. Sorti de `CallView.swift` (hors budget).
 
 extension CallView {
     // MARK: - Connected
 
     var connectedView: some View {
-        // #8394 — UN conteneur de verre pour tout ce qui flotte au-dessus de
+        // UN conteneur de verre pour tout ce qui flotte au-dessus de
         // l'appel établi : le bloc de verre de la pilule (qui porte les
-        // actions du (…), #8459), le bandeau de sous-titres, l'en-tête. Des
+        // actions du (…)), le bandeau de sous-titres, l'en-tête. Des
         // verres voisins ne se superposent jamais (le verre ne peut pas
         // échantillonner le verre) ; ils se fondent entre eux.
         AdaptiveGlassContainer(spacing: 12) {
@@ -52,7 +52,7 @@ extension CallView {
         }
         // Le sélecteur système de diffusion vit dans la hiérarchie en
         // permanence, et en UN seul endroit : le bouton « Écran » vit avec les
-        // commandes de ma caméra (vignette, haut de l'écran ou (…), #8626).
+        // commandes de ma caméra (vignette, haut de l'écran ou (…)).
         .background(screenSharePicker.host.frame(width: 1, height: 1).opacity(0.02).accessibilityHidden(true))
         // §7.1 — populate the camera list when video turns on so the « mon
         // image » actions can decide flip vs device picker (Continuity/USB).
@@ -84,15 +84,14 @@ extension CallView {
         // optimistically opened the transcript panel). Without this, a failed
         // start (e.g. no on-device speech recognizer for the user's language —
         // never falls back to Apple's server-side recognizer, privacy decision)
-        // left the panel open and empty with zero feedback — user-reported
-        // 2026-07-11: "on dirait que la transcription ne fonctionne pas".
+        // would leave the panel open and empty with zero feedback.
         // Échec du moteur LOCAL (permission refusée, langue non supportée
         // on-device…) : toast explicite, mais le panneau RESTE ouvert en
         // réception seule — la réception des transcriptions du pair est liée
-        // à la visibilité du panneau (spec 2026-08-13), le fermer ici
-        // couperait aussi ce flux. L'ancien auto-reveal du panneau au premier
-        // segment reçu est retiré par la même spec : panneau caché ⇒
-        // désabonné, aucun segment ne peut plus arriver panneau fermé.
+        // à la visibilité du panneau, le fermer ici
+        // couperait aussi ce flux. Le panneau ne s'ouvre pas de lui-même au premier
+        // segment reçu : panneau caché ⇒
+        // désabonné, aucun segment ne peut arriver panneau fermé.
         .adaptiveOnChange(of: transcriptionService.lastError) { _, newError in
             guard let newError else { return }
             FeedbackToastManager.shared.showError(transcriptionErrorMessage(for: newError))
@@ -121,7 +120,7 @@ extension CallView {
             // audio call to video unilaterally — its stream must render even
             // while the local camera stays off.
             if callManager.isVideoUIActive {
-                // #8978 — tap the primary video to hide the controls, tap again to
+                // Tap the primary video to hide the controls, tap again to
                 // bring them back; nothing hides them on a timer. The PiP (on top)
                 // keeps its own swap tap.
                 videoCallLayout
@@ -129,8 +128,8 @@ extension CallView {
                     .onTapGesture { toggleControls() }
                     // Swipe-down-to-minimize is attached HERE, not on the whole
                     // connectedView ZStack: the draggable PiP is a sibling ABOVE
-                    // this layer, so moving the PiP no longer also dismisses the
-                    // full-screen call (user-reported 2026-07-02).
+                    // this layer, so moving the PiP does not also dismiss the
+                    // full-screen call.
                     .simultaneousGesture(swipeDownToLeaveGesture)
                     .accessibilityLabel(showControls
                         ? String(localized: "call.video.hideControls", defaultValue: "Masquer les contrôles", bundle: .main)
@@ -154,7 +153,7 @@ extension CallView {
                             .padding(.horizontal, MeeshySpacing.lg)
                             .frame(maxHeight: .infinity)
                     } else {
-                        // #8435 — en audio aussi, glisser vers le bas quitte
+                        // En audio aussi, glisser vers le bas quitte
                         // le plein écran. Pas sur le panneau de sous-titres :
                         // son défilement garde ses propres glissés.
                         VStack(spacing: MeeshySpacing.md) {
@@ -170,7 +169,7 @@ extension CallView {
                 }
 
                 VStack(spacing: MeeshySpacing.md) {
-                    // #8396 — le bandeau de sous-titres, juste au-dessus de la
+                    // Le bandeau de sous-titres, juste au-dessus de la
                     // pilule ; il RESTE quand les actions sont rangées, et
                     // quand le chrome se masque.
                     if callManager.isVideoUIActive && showTranscript {
@@ -187,7 +186,7 @@ extension CallView {
                         .padding(.bottom, Self.chromeBottomInset)
                         .callChromeVisibility(isChromeVisible)
                 }
-                // #8735 — les invitations qui sonnent et le mot de retour se
+                // Les invitations qui sonnent et le mot de retour se
                 // posent AU-DESSUS du bloc, jamais sur ses rangées.
                 .overlay(alignment: .top) { callControlsNoticesAbove }
             }
@@ -195,7 +194,7 @@ extension CallView {
         }
     }
 
-    /// #8435 — le glissé vers le bas du duo : la décision vit dans
+    /// Le glissé vers le bas du duo : la décision vit dans
     /// `CallPiPPolicy.swipeDownOutcome`, la vue ne fait que l'exécuter.
     /// Progressif et annulable : l'écran suit le doigt (`swipeDownOffset`),
     /// et revient si le geste est relâché avant sa conclusion. Espace GLOBAL :
@@ -225,7 +224,7 @@ extension CallView {
     }
 
     /// Ce qui flotte AU-DESSUS de la disposition 1:1 : la vignette perso. Les
-    /// actions du `(…)` montent au-dessus de la pilule (#8432).
+    /// actions du `(…)` montent au-dessus de la pilule.
     @ViewBuilder
     private var duoOverlays: some View {
         // §7.2 — draggable, corner-snapping PiP showing the secondary
@@ -244,7 +243,7 @@ extension CallView {
         }
     }
 
-    /// #8276 — la scène de groupe entre l'en-tête et la pilule, dans le flux
+    /// La scène de groupe entre l'en-tête et la pilule, dans le flux
     /// de la mise en page : quand la pilule grandit (rangées, sous-titres), la
     /// grille rétrécit au lieu de passer dessous — en portrait comme en paysage.
     private var groupStageLayout: some View {
@@ -253,7 +252,7 @@ extension CallView {
                 .frame(height: isStageFullScreen ? DeviceLayout.safeAreaTop : Self.chromeTopInset + 52)
             GroupCallStageView(mesh: mesh, callManager: callManager, isFullScreen: $isStageFullScreen, isChromeVisible: isChromeVisible, onStageTap: toggleControls, onSelfFeaturedChange: { isSelfFeatured = $0 })
                 .padding(.horizontal, MeeshySpacing.md)
-                // #8410 — la pilule qui grandit rétrécit ses rangées (qui
+                // La pilule qui grandit rétrécit ses rangées (qui
                 // défilent alors), jamais la grille sous ce minimum.
                 .frame(minHeight: CallGroupStageSizing.minimumGridHeight)
             if !isStageFullScreen {
@@ -272,8 +271,8 @@ extension CallView {
             }
         }
         .padding(.bottom, isStageFullScreen ? DeviceLayout.safeAreaBottom : 0)
-        // #8735 — chrome masqué, TOUTE la scène le rallume : l'en-tête et la
-        // pilule effacés ne laissaient que les 8 pt entre les vignettes.
+        // Chrome masqué, TOUTE la scène le rallume : l'en-tête et la
+        // pilule effacés ne laisseraient que les 8 pt entre les vignettes.
         .background(stageRevealTarget)
         .background(
             GeometryReader { stage in
@@ -284,7 +283,7 @@ extension CallView {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isStageFullScreen)
     }
 
-    /// #8410 — seul le franchissement du seuil écrit l'état : une rotation
+    /// Seul le franchissement du seuil écrit l'état : une rotation
     /// recalcule l'écran, un redimensionnement continu non.
     func noteGroupStageHeight(_ height: CGFloat) {
         let compact = CallGroupStageSizing.isCompactHeight(height)
@@ -299,16 +298,16 @@ extension CallView {
             .accessibilityHidden(true)
     }
 
-    /// #8978 — la bascule au toucher n'existe que sur une scène vidéo, et pas sous VoiceOver,
+    /// La bascule au toucher n'existe que sur une scène vidéo, et pas sous VoiceOver,
     /// où les contrôles restent en place.
     private var exposesTheTapToggle: Bool {
         CallChromeVisibility.mayToggleByTap(isVideoStage: isVideoStage) && !UIAccessibility.isVoiceOverRunning
     }
 
-    /// #8735 — la porte UNIQUE par laquelle un contrôle dit qu'il est touché
+    /// La porte UNIQUE par laquelle un contrôle dit qu'il est touché
     /// (`callChromeInteraction`). Seul compte le toucher reçu pendant le fondu
     /// de disparition, qui rallume le chrome : un appui n'écrit aucun état de
-    /// la racine, il recalculerait tout l'écran d'appel (#8978).
+    /// la racine, il recalculerait tout l'écran d'appel.
     func noteChromeInteraction(_ interaction: CallChromeInteraction) {
         guard interaction.revealsChrome, !showControls else { return }
         withAnimation(.easeInOut(duration: CallChromeVisibility.fadeDuration)) { showControls = true }
@@ -361,9 +360,9 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
 
-            // Duration + glyphe signal code couleur (P2-iOS-10 → 2026-07-04) :
+            // Duration + glyphe signal code couleur :
             // invisible sur lien sain, apparaît à la dégradation, persiste en
             // vert `recoveryLingerSeconds` après récupération puis se retire
             // (cycle de vie dans TransientCallSignalGlyph).
@@ -402,9 +401,8 @@ extension CallView {
 
             // Status indicators
             HStack(spacing: MeeshySpacing.md) {
-                // §4.3 — reconnexion ICE en cours : remplace l'ancien bandeau
-                // plein-écran (user-reported 2026-07-11) par une pill compacte,
-                // au même endroit que les autres indicateurs de statut.
+                // §4.3 — reconnexion ICE en cours : une pill compacte, plutôt qu'un bandeau
+                // plein-écran, au même endroit que les autres indicateurs de statut.
                 if case .reconnecting = callManager.callState {
                     statusPill(icon: "arrow.triangle.2.circlepath", text: String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main), color: MeeshyColors.warning)
                 }
@@ -439,7 +437,7 @@ extension CallView {
     /// Compacted header shown INSTEAD of `audioCallLayout` while captions are
     /// active — avatar shrunk (120 → 56), status pills dropped, no longer
     /// vertically centered (sits at the top) so `transcriptPanel` gets the
-    /// freed vertical space. User-requested 2026-07-11.
+    /// freed vertical space.
     var compactAudioCallHeader: some View {
         HStack(spacing: MeeshySpacing.md) {
             callAvatarPair(size: 56)
@@ -448,7 +446,7 @@ extension CallView {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                     .font(.system(.headline, design: .rounded).weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
 
                 CallDurationClock {
@@ -479,7 +477,7 @@ extension CallView {
     }
 
 
-    // MARK: - Connection Quality (P2-iOS-10 → glyphe signal 2026-07-04)
+    // MARK: - Connection Quality (glyphe signal)
 
     /// Niveau du glyphe signal — priorité aux stats RTT+perte (mises à jour
     /// chaque `statsIntervalSeconds`), état ICE binaire en repli. Le mapping
@@ -534,14 +532,14 @@ extension CallView {
             // (default) or the local camera (after a PiP tap). The OTHER stream
             // is rendered in the draggable PiP. §7.1 — letterbox on Mac, fill on
             // phone/tablet. The duration chip lives in the header row
-            // (`topChrome`, #8394), inside the safe area.
+            // (`topChrome`), inside the safe area.
             videoStream(local: effectiveSwapStreams, contentMode: primaryVideoContentMode)
                 .callCameraZoom(isEnabled: effectiveSwapStreams)
                 .ignoresSafeArea()
-            // #9214 — le cadre en direct du duo, composé ici, au-dessus de la vidéo.
+            // Le cadre en direct du duo, composé ici, au-dessus de la vidéo.
             liveFrameSurface
                 .ignoresSafeArea()
-            // #8787 — le micro coupé du correspondant reste sur SON image,
+            // Le micro coupé du correspondant reste sur SON image,
             // sous la rangée d'en-tête, même quand le chrome s'efface.
             if showsPeerMutedBadge && !effectiveSwapStreams {
                 CallPeerMutedBadge(compact: false)
@@ -555,7 +553,7 @@ extension CallView {
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: isLiveFrameShown)
     }
 
-    /// #8787 — en duo vidéo, le micro coupé du correspondant se voit sur son
+    /// En duo vidéo, le micro coupé du correspondant se voit sur son
     /// image (la disposition audio a sa pastille « Contact en sourdine »).
     var showsPeerMutedBadge: Bool {
         !callManager.isRemoteAudioEnabled && !isGroupStage
@@ -593,8 +591,8 @@ extension CallView {
             case .live:
                 CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
             case .cameraOff:
-                // P0-3 — peer turned its camera off (or sends no image at
-                // all, #8788): avatar placeholder, never the frozen last
+                // Peer turned its camera off (or sends no image at
+                // all): avatar placeholder, never the frozen last
                 // frame nor an endless spinner.
                 remoteCameraOffPlaceholder
             case .connecting:
@@ -622,7 +620,7 @@ extension CallView {
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.connecting", defaultValue: "Connexion vidéo...", bundle: .main))
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundStyle(Color.white.opacity(0.4))
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
@@ -631,7 +629,7 @@ extension CallView {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The watchdog runs only while this placeholder is on screen; SwiftUI
             // cancels the task the moment the remote track arrives and the view
-            // is replaced by the live feed. #8788 — when it fires, the peer is
+            // is replaced by the live feed. When it fires, the peer is
             // shown with its camera off: nothing is loading any more.
             .task(id: callManager.currentCallId) {
                 try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
@@ -664,7 +662,7 @@ extension CallView {
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))
                 }
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundStyle(Color.white.opacity(0.6))
                 .accessibilityElement(children: .combine)
             }
         }

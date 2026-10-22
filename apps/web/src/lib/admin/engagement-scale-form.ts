@@ -54,7 +54,7 @@ export const LINK_VISIT_FIELDS: readonly LinkVisitField[] = [
   'dailyCapPerCreator',
 ];
 
-export const ABUSE_FIELDS: readonly AbuseField[] = ['heavyPoints', 'clawbackHours', 'unverifiedMaxPoints'];
+export const ABUSE_FIELDS: readonly AbuseField[] = ['heavyPoints', 'unverifiedMaxPoints'];
 
 export type LevelCapDraft = { readonly minLevel: string; readonly maxFactor: string };
 /** Un palier de série ou de fidélité (#10395) : jours, points (sans plafond à 1000), libellé facultatif. */

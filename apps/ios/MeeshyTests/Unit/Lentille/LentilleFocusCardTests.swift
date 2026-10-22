@@ -298,7 +298,7 @@ final class LentilleFocusCardTests: XCTestCase {
     func test_magnification_neverChangesTheLayoutHeight_soTheListNeverJumps() throws {
         let row = try rowSource("LentilleConversationRow.swift")
         XCTAssertTrue(
-            row.contains(".frame(height: isMagnified ? LentilleMetrics.FocusInline.height : LentilleMetrics.Row.height)\n        .frame(height: LentilleMetrics.Row.height)"),
+            row.contains(".frame(height: isMagnified ? LentilleMetrics.FocusInline.height : LentilleMetrics.Row.height)\n        .frame(height: LentilleMetrics.Row.height(for: dynamicTypeSize))"),
             "DEUX cadres : hauteur VISUELLE (100 magnifié / 84 au repos) puis hauteur de LAYOUT " +
             "constante. Le second est ce qui interdit le relayout (R2)."
         )

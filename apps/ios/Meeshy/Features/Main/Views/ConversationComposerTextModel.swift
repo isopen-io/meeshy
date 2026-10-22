@@ -1,6 +1,7 @@
 // MARK: - Extracted from ConversationView+Composer.swift (#4105)
 import SwiftUI
 import Combine
+import MeeshySDK
 
 // MARK: - Composer text isolation
 //
@@ -63,8 +64,7 @@ final class ConversationComposerTextModel: ObservableObject {
     private func scheduleDebouncedPersist(_ value: String) {
         debounceTask?.cancel()
         debounceTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(400)), !Task.isCancelled else { return }
             self?.onPersistNeeded?(value)
         }
     }

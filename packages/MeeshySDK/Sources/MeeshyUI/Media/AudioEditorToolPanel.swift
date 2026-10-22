@@ -8,7 +8,7 @@ struct AudioEditorToolPanel: View {
 
     let tool: AudioEditorTool
     @ObservedObject var controller: AudioEditorController
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
     let accent: Color
     let isDark: Bool
     let onSpeedChange: () -> Void

@@ -49,7 +49,7 @@ private struct AppearancePhaseDriver: ViewModifier {
             guard active else { return }
             phase = 0
             Task { @MainActor in
-                try? await Task.sleep(for: appearanceFrameDelay)
+                _ = await cancellableSleep(for: appearanceFrameDelay)
                 withAnimation(animation) { phase = 1 }
             }
         }
@@ -192,7 +192,7 @@ struct ConfettiOverlay: View {
         progress = 0
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.easeIn(duration: 1.5)) { progress = 1 }
             withAnimation(.easeIn(duration: 0.5).delay(1.2)) { opacity = 0 }
         }
@@ -246,7 +246,7 @@ struct FireworksOverlay: View {
         progress = 0
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.easeOut(duration: 0.8)) { progress = 1 }
             withAnimation(.easeIn(duration: 0.4).delay(0.6)) { opacity = 0 }
         }
@@ -273,7 +273,7 @@ struct ExplodeOverlay: View {
         scale = 0.3
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.easeOut(duration: 0.5)) { scale = 2.5 }
             withAnimation(.easeIn(duration: 0.3).delay(0.3)) { opacity = 0 }
         }
@@ -301,7 +301,7 @@ struct WaooOverlay: View {
         scale = 0.5
         opacity = 1
         Task { @MainActor in
-            try? await Task.sleep(for: appearanceFrameDelay)
+            _ = await cancellableSleep(for: appearanceFrameDelay)
             withAnimation(.spring(response: 0.3, dampingFraction: 0.4)) { scale = 1.5 }
             withAnimation(.easeOut(duration: 0.3).delay(0.5)) {
                 scale = 0
@@ -526,7 +526,7 @@ struct RainbowEffect: ViewModifier {
                 // SwiftUI ne voit qu'un état net inchangé, sans frame de
                 // départ à interpoler.
                 Task { @MainActor in
-                    try? await Task.sleep(for: appearanceFrameDelay)
+                    _ = await cancellableSleep(for: appearanceFrameDelay)
                     withAnimation(.linear(duration: RainbowSweep.cycle).repeatForever(autoreverses: false)) {
                         cometPhase = 1
                     }

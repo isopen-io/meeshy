@@ -195,8 +195,7 @@ struct StickerSheetOnTap: ViewModifier {
             return
         }
         pendingOpen = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(ReceivedSticker.doubleTapWindow * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(ReceivedSticker.doubleTapWindow)), !Task.isCancelled else { return }
             pendingOpen = nil
             HapticFeedback.light()
             isPresented = true

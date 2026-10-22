@@ -1,5 +1,4 @@
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #10632
 // ajoute `profile:decor-updated`. Responsabilité tenue ici : le décor de profil
@@ -12,13 +11,12 @@ public extension Notification.Name {
 
 extension MessageSocketManager {
 
-    func registerProfileDecorHandlers(on socket: SocketIOClient) {
-        socket.on("profile:decor-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ProfileDecorUpdatedEvent.self, from: data) { event in
+    var profileDecorRoutes: [SocketInboundRoute] {
+        [
+            route(.profileDecorUpdated, ProfileDecorUpdatedEvent.self) { _, event in
                 Task { @MainActor in AuthManager.shared.apply(event) }
                 NotificationCenter.default.post(name: .profileDecorUpdated, object: event)
-            }
-        }
+            },
+        ]
     }
 }

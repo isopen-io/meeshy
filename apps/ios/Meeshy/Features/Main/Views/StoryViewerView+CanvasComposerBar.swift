@@ -59,6 +59,7 @@ struct StoryComposerBarView: View {
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?, _ pendingMedia: PendingCommentMedia?, _ place: SharedPlace?) -> Void
 
     // Comment attachments + real voice capture (parity with feed/reels composer).
+    @State private var delays = DelayedActions()
     @State private var commentAttachments: [ComposerAttachment] = []
     @State private var showCommentPhotoPicker: Bool = false
     @State private var commentPhotoItems: [PhotosPickerItem] = []
@@ -171,7 +172,7 @@ struct StoryComposerBarView: View {
                             }
                             Text(reply.displayContent)
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                                 .lineLimit(1)
                         }
 
@@ -185,7 +186,7 @@ struct StoryComposerBarView: View {
                             Image(systemName: "xmark")
                                 // Doctrine 82i : glyphe de chrome dans un cadre tap fixe 22×22 → figé.
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                                 .frame(width: 22, height: 22)
                                 .background(Circle().fill(Color.white.opacity(MeeshyOpacity.light)))
                         }
@@ -239,10 +240,8 @@ struct StoryComposerBarView: View {
                     #selector(UIResponder.resignFirstResponder),
                     to: nil, from: nil, for: nil
                 )
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showTextEmojiPicker = true
-                    }
+                delays.run(after: .milliseconds(100)) {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { showTextEmojiPicker = true }
                 }
             },
             injectedEmoji: $emojiToInject,

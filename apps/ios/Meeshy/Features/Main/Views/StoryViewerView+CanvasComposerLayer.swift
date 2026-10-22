@@ -294,7 +294,7 @@ extension StoryCardView {
         return Button(action: unfoldComposer) {
             Image(systemName: StoryComposerFold.unfoldSymbol)
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: MeeshyControlSize.tapTarget, height: MeeshyControlSize.tapTarget)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
                 .overlay(alignment: .topTrailing) { unfoldBadge(badge) }
@@ -322,7 +322,7 @@ extension StoryCardView {
         case .reply:
             Image(systemName: "arrowshape.turn.up.left.fill")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .accessibilityHidden(true)
         }
     }

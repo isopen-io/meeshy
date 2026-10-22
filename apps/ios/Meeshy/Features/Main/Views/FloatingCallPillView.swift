@@ -233,7 +233,7 @@ struct FloatingCallPillView: View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
             Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
 
             statusEntry
@@ -266,7 +266,7 @@ struct FloatingCallPillView: View {
                     // reste porté par le glyphe signal.
                     Text(formattedDuration)
                         .font(.caption.weight(.medium).monospacedDigit())
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 } else if let glyph = pillStatus.glyphSystemName, let color = pillStatus.glyphColor {
                     Image(systemName: glyph)
                         .font(.caption.weight(.semibold))
@@ -366,7 +366,7 @@ struct FloatingCallPillView: View {
         } label: {
             Image(systemName: "phone.down.fill")
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 44, height: 44)
                 .background(
                     Circle()
@@ -437,7 +437,7 @@ struct FloatingCallPillView: View {
         }
         Task { @MainActor in
             if !reduceMotion {
-                try? await Task.sleep(for: .milliseconds(250))
+                _ = await cancellableSleep(for: .milliseconds(250))
             }
             // The call can end during this 250ms exit animation (user hangs
             // up immediately after swiping, remote hangs up, etc.) — guard

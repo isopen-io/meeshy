@@ -227,8 +227,7 @@ final class SocialEventsV2Reporter: SocialEventsV2Reporting {
     private func scheduleFlush() {
         let interval = flushInterval
         flushTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: interval)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: interval), !Task.isCancelled else { return }
             self?.flushTask = nil
             await self?.flushNow()
         }

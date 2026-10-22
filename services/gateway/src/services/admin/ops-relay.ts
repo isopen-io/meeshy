@@ -73,13 +73,27 @@ export function readOpsSettings(env: OpsEnv): OpsSettings {
   };
 }
 
+/**
+ * Une lecture BORNÉE par les octets lus, jamais par un `stat` préalable (#10459) : entre
+ * le `stat` et la lecture, un fichier peut grossir, et seul ce qu'on a effectivement lu
+ * dit sa taille. `maxBytes + 1` octets demandés : un de plus que le plafond suffit à
+ * refuser. Un chemin qui n'est pas un fichier ordinaire (dossier, FIFO, socket) vaut
+ * `null` avant toute lecture.
+ */
 async function readBoundedJson(file: string, maxBytes: number): Promise<unknown> {
   try {
     const handle = await open(file, 'r');
     try {
-      const { size } = await handle.stat();
-      if (size > maxBytes) return null;
-      return JSON.parse(await handle.readFile('utf8'));
+      if (!(await handle.stat()).isFile()) return null;
+      const buffer = Buffer.alloc(maxBytes + 1);
+      let total = 0;
+      while (total <= maxBytes) {
+        const { bytesRead } = await handle.read(buffer, total, maxBytes + 1 - total, total);
+        if (bytesRead === 0) break;
+        total += bytesRead;
+      }
+      if (total > maxBytes) return null;
+      return JSON.parse(buffer.subarray(0, total).toString('utf8'));
     } finally {
       await handle.close();
     }

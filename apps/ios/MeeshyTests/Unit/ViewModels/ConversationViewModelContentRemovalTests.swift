@@ -160,7 +160,7 @@ final class ContentRemovalOfferTests: XCTestCase {
         FeedPost(id: "p1", author: "Awa", authorId: authorId, type: type, content: "Bonjour")
     }
 
-    private static func offer(_ post: FeedPost, viewerId: String? = "mod", role: String?) -> ((String) -> Void)? {
+    private static func offer(_ post: FeedPost, viewerId: String? = "mod", role: String?) -> PublicationModerationOffer? {
         ContentRemovalOffer.publication(for: post, viewerId: viewerId, viewerRole: role) { _, _ in }
     }
 
@@ -190,6 +190,31 @@ final class ContentRemovalOfferTests: XCTestCase {
     func test_successText_aRemovalSaysTheAuthorIsNotified_aDeletionKeepsItsWord() {
         XCTAssertEqual(ContentRemovalKind.successText(reason: nil, deleted: "Publication supprimée"), "Publication supprimée")
         XCTAssertNotEqual(ContentRemovalKind.successText(reason: "Spam", deleted: "Publication supprimée"), "Publication supprimée")
+    }
+
+    func test_titleKey_severalMessages_usesThePluralKey() {
+        XCTAssertEqual(ContentRemovalKind.message.titleKey(count: 1), "moderation.removal.title.message")
+        XCTAssertEqual(ContentRemovalKind.message.titleKey(count: 3), "moderation.removal.title.messages")
+    }
+
+    func test_deleteConfirmation_titleKey_followsTheSelectionCount() {
+        XCTAssertEqual(MessageDeleteConfirmation.titleKey(count: 1), "conversation.view.delete_message.title")
+        XCTAssertEqual(MessageDeleteConfirmation.titleKey(count: 2), "conversation.view.delete_messages.title")
+    }
+
+    func test_deleteConfirmation_severalMessages_saysHowMany() {
+        XCTAssertTrue(MessageDeleteConfirmation.title(count: 3).contains("3"))
+        XCTAssertFalse(MessageDeleteConfirmation.title(count: 1).contains("1"))
+    }
+
+    func test_titleKey_otherKinds_ignoreTheCount() {
+        XCTAssertEqual(ContentRemovalKind.post.titleKey(count: 4), "moderation.removal.title.post")
+        XCTAssertEqual(ContentRemovalKind.comment.titleKey(count: 2), "moderation.removal.title.comment")
+    }
+
+    func test_sheetTitle_severalMessages_saysHowMany() {
+        XCTAssertTrue(ContentRemovalKind.message.sheetTitle(count: 3).contains("3"))
+        XCTAssertEqual(ContentRemovalKind.message.sheetTitle(count: 1), ContentRemovalKind.message.sheetTitle)
     }
 }
 

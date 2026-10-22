@@ -369,7 +369,11 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         // thread: `removeTap` and `stop()` can block, and muting the mic with
         // captions on used to pay for them in the gesture itself.
         isCaptureActive = false
+        #if compiler(>=6.4)
+        let engine = audioEngine
+        #else
         nonisolated(unsafe) let engine = audioEngine
+        #endif
         let teardown: @Sendable () -> Void = {
             engine.inputNode.removeTap(onBus: 0)
             if engine.isRunning {

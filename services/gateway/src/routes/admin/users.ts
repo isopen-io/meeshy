@@ -33,6 +33,7 @@ import {
   type MessageProtectionContext
 } from './media-protection';
 import { registerConversationMessagesSovereignRoute } from './conversation-messages-sovereign';
+import { registerConversationAttachmentsSovereignRoute } from './conversation-attachments-sovereign';
 import { registerConversationsSovereignRoute } from './conversations-sovereign';
 import { registerUserReportsRoutes } from './user-reports';
 import { registerConversationParticipantsRoute } from './conversation-participants';
@@ -958,6 +959,12 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
   // `conversation-messages-sovereign.ts`, une unité nommable à part entière
   // plutôt qu'une tranche de plus dans ce fichier déjà au plafond de taille.
   registerConversationMessagesSovereignRoute(fastify);
+
+  // GET /admin/conversations/:conversationId/attachments — les PIÈCES d'une
+  // conversation au curseur et par genre, sous le même régime et la même
+  // projection que la lecture des messages (#11510) : l'onglet Médias ne
+  // remonte plus le fil message par message pour les trouver.
+  registerConversationAttachmentsSovereignRoute(fastify);
 
   // GET /admin/conversations — le LISTING de l'instance (#6861), quatrième
   // geste souverain du dépôt. Monté ici, à côté de son frère, parce que c'est

@@ -299,7 +299,7 @@ extension StoryViewModel {
     func sweepExpiredStoriesWhileVisible() async {
         while !Task.isCancelled {
             purgeDeadStories()
-            try? await Task.sleep(for: Self.expirySweepInterval)
+            _ = await cancellableSleep(for: Self.expirySweepInterval)
         }
     }
 

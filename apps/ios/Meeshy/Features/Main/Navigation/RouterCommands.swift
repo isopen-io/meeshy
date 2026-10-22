@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 final class RouterCommands {
     static let inert = RouterCommands(router: nil)
@@ -38,6 +39,31 @@ final class RouterCommands {
 
     func openPostDetail(id postId: String, from origin: OpenOrigin) {
         router?.openPostDetail(id: postId, from: origin)
+    }
+
+    func openProfileSheet(_ user: ProfileSheetUser) {
+        router?.deepLinkProfileUser = user
+    }
+
+    func openProfile(_ user: ProfileSheetUser, inConversation conversationId: String?) {
+        router?.openProfile(user, inConversation: conversationId)
+    }
+
+    func requestFeedComposer() {
+        router?.pendingOpenFeedComposer = true
+    }
+
+    func armSearch() {
+        router?.pendingOpenSearch = true
+    }
+
+    func requestHighlight(messageId: String, inConversation conversationId: String) {
+        router?.pendingHighlightMessageId = messageId
+        router?.pendingHighlightConversationId = conversationId
+    }
+
+    func openPackShop(domain: PackDomain?) {
+        router?.openPackShop(domain: domain)
     }
 }
 

@@ -40,11 +40,11 @@ extension ReelsPlayerView {
             // dette gelée du 264i, jamais pour un arrivant.
             Image(systemName: "play.rectangle.on.rectangle")
                 .font(MeeshyFont.relative(MeeshyIconSize.hero))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "reels.empty", defaultValue: "Aucun réel pour le moment", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.mediaChromeForeground)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
         }
         .accessibilityElement(children: .combine)
     }
@@ -56,11 +56,11 @@ extension ReelsPlayerView {
         VStack(spacing: MeeshySpacing.mdPlus) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
                 .font(MeeshyFont.relative(MeeshyIconSize.hero))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(message)
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.mediaChromeForeground)
+                .foregroundStyle(MeeshyColors.mediaChromeForeground)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxxl)
             Button {
@@ -69,7 +69,7 @@ extension ReelsPlayerView {
             } label: {
                 Text(String(localized: "common.retry"))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                    .foregroundColor(.black)
+                    .foregroundStyle(Color.black)
                     .padding(.horizontal, MeeshySpacing.xxl)
                     .padding(.vertical, MeeshySpacing.smPlus)
                     .background(Capsule().fill(Color.white))

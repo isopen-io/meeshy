@@ -47,7 +47,7 @@ extension VitrineInteractions {
         }
         VitrineTournage.etape("choix")
         choisir(sticker)
-        try? await Task.sleep(for: tenueDuSticker)
+        guard await cancellableSleep(for: tenueDuSticker) else { return }
     }
 
     /// Le composeur range ses médias dans ses propres fichiers : il reçoit une COPIE, jamais la photo du kit.

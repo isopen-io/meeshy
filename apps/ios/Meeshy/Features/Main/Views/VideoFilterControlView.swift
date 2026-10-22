@@ -102,13 +102,13 @@ struct VideoFilterControlView: View {
         HStack(spacing: 10) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(13))
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .frame(width: 20)
                 .accessibilityHidden(true)
 
             Text(label)
                 .font(MeeshyFont.relative(12, weight: .medium))
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .frame(width: 80, alignment: .leading)
                 .accessibilityHidden(true)
 
@@ -119,7 +119,7 @@ struct VideoFilterControlView: View {
 
             Text(formatValue(value.wrappedValue, neutral: neutral))
                 .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundStyle(Color.secondary)
                 .frame(width: 36, alignment: .trailing)
                 .accessibilityHidden(true)
         }
@@ -141,7 +141,7 @@ struct VideoFilterControlView: View {
                 Text(String(localized: "video.filter.reinit", defaultValue: "Réinitialiser", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
             }
-            .foregroundColor(MeeshyColors.indigo500)
+            .foregroundStyle(MeeshyColors.indigo500)
         }
         .opacity(isModified ? 1 : 0.3)
         .disabled(!isModified)

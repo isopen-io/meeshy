@@ -71,8 +71,7 @@ final class ConversationReplyContagionTests: XCTestCase {
         let fx = try await makeFixture()
         quote([.ephemeral, .ephemeralAfterRead, .blurred], in: fx.sut)
 
-        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId,
-                                     protection: fx.sut.captureArmedProtection(replyingTo: quotedId))
+        _ = await fx.sut.send(outgoingMessage(content: "réponse", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID(quotedId), citing: nil), protection: fx.sut.captureArmedProtection(replyingTo: quotedId))).isAccepted
 
         let request = try XCTUnwrap(fx.messageService.lastSendRequest)
         XCTAssertEqual(request.isBlurred, true, "le flou du cité passe à la réponse")
@@ -85,8 +84,7 @@ final class ConversationReplyContagionTests: XCTestCase {
         let fx = try await makeFixture(armed: ConversationProtectionPreference(ephemeralChoice: .duration(.oneMinute), isBlurred: false, isViewOnce: false))
         quote(.blurred, in: fx.sut)
 
-        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId,
-                                     protection: fx.sut.captureArmedProtection(replyingTo: quotedId))
+        _ = await fx.sut.send(outgoingMessage(content: "réponse", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID(quotedId), citing: nil), protection: fx.sut.captureArmedProtection(replyingTo: quotedId))).isAccepted
 
         let request = try XCTUnwrap(fx.messageService.lastSendRequest)
         XCTAssertEqual(request.isBlurred, true)
@@ -97,7 +95,7 @@ final class ConversationReplyContagionTests: XCTestCase {
         let fx = try await makeFixture(armed: ConversationProtectionPreference(ephemeralChoice: .afterRead, isBlurred: false, isViewOnce: false))
         quote(.ephemeral, duration: 300, in: fx.sut)
 
-        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId)
+        _ = await fx.sut.send(outgoingMessage(content: "réponse", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID(quotedId), citing: nil))).isAccepted
 
         let request = try XCTUnwrap(fx.messageService.lastSendRequest)
         XCTAssertEqual(request.ephemeralDuration, 300, "le mode du cité REMPLACE celui que la réponse avait armé")
@@ -108,8 +106,7 @@ final class ConversationReplyContagionTests: XCTestCase {
         let fx = try await makeFixture(isOnline: false)
         quote([.ephemeral, .blurred], duration: 300, in: fx.sut)
 
-        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId,
-                                     protection: fx.sut.captureArmedProtection(replyingTo: quotedId))
+        _ = await fx.sut.send(outgoingMessage(content: "réponse", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID(quotedId), citing: nil), protection: fx.sut.captureArmedProtection(replyingTo: quotedId))).isAccepted
 
         let items = await fx.offlineQueue.enqueuedItems
         let item = try XCTUnwrap(items.first)
@@ -121,8 +118,7 @@ final class ConversationReplyContagionTests: XCTestCase {
         let fx = try await makeFixture()
         quote([.glow], in: fx.sut)
 
-        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId,
-                                     protection: fx.sut.captureArmedProtection(replyingTo: quotedId))
+        _ = await fx.sut.send(outgoingMessage(content: "réponse", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID(quotedId), citing: nil), protection: fx.sut.captureArmedProtection(replyingTo: quotedId))).isAccepted
 
         let request = try XCTUnwrap(fx.messageService.lastSendRequest)
         XCTAssertNil(request.isBlurred)
@@ -174,8 +170,7 @@ final class ConversationReplyContagionTests: XCTestCase {
         quote(.blurred, in: fx.sut)
         fx.sut.composerViewOnceEnabled = true
 
-        _ = await fx.sut.sendMessage(content: "réponse", replyToId: quotedId,
-                                     protection: fx.sut.captureArmedProtection(replyingTo: quotedId))
+        _ = await fx.sut.send(outgoingMessage(content: "réponse", conversationId: fx.sut.conversationId, relation: .reply(to: MessageID(quotedId), citing: nil), protection: fx.sut.captureArmedProtection(replyingTo: quotedId))).isAccepted
 
         let request = try XCTUnwrap(fx.messageService.lastSendRequest)
         XCTAssertEqual(request.isBlurred, true, "le flou du cité passe à la réponse")

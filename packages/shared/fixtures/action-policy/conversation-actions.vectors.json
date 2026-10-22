@@ -1,5 +1,5 @@
 {
-  "$format": "Générés en EXÉCUTANT conversationActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
+  "$format": "Générés en EXÉCUTANT conversationActionsFor (packages/shared/utils) sur le plan de __tests__/action-policy/action-policy-vectors-law.ts, jamais écrits à la main. { _label, input, expected, clientStricter? } — clientStricter nomme les verdicts (edit, delete, react, pin) où le client refuse plus que la passerelle : le test de parité n'y exige que l'inclusion.",
   "vectors": [
     {
       "_label": "direct-membre",
@@ -214,8 +214,8 @@
         "invite": false,
         "leave": false,
         "deleteForAll": false,
-        "hide": true,
-        "report": true,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": true,
         "call": false,
@@ -621,8 +621,8 @@
         "invite": false,
         "leave": false,
         "deleteForAll": false,
-        "hide": true,
-        "report": true,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": true,
         "call": false,
@@ -1028,8 +1028,8 @@
         "invite": false,
         "leave": false,
         "deleteForAll": false,
-        "hide": true,
-        "report": true,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": true,
         "call": false,
@@ -1435,8 +1435,8 @@
         "invite": false,
         "leave": false,
         "deleteForAll": false,
-        "hide": true,
-        "report": true,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": true,
         "call": false,
@@ -1842,8 +1842,8 @@
         "invite": false,
         "leave": false,
         "deleteForAll": false,
-        "hide": true,
-        "report": true,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": true,
         "call": false,
@@ -2249,8 +2249,8 @@
         "invite": false,
         "leave": false,
         "deleteForAll": false,
-        "hide": true,
-        "report": true,
+        "hide": false,
+        "report": false,
         "manageMembers": false,
         "adminOpen": true,
         "call": false,
@@ -2699,6 +2699,43 @@
         "adminOpen": false,
         "call": true,
         "videoCall": true,
+        "e2eeBadge": false
+      }
+    },
+    {
+      "_label": "groupe-non-membre-ne-masque-ni-ne-signale",
+      "input": {
+        "conversation": {
+          "type": "group",
+          "encryptionMode": null,
+          "isActive": true,
+          "closedAt": null,
+          "isAnnouncementChannel": false,
+          "defaultWriteRole": "everyone"
+        },
+        "viewer": {
+          "id": "user-viewer",
+          "participantId": "part-viewer",
+          "hasAccount": true,
+          "isAnonymous": false,
+          "platformRole": "USER",
+          "conversationRole": null,
+          "isActiveMember": false,
+          "canSendMessages": true,
+          "isDeclaredMinor": false
+        }
+      },
+      "expected": {
+        "rename": false,
+        "invite": false,
+        "leave": false,
+        "deleteForAll": false,
+        "hide": false,
+        "report": false,
+        "manageMembers": false,
+        "adminOpen": false,
+        "call": false,
+        "videoCall": false,
         "e2eeBadge": false
       }
     },

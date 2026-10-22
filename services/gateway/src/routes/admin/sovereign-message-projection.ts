@@ -99,7 +99,7 @@ import {
  * raison de les charger (§ « Toute porte qui sort un profil de TIERS filtre sa
  * présence » : ce qu'on ne charge pas n'a pas besoin d'être gardé).
  */
-const sovereignSenderSelect = {
+export const sovereignSenderSelect = {
   id: true,
   userId: true,
   type: true,
@@ -249,7 +249,7 @@ export type SovereignMessageRow = Prisma.MessageGetPayload<{
 }>;
 
 type SovereignReplyToRow = NonNullable<SovereignMessageRow['replyTo']>;
-type SovereignAttachmentRow = SovereignMessageRow['attachments'][number];
+export type SovereignAttachmentRow = SovereignMessageRow['attachments'][number];
 
 // ---------------------------------------------------------------------------
 // LA PROJECTION
@@ -385,7 +385,7 @@ function servedReplyTo(replyTo: SovereignReplyToRow, hostConversationId: string)
  * URL, toutes), la transcription, les pistes traduites (`translations[lang].url`
  * porte le TTS), et `metadata` qui peut porter une timeline d'effets.
  */
-function servedAttachment(piece: SovereignAttachmentRow, messageProtege: boolean) {
+export function servedAttachment(piece: SovereignAttachmentRow, messageProtege: boolean) {
   const protegee = messageProtege || mediaAttachmentIsProtected(piece);
   return {
     id: piece.id,
@@ -502,7 +502,7 @@ export function mapSovereignMessageRow(message: SovereignMessageRow) {
  */
 const objetLibre = { type: 'object', additionalProperties: true, nullable: true } as const;
 
-const senderSchema = {
+export const sovereignSenderSchema = {
   type: 'object',
   nullable: true,
   properties: {
@@ -542,7 +542,7 @@ const translationsSchema = {
   },
 } as const;
 
-const attachmentSchema = {
+export const sovereignAttachmentSchema = {
   type: 'object',
   properties: {
     id: { type: 'string' },
@@ -593,7 +593,7 @@ const replyToSchema = {
     createdAt: { type: 'string', format: 'date-time', nullable: true },
     senderId: { type: 'string', nullable: true },
     senderParticipantId: { type: 'string', nullable: true },
-    sender: senderSchema,
+    sender: sovereignSenderSchema,
     isProtected: { type: 'boolean' },
     isViewOnce: { type: 'boolean', nullable: true },
     isBlurred: { type: 'boolean', nullable: true },
@@ -651,8 +651,8 @@ export const sovereignMessageSchema = {
     metadata: objetLibre,
     validatedMentions: { type: 'array', items: { type: 'string' } },
     translations: translationsSchema,
-    sender: senderSchema,
+    sender: sovereignSenderSchema,
     replyTo: replyToSchema,
-    attachments: { type: 'array', items: attachmentSchema },
+    attachments: { type: 'array', items: sovereignAttachmentSchema },
   },
 } as const;

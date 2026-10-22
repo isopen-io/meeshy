@@ -58,7 +58,7 @@ final class ArrivalCelebrationController: ObservableObject, ArrivalCelebrating {
         hold: (@MainActor () async -> Void)? = nil
     ) {
         self.prefetcher = prefetcher ?? ArrivalPrefetcher()
-        self.hold = hold ?? { try? await Task.sleep(for: ArrivalCelebrationController.holdDuration) }
+        self.hold = hold ?? { _ = await cancellableSleep(for: ArrivalCelebrationController.holdDuration) }
     }
 
     func begin(userId: String) {

@@ -6,6 +6,7 @@ import { performSend, retrySend, type Draft } from '@/lib/send/perform-send';
 import { outboxStore } from '@/lib/send/outbox-store';
 import { notePublicationParticipation } from '@/lib/view/publication-participation';
 import type { RowFlagActionId } from '@/lib/view/row-actions';
+import { announceRowEvent } from '@/lib/view/row-action-notice';
 
 import { cachedCardSeed } from './card-caches';
 import { ApiError, currentOwnerCredential } from './client';
@@ -415,7 +416,7 @@ export function rowAction(conversationId: string, action: RowFlagActionId): void
   void performRowAction({
     conversationId,
     action,
-    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient },
+    deps: { ...apiDeps, store: conversationStore, queryClient: appQueryClient, notify: announceRowEvent },
   });
 }
 

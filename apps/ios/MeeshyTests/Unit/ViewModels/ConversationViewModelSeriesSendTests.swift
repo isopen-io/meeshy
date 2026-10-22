@@ -55,9 +55,9 @@ final class ConversationViewModelSeriesSendTests: XCTestCase {
     func test_sendMessage_deuxEmojisIdentiquesDAffilee_partentTousLesDeux() async throws {
         let (sut, messageService) = try await makeSUT()
 
-        let premier = await sut.sendMessage(content: "😂")
+        let premier = await sut.send(outgoingMessage(content: "😂", conversationId: sut.conversationId)).isAccepted
         let premierId = messageService.lastSendRequest?.clientMessageId
-        let second = await sut.sendMessage(content: "😂")
+        let second = await sut.send(outgoingMessage(content: "😂", conversationId: sut.conversationId)).isAccepted
 
         XCTAssertTrue(premier)
         XCTAssertTrue(second, "un second 😂 tapé aussitôt n'est pas un doublon : c'est un second message")
@@ -70,7 +70,7 @@ final class ConversationViewModelSeriesSendTests: XCTestCase {
         let (sut, messageService) = try await makeSUT()
 
         for _ in 0..<3 {
-            _ = await sut.sendMessage(content: "❤️")
+            _ = await sut.send(outgoingMessage(content: "❤️", conversationId: sut.conversationId)).isAccepted
         }
 
         XCTAssertEqual(messageService.sendCallCount, 3)

@@ -79,7 +79,7 @@ public struct LocationFullscreenView: View {
                         .foregroundColor(Color(hex: accentColor))
                     Text(name)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(Color.primary)
                     Spacer()
                 }
             }
@@ -92,15 +92,15 @@ public struct LocationFullscreenView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(placeName ?? String(localized: "location.fullscreen.sharedPosition", defaultValue: "Position partagée", bundle: .module))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundStyle(Color.primary)
                     if let addr = address {
                         Text(addr)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize))
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(Color.secondary)
                     }
                     Text(String(format: "%.5f, %.5f", latitude, longitude))
                         .font(.system(size: MeeshyFont.captionSize, design: .monospaced))
-                        .foregroundColor(.secondary.opacity(0.7))
+                        .foregroundStyle(Color.secondary.opacity(0.7))
                 }
 
                 Spacer()
@@ -116,7 +116,7 @@ public struct LocationFullscreenView: View {
                         Text(String(localized: "location.fullscreen.openInMaps", defaultValue: "Ouvrir dans Plans", bundle: .module))
                             .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     }
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, MeeshySpacing.smPlus)
                     .background(

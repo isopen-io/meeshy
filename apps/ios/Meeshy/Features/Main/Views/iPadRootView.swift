@@ -23,7 +23,6 @@ import MeeshyUI
 //   iPadRootView+Navigation.swift   — all navigation & notification handlers
 
 struct iPadRootView: View {
-    @StateObject var theme = ThemeManager.shared
     @ObservedObject var storyViewModel: StoryViewModel
     @ObservedObject var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner, RootView.swift) :
@@ -129,7 +128,7 @@ struct iPadRootView: View {
 
     var body: some View {
         ZStack {
-            RootThemedBackground(theme: theme)
+            RootThemedBackground(theme: ThemeManager.shared)
 
             GeometryReader { geometry in
                 HStack(spacing: 0) {
@@ -266,8 +265,10 @@ struct iPadRootView: View {
     private func installRouterCallbacks() {
 
         router.onRouteRequested = { route in
+            // Le routeur a déjà refermé les surfaces et passé la porte du verrou
+            // PIN (#11386) : la conversation se pose, sans seconde porte.
             if case .conversation(let conv) = route {
-                openConversation(conv)
+                placeConversation(conv)
                 return true
             }
             if let root = rightPanelRoute, GameNavigationMap.stacks(route, over: root) {

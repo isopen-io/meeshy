@@ -238,7 +238,11 @@ public protocol OfflineMessageQueueing: Sendable {
         createdAt: Date?,
         /// La protection armée à l'envoi (#8350) — sur l'EXIGENCE, pour la
         /// même raison que `sticker` : un mock doit la voir passer.
-        protection: MessageProtectionIntent
+        protection: MessageProtectionIntent,
+        /// Le nom d'origine de chaque fichier, aligné par index (#11531) —
+        /// sur l'EXIGENCE, pour la même raison : un partage repris doit
+        /// arriver au serveur sous son nom, pas sous `0.jpeg`.
+        originalNames: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult
 }
 

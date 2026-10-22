@@ -1,0 +1,21 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="composer_a11y_addSelection">Add selection</string>
+    <string name="composer_a11y_cancelSelection">Cancel selection</string>
+    <string name="composer_a11y_openFullLibrary">Open the full photo library</string>
+    <string name="composer_a11y_recentPhoto">Recent photo</string>
+    <string name="composer_a11y_recentVideo">Recent video</string>
+    <string name="composer_a11y_selectedState">Selected</string>
+    <string name="composer_recent_accessDenied">Photo access denied</string>
+    <string name="composer_recent_accessDenied_hint">Tap to open Settings</string>
+    <string name="composer_recent_add">Add</string>
+    <string name="composer_recent_addSelected">Add (%d)</string>
+    <string name="composer_recent_alreadyAttached">Already in attachments</string>
+    <string name="composer_recent_cancelSelection">Cancel</string>
+    <string name="composer_recent_edit">Edit</string>
+    <string name="composer_recent_grantAccess">Allow photo access</string>
+    <string name="composer_recent_grantAccess_hint">To find your recent media here</string>
+    <string name="composer_recent_select">Select</string>
+    <string name="recentMedia_resolveFailed">This media couldn\'t be prepared — use the full photo library</string>
+    <string name="recentMedia_resolveFailed_multiple">%d media items couldn\'t be prepared — use the full photo library</string>
+</resources>

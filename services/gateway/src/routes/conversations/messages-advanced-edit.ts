@@ -28,6 +28,8 @@ import {
 import {
   admitMessageEdit,
   isEditRefused,
+  describeEditRefusalForSocket,
+  editRefusalCode,
   CONVERSATION_CLOSED_EDIT_MESSAGE,
 } from '../../services/messaging/messageEditAdmission';
 import { applyMessageEditEffects } from '../../services/messaging/messageEditEffects';
@@ -189,7 +191,7 @@ export function registerEditMessagePutRoute(
             },
             // L'état TERMINAL du conteneur, exigé par `admitMessageEdit`. Deux
             // colonnes sur une lecture déjà là : aucun aller-retour de plus.
-            conversation: { select: { isActive: true, closedAt: true, type: true } },
+            conversation: { select: { isActive: true, closedAt: true, type: true, encryptionMode: true } },
             attachments: { select: { id: true } }
           }
         })
@@ -225,6 +227,9 @@ export function registerEditMessagePutRoute(
         // sujet est « plus personne, plus jamais ».
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'end-to-end-encrypted') {
+          return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -668,6 +673,9 @@ export function registerEditMessagePatchRoute(
       if (isEditRefused(admission)) {
         if (admission.reason === 'conversation-closed') {
           return sendError(reply, 410, CONVERSATION_CLOSED_EDIT_MESSAGE);
+        }
+        if (admission.reason === 'end-to-end-encrypted') {
+          return sendBadRequest(reply, describeEditRefusalForSocket(admission.reason), { code: editRefusalCode(admission.reason) });
         }
         if (admission.reason === 'minor-global') {
           return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });

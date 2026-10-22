@@ -1,4 +1,4 @@
-import { AuthorPlate, Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
+import { AuthorPlate, Chest, Flame, GameBird, LeagueGem, LevelRing, MeeshCoin, RankBlason, Signature, Trophy } from '@/components/game';
 import { flameForm } from '@meeshy/shared/utils/game/flame';
 
 import { useMemo } from 'react';
@@ -78,10 +78,13 @@ export function PhotoEmblemDrawing({ emblem }: { readonly emblem: PhotoEmblem })
       return <Trophy kind="season" size={512} label={gameText('game.trophy.plate.season', { number: formatCount(emblem.season) })} />;
     case 'prestige':
       return <Trophy kind="prestige" size={512} label={gameText('game.trophy.plate.prestige', { number: formatCount(emblem.number) })} />;
+    case 'day':
+      return <Chest state="open" size={512} />;
   }
 }
 
-function Placed({ rect, width, height, children }: { readonly rect: Rect; readonly width: number; readonly height: number; readonly children: React.ReactNode }) {
+/** `hidden` : posé hors écran (un cadre sans ancre `crest` ne montre pas d'emblème, mais la frappe et l'image finale gardent leur dessin). */
+function Placed({ rect, width, height, children, hidden = false }: { readonly rect: Rect; readonly width: number; readonly height: number; readonly children: React.ReactNode; readonly hidden?: boolean }) {
   return (
     <span
       style={{
@@ -90,6 +93,7 @@ function Placed({ rect, width, height, children }: { readonly rect: Rect; readon
         top: percent(rect.y, height),
         width: percent(rect.w, width),
         height: percent(rect.h, height),
+        ...(hidden ? { opacity: 0, pointerEvents: 'none' as const } : {}),
       }}
     >
       {children}
@@ -200,12 +204,31 @@ function ReferralQr({ slot, referral, width, height }: { readonly slot: Rect; re
   );
 }
 
+/**
+ * LE CADRE DÉCORÉ (#10159, L7) : quand la scène d'un cadre de gloire peint
+ * l'aperçu sur un canvas, cette couche ne garde que ce que le canvas ne peut pas
+ * porter — l'emblème à l'ancre `crest` (la pièce que la frappe de Mee et Meo
+ * fait tinter), les dessins sources de l'image finale (hors écran : les quatre
+ * emplacements, la Flamme et la plaque d'auteur, #10816 — le peintre du cadre
+ * la pose et le repli carte simple la relit), et le carré QR, seule pièce qui
+ * s'annonce au lecteur d'écran.
+ */
+export type GloryFrameOverlay = {
+  /** L'ancre du blason ; `null` : le cadre n'en déclare pas, l'emblème ne se montre pas (le dessin reste pour la frappe et l'image finale). */
+  readonly crest: Rect | null;
+  /** L'emplacement du carré QR dans le bandeau du cadre ; `null` : pas de bandeau sur ce cadre. */
+  readonly qr: Rect | null;
+};
+
+const HIDDEN: React.CSSProperties = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', opacity: 0, pointerEvents: 'none' };
+
 export function GamePhotoFrame({
   moment,
   dateLabel,
   format,
   referral = null,
   author = null,
+  glory = null,
 }: {
   readonly moment: PhotoMoment;
   readonly dateLabel: string;
@@ -214,10 +237,55 @@ export function GamePhotoFrame({
   readonly referral?: PhotoReferral | null;
   /** L'auteur (#10816) : son pseudo se grave sur la plaque d'un succès, d'un rang ou d'une fin de mission ; `null` : pas de plaque. */
   readonly author?: PhotoAuthor | null;
+  /** Un cadre décoré peint par le canvas (#10159) ; `null` : la carte simple, dessinée ici. */
+  readonly glory?: GloryFrameOverlay | null;
 }) {
   const plate = authorPlateOf(moment.emblem, author);
-  const layout = photoLayout(format, { banner: referral !== null, rtl: interfaceDirection(currentInterfaceLanguage()) === 'rtl' });
+  const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
+  const layout = photoLayout(format, { banner: referral !== null, rtl });
   const { width, height } = PHOTO_FORMATS[format];
+  if (glory !== null) {
+    const qr = glory.qr;
+    const flame = referral === null || referral.flameDays === null ? null : flameForm(referral.flameDays);
+    return (
+      <div data-photo-frame={format} data-photo-frame-decorated="" className="game-photo-frame" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', aspectRatio: `${width} / ${height}` }}>
+        <div aria-hidden="true" style={{ position: 'absolute', inset: 0 }}>
+          <Placed rect={glory.crest ?? layout.emblem} width={width} height={height} hidden={glory.crest === null}>
+            <span data-game-coin-flip="" style={{ position: 'relative', display: 'block', width: '100%', height: '100%' }}>
+              <span data-game-face-wrap="reverse" style={{ display: 'block', width: '100%', height: '100%' }}>
+                <span data-photo-art="emblem" className="game-photo-art">
+                  <PhotoEmblemDrawing emblem={moment.emblem} />
+                </span>
+              </span>
+              <span data-game-shockwave="" style={{ position: 'absolute', inset: 0 }} />
+            </span>
+          </Placed>
+          <span style={HIDDEN}>
+            <span data-game-actor="mee" data-photo-art="mee" className="game-photo-art">
+              <GameBird bird="meeGuide" size={512} />
+            </span>
+            <span data-game-actor="meo" data-photo-art="meo" className="game-photo-art">
+              <GameBird bird="meoGuide" size={512} flip />
+            </span>
+            <span data-photo-art="signature" className="game-photo-art">
+              <Signature size={256} color="var(--ios-on-brand)" />
+            </span>
+            {flame === null ? null : (
+              <span data-photo-art="flame" className="game-photo-art">
+                <Flame form={flame} size={256} />
+              </span>
+            )}
+            {plate === null ? null : (
+              <span data-photo-art="author" className="game-photo-art">
+                <AuthorPlate plate={plate} width={720} />
+              </span>
+            )}
+          </span>
+        </div>
+        {qr === null || referral === null ? null : <ReferralQr slot={qr} referral={referral} width={width} height={height} />}
+      </div>
+    );
+  }
   return (
     <div
       data-photo-frame={format}

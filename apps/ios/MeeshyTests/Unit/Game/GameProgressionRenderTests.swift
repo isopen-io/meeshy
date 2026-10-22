@@ -14,10 +14,10 @@ final class GameProgressionRenderTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Combien de fois un motif paraît dans les sources du jeu (hors tests) : la garde d'unicité, indépendante du harnais.

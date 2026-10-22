@@ -102,7 +102,7 @@ extension CallManager {
         outgoingRingTimeoutTask?.cancel()
         let timeout = QualityThresholds.outgoingRingTimeoutSeconds
         outgoingRingTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(timeout))
+            _ = await cancellableSleep(for: .seconds(timeout))
             guard let self else { return }
             guard !Task.isCancelled else { return }
             // `.offering` compte comme "sonne encore" : le join de l'appelé est
@@ -127,8 +127,7 @@ extension CallManager {
         incomingRingTimeoutTask?.cancel()
         let timeout = QualityThresholds.outgoingRingTimeoutSeconds + 30
         incomingRingTimeoutTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(timeout))
-            guard let self, !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(timeout)), let self, !Task.isCancelled else { return }
             guard case .ringing(isOutgoing: false) = self.callState else { return }
             Logger.calls.warning("Incoming call still ringing after \(timeout)s — its end was lost; closing as missed")
             if let callId = self.currentCallId {

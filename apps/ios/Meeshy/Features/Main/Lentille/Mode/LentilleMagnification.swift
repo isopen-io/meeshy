@@ -96,7 +96,7 @@ struct LentilleMagnifiedTopLine: View {
             if conversation.tags.count > LentilleMetrics.Tags.maxCount {
                 Text("+\(conversation.tags.count - LentilleMetrics.Tags.maxCount)")
                     .font(MeeshyFont.relative(LentilleMetrics.Tags.chipFontSize, weight: LentilleMetrics.ModeNotch.weight))
-                    .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                     .allowsHitTesting(false)
             }
 
@@ -223,7 +223,7 @@ struct LentilleTagChip: View {
         } label: {
             Text(tag.name)
                 .font(MeeshyFont.relative(LentilleMetrics.Tags.chipFontSize, weight: LentilleMetrics.ModeNotch.weight))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .padding(.horizontal, LentilleMetrics.Tags.chipPaddingHorizontal)
                 .padding(.vertical, LentilleMetrics.Tags.chipPaddingVertical)

@@ -167,7 +167,8 @@ export type SocialEventV2Action<T extends SocialEventV2Type> = (typeof SOCIAL_EV
 
 // ─── Énumérations de champs ──────────────────────────────────────────────────
 
-export const CLIENT_PLATFORMS = ['ios', 'web', 'android_shell', 'pwa'] as const;
+/** `android` = l'application Android NATIVE (additif, #11721) ; `android_shell` = la coque Capacitor. */
+export const CLIENT_PLATFORMS = ['ios', 'web', 'android_shell', 'pwa', 'android'] as const;
 export const DEVICE_CLASSES = ['phone', 'tablet', 'desktop'] as const;
 export const NETWORK_TYPES = ['wifi', 'cellular', 'ethernet', 'offline', 'unknown'] as const;
 export const NETWORK_SUBTYPES = ['2g', '3g', '4g', '5g'] as const;

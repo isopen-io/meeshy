@@ -66,6 +66,16 @@ class CategoryRepositoryTest {
 
         override suspend fun getPrivacy() =
             ApiResponse<PrivacyPreferenceSyncBody>(success = false, error = "not stubbed")
+
+        override suspend fun getAll() = ApiResponse<me.meeshy.sdk.model.UserPreferences>(success = false, error = "not stubbed")
+
+        override suspend fun patchCategory(categoryId: String, body: me.meeshy.sdk.model.CategoryPatchBody) =
+            ApiResponse<Unit>(success = false, error = "not stubbed")
+
+        override suspend fun patchBlock(category: String, body: kotlinx.serialization.json.JsonObject) =
+            ApiResponse<Unit>(success = false, error = "not stubbed")
+
+        override suspend fun resetBlock(category: String) = ApiResponse<Unit>(success = false, error = "not stubbed")
     }
 
     private fun ok(vararg categories: ApiCategory) =
