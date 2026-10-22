@@ -102,13 +102,7 @@ final class GameNotebookViewModel: ObservableObject {
     /// La vignette se décode À LA TAILLE DE LA LISTE : une photo 1080 × 1920 décodée
     /// en entier pèse huit Mo, vingt photos ne tiendraient pas dans une liste fluide.
     nonisolated static func thumbnail(from data: Data, maxPixel: Int) -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-        ]
-        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: cg)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: CGFloat(maxPixel), decodeImmediately: false)
+            .map { UIImage(cgImage: $0) }
     }
 }

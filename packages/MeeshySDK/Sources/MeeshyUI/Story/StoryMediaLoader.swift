@@ -113,23 +113,8 @@ public final class StoryMediaLoader {
     /// - `kCGImageSourceThumbnailMaxPixelSize`: target dimension (longest side)
     /// This is 5-10x more memory efficient than UIImage(data:) + resize after.
     nonisolated private static func downsample(data: Data, maxDimension: CGFloat) -> UIImage? {
-        let sourceOptions: [CFString: Any] = [
-            kCGImageSourceShouldCache: false
-        ]
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
-            return nil
-        }
-
-        let downsampleOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxDimension
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: maxDimension, decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 
     // MARK: - Video Thumbnail (Async + Cached)

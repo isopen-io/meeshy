@@ -362,21 +362,8 @@ actor MediaCompressor {
     // MARK: - ImageIO hardware-accelerated downsampling
 
     private func downsample(data: Data, maxDimension: CGFloat) -> UIImage? {
-        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
-            return nil
-        }
-
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxDimension
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: maxDimension, decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 
     /// Single-pass CGImage downsample using ImageIO. Skips the JPEG@1.0 round-trip
