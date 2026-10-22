@@ -133,7 +133,8 @@ final class ReaderPrismReadingSurfacesGuardTests: XCTestCase {
             let reads = lines.indices.filter { lines[$0].contains("currentUser?.preferredContentLanguages") }
             XCTAssertFalse(reads.isEmpty, "\(path) n'amorce plus le composer depuis les défauts : retirer de la liste")
             for index in reads {
-                XCTAssertTrue(index > 0 && lines[index - 1].contains(Self.compositionMarker),
+                XCTAssertTrue(lines[index].contains(Self.compositionMarker)
+                              || (index > 0 && lines[index - 1].contains(Self.compositionMarker)),
                               "\(path):\(index + 1) lit les défauts de composition sans le dire")
             }
         }
