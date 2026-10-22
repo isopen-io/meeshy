@@ -16,6 +16,13 @@ import { GAME_INK, GAME_INK_2 } from './game-surface';
  * l'arrêt de la frappe (`COMMIT_MS`), à Entrée ou à la sortie du champ : chaque
  * remise recompose l'image finale (1080×1920), pas chaque lettre. Un `<input>`
  * : ce qui s'y tape n'est jamais interprété.
+ *
+ * À la remise de SORTIE (Entrée, sortie du champ), le champ se range sur le
+ * message NORMALISÉ — celui que la recette, la plaque et le compteur portent :
+ * sans elle, une marque bidi collée restait dans le champ et le rendait à
+ * l'envers pendant que l'image peinte était droite. La remise par minuterie,
+ * pendant la frappe, ne touche pas au champ : elle déplacerait le curseur et
+ * mangerait l'espace finale en cours de saisie.
  */
 export type GamePhotoMessageFieldProps = {
   /** Le message en vigueur dans le déroulé ; `null` : aucun. */
@@ -43,12 +50,17 @@ export function GamePhotoMessageField({ message, onCommit }: GamePhotoMessageFie
   };
   useEffect(() => cancel, []);
 
-  const commit = (raw: string) => {
+  const commit = (raw: string): string | null => {
     cancel();
     const next = authorMessageOf(raw);
-    if (next === committed.current) return;
+    if (next === committed.current) return next;
     committed.current = next;
     onCommit(next);
+    return next;
+  };
+
+  const leave = (raw: string) => {
+    setDraft(commit(raw) ?? '');
   };
 
   const onInput = (raw: string) => {
@@ -63,7 +75,7 @@ export function GamePhotoMessageField({ message, onCommit }: GamePhotoMessageFie
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key !== 'Enter') return;
     event.preventDefault();
-    commit(draft);
+    leave(draft);
   };
 
   const count = authorMessageGraphemes(authorMessageOf(draft) ?? '');
@@ -87,7 +99,7 @@ export function GamePhotoMessageField({ message, onCommit }: GamePhotoMessageFie
         inputMode="text"
         aria-label={gameText('game.photo.message.label')}
         onInput={(event) => onInput(event.currentTarget.value)}
-        onBlur={(event) => commit(event.currentTarget.value)}
+        onBlur={(event) => leave(event.currentTarget.value)}
         onKeyDown={onKeyDown}
         className="rounded-chip px-4 text-body"
         style={{ minHeight: 44, color: GAME_INK, backgroundColor: 'var(--color-ios-fill)' }}

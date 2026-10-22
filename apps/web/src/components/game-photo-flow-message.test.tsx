@@ -85,6 +85,21 @@ const paste = async (host: ParentNode, text: string) => {
   await leave(host);
 };
 
+/* Entrée remet le message au déroulé sans quitter le champ. Le champ est FOCALISÉ d'abord : sous happy-dom, React suit la valeur d'un `<input>` par son polyfill, qui ne connaît que l'élément actif. */
+const pressEnter = async (host: ParentNode, text: string) => {
+  const input = field(host);
+  if (input === null) throw new Error('champ absent');
+  act(() => {
+    input.focus();
+    input.value = text;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await act(async () => {
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+  });
+  await settle();
+};
+
 async function atResult(e: PhotoEnv, log: ReturnType<typeof env>['log']) {
   const host = await open(ambassador, e, log);
   await click(choose(host, 'selfie'));
@@ -175,6 +190,23 @@ describe('ce que le message fait à l’image', () => {
     await settle();
     expect(log.shared).toHaveLength(1);
     expect(log.texts.every((text) => text === undefined || !text.includes('Для мамы'))).toBe(true);
+  });
+
+  test('après la sortie du champ, le champ montre exactement ce que la recette porte : marque bidi retirée, espaces resserrées, bords taillés', async () => {
+    const { env: e, log, messages } = withMessages();
+    const host = await atResult(e, log);
+    await paste(host, 'Pour  toi\u202E maman  ');
+    expect(messages.at(-1)).toBe('Pour toi maman');
+    expect(field(host)?.value).toBe('Pour toi maman');
+    expect(by(host, 'data-photo-message-count')?.textContent).toContain('14');
+  });
+
+  test('après Entrée, le champ montre exactement ce que la recette porte', async () => {
+    const { env: e, log, messages } = withMessages();
+    const host = await atResult(e, log);
+    await pressEnter(host, '  Merci\u200B  la famille ');
+    expect(messages.at(-1)).toBe('Merci la famille');
+    expect(field(host)?.value).toBe('Merci la famille');
   });
 
   test('le texte n’est jamais interprété : une balise écrite reste des lettres dans le champ et la recette', async () => {
