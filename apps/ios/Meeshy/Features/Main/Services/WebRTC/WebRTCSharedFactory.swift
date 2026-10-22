@@ -26,4 +26,23 @@ enum WebRTCSharedFactory {
     }()
 }
 
+/// **La configuration UNIQUE d'une connexion d'appel** — appel à deux comme lien
+/// du maillage de groupe. Une connexion construite ailleurs échapperait au
+/// réglage « masquer mon adresse IP » (#11296).
+enum WebRTCPeerConfiguration {
+    static func make(iceServers: [RTCIceServer], transport: CallIceTransport) -> RTCConfiguration {
+        let config = RTCConfiguration()
+        config.iceServers = iceServers
+        config.sdpSemantics = .unifiedPlan
+        config.continualGatheringPolicy = .gatherContinually
+        config.bundlePolicy = .maxBundle
+        config.rtcpMuxPolicy = .require
+        // PERF-003: pre-warm ICE candidate gathering while the user is still
+        // tapping Answer — typically shaving 200–400ms off the connect time.
+        config.iceCandidatePoolSize = Int32(QualityThresholds.iceCandidatePoolSize)
+        config.iceTransportPolicy = transport == .relayOnly ? .relay : .all
+        return config
+    }
+}
+
 #endif
