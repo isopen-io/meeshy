@@ -6,8 +6,9 @@ import org.junit.Test
 /** The gate runs a media action now when the mic is granted, otherwise asks and runs it on the grant. */
 class CallPermissionGateTest {
 
-    private class Harness(micGranted: Boolean) {
+    private class Harness(micGranted: Boolean, cameraGranted: Boolean = true) {
         var granted = micGranted
+        var camera = cameraGranted
         var asked = 0
         var ran = 0
         val pending = CallPermissionGate.PendingAction()
@@ -15,6 +16,7 @@ class CallPermissionGateTest {
             isMicGranted = { granted },
             request = { asked += 1 },
             pending = pending,
+            isCameraGranted = { camera },
         )
     }
 
@@ -77,5 +79,42 @@ class CallPermissionGateTest {
         h.pending.resolve(granted = true)
 
         assertThat(h.ran).isEqualTo(0)
+    }
+
+    @Test
+    fun `accepting with everything granted answers at once`() {
+        val h = Harness(micGranted = true)
+        var answer: IncomingCallAnswer? = null
+
+        h.gate.answerIncoming(isVideo = true) { answer = it }
+
+        assertThat(answer).isEqualTo(IncomingCallAnswer.Answer)
+        assertThat(h.asked).isEqualTo(0)
+    }
+
+    @Test
+    fun `a refused microphone hangs up once the prompt is answered`() {
+        val h = Harness(micGranted = false)
+        var answer: IncomingCallAnswer? = null
+
+        h.gate.answerIncoming(isVideo = false) { answer = it }
+        assertThat(answer).isNull()
+        h.pending.resolve(granted = false)
+        h.pending.settle()
+
+        assertThat(answer).isEqualTo(IncomingCallAnswer.HangUp)
+    }
+
+    @Test
+    fun `a refused camera answers in audio`() {
+        val h = Harness(micGranted = true, cameraGranted = false)
+        var answer: IncomingCallAnswer? = null
+
+        h.gate.answerIncoming(isVideo = true) { answer = it }
+        h.granted = true
+        h.pending.resolve(granted = true)
+        h.pending.settle()
+
+        assertThat(answer).isEqualTo(IncomingCallAnswer.AnswerAudioOnly)
     }
 }
