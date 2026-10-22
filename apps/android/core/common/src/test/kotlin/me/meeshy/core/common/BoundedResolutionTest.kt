@@ -2,6 +2,7 @@ package me.meeshy.core.common
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -16,7 +17,7 @@ class BoundedResolutionTest {
         var finished = false
         val result = resolveBounded<String>(1_000) { delay(5_000); finished = true; "late" }
         assertThat(result).isNull()
-        assertThat(currentTime).isEqualTo(1_000)
+        assertThat(currentTime).isEqualTo(1_000L)
         assertThat(finished).isFalse()
     }
 }
