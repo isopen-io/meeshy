@@ -588,41 +588,7 @@ struct SecurityView: View {
             sectionHeader(title: String(localized: "settings.security.locked_conversations", defaultValue: "Conversations verrouillées", bundle: .main), icon: "lock.shield.fill", color: lockColor)
 
             VStack(spacing: 0) {
-                // Status row
-                HStack(spacing: MeeshySpacing.md) {
-                    fieldIcon("lock.shield.fill", color: lockColor)
-
-                    VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
-                        Text(String(localized: "settings.security.master_pin", defaultValue: "Code PIN principal", bundle: .main))
-                            .font(.caption2.weight(.medium))
-                            .foregroundColor(theme.textMuted)
-                        Text(hasMasterPIN
-                             ? String(localized: "settings.security.configured", defaultValue: "Configuré", bundle: .main)
-                             : String(localized: "settings.security.not_configured", defaultValue: "Non configuré", bundle: .main))
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
-                    }
-
-                    Spacer()
-
-                    if hasMasterPIN {
-                        HStack(spacing: MeeshySpacing.sm) {
-                            if lockedCount > 0 {
-                                Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundColor(MeeshyColors.error)
-                                    .padding(.horizontal, MeeshySpacing.sm)
-                                    .padding(.vertical, MeeshySpacing.xxs)
-                                    .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
-                            }
-                            Image(systemName: "checkmark.shield.fill")
-                                .font(.callout)
-                                .foregroundColor(MeeshyColors.success)
-                        }
-                    }
-                }
-                .padding(.horizontal, MeeshySpacing.mdPlus)
-                .padding(.vertical, MeeshySpacing.smPlus)
+                conversationLockStatusRow(hasMasterPIN: hasMasterPIN, lockedCount: lockedCount, lockColor: lockColor)
 
                 // Actions
                 HStack(spacing: MeeshySpacing.smPlus) {
@@ -701,9 +667,50 @@ struct SecurityView: View {
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
                 .padding(.bottom, MeeshySpacing.smPlus)
+
+                if hasMasterPIN {
+                    ConversationBiometricUnlockRow(color: lockColor)
+                }
             }
             .background(sectionBackground(tint: lockColor))
         }
+    }
+
+    private func conversationLockStatusRow(hasMasterPIN: Bool, lockedCount: Int, lockColor: String) -> some View {
+        HStack(spacing: MeeshySpacing.md) {
+            fieldIcon("lock.shield.fill", color: lockColor)
+
+            VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
+                Text(String(localized: "settings.security.master_pin", defaultValue: "Code PIN principal", bundle: .main))
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(theme.textMuted)
+                Text(hasMasterPIN
+                     ? String(localized: "settings.security.configured", defaultValue: "Configuré", bundle: .main)
+                     : String(localized: "settings.security.not_configured", defaultValue: "Non configuré", bundle: .main))
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
+            }
+
+            Spacer()
+
+            if hasMasterPIN {
+                HStack(spacing: MeeshySpacing.sm) {
+                    if lockedCount > 0 {
+                        Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(MeeshyColors.error)
+                            .padding(.horizontal, MeeshySpacing.sm)
+                            .padding(.vertical, MeeshySpacing.xxs)
+                            .background(Capsule().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
+                    }
+                    Image(systemName: "checkmark.shield.fill")
+                        .font(.callout)
+                        .foregroundStyle(MeeshyColors.success)
+                }
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.mdPlus)
+        .padding(.vertical, MeeshySpacing.smPlus)
     }
 
     // MARK: - Two-Factor Authentication Section

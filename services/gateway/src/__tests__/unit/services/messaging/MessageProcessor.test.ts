@@ -404,9 +404,9 @@ describe('MessageProcessor.getEncryptionContext', () => {
     expect(ctx.isEncrypted).toBe(false);
   });
 
-  it('returns mode=e2ee with isEncrypted=false (client encrypts)', async () => {
+  it('returns mode=e2ee with isEncrypted=false for a textless message (#11216: text is refused)', async () => {
     convFindUnique.mockResolvedValue({ encryptionMode: 'e2ee', encryptionEnabledAt: new Date(), serverEncryptionKeyId: null });
-    const ctx = await processor.getEncryptionContext(CONV_ID, 'hello', 'text');
+    const ctx = await processor.getEncryptionContext(CONV_ID, '', 'text');
     expect(ctx.isEncrypted).toBe(false);
     expect(ctx.mode).toBe('e2ee');
   });

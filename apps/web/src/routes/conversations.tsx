@@ -6,6 +6,8 @@ import { ListHeader } from '@/components/list-header';
 import { SearchCommunitiesBand } from '@/components/search-communities-band';
 import { StoryRail } from '@/components/story-rail';
 import { Glyph } from '@/components/glyph';
+import { LiveAnnouncement } from '@/components/live-announcement';
+import { useRowActionNotice } from '@/lib/view/row-action-notice';
 import { useDismissRowSwipeOnViewChange } from '@/components/conversation-row-swipe';
 import { LensRow, ROW_HEIGHT } from '@/components/lens-row';
 import { ConversationDetailsPortal } from '@/components/conversation-details-sheet-lazy';
@@ -257,6 +259,7 @@ export default function ConversationsScreen() {
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const interfaceLanguage = currentInterfaceLanguage();
+  const rowNotice = useRowActionNotice();
   useDismissRowSwipeOnViewChange(`${selection.join(',')}\u0001${search}`);
   const frame = useRef<HTMLUListElement | null>(null);
   /* #11036 — la barre suit le SENS du défilement ; une recherche en cours la tient. */
@@ -921,6 +924,13 @@ export default function ConversationsScreen() {
           </>
         )}
       </ul>
+
+      {/* L'ISSUE DES GESTES DE RANGÉE — dite à l'oreille, et à l'œil quand la
+          passerelle refuse et que la rangée revient en arrière. Posée AU-DESSUS
+          de la barre de recherche, jamais dessous. */}
+      <div className="pointer-events-none absolute inset-x-0 z-20 h-0" style={{ bottom: searchBarHeight }}>
+        <LiveAnnouncement text={rowNotice.text} tone={rowNotice.tone} marker="conversationRows" />
+      </div>
 
       {/*
         La barre de recherche EN BAS — a portee du pouce (cf. doc-comment).

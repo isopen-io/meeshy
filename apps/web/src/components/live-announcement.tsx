@@ -49,6 +49,10 @@ const MARKERS = {
   /* « Mes sons » (#9848) — l'issue d'un retrait : réussi, ou refusé et la
      rangée revenue à sa place. */
   mySounds: { 'data-my-sounds-announce': '' },
+  /* La liste des conversations — l'issue d'un geste de rangée (épingler,
+     sourdine, archiver, lu) : confirmé à l'oreille, ou refusé et la rangée
+     revenue à sa place. */
+  conversationRows: { 'data-conversation-rows-announce': '' },
 } as const;
 
 export type AnnouncementMarker = keyof typeof MARKERS;

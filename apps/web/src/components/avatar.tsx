@@ -173,6 +173,13 @@ type AvatarProps = {
    */
   redundant?: boolean;
   /**
+   * HORS DU PARCOURS `Tab`, MAIS ATTEIGNABLE (#11227) — l'hôte tient un
+   * parcours aux flèches (la rangée de la liste, `useRowRoving`) qui y mène :
+   * le lien et la pastille d'humeur restent focalisables et annoncés, sans
+   * coûter un arrêt de tabulation chacun.
+   */
+  outOfTabOrder?: boolean;
+  /**
    * UN VRAI PORTRAIT (#5893) — `PostMedia.author.avatar`/`Viewer.avatar` :
    * une RÉFÉRENCE DE MÉDIA telle que la passerelle la sert, jamais posée pour
    * un groupe (D-1 étend `MeeshyAvatar.swift`, qui peint la photo AU-DESSUS du
@@ -252,6 +259,7 @@ function renderAvatar({
   moodStill = false,
   moodAuthorId,
   redundant,
+  outOfTabOrder,
 }: Omit<AvatarProps, 'ring'>, storyRingSeparated = false) {
   const showsImage = src !== undefined && src !== '';
   const resolvedSrc = showsImage ? attachmentSrc(src) : undefined;
@@ -387,13 +395,13 @@ function renderAvatar({
     ) : (
       <span className="relative grid shrink-0 place-items-center" style={{ width: size, height: size }}>
         {rendu}
-        <MoodPeekTarget authorId={peekAuthor} emoji={humeur} name={name ?? profileUsername} size={size} />
+        <MoodPeekTarget authorId={peekAuthor} emoji={humeur} name={name ?? profileUsername} size={size} {...(outOfTabOrder === true ? { outOfTabOrder } : {})} />
       </span>
     );
   if (cible === null) return withMoodPeek(corps);
 
   const sizeVar = { '--avatar-size': `${size}px` } as CSSProperties;
-  const focus = redundant === true ? { tabIndex: -1 } : {};
+  const focus = redundant === true || outOfTabOrder === true ? { tabIndex: -1 } : {};
   const nomme = (cle: 'a11y.avatar.story' | 'a11y.avatar.profile'): string =>
     translate(currentInterfaceLanguage(), cle, { name: name ?? profileUsername ?? '' });
 
@@ -453,6 +461,7 @@ export function MoodPeekTarget({
   name,
   size,
   inset = 0,
+  outOfTabOrder = false,
 }: {
   readonly authorId: string;
   readonly emoji: string;
@@ -461,6 +470,7 @@ export function MoodPeekTarget({
   /** L'écart entre l'avatar et la boîte qui porte la cible, quand un hôte la
    * pose lui-même (le liseré du profil). */
   readonly inset?: number;
+  readonly outOfTabOrder?: boolean;
 }) {
   const hosted = useMoodPeekHosted();
   if (!hosted) return null;
@@ -471,6 +481,7 @@ export function MoodPeekTarget({
     <button
       type="button"
       data-mood-peek={authorId}
+      {...(outOfTabOrder ? { tabIndex: -1 } : {})}
       aria-haspopup="dialog"
       aria-label={translate(currentInterfaceLanguage(), 'mood.peek.title', { name: name ?? '' })}
       className="absolute cursor-pointer rounded-chip border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-[-10px]"

@@ -101,4 +101,12 @@ describe('conversationActionsFor — rôles de plateforme et de conversation (#1
   ] as const)('un rang de ligne %j se lit casse pliée, comme effectiveConversationRole', (conversationRole, verdict) => {
     expect(actionsOf({ viewer: { conversationRole } })[verdict]).toBe(true);
   });
+  it('masquer et signaler une conversation exigent une participation active (route delete-for-me, verifierCible)', () => {
+    const actions = actionsOf();
+    expect([actions.hide, actions.report]).toEqual([true, true]);
+    const left = actionsOf({ viewer: { isActiveMember: false, conversationRole: null } });
+    expect([left.hide, left.report]).toEqual([false, false]);
+    const adminLeft = actionsOf({ viewer: { platformRole: 'BIGBOSS', isActiveMember: false, conversationRole: null } });
+    expect([adminLeft.hide, adminLeft.report]).toEqual([false, false]);
+  });
 });

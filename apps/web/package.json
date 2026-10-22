@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/web",
-  "version": "2.19.0",
+  "version": "2.22.0",
   "private": true,
   "type": "module",
   "description": "La v3.1 web — une application TypeScript unique, servie en web, installable en PWA, empaquetable Android/iOS par Capacitor. Interface reprise de l'app iOS.",
@@ -84,6 +84,7 @@
   },
   "dependencies": {
     "@capacitor-community/media": "9.1.0",
+    "@capacitor/haptics": "8.0.2",
     "@capacitor/push-notifications": "8.1.2",
     "@mediapipe/tasks-vision": "1.1.0",
     "@meeshy/shared": "workspace:*",
