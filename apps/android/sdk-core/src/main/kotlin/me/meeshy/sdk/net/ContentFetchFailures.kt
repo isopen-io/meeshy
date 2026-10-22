@@ -1,7 +1,6 @@
 package me.meeshy.sdk.net
 
 import me.meeshy.sdk.model.ContentFetchFailure
-import retrofit2.HttpException
 import java.io.IOException
 
 /**
@@ -18,9 +17,8 @@ fun ApiError.toContentFetchFailure(): ContentFetchFailure {
     }
 }
 
-/** Meme table pour une exception brute. */
+/** Exception brute : IOException -> reseau ; le reste -> serveur (les HttpException sont deja repliees en [ApiError] par [apiCall]). */
 fun Throwable.toContentFetchFailure(): ContentFetchFailure = when (this) {
-    is HttpException -> ContentFetchFailure.fromHttpStatus(code())
     is IOException -> ContentFetchFailure.NETWORK
     else -> ContentFetchFailure.SERVER
 }

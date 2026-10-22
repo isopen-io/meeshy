@@ -3,16 +3,10 @@ package me.meeshy.sdk.net
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.SerializationException
 import me.meeshy.sdk.model.ContentFetchFailure
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Test
-import retrofit2.HttpException
-import retrofit2.Response
 import java.io.IOException
 
 class ContentFetchFailuresTest {
-
-    private fun http(code: Int) = HttpException(Response.error<Any>(code, "{}".toResponseBody("application/json".toMediaType())))
 
     @Test
     fun `ApiError reseau devient NETWORK`() {
@@ -36,8 +30,6 @@ class ContentFetchFailuresTest {
     @Test
     fun `exceptions brutes`() {
         assertThat(IOException("down").toContentFetchFailure()).isEqualTo(ContentFetchFailure.NETWORK)
-        assertThat(http(404).toContentFetchFailure()).isEqualTo(ContentFetchFailure.NOT_FOUND)
-        assertThat(http(503).toContentFetchFailure()).isEqualTo(ContentFetchFailure.SERVER)
         assertThat(SerializationException("bad").toContentFetchFailure()).isEqualTo(ContentFetchFailure.SERVER)
     }
 }
