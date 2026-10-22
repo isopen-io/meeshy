@@ -32,7 +32,6 @@ class AuthRoutesManifestTest {
         AuthApi::class.java,
         PhoneTransferApi::class.java,
         AnonymousApi::class.java,
-        InvitationApi::class.java,
     )
 
     private fun racineDepot(): File {
@@ -102,7 +101,10 @@ class AuthRoutesManifestTest {
 
     @Test
     fun `les routes du contrat d'authentification sont toutes declarees`() {
-        val declarees = interfaces.flatMap(::routesDeclarees).map { (verbe, chemin) -> verbe to canonise(apiPrefix + chemin) }.toSet()
+        val declarees = (
+            interfaces.flatMap { routesDeclarees(it) } +
+                routesDeclarees(FriendApi::class.java, setOf("sendEmailInvitation"))
+            ).map { (verbe, chemin) -> verbe to canonise(apiPrefix + chemin) }.toSet()
 
         val attendues = listOf(
             "POST" to "auth/login",

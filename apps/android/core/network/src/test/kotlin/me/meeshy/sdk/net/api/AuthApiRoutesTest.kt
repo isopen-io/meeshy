@@ -2,8 +2,8 @@ package me.meeshy.sdk.net.api
 
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import me.meeshy.sdk.model.EmailInvitationRequest
 import me.meeshy.sdk.model.auth.AnonymousRefreshRequest
-import me.meeshy.sdk.model.auth.EmailInvitationRequest
 import me.meeshy.sdk.model.auth.PhoneOwnershipCheckRequest
 import me.meeshy.sdk.model.auth.PhoneTransferInitiateRegistrationRequest
 import me.meeshy.sdk.model.auth.PhoneTransferInitiateRequest
@@ -13,8 +13,9 @@ import org.junit.Test
 
 /**
  * Les routes d'authentification qui n'ont pas leur place dans [AuthApi] : le
- * transfert de numero (sept routes), le renouvellement d'une session d'invite et
- * l'invitation par e-mail — verbe, chemin et corps tels qu'ils PARTENT.
+ * transfert de numero (sept routes) et le renouvellement d'une session d'invite —
+ * plus l'invitation par e-mail, deja declaree par [FriendApi] (une route n'a qu'UNE
+ * declaration) — verbe, chemin et corps tels qu'ils PARTENT.
  */
 class AuthApiRoutesTest {
 
@@ -135,7 +136,7 @@ class AuthApiRoutesTest {
             """{"success":true,"data":{"email":"ami@exemple.fr","sentAt":"2026-10-22T10:00:00.000Z","invitationUrl":"https://meeshy.me/signup/affiliate/tok"}}""",
         )
 
-        val response = probe.api(InvitationApi::class.java).inviteByEmail(EmailInvitationRequest("ami@exemple.fr"))
+        val response = probe.api(FriendApi::class.java).sendEmailInvitation(EmailInvitationRequest("ami@exemple.fr"))
 
         assertThat(probe.call.method).isEqualTo("POST")
         assertThat(probe.call.path).isEqualTo("/api/v1/invitations/email")

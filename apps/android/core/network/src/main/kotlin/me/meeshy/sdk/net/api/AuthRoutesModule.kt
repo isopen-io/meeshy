@@ -24,8 +24,4 @@ internal object AuthRoutesModule {
     @Provides
     @Singleton
     fun providesAnonymousApi(api: MeeshyApi): AnonymousApi = api.service(AnonymousApi::class.java)
-
-    @Provides
-    @Singleton
-    fun providesInvitationApi(api: MeeshyApi): InvitationApi = api.service(InvitationApi::class.java)
 }
