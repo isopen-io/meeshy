@@ -66,6 +66,33 @@ data class CallHistoryPeer(
 )
 
 /**
+ * Someone who joined a GROUP call, reader excluded (#8066): a name and a face,
+ * never a presence nor a contact field. Mirrors the gateway `CallHistoryParticipant`;
+ * every field degrades so one odd participant never fails the whole record.
+ */
+@Serializable
+data class CallHistoryParticipant(
+    val participantId: String = "",
+    val userId: String? = null,
+    val username: String? = null,
+    val displayName: String = "",
+    val avatar: String? = null,
+)
+
+/** `DELETE /calls/history/{callId}` result. */
+@Serializable
+data class CallHistoryHideResult(
+    val callId: String? = null,
+    val hidden: Boolean? = null,
+)
+
+/** `DELETE /calls/history` result: how many calls left the reader's journal. */
+@Serializable
+data class CallHistoryClearResult(
+    val cleared: Int = 0,
+)
+
+/**
  * One entry in the call journal. Mirrors the gateway `CallHistoryItem` REST
  * contract; only [callId]/[conversationId] and the other non-null fields are
  * required, so a malformed frame fails to decode rather than half-populating.
@@ -92,6 +119,8 @@ data class CallRecord(
     val bytesSent: Int? = null,
     val bytesReceived: Int? = null,
     val peer: CallHistoryPeer? = null,
+    /** Who joined a group call (reader excluded, join order); empty when absent. */
+    val participants: List<CallHistoryParticipant> = emptyList(),
 ) {
     /** The classified direction, degrading an unknown wire value to incoming. */
     val directionKind: CallDirection get() = CallDirection.fromRaw(direction)
@@ -106,12 +135,29 @@ data class CallRecord(
      * (group) → fallback. Blank candidates are skipped (surpasses iOS, which
      * only skips empty strings and would surface a whitespace-only name).
      */
-    val displayName: String
+    val displayName: String get() = displayNameOr(FALLBACK_NAME)
+
+    /** [displayName] with a caller-supplied (localized) fallback. */
+    fun displayNameOr(fallback: String): String {
+        peer?.displayName?.let { if (it.isNotBlank()) return it }
+        peer?.username?.let { if (it.isNotBlank()) return it }
+        conversationTitle?.let { if (it.isNotBlank()) return it }
+        return fallback
+    }
+
+    /** The first [limit] participant names of a group call and how many others. */
+    fun participantSummary(limit: Int = GROUP_LABEL_NAMES): Pair<List<String>, Int> {
+        val names = participants.map { it.displayName }.filter { it.isNotBlank() }
+        return names.take(limit) to maxOf(0, names.size - limit)
+    }
+
+    /** `"A, B +N"` for a group call; `null` when nobody is listed. */
+    val participantsLabel: String?
         get() {
-            peer?.displayName?.let { if (it.isNotBlank()) return it }
-            peer?.username?.let { if (it.isNotBlank()) return it }
-            conversationTitle?.let { if (it.isNotBlank()) return it }
-            return FALLBACK_NAME
+            val (names, more) = participantSummary()
+            if (names.isEmpty()) return null
+            val joined = names.joinToString(", ")
+            return if (more > 0) "$joined +$more" else joined
         }
 
     /** Peer avatar for a direct call; else the conversation (group) avatar. */
@@ -136,6 +182,7 @@ data class CallRecord(
 }
 
 private const val FALLBACK_NAME = "Inconnu"
+private const val GROUP_LABEL_NAMES = 2
 private val BYTE_UNITS = listOf("KB", "MB", "GB", "TB")
 
 private fun formatBytes(total: Int): String {
