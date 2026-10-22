@@ -13,7 +13,7 @@ import java.io.IOException
  * (plafonné à 30 s) ou `2^tentative` secondes. La quatrième réponse remonte telle quelle.
  *
  * Jamais rejoué : un 429 `DAILY_*` / `NEWCOMER_SLOW_MODE` (la limite se DIT à l'auteur),
- * une route dont la politique est « jamais » (`/signal/*`), une méthode [NeverRetried].
+ * une route dont la politique est « jamais » (`/signal/…`), une méthode [NeverRetried].
  */
 class RetryInterceptor(
     private val sleeper: (Long) -> Unit = { Thread.sleep(it) },
