@@ -49,10 +49,13 @@ const fakeScene = (frameId: string): GloryScene => ({
   close: () => undefined,
 });
 
-function offered(offer: GloryOffer, options: { readonly ready?: ReadonlySet<string>; readonly warmOk?: boolean } = {}) {
+/** `warm: 'later'` : le chargement d'une tuile absente attend `releaseWarm()` — le cadre arrive APRÈS la prise. */
+function offered(offer: GloryOffer, options: { readonly ready?: ReadonlySet<string>; readonly warmOk?: boolean; readonly warm?: 'later' } = {}) {
   const calls: Call[] = [];
   const warmed: string[] = [];
   const ready = new Set(options.ready ?? offer.tiles.filter((t) => t.ready).map((t) => t.ref.frameId));
+  const pending: (() => void)[] = [];
+  const releaseWarm = () => pending.splice(0).forEach((release) => release());
   const { env: base, log } = env();
   const value: PhotoEnv = {
     ...base,
@@ -65,12 +68,13 @@ function offered(offer: GloryOffer, options: { readonly ready?: ReadonlySet<stri
     gloryWarm: async (frame) => {
       warmed.push(frame.frameId);
       if (options.warmOk === false) return false;
+      if (options.warm === 'later') await new Promise<void>((resolve) => pending.push(resolve));
       ready.add(frame.frameId);
       return true;
     },
     gloryThumb: async () => null,
   };
-  return { env: value, log, calls, warmed };
+  return { env: value, log, calls, warmed, releaseWarm };
 }
 
 const twoTiles: GloryOffer = { tiles: [tile('savane.ambassadeur-2'), tile('royaumes.ambassadeur-2', { poses: ['duo'], defaultPose: 'duo' })], preselected: ref('savane.ambassadeur-2') };
@@ -218,16 +222,46 @@ describe('tout se change après', () => {
     expect(log.cameraOpened).toBe(1);
   });
 
-  test('sur le résultat, changer de pose recompose aussi', async () => {
+  test('sur le résultat, changer de pose recompose aussi, et « Enregistrer » revient : la pose nomme la version', async () => {
     const { env: e, log, calls } = offered(twoTiles);
     const host = await open(ambassador, e, log);
     await click(choose(host, 'selfie'));
     await settle();
     await click(takeFrame(host));
     await settle();
+    expect(by(host, 'data-photo-save')).toBeNull();
     await click(poseOption(host, 'pied'));
     await settle();
     expect(log.rendered).toHaveLength(2);
     expect(calls.filter((call) => call.scale === 1).at(-1)?.pose).toBe('pied');
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+    await click(poseOption(host, 'perches'));
+    await settle();
+    expect(log.rendered).toHaveLength(3);
+    expect(by(host, 'data-photo-save')).toBeNull();
+  });
+
+  test('un cadre choisi mais pas encore prêt se prend en carte simple, et c’est elle qui se nomme ; quand il arrive, la recomposition décorée fait revenir « Enregistrer »', async () => {
+    const missing: GloryOffer = { tiles: [tile('savane.ambassadeur-2'), tile('royaumes.ambassadeur-2', { ready: false, missingBytes: 420_000 })], preselected: ref('savane.ambassadeur-2') };
+    const { env: e, log, calls, releaseWarm } = offered(missing, { warm: 'later' });
+    const host = await open(ambassador, e, log);
+    await click(choose(host, 'selfie'));
+    await settle();
+    await click(option(host, 'royaumes.ambassadeur-2'));
+    await settle();
+    await click(takeFrame(host));
+    await settle();
+    expect(log.rendered).toHaveLength(1);
+    expect(log.saved).toHaveLength(1);
+    expect(by(host, 'data-photo-save')).toBeNull();
+    await click(by(host, 'data-photo-keep'));
+    await settle();
+    expect(log.kept[0]?.photo.recipe?.frameId).toBeUndefined();
+    releaseWarm();
+    await settle();
+    expect(log.rendered).toHaveLength(2);
+    expect(calls.filter((call) => call.scale === 1).at(-1)?.frame).toEqual(ref('royaumes.ambassadeur-2'));
+    expect(by(host, 'data-photo-save')).not.toBeNull();
+    expect(log.saved).toHaveLength(1);
   });
 });

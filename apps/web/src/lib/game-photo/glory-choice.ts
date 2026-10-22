@@ -87,8 +87,13 @@ export function choosePose(choice: GloryChoice, offer: GloryOffer | null, pose: 
   return { ...choice, pose, byUser: true };
 }
 
-/** Le cadre d'une prise pour la loi d'enregistrement (`capture-save`) : le cadre choisi, sinon la carte simple du moment. */
-export const frameIdOf = (choice: GloryChoice, momentId: string): string => choice.frame?.frameId ?? momentId;
+/**
+ * Le nom de la VERSION d'une prise pour la loi d'enregistrement (`capture-save`) : la scène COMPOSÉE
+ * (jamais le seul choix — un cadre choisi mais pas encore prêt se compose en carte simple) et, sur un
+ * cadre, la pose, qui change l'image autant que le cadre. Sans scène, la carte simple du moment.
+ */
+export const composedVersionOf = ({ frameId, pose, momentId }: { readonly frameId: string | null; readonly pose: GloryFrameBirdLayout | null; readonly momentId: string }): string =>
+  frameId === null ? momentId : pose === null ? frameId : `${frameId}#${pose}`;
 
 /** La présence d'une tuile : ce que l'appareil a vécu depuis prime sur ce que l'offre disait. */
 export function presenceOf(offer: GloryOffer, ref: FrameRef, lived: ReadonlyMap<string, TilePresence>): TilePresence {

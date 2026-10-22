@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
-import { INITIAL_CHOICE, chooseFrame, choosePose, frameIdOf, presenceOf, reconcileChoice, tileOf, type GloryOffer, type GloryOfferTile } from './glory-choice';
+import { INITIAL_CHOICE, chooseFrame, choosePose, composedVersionOf, presenceOf, reconcileChoice, tileOf, type GloryOffer, type GloryOfferTile } from './glory-choice';
 
 /**
  * LE CHOIX DU CADRE ET DE LA POSE (#10164, L11) — une loi PURE entre l'offre que
@@ -81,9 +81,11 @@ describe('la pose', () => {
 });
 
 describe('ce que la prise emporte', () => {
-  test('le cadre de la loi d’enregistrement : le cadre choisi, sinon la carte simple du moment', () => {
-    expect(frameIdOf(reconcileChoice(INITIAL_CHOICE, offer), 'rank:ambassadeur:2')).toBe('savane.ambassadeur-2');
-    expect(frameIdOf(INITIAL_CHOICE, 'rank:ambassadeur:2')).toBe('rank:ambassadeur:2');
+  test('la version de la loi d’enregistrement se nomme par la scène COMPOSÉE et sa pose, sinon par la carte simple du moment', () => {
+    expect(composedVersionOf({ frameId: 'savane.ambassadeur-2', pose: null, momentId: 'rank:ambassadeur:2' })).toBe('savane.ambassadeur-2');
+    expect(composedVersionOf({ frameId: 'savane.ambassadeur-2', pose: 'pied', momentId: 'rank:ambassadeur:2' })).toBe('savane.ambassadeur-2#pied');
+    expect(composedVersionOf({ frameId: null, pose: 'pied', momentId: 'rank:ambassadeur:2' })).toBe('rank:ambassadeur:2');
+    expect(composedVersionOf({ frameId: 'a', pose: 'pied', momentId: 'm' })).not.toBe(composedVersionOf({ frameId: 'a', pose: 'perches', momentId: 'm' }));
   });
 
   test('la présence d’une tuile : prête, ou le poids qui manque ; un état vécu (chargement, échec) prime', () => {

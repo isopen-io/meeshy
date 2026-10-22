@@ -8,7 +8,7 @@ import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
-import { frameIdOf } from '@/lib/game-photo/glory-choice';
+import { composedVersionOf } from '@/lib/game-photo/glory-choice';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
@@ -73,6 +73,9 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
  */
 
 export type PhotoFlowResult = { readonly deferred: boolean };
+
+/** L'image composée et ce qui l'a composée : la scène ouverte (`null` : la carte simple) et sa pose. */
+type Composition = { readonly files: PhotoFiles; readonly frameId: string | null; readonly pose: GloryRecipe['pose'] };
 
 type Props = {
   readonly moment: PhotoMoment;
@@ -152,7 +155,11 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const [galleryFile, setGalleryFile] = useState<File | null>(null);
   const [galleryError, setGalleryError] = useState(false);
   const [still, setStill] = useState<Blob | null>(null);
-  const [files, setFiles] = useState<PhotoFiles | null>(null);
+  /* L'image COMPOSÉE et ce qui l'a composée : la scène ouverte (ou aucune, la carte simple) et sa pose —
+     jamais le seul choix, qu'un cadre pas encore prêt ne suit pas. C'est elle qui nomme la version pour
+     la loi d'enregistrement et que la recette du carnet décrit (#10164). */
+  const [composition, setComposition] = useState<Composition | null>(null);
+  const files = composition?.files ?? null;
   const [format, setFormat] = useState<PhotoFormat>('story');
   /* Le format au moment de la composition : la prise par le cadre part dans la galerie dans CE format (#10296). */
   const formatAtCompose = useRef<PhotoFormat>(format);
@@ -214,19 +221,14 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const gloryTexts = useMemo(() => ({ kicker: moment.kicker, title: moment.title, date: dateLabel, message: null }), [moment.kicker, moment.title, dateLabel]);
   const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch });
   const glory = gloryChoice.scene;
-  /* Le cadre posé sur la prise, pour la loi d'enregistrement : le cadre choisi, sinon la carte simple du moment. */
-  const frameId = frameIdOf(gloryChoice.choice, moment.id);
-  /* Lu au moment de composer : changer de cadre pendant la frappe ne la rejoue pas. */
-  const frameIdRef = useRef(frameId);
-  frameIdRef.current = frameId;
-  /* La version composée : le cadre dont la scène est ouverte (ou la carte simple) et la pose — ce qui, en
-     changeant sur le résultat, recompose l'image (#10164). La scène compte, pas le seul choix : un cadre
-     choisi mais pas encore prêt se compose en carte simple, puis se recompose quand il arrive. */
-  const recipeKey = `${glory === null ? 'simple' : glory.frame.id}|${gloryChoice.choice.pose ?? ''}`;
-  const recipeKeyRef = useRef(recipeKey);
-  recipeKeyRef.current = recipeKey;
-  const composedRecipe = useRef(recipeKey);
   const chosenPose = gloryChoice.choice.pose;
+  /* La version que l'aperçu ANNONCE : le cadre dont la scène est ouverte (ou la carte simple) et la pose — ce
+     qui, en changeant sur le résultat, recompose l'image (#10164). La scène compte, pas le seul choix : un
+     cadre choisi mais pas encore prêt se compose en carte simple, puis se recompose quand il arrive. */
+  const previewVersion = composedVersionOf({ frameId: glory === null ? null : glory.frame.id, pose: chosenPose, momentId: moment.id });
+  const previewVersionRef = useRef(previewVersion);
+  previewVersionRef.current = previewVersion;
+  const composedVersion = useRef(previewVersion);
   const gloryRecipe = useMemo((): GloryRecipe => ({ pose: chosenPose, message: null, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [chosenPose, withFlame, withLink]);
   const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
   const gloryBanner = useMemo(() => (glory === null || referral === null ? null : photoBannerOf(referral, glory.bannerLayout(rtl))), [glory, referral, rtl]);
@@ -238,16 +240,19 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     return scene === null ? null : { source: { scene, recipe: gloryRecipe, language: currentInterfaceLanguage() }, close: scene.close };
   }, [openFinal, gloryRecipe]);
   const composeWith = useCallback(
-    async (input: { readonly photo: PhotoSource | null; readonly frame: HTMLElement | null; readonly referral: PhotoReferral | null }): Promise<PhotoFiles | null> => {
+    async (input: { readonly photo: PhotoSource | null; readonly frame: HTMLElement | null; readonly referral: PhotoReferral | null }): Promise<Composition | null> => {
       const final = await gloryFinal();
       try {
-        return await env.render({ moment, ...input, glory: final?.source ?? null });
+        const rendered = await env.render({ moment, ...input, glory: final?.source ?? null });
+        if (rendered === null) return null;
+        return { files: rendered, frameId: final === null ? null : final.source.scene.frame.id, pose: final === null ? null : final.source.recipe.pose };
       } finally {
         final?.close();
       }
     },
     [env, gloryFinal, moment],
   );
+  const versionOf = useCallback((composed: Composition): string => composedVersionOf({ frameId: composed.frameId, pose: composed.pose, momentId: moment.id }), [moment.id]);
   /* Lu au moment de composer, jamais une dépendance de la frappe : une scène d'aperçu qui arrive
      PENDANT la frappe (premier usage : chunk, packs, contrat, décodages) changerait l'identité de
      `composeWith` et rejouerait frappe et composition — la même loi que `referralRef`. */
@@ -366,11 +371,11 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
           dispatch({ type: 'compose-failed' });
           return;
         }
-        setFiles(rendered);
+        setComposition(rendered);
         setComposedReferral(banner);
-        composedRecipe.current = recipeKeyRef.current;
+        composedVersion.current = previewVersionRef.current;
         galleryOnCompose.current = strikingZone === 'frame';
-        dispatch({ type: 'composed', frame: frameIdRef.current, format: formatAtCompose.current });
+        dispatch({ type: 'composed', frame: versionOf(rendered), format: formatAtCompose.current });
       })
       .catch(() => {
         if (live) dispatch({ type: 'compose-failed' });
@@ -378,7 +383,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     return () => {
       live = false;
     };
-  }, [strikingMode, strikingZone, play, stage]);
+  }, [strikingMode, strikingZone, play, stage, versionOf]);
 
   /* La sortie : « plus tard » laisse le moment en attente, tout le reste le laisse tel quel. */
   useEffect(() => {
@@ -462,7 +467,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     [composeWith, resultMode],
   );
   const outgoingFiles = useCallback(
-    async (): Promise<PhotoFiles | null> => (composedReferral?.placeholder === true ? recompose(null) : files),
+    async (): Promise<PhotoFiles | null> => (composedReferral?.placeholder === true ? (await recompose(null))?.files ?? null : files),
     [composedReferral, files, recompose],
   );
   const sharing = useRef(false);
@@ -487,9 +492,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     if (!alive.current || recomposed === null) return null;
     if (next === null) setLinkUnavailable(true);
     else setLink(url);
-    setFiles(recomposed);
+    setComposition(recomposed);
     setComposedReferral(next);
-    return { files: recomposed, referral: next };
+    return { files: recomposed.files, referral: next };
   }, [composedReferral, env, files, recompose]);
 
   const share = useCallback(async () => {
@@ -540,21 +545,24 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   }, []);
 
   /* TOUT SE CHANGE APRÈS (#10164) : sur le résultat, un autre cadre ou une autre pose recompose l'image depuis
-     la même photo, sans reprendre ; c'est une autre version pour la loi d'enregistrement, « Enregistrer » revient. */
+     la même photo, sans reprendre ; c'est une autre version pour la loi d'enregistrement, « Enregistrer » revient.
+     La version se nomme par ce qui a été COMPOSÉ, une fois l'image rendue : tant qu'elle ne l'est pas, l'image
+     affichée est l'ancienne, et son état d'enregistrement reste le sien. */
   const atResult = state.step === 'result';
   useEffect(() => {
-    if (!atResult || composedRecipe.current === recipeKey) return;
-    composedRecipe.current = recipeKey;
-    dispatch({ type: 'frame', frame: frameIdRef.current });
+    if (!atResult || composedVersion.current === previewVersion) return;
+    composedVersion.current = previewVersion;
     let live = true;
     void recompose(composedReferral).then((rendered) => {
-      if (live && rendered !== null) setFiles(rendered);
+      if (!live || rendered === null) return;
+      setComposition(rendered);
+      dispatch({ type: 'frame', frame: versionOf(rendered) });
     });
     return () => {
       live = false;
     };
-    /* Le bandeau composé et `recompose` suivent la clé : ils ne relancent rien d'eux-mêmes. */
-  }, [atResult, recipeKey]);
+    /* Le bandeau composé, `recompose` et `versionOf` suivent la clé : ils ne relancent rien d'eux-mêmes. */
+  }, [atResult, previewVersion]);
 
   /* Une prise par la case du cadre part dans la galerie dès qu'elle est composée, puis le résultat
      s'affiche sans « Enregistrer » (l'état l'y a déjà rangée avec ce cadre). */
@@ -585,8 +593,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
       source,
       recipe: {
         ...(taken === null ? {} : { mirror: taken.mirror }),
-        ...(gloryChoice.choice.frame === null ? {} : { frameId: gloryChoice.choice.frame.frameId }),
-        ...(chosenPose === null ? {} : { pose: chosenPose }),
+        ...(composition === null || composition.frameId === null ? {} : { frameId: composition.frameId }),
+        ...(composition === null || composition.pose === null ? {} : { pose: composition.pose }),
         showLink: composedReferral !== null,
       },
     });
@@ -598,7 +606,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
           ? { tone: 'error', text: gameText('game.photo.notice.no_space'), action: 'save' }
           : { tone: 'error', text: gameText('game.photo.notice.keep_failed') },
     );
-  }, [chosenPose, composedReferral, env, gloryChoice.choice.frame, moment, outgoingFiles, state]);
+  }, [composedReferral, composition, env, moment, outgoingFiles, state]);
 
   /* Le piège de focus : Tab ne sort jamais du dialogue. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
