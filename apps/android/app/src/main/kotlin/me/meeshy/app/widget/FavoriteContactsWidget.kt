@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
@@ -20,7 +19,6 @@ import androidx.glance.appwidget.lazy.items
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
 import androidx.glance.layout.Alignment
-import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxSize
@@ -30,11 +28,13 @@ import androidx.glance.layout.size
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
-import androidx.glance.unit.ColorProvider
 import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
-import me.meeshy.ui.theme.hexColor
+import me.meeshy.app.widget.kit.WidgetAvatarBitmap
+import me.meeshy.app.widget.kit.WidgetTheme
+import androidx.glance.Image
+import androidx.glance.ImageProvider
 
 /**
  * Home-screen widget — parity target: iOS `MeeshyWidgets.FavoriteContactsWidget`
@@ -83,12 +83,12 @@ private fun FavoriteContactsWidgetContent(presentation: FavoriteContactsWidgetPr
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(Color.White)
+            .background(WidgetTheme.background)
             .padding(12.dp),
     ) {
         Text(
             text = context.getString(R.string.widget_favorite_contacts_title),
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color(0xFF4338CA))),
+            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = WidgetTheme.title),
         )
         if (presentation.isEmpty) {
             Column(
@@ -100,7 +100,7 @@ private fun FavoriteContactsWidgetContent(presentation: FavoriteContactsWidgetPr
             ) {
                 Text(
                     text = context.getString(R.string.widget_favorite_contacts_empty),
-                    style = TextStyle(fontSize = 12.sp, color = ColorProvider(Color.Gray)),
+                    style = TextStyle(fontSize = 12.sp, color = WidgetTheme.textSecondary),
                 )
             }
         } else {
@@ -123,25 +123,21 @@ private fun FavoriteContactRowContent(row: FavoriteContactRow) {
             .clickable(actionStartActivityIntent(openConversationIntent(context, row.id))),
         verticalAlignment = Alignment.Vertical.CenterVertically,
     ) {
-        Box(
-            modifier = GlanceModifier
-                .size(28.dp)
-                .background(ColorProvider(hexColor(row.accentHex))),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = row.name.take(1).uppercase(),
-                style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ColorProvider(Color.White)),
-            )
-        }
+        Image(
+            provider = ImageProvider(WidgetAvatarBitmap.render(context, row.name, row.accentHex, AVATAR_DP, presence = null)),
+            contentDescription = null,
+            modifier = GlanceModifier.size(AVATAR_DP.dp),
+        )
         Text(
             text = row.name,
-            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = ColorProvider(Color.Black)),
+            style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.Medium, color = WidgetTheme.textPrimary),
             maxLines = 1,
             modifier = GlanceModifier.padding(start = 8.dp).fillMaxWidth(),
         )
     }
 }
+
+private const val AVATAR_DP = 30
 
 private fun openConversationIntent(context: Context, conversationId: String): Intent =
     Intent(

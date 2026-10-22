@@ -14,8 +14,11 @@ internal object StoryComposerStickerReducer {
         if (!state.deck.selectedCanAddSticker) {
             return state.copy(errorMessage = StoryComposerViewModel.STICKER_LIMIT)
         }
+        val at = state.deck.nextObjectPosition()
         return state.copy(
-            deck = state.deck.addStickerToSelected(StoryStickerElement(id = id, emoji = emoji)),
+            deck = state.deck.addStickerToSelected(
+                StoryStickerElement(id = id, emoji = emoji, x = at.x.toFloat(), y = at.y.toFloat()),
+            ),
             selectedStickerId = id,
             selectedTextElementId = null,
             errorMessage = null,

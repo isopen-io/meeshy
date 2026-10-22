@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.timeline
 
+import me.meeshy.sdk.model.scene.ClipTransform
 import com.google.common.truth.Truth.assertThat
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray

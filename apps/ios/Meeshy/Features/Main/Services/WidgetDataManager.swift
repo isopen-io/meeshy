@@ -183,7 +183,7 @@ final class WidgetDataManager: NotificationWidgetSink {
         suiteName: String,
         stagingDirectories: [URL]? = nil,
         preferredContentLanguages: @escaping @MainActor () -> [String] = {
-            AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         },
         presenceState: @escaping @MainActor (String) -> PresenceState? = {
             PresenceManager.shared.knownPresenceState(for: $0)

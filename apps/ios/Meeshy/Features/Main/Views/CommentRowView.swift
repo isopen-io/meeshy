@@ -178,7 +178,7 @@ struct CommentRowView: View, Equatable {
                         }
 
                         let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
-                        let targetLang = userLangs.first?.lowercased() ?? "fr"
+                        let targetLang = comment.servedLanguage(preferredLanguages: userLangs)?.lowercased() ?? userLangs.first?.lowercased() ?? "fr"
                         LanguageFlagChip(code: targetLang, isActive: !showOriginal) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                                 showOriginal = false

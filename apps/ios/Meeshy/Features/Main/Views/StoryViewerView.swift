@@ -748,7 +748,7 @@ struct StoryViewerView: View {
             storyCommentExpandedThreads: storyCommentExpandedThreads,
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
-            commentsUserLang: ReaderPrism.resolve(for: AuthManager.shared.currentUser).first ?? "fr",
+            commentsReaderLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isContentReady: $isContentReady,
             showEmojiStrip: $showEmojiStrip,
             showFullEmojiPicker: $showFullEmojiPicker,
@@ -798,8 +798,8 @@ struct StoryViewerView: View {
             sendComment: { text, effectFlags, parentId, pendingMedia, location in
                 sendComment(text: text, effectFlags: effectFlags, parentId: parentId, pendingMedia: pendingMedia, location: location)
             },
-            makeStoryCommentRow: { comment, userLang in
-                makeStoryCommentRow(comment, userLang: userLang)
+            makeStoryCommentRow: { comment, readerLanguages in
+                makeStoryCommentRow(comment, readerLanguages: readerLanguages)
             },
             toggleStoryCommentThread: { await toggleStoryCommentThread($0) },
             makeStoryExternalShareURL: { makeStoryExternalShareURL($0) },

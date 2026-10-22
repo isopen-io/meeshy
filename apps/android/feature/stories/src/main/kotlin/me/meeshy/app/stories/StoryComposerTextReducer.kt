@@ -38,8 +38,9 @@ internal object StoryComposerTextReducer {
         if (!state.deck.selectedCanAddTextElement) {
             return state.copy(errorMessage = StoryComposerViewModel.TEXT_ELEMENT_LIMIT)
         }
+        val at = state.deck.nextObjectPosition()
         return state.copy(
-            deck = state.deck.addTextElementToSelected(StoryTextElement(id = id)),
+            deck = state.deck.addTextElementToSelected(StoryTextElement(id = id, x = at.x.toFloat(), y = at.y.toFloat())),
             selectedTextElementId = id,
             selectedStickerId = null,
             errorMessage = null,

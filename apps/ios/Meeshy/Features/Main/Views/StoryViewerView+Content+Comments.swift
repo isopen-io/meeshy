@@ -29,7 +29,7 @@ extension StoryViewerView {
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             storyCommentRepliesHasMore: storyCommentRepliesHasMore,
             isLoadingComments: isLoadingComments,
-            userLang: ReaderPrism.resolve(for: AuthManager.shared.currentUser).first ?? "fr",
+            readerLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,

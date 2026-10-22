@@ -136,7 +136,7 @@ struct ThemedFeedOverlay: View {
             Task(priority: .utility) {
                 do {
                     let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
-                    let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                     let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
                     await bestEffort("rootViewComponents.feed.saveBookmarks", category: .cache) { try await CacheCoordinator.shared.feed.save(posts, for: "bookmarks") }
                     await MainActor.run {

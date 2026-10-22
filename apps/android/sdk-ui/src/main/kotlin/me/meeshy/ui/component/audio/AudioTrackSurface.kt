@@ -9,6 +9,8 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import me.meeshy.sdk.model.mediacache.MediaCacheCategory
+import me.meeshy.ui.component.media.MeeshyMediaCache
 
 /**
  * SDK-pure headless audio track: an [ExoPlayer] instance with no visual surface,
@@ -39,8 +41,12 @@ fun AudioTrackSurface(
     sourceEndMs: Long? = null,
 ) {
     val context = LocalContext.current
+    val mediaCache = remember(context) { MeeshyMediaCache.get(context) }
     val player = remember(mediaUrl, sourceStartMs, sourceEndMs) {
-        ExoPlayer.Builder(context).build().apply {
+        // Lecture par le cache disque (clé canonique) : un média déjà vu se rouvre sans réseau.
+        ExoPlayer.Builder(context)
+            .setMediaSourceFactory(mediaCache.mediaSourceFactory(MediaCacheCategory.AUDIO, mediaUrl))
+            .build().apply {
             // La fenêtre est portée par le MediaItem, jamais par un `seekTo`
             // suivi d'une surveillance : ExoPlayer coupe la source lui-même, la
             // position 0 EST le début de la fenêtre, et la boucle reboucle
@@ -79,7 +85,12 @@ fun AudioTrackSurface(
         if (!isActive) player.seekTo(0)
     }
 
+    // Bail de lecture : la ressource jouée est à l'abri de l'éviction LRU tant que le player vit.
     DisposableEffect(player) {
-        onDispose { player.release() }
+        val releaseLease = mediaCache.lease(mediaUrl)
+        onDispose {
+            releaseLease()
+            player.release()
+        }
     }
 }

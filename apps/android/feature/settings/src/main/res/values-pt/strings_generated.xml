@@ -1,5 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_done">Concluído</string>
+    <string name="location_map_style_hybrid">Híbrido</string>
+    <string name="location_map_style_imagery">Satélite</string>
+    <string name="location_map_style_section">Tipo de mapa</string>
+    <string name="location_map_style_standard">Mapa</string>
     <string name="location_precision_around">Arredores (~100 m)</string>
     <string name="location_precision_city">Cidade (~10 km)</string>
     <string name="location_precision_exact">Exata</string>
@@ -7,4 +12,9 @@
     <string name="location_precision_neighborhood">Bairro (~1 km)</string>
     <string name="location_precision_section">Precisão do compartilhamento</string>
     <string name="location_settings_title">Compartilhamento de localização</string>
+    <string name="settings_media_capture_header">Ao capturar</string>
+    <string name="settings_media_capture_original_subtitle">A foto ou o vídeo bruto, sem efeito nem moldura, é salvo no Fotos a cada captura.</string>
+    <string name="settings_media_capture_original_title">Salvar o original</string>
+    <string name="settings_media_capture_rendered_subtitle">Automaticamente ao confirmar a edição. Caso contrário, a seta da edição a salva quando você quiser.</string>
+    <string name="settings_media_capture_rendered_title">Salvar a versão com efeitos e moldura</string>
 </resources>

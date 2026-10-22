@@ -452,11 +452,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     /// Prisme ORDONNÉ du lecteur, seule autorité iOS sur cet ordre
     /// (`systemLanguage` > `regionalLanguage` > `customDestinationLanguage` >
-    /// `deviceLocale`). Jamais réimplémenté localement. Vide sans session : la
-    /// carte d'aperçu est alors `nil` et la ligne rend l'original — même
-    /// comportement que le chemin REST pour un participant anonyme.
+    /// `deviceLocale`), sans repli « fr » : `ReaderPrism.resolve(for:)` (#11875).
+    /// Jamais réimplémenté localement. Sans session, la locale de l'appareil
+    /// seule — même règle que la bulle pour un participant anonyme.
     /* partagé entre les fichiers du moteur (#4172) */ func currentPreferredLanguages() async -> [String] {
-        await MainActor.run { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
+        await MainActor.run { ReaderPrism.resolve(for: AuthManager.shared.currentUser) }
     }
 
     /// Persist a conversation list pre-sorted by `lastMessageAt` DESC. Centralising
