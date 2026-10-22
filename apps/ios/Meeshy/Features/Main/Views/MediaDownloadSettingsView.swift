@@ -166,9 +166,9 @@ struct MediaDownloadSettingsView: View {
                                             set: { compresse in preferences.updateDocument { $0.compressImagesOnUpload = compresse } }),
                               icon: "arrow.down.right.and.arrow.up.left",
                               title: String(localized: "settings.media.outgoing.compress.title",
-                                            defaultValue: "Compression forte des photos", bundle: .main),
+                                            defaultValue: "Compression forte des photos et vidéos", bundle: .main),
                               subtitle: String(localized: "settings.media.outgoing.compress.subtitle",
-                                               defaultValue: "Économise des données en réduisant chaque photo. Sinon, elles partent en haute définition, compressées sans perte visible.",
+                                               defaultValue: "Économise des données en réduisant chaque photo et chaque vidéo (720p). Sinon, elles partent en haute définition (vidéos en 1080p), compressées sans perte visible.",
                                                bundle: .main))
                 Divider().padding(.leading, 54)
                 captureToggle(isOn: $keepsPhotoLocation, icon: "location",
