@@ -44,7 +44,7 @@ class FriendBlockSendersTest {
 
     @Test
     fun `unblock user maps an accepted call to success and any failure to retryable`() = runTest {
-        val handler = UnblockUserHandler(blockApi, BlockCache())
+        val handler = UnblockUserHandler(blockRepository, BlockCache())
         val row = outboxRow(OutboxKind.UNBLOCK_USER, targetId = "u1")
 
         coEvery { blockApi.unblock("u1") } returns accepted(BlockActionResponse())

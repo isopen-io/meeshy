@@ -2,6 +2,7 @@ package me.meeshy.sdk.outbox
 
 import com.google.common.truth.Truth.assertThat
 import java.io.File
+import java.util.jar.JarFile
 import org.junit.Test
 
 /**
@@ -42,14 +43,31 @@ class SenderRegistryCompletenessTest {
 
     private fun classesUnderSdkPackage(): List<Class<*>> {
         val loader = Thread.currentThread().contextClassLoader ?: javaClass.classLoader
-        return loader.getResources(SDK_PACKAGE_PATH).toList()
+        val roots = loader.getResources(SDK_PACKAGE_PATH).toList()
             .filter { it.protocol == "file" }
-            .map { File(it.toURI()) }
-            .flatMap { root -> root.walkTopDown().filter { it.extension == "class" }.map { root to it }.toList() }
-            .map { (root, file) -> "$SDK_PACKAGE.${file.relativeTo(root).path.removeSuffix(".class").replace(File.separatorChar, '.')}" }
+            .map { File(it.toURI()).parentFile.parentFile.parentFile }
+        val codeSource = File(OutboxKindKey::class.java.protectionDomain.codeSource.location.toURI())
+        return (roots + codeSource).distinct()
+            .flatMap(::classNamesIn)
+            .distinct()
             .filterNot { '$' in it }
             .mapNotNull { name -> runCatching { Class.forName(name, false, loader) }.getOrNull() }
     }
+
+    private fun classNamesIn(location: File): List<String> =
+        if (location.isDirectory) {
+            location.walkTopDown()
+                .filter { it.extension == "class" }
+                .map { it.relativeTo(location).path.replace(File.separatorChar, '/') }
+                .toList()
+                .let(::sdkClassNames)
+        } else {
+            JarFile(location).use { jar -> sdkClassNames(jar.entries().toList().map { it.name }) }
+        }
+
+    private fun sdkClassNames(paths: List<String>): List<String> =
+        paths.filter { it.startsWith("$SDK_PACKAGE_PATH/") && it.endsWith(".class") }
+            .map { it.removeSuffix(".class").replace('/', '.') }
 
     private companion object {
         const val SDK_PACKAGE = "me.meeshy.sdk"

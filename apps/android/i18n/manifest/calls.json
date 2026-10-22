@@ -89,6 +89,62 @@
           "status": "candidate"
         },
         {
+          "catalog": "app",
+          "iosKey": "call.error.callee_refuses_non_contacts",
+          "androidName": "call_error_callee_refuses_non_contacts",
+          "status": "candidate"
+        },
+        {
+          "androidName": "call_feedback_issue_audio_quality",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_feedback_issue_dropped",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.issue.echo",
+          "androidName": "call_feedback_issue_echo",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.label.other",
+          "androidName": "call_feedback_issue_other",
+          "status": "candidate"
+        },
+        {
+          "androidName": "call_feedback_issue_sync",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_feedback_issue_video_quality",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "call_feedback_send",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.later",
+          "androidName": "call_feedback_skip",
+          "status": "candidate"
+        },
+        {
+          "androidName": "call_feedback_star",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.title.anonymous",
+          "androidName": "call_feedback_title",
+          "status": "candidate"
+        },
+        {
           "androidName": "call_history_empty",
           "status": "android-only"
         },
@@ -186,6 +242,36 @@
         },
         {
           "androidName": "call_quality_poor",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.row.reaction.a11y",
+          "androidName": "call_reaction_from",
+          "status": "candidate"
+        },
+        {
+          "androidName": "call_screen_share_channel",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_screen_share_notification_text",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_screen_share_notification_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_spoken_hours",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_spoken_minutes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_spoken_seconds",
           "status": "android-only"
         },
         {

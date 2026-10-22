@@ -538,12 +538,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "media.summary.file",
-          "androidName": "conversations_preview_file",
-          "status": "candidate"
-        },
-        {
-          "catalog": "app",
           "iosKey": "protection.hidden",
           "androidName": "conversations_preview_hidden",
           "status": "candidate"
@@ -560,18 +554,6 @@
         },
         {
           "catalog": "app",
-          "iosKey": "media.summary.location",
-          "androidName": "conversations_preview_location",
-          "status": "candidate"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "media.summary.photo",
-          "androidName": "conversations_preview_photo",
-          "status": "candidate"
-        },
-        {
-          "catalog": "app",
           "iosKey": "a11y.comment.body",
           "androidName": "conversations_preview_sender_format",
           "status": "candidate"
@@ -583,12 +565,6 @@
           "status": "candidate"
         },
         {
-          "catalog": "app",
-          "iosKey": "forward.preview.video",
-          "androidName": "conversations_preview_video",
-          "status": "candidate"
-        },
-        {
           "catalog": "nse",
           "iosKey": "notification.view_once_message",
           "androidName": "conversations_preview_view_once",
@@ -597,12 +573,6 @@
         {
           "androidName": "conversations_preview_view_once_content_description",
           "status": "android-only"
-        },
-        {
-          "catalog": "app",
-          "iosKey": "attachment.voice",
-          "androidName": "conversations_preview_voice",
-          "status": "candidate"
         },
         {
           "catalog": "app",

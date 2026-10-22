@@ -72,6 +72,12 @@
         },
         {
           "catalog": "app",
+          "iosKey": "reels.empty",
+          "androidName": "reels_empty",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
           "iosKey": "reels.action.like",
           "androidName": "reels_like",
           "status": "candidate"

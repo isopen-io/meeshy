@@ -1,5 +1,8 @@
 package me.meeshy.app.calls
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import com.google.common.truth.Truth.assertThat
@@ -20,10 +23,12 @@ class CallReactionOverlayTest {
 
     @Test
     fun `a reaction is announced by its glyph, rising or not`() {
-        listOf(false, true).forEach { reduceMotion ->
-            rule.setContent { MeeshyTheme { CallReactionOverlay(listOf(fire), reduceMotion, onFinished = {}) } }
-            rule.onNodeWithContentDescription("Reaction 🔥").assertExists()
-        }
+        var reduceMotion by mutableStateOf(false)
+        rule.setContent { MeeshyTheme { CallReactionOverlay(listOf(fire), reduceMotion, onFinished = {}) } }
+        rule.onNodeWithContentDescription("Reaction 🔥").assertExists()
+
+        reduceMotion = true
+        rule.onNodeWithContentDescription("Reaction 🔥").assertExists()
     }
 
     @Test
