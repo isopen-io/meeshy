@@ -609,20 +609,20 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         XCTAssertEqual(center.endWaiterCount(for: key), 0)
     }
 
-    /// Retiré de la fenêtre (ou échoué sur l'hôte injoignable du témoin, si le
-    /// réseau répond le premier) : l'attente se lève sur la fin, quelle qu'elle soit.
-    func test_awaitEnd_wakesWhenThePrefetchEnds() async {
+    /// Retirée de la fenêtre ou échouée : l'attente se lève sur toute fin.
+    func test_awaitEnd_wakesOnAFailureOrAWithdrawal() async {
         let center = AttachmentDownloadCenter(haptics: { _ in })
-        let url = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
-        let key = AttachmentDownloadCenter.key(for: url)
-        center.prefetch(urlString: url, expectedSize: 100, cacheStore: .video)
-        let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
-        await waitUntilAwaited(key, on: center)
+        for end in [AttachmentDownloadCenter.Event.failed, .cancelled] {
+            let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+            center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+            let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+            await waitUntilAwaited(key, on: center)
 
-        center.cancelPrefetch(urlString: url)
+            center.publish(end, for: key)
 
-        let end = await waiter.value
-        XCTAssertTrue(end == .cancelled || end == .failed, "attendu une fin, reçu \(String(describing: end))")
+            let received = await waiter.value
+            XCTAssertEqual(received, end)
+        }
     }
 
     /// Le balayage suivant annule la passe qui attendait : elle se libère
