@@ -55,4 +55,22 @@ class CallActionTest {
         assertThat(CallAction.fromId("")).isNull()
         assertThat(CallAction.fromId(null)).isNull()
     }
+
+    @Test
+    fun `the pill actions keep the iOS family split - my image versus the call`() {
+        fun idsOf(family: CallActionFamily) = CallAction.entries.filter { it.family == family }.map { it.id }
+
+        assertThat(idsOf(CallActionFamily.MyImage))
+            .containsExactly("camera", "flipCamera", "cameraPicker", "effects", "screenShare")
+        assertThat(idsOf(CallActionFamily.TheCall))
+            .containsExactly("captions", "recording", "pictureInPicture", "addPeople", "react", "capture", "journal")
+    }
+
+    @Test
+    fun `the base row and the lifecycle controls are their own families`() {
+        fun idsOf(family: CallActionFamily) = CallAction.entries.filter { it.family == family }.map { it.id }
+
+        assertThat(idsOf(CallActionFamily.Base)).containsExactly("mute", "audioOutput", "hangUp")
+        assertThat(idsOf(CallActionFamily.Lifecycle)).containsExactly("accept", "decline", "retry", "close")
+    }
 }
