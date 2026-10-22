@@ -93,6 +93,17 @@ final class NotificationServerRevocationTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
+    private func toastManagerUnit() throws -> String {
+        let directory = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Notifications")
+        return try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("NotificationToastManager") && $0.hasSuffix(".swift") }
+            .sorted()
+            .map { try sdkSource("Sources/MeeshySDK/Notifications/\($0)") }
+            .joined(separator: "\n")
+    }
+
     // MARK: - Cache (dimension « cache »)
 
     func test_applyRevocationLocally_removesTheNotificationFromTheRealCache() async throws {
@@ -204,7 +215,7 @@ final class NotificationServerRevocationTests: XCTestCase {
     /// `notification:counts` compagnon, contrairement au socket. Le compteur
     /// vient EN DERNIER : la durabilité ne doit pas être l'otage d'un GET lent.
     func test_applyServerRevocation_sourceComposesTheDurableLocalPartThenTheCounter() throws {
-        let code = try sdkSource("Sources/MeeshySDK/Notifications/NotificationToastManager.swift")
+        let code = try toastManagerUnit()
         guard let range = code.range(of: "func applyServerRevocation(notificationIds: [String]) async {") else {
             XCTFail("applyServerRevocation doit exister sur NotificationToastManager"); return
         }
@@ -222,7 +233,7 @@ final class NotificationServerRevocationTests: XCTestCase {
     /// avec le socket (sa jumelle qui ATTEND l'écriture), pas une seconde
     /// implémentation, puis forcer le flush.
     func test_applyServerRevocationLocally_sourceReusesTheSharedAtomAndForcesTheFlush() throws {
-        let code = try sdkSource("Sources/MeeshySDK/Notifications/NotificationToastManager.swift")
+        let code = try toastManagerUnit()
         guard let range = code.range(of: "func applyServerRevocationLocally(notificationIds: [String]) async -> Bool {") else {
             XCTFail("applyServerRevocationLocally doit exister sur NotificationToastManager"); return
         }
