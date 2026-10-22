@@ -1,106 +1,17 @@
-import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'bun:test';
 import { act } from 'react';
 
-import type { CameraResult } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
-import { rankMoment, startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
-import type { KeepOutcome, KeptPhoto, Notebook } from '@/lib/game-photo/notebook';
-import type { PhotoReferral } from '@/lib/game-photo/referral';
-import type { GloryRenderSource, PhotoFiles } from '@/lib/game-photo/render';
-import type { GloryScene } from '@/lib/game-photo/glory/glory-scene';
-import type { ShareOutcome } from '@/lib/game-photo/share';
+import { startMoment, type PhotoMoment } from '@/lib/game-photo/moments';
+import type { PhotoFiles } from '@/lib/game-photo/render';
 import { loadGameCatalog } from '@/lib/i18n-game-catalog';
-import { createActMounter } from '@/test-support/act-mount';
-import { ensureHappyDomRegistered, releaseHappyDomIfRegistered } from '@/test-support/happy-dom-environment';
+import { by, choose, env, rank, scene, settle, setupGamePhotoFlowTests, takeFrame, type FlowLog } from '@/test-support/game-photo-flow-harness';
 
-import { GamePhotoFlow, type PhotoFlowResult } from './game-photo-flow';
+import { GamePhotoFlow } from './game-photo-flow';
 
-const globals = globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean };
-const { mount, unmountAll, click } = createActMounter();
-
-beforeAll(() => {
-  ensureHappyDomRegistered({ url: 'http://localhost/me/progression' });
-  globals.IS_REACT_ACT_ENVIRONMENT = true;
-});
-afterAll(async () => {
-  delete globals.IS_REACT_ACT_ENVIRONMENT;
-  await releaseHappyDomIfRegistered();
-});
-afterEach(unmountAll);
-
-const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 15)));
-const choose = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-photo-choice="${id}"]`);
-const by = (host: ParentNode, attribute: string) => host.querySelector<HTMLElement>(`[${attribute}]`);
-const takeFrame = (host: ParentNode) => host.querySelector<HTMLElement>('[data-photo-take="frame"]');
-const scene = (host: ParentNode) => host.querySelector<HTMLElement>('[data-photo-take="scene"]');
-
-type Log = {
-  stops: number;
-  cameraOpened: number;
-  kept: { moment: PhotoMoment; photo: KeptPhoto }[];
-  deferred: PhotoMoment[];
-  shared: { file: File; title: string }[];
-  /** Le texte qui accompagnait chaque partage (#7742). */
-  texts: (string | undefined)[];
-  /** Le bandeau de parrainage de chaque composition (#7742). */
-  referrals: (PhotoReferral | null | undefined)[];
-  saved: File[];
-  /** Les fichiers rendus par chaque composition, dans l'ordre. */
-  outputs: PhotoFiles[];
-  rendered: { moment: PhotoMoment; mirror: boolean | null }[];
-  closed: PhotoFlowResult[];
-};
-
-const files = (): PhotoFiles => ({
-  story: new File(['s'], 'meeshy-story.png', { type: 'image/png' }),
-  square: new File(['q'], 'meeshy-profil.png', { type: 'image/png' }),
-});
-
-function env(overrides: Partial<PhotoEnv> & { camera?: CameraResult | 'pending'; keepOk?: boolean; keepOutcome?: KeepOutcome; shareOutcome?: ShareOutcome; renderOk?: boolean } = {}) {
-  const log: Log = { stops: 0, cameraOpened: 0, kept: [], deferred: [], shared: [], texts: [], referrals: [], saved: [], outputs: [], rendered: [], closed: [] };
-  const notebook: Notebook = {
-    defer: async (moment) => (log.deferred.push(moment), true),
-    keep: async (moment, photo) => (log.kept.push({ moment, photo }), overrides.keepOutcome ?? (overrides.keepOk === false ? 'unavailable' : 'kept')),
-    list: async () => [],
-    remove: async () => true,
-  };
-  const live: CameraResult = { ok: true, session: { stream: new MediaStream(), stop: () => void (log.stops += 1) } };
-  const value: PhotoEnv = {
-    openCamera: async () => {
-      log.cameraOpened += 1;
-      return overrides.camera === 'pending' ? new Promise<CameraResult>(() => undefined) : (overrides.camera ?? live);
-    },
-    notebook,
-    share: async (file, title, text) => (log.shared.push({ file, title }), log.texts.push(text), overrides.shareOutcome ?? 'shared'),
-    save: async (file) => (log.saved.push(file), 'downloaded'),
-    render: async ({ moment, photo, referral }) => {
-      log.rendered.push({ moment, mirror: photo === null ? null : photo.mirror });
-      log.referrals.push(referral);
-      if (overrides.renderOk === false) return null;
-      const output = files();
-      log.outputs.push(output);
-      return output;
-    },
-    captureVideo: () => ({ image: {} as CanvasImageSource, width: 1080, height: 1920, mirror: true }),
-    readGallery: async () => ({ image: {} as CanvasImageSource, width: 800, height: 600, mirror: false }),
-    now: () => new Date('2026-10-05T10:00:00.000Z'),
-    playOptions: {
-      reducedMotion: false,
-      haptics: false,
-      schedule: (run) => {
-        run();
-        return () => undefined;
-      },
-    },
-  };
-  return { env: { ...value, ...overrides } as PhotoEnv, log };
-}
-
-const open = async (moment: PhotoMoment, e: PhotoEnv, log: Log) =>
-  mount(<GamePhotoFlow moment={moment} env={e} onClose={(result) => log.closed.push(result)} />);
-
-const rank = rankMoment({ rank: 'voix', division: 2 });
+const { mount, unmountAll, click, open } = setupGamePhotoFlowTests();
+type Log = FlowLog;
 
 /**
  * LES MOMENTS PHOTO (#9382) — conception, partie VI, de la proposition au
@@ -1173,82 +1084,5 @@ describe('la carte d’auteur', () => {
     await click(choose(host, 'card'));
     await settle();
     expect(host.querySelector('[data-photo-stage] [data-photo-art="author"] svg')).not.toBeNull();
-  });
-});
-
-/**
- * LE CADRE DÉCORÉ (#10159, L7) : quand l'environnement sert la scène d'un cadre,
- * l'aperçu se peint sur un canvas et la couche DOM ne garde que l'emblème et le
- * carré ; l'image finale est composée avec la scène PLEINE résolution, rendue
- * aussitôt ; la scène d'aperçu se rend en sortant. Sans scène (pack pas prêt,
- * ancien serveur), rien ne change : la carte simple, sans attente.
- */
-describe('le cadre décoré (#10159)', () => {
-  type SceneLog = { opened: number[]; closed: number[] };
-  const fakeScene = (log: SceneLog, scale: number): GloryScene => {
-    log.opened.push(scale);
-    return {
-      frame: { id: 'savane.ambassadeur-2' } as unknown as GloryScene['frame'],
-      pack: 'afrique',
-      crest: { x: 448, y: 114, w: 184, h: 290 },
-      bannerLayout: () => null,
-      paint: () => undefined,
-      close: () => void log.closed.push(scale),
-    };
-  };
-  const decorated = (ready = true) => {
-    const scenes: SceneLog = { opened: [], closed: [] };
-    const glorySources: (GloryRenderSource | null | undefined)[] = [];
-    const { env: base, log } = env();
-    const value: PhotoEnv = {
-      ...base,
-      render: async (input) => {
-        glorySources.push(input.glory);
-        return base.render(input);
-      },
-      glory: async ({ scale }) => (ready ? fakeScene(scenes, scale) : null),
-      gloryKit: async () => ({ art: { emblem: {} as CanvasImageSource, mee: {} as CanvasImageSource, meo: {} as CanvasImageSource, signature: {} as CanvasImageSource }, palette: { top: '#000', bottom: '#000', ink: '#fff', inkSoft: '#ccc', scrim: '#000' }, fontFamily: 'system-ui', scratch: () => null }),
-    };
-    return { env: value, log, scenes, glorySources };
-  };
-
-  test('la scène d’aperçu est demandée à demi-résolution ; l’aperçu se peint sur un canvas sous une couche DOM réduite à l’emblème', async () => {
-    const { env: e, log, scenes } = decorated();
-    const host = await open(rank, e, log);
-    await click(choose(host, 'selfie'));
-    await settle();
-    expect(scenes.opened).toEqual([0.5]);
-    expect(host.querySelector('[data-photo-glory-canvas]')).not.toBeNull();
-    expect(host.querySelector('[data-photo-stage] [data-photo-frame-decorated]')).not.toBeNull();
-    expect(host.querySelector('[data-photo-stage] [data-game-coin-flip] [data-photo-art="emblem"]')).not.toBeNull();
-    for (const slot of ['mee', 'meo', 'signature']) expect(host.querySelector(`[data-photo-stage] [data-photo-art="${slot}"] svg`)).not.toBeNull();
-  });
-
-  test('l’image finale est composée avec une scène pleine résolution, rendue aussitôt ; la scène d’aperçu se rend à la fermeture', async () => {
-    const { env: e, log, scenes, glorySources } = decorated();
-    const host = await open(rank, e, log);
-    await click(choose(host, 'selfie'));
-    await settle();
-    await click(takeFrame(host));
-    await settle();
-    expect(scenes.opened).toEqual([0.5, 1]);
-    expect(scenes.closed).toEqual([1]);
-    expect(glorySources.at(-1)?.scene.pack).toBe('afrique');
-    expect(glorySources.at(-1)?.recipe).toMatchObject({ pose: null, message: null, showFlame: true, showLink: true });
-    unmountAll();
-    expect(scenes.closed).toEqual([1, 0.5]);
-  });
-
-  test('pack pas prêt (scène nulle) : la carte simple, sans canvas, et la composition part sans cadre', async () => {
-    const { env: e, log, glorySources } = decorated(false);
-    const host = await open(rank, e, log);
-    await click(choose(host, 'selfie'));
-    await settle();
-    expect(host.querySelector('[data-photo-glory-canvas]')).toBeNull();
-    expect(host.querySelector('[data-photo-frame-decorated]')).toBeNull();
-    await click(takeFrame(host));
-    await settle();
-    expect(glorySources).toEqual([null]);
-    expect(log.outputs).toHaveLength(1);
   });
 });

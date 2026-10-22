@@ -13,6 +13,9 @@ import { currentInterfaceLanguage } from '@/lib/interface-language';
  * source pendant le direct (rAF), le still ou la photo de galerie ensuite,
  * rien pour la carte seule. Le canvas est en pixels d'image (1080 × 1920)
  * ramenés à sa taille CSS par une échelle : le peintre ne connaît qu'un repère.
+ * La surface de travail de la photo (`kit.scratch`, un bassin) est remise à la
+ * MÊME échelle : un canevas réutilisé en pixels d'affichage, jamais un canevas
+ * neuf en pixels de design à chaque image.
  *
  * Décoratif : le dialogue dit le moment en toutes lettres, et la couche DOM
  * au-dessus garde l'emblème (la frappe) et le carré QR (annoncé).
@@ -61,9 +64,10 @@ export function GamePhotoGloryCanvas({ scene, kit, source, banner, recipe }: Glo
         element.width = pixelWidth;
         element.height = pixelHeight;
       }
-      ctx.setTransform(pixelWidth / width, 0, 0, pixelHeight / height, 0, 0);
+      const scale = pixelWidth / width;
+      ctx.setTransform(scale, 0, 0, pixelHeight / height, 0, 0);
       ctx.clearRect(0, 0, width, height);
-      scene.paint(ctx as unknown as PaintContext, { photo, art: kit.art, ...(banner === null ? {} : { banner }), recipe, palette: kit.palette, fontFamily: kit.fontFamily, rtl, language, scratch: kit.scratch });
+      scene.paint(ctx as unknown as PaintContext, { photo, art: kit.art, ...(banner === null ? {} : { banner }), recipe, palette: kit.palette, fontFamily: kit.fontFamily, rtl, language, scratch: kit.scratch.at(scale) });
     };
     if (live === null) {
       paint(still);

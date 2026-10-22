@@ -5,7 +5,7 @@ import { formatCount, gameText } from '@/lib/view/game-copy';
 
 import { paintPhoto, type PaintContext, type PhotoArt, type PhotoBanner, type PhotoPalette, type PhotoSource } from './compose';
 import type { GloryRecipe, GloryScene } from './glory/glory-scene';
-import type { PaintSurface } from './glory/paint-glory-frame';
+import { scratchPool } from './scratch';
 import { PHOTO_FORMATS, photoLayout, type BannerLayout, type PhotoFormat } from './layout';
 import type { PhotoMoment } from './moments';
 import type { PhotoReferral } from './referral';
@@ -68,11 +68,8 @@ export type GloryRenderSource = {
   readonly language: string;
 };
 
-const scratchOf = (createCanvas: RenderParams['createCanvas']) => (width: number, height: number): PaintSurface | null => {
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-  return ctx === null ? null : { ctx: ctx as unknown as PaintContext, image: canvas };
-};
+/** La surface de travail de l'image finale : le même bassin que l'aperçu (`scratch.ts`), à l'échelle 1. */
+const scratchOf = (createCanvas: RenderParams['createCanvas']) => scratchPool(createCanvas).at(1);
 
 export type KeptStoryDeps = {
   readonly createCanvas: (width: number, height: number) => HTMLCanvasElement;

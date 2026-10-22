@@ -26,6 +26,8 @@ type ComposeOutput = {
   readonly png: string;
   readonly stable: boolean;
   readonly excluded: readonly (readonly [number, number, number, number])[];
+  /** Les boîtes des oiseaux, À PART : le pilote y ajoute la place que les ancres du générateur leur donnent dans la cible. */
+  readonly birds: readonly (readonly [number, number, number, number])[];
   readonly size: readonly [number, number];
 };
 
@@ -116,7 +118,7 @@ async function compose(input: ComposeInput): Promise<ComposeOutput> {
   const crest = format.crest === null ? [] : [format.crest.box];
   const texts = Object.values(format.text).map((slot) => slot.bbox);
   const birdBoxes = layout === undefined ? [] : anchorsOf(layout).map((anchor) => anchor.box);
-  return { png: first, stable: first === second, excluded: [...crest, ...texts, ...birdBoxes], size: format.size };
+  return { png: first, stable: first === second, excluded: [...crest, ...texts], birds: birdBoxes, size: format.size };
 }
 
 (window as unknown as { gloryGate: { compose: typeof compose } }).gloryGate = { compose };

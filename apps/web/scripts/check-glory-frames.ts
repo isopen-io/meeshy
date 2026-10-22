@@ -1,12 +1,11 @@
 /**
  * LE GATE DE FIDÉLITÉ DES CADRES DE GLOIRE (#10159, L7 ; prompt § 8.3) — le
  * VRAI peintre web compose l'échantillon de L21a (`docs/product/cadres-de-gloire/cible/`)
- * avec les MÊMES entrées que les cibles : le contrat versionné de chaque
- * collection, les couches du magasin (`services/gateway/assets/packs/`), la
- * photo fixture, les stickers PNG du générateur, les textes d'exemple. La
- * composition 1080 × 1920 descend à 540 × 960 par la MÊME moyenne 2 × 2 que les
- * cibles (`lib/cible-plan.mjs`, `halve`), puis se compare hors boîtes de texte,
- * de blason et d'oiseaux :
+ * depuis le contrat versionné de chaque collection, les couches du magasin
+ * (`services/gateway/assets/packs/`), la photo fixture, les stickers PNG du
+ * générateur et les textes d'exemple. La composition 1080 × 1920 descend à
+ * 540 × 960 par la MÊME moyenne 2 × 2 que les cibles (`lib/cible-plan.mjs`,
+ * `halve`), puis se compare hors boîtes de texte, de blason et d'oiseaux :
  *   · au moins 99,5 % des pixels à |Δ| ≤ 6 sur chaque canal (alpha prémultiplié) ;
  *   · aucun bloc 16 × 16 dont le Δ moyen dépasse 12.
  * Et sur un still, deux peintures des mêmes entrées sont identiques à l'octet
@@ -14,9 +13,26 @@
  *
  *   bun scripts/check-glory-frames.ts [--only savane,moments] [--out <dossier>] [--report]
  *
- * `--report` imprime les mesures sans rougir : c'est la forme qui sert tant que
- * la tolérance du § 8.3 se juge contre des couches q82 (README du générateur,
- * « Exporter ») — un gate qui ne peut pas être vert n'en est pas un.
+ * CE QUI ROUGIT TOUJOURS, `--report` ou non (`lib/glory-gate-verdict.ts`) : une
+ * peinture INSTABLE, une cible dont la collection n'a pas de manifeste versionné
+ * sans être déclarée de démonstration (`DEMO_COLLECTIONS`), zéro cible composée,
+ * un cadre qui ne se compose pas, une couche absente du magasin.
+ *
+ * CE QUE `--report` IMPRIME SANS ROUGIR : les écarts de tolérance. Ils ne
+ * tiennent PAS au peintre : les cibles ne sont pas composées avec les MÊMES
+ * entrées que lui. Le générateur applique `generateur/lib/anchors.json` (lot
+ * L2, #10153 — Mee et Meo déplacés hors de la photo, un `dx`, `dy`, `scale` par
+ * oiseau en repère 540 × 960) à l'enregistrement de chaque SVG, donc aux cibles
+ * (L21a, #10177) ; le contrat versionné ne porte pas ces ancres. Olympe n'a
+ * aucune plaque, et ses pires blocs (Δ 146–168 à y ≈ 752) étaient exactement
+ * les oiseaux de la cible (dy +72 / +82 × 2). Le gate exclut donc les oiseaux
+ * aux DEUX places (contrat et cible) et NOMME l'écart par cadre — mesuré le
+ * 2026-10-22 : olympe passe de 90,84 % à 93,08 %, pire bloc 21. Ce qui reste :
+ * sur les variantes `plain`, la bande de plaque (pires blocs à y ≈ 864–896 —
+ * les contrats n'ont pas de plaque sans message, le peintre y pose celle à
+ * message) ; partout, des couches servies en q82 (README du générateur,
+ * « Exporter »). Rapprocher les contrats des cibles est l'affaire de
+ * #10153/#10177, pas du peintre.
  */
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -25,6 +41,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { launchChromium, watchPage } from './lib/browser.mjs';
+import { anchoredBox, geometryDrift, gloryVerdict, withinTolerance, type AnchorFix, type Box, type GloryMeasure, type SkippedTarget } from './lib/glory-gate-verdict';
 
 type BunOutput = { readonly path: string };
 type BunRuntime = {
@@ -47,6 +64,10 @@ const MANIFESTS = join(ROOT, 'packages', 'shared', 'design', 'glory-frames');
 const PACK_ASSETS = join(ROOT, 'services', 'gateway', 'assets', 'packs');
 
 const THRESHOLDS = { channelDelta: 6, share: 0.995, block: 16, blockMeanDelta: 12 } as const;
+/** Les collections de l'échantillon SANS manifeste versionné par choix (démonstration, non livrées) : toute autre collection sautée est ROUGE. */
+const DEMO_COLLECTIONS = ['poses'] as const;
+/** Les ancres sont en repère 540 × 960 (`generateur/lib/page.mjs`, `SCALE`) ; l'image est en 1080 × 1920. */
+const ANCHOR_SCALE = 2;
 /** Une boîte exclue s'élargit d'autant, en pixels de design : l'anticrénelage d'un bord de texte déborde de sa boîte. */
 const EXCLUSION_PAD = 2;
 
@@ -64,6 +85,7 @@ const sharp = requireFrom('sharp') as Sharp;
 sharp.concurrency(1);
 
 const { halve } = (await import(join(GENERATOR, 'lib', 'cible-plan.mjs'))) as { halve: (raw: Buffer, width: number, height: number) => Buffer };
+const anchors = JSON.parse(readFileSync(join(GENERATOR, 'lib', 'anchors.json'), 'utf8')) as Readonly<Record<string, readonly AnchorFix[]>>;
 
 type Target = { readonly file: string; readonly collection: string; readonly frame: string; readonly variant: 'plain' | 'message'; readonly layout: string | null };
 type Index = { readonly size: readonly [number, number]; readonly targets: readonly Target[]; readonly photo: { readonly file: string } };
@@ -110,8 +132,11 @@ const server = Bun.serve({
 });
 const base = `http://localhost:${server.port}`;
 
-type Box = readonly [number, number, number, number];
-type Composed = { readonly png: string; readonly stable: boolean; readonly excluded: readonly Box[]; readonly size: readonly [number, number] };
+type Composed = { readonly png: string; readonly stable: boolean; readonly excluded: readonly Box[]; readonly birds: readonly Box[]; readonly size: readonly [number, number] };
+
+/** Les oiseaux aux DEUX places : celle du contrat (où le peintre les pose) et celle de la cible (ancres du générateur). */
+const birdExclusions = (birds: readonly Box[], fixes: readonly AnchorFix[]): readonly Box[] =>
+  birds.flatMap((box, index) => [box, anchoredBox(box, fixes.find((fix) => fix.bird === index), ANCHOR_SCALE)]);
 
 const decode = async (input: Buffer) => sharp(input).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
 
@@ -184,15 +209,15 @@ await page.goto(`${base}/`);
 await page.waitForSelector('body[data-ready="true"]', { state: 'attached' });
 
 if (out !== undefined) mkdirSync(out, { recursive: true });
-const failures: string[] = [];
-const skipped: string[] = [];
+const measures: GloryMeasure[] = [];
+const skipped: SkippedTarget[] = [];
 const rows: string[] = [];
 const [designWidth, designHeight] = index.size;
 for (const target of index.targets) {
   if (only !== null && !only.includes(target.collection)) continue;
   const frame = frameOf(target);
   if (frame === null) {
-    skipped.push(`${target.file} : aucun manifeste versionné pour « ${target.collection} » (collection de démonstration, non livrée)`);
+    skipped.push({ file: target.file, collection: target.collection });
     continue;
   }
   const composed = await page.evaluate(
@@ -205,11 +230,14 @@ for (const target of index.targets) {
   const ours = halve(full.data, full.info.width, full.info.height);
   const expected = await decode(readFileSync(join(CIBLE, target.file)));
   if (expected.info.width !== designWidth || expected.info.height !== designHeight) throw new Error(`${target.file} : cible ${expected.info.width}×${expected.info.height}`);
-  const mask = maskOf(composed.excluded, designWidth, designHeight);
+  const fixes = anchors[target.frame] ?? [];
+  const mask = maskOf([...composed.excluded, ...birdExclusions(composed.birds, fixes)], designWidth, designHeight);
   const verdict = compare(ours, expected.data, mask, designWidth, designHeight);
-  const ok = composed.stable && verdict.share >= THRESHOLDS.share && verdict.worstBlock <= THRESHOLDS.blockMeanDelta;
-  rows.push(`  ${ok ? 'OK ' : 'KO '} ${target.file.padEnd(40)} |Δ|≤6 : ${(verdict.share * 100).toFixed(2).padStart(6)} %   pire bloc : ${verdict.worstBlock.toFixed(1).padStart(5)}   stable : ${composed.stable ? 'oui' : 'NON'}   (${verdict.compared} px comparés ; pires blocs x,y:Δ ${verdict.worstBlocks.join(' ')})`);
-  if (!ok) failures.push(target.file);
+  const measure: GloryMeasure = { file: target.file, stable: composed.stable, share: verdict.share, worstBlock: verdict.worstBlock };
+  measures.push(measure);
+  const ok = measure.stable && withinTolerance(measure, THRESHOLDS);
+  const drift = geometryDrift(fixes, ANCHOR_SCALE);
+  rows.push(`  ${ok ? 'OK ' : 'KO '} ${target.file.padEnd(40)} |Δ|≤6 : ${(verdict.share * 100).toFixed(2).padStart(6)} %   pire bloc : ${verdict.worstBlock.toFixed(1).padStart(5)}   stable : ${composed.stable ? 'oui' : 'NON'}   (${verdict.compared} px comparés ; pires blocs x,y:Δ ${verdict.worstBlocks.join(' ')})${drift === null ? '' : `\n       ${drift}`}`);
   if (out !== undefined) {
     await sharp(ours, { raw: { width: designWidth, height: designHeight, channels: 4 } }).png().toFile(join(out, target.file.replace(/\.webp$/, '.web.png')));
     await sharp(verdict.diff, { raw: { width: designWidth, height: designHeight, channels: 4 } }).png().toFile(join(out, target.file.replace(/\.webp$/, '.diff.png')));
@@ -222,9 +250,7 @@ await server.stop(true);
 
 console.log(`Fidélité des cadres de gloire (§ 8.3) — ${rows.length} cibles, seuils : ${THRESHOLDS.share * 100} % des pixels à |Δ| ≤ ${THRESHOLDS.channelDelta}, bloc ${THRESHOLDS.block}×${THRESHOLDS.block} ≤ ${THRESHOLDS.blockMeanDelta}`);
 rows.forEach((row) => console.log(row));
-skipped.forEach((line) => console.log(`  --  ${line}`));
-if (failures.length > 0) {
-  console.log(`${reportOnly ? 'MESURE' : 'ROUGE'} : ${failures.length} cible(s) hors tolérance : ${failures.join(', ')}`);
-  if (!reportOnly) process.exit(1);
-}
-console.log(reportOnly ? 'mesure terminée' : 'vert');
+skipped.forEach((target) => console.log(`  --  ${target.file} : aucun manifeste versionné pour « ${target.collection} »${DEMO_COLLECTIONS.includes(target.collection as (typeof DEMO_COLLECTIONS)[number]) ? ' (collection de démonstration, non livrée)' : ''}`));
+const outcome = gloryVerdict({ measures, skipped, demoCollections: DEMO_COLLECTIONS, reportOnly, thresholds: THRESHOLDS });
+console.log(outcome.summary);
+if (outcome.red) process.exit(1);

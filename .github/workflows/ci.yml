@@ -1058,11 +1058,18 @@ jobs:
       # magasin et la photo fixture ; deux peintures identiques à l'octet ; la
       # composition descendue à 540 × 960 par la même moyenne 2 × 2 que les
       # cibles et comparée hors boîtes de texte, de blason et d'oiseaux. Un
-      # cadre qui ne se compose pas, une couche absente du magasin ou une
-      # peinture instable est ROUGE ; les mesures de tolérance sont IMPRIMÉES
-      # (`--report`) tant que les contrats ne portent pas la plaque sans
-      # message et que les couches sont servies en q82 (mesuré le 2026-10-22 :
-      # 82 à 98 % des pixels à |Δ| ≤ 6 ; voir #10159).
+      # cadre qui ne se compose pas, une couche absente du magasin, une
+      # peinture instable, une collection sans manifeste versionné hors liste
+      # de démonstration ou zéro cible composée est ROUGE, `--report` ou non
+      # (`scripts/lib/glory-gate-verdict.ts`). Les mesures de tolérance sont
+      # IMPRIMÉES (`--report`) : les cibles ne sont PAS composées avec les
+      # mêmes entrées que le peintre — le générateur applique
+      # `generateur/lib/anchors.json` (L2, #10153 : Mee et Meo déplacés) que le
+      # contrat versionné ne porte pas ; le gate exclut les oiseaux aux deux
+      # places et nomme l'écart par cadre. Ce qui reste : la plaque sans
+      # message absente des contrats (variantes `plain`) et des couches
+      # servies en q82 (mesuré le 2026-10-22 : 82 à 98 % des pixels à |Δ| ≤ 6 ;
+      # voir #10159, #10153/#10177).
       - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
         if: ${{ !cancelled() }}
         run: |

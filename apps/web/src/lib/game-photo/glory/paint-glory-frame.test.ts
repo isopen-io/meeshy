@@ -307,6 +307,34 @@ describe('la plaque et le message', () => {
   });
 });
 
+/**
+ * LA PLAQUE D'AUTEUR (#10816) sous un cadre décoré : le contrat ne lui déclare
+ * aucun emplacement, et le lot #10159 ne la peignait pas — le pseudo
+ * disparaissait de l'aperçu ET de l'image finale dès qu'un cadre de gloire
+ * s'appliquait. Elle se pose au-dessus du bloc de texte vivant, centrée sur
+ * lui, à 40 % de la largeur ; sans dessin d'auteur (invité, moment sans
+ * plaque), rien.
+ */
+describe('la plaque d’auteur', () => {
+  test('peinte après le texte, centrée sur le bloc de texte et juste au-dessus de lui, à 40 % de la largeur', () => {
+    const author = image('author', 360, 100);
+    const { calls } = paint({ art: { ...art, author } });
+    const drawnAuthor = calls.findIndex((c) => c.op === 'drawImage' && idOf(c.args[0]) === 'author');
+    const dateWritten = calls.findIndex((c) => c.op === 'fillText' && c.args[0] === '10 octobre 2026');
+    expect(dateWritten).toBeGreaterThan(-1);
+    expect(drawnAuthor).toBeGreaterThan(dateWritten);
+    const args = nums(calls[drawnAuthor]);
+    expect(at(args, 3)).toBeCloseTo(432, 5);
+    expect(at(args, 4)).toBeCloseTo(120, 5);
+    expect(at(args, 1)).toBeCloseTo(324, 5);
+    expect(at(args, 2) + at(args, 4)).toBeCloseTo(1586 - 1080 * 0.02, 5);
+  });
+
+  test('sans dessin d’auteur : aucune plaque', () => {
+    expect(drawn(paint().calls)).not.toContain('author');
+  });
+});
+
 describe('le texte vivant', () => {
   test('capitales quand l’exemple de l’export l’était, à la ligne de base et l’ancre du contrat, dans la police du cadre', () => {
     const [kicker, title, date] = written(paint().calls);

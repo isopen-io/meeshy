@@ -232,6 +232,11 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     },
     [env, gloryFinal, moment],
   );
+  /* Lu au moment de composer, jamais une dépendance de la frappe : une scène d'aperçu qui arrive
+     PENDANT la frappe (premier usage : chunk, packs, contrat, décodages) changerait l'identité de
+     `composeWith` et rejouerait frappe et composition — la même loi que `referralRef`. */
+  const composeRef = useRef(composeWith);
+  composeRef.current = composeWith;
   const options =
     !linkOffered ? null : (
       <fieldset className="flex flex-col gap-1" data-photo-options="">
@@ -338,7 +343,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     const source = strikingMode === 'card' ? null : photo.current;
     const handle = play('mint');
     const banner = referralRef.current;
-    void Promise.all([handle?.finished ?? Promise.resolve(), composeWith({ photo: source, frame: stage.current, referral: banner })])
+    void Promise.all([handle?.finished ?? Promise.resolve(), composeRef.current({ photo: source, frame: stage.current, referral: banner })])
       .then(([, rendered]) => {
         if (!live) return;
         if (rendered === null) {
@@ -356,7 +361,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     return () => {
       live = false;
     };
-  }, [strikingMode, strikingZone, frameId, composeWith, play, stage]);
+  }, [strikingMode, strikingZone, frameId, play, stage]);
 
   /* La sortie : « plus tard » laisse le moment en attente, tout le reste le laisse tel quel. */
   useEffect(() => {

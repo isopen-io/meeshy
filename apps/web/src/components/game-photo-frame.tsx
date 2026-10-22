@@ -206,8 +206,10 @@ function ReferralQr({ slot, referral, width, height }: { readonly slot: Rect; re
  * LE CADRE DÉCORÉ (#10159, L7) : quand la scène d'un cadre de gloire peint
  * l'aperçu sur un canvas, cette couche ne garde que ce que le canvas ne peut pas
  * porter — l'emblème à l'ancre `crest` (la pièce que la frappe de Mee et Meo
- * fait tinter), les quatre dessins sources de l'image finale (hors écran), et
- * le carré QR, seule pièce qui s'annonce au lecteur d'écran.
+ * fait tinter), les dessins sources de l'image finale (hors écran : les quatre
+ * emplacements, la Flamme et la plaque d'auteur, #10816 — le peintre du cadre
+ * la pose et le repli carte simple la relit), et le carré QR, seule pièce qui
+ * s'annonce au lecteur d'écran.
  */
 export type GloryFrameOverlay = {
   /** L'ancre du blason ; `null` : le cadre n'en déclare pas, l'emblème ne se montre pas (le dessin reste pour la frappe et l'image finale). */
@@ -269,6 +271,11 @@ export function GamePhotoFrame({
             {flame === null ? null : (
               <span data-photo-art="flame" className="game-photo-art">
                 <Flame form={flame} size={256} />
+              </span>
+            )}
+            {plate === null ? null : (
+              <span data-photo-art="author" className="game-photo-art">
+                <AuthorPlate plate={plate} width={720} />
               </span>
             )}
           </span>

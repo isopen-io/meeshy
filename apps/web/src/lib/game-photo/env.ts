@@ -9,16 +9,16 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 import { loadArt } from './art';
 import { openFrontCamera, type CameraResult } from './camera';
-import type { PaintContext, PhotoArt, PhotoPalette, PhotoSource } from './compose';
+import type { PhotoArt, PhotoPalette, PhotoSource } from './compose';
 import { rasterizeSvg } from './compose';
 import { rootVarReader } from './css-vars';
 import type { GloryScene, GloryStep, GloryTexts } from './glory/glory-scene';
-import type { PaintSurface } from './glory/paint-glory-frame';
 import type { PhotoMoment } from './moments';
 import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
 import { indexedDbLegacyStore, knownAccountsOf, settleLegacyNotebook, type KeyedStorage } from './notebook-legacy';
 import type { PhotoReferral } from './referral';
 import { keptStoryOf, renderPhotoFiles, type GloryRenderSource, type PhotoFiles } from './render';
+import { scratchPool, type ScratchPool } from './scratch';
 import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './share';
 
 /**
@@ -92,7 +92,8 @@ export type GloryPreviewKit = {
   readonly art: PhotoArt;
   readonly palette: PhotoPalette;
   readonly fontFamily: string;
-  readonly scratch: (width: number, height: number) => PaintSurface | null;
+  /** Le bassin de la surface de travail (`scratch.ts`) : UN canevas réutilisé, à l'échelle de l'aperçu — jamais un canevas neuf par peinture. */
+  readonly scratch: ScratchPool;
 };
 
 /** L'image est peinte aux couleurs de la charte : chaque rôle est un jeton du document. */
@@ -117,12 +118,6 @@ const createCanvas = (width: number, height: number): HTMLCanvasElement => {
   canvas.width = width;
   canvas.height = height;
   return canvas;
-};
-
-const scratch = (width: number, height: number): PaintSurface | null => {
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext('2d');
-  return ctx === null ? null : { ctx: ctx as unknown as PaintContext, image: canvas };
 };
 
 const rasterDeps = () => ({
@@ -266,7 +261,7 @@ export function browserPhotoEnv(): PhotoEnv {
     gloryKit: async (frame) => {
       const read = documentReader();
       const art = await artOf(frame, read);
-      return art === null ? null : { art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), scratch };
+      return art === null ? null : { art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), scratch: scratchPool(createCanvas) };
     },
     developSource: (photo) => developNotebookSource(photo),
     keptStory: (story) => keptStoryOf(story, { createCanvas, decode: (blob) => createImageBitmap(blob) }),

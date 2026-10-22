@@ -1,6 +1,6 @@
 import { drawContained, paintReferralBanner, type PaintContext, type PhotoArt, type PhotoBanner, type PhotoPalette, type PhotoSource } from '../compose';
 import { gloryTextFace, textScript } from '../glory-fonts';
-import { bannerWithin, coverFit, type Rect } from '../layout';
+import { AUTHOR_PLATE_RATIO, bannerWithin, coverFit, photoLayout, type Rect } from '../layout';
 import { paintGloryText, type GloryTextDeps } from './paint-glory-text';
 import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFrameBirdAnchor, type GloryFrameFormat, type GloryRecipe, type GloryTexts } from './frame-spec';
 
@@ -24,6 +24,8 @@ import { anchorsOf, birdLayoutOf, boxArgs, plateVariantOf, rectOf, type GloryFra
  *  - `plate` : la variante que la recette demande (message ou non) ;
  *  - `text` : les emplacements vivants remplis par le moment, les autres avec
  *    leur texte d'exemple ; réduit puis ellipsé ; l'arabe de droite à gauche ;
+ *    puis la plaque d'auteur (#10816) si le cadre affiché en a une — le contrat
+ *    ne lui déclare pas d'emplacement, elle se pose au-dessus du bloc de texte ;
  *  - `banner` : le bandeau de parrainage dans la boîte déclarée, retirable.
  */
 
@@ -180,6 +182,28 @@ function paintBanner(ctx: PaintContext, input: GloryPaintInput): void {
   paintReferralBanner(ctx, layout, input, text);
 }
 
+/** La plaque d'auteur : 40 % de la largeur, posée à un cinquantième de la largeur au-dessus du bloc de texte vivant, centrée sur lui. */
+const AUTHOR_WIDTH = 0.4;
+const AUTHOR_GAP = 0.02;
+
+/** Où la plaque d'auteur se pose sur un cadre décoré ; un cadre sans aucun emplacement de texte la prend à la place de la carte simple. */
+export function authorRectOf(format: GloryFrameFormat): Rect {
+  const boxes = Object.values(format.text).map((slot) => slot.bbox);
+  if (boxes.length === 0) return photoLayout('story').author;
+  const width = format.size[0];
+  const top = Math.min(...boxes.map((box) => box[1]));
+  const left = Math.min(...boxes.map((box) => box[0]));
+  const right = Math.max(...boxes.map((box) => box[0] + box[2]));
+  const w = width * AUTHOR_WIDTH;
+  const h = w / AUTHOR_PLATE_RATIO;
+  return { x: (left + right) / 2 - w / 2, y: top - width * AUTHOR_GAP - h, w, h };
+}
+
+function paintAuthor(ctx: PaintContext, input: GloryPaintInput): void {
+  if (input.art.author === undefined) return;
+  drawContained(ctx, input.art.author, authorRectOf(input.format));
+}
+
 const textDeps = (input: GloryPaintInput): GloryTextDeps => ({
   width: input.format.size[0],
   language: input.language,
@@ -197,7 +221,10 @@ export function paintGloryFrame(ctx: PaintContext, input: GloryPaintInput): void
     if (token === 'crest') return format.crest === null ? undefined : drawContained(ctx, input.art.emblem, rectOf(format.crest.box));
     if (token === 'birds') return paintBirds(ctx, input);
     if (token === 'plate') return paintPlate(ctx, input);
-    if (token === 'text') return paintGloryText(ctx, format.text, texts, textDeps(input));
+    if (token === 'text') {
+      paintGloryText(ctx, format.text, texts, textDeps(input));
+      return paintAuthor(ctx, input);
+    }
     if (token === 'banner') return paintBanner(ctx, input);
     if (token.startsWith('grade:')) return paintGrade(ctx, input, Number(token.slice(6)));
     if (token === 'front:under-birds' || token === 'front:over-birds') return paintFront(ctx, input, token.slice(6) as 'under-birds' | 'over-birds');
