@@ -2,6 +2,7 @@ package me.meeshy.core.database
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.RoomDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -37,10 +38,13 @@ internal object DatabaseModule {
     @Provides
     @Singleton
     fun providesDatabase(@ApplicationContext context: Context): MeeshyDatabase =
-        Room.databaseBuilder(context, MeeshyDatabase::class.java, DATABASE_NAME)
+        meeshyDatabaseBuilder(context).build()
+
+    /** The production configuration, shared with the tests that open the database the way the app does. */
+    fun meeshyDatabaseBuilder(context: Context, name: String = DATABASE_NAME): RoomDatabase.Builder<MeeshyDatabase> =
+        Room.databaseBuilder(context, MeeshyDatabase::class.java, name)
             .addMigrations(*MeeshyMigrations.all)
             .fallbackToDestructiveMigrationFrom(*PRE_BASELINE_VERSIONS)
-            .build()
 
     @Provides
     fun providesConversationDao(database: MeeshyDatabase): ConversationDao =
