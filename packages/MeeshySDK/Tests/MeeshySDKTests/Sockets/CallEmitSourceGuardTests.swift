@@ -30,6 +30,18 @@ final class CallEmitSourceGuardTests: XCTestCase {
             .joined(separator: "\n")
     }
 
+    /// Les publishers d'appel ne sont plus alimentés depuis les gestionnaires `socket.on` du manager : la table de
+    /// routes entrantes (`MessageSocketRoutes+Calls.swift`) décode chaque événement `call:*` et y appelle `send(`.
+    private func callRoutesSource() throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshySDK/Sockets")
+        return try String(contentsOf: root.appendingPathComponent("MessageSocketRoutes+Calls.swift"), encoding: .utf8)
+    }
+
     // MARK: - Emit: call:join
 
     func test_emitCallJoin_emitsCorrectEventWithCallId() throws {
@@ -182,97 +194,97 @@ final class CallEmitSourceGuardTests: XCTestCase {
     // MARK: - Publisher: incoming call events
 
     func test_callOfferReceived_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callOfferReceived.send("),
+            src.contains("$0.callOfferReceived.send(") || src.contains("manager.callOfferReceived.send(") || src.contains("self?.callOfferReceived.send("),
             "callOfferReceived publisher must be fired when 'call:*' offer event arrives from gateway"
         )
     }
 
     func test_callAnswerReceived_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callAnswerReceived.send("),
+            src.contains("$0.callAnswerReceived.send(") || src.contains("manager.callAnswerReceived.send(") || src.contains("self?.callAnswerReceived.send("),
             "callAnswerReceived publisher must be fired when gateway relays the remote SDP answer"
         )
     }
 
     func test_callICECandidateReceived_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callICECandidateReceived.send("),
+            src.contains("$0.callICECandidateReceived.send(") || src.contains("manager.callICECandidateReceived.send(") || src.contains("self?.callICECandidateReceived.send("),
             "callICECandidateReceived publisher must be fired for each trickle ICE candidate"
         )
     }
 
     func test_callEnded_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callEnded.send("),
+            src.contains("$0.callEnded.send(") || src.contains("manager.callEnded.send(") || src.contains("self?.callEnded.send("),
             "callEnded publisher must be fired when gateway emits call:ended"
         )
     }
 
     func test_callMissed_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callMissed.send("),
+            src.contains("$0.callMissed.send(") || src.contains("manager.callMissed.send(") || src.contains("self?.callMissed.send("),
             "callMissed publisher must be fired when gateway emits call:missed"
         )
     }
 
     func test_callAlreadyAnswered_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callAlreadyAnswered.send("),
+            src.contains("$0.callAlreadyAnswered.send(") || src.contains("manager.callAlreadyAnswered.send(") || src.contains("self?.callAlreadyAnswered.send("),
             "callAlreadyAnswered publisher must be fired so CallKit CallAction can be un-fulfilled"
         )
     }
 
     func test_callParticipantJoined_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self.callParticipantJoined.send(") || src.contains("self?.callParticipantJoined.send("),
+            src.contains("$0.callParticipantJoined.send(") || src.contains("manager.callParticipantJoined.send(") || src.contains("$0.callParticipantJoined.send(") || src.contains("manager.callParticipantJoined.send(") || src.contains("self?.callParticipantJoined.send("),
             "callParticipantJoined publisher must be fired when a participant joins the call"
         )
     }
 
     func test_callParticipantLeft_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callParticipantLeft.send("),
+            src.contains("$0.callParticipantLeft.send(") || src.contains("manager.callParticipantLeft.send(") || src.contains("self?.callParticipantLeft.send("),
             "callParticipantLeft publisher must be fired when a participant leaves the call"
         )
     }
 
     func test_callMediaToggled_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callMediaToggled.send("),
+            src.contains("$0.callMediaToggled.send(") || src.contains("manager.callMediaToggled.send(") || src.contains("self?.callMediaToggled.send("),
             "callMediaToggled publisher must be fired so UI can reflect remote mute/video state"
         )
     }
 
     func test_callError_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callError.send("),
+            src.contains("$0.callError.send(") || src.contains("manager.callError.send(") || src.contains("self?.callError.send("),
             "callError publisher must be fired on gateway call:error so CallManager can present UI"
         )
     }
 
     func test_callIceServersRefreshed_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callIceServersRefreshed.send("),
+            src.contains("$0.callIceServersRefreshed.send(") || src.contains("manager.callIceServersRefreshed.send(") || src.contains("self?.callIceServersRefreshed.send("),
             "callIceServersRefreshed publisher must be fired so CallManager can update TURN credentials"
         )
     }
 
     func test_callQualityAlert_publisherFiredOnSocketEvent() throws {
-        let src = try managerSource()
+        let src = try callRoutesSource()
         XCTAssertTrue(
-            src.contains("self?.callQualityAlert.send("),
+            src.contains("$0.callQualityAlert.send(") || src.contains("manager.callQualityAlert.send(") || src.contains("self?.callQualityAlert.send("),
             "callQualityAlert publisher must be fired on call:quality-alert so CallManager can set isRemoteQualityDegraded"
         )
     }

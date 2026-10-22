@@ -226,6 +226,65 @@ private struct RecordedVideoEncoding {
     let degradationPreference: VideoDegradationPreference
 }
 
+// MARK: - #11468 — une offre arrivée après le décroché, ou rejouée
+
+/// La passerelle rejoue l'offre et les candidats ICE à chaque (re)jonction d'un
+/// appareil (#11468) : le client ne dépend d'aucun ordre entre eux, et un rejeu
+/// exact ne relance pas la négociation.
+@MainActor
+final class WebRTCServiceLateOfferTests: XCTestCase {
+
+    private func makeSUT() -> (sut: WebRTCService, client: DataProfileRecordingClient) {
+        let client = DataProfileRecordingClient()
+        let sut = WebRTCService(client: client, pathMonitor: MockCallNetworkPathMonitor(), mediaFaults: RecordingMediaFaults())
+        return (sut, client)
+    }
+
+    private func settle(until condition: () -> Bool) async {
+        for _ in 0..<200 where !condition() { await Task.yield() }
+    }
+
+    func test_candidatesReceivedBeforeTheLateOffer_reachTheLinkOnceItIsAnswered() async {
+        let (sut, client) = makeSUT()
+        sut.configure(isVideo: false)
+        sut.addICECandidate(IceCandidate(sdpMid: "0", sdpMLineIndex: 0, candidate: "candidate:early"))
+        XCTAssertTrue(client.addedCandidateDescriptions.map(\.candidate).isEmpty, "sans description distante, un candidat attend")
+
+        let answer = await sut.createAnswer(from: SessionDescription(type: .offer, sdp: "offer-v1"))
+
+        XCTAssertNotNil(answer)
+        await settle { !client.addedCandidateDescriptions.map(\.candidate).isEmpty }
+        XCTAssertEqual(client.addedCandidateDescriptions.map(\.candidate), ["candidate:early"])
+    }
+
+    func test_replayedOffer_getsTheSameAnswer_withoutRenegotiating() async {
+        let (sut, client) = makeSUT()
+        let offer = SessionDescription(type: .offer, sdp: "offer-v1")
+
+        let first = await sut.createAnswer(from: offer)
+        let replayed = await sut.createAnswer(from: offer)
+
+        XCTAssertEqual(client.answeredOfferDescriptions.map(\.sdp), ["offer-v1"])
+        XCTAssertEqual(replayed?.sdp, first?.sdp)
+    }
+
+    func test_newOffer_isAnswered_evenAfterAnEarlierOne() async {
+        let (sut, client) = makeSUT()
+        _ = await sut.createAnswer(from: SessionDescription(type: .offer, sdp: "offer-v1"))
+        _ = await sut.createAnswer(from: SessionDescription(type: .offer, sdp: "offer-v2"))
+        XCTAssertEqual(client.answeredOfferDescriptions.map(\.sdp), ["offer-v1", "offer-v2"])
+    }
+
+    func test_closedLink_forgetsTheAnsweredOffer() async {
+        let (sut, client) = makeSUT()
+        let offer = SessionDescription(type: .offer, sdp: "offer-v1")
+        _ = await sut.createAnswer(from: offer)
+        sut.close()
+        _ = await sut.createAnswer(from: offer)
+        XCTAssertEqual(client.answeredOfferDescriptions.map(\.sdp), ["offer-v1", "offer-v1"])
+    }
+}
+
 private nonisolated final class DataProfileRecordingClient: WebRTCClientProviding, CallDataProfileApplying {
     weak var delegate: (any WebRTCClientDelegate)?
     var localVideoTrack: Any?
@@ -253,9 +312,14 @@ private nonisolated final class DataProfileRecordingClient: WebRTCClientProvidin
     func setNegotiationRole(isPolite: Bool) {}
     func createOffer() async throws -> SessionDescription { SessionDescription(type: .offer, sdp: "offer") }
     func restartIce() {}
-    func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { SessionDescription(type: .answer, sdp: "answer") }
+    private(set) var answeredOfferDescriptions: [SessionDescription] = []
+    private(set) var addedCandidateDescriptions: [IceCandidate] = []
+    func createAnswer(for offer: SessionDescription) async throws -> SessionDescription {
+        answeredOfferDescriptions.append(offer)
+        return SessionDescription(type: .answer, sdp: "answer-\(answeredOfferDescriptions.count)")
+    }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}
-    func addIceCandidate(_ candidate: IceCandidate) async throws {}
+    func addIceCandidate(_ candidate: IceCandidate) async throws { addedCandidateDescriptions.append(candidate) }
     func startLocalMedia(type: CallMediaType) async throws {
         if let startLocalMediaError { throw startLocalMediaError }
     }

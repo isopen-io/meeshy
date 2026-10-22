@@ -25,14 +25,14 @@ struct ConversationDashboardProfilesSection: View {
 
                         Text(profile.displayName ?? profile.username ?? "?")
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
 
                         Spacer()
 
                         if profile.confidence > 0 {
                             Text("\(Int(profile.confidence * 100))%")
                                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold, design: .rounded))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .padding(.horizontal, MeeshySpacing.sm)
                                 .padding(.vertical, MeeshySpacing.xxs)
                                 .background(
@@ -45,7 +45,7 @@ struct ConversationDashboardProfilesSection: View {
                         Text(profile.personaSummary)
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular, design: .serif))
                             .italic()
-                            .foregroundColor(theme.textSecondary)
+                            .foregroundStyle(theme.textSecondary)
                             .lineLimit(3)
                     }
 
@@ -71,7 +71,7 @@ struct ConversationDashboardProfilesSection: View {
                             Text(profile.catchphrases.prefix(3).joined(separator: " \u{00B7} "))
                                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium, design: .serif))
                                 .italic()
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .lineLimit(2)
                         }
                         .padding(.horizontal, MeeshySpacing.smPlus)
@@ -87,7 +87,7 @@ struct ConversationDashboardProfilesSection: View {
                             ForEach(profile.topicsOfExpertise.prefix(3), id: \.self) { topic in
                                 Text(topic)
                                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                                    .foregroundColor(theme.textMuted)
+                                    .foregroundStyle(theme.textMuted)
                                     .padding(.horizontal, MeeshySpacing.xsPlus)
                                     .padding(.vertical, MeeshySpacing.xxs)
                                     .background(
@@ -123,7 +123,7 @@ struct ConversationDashboardProfilesSection: View {
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
         }
-        .foregroundColor(theme.textSecondary)
+        .foregroundStyle(theme.textSecondary)
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.xs)
         .background(
@@ -167,14 +167,14 @@ struct ConversationDashboardProfilesSection: View {
         return VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
             Text(category.uppercased())
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .tracking(0.8)
 
             ForEach(sorted.prefix(4), id: \.label) { trait in
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(trait.label)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .frame(width: 80, alignment: .leading)
                         .lineLimit(1)
 

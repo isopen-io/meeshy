@@ -298,7 +298,7 @@ struct GameBadgeStarsView: View {
             }
             Text(ConceptText.ratio(GameCopy.formatCount(model.stars), GameCopy.formatCount(model.starsMax)))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                .foregroundColor(ThemeManager.shared.textMuted)
+                .foregroundStyle(ThemeManager.shared.textMuted)
                 .lineLimit(1)
                 .minimumScaleFactor(GameChip.minimumScale)
                 .padding(.leading, MeeshySpacing.xxs)
@@ -356,14 +356,14 @@ struct GameBadgeUpcomingView: View {
             if model.upcoming.isEmpty {
                 Text(model.next)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 FlowLayout(spacing: MeeshySpacing.xs) {
                     Text(GameBadgeGuideText.upcomingTitle)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                         .textCase(.uppercase)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                         .minimumScaleFactor(GameChip.minimumScale)
                     ForEach(model.upcoming) { rung in
@@ -441,7 +441,7 @@ private struct GameBadgeShelfRow: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(ProgressionCopy.title(for: entry.axis))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     GameBadgeStarsView(model: model)
                 }

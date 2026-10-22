@@ -52,6 +52,19 @@ enum CallResumePolicy {
     /// il raccroche un appel que la passerelle tient encore pour lui.
     static let minimumReconnectWindow: TimeInterval = CallRules.rejoinGrace + CallRules.heartbeatInterval
 
+    /// Un autre appareil du compte a décroché (`call:already-answered`, #11468).
+    /// Cet appareil s'efface tant qu'il n'a pas de liaison établie : qu'il sonne
+    /// encore, ou qu'il ait décroché aussi et perdu la course (`.connecting`).
+    /// Il s'efface EN SILENCE pour le serveur — ni `call:leave` ni `call:end` :
+    /// la passerelle clôt la participation par utilisateur, et l'appel de
+    /// l'appareil gagnant finirait avec lui.
+    static func yieldsToAnotherDevice(callState: CallState) -> Bool {
+        switch callState {
+        case .ringing(isOutgoing: false), .connecting: return true
+        default: return false
+        }
+    }
+
     /// L'appel en cours d'une conversation vaut d'être REJOINT plutôt que
     /// recommencé quand quelqu'un d'autre y est encore.
     static func shouldJoin(_ session: ActiveCallSession?, conversationId: String, currentUserId: String) -> Bool {

@@ -198,8 +198,7 @@ struct MiniAudioPlayerBar: View {
             }
             graceContext = lastObservedContext
             graceTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: Constants.graceDurationNanos)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(Constants.graceDurationNanos)), !Task.isCancelled else { return }
                 graceContext = nil
                 present(displayedContext)
             }

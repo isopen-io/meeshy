@@ -154,7 +154,7 @@ extension StoryViewModel {
                 Task { @MainActor in
                     // Wait a bit so the connection stabilizes and any in-flight
                     // request has a chance to complete first.
-                    try? await Task.sleep(for: .seconds(2))
+                    _ = await cancellableSleep(for: .seconds(2))
                     // TOUTES les entrées en échec repartent — la file les
                     // sérialise (une seule monte à la fois) et la revendication
                     // atomique empêche toute course avec le drain de queue.

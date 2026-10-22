@@ -211,7 +211,7 @@ struct ReelMoreOptionsMenu: View {
             }, onRemove: nil)
         } else {
             PublicationDestructiveMenuItems(postId: reel.id, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: reel) { [viewModel] in
-                await viewModel.deletePost($0, reason: $1)
+                await viewModel.withdrawPost($0, $1)
             })
             Divider()
             Button(role: .destructive) {

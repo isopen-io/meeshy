@@ -215,7 +215,7 @@ struct GameBannerBadgeView: View {
         Text(text)
             .font(MeeshyFont.relative(size, weight: .bold))
             .monospacedDigit()
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .lineLimit(1)
             .minimumScaleFactor(0.6)
             .bannerTextShadow()
@@ -224,7 +224,7 @@ struct GameBannerBadgeView: View {
     private func small(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-            .foregroundColor(.white.opacity(0.92))
+            .foregroundStyle(Color.white.opacity(0.92))
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .bannerTextShadow()
@@ -233,7 +233,7 @@ struct GameBannerBadgeView: View {
     private func caption(_ text: String) -> some View {
         Text(text)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .lineLimit(1)
             .minimumScaleFactor(0.8)
             .bannerTextShadow()

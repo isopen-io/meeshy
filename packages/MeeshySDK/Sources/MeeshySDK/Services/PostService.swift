@@ -94,6 +94,8 @@ public protocol PostServiceProviding: Sendable {
     func delete(postId: String) async throws
     /// #11151 — le retrait de la publication d'un AUTRE porte son motif.
     func delete(postId: String, reason: String?) async throws
+    /// #11535 — la modération rend PRIVÉE la publication d'un autre, avec son motif.
+    func makePrivate(postId: String, authorId: String, reason: String?) async throws
     func like(postId: String) async throws
     func unlike(postId: String) async throws
     func bookmark(postId: String) async throws

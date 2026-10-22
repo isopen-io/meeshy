@@ -42,7 +42,7 @@ extension VitrineInteractions {
             try? await Task.sleep(for: tenueDUnReel)
             guard rang < nombre else { break }
             suivant()
-            try? await Task.sleep(for: monteeDuReelSuivant)
+            _ = await cancellableSleep(for: monteeDuReelSuivant)
         }
     }
 
@@ -56,7 +56,7 @@ extension VitrineInteractions {
         NotificationCenter.default.post(name: Notification.Name("pushNavigateToRoute"), object: "storyDetail:\(story.id)")
         await VitrineRendu.shared.attendre([.story])
         VitrineTournage.etape("story")
-        try? await Task.sleep(for: tenueDeLaStory)
+        guard await cancellableSleep(for: tenueDeLaStory) else { return }
     }
 
     /// Le vocal part dans sa langue d'origine — drapeau d'origine touché —, puis le lecteur revient à sa langue : la
@@ -74,13 +74,13 @@ extension VitrineInteractions {
         await attendreLaLecture(jusqua: ecouteDeLOriginal, au: delaiDeLOriginal)
         conversation.setBubbleActiveDisplayLanguage(nil, for: messageId)
         VitrineTournage.etape("traduction")
-        try? await Task.sleep(for: tenueDeLaTraductionDuVocal)
+        guard await cancellableSleep(for: tenueDeLaTraductionDuVocal) else { return }
     }
 
     private static func attendreLaLecture(jusqua instant: TimeInterval, au plusTard: Duration) async {
         let limite = ContinuousClock.now + plusTard
         while ConversationAudioCoordinator.shared.currentTime < instant, ContinuousClock.now < limite {
-            try? await Task.sleep(for: VitrineTournage.pas)
+            _ = await cancellableSleep(for: VitrineTournage.pas)
         }
     }
 }

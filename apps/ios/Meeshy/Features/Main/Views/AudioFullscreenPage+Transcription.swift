@@ -231,7 +231,7 @@ extension AudioFullscreenPage {
                 // Le résultat arrive via l'abonnement socket et lève l'attente
                 // (`applyServerTranscription`) ; le plafond ne vaut que pour le
                 // silence réel (#10759).
-                try? await Task.sleep(nanoseconds: UInt64(ServerTranscriptionWait.silenceCeiling * 1_000_000_000))
+                _ = await cancellableSleep(for: .seconds(ServerTranscriptionWait.silenceCeiling))
                 await MainActor.run {
                     guard !ServerTranscriptionWait.isWaiting(requestedAt: requestedAt, now: Date(), hasArrived: localTranscription != nil) else { return }
                     isRequestingTranscription = false

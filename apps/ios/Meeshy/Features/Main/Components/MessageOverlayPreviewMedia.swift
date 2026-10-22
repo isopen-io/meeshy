@@ -133,7 +133,7 @@ struct OverlayPreviewMediaGrid: View {
                                         MeeshyColors.mediaScrim
                                         Text(verbatim: "+\(hidden)")
                                             .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                                            .foregroundColor(.white)
+                                            .foregroundStyle(Color.white)
                                     }
                                     .accessibilityHidden(true)
                                 }

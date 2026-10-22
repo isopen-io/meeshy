@@ -23,7 +23,7 @@ struct FocalConversationStartRow: View, Equatable {
         VStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .light))
-                .foregroundColor(ThemeManager.shared.textMuted)
+                .foregroundStyle(ThemeManager.shared.textMuted)
                 .accessibilityHidden(true)
 
             Text(String(
@@ -32,13 +32,13 @@ struct FocalConversationStartRow: View, Equatable {
                 bundle: .main
             ))
             .font(MeeshyFont.relative(12.5, weight: .medium))
-            .foregroundColor(ThemeManager.shared.textMuted)
+            .foregroundStyle(ThemeManager.shared.textMuted)
             .multilineTextAlignment(.center)
 
             if let dayLabel = firstMessageDayLabel {
                 Text(dayLabel)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(ThemeManager.shared.textMuted.opacity(0.8))
+                    .foregroundStyle(ThemeManager.shared.textMuted.opacity(0.8))
                     .multilineTextAlignment(.center)
             }
         }

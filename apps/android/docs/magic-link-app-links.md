@@ -3,7 +3,13 @@
 Le lien magic link envoyé par email est `https://meeshy.me/auth/magic-link?token=…`.
 Pour qu'un tap sur ce lien **ouvre l'app Android directement** (au lieu du
 navigateur), Android exige une relation Digital Asset Links **vérifiée** entre le
-domaine `meeshy.me` et l'app `me.meeshy.app`.
+domaine `meeshy.me` et l'app `me.meeshy.android`.
+
+> **Deux applications Android, deux identifiants (décision porteur 2026-10-22, #11570).** L'app native Kotlin
+> publie sous `me.meeshy.android` ; la coque Capacitor de `apps/web` garde `me.meeshy.app`. Les entrées
+> `me.meeshy.app` et `me.meeshy.app.debug` déjà présentes dans `assetlinks.json` sont celles de la coque et
+> ne se touchent pas. Les entrées `me.meeshy.android` (release) et `me.meeshy.android.debug` restent à ajouter
+> avec leurs empreintes, ce que ce document décrit.
 
 Deux moitiés, qui doivent concorder :
 
@@ -16,7 +22,7 @@ La vérification échoue — et le lien ouvre le navigateur — tant que l'empre
 SHA-256 du certificat qui signe l'APK/AAB installé **ne figure pas** dans
 `assetlinks.json`. C'est pour ça qu'il faut y mettre l'empreinte de la clé
 **release** avant la prod : le fichier ne contient aujourd'hui que l'empreinte
-**debug** (utile seulement pour tester en local avec `me.meeshy.app.debug`).
+**debug** (utile seulement pour tester en local avec `me.meeshy.android.debug`).
 
 ---
 
@@ -31,7 +37,7 @@ Google re-signe l'app avec **sa** clé de signature d'app ; c'est donc l'emprein
 de **cette** clé (pas celle de l'upload key) qui vérifie les liens pour toute
 installation venant du Play Store.
 
-1. Play Console → app **Meeshy** (`me.meeshy.app`) → **Test and release → Setup → App signing**.
+1. Play Console → app **Meeshy** (`me.meeshy.android`) → **Test and release → Setup → App signing**.
 2. Section **App signing key certificate** → copier **SHA-256 certificate fingerprint**
    (format `AB:CD:…`, 32 octets).
 3. Bonus : la même page propose un bloc **Digital Asset Links JSON** prêt à
@@ -69,7 +75,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
 
 ### Cas C — Empreinte debug (déjà en place, pour référence)
 
-Sert uniquement à tester les App Links en build **debug** (`me.meeshy.app.debug`).
+Sert uniquement à tester les App Links en build **debug** (`me.meeshy.android.debug`).
 Déjà présente dans `assetlinks.json`.
 
 ```bash
@@ -93,14 +99,14 @@ on peut y mettre plusieurs empreintes (utile pendant une rotation de clé, ou
 pour couvrir Play App signing key + upload key simultanément).
 
 Remplacer le placeholder `REPLACE_WITH_RELEASE_SHA256` de l'entrée
-`me.meeshy.app` par l'empreinte obtenue au §1 :
+`me.meeshy.android` par l'empreinte obtenue au §1 :
 
 ```json
 {
   "relation": ["delegate_permission/common.handle_all_urls"],
   "target": {
     "namespace": "android_app",
-    "package_name": "me.meeshy.app",
+    "package_name": "me.meeshy.android",
     "sha256_cert_fingerprints": [
       "AB:CD:EF:...:99"
     ]
@@ -108,7 +114,7 @@ Remplacer le placeholder `REPLACE_WITH_RELEASE_SHA256` de l'entrée
 }
 ```
 
-Ne pas toucher l'entrée `me.meeshy.app.debug` (empreinte debug, test local).
+Ne pas toucher l'entrée `me.meeshy.android.debug` (empreinte debug, test local).
 
 ---
 
@@ -125,8 +131,8 @@ Ne pas toucher l'entrée `me.meeshy.app.debug` (empreinte debug, test local).
    ```
 3. Sur un appareil avec le build release installé :
    ```bash
-   adb shell pm verify-app-links --re-verify me.meeshy.app
-   adb shell pm get-app-links me.meeshy.app   # doit afficher "verified" pour meeshy.me
+   adb shell pm verify-app-links --re-verify me.meeshy.android
+   adb shell pm get-app-links me.meeshy.android   # doit afficher "verified" pour meeshy.me
    ```
 4. Test fonctionnel — un tap sur un vrai lien magic link doit ouvrir l'app :
    ```bash

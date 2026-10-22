@@ -75,7 +75,7 @@ extension UserProfileSheet {
                         .padding(.vertical, MeeshySpacing.smPlus)
                         .contentShape(Rectangle())
                     }
-                    .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .roundedRect(cornerRadius: 0)))
+                    .buttonStyle(MeeshyPointerPlainButtonStyle(shape: .rectangle))
                     .staggeredAppear(index: index)
                     .opacity(isInteractionDisabled ? 0.35 : 1)
 

@@ -37,17 +37,17 @@ extension UniversalComposerBar {
                     Image(systemName: "mic.fill")
                         .font(.callout.weight(.medium))
                         .foregroundColor(iconTint)
-                        .frame(width: 36, height: 36)
+                        .frame(width: QuickEmojiExpansion.micFloor, height: QuickEmojiExpansion.micFloor)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel(String(localized: "composer.a11y.startRecording", defaultValue: "Enregistrer un message vocal", bundle: .main))
-                .padding(.leading, MeeshySpacing.xs)
                 .transition(.scale.combined(with: .opacity))
             }
 
-            // Text input
             ZStack(alignment: .leading) {
                 if text.isEmpty {
                     Text(resolvedPlaceholder)
+                        .lineLimit(1)
                         .foregroundColor(placeholderColor)
                         .padding(.leading, (resolvedShowVoice && !isFocused) ? 2 : 16)
                 }

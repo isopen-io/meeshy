@@ -85,6 +85,7 @@ extension StoryViewerView {
         // décidé, court-circuitant tap et long-press.
         resetGestureTracking()
         groupIntroTask?.cancel()
+        delays.cancelAll()
         groupIntroTask = nil
         prefetchTasks.forEach { $0.cancel() }
         prefetchTasks.removeAll()

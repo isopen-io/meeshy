@@ -50,11 +50,11 @@ struct VideoFiltersPanel: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "camera.filters")
                 .font(MeeshyFont.relative(14, weight: .semibold))
-                .foregroundColor(MeeshyColors.indigo400)
+                .foregroundStyle(MeeshyColors.indigo400)
                 .accessibilityHidden(true)
             Text(String(localized: "video.filter.title", defaultValue: "Filtres vidéo", bundle: .main))
                 .font(MeeshyFont.relative(15, weight: .semibold, design: .rounded))
-                .foregroundColor(.primary)
+                .foregroundStyle(Color.primary)
             Spacer()
             if filterConfig.isEnabled {
                 Button {
@@ -63,7 +63,7 @@ struct VideoFiltersPanel: View {
                 } label: {
                     Text(String(localized: "video.filter.reset", defaultValue: "Réinitialiser", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                 }
                 .meeshyTapTarget()
             }
@@ -125,7 +125,7 @@ struct VideoFiltersPanel: View {
             HStack {
                 Image(systemName: "person.and.background.dotted")
                     .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .frame(width: 18)
                 Text(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arrière-plan", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
@@ -140,7 +140,7 @@ struct VideoFiltersPanel: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(String(localized: "video.filter.radius", defaultValue: "Rayon", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.backgroundBlurRadius, in: 5...20)
                         .tint(MeeshyColors.indigo500)
@@ -148,7 +148,7 @@ struct VideoFiltersPanel: View {
                         .accessibilityValue(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                     Text(String(format: "%.0f", filterConfig.backgroundBlurRadius))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .frame(width: 28, alignment: .trailing)
                 }
                 .padding(.leading, 28)
@@ -158,14 +158,14 @@ struct VideoFiltersPanel: View {
             HStack {
                 Image(systemName: "sparkles")
                     .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(String(localized: "video.filter.naturalComplexion", defaultValue: "Teint naturel", bundle: .main))
                         .font(MeeshyFont.relative(13, weight: .medium))
                     Text(String(localized: "video.filter.naturalComplexion.hint", defaultValue: "Unifie et illumine le teint, sans retouche visible", bundle: .main))
                         .font(MeeshyFont.relative(11))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
                 Spacer()
                 Toggle("", isOn: $filterConfig.naturalComplexionEnabled)
@@ -178,7 +178,7 @@ struct VideoFiltersPanel: View {
             HStack {
                 Image(systemName: "face.dashed")
                     .font(MeeshyFont.relative(12, weight: .medium))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
                     .frame(width: 18)
                 Text(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage de la peau", bundle: .main))
                     .font(MeeshyFont.relative(13, weight: .medium))
@@ -193,7 +193,7 @@ struct VideoFiltersPanel: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Text(String(localized: "video.filter.intensity", defaultValue: "Intensité", bundle: .main))
                         .font(MeeshyFont.relative(12, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .frame(width: 55, alignment: .leading)
                     Slider(value: $filterConfig.skinSmoothingIntensity, in: 0...1)
                         .tint(MeeshyColors.indigo500)
@@ -201,7 +201,7 @@ struct VideoFiltersPanel: View {
                         .accessibilityValue(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                     Text(String(format: "%.0f%%", filterConfig.skinSmoothingIntensity * 100))
                         .font(MeeshyFont.relative(11, weight: .medium, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                         .frame(width: 42, alignment: .trailing)
                 }
                 .padding(.leading, 28)
@@ -223,7 +223,7 @@ struct VideoFiltersPanel: View {
                 Text(String(localized: "video.filter.performanceDegraded", defaultValue: "Performance réduite — certains filtres désactivés", bundle: .main))
                     .font(MeeshyFont.relative(11, weight: .medium))
             }
-            .foregroundColor(MeeshyColors.warning)
+            .foregroundStyle(MeeshyColors.warning)
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.sm)
             .background(

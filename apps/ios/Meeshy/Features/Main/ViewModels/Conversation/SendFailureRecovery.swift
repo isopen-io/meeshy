@@ -6,8 +6,8 @@ import os
 /// refus fermant le composeur, tenir la bulle d'un mode lent, et poser le
 /// `tempId → serverId` que `message:new` réconcilie.
 struct SendRecoveryHooks {
-    let withdraw: (String, ConversationWriteRestriction) async -> Void
-    let holdSlowMode: (String, NewcomerSlowMode, any Error) async -> Void
+    let withdraw: @MainActor (String, ConversationWriteRestriction) async -> Void
+    let holdSlowMode: @MainActor (String, NewcomerSlowMode, any Error) async -> Void
     let registerServerId: (String, String) -> Void
 }
 

@@ -172,6 +172,23 @@ final class SharePendingSendConsumerTests: XCTestCase {
                        1_785_000_000, accuracy: 1)
     }
 
+    /// Le fichier relu s'appelle `0.jpg` ; la file reçoit le nom d'origine
+    /// que l'extension a gardé, pour le `filename` TUS (#11531).
+    func test_consumeAll_enqueuesTheOriginalNamesOfTheSharedFiles() async throws {
+        let dir = try makeDirectory()
+        let mediaRoot = try makeMediaRoot()
+        let named = SharePendingSendConsumer.PendingMedia(
+            relPath: "cid_abc/0.jpg", ext: "jpg", mime: "image/jpeg", bytes: 32, originalName: "IMG_0111.jpg")
+        try writeShare(media: [named], conversationIds: ["conv1"], in: dir, mediaRoot: mediaRoot)
+        let queue = FakeOfflineMessageQueue()
+
+        await SharePendingSendConsumer(queue: queue)
+            .consumeAll(in: dir, mediaRoot: mediaRoot, now: fixtureNow)
+
+        let mediaCalls = await queue.enqueuedMediaCalls
+        XCTAssertEqual(mediaCalls.first?.originalNames, ["IMG_0111.jpg"])
+    }
+
     // MARK: - Ordre explicite « origine d'abord » (revue round 1, Important 1)
 
     /// `OutboxFlusher` trie par `ORDER BY createdAt ASC` SANS départage : un

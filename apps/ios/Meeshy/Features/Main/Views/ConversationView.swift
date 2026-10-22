@@ -641,7 +641,7 @@ struct ConversationView: View {
             beginSelection: { beginSelectionMode(seedingWith: $0) },
             deleteMedia: { deleteMedia(targeted: nil, of: $0) },
             requestDelete: { requestDeleteMessage($0) },
-            edit: { beginEdit($0) },
+            beginEdit: { beginEdit($0) },
             export: { beginMessageExport($0, quick: $1) },
             compose: { composerState.composeMediaTarget = ComposerSeedTarget(message: $0) }
         )

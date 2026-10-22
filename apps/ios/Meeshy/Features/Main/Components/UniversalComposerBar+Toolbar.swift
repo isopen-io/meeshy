@@ -132,7 +132,7 @@ extension UniversalComposerBar {
                 .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
                 .adaptiveLiquidGlass(in: Circle(), interactive: true)
-                .frame(width: 44, height: 44)
+                .frame(width: ComposerBottomClearance.doorDiameter, height: ComposerBottomClearance.doorDiameter)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -153,7 +153,7 @@ extension UniversalComposerBar {
                 .font(.callout.weight(ComposerGlassDoors.glyphWeight))
                 .foregroundColor(iconTint)
                 .frame(width: 30, height: 30)
-                .frame(width: 44, height: 44)
+                .frame(width: ComposerBottomClearance.doorDiameter, height: ComposerBottomClearance.doorDiameter)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

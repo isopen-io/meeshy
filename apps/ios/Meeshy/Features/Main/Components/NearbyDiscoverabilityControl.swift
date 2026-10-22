@@ -398,21 +398,21 @@ struct NearbyDiscoverabilityControl: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(placeName)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                     .lineLimit(1)
                 if offersDiscoverability {
                     Text(choice.isDiscoverable
                          ? NearbyDiscoverabilityLabels.summaryEnabled
                          : NearbyDiscoverabilityLabels.summaryDisabled)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                        .foregroundColor(MeeshyColors.textMuted(isDark: true))
+                        .foregroundStyle(MeeshyColors.textMuted(isDark: true))
                         .lineLimit(1)
                 }
             }
             if offersDiscoverability {
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(MeeshyFont.relative(11, weight: .semibold))
-                    .foregroundColor(MeeshyColors.textMuted(isDark: true))
+                    .foregroundStyle(MeeshyColors.textMuted(isDark: true))
                     .accessibilityHidden(true)
             }
             Spacer(minLength: 0)
@@ -436,7 +436,7 @@ struct NearbyDiscoverabilityControl: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 11, weight: .bold))
-                .foregroundColor(MeeshyColors.textPrimary(isDark: true))
+                .foregroundStyle(MeeshyColors.textPrimary(isDark: true))
                 .frame(width: 28, height: 28)
                 .adaptiveGlass(in: Circle())
         }
@@ -454,7 +454,7 @@ struct NearbyDiscoverabilityControl: View {
     private var discoverabilityDetail: some View {
         Text(NearbyDiscoverabilityLabels.subtitle)
             .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-            .foregroundColor(MeeshyColors.textMuted(isDark: true))
+            .foregroundStyle(MeeshyColors.textMuted(isDark: true))
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -545,11 +545,11 @@ struct NearbyDiscoverabilityControl: View {
         HStack(alignment: .top, spacing: MeeshySpacing.xs) {
             Image(systemName: icon)
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs))
-                .foregroundColor(MeeshyColors.textMuted(isDark: true))
+                .foregroundStyle(MeeshyColors.textMuted(isDark: true))
                 .accessibilityHidden(true)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(MeeshyColors.textMuted(isDark: true))
+                .foregroundStyle(MeeshyColors.textMuted(isDark: true))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }

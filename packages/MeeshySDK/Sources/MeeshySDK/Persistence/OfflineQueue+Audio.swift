@@ -277,7 +277,7 @@ extension OfflineQueue {
         sticker: MessageSticker? = nil,
         deletesSourceFiles: Bool = true,
         createdAt: Date? = nil,
-        protection: MessageProtectionIntent = .none
+        protection: MessageProtectionIntent = .none, originalNames: [String?]? = nil
     ) async throws -> EnqueueMediaResult {
         guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
 
@@ -304,7 +304,7 @@ extension OfflineQueue {
             attachmentKinds: kinds,
             localAudioPath: nil,
             localAudioPaths: nil,
-            localMediaPaths: relativePaths,
+            localMediaPaths: relativePaths, localMediaOriginalNames: originalNames,
             sticker: sticker,
             copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
             protectionFlags: protection.persistedFlags,

@@ -30,6 +30,8 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         let sticker: MessageSticker?
         let deletesSourceFiles: Bool
         let createdAt: Date?
+        /// Noms d'origine alignés sur les fichiers (#11531).
+        var originalNames: [String?]? = nil
     }
 
     // MARK: - Stubbing
@@ -113,7 +115,8 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         sticker: MessageSticker?,
         deletesSourceFiles: Bool,
         createdAt: Date?,
-        protection: MessageProtectionIntent
+        protection: MessageProtectionIntent,
+        originalNames: [String?]?
     ) async throws -> OfflineQueue.EnqueueMediaResult {
         if let delay { try? await Task.sleep(for: delay) }
         if shouldFailNow() { throw errorToThrow }
@@ -123,7 +126,8 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
             clientMessageId: clientMessageId,
             copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
             sticker: sticker,
-            deletesSourceFiles: deletesSourceFiles, createdAt: createdAt))
+            deletesSourceFiles: deletesSourceFiles, createdAt: createdAt,
+            originalNames: originalNames))
         return OfflineQueue.EnqueueMediaResult(
             outboxId: "ofq_fake_\(clientMessageId)",
             localMediaPaths: sourceMediaURLs.indices.map {

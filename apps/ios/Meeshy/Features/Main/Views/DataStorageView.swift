@@ -58,7 +58,7 @@ struct DataStorageView: View {
                         HStack(spacing: MeeshySpacing.sm) {
                             Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache média", bundle: .main))
                                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
 
                             Spacer()
 
@@ -69,7 +69,7 @@ struct DataStorageView: View {
 
                         Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et vidéos mis en cache", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .regular))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                 }
                 .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -78,7 +78,7 @@ struct DataStorageView: View {
 
                 Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les médias plus rapidement et réduit la consommation de données. Les fichiers mis en cache sont automatiquement supprimés après 7 jours.", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .lineSpacing(3)
                     .padding(.horizontal, MeeshySpacing.mdPlus)
                     .padding(.bottom, MeeshySpacing.smPlus)

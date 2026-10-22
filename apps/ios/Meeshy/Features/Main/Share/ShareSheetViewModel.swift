@@ -217,8 +217,7 @@ final class ShareSheetViewModel: ObservableObject {
             searchResults = nil
             return
         }
-        try? await Task.sleep(for: debounce)
-        guard token == searchToken else { return }
+        guard await cancellableSleep(for: debounce), token == searchToken else { return }
         let results = await directory.search(trimmed, currentUserId: currentUserId())
         guard token == searchToken else { return }
         searchResults = results

@@ -70,18 +70,17 @@ extension CallManager {
             Logger.calls.warning("call:end deferred — socket down, will reconcile on reconnect (callId=\(callId))")
             return
         }
-        Task { [weak self] in
-            let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
-            if !acked {
-                MessageSocketManager.shared.emitCallEnd(callId: callId)
-                // [Chaos-test 2, callId 6a4690a2…] An unacked end during churn
-                // means the socket LOOKED up but the emit may never have
-                // materialised server-side (the CallSession decayed to
-                // failed/91s via GC instead of missed). Remember it and replay
-                // on the next connect — the gateway end handler is idempotent,
-                // a duplicate is a logged no-op.
-                self?.armPendingEndReconciliation(callId: callId, reason: nil)
-                Logger.calls.warning("call:end ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+        // D2 (#11468) — émis ICI, de façon synchrone : une `Task` du fil principal le faisait
+        // passer derrière tout le démontage local (14 à 17 s, simulateur chargé).
+        MessageSocketManager.shared.emitCallEndWithAck(callId: callId) { [weak self] acked in
+            let manager = self
+            Task { @MainActor in
+                if !acked {
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
+                    // [Chaos-test 2] Unacked end: replay on next connect (gateway end is idempotent).
+                    manager?.armPendingEndReconciliation(callId: callId, reason: nil)
+                    Logger.calls.warning("call:end ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+                }
             }
         }
     }
@@ -111,14 +110,8 @@ extension CallManager {
         // tous les cas pour nettoyer l'état local + cancel les Tasks.
         let callId = currentCallId
 
-        // Phase finale — émettre `call:end` avec ACK garanti pour que le
-        // gateway broadcast `call:ended` au peer. Avant : emit fire-and-forget
-        // sans confirmation → si le socket était saturé / déconnecté au
-        // moment du raccroché, l'appelé restait bloqué en `.connecting` /
-        // `.connected` indéfiniment sans aucun signal d'arrêt. On utilise
-        // `emitCallEndWithAck` (3s timeout, retry interne au gateway) en
-        // Task détaché : ne bloque pas le cleanup local mais garantit que
-        // le gateway sait que l'appel est fini.
+        // `call:end` avec accusé (3 s, repli + réconciliation) part AVANT
+        // `endCallInternal` : le serveur l'apprend avant le démontage local.
         // Raccroché instantané côté pair (parité WhatsApp) : `bye` in-band sur
         // le data channel P2P — arrive en millisecondes, sans dépendre des
         // allers-retours DB du gateway avant son fanout `call:ended`. Émis

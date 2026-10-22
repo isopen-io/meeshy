@@ -2,6 +2,7 @@ import AVFoundation
 import CoreMedia
 import CoreVideo
 import Foundation
+import MeeshySDK
 
 // Extrait de `StoryExporter.swift` : l'ENCODAGE final (lecteur de composition →
 // écrivain MP4 au débit plafonné) est une responsabilité distincte de la
@@ -196,6 +197,7 @@ enum StoryExportEncoder {
     /// site ne les manipule après la mise en place. C'est précisément le cas
     /// d'usage d'un `@unchecked Sendable` : la sécurité est structurelle, pas
     /// vérifiable par le compilateur.
+    // unchecked: chaque couple n'est touché que par sa file de pompage.
     private nonisolated struct PumpPair: @unchecked Sendable {
         let input: AVAssetWriterInput
         let output: AVAssetReaderOutput
@@ -207,19 +209,19 @@ enum StoryExportEncoder {
     /// la donnée : la fin de flux peut donc être atteinte plusieurs fois si deux
     /// rappels se chevauchent. Reprendre deux fois une `CheckedContinuation` est
     /// une erreur fatale, pas un avertissement.
-    private nonisolated final class ContinuationBox: @unchecked Sendable {
-        private let lock = NSLock()
-        private var continuation: CheckedContinuation<Void, Never>?
+    // unchecked: continuation sous Locked, reprise hors du verrou.
+    nonisolated final class ContinuationBox: @unchecked Sendable {
+        private let continuation: Locked<CheckedContinuation<Void, Never>?>
 
         init(_ continuation: CheckedContinuation<Void, Never>) {
-            self.continuation = continuation
+            self.continuation = Locked(continuation)
         }
 
         func resumeOnce() {
-            lock.lock()
-            let pending = continuation
-            continuation = nil
-            lock.unlock()
+            let pending = continuation.mutate { current -> CheckedContinuation<Void, Never>? in
+                defer { current = nil }
+                return current
+            }
             pending?.resume()
         }
     }
@@ -231,11 +233,11 @@ enum StoryExportEncoder {
     /// offrait (`StoryExporter_ProgressTests`) : au plus ~10 appels par seconde,
     /// valeurs dans `0…1`, l'appelant émettant lui-même le `1.0` terminal.
     /// Appelé depuis la file de pompage, d'où le verrou.
+    // unchecked: dernier instant d'émission sous Locked ; le reste est immuable.
     private nonisolated final class ExportProgressReporter: @unchecked Sendable {
-        private let lock = NSLock()
         private let totalSeconds: Double
         private let emit: @Sendable (Double) -> Void
-        private var lastEmission: TimeInterval = 0
+        private let lastEmission = Locked<TimeInterval>(0)
 
         init(total: CMTime, emit: @escaping @Sendable (Double) -> Void) {
             self.totalSeconds = max(0.001, CMTimeGetSeconds(total))
@@ -244,10 +246,11 @@ enum StoryExportEncoder {
 
         func observe(_ presentationTime: CMTime) {
             let now = ProcessInfo.processInfo.systemUptime
-            lock.lock()
-            let due = now - lastEmission >= 0.1
-            if due { lastEmission = now }
-            lock.unlock()
+            let due = lastEmission.mutate { last -> Bool in
+                guard now - last >= 0.1 else { return false }
+                last = now
+                return true
+            }
             guard due else { return }
             let fraction = CMTimeGetSeconds(presentationTime) / totalSeconds
             emit(min(1.0, max(0.0, fraction)))

@@ -256,28 +256,28 @@ internal struct _InlineRenderer: View {
         case .ready:
             Image(systemName: "play.fill")
                 .font(.system(size: 22 * playButtonScale, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: 2 * playButtonScale)
         case .needsDownload:
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 22 * playButtonScale, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                 if player.attachment.fileSize > 0 {
                     Text(formatSize(Int64(player.attachment.fileSize)))
                         .font(.system(size: 9 * playButtonScale, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundStyle(Color.white.opacity(0.9))
                 }
             }
         case .downloading(let progress):
             VStack(spacing: MeeshySpacing.xxs) {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 16 * playButtonScale, weight: .bold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundStyle(Color.white.opacity(0.6))
                 if progress > 0 {
                     Text("\(Int(progress * 100))%")
                         .font(.system(size: 10 * playButtonScale, weight: .bold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 } else {
                     ProgressView().tint(.white).scaleEffect(0.6 * playButtonScale)
                 }

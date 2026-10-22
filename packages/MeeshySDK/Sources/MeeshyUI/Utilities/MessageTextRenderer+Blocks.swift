@@ -1,5 +1,6 @@
 import SwiftUI
 import Foundation
+import MeeshySDK
 
 // MARK: - MessageBlockParser
 
@@ -25,12 +26,12 @@ public enum MessageBlockParser {
         case code(language: String?, text: String)
     }
 
-    private static let heading = try! NSRegularExpression(pattern: #"^(#{1,3})[ \t]+(\S.*)$"#)
-    private static let bullet = try! NSRegularExpression(pattern: #"^[ \t]{0,3}[-*+][ \t]+(\S.*)$"#)
-    private static let ordered = try! NSRegularExpression(pattern: #"^[ \t]{0,3}(\d{1,9})[.)][ \t]+(\S.*)$"#)
-    private static let quote = try! NSRegularExpression(pattern: #"^[ \t]{0,3}>[ \t]?(.*)$"#)
-    private static let fence = try! NSRegularExpression(pattern: #"^[ \t]{0,3}```[ \t]*([\w+#.-]*)[ \t]*$"#)
-    private static let closingFence = try! NSRegularExpression(pattern: #"^[ \t]{0,3}```[ \t]*$"#)
+    private static let heading = LiteralRegex.compile(pattern: #"^(#{1,3})[ \t]+(\S.*)$"#)
+    private static let bullet = LiteralRegex.compile(pattern: #"^[ \t]{0,3}[-*+][ \t]+(\S.*)$"#)
+    private static let ordered = LiteralRegex.compile(pattern: #"^[ \t]{0,3}(\d{1,9})[.)][ \t]+(\S.*)$"#)
+    private static let quote = LiteralRegex.compile(pattern: #"^[ \t]{0,3}>[ \t]?(.*)$"#)
+    private static let fence = LiteralRegex.compile(pattern: #"^[ \t]{0,3}```[ \t]*([\w+#.-]*)[ \t]*$"#)
+    private static let closingFence = LiteralRegex.compile(pattern: #"^[ \t]{0,3}```[ \t]*$"#)
 
     /// Capture groups of `regex` on the whole `line`, or `nil` when it doesn't match.
     private static func groups(_ regex: NSRegularExpression, _ line: String) -> [String]? {

@@ -48,13 +48,13 @@ public struct EmptyStateView: View {
 
             Text(title)
                 .font(MeeshyFont.relative(compact ? 15 : 18, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
             if !subtitle.isEmpty {
                 Text(subtitle)
                     .font(MeeshyFont.relative(compact ? 12 : 14))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xxxl)
             }
@@ -83,7 +83,7 @@ public struct EmptyStateView: View {
         } label: {
             Text(label)
                 .font(MeeshyFont.relative(compact ? 13 : 14, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, compact ? MeeshySpacing.lg : MeeshySpacing.xxl)
                 .padding(.vertical, compact ? MeeshySpacing.sm : MeeshySpacing.md)
                 .background(

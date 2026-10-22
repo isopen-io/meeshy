@@ -613,22 +613,33 @@ fileprivate struct BubbleGridImageView: View {
 
     @Environment(\.displayScale) private var displayScale: CGFloat
 
-    /// 5.2 — l'URL que la case AFFICHE : la plus petite variante
-    /// `>= largeur d'affichage en px` (atome pur SDK), ou l'original sans
-    /// variante (image chiffrée). Site unique : le badge y lit la MÊME URL
-    /// que celle que la case télécharge (#10370).
+    /// 5.2 — l'URL que la case AFFICHE (`BubbleImageSourceLaw`) : une forme
+    /// déjà sur l'appareil d'abord, sinon la plus petite variante
+    /// `>= largeur d'affichage en px`, ou l'original sans variante (image
+    /// chiffrée). Site unique : le badge y lit la MÊME URL que celle que la
+    /// case charge (#10370).
     static func displayedURL(for attachment: MessageAttachment, cellPointWidth: CGFloat,
-                             displayScale: CGFloat) -> String? {
-        guard !attachment.fileUrl.isEmpty else { return nil }
-        return ImageVariantSelector.bestImageURL(
+                             displayScale: CGFloat,
+                             isOnDevice: (String) -> Bool = BubbleImageSourceLaw.isOnDevice) -> String? {
+        BubbleImageSourceLaw.displayedURL(
             variants: attachment.imageVariants ?? [],
             originalURL: attachment.fileUrl,
             originalWidth: attachment.width,
-            targetWidthPx: Int((cellPointWidth * displayScale).rounded())
+            targetWidthPx: Int((cellPointWidth * displayScale).rounded()),
+            isOnDevice: isOnDevice
         )
     }
 
+    /// L'original posé sur l'appareil par le bouton de la bulle relit la
+    /// source affichée et relance le chargement retenu par la politique.
     var body: some View {
+        OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+            image(originalLanded: originalLanded)
+        }
+    }
+
+    @ViewBuilder
+    private func image(originalLanded: Bool) -> some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         let selectedFull = Self.displayedURL(for: attachment, cellPointWidth: cellPointWidth,
@@ -646,7 +657,8 @@ fileprivate struct BubbleGridImageView: View {
                 thumbnailUrl: effectiveThumb,
                 fullUrl: selectedFull,
                 targetSize: CGSize(width: cellPointWidth, height: cellPointWidth),
-                onFullImageLoaded: onFullImageLoaded
+                onFullImageLoaded: onFullImageLoaded,
+                reloadToken: originalLanded
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }

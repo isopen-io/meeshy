@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 
 // MARK: - Liquid Glass (product styling over the SDK Compatibility wrappers)
 
@@ -112,8 +113,7 @@ private struct CallChromeVisibilityModifier: ViewModifier {
             }
             .task(id: hiddenAt) {
                 guard hiddenAt != nil else { return }
-                try? await Task.sleep(nanoseconds: CallChromeVisibility.fadeDurationNanoseconds)
-                guard !Task.isCancelled else { return }
+                guard await cancellableSleep(for: .nanoseconds(CallChromeVisibility.fadeDurationNanoseconds)), !Task.isCancelled else { return }
                 clock = Date()
             }
     }

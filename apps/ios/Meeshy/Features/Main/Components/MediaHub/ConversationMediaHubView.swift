@@ -130,7 +130,7 @@ struct ConversationMediaHubView: View {
     private var offlineNotice: some View {
         Label(ConversationMediaHubCopy.offline, systemImage: "wifi.slash")
             .font(.footnote.weight(.medium))
-            .foregroundColor(MeeshyColors.warning)
+            .foregroundStyle(MeeshyColors.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, MeeshySpacing.sm)
@@ -206,7 +206,7 @@ struct ConversationMediaHubView: View {
         return Button { open(item) } label: {
             MediaHubVisualTile(item: item, accessibilityText: label).equatable()
         }
-        .buttonStyle(MeeshyPointerButtonStyle(shape: .roundedRect(cornerRadius: 0)))
+        .buttonStyle(MeeshyPointerButtonStyle(shape: .rectangle))
         .modifier(GoToMessageAffordance(messageId: item.messageId, goToMessage: actions.goToMessage))
     }
 

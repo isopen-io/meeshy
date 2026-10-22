@@ -207,7 +207,7 @@ struct GuestAttachmentSheet: View {
                 .fontWeight(.semibold)
         }
         .font(MeeshyFont.relative(MeeshyFont.labelSize))
-        .foregroundColor(MeeshyColors.indigo300)
+        .foregroundStyle(MeeshyColors.indigo300)
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, MeeshySpacing.mdPlus)
         .padding(.vertical, MeeshySpacing.md)
@@ -222,7 +222,7 @@ struct GuestAttachmentSheet: View {
         HStack(spacing: MeeshySpacing.md) {
             Image(systemName: "nosign")
                 .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(MeeshyColors.error.opacity(0.18)))
                 .accessibilityHidden(true)

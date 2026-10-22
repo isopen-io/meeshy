@@ -304,9 +304,9 @@ struct HeaderFlameCount: View, Equatable {
     var body: some View {
         ZStack {
             ForEach(Self.outline.indices, id: \.self) { index in
-                digits.foregroundColor(.white).offset(Self.outline[index])
+                digits.foregroundStyle(Color.white).offset(Self.outline[index])
             }
-            digits.foregroundColor(MeeshyColors.error)
+            digits.foregroundStyle(MeeshyColors.error)
         }
         .padding(1)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: text)
@@ -409,12 +409,12 @@ struct HeaderFlameDecoration: ViewModifier {
         let duration = reduceMotion ? 0.6 : HeaderFlameOrbit.duration
         let release = duration * Double(HeaderFlameOrbit.valueRelease)
         Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(16))
+            _ = await cancellableSleep(for: .milliseconds(16))
             withAnimation(.linear(duration: duration)) { phase = 1 }
-            try? await Task.sleep(for: .seconds(release))
+            _ = await cancellableSleep(for: .seconds(release))
             guard replay == replayCount else { return }
             heldPoints = nil
-            try? await Task.sleep(for: .seconds(duration - release))
+            _ = await cancellableSleep(for: .seconds(duration - release))
             guard replay == replayCount else { return }
             isPlaying = false
         }

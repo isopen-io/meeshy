@@ -250,7 +250,7 @@ struct StoryCardView: View {
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
     let makeStoryExternalShareURL: (String) -> URL?
-    let deleteCurrentStory: (_ reason: String?) -> Void
+    let storyWithdrawal: StoryWithdrawalActions
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat

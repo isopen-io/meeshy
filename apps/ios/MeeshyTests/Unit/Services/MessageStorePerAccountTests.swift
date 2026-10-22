@@ -367,11 +367,25 @@ final class MessageStorePerAccountTests: XCTestCase {
 
     func test_keepsData_onlyWhileTheDeviceKeepsTheAccountsSession() {
         let preserved: Set<String> = ["alice"]
-        XCTAssertTrue(AccountDataRetention.keepsData(of: key("alice")) { preserved.contains($0) },
+        XCTAssertTrue(AccountDataRetention.keepsData(of: key("alice"), arriving: key("bob")) { preserved.contains($0) },
                       "changer de compte garde la session, donc les données")
-        XCTAssertFalse(AccountDataRetention.keepsData(of: key("bob")) { preserved.contains($0) },
+        XCTAssertFalse(AccountDataRetention.keepsData(of: key("bob"), arriving: key("alice")) { preserved.contains($0) },
                        "déconnexion, session révoquée ou retrait : les jetons sont partis, les données aussi")
-        XCTAssertFalse(AccountDataRetention.keepsData(of: nil) { _ in true })
+        XCTAssertFalse(AccountDataRetention.keepsData(of: nil, arriving: key("alice")) { _ in true })
+    }
+
+    /// #11558 — au démarrage à froid, la base du compte actif est déjà la
+    /// courante : rien n'est quitté, et le trousseau n'a pas à être lu.
+    func test_keepsData_sameAccountArriving_doesNotAskTheSession() {
+        var asked = 0
+
+        let keeps = AccountDataRetention.keepsData(of: key("alice"), arriving: key("alice")) { _ in
+            asked += 1
+            return true
+        }
+
+        XCTAssertFalse(keeps)
+        XCTAssertEqual(asked, 0)
     }
 
     // MARK: - À côté : les brouillons de commentaire

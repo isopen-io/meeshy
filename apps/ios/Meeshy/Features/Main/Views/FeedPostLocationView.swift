@@ -29,10 +29,10 @@ struct FeedPostLocationSticker: View {
             HStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "mappin.circle.fill")
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                 Text(displayLabel)
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(MeeshyColors.indigo900)
+                    .foregroundStyle(MeeshyColors.indigo900)
                     .lineLimit(1)
             }
             .padding(.horizontal, MeeshySpacing.smPlus)
@@ -121,7 +121,7 @@ struct FeedPostLocationMapCard: View {
                 MeeshyColors.indigo100.opacity(colorScheme == .dark ? 0.15 : 1)
                 Image(systemName: "mappin.and.ellipse")
                     .font(.title2)
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
             }
         }
     }
@@ -129,7 +129,7 @@ struct FeedPostLocationMapCard: View {
     private func textScrim(_ text: String) -> some View {
         Text(text)
             .font(.subheadline.weight(.medium))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .lineLimit(4)
             .multilineTextAlignment(.leading)
             .padding(.horizontal, MeeshySpacing.md)

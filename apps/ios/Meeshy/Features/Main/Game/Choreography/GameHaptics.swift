@@ -1,5 +1,6 @@
 import CoreHaptics
 import UIKit
+import MeeshySDK
 
 /// UN TOUCHER du motif : à quel instant, avec quelle force.
 nonisolated struct GameHapticTap: Equatable, Sendable {
@@ -125,7 +126,7 @@ final class GameHaptics: GameHapticsProviding {
             let generator = UIImpactFeedbackGenerator(style: tap.intensity > 0.75 ? .heavy : (tap.intensity > 0.5 ? .medium : .light))
             generator.prepare()
             Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(tap.time * 1_000_000_000))
+                _ = await cancellableSleep(for: .seconds(tap.time))
                 generator.impactOccurred(intensity: CGFloat(tap.intensity))
             }
         }

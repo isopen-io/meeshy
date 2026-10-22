@@ -152,4 +152,37 @@ final class EngagementRevealQueueTests: XCTestCase {
         XCTAssertNil(file.enCours)
         XCTAssertEqual(file.enAttente, [ampleur])
     }
+    // MARK: - #11556 — un état d'onboarding inchangé ne réécrit pas la file
+
+    /// Recette 2026-10-22 : 15 minutes d'écran blanc au démarrage, le fil principal
+    /// recalculant `EngagementRevealHost.body` sans fin. Chaque réabonnement rejouait
+    /// `isPresented`, et l'écriture de la file — même identique — réinvalidait l'hôte.
+    func test_enSuspendant_sameState_returnsNilSoTheHostWritesNothing() {
+        var suspendue = EngagementRevealQueue()
+        suspendue.suspends(true)
+
+        XCTAssertNil(EngagementRevealQueue().enSuspendant(false))
+        XCTAssertNil(suspendue.enSuspendant(true))
+    }
+
+    func test_enSuspendant_changedState_returnsTheNextQueue() {
+        var file = EngagementRevealQueue()
+        file.suspends(true)
+        file.enfile(volume)
+
+        let reprise = file.enSuspendant(false)
+
+        XCTAssertEqual(reprise?.enCours, volume)
+        XCTAssertEqual(reprise?.estSuspendue, false)
+        XCTAssertEqual(EngagementRevealQueue().enSuspendant(true)?.estSuspendue, true)
+    }
+
+    func test_host_observesOnboardingByValue_neverByAPublisherRebuiltEachRender() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/EngagementRevealHost.swift")
+        let code = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(code.contains(".onReceive(OnboardingPresenceSignal"), "un éditeur reconstruit à chaque rendu se réabonne et rejoue sa valeur")
+        XCTAssertTrue(code.contains("adaptiveOnChange(of: onboarding.isPresented, initial: true)"), "le montage sous un calque déjà présenté suspend dès le départ")
+    }
 }

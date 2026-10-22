@@ -270,9 +270,7 @@ extension StoryViewerView {
             dragOffset = 0
             groupSlide = 0
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.32) {
-            if !isTransitioning { neighborPreviewDirection = 0 }
-        }
+        delays.run(after: .milliseconds(320)) { if !isTransitioning { neighborPreviewDirection = 0 } }
         resumeTimer()
     }
 }

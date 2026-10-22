@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-import SocketIO
 
 // Extrait de `MessageSocketManager.swift`, hors budget de taille : le lot #8906
 // ajoute `engagement:conversation-updated`. Responsabilité tenue ici : l'état
@@ -21,17 +20,12 @@ extension MessageSocketManager {
         PostEngagementChannel.updates.eraseToAnyPublisher()
     }
 
-    func registerConversationEngagementHandlers(on socket: SocketIOClient) {
-        socket.on("engagement:conversation-updated") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(ConversationEngagementSnapshot.self, from: data) { [weak self] snapshot in
-                self?.conversationEngagementUpdated.send(snapshot)
-            }
-        }
-        socket.on("engagement:post-updated") { [weak self] data, _ in
-            self?.decode(PostEngagementSnapshot.self, from: data) { snapshot in
+    var conversationEngagementRoutes: [SocketInboundRoute] {
+        [
+            route(.engagementConversationUpdated, ConversationEngagementSnapshot.self) { $0.conversationEngagementUpdated.send($1) },
+            route(.engagementPostUpdated, PostEngagementSnapshot.self) { _, snapshot in
                 PostEngagementChannel.updates.send(snapshot)
-            }
-        }
+            },
+        ]
     }
 }

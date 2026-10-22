@@ -24,4 +24,9 @@ public struct Locked<State>: Sendable {
     public func mutateUnchecked<V>(_ body: (inout State) throws -> V) rethrows -> V {
         try lock.withLockUnchecked { state in try body(&state) }
     }
+
+    public subscript<V>(unchecked keyPath: WritableKeyPath<State, V>) -> V {
+        get { lock.withLockUnchecked { $0[keyPath: keyPath] } }
+        nonmutating set { lock.withLockUnchecked { $0[keyPath: keyPath] = newValue } }
+    }
 }

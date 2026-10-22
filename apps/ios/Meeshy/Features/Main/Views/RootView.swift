@@ -45,7 +45,6 @@ struct StoryViewerRequest: Identifiable, Equatable {
 }
 
 struct RootView: View {
-    @StateObject private var theme = ThemeManager.shared
     @ObservedObject private var storyViewModel: StoryViewModel
     @ObservedObject private var statusViewModel: StatusViewModel
     // Possédé sans être observé (cf. ConversationListVMOwner) : évite que le churn
@@ -153,7 +152,7 @@ struct RootView: View {
     var body: some View {
         ZStack {
             // 1. Dynamic Background
-            RootThemedBackground(theme: theme)
+            RootThemedBackground(theme: ThemeManager.shared)
 
             // 2. Main content -- NavigationStack
             NavigationStack(path: $router.path) {

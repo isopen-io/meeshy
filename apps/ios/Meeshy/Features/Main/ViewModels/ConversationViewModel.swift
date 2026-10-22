@@ -7,7 +7,7 @@ import MeeshyUI
 import os
 
 @MainActor
-class ConversationViewModel: ObservableObject {
+class ConversationViewModel: ObservableObject, AttachmentSendHosting, TranscriptionRetryReceiving {
 
     // MARK: - Published State
 
@@ -689,9 +689,9 @@ class ConversationViewModel: ObservableObject {
     }
 
     /// Mémoire des messages déjà vus par la file des vocaux — pilotée par
-    /// `subscribeToMessagesForAudioQueue()` (`ConversationViewModel+AudioQueue.swift`).
+    /// `ConversationAudioQueueFeed` (`subscribeToMessagesForAudioQueue()` dans `+AudioQueue.swift`).
     /// Stockée ici : une extension ne déclare pas de propriété stockée.
-    var audioQueueTracker = AudioQueueAppendTracker()
+    let audioQueueFeed = ConversationAudioQueueFeed()
 
     // MARK: - Mark as Read / Received
 

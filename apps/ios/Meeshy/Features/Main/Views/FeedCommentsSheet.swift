@@ -55,6 +55,7 @@ struct CommentsSheetView: View {
     /// composer soumet un PATCH (contenu + effets) au lieu d'une création.
     @State var editingComment: FeedComment?
     @State private var composerFocusTrigger: Bool = false
+    @State private var delays = DelayedActions()
     /// Focus réel du champ du composer — pilote l'insertion d'un texte déposé
     /// (au curseur quand le champ a le focus, sinon à la fin).
     @State private var composerIsFocused: Bool = false
@@ -281,9 +282,7 @@ struct CommentsSheetView: View {
                         .padding(.bottom, 100)
                     }
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            attemptScrollToTargetComment(using: commentsProxy)
-                        }
+                        delays.run(after: .milliseconds(500)) { attemptScrollToTargetComment(using: commentsProxy) }
                     }
                     .adaptiveOnChange(of: topLevel.count) { _, _ in
                         attemptScrollToTargetComment(using: commentsProxy)
@@ -370,6 +369,7 @@ struct CommentsSheetView: View {
         }
         .unsentComments(restore: { await restoreUnsentComments() }, discard: { discardUnsentComment($0) }, draft: $composerText)
         .onDisappear {
+            delays.cancelAll()
             SocialSocketManager.shared.leavePostRoom(postId: post.id)
             // Ne relâcher QUE ce que la feuille a revendiqué : présentée
             // depuis le viewer de réels (post déjà actif), elle ne doit pas
@@ -474,9 +474,7 @@ struct CommentsSheetView: View {
     /// Surligne `id` puis désarme après 2,6 s (si toujours actif).
     private func applyTargetHighlight(_ id: String) {
         highlightedCommentId = id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-            if highlightedCommentId == id { highlightedCommentId = nil }
-        }
+        delays.run(after: .milliseconds(2600)) { if highlightedCommentId == id { highlightedCommentId = nil } }
     }
 
     // MARK: - Comment Like Toggle

@@ -475,7 +475,7 @@ struct LentilleConversationRow: View {
         Button(action: { onJoinLiveCall?() }) {
             Text(String(localized: "call.header.rejoin", defaultValue: "Rejoindre", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, MeeshySpacing.sm)
                 .padding(.vertical, MeeshySpacing.xxs)
                 .background(Capsule(style: .continuous).fill(accent))
@@ -538,7 +538,7 @@ struct LentilleConversationRow: View {
                 ? String(localized: "draft.label", bundle: .main)
                 : String(localized: "draft.label_prefix", bundle: .main))
                 .font(LentilleMetrics.Line2.font)
-                .foregroundColor(MeeshyColors.error)
+                .foregroundStyle(MeeshyColors.error)
             if !draft.previewText.isEmpty {
                 Text(draft.previewText)
                     .font(LentilleMetrics.Line2.font)

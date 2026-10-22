@@ -89,7 +89,7 @@ final class ShareViewController: UIViewController {
                 guard let self, let model else { return }
                 self.relayToApp(ShareRelayHandoff(
                     shareId: self.shareId, createdAt: Date(), text: model.subject.composedText(caption: ""),
-                    media: dispatcher.keptMedia(of: model.subject).map { ShareRelayHandoff.Media(relPath: $0.relPath, mime: $0.mime, bytes: $0.bytes) },
+                    media: dispatcher.keptMedia(of: model.subject).map(ShareRelayHandoff.Media.init(staged:)),
                     conversationIds: []
                 ))
             })
