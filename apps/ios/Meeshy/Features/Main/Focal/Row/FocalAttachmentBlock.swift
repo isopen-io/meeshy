@@ -301,7 +301,8 @@ struct FocalGridCell: View {
                     attachment: attachment,
                     accentColor: accentHex,
                     messageDeliveryStatus: messageDeliveryStatus,
-                    form: downloadPlacement.form
+                    form: downloadPlacement.form,
+                    tileHostsVideoPlayer: videoPresentation.hostsPlayer
                 )
             }
         }
@@ -380,6 +381,13 @@ struct FocalGridCell: View {
                 .clipped()
             }
 
+        case .video where !videoPresentation.hostsPlayer:
+            // #11586 — la case « +N » ouvre la galerie : une image fixe, sans
+            // lecteur ni bouton lecture sous le libellé.
+            ConversationVideoPoster(attachment: attachment,
+                                    accentHex: accentHex,
+                                    showsPlaybackCue: videoPresentation.showsPlaybackCue)
+
         case .video:
             // #8231 — lecture inline à trois contrôles (son, lecture/pause,
             // plein écran) ; toucher la vidéo hors contrôles ouvre le plein
@@ -410,6 +418,13 @@ struct FocalGridCell: View {
         if slot.overflowCount > 0 {
             MediaTileOverflowLabel(count: slot.overflowCount)
         }
+    }
+
+    /// #11586 — la MÊME loi que la tuile de bulle : la case « +N » ne monte
+    /// pas de lecteur. Une pièce protégée n'a pas de `mediaLayer` du tout.
+    private var videoPresentation: MediaTileVideoPresentation {
+        MediaTileVideoPresentation.resolve(overflowCount: slot.overflowCount,
+                                           isHiddenByProtection: protectionState != .none)
     }
 
     /// #11569 — la MÊME loi que la tuile de bulle : sur la case « +N », le

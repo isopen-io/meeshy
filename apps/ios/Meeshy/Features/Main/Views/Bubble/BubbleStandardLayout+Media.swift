@@ -335,15 +335,21 @@ fileprivate struct BubbleGridCell: View {
     /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
     /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
     /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
-    /// vidéo n'est qu'un poster.
+    /// vidéo n'est qu'un poster — sans bouton lecture sur le « +N » (#11586).
     var body: some View {
         Group {
-            if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
+            if attachment.type == .video, videoPresentation.hostsPlayer {
                 videoBody
             } else {
                 standardBody
             }
         }
+    }
+
+    /// #11586 — la MÊME loi que la case du Fil.
+    private var videoPresentation: MediaTileVideoPresentation {
+        MediaTileVideoPresentation.resolve(overflowCount: overflowCount,
+                                           isHiddenByProtection: attachmentIsProtected && !isRevealed)
     }
 
     /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
@@ -483,7 +489,8 @@ fileprivate struct BubbleGridCell: View {
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
-                                    playButtonDiameter: solo ? 64 : 44)
+                                    playButtonDiameter: solo ? 64 : 44,
+                                    showsPlaybackCue: videoPresentation.showsPlaybackCue)
         default:
             EmptyView()
         }
@@ -551,7 +558,8 @@ fileprivate struct BubbleGridCell: View {
                                                                cellPointWidth: cellPointWidth,
                                                                displayScale: displayScale),
                 displayedImageLanded: displayedImageLanded,
-                form: downloadPlacement.form
+                form: downloadPlacement.form,
+                tileHostsVideoPlayer: videoPresentation.hostsPlayer
             )
         }
     }
