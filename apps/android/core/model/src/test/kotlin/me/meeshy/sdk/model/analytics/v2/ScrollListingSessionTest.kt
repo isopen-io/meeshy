@@ -12,6 +12,7 @@ class ScrollListingSessionTest {
         val segment = s.sample(100.0, 60_000)!!
         assertThat(segment.segment).isEqualTo(0)
         assertThat(segment.durationMs).isEqualTo(60_000)
+        s.sample(150.0, 60_200)
         assertThat(s.finish(61_000)!!.segment).isEqualTo(1)
     }
 

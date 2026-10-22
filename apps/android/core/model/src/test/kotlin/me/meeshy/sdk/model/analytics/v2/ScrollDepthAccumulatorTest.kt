@@ -27,13 +27,14 @@ class ScrollDepthAccumulatorTest {
 
     @Test
     fun `les quatre classes de vitesse sont aux bornes 500 1500 et 4000`() {
-        fun histogram(dpPerSecond: Int) = scrolled(0.0 to 0, dpPerSecond / 10.0 to 100).velocityHistogram
-        assertThat(histogram(499)).containsExactly(100, 0, 0, 0).inOrder()
-        assertThat(histogram(500)).containsExactly(0, 100, 0, 0).inOrder()
-        assertThat(histogram(1_499)).containsExactly(0, 100, 0, 0).inOrder()
-        assertThat(histogram(1_500)).containsExactly(0, 0, 100, 0).inOrder()
-        assertThat(histogram(3_999)).containsExactly(0, 0, 100, 0).inOrder()
-        assertThat(histogram(4_000)).containsExactly(0, 0, 0, 100).inOrder()
+        // 100 ms par pas : un delta de N dp vaut 10 x N dp/s
+        fun histogram(deltaDp: Int) = scrolled(0.0 to 0, deltaDp.toDouble() to 100).velocityHistogram
+        assertThat(histogram(49)).containsExactly(100, 0, 0, 0).inOrder()
+        assertThat(histogram(50)).containsExactly(0, 100, 0, 0).inOrder()
+        assertThat(histogram(149)).containsExactly(0, 100, 0, 0).inOrder()
+        assertThat(histogram(150)).containsExactly(0, 0, 100, 0).inOrder()
+        assertThat(histogram(399)).containsExactly(0, 0, 100, 0).inOrder()
+        assertThat(histogram(400)).containsExactly(0, 0, 0, 100).inOrder()
     }
 
     @Test
