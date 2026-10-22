@@ -32,6 +32,8 @@ import dagger.hilt.android.EntryPointAccessors
 import me.meeshy.app.MainActivity
 import me.meeshy.app.R
 import me.meeshy.app.conversations.LastMessagePreviewLabels
+import me.meeshy.app.conversations.withMediaKinds
+import me.meeshy.ui.component.media.ResourceMediaKindStrings
 import me.meeshy.feature.conversations.R as ConversationsR
 
 /**
@@ -62,16 +64,16 @@ internal class QuickReplyWidget : GlanceAppWidget() {
         val conversations = entryPoint.conversationRepository().recentCachedConversations()
         val currentUserId = entryPoint.tokenStore().userId
         val labels = LastMessagePreviewLabels(
-            photo = context.getString(ConversationsR.string.conversations_preview_photo),
-            video = context.getString(ConversationsR.string.conversations_preview_video),
-            voice = context.getString(ConversationsR.string.conversations_preview_voice),
-            file = context.getString(ConversationsR.string.conversations_preview_file),
-            location = context.getString(ConversationsR.string.conversations_preview_location),
+            photo = "",
+            video = "",
+            voice = "",
+            file = "",
+            location = "",
             none = context.getString(ConversationsR.string.conversations_no_messages),
             you = context.getString(ConversationsR.string.conversations_preview_you),
             senderFormat = context.getString(ConversationsR.string.conversations_preview_sender_format),
             draftPrefix = context.getString(ConversationsR.string.conversations_preview_draft_prefix),
-        )
+        ).withMediaKinds(ResourceMediaKindStrings(context))
         val presentation = QuickReplyWidgetPresentation.from(conversations, currentUserId, labels)
 
         provideContent {
