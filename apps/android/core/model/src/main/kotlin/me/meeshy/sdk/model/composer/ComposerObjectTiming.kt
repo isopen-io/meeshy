@@ -29,7 +29,7 @@ data class ComposerObjectTiming(val start: Double, val end: Double?) {
 
     fun trimmingStart(to: Double): ComposerObjectTiming {
         val e = end ?: return ComposerObjectTiming(max(0.0, to), null)
-        return ComposerObjectTiming(min(max(0.0, to), e - MINIMUM_WINDOW), e)
+        return ComposerObjectTiming(min(max(0.0, to), max(0.0, e - MINIMUM_WINDOW)), e)
     }
 
     fun trimmingEnd(to: Double, slideDuration: Double): ComposerObjectTiming {

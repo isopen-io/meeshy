@@ -58,7 +58,7 @@ object ComposerObjectChips {
         if (!textAlign.isNullOrEmpty()) {
             add(Chip("align", textAlign.lowercase(), reaches(ComposerObjectEditorSection.Tool(TextEditTool.ALIGN), ComposerObjectKind.TEXT)))
         }
-        windowChip(start, duration, ComposerObjectKind.TEXT)?.let(::add)
+        windowChip(start, duration, ComposerObjectKind.TEXT)?.let { add(it) }
     }
 
     fun mediaChips(
@@ -70,23 +70,23 @@ object ComposerObjectChips {
         duration: Double?,
     ): List<Chip> = buildList {
         add(sizeChip(scale))
-        rotationChip(rotation)?.let(::add)
-        if (isVideo) volumeChip(volume)?.let(::add)
-        windowChip(start, duration, ComposerObjectKind.MEDIA)?.let(::add)
+        rotationChip(rotation)?.let { add(it) }
+        if (isVideo) volumeChip(volume)?.let { add(it) }
+        windowChip(start, duration, ComposerObjectKind.MEDIA)?.let { add(it) }
     }
 
     fun audioChips(scale: Double, rotation: Double, volume: Double, start: Double?, duration: Double?): List<Chip> =
         buildList {
             add(sizeChip(scale))
-            rotationChip(rotation)?.let(::add)
-            volumeChip(volume)?.let(::add)
-            windowChip(start, duration, ComposerObjectKind.AUDIO)?.let(::add)
+            rotationChip(rotation)?.let { add(it) }
+            volumeChip(volume)?.let { add(it) }
+            windowChip(start, duration, ComposerObjectKind.AUDIO)?.let { add(it) }
         }
 
     fun stickerChips(scale: Double, rotation: Double, start: Double?, duration: Double?): List<Chip> =
         buildList {
             add(sizeChip(scale))
-            rotationChip(rotation)?.let(::add)
-            windowChip(start, duration, ComposerObjectKind.STICKER)?.let(::add)
+            rotationChip(rotation)?.let { add(it) }
+            windowChip(start, duration, ComposerObjectKind.STICKER)?.let { add(it) }
         }
 }

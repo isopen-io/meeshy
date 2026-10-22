@@ -8,7 +8,7 @@ sealed class ComposerInlineFamily {
     data object Audio : ComposerInlineFamily()
     data object Sticker : ComposerInlineFamily()
     data object Place : ComposerInlineFamily()
-    data class Background(val isVideo: Boolean) : ComposerInlineFamily()
+    data class Background(val video: Boolean) : ComposerInlineFamily()
 
     val sceneKind: ComposerObjectKind
         get() = when (this) {
@@ -22,7 +22,7 @@ sealed class ComposerInlineFamily {
     val isVideo: Boolean
         get() = when (this) {
             Video -> true
-            is Background -> isVideo
+            is Background -> video
             Text, Image, Audio, Sticker, Place -> false
         }
 
