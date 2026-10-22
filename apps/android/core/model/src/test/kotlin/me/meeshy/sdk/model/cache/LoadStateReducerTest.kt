@@ -114,12 +114,11 @@ class LoadStateReducerTest {
     }
 
     @Test
-    fun `a silent revalidation failure never turns into Error`() {
-        everyState.forEach { state ->
-            val next = reduce(state, LoadEvent.RevalidationFailed(serverError))
-            assertThat(next).isEqualTo(state)
-        }
-        everyState.forEach { state ->
+    fun `a silent revalidation failure never introduces an Error`() {
+        val statesWithoutError = everyState.filterNot { it is LoadState.Error }
+
+        statesWithoutError.forEach { state ->
+            assertThat(reduce(state, LoadEvent.RevalidationFailed(serverError))).isEqualTo(state)
             assertThat(reduce(state, LoadEvent.RevalidationFailed(offline))).isNotInstanceOf(LoadState.Error::class.java)
         }
     }

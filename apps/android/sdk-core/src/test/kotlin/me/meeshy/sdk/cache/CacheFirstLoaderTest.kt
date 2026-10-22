@@ -328,13 +328,13 @@ class CacheFirstLoaderTest {
     fun `leaving the screen cancels the silent revalidation and persists nothing`() = runTest {
         val store = FakeStore(cached = stale("old"))
         val fetchStarted = CompletableDeferred<Unit>()
-        var fetchCancelled = false
+        val fetchCancelled = CompletableDeferred<Unit>()
         val hanging: suspend () -> NetworkResult<List<String>> = {
             fetchStarted.complete(Unit)
             try {
                 awaitCancellation()
             } finally {
-                fetchCancelled = true
+                fetchCancelled.complete(Unit)
             }
         }
 
@@ -344,20 +344,20 @@ class CacheFirstLoaderTest {
             cancelAndIgnoreRemainingEvents()
         }
 
-        assertThat(fetchCancelled).isTrue()
+        fetchCancelled.await()
         assertThat(store.saved).isEmpty()
     }
 
     @Test
     fun `leaving the screen cancels a pull-to-refresh in flight without reporting an error`() = runTest {
         val fetchStarted = CompletableDeferred<Unit>()
-        var fetchCancelled = false
+        val fetchCancelled = CompletableDeferred<Unit>()
         val hanging: suspend () -> NetworkResult<List<String>> = {
             fetchStarted.complete(Unit)
             try {
                 awaitCancellation()
             } finally {
-                fetchCancelled = true
+                fetchCancelled.complete(Unit)
             }
         }
 
@@ -366,7 +366,7 @@ class CacheFirstLoaderTest {
             cancel()
         }
 
-        assertThat(fetchCancelled).isTrue()
+        fetchCancelled.await()
     }
 
     // ── Folding the events into a screen state ─────────────────────────────────
