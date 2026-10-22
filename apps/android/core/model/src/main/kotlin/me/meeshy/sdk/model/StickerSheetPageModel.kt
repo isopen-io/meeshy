@@ -42,13 +42,15 @@ object StickerSheetPageModel {
      * - [installed] : les packs installés, `null` tant qu'on ne sait pas — les trois intégrés le sont
      *   alors par défaut.
      * - [hasPackPick] : l'hôte sait poser un sticker de tiers.
-     * - [hasShop] : l'hôte sert la Boutique. Une capacité absente RETIRE l'onglet, elle ne le grise pas.
+     * - [hasShop] : l'hôte sert la Boutique ; [hasCustom] : il sert l'onglet Personnalisés.
+     *   Une capacité absente RETIRE l'onglet, elle ne le grise pas.
      */
     fun offered(
         hasMee: Boolean,
         installed: List<StickerPackInfo>?,
         hasPackPick: Boolean,
         hasShop: Boolean,
+        hasCustom: Boolean = true,
     ): List<StickerSheetPage> {
         val installedSlugs = installed?.map { it.slug }?.toSet()
         val builtins = if (hasMee) {
@@ -67,10 +69,9 @@ object StickerSheetPageModel {
         }
         val lead = listOf(StickerSheetTab.SEARCH, StickerSheetTab.FAVORITES, StickerSheetTab.RECENTS)
             .map(StickerSheetPage::Fixed)
-        val tail = listOf<StickerSheetPage>(
-            StickerSheetPage.Fixed(StickerSheetTab.CUSTOM),
-            StickerSheetPage.Fixed(StickerSheetTab.SMILEYS),
-        ) + if (hasShop) listOf(StickerSheetPage.Shop) else emptyList()
+        val tail = (if (hasCustom) listOf<StickerSheetPage>(StickerSheetPage.Fixed(StickerSheetTab.CUSTOM)) else emptyList()) +
+            StickerSheetPage.Fixed(StickerSheetTab.SMILEYS) +
+            (if (hasShop) listOf(StickerSheetPage.Shop) else emptyList())
         return lead + builtins + thirdParty + tail
     }
 

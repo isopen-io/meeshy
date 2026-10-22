@@ -23,4 +23,14 @@ sealed interface StickerSheetChoice {
             is Mee -> StickerUsageEntry.mee(stickerId)
             is Instant, is PackItem -> null
         }
+
+    companion object {
+        /** Le choix qu'une entrée des Favoris ou des Récents rejoue. */
+        fun from(entry: StickerUsageEntry): StickerSheetChoice = when (entry.kind) {
+            StickerUsageEntry.Kind.EMOJI -> Emoji(entry.value)
+            StickerUsageEntry.Kind.TEMPLATE -> Template(entry.value)
+            StickerUsageEntry.Kind.LIBRARY -> Library(entry.value)
+            StickerUsageEntry.Kind.MEE -> Mee(entry.value)
+        }
+    }
 }

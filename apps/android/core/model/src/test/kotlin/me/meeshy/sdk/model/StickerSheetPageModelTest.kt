@@ -20,6 +20,13 @@ class StickerSheetPageModelTest {
     }
 
     @Test
+    fun `sans l'onglet personnalises de l'hote, il est retire et non grise`() {
+        val pages = StickerSheetPageModel.offered(false, null, false, false, hasCustom = false)
+        assertThat(pages).doesNotContain(fixed(StickerSheetTab.CUSTOM))
+        assertThat(pages.last()).isEqualTo(fixed(StickerSheetTab.SMILEYS))
+    }
+
+    @Test
     fun `les packs integres sont installes par defaut tant qu'on ne sait pas, puis les packs de tiers, puis la boutique en fin`() {
         val pages = StickerSheetPageModel.offered(true, null, hasPackPick = true, hasShop = true)
         assertThat(pages.filterIsInstance<StickerSheetPage.Pack>().map { it.slug })
@@ -78,6 +85,18 @@ class StickerSheetPageModelTest {
         assertThat(StickerSheetChoice.Mee("m").usageEntry).isEqualTo(StickerUsageEntry.mee("m"))
         assertThat(StickerSheetChoice.Instant("i").usageEntry).isNull()
         assertThat(StickerSheetChoice.PackItem("p", "x").usageEntry).isNull()
+    }
+
+    @Test
+    fun `une entree rejouee redonne le meme choix`() {
+        listOf(
+            StickerSheetChoice.Emoji("😀"),
+            StickerSheetChoice.Template("t"),
+            StickerSheetChoice.Library("l"),
+            StickerSheetChoice.Mee("m"),
+        ).forEach { choice ->
+            assertThat(StickerSheetChoice.from(choice.usageEntry!!)).isEqualTo(choice)
+        }
     }
 }
 
