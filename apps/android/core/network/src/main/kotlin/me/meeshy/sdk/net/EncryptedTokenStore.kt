@@ -16,8 +16,9 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
 
     private val vault = EncryptedAccountTokenVault(store)
 
-    private val adoptedOnce: Unit by lazy {
-        store.get(KEY_USER_ID)?.let(vault::adoptLegacyTokens)
+    private val adoption = lazy {
+        store.get(KEY_USER_ID)?.let { vault.adoptLegacyTokens(it) }
+        true
     }
 
     override var jwt: String?
@@ -49,12 +50,12 @@ class EncryptedTokenStore(private val store: SecureStore) : TokenStore {
     }
 
     private fun read(key: String): String? {
-        adoptedOnce
+        adoption.value
         return store.get(key, store.get(KEY_USER_ID)) ?: store.get(key)
     }
 
     private fun write(key: String, value: String?) {
-        adoptedOnce
+        adoption.value
         val account = store.get(KEY_USER_ID)
         if (value == null) {
             store.remove(key, account)
