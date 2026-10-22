@@ -1,20 +1,102 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+/**
+ * Corps de `POST /users/register-device-token` — le schéma de la passerelle
+ * (`routes/push-tokens.ts`, `registerDeviceTokenSchema`).
+ *
+ * Android n'est JAMAIS `apns` : son jeton est un jeton FCM, et la passerelle
+ * route l'envoi d'après `type`. `platform` est REQUIS côté serveur ; `platform`
+ * et `type` valent leur défaut ici, et `MeeshyApi.json` n'encode pas les
+ * défauts — d'où `@EncodeDefault`, sans lequel le corps partirait sans
+ * `platform` et la passerelle répondrait 400.
+ *
+ * Les longueurs sont bornées par le schéma (un dépassement est un 400, donc
+ * aucun push pour cet appareil) : [fcm] est la fabrique qui les applique.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class RegisterDeviceTokenRequest(
     val token: String,
-    val platform: String = "ios",
-    val type: String = "apns",
-    val apnsEnvironment: String? = null,
-)
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val platform: String = PLATFORM_ANDROID,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val type: String = TYPE_FCM,
+    val deviceId: String? = null,
+    val deviceName: String? = null,
+    val appVersion: String? = null,
+    val bundleId: String? = null,
+) {
+    companion object {
+        const val PLATFORM_ANDROID = "android"
+        const val TYPE_FCM = "fcm"
+        const val DEVICE_ID_MAX = 255
+        const val DEVICE_NAME_MAX = 100
+        const val APP_VERSION_MAX = 50
+        const val BUNDLE_ID_MAX = 255
 
+        /**
+         * La requête d'un jeton FCM Android : champs optionnels vides retirés,
+         * longueurs ramenées aux bornes de la passerelle.
+         */
+        fun fcm(
+            token: String,
+            deviceId: String? = null,
+            deviceName: String? = null,
+            appVersion: String? = null,
+            bundleId: String? = null,
+        ): RegisterDeviceTokenRequest = RegisterDeviceTokenRequest(
+            token = token,
+            deviceId = deviceId.cappedOrNull(DEVICE_ID_MAX),
+            deviceName = deviceName.cappedOrNull(DEVICE_NAME_MAX),
+            appVersion = appVersion.cappedOrNull(APP_VERSION_MAX),
+            bundleId = bundleId.cappedOrNull(BUNDLE_ID_MAX),
+        )
+
+        /**
+         * `null` pour un texte vide, sinon le texte coupé à [max] unités UTF-16
+         * — la mesure de `maxLength` côté serveur. Une coupe qui laisserait une
+         * moitié de paire de substitution la retire : un emoji tronqué n'est
+         * pas un UTF-8 valide.
+         */
+        private fun String?.cappedOrNull(max: Int): String? {
+            val text = this?.takeIf { it.isNotBlank() } ?: return null
+            if (text.length <= max) return text
+            val cut = text.substring(0, max)
+            return if (cut.last().isHighSurrogate()) cut.dropLast(1) else cut
+        }
+    }
+}
+
+/**
+ * Corps de `DELETE /users/register-device-token`.
+ *
+ * La passerelle, face à un corps qui ne nomme NI `token` NI `deviceId`,
+ * SUPPRIME tous les jetons de l'utilisateur (« logout from all devices »). Un
+ * `{}` envoyé par mégarde déconnecterait donc ses autres appareils : le
+ * constructeur refuse ce corps, et les deux fabriques sont la seule façon
+ * courante de le construire.
+ */
 @Serializable
 data class UnregisterDeviceTokenRequest(
-    val token: String,
-)
+    val token: String? = null,
+    val deviceId: String? = null,
+) {
+    init {
+        require(!token.isNullOrBlank() || !deviceId.isNullOrBlank()) {
+            "Un désenregistrement sans token ni deviceId viserait tous les appareils du compte"
+        }
+    }
+
+    companion object {
+        fun byToken(token: String): UnregisterDeviceTokenRequest = UnregisterDeviceTokenRequest(token = token)
+
+        fun byDeviceId(deviceId: String): UnregisterDeviceTokenRequest =
+            UnregisterDeviceTokenRequest(deviceId = deviceId)
+    }
+}
 
 @Serializable
 data class RegisterDeviceTokenResponse(
@@ -23,6 +105,13 @@ data class RegisterDeviceTokenResponse(
     val platform: String? = null,
     val deviceName: String? = null,
     val isNew: Boolean? = null,
+    val message: String? = null,
+)
+
+/** `data` de `DELETE /users/register-device-token` — combien de jetons la passerelle a supprimés. */
+@Serializable
+data class UnregisterDeviceTokenResponse(
+    val deletedCount: Int? = null,
     val message: String? = null,
 )
 
@@ -279,4 +368,38 @@ data class UnreadCountResponse(
 data class MarkReadResponse(
     val success: Boolean = false,
     val count: Int? = null,
+)
+
+/**
+ * `data` de `GET /notifications/counts` — les totaux de TOUTE la boîte, groupés
+ * par type BRUT (`byType`), calculés sur le même prédicat de visibilité que la
+ * liste : un onglet qui annonce « 3 » ne peut pas en montrer deux.
+ */
+@Serializable
+data class NotificationCounts(
+    val total: Int = 0,
+    val unread: Int = 0,
+    val byType: Map<String, Int> = emptyMap(),
+)
+
+/**
+ * Corps de `POST /notifications/read-by-types`. La passerelle borne la liste
+ * (`minItems` 1, `maxItems` 30) : [NotificationTypeSelection.readBatches] est la
+ * fabrique qui normalise et découpe, le constructeur refuse une liste hors borne.
+ */
+@Serializable
+data class ReadNotificationsByTypesRequest(val types: List<String>) {
+    init {
+        require(types.size in 1..MAX_TYPES) { "types doit compter entre 1 et $MAX_TYPES éléments" }
+    }
+
+    companion object {
+        const val MAX_TYPES = 30
+    }
+}
+
+/** `data` des accusés de réception de conversation (`mark-as-received`, `mark-as-read`) : le nombre de lignes touchées. */
+@Serializable
+data class MarkedCountResult(
+    val markedCount: Int? = null,
 )

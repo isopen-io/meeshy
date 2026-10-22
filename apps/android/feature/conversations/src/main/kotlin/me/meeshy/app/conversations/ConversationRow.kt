@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import me.meeshy.feature.conversations.R
 import me.meeshy.sdk.conversation.LocalMessage
 import me.meeshy.sdk.lang.LanguageResolver
+import me.meeshy.ui.component.media.rememberMediaKindStrings
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.model.CategoryOption
 import me.meeshy.sdk.model.ConversationDraft
@@ -248,11 +249,11 @@ private fun ConversationRowContent(
     val isCreator = conversation.currentUserRole(currentUserId) == MemberRole.CREATOR
     var menuExpanded by remember { mutableStateOf(false) }
     val previewLabels = LastMessagePreviewLabels(
-        photo = stringResource(R.string.conversations_preview_photo),
-        video = stringResource(R.string.conversations_preview_video),
-        voice = stringResource(R.string.conversations_preview_voice),
-        file = stringResource(R.string.conversations_preview_file),
-        location = stringResource(R.string.conversations_preview_location),
+        photo = "",
+        video = "",
+        voice = "",
+        file = "",
+        location = "",
         none = stringResource(R.string.conversations_no_messages),
         you = stringResource(R.string.conversations_preview_you),
         senderFormat = stringResource(R.string.conversations_preview_sender_format),
@@ -260,7 +261,7 @@ private fun ConversationRowContent(
         expired = stringResource(R.string.conversations_preview_expired),
         hidden = stringResource(R.string.conversations_preview_hidden),
         viewOnce = stringResource(R.string.conversations_preview_view_once),
-    )
+    ).withMediaKinds(rememberMediaKindStrings())
     val draftLine = draftPreview(draft, previewLabels)
     val typingLine = typingPreview(
         typingDisplayName,
