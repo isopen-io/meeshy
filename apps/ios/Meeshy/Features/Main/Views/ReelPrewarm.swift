@@ -247,9 +247,13 @@ final class ReelPagerPreloader {
 
     private var clock = ReelPreloadWindow.VisitClock()
     private let center: AttachmentDownloadCenter
+    /// Hors du premier plan, la fenêtre ne télécharge ni ne prépare plus rien ;
+    /// elle repart au retour (#11284).
+    private let activity: PreloadActivityGate
 
-    init(center: AttachmentDownloadCenter = .shared) {
+    init(center: AttachmentDownloadCenter = .shared, activity: PreloadActivityGate = .shared) {
         self.center = center
+        self.activity = activity
     }
 
     /// Note l'arrivée sur `index` (temps passé sur le réel quitté, sens du
@@ -299,9 +303,17 @@ final class ReelPagerPreloader {
     }
 
     /// Prépare la fenêtre autour de `activeIndex`, palier par palier.
-    /// Annulable à tout instant : le balayage suivant relance le tout.
+    /// Annulable à tout instant : le balayage suivant relance le tout. L'app qui
+    /// quitte le premier plan (ou dont l'écran est couvert) l'arrête, son retour
+    /// la relance (`PreloadActivityGate`, #11284).
     func prepare(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) async {
         retire(reels: reels, activeIndex: activeIndex, window: window)
+        await activity.runWhileActive { [self] in
+            await self.prepareWindow(reels: reels, activeIndex: activeIndex, window: window)
+        }
+    }
+
+    private func prepareWindow(reels: [FeedPost], activeIndex: Int, window: ReelPreloadWindow.Window) async {
         guard MediaThermalPolicy.shouldPrefetchVideo(
             thermalState: ProcessInfo.processInfo.thermalState
         ) else { return }
