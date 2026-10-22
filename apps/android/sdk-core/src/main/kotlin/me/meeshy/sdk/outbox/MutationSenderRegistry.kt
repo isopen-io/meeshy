@@ -1,13 +1,14 @@
 package me.meeshy.sdk.outbox
 
 import me.meeshy.core.database.entity.OutboxEntity
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
  * The outbox's per-kind registry (ARCHITECTURE.md §5; ADR-006): the Hilt multibinding
  * of [OutboxKindHandler]s keyed by [OutboxKindKey], plus what the flush worker derives
- * from it. The worker holds no `when` over [OutboxKind] — it asks this registry for a
- * drainer and for the lanes to sweep.
+ * from it. The worker holds no `when` over [OutboxKind] — it asks this registry to
+ * drain every lane.
  */
 public class MutationSenderRegistry @Inject constructor(
     private val handlers: Map<OutboxKind, @JvmSuppressWildcards OutboxKindHandler>,
@@ -35,9 +36,25 @@ public class MutationSenderRegistry @Inject constructor(
         OutboxDrainer(
             outbox = outbox,
             senders = handlers,
-            onExhausted = ::onExhausted,
+            onExhausted = { row -> this.onExhausted(row) },
             graftProducedId = OutboxPayloadGrafts.firstOf(
                 *handlers.values.mapNotNull { it.payloadGraft }.toTypedArray(),
             ),
         )
+
+    /**
+     * One full flush pass over [outbox]: the dynamic per-conversation message lanes
+     * (only known once rows are queued, so discovered via
+     * [OutboxRepository.activeMessageLanes]) first, then every [sharedLanes] entry.
+     * Lanes drain independently, so a transient failure on one never blocks another.
+     */
+    public suspend fun drainAll(outbox: OutboxRepository): List<DrainReport> {
+        val drainer = drainerFor(outbox)
+        val lanes = outbox.activeMessageLanes() + sharedLanes
+        return lanes.map { lane ->
+            drainer.drainLane(lane).also { report ->
+                Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
+            }
+        }
+    }
 }
