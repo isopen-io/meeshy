@@ -26,10 +26,27 @@ fun <T> cacheFirstFlow(
     clock: CacheClock = SystemCacheClock,
     onRevalidateError: (Throwable) -> Unit = {},
 ): Flow<CacheResult<T>> =
-    combine(
-        source.observe(),
-        source.lastSyncedAt(),
-    ) { data, syncedAt -> data to syncedAt }
+    cacheFirstFlowOf(
+        policy = policy,
+        snapshots = combine(source.observe(), source.lastSyncedAt()) { data, syncedAt -> data to syncedAt },
+        revalidate = source::revalidate,
+        clock = clock,
+        onRevalidateError = onRevalidateError,
+    )
+
+/**
+ * The same stale-while-revalidate classification over [snapshots] — (data, last sync instant)
+ * pairs read TOGETHER. A source whose data and instant live in one row passes that row here, so
+ * a fresh value is never paired with the previous instant (a transient Stale that would refetch).
+ */
+fun <T> cacheFirstFlowOf(
+    policy: CachePolicy,
+    snapshots: Flow<Pair<T?, Long?>>,
+    revalidate: suspend () -> Unit,
+    clock: CacheClock = SystemCacheClock,
+    onRevalidateError: (Throwable) -> Unit = {},
+): Flow<CacheResult<T>> =
+    snapshots
         .distinctUntilChanged()
         .transformLatest { (data, syncedAt) ->
             val ageMillis = syncedAt
@@ -38,15 +55,15 @@ fun <T> cacheFirstFlow(
 
             val result = classifyCache(data, ageMillis, policy)
             emit(result)
-            if (result !is CacheResult.Fresh) revalidateSafe(source, onRevalidateError)
+            if (result !is CacheResult.Fresh) revalidateSafe(revalidate, onRevalidateError)
         }
 
-private suspend fun <T> revalidateSafe(
-    source: SwrCacheSource<T>,
+private suspend fun revalidateSafe(
+    revalidate: suspend () -> Unit,
     onError: (Throwable) -> Unit,
 ) {
     try {
-        source.revalidate()
+        revalidate()
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {

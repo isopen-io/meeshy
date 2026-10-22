@@ -1,7 +1,7 @@
 package me.meeshy.app.calls
 
-import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.call.IncomingCallAnswer
+import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /** The gate runs a media action now when the mic is granted, otherwise asks and runs it on the grant. */
