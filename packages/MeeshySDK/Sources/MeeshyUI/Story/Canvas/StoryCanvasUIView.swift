@@ -523,8 +523,8 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Audio
 
-    /// Sample-accurate foreground+background audio engine for mode `.play`.
-    let audioMixer = ReaderAudioMixer()
+    /// Sample-accurate foreground+background audio, on the reader's SHARED engine (#9878).
+    let audioMixer = ReaderAudioMixer(engineHost: .reader)
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public internal(set) var isAudioMuted: Bool = false

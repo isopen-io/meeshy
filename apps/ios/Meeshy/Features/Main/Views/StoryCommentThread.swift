@@ -12,8 +12,8 @@ struct StoryCommentThread: View {
     let replies: [FeedComment]
     let isExpanded: Bool
     let isLoadingReplies: Bool
-    let userLang: String
-    let makeRow: (FeedComment, String) -> StoryCommentRowView
+    let readerLanguages: [String]
+    let makeRow: (FeedComment, [String]) -> StoryCommentRowView
     let onToggleThread: () -> Void
     /// Vrai quand le serveur a d'autres pages de réponses au-delà de celles
     /// chargées (endpoint replies paginé à 20) — affiche « Voir plus de
@@ -22,13 +22,13 @@ struct StoryCommentThread: View {
     var onLoadMoreReplies: (@MainActor () async -> Void)? = nil
 
     var body: some View {
-        makeRow(comment, userLang)
+        makeRow(comment, readerLanguages)
             .id(comment.id)
 
         let autoPreview = Array(replies.prefix(2))
         if !autoPreview.isEmpty && !isExpanded {
             ForEach(autoPreview) { reply in
-                makeRow(reply, userLang)
+                makeRow(reply, readerLanguages)
                     .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }
@@ -65,7 +65,7 @@ struct StoryCommentThread: View {
             }
 
             ForEach(replies) { reply in
-                makeRow(reply, userLang)
+                makeRow(reply, readerLanguages)
                     .padding(.leading, MeeshySpacing.xxxl)
                     .id(reply.id)
             }

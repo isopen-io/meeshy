@@ -43,19 +43,25 @@ final class ReduceMotionComplianceTests: XCTestCase {
     }
 
     private static let conversationRow = "Meeshy/Features/Main/Views/ThemedConversationRow.swift"
+    /// L'unique indicateur de frappe (#9891) : les rangées et la bulle le montent.
+    private static let typingDots = "../../packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyTypingDots.swift"
     private static let syncPill = "Meeshy/Features/Main/Components/SyncPill.swift"
 
     // MARK: - Every unstoppable animation must be reachable by the setting
 
     func test_typingDots_honourReduceMotion() throws {
-        let code = codeLines(try source(Self.conversationRow))
+        let code = codeLines(try source(Self.typingDots))
 
+        XCTAssertTrue(
+            codeLines(try source(Self.conversationRow)).contains("MeeshyTypingDots(color:"),
+            "The conversation list mounts the single typing indicator of the SDK."
+        )
         XCTAssertTrue(
             code.contains("@Environment(\\.accessibilityReduceMotion)"),
             "The typing dots run `.repeatForever` in the conversation list — the setting must reach them."
         )
         XCTAssertTrue(
-            code.contains("reduceMotion ? nil :"),
+            code.contains("restsStill ? nil :"),
             "Under Reduce Motion the animation must be nil, not merely shortened: a repeating " +
             "animation with a smaller duration still never stops."
         )
@@ -80,11 +86,11 @@ final class ReduceMotionComplianceTests: XCTestCase {
     /// scale. Frozen at that phase they would read as disabled, so the static
     /// state has to be the full-strength one.
     func test_reducedMotionKeepsTheIndicatorsLegible() throws {
-        let row = codeLines(try source(Self.conversationRow))
+        let row = codeLines(try source(Self.typingDots))
         let pill = codeLines(try source(Self.syncPill))
 
         XCTAssertTrue(
-            row.contains("reduceMotion ? 1.0 :"),
+            row.contains("restsStill || isAnimating ? 1.0 : 0.5"),
             "With motion off the typing dots must rest at full scale and opacity, not at the " +
             "animation's dimmed low phase."
         )
@@ -92,6 +98,27 @@ final class ReduceMotionComplianceTests: XCTestCase {
             pill.contains("reduceMotion ? 1.0 :"),
             "Same for the sync dot: no motion, but still plainly visible."
         )
+    }
+
+    /// **Une seule implémentation des points de frappe** (#9891). Trois copies
+    /// vivaient côté app ; une quatrième se reconnaîtrait à sa cadence
+    /// (« 0.18 » de décalage par point) posée hors de l'atome du SDK.
+    func test_typingDotsHaveASingleImplementation() throws {
+        let appRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy")
+        let walker = try XCTUnwrap(FileManager.default.enumerator(at: appRoot, includingPropertiesForKeys: nil))
+        let files = walker.compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
+        XCTAssertGreaterThan(files.count, 500, "the sweep must see the app sources")
+
+        let copies = try files.filter { file in
+            let code = codeLines(try String(contentsOf: file, encoding: .utf8))
+            return code.contains("repeatForever") && code.contains("Double(i) * 0.18")
+        }.map(\.lastPathComponent)
+        XCTAssertEqual(copies, [], "typing dots are `MeeshyTypingDots` (SDK) — never a local copy")
     }
 
     // MARK: - L'ancien décor d'inscription (#5218)

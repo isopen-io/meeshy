@@ -147,3 +147,42 @@ final class CallAudioRouteService: CallAudioRouteProviding {
         try session.setPreferredInput(port)
     }
 }
+
+// MARK: - Isolation vocale (#11295)
+
+/// **Les modes micro du système, depuis le panneau d'appel.** iOS n'expose
+/// aucun réglage programmatique du mode (`activeMicrophoneMode` est en lecture
+/// seule) ; il expose en revanche la feuille système qui le règle
+/// (`showSystemUserInterface(.microphoneModes)`, iOS 15+). Le panneau l'ouvre
+/// en un geste et dit le mode actif.
+enum CallMicrophoneMode: Equatable {
+    case standard
+    case voiceIsolation
+    case wideSpectrum
+
+    init(_ mode: AVCaptureDevice.MicrophoneMode) {
+        switch mode {
+        case .voiceIsolation: self = .voiceIsolation
+        case .wideSpectrum: self = .wideSpectrum
+        default: self = .standard
+        }
+    }
+
+    static var current: CallMicrophoneMode { CallMicrophoneMode(AVCaptureDevice.activeMicrophoneMode) }
+
+    var isolatesVoice: Bool { self == .voiceIsolation }
+
+    var menuTitle: String {
+        isolatesVoice
+            ? String(localized: "call.control.voiceIsolation.on", defaultValue: "Isolation vocale activée", bundle: .main)
+            : String(localized: "call.control.voiceIsolation", defaultValue: "Isolation vocale", bundle: .main)
+    }
+
+    var symbolName: String { isolatesVoice ? "checkmark" : "waveform" }
+
+    static func presentSystemModes() {
+        HapticFeedback.light()
+        AVCaptureDevice.showSystemUserInterface(.microphoneModes)
+    }
+}
+

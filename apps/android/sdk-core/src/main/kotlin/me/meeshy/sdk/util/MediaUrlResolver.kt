@@ -139,3 +139,13 @@ private fun encodePathSegments(chemin: String): String =
             }
         }.joinToString("")
     }
+
+/**
+ * Comme [resolveMediaUrl], mais refuse (`null`) toute adresse que [MediaUrlPolicy] n'accepte pas :
+ * l'appelant ne lance alors AUCUNE requête (protection SSRF, miroir de `MeeshyConfig.resolveMediaURL`).
+ */
+fun resolveSafeMediaUrl(url: String, apiBaseUrl: String?): String? {
+    val resolved = if (url.startsWith("file:")) url else resolveMediaUrl(url, apiBaseUrl)
+    val local = me.meeshy.sdk.model.net.MediaUrlPolicy.isLocalEnvironment(apiBaseUrl)
+    return resolved.takeIf { me.meeshy.sdk.model.net.MediaUrlPolicy.isAllowed(it, local) }
+}

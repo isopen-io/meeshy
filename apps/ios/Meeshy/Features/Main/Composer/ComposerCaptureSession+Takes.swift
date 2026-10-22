@@ -264,10 +264,10 @@ extension ComposerCaptureSession {
     nonisolated static func renderedPhotoBytes(_ data: Data?, fallback: UIImage?, look: ComposerPhotoLook,
                                                aspect: CGFloat, person: CallFramePerson, date: Date,
                                                scenes: any ComposerLookSceneProviding) async -> Data? {
-        guard let debout = data.flatMap(uprightImage) ?? fallback.flatMap(ComposerPhotoLookSource.upright),
-              let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity, aspect: aspect,
-                                                                person: person, date: date, scenes: scenes)
-        else { return nil }
+        guard let debout = data.flatMap(uprightImage) ?? fallback.flatMap(ComposerPhotoLookSource.upright) else { return nil }
+        if let prise = ComposerPhotoEncoding.untouchedTake(data, of: debout, paints: ComposerLiveLookRule.rendersLive(look), aspect: aspect) { return prise }
+        guard let rendu = await ComposerLookPainter.renderPhoto(debout, look: look, framing: .identity, aspect: aspect,
+                                                                person: person, date: date, scenes: scenes) else { return nil }
         return await ComposerPhotoEncoding.encode(rendu, like: data)
     }
 

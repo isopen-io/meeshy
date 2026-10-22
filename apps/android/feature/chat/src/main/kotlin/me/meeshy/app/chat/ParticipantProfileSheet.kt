@@ -69,7 +69,7 @@ import java.util.Date
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ParticipantProfileSheet(
+internal fun ParticipantProfileSheet(
     conversationId: String,
     participantId: String,
     displayName: String,

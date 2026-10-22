@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 import PhotosUI
 import AVFoundation
+import ImageIO
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -387,14 +388,14 @@ extension ConversationView {
             // Le fichier nous appartient ; une fois les octets en mémoire
             // (ou le décodage refusé), la copie disque ne sert plus.
             try? FileManager.default.removeItem(at: url)
-            guard let data, let image = UIImage(data: data) else {
+            guard let data, let source = CGImageSourceCreateWithData(data as CFData, nil), CGImageSourceGetCount(source) > 0 else {
                 // Pas de tuile fantôme : on refuse et on le dit.
                 Logger.messages.error("Ingestion image impossible (lecture ou décodage) pour \(name, privacy: .public)")
                 ComposerIngestFeedback.showFailure(names: [name])
                 return
             }
-            let prep = AttachmentPreparationService.shared.prepareImage(
-                image,
+            let prep = AttachmentPreparationService.shared.prepareImageData(
+                data,
                 context: .message,
                 accentColor: accentColor
             )
@@ -443,12 +444,10 @@ extension ConversationView {
         return prep
     }
 
-    func handleCameraCapture(_ image: UIImage, capturedInApp: Bool = false) {
-        let prep = AttachmentPreparationService.shared.prepareImage(
-            image,
-            context: .message,
-            accentColor: accentColor
-        )
+    /// Les OCTETS de la prise, quand l'objectif les a rendus, partent sans seconde génération d'encodage (#9885).
+    func handleCameraCapture(_ image: UIImage, data: Data? = nil, capturedInApp: Bool = false) {
+        let prep = data.map { AttachmentPreparationService.shared.prepareImageData($0, context: .message, accentColor: accentColor) }
+            ?? AttachmentPreparationService.shared.prepareImage(image, context: .message, accentColor: accentColor)
         trackPreparation(prep, capturedInApp: capturedInApp)
     }
 

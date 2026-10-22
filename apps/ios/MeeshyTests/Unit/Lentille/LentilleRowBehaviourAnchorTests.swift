@@ -75,22 +75,28 @@ final class LentilleRowBehaviourAnchorTests: XCTestCase {
 
     // MARK: - L01 — typing multi-membres : reduce-motion (réel) + dot de présence forcé vert (FERMÉ, V3ter)
 
-    /// Volet RÉEL de L01 : `LentilleTypingDots` respecte Reduce Motion — au
-    /// repos à la phase HAUTE (`scaleEffect`/`opacity` à `1.0`), jamais figée
-    /// à mi-animation (`0.5`/`0.4`). La sélection DÉTERMINISTE du typeur
-    /// affiché (l'autre volet « sélection déterministe » de L01) est
+    /// Volet RÉEL de L01 : les points de frappe du rang respectent Reduce
+    /// Motion — au repos à la phase HAUTE (`scaleEffect`/`opacity` à `1.0`),
+    /// jamais figés à mi-animation (`0.5`/`0.4`). Depuis #9891, le rang monte
+    /// l'unique indicateur du SDK (`MeeshyTypingDots`) au lieu de sa copie
+    /// `LentilleTypingDots` : la garde suit la règle là où elle vit désormais.
+    /// La sélection DÉTERMINISTE du typeur affiché (l'autre volet de L01) est
     /// couverte par `ConversationListViewModelTests
-    /// .test_typingSelection_pickIsDeterministicAndNilWhenEmpty` (logique
-    /// PARTAGÉE, hors `Lentille/**` — la Lentille consomme
-    /// `typingUsername` déjà résolu, elle ne réimplémente pas la sélection).
+    /// .test_typingSelection_pickIsDeterministicAndNilWhenEmpty`.
     func test_L01_typingDots_restAtTheHighPhase_underReduceMotion() throws {
-        let code = normalizedCode(try rowSource())
+        let row = normalizedCode(try rowSource())
+        let dots = normalizedCode(try source(at: "../../packages/MeeshySDK/Sources/MeeshyUI/Primitives/MeeshyTypingDots.swift"))
         XCTAssertTrue(
-            code.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"),
-            "LentilleTypingDots doit lire @Environment(\\.accessibilityReduceMotion) — L01, « TypingDotsView conservé (reduce-motion-aware) »."
+            row.contains("MeeshyTypingDots(color: Color(hex: accentColorHex))"),
+            "Le rang monte l'unique indicateur de frappe du SDK — L01, #9891."
+        )
+        XCTAssertFalse(row.contains("struct LentilleTypingDots"), "La copie locale des points ne revient pas — #9891.")
+        XCTAssertTrue(
+            dots.contains("@Environment(\\.accessibilityReduceMotion) private var reduceMotion"),
+            "Les points doivent lire @Environment(\\.accessibilityReduceMotion) — L01."
         )
         XCTAssertTrue(
-            code.contains(".scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))"),
+            dots.contains("restsStill || isAnimating ? 1.0 : 0.5"),
             "Sous Reduce Motion, les points doivent rester à l'échelle 1.0 (phase HAUTE), jamais figés à mi-animation (0.5) — L01."
         )
     }

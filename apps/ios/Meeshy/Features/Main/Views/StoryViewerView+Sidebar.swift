@@ -305,6 +305,7 @@ struct StoryActionSidebarView: View {
         guard demanderComposer != nil, !isOwnStory, let story = currentStory else { return nil }
         return ComposerSeedTarget(
             story: story,
+            // Défaut de COMPOSITION (langue proposée au composer, repli « fr ») — pas une lecture (#11832).
             preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         )
     }

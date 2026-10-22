@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -402,7 +403,11 @@ private fun ConversationHitRow(conversation: ApiConversation, currentUserId: Str
             )
             if (conversation.memberCount > 2) {
                 Text(
-                    text = stringResource(R.string.global_search_members, conversation.memberCount),
+                    text = pluralStringResource(
+                        R.plurals.global_search_members,
+                        conversation.memberCount,
+                        conversation.memberCount,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MeeshyTheme.tokens.textMuted,
                     maxLines = 1,

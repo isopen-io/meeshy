@@ -418,42 +418,6 @@ struct ThemedConversationRow: View {
 
     // MARK: - Typing Indicator
 
-    private struct TypingDotsView: View {
-        let accentColor: String
-        // These dots pulse with `.repeatForever` — an animation that never ends
-        // on its own — right in the conversation list. Sustained motion of that
-        // kind is what Reduce Motion exists to stop (vestibular disorders), so
-        // the setting has to reach here. `@Environment` and not an observed
-        // singleton: this is a leaf view rendered once per row.
-        @Environment(\.accessibilityReduceMotion) private var reduceMotion
-        @State private var isAnimating = false
-
-        var body: some View {
-            HStack(spacing: MeeshySpacing.xxs) {
-                ForEach(0..<3, id: \.self) { i in
-                    Circle()
-                        .fill(Color(hex: accentColor))
-                        .frame(width: 5, height: 5)
-                        // Motion off rests at the animation's HIGH phase, never
-                        // its low one: frozen at 0.5 scale / 0.4 opacity the
-                        // dots would read as disabled rather than as "typing".
-                        .scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))
-                        .opacity(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.4))
-                        .animation(
-                            reduceMotion
-                                ? nil
-                                : Animation.easeInOut(duration: 0.5)
-                                    .repeatForever(autoreverses: true)
-                                    .delay(Double(i) * 0.18),
-                            value: isAnimating
-                        )
-                }
-            }
-            .onAppear { isAnimating = true }
-            .onDisappear { isAnimating = false }
-        }
-    }
-
     @ViewBuilder
     private var typingIndicatorView: some View {
         HStack(spacing: MeeshySpacing.xs) {
@@ -463,7 +427,7 @@ struct ThemedConversationRow: View {
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .regular, design: .default).italic())
                 .foregroundColor(accent)
                 .lineLimit(1)
-            TypingDotsView(accentColor: accentColor)
+            MeeshyTypingDots(color: Color(hex: accentColor))
         }
     }
 

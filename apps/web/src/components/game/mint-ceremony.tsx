@@ -5,6 +5,7 @@ import { GLORY_POINTS } from '@meeshy/shared/utils/game/glory';
 import { meeshDisplayEdition, type MeeshEdition } from '@meeshy/shared/utils/game/mint';
 import { mintCeremonyPlan, mintRefusalReason, MINT_CEREMONY_STRIKE_READY_MS, type MintCeremonyPlan, type MintRefusalReason } from '@meeshy/shared/utils/game/mint-ceremony';
 
+import { browserDeviceHost, deviceTierOf, tierRank, type DeviceNavigator } from '@/lib/device/capability-tier';
 import type { GameBirdKey } from '@/lib/game/birds';
 import {
   DEFAULT_TARGET,
@@ -80,9 +81,8 @@ export type MintCeremonyProps = {
   readonly haptic?: (name: HapticName) => void;
 };
 
-/** Un appareil modeste : quatre cœurs ou moins. Moitié moins de particules (épopée § 7). */
-export const isModestDevice = (host: { readonly hardwareConcurrency?: number } | undefined = typeof navigator === 'undefined' ? undefined : navigator): boolean =>
-  host?.hardwareConcurrency !== undefined && host.hardwareConcurrency > 0 && host.hardwareConcurrency <= 4;
+/** Un appareil modeste : un tier de capacité bas ou moyen (W10, `device/capability-tier.ts`). Moitié moins de particules (épopée § 7). */
+export const isModestDevice = (host: DeviceNavigator | undefined = browserDeviceHost().navigator): boolean => tierRank(deviceTierOf({ navigator: host })) <= tierRank('mid');
 
 const PARTY: Readonly<Record<MeeshEdition, readonly [GameBirdKey, GameBirdKey]>> = {
   silver: ['meeJoy', 'meoOpen'],

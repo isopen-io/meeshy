@@ -282,7 +282,7 @@ struct ConversationListView: View {
         // O(n²) par passe auparavant) sont résolus UNE fois ici.
         let passContext = ConversationRowPassContext(
             orderedConversationIds: orderedConversationIds,
-            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             autoPreviewLimit: ConversationRowMetrics.autoPreviewLoadRowLimit
         )
         // Drapeau lu UNE fois par passe de body, jamais par rang : l'`onAppear`

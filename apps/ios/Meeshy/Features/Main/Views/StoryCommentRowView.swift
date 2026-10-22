@@ -16,7 +16,7 @@ import MeeshyUI
 // - Heart reaction + Reply CTAs sit below the text in their own action row.
 struct StoryCommentRowView: View, Equatable {
     let comment: FeedComment
-    let userLang: String
+    let readerLanguages: [String]
     let isLiked: Bool
     let likeCount: Int
     var isInFlight: Bool = false
@@ -220,7 +220,7 @@ struct StoryCommentRowView: View, Equatable {
                 }
             }
 
-            LanguageFlagChip(code: userLang, isActive: !showOriginal, metrics: .overlay) {
+            LanguageFlagChip(code: comment.servedLanguage(preferredLanguages: readerLanguages) ?? readerLanguages.first ?? "fr", isActive: !showOriginal, metrics: .overlay) {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showOriginal = false
                 }

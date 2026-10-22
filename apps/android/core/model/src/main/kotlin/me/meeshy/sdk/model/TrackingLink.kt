@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /** A tracking link — port of TrackingLink (TrackingLinkModels.swift). */
@@ -58,6 +59,6 @@ data class CreateTrackingLinkRequest(
     val campaign: String? = null,
     val source: String? = null,
     val medium: String? = null,
-    val token: String? = null,
+    @SerialName("customToken") val token: String? = null,
     val expiresAt: String? = null,
 )

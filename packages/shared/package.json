@@ -101,6 +101,7 @@
     "build:watch": "tsc --watch --project tsconfig.json",
     "api-endpoints:generate": "tsx scripts/generate-api-endpoints.ts",
     "ios-endpoints:generate": "tsx scripts/generate-ios-endpoints.ts",
+    "android-endpoints:generate": "tsx scripts/generate-android-endpoints.ts",
     "generate:call-frames": "bun scripts/generate-call-frames-swift.ts",
     "generate:lens-format": "bun scripts/generate-lens-format-swift.ts",
     "import:glory-frames": "bun scripts/import-glory-frames.ts",

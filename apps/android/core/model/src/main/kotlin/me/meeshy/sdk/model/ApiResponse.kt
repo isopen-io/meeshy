@@ -31,6 +31,7 @@ data class ApiResponse<T>(
     val suggestions: List<String>? = null,
     val violations: List<ApiViolation>? = null,
     val pagination: Pagination? = null,
+    val meta: ApiResponseMeta? = null,
 )
 
 /**
@@ -53,4 +54,15 @@ data class Pagination(
     val limit: Int? = null,
     val hasMore: Boolean = false,
     val nextCursor: String? = null,
-)
+) {
+    /** Lecture par curseur : l'ancre de la suite (`nextCursor`) et s'il reste des pages. */
+    val cursorPage: PaginationCursorView get() = PaginationCursorView(nextCursor, hasMore, limit)
+
+    /** Lecture par offset, ou `null` si la page n'en porte aucun trait (`offset`/`total`). */
+    val offsetPage: PaginationOffsetView?
+        get() = if (offset == null && total == null) null else PaginationOffsetView(offset, limit, total, hasMore)
+}
+
+data class PaginationCursorView(val nextCursor: String?, val hasMore: Boolean, val limit: Int?)
+
+data class PaginationOffsetView(val offset: Int?, val limit: Int?, val total: Int?, val hasMore: Boolean)

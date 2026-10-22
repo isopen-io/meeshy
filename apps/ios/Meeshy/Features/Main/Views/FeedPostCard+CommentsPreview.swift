@@ -119,8 +119,8 @@ extension FeedPostCard {
                         if let origLang = comment.originalLanguage, comment.translatedContent != nil {
                             MetaSeparator().font(.caption2).foregroundColor(theme.textMuted)
 
-                            let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-                            let targetLang = userLangs.first?.lowercased() ?? "fr"
+                            let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
+                            let targetLang = comment.servedLanguage(preferredLanguages: userLangs)?.lowercased() ?? userLangs.first?.lowercased() ?? "fr"
                             // Ces trois glyphes ne disent qu'UNE chose : « ce
                             // commentaire a été traduit, de là vers ici ». Lus un
                             // par un, VoiceOver annonçait deux PAYS — « drapeau du
