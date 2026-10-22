@@ -98,11 +98,11 @@ final class ComposerRailMountGeometryTests: XCTestCase {
         return host.view
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         window?.rootViewController = nil
         window?.isHidden = true
         window = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
 

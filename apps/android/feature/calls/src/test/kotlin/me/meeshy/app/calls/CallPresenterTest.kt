@@ -169,21 +169,21 @@ class CallPresenterTest {
 
     @Test
     fun `connected shows the elapsed clock starting at 0 00`() {
-        assertThat(CallPresenter.present(CallState.Connected, config, media, 0).durationLabel).isEqualTo("0:00")
-        assertThat(CallPresenter.present(CallState.Connected, config, media, 7).durationLabel).isEqualTo("0:07")
-        assertThat(CallPresenter.present(CallState.Connected, config, media, 65).durationLabel).isEqualTo("1:05")
+        assertThat(CallPresenter.present(CallState.Connected, config, media, 0).durationLabel).isEqualTo("00:00")
+        assertThat(CallPresenter.present(CallState.Connected, config, media, 7).durationLabel).isEqualTo("00:07")
+        assertThat(CallPresenter.present(CallState.Connected, config, media, 65).durationLabel).isEqualTo("01:05")
     }
 
     @Test
     fun `reconnecting keeps showing the running clock`() {
         assertThat(CallPresenter.present(CallState.Reconnecting(attempt = 2), config, media, 42).durationLabel)
-            .isEqualTo("0:42")
+            .isEqualTo("00:42")
     }
 
     @Test
     fun `ended freezes the final length only when the call had connected`() {
         assertThat(CallPresenter.present(CallState.Ended(CallEndReason.Remote), config, media, 125).durationLabel)
-            .isEqualTo("2:05")
+            .isEqualTo("02:05")
     }
 
     @Test

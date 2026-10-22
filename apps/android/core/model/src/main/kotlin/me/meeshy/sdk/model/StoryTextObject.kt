@@ -55,4 +55,6 @@ data class StoryTextObject(
     val fadeOut: Double? = null,
     val isLocked: Boolean? = null,
     val keyframes: List<StoryKeyframe>? = null,
+    /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
+    val name: String? = null,
 )

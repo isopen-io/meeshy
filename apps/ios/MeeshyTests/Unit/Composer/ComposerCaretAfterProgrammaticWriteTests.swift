@@ -42,12 +42,12 @@ final class ComposerCaretAfterProgrammaticWriteTests: XCTestCase {
 
     private var window: UIWindow?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         window?.endEditing(true)
         window?.rootViewController = nil
         window?.isHidden = true
         window = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func render(_ host: Host) -> UIView {

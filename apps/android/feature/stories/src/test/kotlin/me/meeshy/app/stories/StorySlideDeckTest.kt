@@ -1,6 +1,7 @@
 package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4

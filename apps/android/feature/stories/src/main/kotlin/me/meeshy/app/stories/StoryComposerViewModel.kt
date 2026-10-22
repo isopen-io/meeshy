@@ -24,6 +24,12 @@ import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.StrokeSmoothing
 import me.meeshy.sdk.model.UploadedMedia
 import me.meeshy.sdk.model.media.TusUploadContext
+import me.meeshy.sdk.model.scene.StoryBackgroundFraming
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.model.scene.StoryColorMatrix
+import me.meeshy.sdk.model.scene.StoryFilterMatrix
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextOutlineCycle
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CreateStoryRequest

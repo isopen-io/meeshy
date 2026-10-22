@@ -72,10 +72,10 @@ final class ProgressionLastAchievementHeroTests: XCTestCase {
         return e
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// LE témoin central — la forme que la passerelle sert vraiment.

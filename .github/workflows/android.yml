@@ -32,11 +32,23 @@ on:
     paths:
       - 'apps/android/**'
       - '.github/workflows/android.yml'
+      - 'apps/ios/Meeshy/Localizable.xcstrings'
+      - 'apps/ios/Meeshy/InfoPlist.xcstrings'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings'
+      - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
   pull_request:
     branches: [main, dev]
     paths:
       - 'apps/android/**'
       - '.github/workflows/android.yml'
+      - 'apps/ios/Meeshy/Localizable.xcstrings'
+      - 'apps/ios/Meeshy/InfoPlist.xcstrings'
+      - 'packages/MeeshySDK/Sources/MeeshyUI/Resources/Localizable.xcstrings'
+      - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
+      - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
   workflow_dispatch:
 
 concurrency:
@@ -53,8 +65,55 @@ env:
   LC_ALL: C.utf8
 
 jobs:
+  # Chaînes : les catalogues iOS (.xcstrings) sont la source des chaînes Android adoptées
+  # (apps/android/i18n/manifest). Le contrôle de génération échoue quand un strings_generated.xml
+  # n'est plus celui que les catalogues produiraient. Bloquant pour une PR qui touche apps/android,
+  # consultatif pour une PR iOS seule (qui ne peut pas connaître le manifeste Android).
+  i18n:
+    name: Android strings (generation check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      android_touched: ${{ steps.scope.outputs.android_touched }}
+    defaults:
+      run:
+        working-directory: apps/android
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Does this change touch apps/android?
+        id: scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR_NUMBER" ]; then
+            echo "android_touched=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files="$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}/files" --paginate -q '.[].filename')"
+          if printf '%s\n' "$files" | grep -qE '^(apps/android/|\.github/workflows/android\.yml$)'; then
+            echo "android_touched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "android_touched=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::PR iOS seule : le contrôle des chaînes est consultatif"
+          fi
+
+      - name: i18n script tests
+        continue-on-error: ${{ steps.scope.outputs.android_touched != 'true' }}
+        run: python3 -m unittest discover -s scripts/i18n/tests
+
+      - name: Generated strings are up to date (xcstrings_to_android.py --check)
+        continue-on-error: ${{ steps.scope.outputs.android_touched != 'true' }}
+        run: python3 apps/android/scripts/i18n/xcstrings_to_android.py --check
+        working-directory: .
+
   android:
     name: Android (assemble + unit tests)
+    needs: i18n
+    if: needs.i18n.outputs.android_touched == 'true'
     runs-on: ubuntu-latest
     # Measured on the first green runs (2026-08-12): ~8-10 min wall clock for
     # the whole job on a cold Gradle cache — of which assembleDebug is the bulk
