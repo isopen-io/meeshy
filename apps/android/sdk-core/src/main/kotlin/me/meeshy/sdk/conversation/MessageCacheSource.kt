@@ -6,23 +6,19 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.SyncMetaDao
-import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
 import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SwrCacheSource
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.isoToEpochMillisOrNull
 import me.meeshy.sdk.net.ConditionalResult
-import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.api.listConditionalResult
 import me.meeshy.sdk.net.rawApiCall
-import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a message-list revalidation fails; carries the API error message. */
 internal class MessageSyncException(message: String) : Exception(message)
@@ -186,16 +182,7 @@ internal class MessageCacheSource(
 
     private suspend fun persist(messages: List<ApiMessage>, newEtag: String?) {
         val now = clock.nowMillis()
-        val rows = messages.map { message ->
-            MessageEntity(
-                id = message.id,
-                conversationId = conversationId,
-                seq = null,
-                payload = MeeshyApi.json.encodeToString(message),
-                createdAt = isoToEpochMillis(message.createdAt),
-                cachedAt = now,
-            )
-        }
+        val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
         val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         database.withTransaction {
             messageDao.upsertAll(rows)
@@ -222,16 +209,7 @@ internal class MessageCacheSource(
      */
     private suspend fun persistAfterBackfill(messages: List<ApiMessage>) {
         val now = clock.nowMillis()
-        val rows = messages.map { message ->
-            MessageEntity(
-                id = message.id,
-                conversationId = conversationId,
-                seq = null,
-                payload = MeeshyApi.json.encodeToString(message),
-                createdAt = isoToEpochMillis(message.createdAt),
-                cachedAt = now,
-            )
-        }
+        val rows = messages.map { MessageEntityFactory.cached(it, cachedAt = now, conversationId = conversationId) }
         val ackedLocalIds = messages.mapNotNull { it.clientMessageId }
         val currentEtag = syncMetaDao.etag(resourceKey)
         database.withTransaction {

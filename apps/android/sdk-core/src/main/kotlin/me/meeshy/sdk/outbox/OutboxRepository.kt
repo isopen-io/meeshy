@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.entity.OutboxEntity
+import me.meeshy.sdk.model.ObjectIdGuard
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -54,8 +55,55 @@ class OutboxRepository @Inject constructor(
         }
     }
 
-    /** Still-deliverable rows of one lane, oldest first. */
-    suspend fun deliverable(lane: String): List<OutboxEntity> = outboxDao.deliverableForLane(lane)
+    /**
+     * Rows of one lane the drainer may attempt NOW, oldest first: not exhausted, and not
+     * [held][OutboxLocalTargets] behind a local id. A held row is invisible here — it is neither
+     * sent to a route that cannot address it nor charged an attempt — but remains owed
+     * ([hasDeliverable]) until [resolveLocalId] gives it the server's id.
+     */
+    suspend fun deliverable(lane: String): List<OutboxEntity> =
+        outboxDao.deliverableForLane(lane).filterNot { OutboxLocalTargets.isHeld(it) }
+
+    /**
+     * The local id [localId] (`cid_`, `cmid_`, `pending_`) now has its server id: every still
+     * `PENDING` row that was waiting on it is re-addressed to [serverId] and becomes deliverable
+     * with its attempt budget untouched. The graft is a transaction, so the drainer never reads
+     * a half-rewritten queue.
+     *
+     * Refused (returns 0, nothing written) unless [localId] is a local id and [serverId] a real
+     * ObjectId — a "resolution" to another local id would only move the problem.
+     *
+     * @return how many rows were re-addressed.
+     */
+    suspend fun resolveLocalId(localId: String, serverId: String): Int {
+        if (!ObjectIdGuard.isLocalId(localId) || !ObjectIdGuard.isValid(serverId)) return 0
+        return database.withTransaction {
+            val waiting = outboxDao.byState(OutboxState.PENDING.name).filter { it.targetId == localId }
+            val at = now()
+            waiting.forEach { outboxDao.upsert(it.copy(targetId = serverId, updatedAt = at)) }
+            waiting.size
+        }
+    }
+
+    /**
+     * The local entity [localId] will never exist server-side (its publish was discarded or
+     * gave up): the `PENDING` rows still waiting on it can never be delivered, so they leave the
+     * queue instead of waiting forever. Each is signalled [OutboxOutcome.Cancelled] so the
+     * optimistic flip that enqueued it rolls back.
+     *
+     * @return how many rows were cancelled.
+     */
+    suspend fun cancelHeldFor(localId: String): Int {
+        if (!ObjectIdGuard.isLocalId(localId)) return 0
+        val cancelled = database.withTransaction {
+            val waiting = outboxDao.byState(OutboxState.PENDING.name)
+                .filter { it.targetId == localId && OutboxLocalTargets.isHeld(it) }
+            outboxDao.deleteAll(waiting.map { it.cmid })
+            waiting.map { it.cmid }
+        }
+        cancelled.forEach { emit(OutboxOutcome.Cancelled(it)) }
+        return cancelled.size
+    }
 
     /**
      * Whether this device still owes the server a [kind] write on [lane] — enqueued and
