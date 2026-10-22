@@ -50,13 +50,28 @@ nonisolated protocol DeviceContactBookReading: Sendable {
 
 /// Le carnet réel, adossé à `CNContactStore`.
 nonisolated final class CNDeviceContactBook: DeviceContactBookReading, @unchecked Sendable {
-    private let store: CNContactStore
+    private let makeStore: @Sendable () -> CNContactStore
+    private let lock = NSLock()
+    private var built: CNContactStore?
 
     /// Init hors acteur (type `nonisolated`) : il sert de VALEUR PAR DÉFAUT à
     /// `ContactSyncService.init`, donc son expression est évaluée au site
     /// d'appel — un init isolé y imposerait l'acteur à tout appelant.
-    init(store: CNContactStore = CNContactStore()) {
-        self.store = store
+    ///
+    /// #11558 — le store ne naît qu'au premier USAGE : `CNContactStore()`
+    /// interroge TCC par XPC synchrone, et `ContactSyncService.shared` est
+    /// construit au lancement, sur le fil principal, avant le premier écran.
+    init(makeStore: @escaping @Sendable () -> CNContactStore = { CNContactStore() }) {
+        self.makeStore = makeStore
+    }
+
+    var store: CNContactStore {
+        lock.withLock {
+            if let built { return built }
+            let fresh = makeStore()
+            built = fresh
+            return fresh
+        }
     }
 
     func authorizationStatus() -> CNAuthorizationStatus {

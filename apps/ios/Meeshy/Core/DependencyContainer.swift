@@ -175,7 +175,7 @@ final class DependencyContainer {
         // ajout d'un compte) garde sa base ouverte pour son retour ; seul un
         // compte dont les jetons sont partis (déconnexion, session révoquée,
         // retrait) voit la sienne purgée.
-        let keepsLeaving = AccountDataRetention.keepsData(of: storeRouter.current.key) {
+        let keepsLeaving = AccountDataRetention.keepsData(of: storeRouter.current.key, arriving: key) {
             AuthManager.shared.hasPreservedSession(for: $0)
         }
         let outgoing = storeRouter.activate(key, keepingOutgoing: keepsLeaving)

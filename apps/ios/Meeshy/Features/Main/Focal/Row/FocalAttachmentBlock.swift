@@ -364,17 +364,20 @@ struct FocalGridCell: View {
         case .image:
             let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
             let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-            ProgressiveCachedImage(
-                thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl,
-                targetSize: CGSize(width: slot.width, height: slot.height)
-            ) {
-                Color(hex: attachment.thumbnailColor).shimmer()
+            OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+                ProgressiveCachedImage(
+                    thumbHash: attachment.thumbHash,
+                    thumbnailUrl: thumbUrl,
+                    fullUrl: fullUrl,
+                    targetSize: CGSize(width: slot.width, height: slot.height),
+                    reloadToken: originalLanded
+                ) {
+                    Color(hex: attachment.thumbnailColor).shimmer()
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+                .clipped()
             }
-            .aspectRatio(contentMode: .fill)
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-            .clipped()
 
         case .video:
             // #8231 — lecture inline à trois contrôles (son, lecture/pause,

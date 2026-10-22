@@ -4,6 +4,9 @@ import os
 /// Migration unique des clés GLOBALES historiques (UserDefaults et trousseau
 /// sans namespace) vers les clés par compte. Rejouée à chaque
 /// `checkExistingSession`, elle est sans effet une fois les clés migrées.
+///
+/// `run()` rend `true` quand elle a posé le compte actif au trousseau elle-même :
+/// `AuthManager` doit alors oublier celui qu'il tient en mémoire (#11558).
 @MainActor
 struct LegacyAuthKeyMigration {
     let keychain: any KeychainStoring
@@ -18,12 +21,15 @@ struct LegacyAuthKeyMigration {
     /// Pose le compte migré comme actif et l'inscrit au sélecteur.
     let adopt: (MeeshyUser) -> Void
 
-    func run() {
+    @discardableResult
+    func run() -> Bool {
+        var wroteActiveUser = false
         // 1. Migrate activeUserId from UserDefaults to Keychain
         if let legacyActiveId = userDefaults.string(forKey: activeUserIdKey) {
             if keychain.load(forKey: activeUserIdKey, account: nil) == nil {
                 do {
                     try keychain.save(legacyActiveId, forKey: activeUserIdKey, account: nil)
+                    wroteActiveUser = true
                 } catch {
                     Logger.auth.error("Legacy migration failed for activeUserId: \(error.localizedDescription, privacy: .public)")
                 }
@@ -55,7 +61,7 @@ struct LegacyAuthKeyMigration {
               let token = keychain.load(forKey: legacyTokenKey, account: nil),
               let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
               let userData = userJSON.data(using: .utf8) else {
-            return
+            return wroteActiveUser
         }
 
         do {
@@ -73,5 +79,6 @@ struct LegacyAuthKeyMigration {
 
         keychain.delete(forKey: legacyTokenKey, account: nil)
         keychain.delete(forKey: legacyUserKey, account: nil)
+        return wroteActiveUser
     }
 }

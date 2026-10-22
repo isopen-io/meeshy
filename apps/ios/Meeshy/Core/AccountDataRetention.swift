@@ -28,11 +28,16 @@ nonisolated enum AccountDataRetention {
 
     /// Le compte quitté garde-t-il ses données ? Seulement si l'appareil
     /// garde sa session.
+    ///
+    /// Rien n'est quitté quand le compte qui arrive est déjà le courant (chaque
+    /// démarrage à froid) : la session n'est alors pas interrogée, c'est une
+    /// lecture du trousseau sur le fil principal (#11558).
     static func keepsData(
         of leaving: MessageStoreAccountKey?,
+        arriving: MessageStoreAccountKey?,
         isPreserved: (String) -> Bool
     ) -> Bool {
-        guard let leaving else { return false }
+        guard let leaving, leaving != arriving else { return false }
         return isPreserved(leaving.userId)
     }
 }

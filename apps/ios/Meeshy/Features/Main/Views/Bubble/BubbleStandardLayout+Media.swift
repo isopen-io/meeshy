@@ -612,10 +612,6 @@ fileprivate struct BubbleGridImageView: View {
     var onFullImageLoaded: (@MainActor () -> Void)? = nil
 
     @Environment(\.displayScale) private var displayScale: CGFloat
-    /// L'original vient d'être posé sur l'appareil par le bouton de la bulle
-    /// (`AttachmentDownloadCenter`) : la source affichée se relit, et le
-    /// chargement retenu par la politique repart.
-    @State private var originalLanded = false
 
     /// 5.2 — l'URL que la case AFFICHE (`BubbleImageSourceLaw`) : une forme
     /// déjà sur l'appareil d'abord, sinon la plus petite variante
@@ -634,7 +630,16 @@ fileprivate struct BubbleGridImageView: View {
         )
     }
 
+    /// L'original posé sur l'appareil par le bouton de la bulle relit la
+    /// source affichée et relance le chargement retenu par la politique.
     var body: some View {
+        OriginalLandingReload(fileUrl: attachment.fileUrl) { originalLanded in
+            image(originalLanded: originalLanded)
+        }
+    }
+
+    @ViewBuilder
+    private func image(originalLanded: Bool) -> some View {
         let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
         let selectedFull = Self.displayedURL(for: attachment, cellPointWidth: cellPointWidth,
@@ -660,25 +665,10 @@ fileprivate struct BubbleGridImageView: View {
             .aspectRatio(contentMode: .fill)
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
             .clipped()
-            .task(id: attachment.fileUrl) { await watchOriginalLanding() }
         } else {
             Color(hex: attachment.thumbnailColor)
                 .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(MeeshyOpacity.strong)))
         }
-    }
-}
-
-extension BubbleGridImageView {
-    /// Le bouton « télécharger » de la bulle passe par le centre, que la vue
-    /// d'image n'observait pas : la photo restait floue jusqu'au plein écran.
-    fileprivate func watchOriginalLanding() async {
-        guard !originalLanded, !attachment.fileUrl.isEmpty,
-              !attachment.fileUrl.hasPrefix("file://") else { return }
-        let key = AttachmentDownloadCenter.key(for: attachment.fileUrl)
-        guard await AttachmentDownloadCenter.shared.firstEvent(
-            for: key, where: BubbleImageSourceLaw.marksOriginalLanding
-        ) != nil else { return }
-        originalLanded = true
     }
 }
 

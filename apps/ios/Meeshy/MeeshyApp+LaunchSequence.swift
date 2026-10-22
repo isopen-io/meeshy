@@ -27,7 +27,7 @@ extension MeeshyApp {
 
     func prepareProcess() {
         ImageDownsamplingConfig.applyGlobal()
-        KeychainManager.shared.migrateToAfterFirstUnlock()
+        KeychainManager.shared.migrateToAfterFirstUnlockOnce()
         #if DEBUG
         VitrineStage.preparer()
         #endif

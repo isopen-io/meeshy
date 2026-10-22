@@ -93,7 +93,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// otherwise silently no-ops every save/load and makes any test that
     /// drives a full `applySession` → `refreshSession` round trip
     /// unrunnable. Mirrors the existing `authService` injection seam below.
-    internal var keychain: any KeychainStoring
+    internal var keychain: any KeychainStoring { didSet { activeUser.forget() } }
+    /// Le compte actif, lu UNE fois au trousseau puis tenu en mémoire (#11558).
+    var activeUser = PersistedActiveUser()
     private let userDefaults: UserDefaults
     private let groupDefaults: UserDefaults?
 
@@ -142,7 +144,6 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private let legacyUserKey = "meeshy_current_user"
 
     // UserDefaults keys (non-sensitive)
-    private let activeUserIdUDKey = "meeshy_active_user_id"
     let savedAccountsUDKey = "meeshy_saved_accounts"
 
     private init(
@@ -182,21 +183,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// de notification (réponse rapide, commentaire) peut s'exécuter app tuée, avant `checkExistingSession` :
     /// `currentUser` est encore vide, et le texte tapé sur l'écran verrouillé partirait à la poubelle.
     public var persistedActiveUserId: String? { activeUserId }
+    /// Pour un écrivain du processus qui pose le compte actif SANS `AuthManager` (la vitrine).
+    public func rereadPersistedActiveUser() { activeUser.forget() }
 
     var activeUserId: String? {
-        get { keychain.load(forKey: activeUserIdUDKey, account: nil) }
-        set {
-            if let value = newValue {
-                do {
-                    try keychain.save(value, forKey: activeUserIdUDKey, account: nil)
-                } catch {
-                    Logger.auth.error("Failed to save activeUserId to keychain: \(error.localizedDescription, privacy: .public)")
-                }
-            } else {
-                keychain.delete(forKey: activeUserIdUDKey, account: nil)
-            }
-            groupDefaults?.set(newValue, forKey: activeUserIdUDKey)
-        }
+        get { activeUser.read(from: keychain) }
+        set { activeUser.write(newValue, to: keychain, groupDefaults: groupDefaults) }
     }
 
     // MARK: - Token Access
@@ -849,10 +841,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Migration from legacy global keys (one-time, at first launch)
 
     private func migrateFromLegacyKeysIfNeeded() {
-        LegacyAuthKeyMigration(
+        if LegacyAuthKeyMigration(
             keychain: keychain,
             userDefaults: userDefaults,
-            activeUserIdKey: activeUserIdUDKey,
+            activeUserIdKey: PersistedActiveUser.key,
             savedAccountsKey: savedAccountsUDKey,
             legacyTokenKey: legacyTokenKey,
             legacyUserKey: legacyUserKey,
@@ -861,7 +853,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
                 self.activeUserId = user.id
                 self.upsertSavedAccount(from: user)
             }
-        ).run()
+        ).run() { activeUser.forget() }
     }
 
     // MARK: - Local Profile Mutation (optimistic)

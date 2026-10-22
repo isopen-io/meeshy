@@ -88,7 +88,7 @@ extension StoryCardView {
                 sharedContentWrapper: $sharedContentWrapper,
                 showExportShareSheet: $showExportShareSheet,
                 makeStoryExternalShareURL: makeStoryExternalShareURL,
-                deleteCurrentStory: deleteCurrentStory,
+                deleteCurrentStory: storyWithdrawal.delete, makeCurrentStoryPrivate: storyWithdrawal.makePrivate,
                 pauseTimer: pauseTimer,
                 dismissViewer: dismissViewer,
                 reportStory: reportStory,

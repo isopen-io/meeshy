@@ -407,7 +407,7 @@
     "Meeshy::StoryViewerView": 3546,
     "Meeshy::UniversalComposerBar": 3220,
     "Meeshy::View": 1673,
-    "MeeshySDK::AuthManager": 1898,
+    "MeeshySDK::AuthManager": 1893,
     "MeeshySDK::ConversationSyncEngine": 2893,
     "MeeshySDK::MessagePersistenceActor": 2374,
     "MeeshySDK::MessageSocketManager": 1957,

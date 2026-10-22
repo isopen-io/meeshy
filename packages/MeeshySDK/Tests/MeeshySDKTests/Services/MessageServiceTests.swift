@@ -352,7 +352,8 @@ final class MessageServiceTests: XCTestCase {
     }
 
     func test_delete_withReason_sendsReasonInJSONBody() async throws {
-        mock.stub("/conversations/\(convId)/messages/\(msgId)", result: APIResponse(success: true, data: ["deleted": true], error: nil))
+        mock.stub("/conversations/\(convId)/messages/\(msgId)", result: try Self.gatewayAcknowledgement(
+            #"{"success":true,"data":{"messageId":"m1","deleted":true,"meta":{"conversationStats":{"messageCount":3}}}}"#))
 
         try await service.delete(conversationId: convId, messageId: msgId, reason: "Propos haineux")
 
@@ -509,5 +510,12 @@ final class MessageServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(mock.requestCount, 1)
+    }
+
+    /// La charge que la passerelle sert VRAIMENT à un DELETE (#11529) : un
+    /// double typé `APIResponse<[String: Bool]>` laissait passer un client qui
+    /// échoue sur `data.messageId`, une chaîne.
+    static func gatewayAcknowledgement(_ json: String) throws -> DeletionAcknowledgement {
+        try JSONDecoder().decode(DeletionAcknowledgement.self, from: Data(json.utf8))
     }
 }
