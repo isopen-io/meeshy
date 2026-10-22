@@ -51,6 +51,8 @@ export type FlowState =
 export type FlowEvent =
   | { readonly type: 'selfie' }
   | { readonly type: 'card' }
+  /** La reprise d'une photo gardée depuis sa source (#10166) : une photo prise ou importée, jamais une carte seule. */
+  | { readonly type: 'same-photo'; readonly mode: Exclude<NotebookMode, 'card'> }
   | { readonly type: 'later' }
   | { readonly type: 'close' }
   | { readonly type: 'camera-ready' }
@@ -77,6 +79,7 @@ export function flowReducer(state: FlowState, event: FlowEvent): FlowState {
     case 'offer':
       if (event.type === 'selfie') return { step: 'camera', camera: 'opening' };
       if (event.type === 'card') return { step: 'striking', mode: 'card', zone: 'outside' };
+      if (event.type === 'same-photo') return { step: 'striking', mode: event.mode, zone: 'outside' };
       if (event.type === 'later') return { step: 'done', deferred: true };
       return state;
     case 'camera':

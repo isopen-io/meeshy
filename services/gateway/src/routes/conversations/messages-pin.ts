@@ -36,7 +36,7 @@ import {
 import { canAccessConversation } from './utils/access-control';
 import { readerShareLinkHasExpired, refuseExpiredShareLink } from '../../services/shareLinkReadGate';
 import { ouvrirConversationLisible } from './utils/conversation-read-gate';
-import { sendSuccess, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
+import { sendSuccess, sendError, sendForbidden, sendNotFound, sendInternalError, sendBadRequest } from '../../utils/response.js';
 import { refusesContentGesture, withoutCaptureNotices } from '../../services/messaging/captureNoticeVisibility';
 import { getPresenceVisibilityService } from '../../services/PresenceVisibilityService';
 import { presenceMissingEntryPolicy, viewerFromRequest } from '../users/presence-gate';
@@ -49,6 +49,12 @@ import { EngagementService } from '../../services/engagement/EngagementService';
 import { announceConversationActivity } from '../../services/conversations/conversationActivity';
 import { GLOBAL_ADULTS_ONLY_CODE, MINOR_GLOBAL_REFUSAL_MESSAGE } from '../../services/messaging/conversationWriteAdmission';
 import { refusesMinorInConversationOfType } from '../../services/messaging/globalMinorGate';
+import {
+  admitMessagePin,
+  isMessagePinRefused,
+  PIN_CONVERSATION_SELECT,
+  type MessagePinAdmission
+} from '../../services/messaging/messagePinAdmission';
 
 /**
  * #9927 — épingler ou dépingler dans Meeshy Global met un message en avant pour
@@ -64,6 +70,25 @@ const refusesMinorPin = (
   refusesMinorInConversationOfType(prisma, {
     conversationType,
     userId: authRequest.authContext.isAnonymous ? null : authRequest.authContext.userId,
+    now: new Date(),
+  });
+
+/**
+ * #11219 — PUT et DELETE partagent UNE porte : épingler ou désépingler met en
+ * avant (ou retire) un message pour TOUS, donc exige le droit d'écrire ici.
+ * Posée APRÈS l'existence du message (le 404 reste ce qu'il était), sur la
+ * conversation chargée AVEC lui.
+ */
+const admitPinGesture = (
+  prisma: PrismaClient,
+  authRequest: UnifiedAuthRequest,
+  conversationId: string,
+  conversation: Parameters<typeof admitMessagePin>[1]['conversation']
+): Promise<MessagePinAdmission> =>
+  admitMessagePin(prisma, {
+    conversation,
+    conversationId,
+    caller: authRequest.authContext,
     now: new Date(),
   });
 
@@ -132,6 +157,7 @@ export function registerMessagePinRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        410: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -173,10 +199,14 @@ export function registerMessagePinRoutes(
       // `tool.pin` (#8959) — ré-épingler n'est pas un geste nouveau.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: { type: true } } }
+        select: { id: true, pinnedAt: true, messageType: true, metadata: true, conversation: { select: PIN_CONVERSATION_SELECT } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
+      if (isMessagePinRefused(admission)) {
+        return sendError(reply, admission.status, admission.message, admission.code ? { code: admission.code } : {});
       }
       if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
         return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });
@@ -259,6 +289,7 @@ export function registerMessagePinRoutes(
         401: errorResponseSchema,
         403: errorResponseSchema,
         404: errorResponseSchema,
+        410: errorResponseSchema,
         500: errorResponseSchema
       }
     },
@@ -297,10 +328,14 @@ export function registerMessagePinRoutes(
       // `deletedAt: null`) et le tombstone lui-même part au balayage.
       const message = await prisma.message.findFirst({
         where: { id: messageId, conversationId, deletedAt: null },
-        select: { id: true, conversation: { select: { type: true } } }
+        select: { id: true, conversation: { select: PIN_CONVERSATION_SELECT } }
       });
       if (!message) {
         return sendNotFound(reply, 'Message not found');
+      }
+      const admission = await admitPinGesture(prisma, authRequest, conversationId, message.conversation);
+      if (isMessagePinRefused(admission)) {
+        return sendError(reply, admission.status, admission.message, admission.code ? { code: admission.code } : {});
       }
       if (await refusesMinorPin(prisma, authRequest, message.conversation?.type)) {
         return sendForbidden(reply, MINOR_GLOBAL_REFUSAL_MESSAGE, { code: GLOBAL_ADULTS_ONLY_CODE });

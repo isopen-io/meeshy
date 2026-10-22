@@ -61,6 +61,10 @@ struct MessageOverlayCellPreview: View {
 
     /// La rangée plate se pose à 16 pt des bords de l'écran.
     static let flatRowMargin: CGFloat = 16
+    /// **La bulle respire aussi : 16 pt de marge** de chaque côté de l'aperçu,
+    /// la même que la rangée plate. Collée au bord de sa cellule, elle se lisait
+    /// comme coupée dès que le facteur d'échelle la rapprochait de l'écran.
+    static let bubbleMargin: CGFloat = flatRowMargin
 
     let face: Face
     let message: Message
@@ -99,6 +103,7 @@ struct MessageOverlayCellPreview: View {
             bubble
                 .equatable()
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, Self.bubbleMargin)
         }
     }
 }
@@ -155,5 +160,103 @@ extension MessageOverlayCellPreview: @MainActor Equatable {
             && lhs.isDark == rhs.isDark
             && lhs.accentHex == rhs.accentHex
             && OverlayPreviewProtection.form(for: lhs.message) == OverlayPreviewProtection.form(for: rhs.message)
+    }
+}
+
+// MARK: - L'échelle de l'aperçu a un plancher
+
+/// **L'aperçu ne se réduit JAMAIS sous 60 %.** Il se réduisait jusqu'à 40 % :
+/// un long message devenait une vignette illisible, alors que l'appui long sert
+/// à le lire. Sous le plancher, l'aperçu garde sa lisibilité et se BORNE à la
+/// hauteur qui reste : le surplus se parcourt par un défilement interne.
+nonisolated enum MessageOverlayPreviewFit {
+    static let scaleFloor: CGFloat = 0.6
+    /// La hauteur minimale offerte à l'aperçu, quelle que soit la place.
+    static let minimumRoom: CGFloat = 60
+
+    struct Result: Equatable {
+        /// Le facteur appliqué à l'aperçu, dans `[scaleFloor, 1]`.
+        let scale: CGFloat
+        /// La hauteur que l'aperçu occupe à l'écran, jamais au-delà de la place.
+        let visibleHeight: CGFloat
+        /// Le contenu réduit dépasse encore la place : il défile dans son cadre.
+        let scrollsInternally: Bool
+    }
+
+    static func resolve(naturalHeight: CGFloat, chromeHeight: CGFloat, available: CGFloat) -> Result {
+        let natural = max(1, naturalHeight)
+        let room = max(minimumRoom, available - chromeHeight)
+        let scale = max(scaleFloor, min(1, room / natural))
+        let scaled = natural * scale
+        return Result(scale: scale, visibleHeight: min(scaled, room), scrollsInternally: scaled > room + 0.5)
+    }
+}
+
+// MARK: - Le cadre de l'aperçu
+
+/// **Le cadre où l'aperçu réduit se pose** : à `naturalSize × scale`, ancré à
+/// son bord natif, borné à `visibleHeight`. Quand le contenu réduit dépasse
+/// encore, il défile à l'intérieur — le contenu lui-même ne reçoit aucun
+/// toucher (c'est une image de la cellule, pas un lecteur), seul le cadre
+/// défile ; un fondu en pied dit qu'il y a une suite.
+struct MessageOverlayPreviewViewport<Content: View>: View {
+    let scale: CGFloat
+    let naturalSize: CGSize
+    let visibleHeight: CGFloat
+    let scrolls: Bool
+    let isTrailing: Bool
+    @ViewBuilder let content: Content
+
+    private static var fadeHeight: CGFloat { 24 }
+    private static var scrollSpace: String { "messageOverlayPreviewScroll" }
+
+    /// Le défilement déjà parcouru : le fondu n'existe que tant qu'il reste une
+    /// suite SOUS le cadre. Arrivé au bout, la dernière ligne est NETTE.
+    @State private var scrolledOffset: CGFloat = 0
+
+    private struct ScrollOffsetKey: PreferenceKey {
+        static var defaultValue: CGFloat { 0 }
+        static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+    }
+
+    /// Reste-t-il du contenu sous le cadre ? Pure, testable sans rendu.
+    static func hasContentBelow(contentHeight: CGFloat, visibleHeight: CGFloat, scrolledOffset: CGFloat) -> Bool {
+        contentHeight - scrolledOffset - visibleHeight > 1
+    }
+
+    var body: some View {
+        let width = naturalSize.width * scale
+        let alignment: Alignment = isTrailing ? .topTrailing : .topLeading
+        let anchor: UnitPoint = isTrailing ? .topTrailing : .topLeading
+        let scaled = content
+            .allowsHitTesting(false)
+            .scaleEffect(scale, anchor: anchor)
+            .frame(width: width, height: naturalSize.height * scale, alignment: alignment)
+        if scrolls {
+            ScrollView(.vertical, showsIndicators: false) {
+                scaled.background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: -proxy.frame(in: .named(Self.scrollSpace)).minY)
+                    }
+                )
+            }
+            .coordinateSpace(name: Self.scrollSpace)
+            .onPreferenceChange(ScrollOffsetKey.self) { scrolledOffset = $0 }
+            .frame(width: width, height: visibleHeight)
+            .mask(bottomFade(active: Self.hasContentBelow(
+                contentHeight: naturalSize.height * scale, visibleHeight: visibleHeight, scrolledOffset: scrolledOffset)))
+        } else {
+            scaled.frame(width: width, height: visibleHeight, alignment: alignment)
+        }
+    }
+
+    private func bottomFade(active: Bool) -> some View {
+        VStack(spacing: 0) {
+            Rectangle().fill(Color.black)
+            LinearGradient(colors: [.black, active ? .clear : .black], startPoint: .top, endPoint: .bottom)
+                .frame(height: Self.fadeHeight)
+        }
     }
 }

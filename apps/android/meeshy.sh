@@ -57,6 +57,8 @@ case "$CMD" in
   clean)    ./gradlew clean "$@" ;;
   jvm-check) GRADLE_BIN="$(command -v gradle || echo ./gradlew)"
             LANG=C.utf8 LC_ALL=C.utf8 "$GRADLE_BIN" -p scripts/jvm-check test --console=plain "$@" ;;
+  i18n)     python3 scripts/i18n/xcstrings_to_android.py "$@" ;;
+  i18n-test) python3 -m unittest discover -s scripts/i18n/tests "$@" ;;
   emulator) boot_emulator ;;
   devices)  "$ADB" devices -l ;;
   install)  boot_emulator; ./gradlew :app:installDebug "$@" ;;

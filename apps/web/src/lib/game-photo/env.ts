@@ -9,14 +9,21 @@ import { appSettingsOpener } from '@/lib/view/settings-recovery';
 
 import { loadArt } from './art';
 import { openFrontCamera, type CameraResult } from './camera';
-import type { PhotoPalette, PhotoSource } from './compose';
+import type { PhotoArt, PhotoPalette, PhotoSource } from './compose';
 import { rasterizeSvg } from './compose';
+import type { GloryFrameBirdLayout } from '@meeshy/shared/types/glory-frame-format';
+import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
+import type { FrameRef } from '@meeshy/shared/utils/game/glory-frames';
+
 import { rootVarReader } from './css-vars';
+import type { GloryOffer } from './glory-choice';
+import type { GloryScene, GloryStep, GloryTexts } from './glory/glory-scene';
 import type { PhotoMoment } from './moments';
 import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
 import { indexedDbLegacyStore, knownAccountsOf, settleLegacyNotebook, type KeyedStorage } from './notebook-legacy';
 import type { PhotoReferral } from './referral';
-import { keptStoryOf, renderPhotoFiles, type PhotoFiles } from './render';
+import { keptStoryOf, renderPhotoFiles, type GloryRenderSource, type PhotoFiles } from './render';
+import { scratchPool, type ScratchPool } from './scratch';
 import { savePhoto, sharePhoto, type PhotoDoors, type ShareOutcome } from './share';
 
 /**
@@ -51,7 +58,38 @@ export type PhotoEnv = {
     readonly frame: HTMLElement | null;
     /** Le bandeau de parrainage (#7742) ; `null` ou absent : la carte part sans lui. */
     readonly referral?: PhotoReferral | null;
+    /** Le cadre décoré de l'étape (#10159) ; `null` ou absent : la carte simple. */
+    readonly glory?: GloryRenderSource | null;
+    /** La date que la carte porte ; absent : aujourd'hui. Une reprise (#10166) garde la date de l'étape. */
+    readonly at?: Date;
   }) => Promise<PhotoFiles | null>;
+  /**
+   * LA SCÈNE DU CADRE DÉCORÉ (#10159, L7) : le cadre que la loi retient pour
+   * l'étape — ou, quand `frame` est donné, CE cadre de la bande (#10164), dans
+   * la `pose` demandée —, PRÊT (toutes ses couches au magasin), à l'échelle
+   * demandée (0,5 pour l'aperçu, 1 pour l'image finale). `null` : carte simple,
+   * sans attente — ce qui manque a été demandé. Absent : l'environnement ne
+   * peint pas de décor.
+   */
+  readonly glory?: (input: {
+    readonly step: GloryStep;
+    readonly texts: GloryTexts;
+    readonly scale: number;
+    readonly frame?: FrameRef;
+    readonly pose?: GloryFrameBirdLayout | null;
+  }) => Promise<GloryScene | null>;
+  /**
+   * LA BANDE DES CADRES (#10164, L11) : les cadres que la loi propose pour
+   * l'étape, en tuiles (nom, usage, poses, présence). `null` : rien à proposer,
+   * la bande ne s'affiche pas. Absent : le déroulé garde le cadre présélectionné.
+   */
+  readonly gloryOffer?: (step: GloryStep) => Promise<GloryOffer | null>;
+  /** Charge aussitôt les couches d'un cadre touché (priorité manuelle) ; `true` quand elles y sont toutes. */
+  readonly gloryWarm?: (frame: FrameRef) => Promise<boolean>;
+  /** La vignette d'une tuile ; `null` : la tuile reste nommée, sans image. */
+  readonly gloryThumb?: (thumb: PackAssetRef) => Promise<Blob | null>;
+  /** Ce que l'aperçu sur canvas demande en plus de la scène : les dessins du cadre affiché, la palette, la surface de travail. */
+  readonly gloryKit?: (frame: HTMLElement) => Promise<GloryPreviewKit | null>;
   /**
    * Le lien de parrainage EXISTANT de l'utilisateur (#7742), lu SANS rien créer ;
    * `null` quand il n'a aucun jeton utilisable (ou hors ligne). Absent :
@@ -73,6 +111,14 @@ export type PhotoEnv = {
   readonly now: () => Date;
   /** Réduction des animations, haptique, ordonnanceur : voir `PlayOptions`. */
   readonly playOptions?: PlayOptions;
+};
+
+export type GloryPreviewKit = {
+  readonly art: PhotoArt;
+  readonly palette: PhotoPalette;
+  readonly fontFamily: string;
+  /** Le bassin de la surface de travail (`scratch.ts`) : UN canevas réutilisé, à l'échelle de l'aperçu — jamais un canevas neuf par peinture. */
+  readonly scratch: ScratchPool;
 };
 
 /** L'image est peinte aux couleurs de la charte : chaque rôle est un jeton du document. */
@@ -98,6 +144,19 @@ const createCanvas = (width: number, height: number): HTMLCanvasElement => {
   canvas.height = height;
   return canvas;
 };
+
+const rasterDeps = () => ({
+  createImage: () => new Image(),
+  createObjectUrl: (blob: Blob) => URL.createObjectURL(blob),
+  revokeObjectUrl: (url: string) => URL.revokeObjectURL(url),
+});
+
+const artOf = (frame: HTMLElement, read: (name: string) => string): Promise<PhotoArt | null> => loadArt({ root: frame, read, raster: (markup) => rasterizeSvg(markup, rasterDeps()) });
+
+const documentReader = () => rootVarReader({ getComputedStyle: (root) => getComputedStyle(root), root: document.documentElement });
+
+/** Le module des cadres, chargé au premier besoin seulement (chunk `glory_painter`, jamais dans la première peinture). */
+const gloryModule = () => import('./glory/glory-scene');
 
 function captureVideo(video: HTMLVideoElement): PhotoSource | null {
   const { videoWidth: width, videoHeight: height } = video;
@@ -208,21 +267,47 @@ export function browserPhotoEnv(): PhotoEnv {
     referral: () => existingReferralLink(currentReader()),
     createReferral: () => shareableReferralLink(currentReader()),
     save: (file) => savePhoto(file, doors()),
-    render: async ({ moment, photo, frame, referral }) => {
+    render: async ({ moment, photo, frame, referral, glory, at }) => {
       if (frame === null) return null;
-      const read = rootVarReader({ getComputedStyle: (root) => getComputedStyle(root), root: document.documentElement });
-      const art = await loadArt({
-        root: frame,
-        read,
-        raster: (markup) =>
-          rasterizeSvg(markup, {
-            createImage: () => new Image(),
-            createObjectUrl: (blob) => URL.createObjectURL(blob),
-            revokeObjectUrl: (url) => URL.revokeObjectURL(url),
-          }),
-      });
+      const read = documentReader();
+      const art = await artOf(frame, read);
       if (art === null) return null;
-      return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null });
+      return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: at ?? now(), createCanvas, referral: referral ?? null, glory: glory ?? null });
+    },
+    glory: async ({ step, texts, scale, frame, pose = null }) => {
+      try {
+        const { gloryFrameAt, gloryFrameFor, openGloryScene } = await gloryModule();
+        const pick = frame === undefined ? await gloryFrameFor(step) : await gloryFrameAt(frame);
+        return pick === null ? null : openGloryScene({ pick, texts, pose, scale });
+      } catch {
+        return null;
+      }
+    },
+    gloryOffer: async (step) => {
+      try {
+        return await (await gloryModule()).gloryOfferFor(step);
+      } catch {
+        return null;
+      }
+    },
+    gloryWarm: async (frame) => {
+      try {
+        return await (await gloryModule()).warmGloryFrame(frame);
+      } catch {
+        return false;
+      }
+    },
+    gloryThumb: async (thumb) => {
+      try {
+        return await (await gloryModule()).gloryThumbBlob(thumb);
+      } catch {
+        return null;
+      }
+    },
+    gloryKit: async (frame) => {
+      const read = documentReader();
+      const art = await artOf(frame, read);
+      return art === null ? null : { art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), scratch: scratchPool(createCanvas) };
     },
     developSource: (photo) => developNotebookSource(photo),
     keptStory: (story) => keptStoryOf(story, { createCanvas, decode: (blob) => createImageBitmap(blob) }),

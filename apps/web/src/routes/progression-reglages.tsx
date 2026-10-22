@@ -3,6 +3,9 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 
 import type { GameVisibility } from '@meeshy/shared/types/game';
+import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
+
+import { GameAtmosphereChoice } from '@/components/game-atmosphere-choice';
 
 import { GameSettings } from '@/components/game-settings';
 import { GAME_BRAND } from '@/components/game-surface';
@@ -12,7 +15,9 @@ import { appPreferencesQueryOptions } from '@/lib/api/app-preferences';
 import { performPreferenceEdit } from '@/lib/api/app-preferences-actions';
 import { apiDeps } from '@/lib/api/deps';
 import { appQueryClient } from '@/lib/api/query-client';
+import type { AtmosphereGate, AtmosphereOutcome } from '@/lib/game/atmosphere';
 import { gamePrefs, useGamePrefs } from '@/lib/game/preferences';
+import { useAtmosphereGate } from '@/lib/game/use-atmosphere-gate';
 import { setGameHidden, useGameSettings } from '@/lib/game/use-game-settings';
 import { suspendForGameCatalog } from '@/lib/i18n-game-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
@@ -33,6 +38,9 @@ import { ProgressionPage } from '@/routes/progression-page';
  * publique. Hors ligne, le geste est SUSPENDU dans les deux sens : le serveur
  * fait foi, et une bascule qui ne partirait pas serait défaite à la lecture
  * suivante. Réafficher ne rouvre aucune visibilité.
+ *
+ * « Mon atmosphère » (#10163) ouvre le MÊME écran de choix que le déroulé photo (E1), sans « Choisir plus
+ * tard » : choisir enregistre sur le compte et installe le pack ; hors ligne, l'écriture part avec la connexion.
  */
 const CLOSED: { readonly showcase: 'me'; readonly rank: 'me'; readonly treasury: 'me'; readonly atlas: 'me' } = {
   showcase: 'me',
@@ -48,6 +56,7 @@ export function ReglagesBody({
   hide,
   visibility,
   notifications,
+  atmosphere,
 }: {
   readonly progress: EngagementWithGame;
   readonly actions: GameV2Actions;
@@ -57,10 +66,23 @@ export function ReglagesBody({
   readonly visibility?: GameVisibility | undefined;
   /** Les notifications du jeu (#9490) — absent : pas de carte. */
   readonly notifications?: { readonly enabled: boolean | undefined; readonly onToggle: (on: boolean) => void; readonly error?: string | undefined } | undefined;
+  /** L'atmosphère des cadres (#10163) — absent : pas de carte. */
+  readonly atmosphere?: AtmosphereGate | undefined;
 }) {
   const prefs = useGamePrefs();
   const game = progress.game;
+  const [choosing, setChoosing] = useState(false);
+  const [atmosphereNotice, setAtmosphereNotice] = useState<string | undefined>(undefined);
+  const chooseAtmosphere = (picked: GloryAtmosphere): void => {
+    setChoosing(false);
+    setAtmosphereNotice(undefined);
+    void atmosphere?.choose(picked).then((outcome: AtmosphereOutcome) => {
+      if (outcome.status === 'queued') setAtmosphereNotice(gameText('game.settings.atmosphere.queued'));
+      if (outcome.status === 'refused') setAtmosphereNotice(gameErrorMessage(outcome.code));
+    });
+  };
   return (
+    <>
     <GameSettings
       prefs={prefs}
       visibility={game?.visibility ?? visibility}
@@ -75,7 +97,10 @@ export function ReglagesBody({
       onHidden={hide}
       onVisibility={actions.visibility.run}
       onLeaveLeague={() => actions.consent.run({ consent: false })}
+      atmosphere={atmosphere === undefined ? undefined : { current: atmosphere.current, onChange: () => setChoosing(true), notice: atmosphereNotice }}
     />
+    {choosing && atmosphere !== undefined ? <GameAtmosphereChoice current={atmosphere.current} tiles={atmosphere.tiles} onChoose={chooseAtmosphere} onClose={() => setChoosing(false)} /> : null}
+    </>
   );
 }
 
@@ -110,6 +135,7 @@ function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGam
   const actions = useGameV2Actions();
   const settings = useGameSettings(true);
   const preferences = useQuery({ ...appPreferencesQueryOptions(apiDeps), enabled: true }, appQueryClient);
+  const atmosphere = useAtmosphereGate(progress.game, { tiles: true });
   const [notificationsError, setNotificationsError] = useState<string | undefined>(undefined);
   const toggleNotifications = (on: boolean): void => {
     setNotificationsError(undefined);
@@ -129,6 +155,7 @@ function ReglagesScreenBody({ progress }: { readonly progress: EngagementWithGam
       hide={(on) => hideGame({ on, progress, actions })}
       visibility={settings.data?.visibility}
       notifications={{ enabled: preferences.data?.gameEnabled, onToggle: toggleNotifications, error: notificationsError }}
+      atmosphere={atmosphere}
     />
   );
 }

@@ -61,6 +61,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
     case communitiesByCommunityIdMembers(communityId: String)
     case conversations
     case conversationsByConversationId(conversationId: String)
+    case conversationsByConversationIdAttachments(conversationId: String)
     case conversationsByConversationIdMessages(conversationId: String)
     case conversationsByConversationIdParticipants(conversationId: String)
     case conversationsByConversationIdParticipantsByUserId(conversationId: String, userId: String)
@@ -204,6 +205,7 @@ public enum AdminEndpoint: MeeshyEndpoint, Sendable {
         case .communitiesByCommunityIdMembers(let communityId): return "/api/v1/admin/communities/\(communityId)/members"
         case .conversations: return "/api/v1/admin/conversations"
         case .conversationsByConversationId(let conversationId): return "/api/v1/admin/conversations/\(conversationId)"
+        case .conversationsByConversationIdAttachments(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/attachments"
         case .conversationsByConversationIdMessages(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/messages"
         case .conversationsByConversationIdParticipants(let conversationId): return "/api/v1/admin/conversations/\(conversationId)/participants"
         case .conversationsByConversationIdParticipantsByUserId(let conversationId, let userId): return "/api/v1/admin/conversations/\(conversationId)/participants/\(userId)"

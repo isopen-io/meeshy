@@ -148,9 +148,12 @@ export function AdminPostsPanel({
     {
       /* LES GESTES DE LA LIGNE (#10392) : hors ligne, remise en ligne, audience — en un appui et
          une confirmation, sans ouvrir la fiche. L'effet est immédiat sur cette page de liste.
-         Placés AVANT les compteurs (#10461) : à 1440 px ils tiennent dans la largeur visible. */
+         Placés AVANT les compteurs (#10461) : à 1440 px ils tiennent dans la largeur visible ; à 1280 px
+         (968 px de contenu, sous `@5xl`) cinq compteurs se retirent ; la cellule se replie ENTRE les
+         gestes, jamais dans un libellé ; à 375 px la carte les pose sur leur propre ligne (`stacked`). */
       id: 'gestures',
       header: translateAdmin(language, 'admin.gesture.col'),
+      stacked: true,
       cell: (row) => (
         <span className="flex flex-wrap items-center gap-1.5">
           <AdminButton tone="secondary" onClick={() => setPreviewId(row.id)} data={{ 'data-admin-post-preview-open': row.id }}>

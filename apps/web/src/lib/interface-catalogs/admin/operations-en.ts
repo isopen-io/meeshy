@@ -43,7 +43,7 @@ const f = {
   'admin.ops.action.backup': 'Run the backup',
   'admin.ops.action.image-prune': 'Clean up Docker',
   'admin.ops.action.backup.body': 'A full backup of this environment’s database and volumes starts now. At most one every 6 hours.',
-  'admin.ops.action.image-prune.body': 'Unused Docker images older than a week and the build cache are removed to free the disk; running containers and volumes are not touched. The clean-up covers the whole machine: on a shared host, it also touches production images. At most one clean-up per hour.',
+  'admin.ops.action.image-prune.body': 'Unused Docker images older than a week and the build cache are removed to free the disk; running containers and volumes are not touched. The clean-up covers the whole machine: on a shared host, it also touches production images. The previous image of each production service is kept for a rollback; older ones are pulled again from the registry. At most one clean-up per hour.',
   'admin.ops.action.confirmType': 'Type “{name}” to confirm',
   'admin.ops.action.reason': 'Reason (optional)',
   'admin.ops.action.cancel': 'Cancel',

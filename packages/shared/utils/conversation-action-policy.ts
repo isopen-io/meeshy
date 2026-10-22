@@ -10,6 +10,9 @@
  * `isAnonymous` est un invité ; le badge suit `conversationIsEndToEnd`, la loi
  * qui retire les services aux messages.
  *
+ * Masquer (`delete-for-me`) et signaler (`verifierCible`) exigent une participation
+ * ACTIVE, comme la passerelle (#11214).
+ *
  * Trois lectures suivent la passerelle à la lettre (#11215) : le rang de la
  * ligne se lit casse PLIÉE, comme `effectiveConversationRole` (des lignes
  * `CREATOR` héritées existent) ; Inviter suit `mayMintShareLink`, où tout
@@ -88,8 +91,8 @@ export function conversationActionsFor({ conversation, viewer }: ConversationAct
     invite: open && invites(conversation, viewer, moderates),
     leave: open && authority && viewer.isActiveMember && registered,
     deleteForAll: open && authority && rank >= MEMBER_ROLE_HIERARCHY.admin,
-    hide: registered,
-    report: registered,
+    hide: registered && viewer.isActiveMember,
+    report: registered && viewer.isActiveMember,
     manageMembers: open && MANAGED_TYPES.has(conversation.type) && moderates,
     adminOpen: platformAdministers(viewer),
     call: callable,

@@ -23,10 +23,14 @@ import type {
   ShowcaseVisibilityResponse,
   UserShowcaseResponse,
 } from '@meeshy/shared/types/game';
+import type { GamePhotoBlock } from '@meeshy/shared/types/game-photo';
+import { PHOTO_INVITATIONS, PHOTO_MOMENTS_SERVED_MAX } from '@meeshy/shared/types/game-photo-settings';
+import { GLORY_ATMOSPHERES } from '@meeshy/shared/types/glory-atmospheres';
 import { DUO_STATUSES } from '@meeshy/shared/utils/game/duo';
 import { ACHIEVEMENT_RARITIES } from '@meeshy/shared/utils/game/glory';
 import { LEAGUE_KEYS } from '@meeshy/shared/utils/game/league';
 import { SEASON_STEPS } from '@meeshy/shared/utils/game/season';
+import { TREASURY_TIERS } from '@meeshy/shared/utils/game/treasury';
 import { SHOWCASE_VISIBILITIES } from '@meeshy/shared/utils/game/trophies';
 
 import { isBool, isFraction, isInt, isOneOf, isRec, isText, optional, orNull, shape, type Rec } from './game-guards';
@@ -170,7 +174,41 @@ const isAchievementRarities = (value: unknown): value is GameAchievementRarities
       shape(entry, { rarity: isOneOf(ACHIEVEMENT_RARITIES), holders: (n) => isInt(n), population: (n) => isInt(n) }),
   );
 
-/** Les huit extensions que le bloc `game` peut porter. */
+/**
+ * LES RÉGLAGES ET LE REGISTRE DES MOMENTS PHOTO (#10163, L10b) — l'extension `photo` (L10a), lue comme les
+ * autres : l'atmosphère des cadres (`null` : pas encore choisie), « Me proposer d'immortaliser », la ligne de
+ * base et le registre des étapes présentées, notifiées, immortalisées. Une ligne de base illisible tombe à
+ * `null` SEULE, comme le contrat le fait côté serveur ; une étape d'avant le signal « immortalisée » lit
+ * `keptAt: null`.
+ */
+const isTreasuryTier = isOneOf(TREASURY_TIERS.map((tier) => tier.key));
+const isAtmosphere = orNull(isOneOf(GLORY_ATMOSPHERES));
+
+const isPhotoBaseline = (value: unknown): boolean =>
+  shape(value, {
+    rank: isText,
+    division: orNull((v) => isInt(v, 1, 5)),
+    levelRecord: (v) => isInt(v),
+    prestige: (v) => isInt(v),
+    minted: (v) => isInt(v),
+    treasuryTier: orNull(isTreasuryTier),
+    flameRecord: (v) => isInt(v),
+    pastCycleRecords: optional(arrayOf((v) => isInt(v), 400)),
+  });
+
+const isPhotoMoment = (value: unknown): boolean =>
+  shape(value, { stepId: isText, detectedAt: orNull(isIsoDate), presentedAt: orNull(isIsoDate), notifiedAt: orNull(isIsoDate), keptAt: optional(orNull(isIsoDate)) });
+
+const readPhotoBlock = (value: unknown): GamePhotoBlock | undefined => {
+  if (!shape(value, { atmosphere: isAtmosphere, invitations: isOneOf(PHOTO_INVITATIONS), baselineAt: orNull(isIsoDate), treasuryPeakTier: optional(orNull(isTreasuryTier)), moments: arrayOf(isPhotoMoment, PHOTO_MOMENTS_SERVED_MAX) }))
+    return undefined;
+  const moments = (value['moments'] as readonly Rec[]).map((moment) => ({ ...moment, keptAt: moment['keptAt'] ?? null }));
+  const baseline = isPhotoBaseline(value['baseline']) ? value['baseline'] : null;
+  const treasuryPeakTier = value['treasuryPeakTier'] ?? null;
+  return { ...value, baseline, treasuryPeakTier, moments } as GamePhotoBlock;
+};
+
+/** Les neuf extensions que le bloc `game` peut porter. */
 export type GameExtensions = {
   readonly league?: GameLeagueBlock;
   readonly duo?: GameDuoBlock;
@@ -180,11 +218,13 @@ export type GameExtensions = {
   readonly prestige?: GamePrestigeBlock;
   readonly visibility?: GameVisibility;
   readonly achievementRarities?: GameAchievementRarities;
+  readonly photo?: GamePhotoBlock;
 };
 
 /** Les extensions de ce bloc, chacune lue SEULE : une extension illisible n'est pas posée, les autres le sont. */
 export function readGameExtensions(block: Rec): GameExtensions {
   const season = block['season'];
+  const photo = readPhotoBlock(block['photo']);
   return {
     ...(isLeagueBlock(block['league']) ? { league: block['league'] } : {}),
     ...(isDuoBlock(block['duo']) ? { duo: block['duo'] } : {}),
@@ -194,10 +234,11 @@ export function readGameExtensions(block: Rec): GameExtensions {
     ...(isPrestigeBlock(block['prestige']) ? { prestige: block['prestige'] } : {}),
     ...(isVisibilityBlock(block['visibility']) ? { visibility: block['visibility'] } : {}),
     ...(isAchievementRarities(block['achievementRarities']) ? { achievementRarities: block['achievementRarities'] } : {}),
+    ...(photo === undefined ? {} : { photo }),
   };
 }
 
-export const GAME_EXTENSION_KEYS = ['league', 'duo', 'season', 'trophies', 'atlas', 'prestige', 'visibility', 'achievementRarities'] as const;
+export const GAME_EXTENSION_KEYS = ['league', 'duo', 'season', 'trophies', 'atlas', 'prestige', 'visibility', 'achievementRarities', 'photo'] as const;
 
 /** Le bloc `game` tel que le web le lit : le contrat, tel quel. */
 export type GameBlockV2 = GameBlock;

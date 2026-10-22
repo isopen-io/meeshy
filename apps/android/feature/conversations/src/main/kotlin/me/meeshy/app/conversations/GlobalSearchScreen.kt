@@ -307,6 +307,7 @@ private fun SearchResults(
             GlobalSearchTab.CONVERSATIONS -> items(state.results.conversations, key = { it.id }) { conversation ->
                 ConversationHitRow(
                     conversation = conversation,
+                    currentUserId = state.currentUserId,
                     onClick = { onOpenConversation(conversation.id) },
                 )
             }
@@ -387,8 +388,8 @@ private fun buildHighlightedContent(content: String, query: String, wash: Color)
 private val SEARCH_HIGHLIGHT_WASH = MeeshyPalette.Warning.copy(alpha = 0.45f)
 
 @Composable
-private fun ConversationHitRow(conversation: ApiConversation, onClick: () -> Unit) {
-    val title = conversation.displayTitle()
+private fun ConversationHitRow(conversation: ApiConversation, currentUserId: String?, onClick: () -> Unit) {
+    val title = conversation.displayTitle(currentUserId)
     ResultCard(onClick = onClick) {
         MeeshyAvatar(name = title, size = 40.dp)
         Spacer(Modifier.width(MeeshySpacing.md))

@@ -16,7 +16,7 @@ import * as stickerPacksEndpoints from '@meeshy/shared/api/endpoints/sticker-pac
 import type { ConversationsDeps } from './conversations';
 import type { ApiResult } from './http';
 import { packQueryKeys } from './pack-query-keys';
-import { listOf, loadCatalogueOf, loadDetailOf, loadInstalledOf, setInstalledOf, type PackPort } from './packs';
+import { decodePackNames, listOf, loadCatalogueOf, loadDetailOf, loadInstalledOf, setInstalledOf, type PackPort } from './packs';
 
 /**
  * **LE PORT DES PACKS DE STICKERS** (#9141) — `stickerPacks`
@@ -78,6 +78,7 @@ const WireSummary = z.object({
   installCount: z.number(),
   price: z.optional(z.nullable(z.number())),
   owned: z.optional(z.boolean()),
+  names: z.optional(z.record(z.string(), z.unknown())),
 });
 
 const WireDetail = z.extend(WireSummary, {
@@ -87,12 +88,13 @@ const WireDetail = z.extend(WireSummary, {
 
 type WireSummaryData = z.infer<typeof WireSummary>;
 
-/** `price` et `owned` sont additifs : absents du fil, ils restent absents du résumé (jamais `undefined` posé). */
-const summaryOf = ({ price, owned, coverUrl, ...rest }: WireSummaryData): StickerPackSummary => ({
+/** `price`, `owned` et `names` sont additifs : absents du fil, ils restent absents du résumé (jamais `undefined` posé). */
+const summaryOf = ({ price, owned, names, coverUrl, ...rest }: WireSummaryData): StickerPackSummary => ({
   ...rest,
   coverUrl: coverUrl ?? null,
   ...(price === undefined ? {} : { price }),
   ...(owned === undefined ? {} : { owned }),
+  ...(names === undefined ? {} : { names: decodePackNames(names) }),
 });
 
 export function decodePackSummary(raw: unknown): StickerPackSummary | null {
@@ -124,7 +126,7 @@ export const stickerPackPort: PackPort<StickerPackSummary, StickerPackDetail, St
   absentMeansEmpty: false,
 };
 
-/** Un pack intégré, tel que le serveur le servirait — ses stickers, le client les dessine. */
+/** Un pack intégré, tel que le serveur le servirait — ses stickers, le client les dessine ; ses sept langues, le catalogue partagé les porte (#10189). */
 export const builtinPackDetail = (slug: string, installed: boolean): StickerPackDetail | null => {
   const pack = BUILTIN_STICKER_PACKS.find((candidate) => candidate.slug === slug);
   if (pack === undefined) return null;
@@ -132,6 +134,7 @@ export const builtinPackDetail = (slug: string, installed: boolean): StickerPack
     slug: pack.slug,
     name: pack.name,
     description: pack.description,
+    names: pack.names,
     author: STICKER_PACK_AUTHOR_MEESHY,
     builtin: true,
     status: 'approved',

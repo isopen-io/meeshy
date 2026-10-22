@@ -134,10 +134,21 @@ describe('les packs (§ 5.10.5, PP1, PP2)', () => {
     expect(afrique).toMatchObject({ atmosphere: 'afrique', installedByDefault: true, removable: false, collections: [{ slug: 'savane' }, { slug: 'royaumes' }] });
   });
 
-  it('les sept atmosphères ont chacune leur pack ; les moments et le trésor sont installés par défaut, non retirables', () => {
+  it('les sept atmosphères ont chacune leur pack ; les moments, le trésor et les hauts faits sont installés par défaut, non retirables', () => {
     expect(entries.flatMap((entry) => (entry.atmosphere === undefined ? [] : [entry.atmosphere]))).toEqual([...GLORY_ATMOSPHERES]);
-    for (const slug of ['moments', 'tresor']) expect(entries.find((entry) => entry.slug === slug)).toMatchObject({ installedByDefault: true, removable: false });
+    for (const slug of ['moments', 'tresor', 'succes']) expect(entries.find((entry) => entry.slug === slug)).toMatchObject({ installedByDefault: true, removable: false });
     expect(entries.filter((entry) => entry.atmosphere !== undefined && entry.atmosphere !== 'afrique').every((entry) => entry.removable && !entry.installedByDefault)).toBe(true);
+  });
+
+  it('le pack des hauts faits (LS, #10168, PP9) est UNIQUE : cinq raretés et un neutre, tous d’usage `achievement`, sans atmosphère, sans cadre de rang ni libre', () => {
+    const succes = entries.find((entry) => entry.slug === 'succes');
+    expect(succes).toMatchObject({ collections: [{ slug: 'succes' }], hidden: false });
+    expect(succes?.atmosphere).toBeUndefined();
+    const frames = succes === undefined ? [] : contractOf(succes);
+    expect(frames.map((frame) => frame.id).sort()).toEqual(['succes.common', 'succes.epic', 'succes.legendary', 'succes.mythic', 'succes.neutre', 'succes.rare']);
+    expect(frames.every((frame) => frame.usage.kind === 'achievement' && frame.appliesTo.family === 'achievement')).toBe(true);
+    expect(frames.find((frame) => frame.id === 'succes.neutre')?.usage).toEqual({ kind: 'achievement' });
+    expect(entries.filter((entry) => contractOf(entry).some((frame) => frame.usage.kind === 'achievement')).map((entry) => entry.slug)).toEqual(['succes']);
   });
 
   it('un identifiant de cadre est unique dans tout le registre', () => {

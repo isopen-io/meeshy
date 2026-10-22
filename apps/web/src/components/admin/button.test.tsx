@@ -29,6 +29,18 @@ describe('AdminButton — le bouton commun de l’administration', () => {
     expect(buttonOf(host).className).toContain('rounded-card');
   });
 
+  test('un bouton de ligne (md) ne replie jamais son libellé ; le gros bouton (lg) le peut (#10461)', async () => {
+    const host = await mount(
+      <>
+        <AdminButton>Mettre hors ligne</AdminButton>
+        <AdminButton size="lg">Régénérer le mot de passe</AdminButton>
+      </>,
+    );
+    const [row, big] = [...host.querySelectorAll('button')];
+    expect(row?.className).toContain('whitespace-nowrap');
+    expect(big?.className).not.toContain('whitespace-nowrap');
+  });
+
   test('secondaire et danger : une surface bordée, le danger porte le ton du danger', async () => {
     const host = await mount(
       <>

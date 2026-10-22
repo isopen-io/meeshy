@@ -1,10 +1,13 @@
 import * as adminEndpoints from '@meeshy/shared/api/endpoints/admin';
+import { maskedAttachment } from '@meeshy/shared/utils/attachment-protection';
+
+import { attachmentKindOf, type MediaHubAttachmentItem } from '@/lib/view/media-hub';
 
 import { type AdminDeps, asCount, asRecord, asText, pageServie, type PageServie } from './admin';
 import { adminPageOf, type AdminPage } from './admin-page';
-import { decodeMessage } from './decode';
+import { decodeAttachment, decodeMessage } from './decode';
 import type { ApiResult } from './http';
-import type { Message } from './types';
+import type { Attachment, Message } from './types';
 
 /**
  * **LA LECTURE SOUVERAINE DES CONVERSATIONS** (#6862) — les décodeurs des deux
@@ -79,6 +82,8 @@ import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /** Le motif écrit est refusé par le SCHÉMA de la route sous dix caractères. */
 export const MOTIF_LONGUEUR_MINIMALE = 10;
+/** … et par le schéma de la route des pièces (#11510) au-delà de cinq cents : la saisie s'arrête là, le 400 n'arrive jamais. */
+export const MOTIF_LONGUEUR_MAXIMALE = 500;
 
 export const ADMIN_CONVERSATIONS_PAGE_SIZE = 20;
 export const ADMIN_MESSAGES_PAGE_SIZE = 30;
@@ -406,3 +411,132 @@ export function mergeAdminThreadPages(pages: readonly AdminSovereignThreadPage[]
 /** L'offset de la page plus ANCIENNE suivante, ou `undefined` quand le fil est remonté jusqu'au début. */
 export const nextAdminThreadOffset = (page: AdminSovereignThreadPage): number | undefined =>
   page.hasMore ? page.offset + ADMIN_MESSAGES_PAGE_SIZE : undefined;
+
+// ---------------------------------------------------------------------------
+// LES PIÈCES — GET /admin/conversations/:id/attachments (#11510)
+// ---------------------------------------------------------------------------
+
+/**
+ * **LES PIÈCES D'UNE CONVERSATION, SANS REMONTER LE FIL** (#11510).
+ *
+ * L'onglet « Médias » tirait ses pièces des pages de messages déjà lues : sur
+ * une conversation de milliers de messages pauvre en médias, il fallait charger
+ * beaucoup de pages — chacune une lecture journalisée — pour en trouver
+ * quelques-uns. La passerelle sert désormais les pièces DIRECTEMENT, au curseur
+ * et par genre, sous la même projection de protection que le fil.
+ *
+ * ## Le client VOILE une seconde fois
+ *
+ * La passerelle retient déjà l'URL, la vignette, le `thumbHash`, les variantes,
+ * la transcription et les pistes d'une pièce protégée (`isProtected: true`). Le
+ * décodeur ne s'y fie pas : sur une pièce RETENUE, il retire ces champs
+ * lui-même — un témoin fail-closed se mesure sur une charge plus bavarde que ce
+ * que le serveur sert. Et une pièce retenue SANS drapeau de pièce (le MESSAGE
+ * est protégé : chiffré, à vue unique, expiré) n'entre pas dans la pellicule :
+ * aucune tuile ne saurait la voiler, et le fil en dit déjà le constat.
+ *
+ * ## Le porteur est un `Message` MINIMAL, composé du résumé servi
+ *
+ * `MediaTile` et `MediaHubRow` lisent `message.createdAt`, `message.sender` et
+ * `message.id` — rien d'autre. Le résumé servi par la route est complété des
+ * champs que le type partagé déclare requis et que la route ne sert pas,
+ * exactement comme {@link decodeThreadMessage} le fait pour le fil, puis passe
+ * par `decodeMessage` — le même décodeur.
+ */
+export const ADMIN_ATTACHMENTS_PAGE_SIZE = 60;
+
+/** Les genres de pièce que la route filtre — la partition de `attachmentKindOf`. */
+export const ADMIN_MEDIA_KINDS = ['visual', 'audio', 'document', 'contact'] as const;
+
+export type AdminMediaKind = (typeof ADMIN_MEDIA_KINDS)[number];
+
+/** UNE clé par genre demandé : filtrer est une AUTRE requête, pas un tri local. */
+export const adminConversationMediaQueryKey = (conversationId: string, kind: AdminMediaKind | null) =>
+  [ADMIN_SOUVERAIN_PREFIXE, 'attachments', conversationId, kind ?? 'all'] as const;
+
+export type AdminSovereignMediaPage = {
+  /** Dans l'ordre SERVI — le plus récent d'abord, l'ordre de la pellicule. */
+  readonly items: readonly MediaHubAttachmentItem[];
+  readonly nextCursor: string | null;
+};
+
+/** Ce que la passerelle RETIENT d'une pièce protégée — retiré ici aussi, quoi que la charge porte. */
+const SECRETS_DUNE_PIECE = { fileUrl: null, thumbnailUrl: null, thumbHash: null, imageVariants: null, transcription: null, translations: null, metadata: null } as const;
+
+function decodeMediaItem(entree: unknown): MediaHubAttachmentItem | null {
+  const ligne = asRecord(entree);
+  if (ligne === null || typeof ligne.id !== 'string' || ligne.id === '') return null;
+  if (typeof ligne.mimeType !== 'string' || ligne.mimeType === '') return null;
+  const porteur = asRecord(ligne.message);
+  if (porteur === null || typeof porteur.id !== 'string' || porteur.id === '') return null;
+  if (typeof porteur.createdAt !== 'string' || porteur.createdAt === '') return null;
+
+  const { message: _porteur, isProtected, ...piece } = ligne;
+  const retenue = isProtected === true;
+  /* Les DEUX casts du décodeur — celui-ci et celui du porteur, plus bas — sont
+     à la frontière : la charge est `unknown`, le schéma de réponse de la route
+     en est le contrat, et `decodeAttachment` / `decodeMessage` retirent les
+     `null` et complètent ce que la route ne sert pas. */
+  const attachment = decodeAttachment({ ...piece, ...(retenue ? SECRETS_DUNE_PIECE : {}), messageId: porteur.id } as unknown as Attachment);
+  if (retenue && !maskedAttachment(attachment)) return null;
+
+  const message = decodeMessage({
+    id: porteur.id,
+    senderId: typeof porteur.senderId === 'string' ? porteur.senderId : '',
+    sender: porteur.sender,
+    content: '',
+    originalLanguage: '',
+    messageType: 'text',
+    messageSource: 'user',
+    isEdited: false,
+    isViewOnce: false,
+    viewOnceCount: 0,
+    isBlurred: false,
+    translations: [],
+    deliveredCount: 0,
+    readCount: 0,
+    createdAt: porteur.createdAt,
+    timestamp: porteur.createdAt,
+    attachments: [attachment],
+  } as unknown as Message);
+
+  return { kind: attachmentKindOf(attachment.mimeType), key: `${message.id}:${attachment.id}`, messageId: message.id, message, attachment };
+}
+
+export function decodeAdminSovereignMedia(page: PageServie): AdminSovereignMediaPage {
+  const items = page.lignes.map(decodeMediaItem).filter((item): item is MediaHubAttachmentItem => item !== null);
+  const cursor = page.meta.nextCursor;
+  const nextCursor = page.meta.hasMore !== false && typeof cursor === 'string' && cursor !== '' ? cursor : null;
+  return { items, nextCursor };
+}
+
+export async function loadAdminSovereignMedia(
+  params: AdminDeps & {
+    readonly conversationId: string;
+    /** Le jeton opaque de la page précédente — `null` pour la première. */
+    readonly cursor: string | null;
+    readonly kind: AdminMediaKind | null;
+    /** Même règle que le fil : absent (`null`), la lecture part sans `reason`, ce que la passerelle n'admet que du rang souverain. */
+    readonly reason: string | null;
+    readonly signal?: AbortSignal;
+  },
+): Promise<ApiResult<AdminSovereignMediaPage>> {
+  const query = new URLSearchParams({
+    limit: String(ADMIN_ATTACHMENTS_PAGE_SIZE),
+    ...(params.cursor === null ? {} : { cursor: params.cursor }),
+    ...(params.kind === null ? {} : { kind: params.kind }),
+    ...(params.reason === null ? {} : { reason: params.reason }),
+  });
+
+  const result = await params.transport.request<unknown>({
+    method: 'GET',
+    path: `${adminEndpoints.conversationsByConversationIdAttachments(params.conversationId)}?${query.toString()}`,
+    ...(params.signal === undefined ? {} : { signal: params.signal }),
+  });
+  if (!result.ok) return result;
+
+  return { ok: true, data: decodeAdminSovereignMedia(pageServie(result)) };
+}
+
+/** Le curseur de la page suivante, ou `undefined` quand la pellicule est épuisée. */
+export const nextAdminMediaCursor = (page: AdminSovereignMediaPage): string | undefined => page.nextCursor ?? undefined;
