@@ -1,5 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 
+import type { GameBlock } from '@meeshy/shared/types/game';
 import type { GamePhotoBlock } from '@meeshy/shared/types/game-photo';
 import { DEFAULT_PHOTO_INVITATIONS } from '@meeshy/shared/types/game-photo-settings';
 import { DEFAULT_GLORY_ATMOSPHERE, GLORY_ATMOSPHERES, type GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
@@ -26,7 +27,8 @@ import { onGame } from '@/lib/view/game-optimistic-v2';
  * CHOISIR = INSTALLER : la passerelle pose l'installation du pack dans la même écriture ; ici l'étagère des
  * packs installés et l'extension `photo` se posent AVANT la réponse (optimistes), un refus les défait, une
  * panne ou l'absence de réseau met l'écriture dans UNE file (dédoublonnée : le dernier choix gagne) rejouée au
- * retour du réseau, et un ancien serveur (404) laisse le choix local. Quand l'installation est confirmée,
+ * retour du réseau, et un ancien serveur (404) laisse le choix local — SANS relecture auprès de lui ni époque :
+ * sa relecture effacerait l'optimiste, et personne n'a installé de pack. Quand l'installation est confirmée,
  * `onInstalled` fait avancer l'époque du catalogue des cadres : le déroulé ouvert recompose son aperçu.
  */
 
@@ -60,6 +62,18 @@ export function noteAtmosphereDeferred(storage: SafeStorage, userId: string): vo
 export const shouldOfferAtmosphere = (input: { readonly stepId: string; readonly atmosphere: GloryAtmosphere | null; readonly deferrals: number }): boolean =>
   input.deferrals < ATMOSPHERE_SCREEN_SHOWINGS &&
   gloryFramesFor({ stepId: input.stepId, atmosphere: input.atmosphere, lastChosen: null, catalog: [], installed: new Set() }).needsAtmosphere;
+
+/**
+ * L'écran peut-il encore s'ouvrir pour CE compte ? Son rang doit photographier dans une atmosphère (dès Ambassadeur,
+ * par la loi partagée) : avant, aucune étape de rang n'en a besoin, et Progression ne paie pas la boutique des cadres
+ * pour un compte à qui l'écran ne se montrera jamais.
+ */
+export const atmosphereMayBeOffered = (input: { readonly game: GameBlock | null | undefined; readonly deferrals: number }): boolean => {
+  const glory = input.game?.glory;
+  if (glory === undefined) return false;
+  const stepId = `rank:${glory.rank}:${glory.division5 ?? glory.division ?? 0}`;
+  return shouldOfferAtmosphere({ stepId, atmosphere: input.game?.photo?.atmosphere ?? null, deferrals: input.deferrals });
+};
 
 const EMPTY_PHOTO: GamePhotoBlock = { atmosphere: null, invitations: DEFAULT_PHOTO_INVITATIONS, baselineAt: null, baseline: null, treasuryPeakTier: null, moments: [] };
 
@@ -99,10 +113,16 @@ const afterServer = (deps: AtmosphereDeps): void => {
   deps.onInstalled();
 };
 
-/** `true` : l'écriture a abouti (ou le serveur est ancien) ; `false` : panne, à rejouer ; un refus rend son code. */
-async function send(job: AtmosphereJob, deps: AtmosphereDeps): Promise<{ readonly kind: 'done'; readonly packInstalled: boolean } | { readonly kind: 'retry' } | { readonly kind: 'refused'; readonly code: string | undefined }> {
+/**
+ * `done` : le serveur a écrit ; `local` : un ANCIEN serveur (404) — le choix ne vit que dans ce cache, et surtout
+ * on ne le relit PAS auprès de lui (il rendrait l'extension absente et l'étagère sans le pack, effaçant l'optimiste
+ * à l'instant) ; `retry` : panne, à rejouer ; un refus rend son code.
+ */
+type Sent = { readonly kind: 'done'; readonly packInstalled: boolean } | { readonly kind: 'local' } | { readonly kind: 'retry' } | { readonly kind: 'refused'; readonly code: string | undefined };
+
+async function send(job: AtmosphereJob, deps: AtmosphereDeps): Promise<Sent> {
   const result = await setFrameAtmosphere(deps.transport, job.requestId, job.atmosphere);
-  if (result.ok) return { kind: 'done', packInstalled: result.data.packInstalled };
+  if (result.ok) return result.data.local ? { kind: 'local' } : { kind: 'done', packInstalled: result.data.packInstalled };
   return result.status === 0 || result.status >= 500 || result.status === 408 || result.status === 429 ? { kind: 'retry' } : { kind: 'refused', code: result.code };
 }
 
@@ -131,6 +151,7 @@ export async function chooseAtmosphere(atmosphere: GloryAtmosphere, deps: Atmosp
     return { status: 'refused', code: sent.code };
   }
   deps.queue.remove(QUEUE_KEY);
+  if (sent.kind === 'local') return { status: 'saved', packInstalled: false };
   afterServer(deps);
   return { status: 'saved', packInstalled: sent.packInstalled };
 }
@@ -142,7 +163,7 @@ export async function flushAtmosphereQueue(deps: AtmosphereDeps): Promise<void> 
     const sent = await send(job, deps);
     if (sent.kind === 'retry') return false;
     if (sent.kind === 'done') afterServer(deps);
-    else void deps.client.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
+    if (sent.kind === 'refused') void deps.client.invalidateQueries({ queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY });
     return true;
   });
 }

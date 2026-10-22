@@ -1,18 +1,29 @@
 import { describe, expect, test } from 'bun:test';
-import { QueryClient } from '@tanstack/react-query';
+import { QueryClient, QueryObserver } from '@tanstack/react-query';
 
 import { resolveEngagementProgress } from '@meeshy/shared/utils/engagement-progress';
 
 import { ENGAGEMENT_PROGRESS_QUERY_KEY, type EngagementWithGame } from '@/lib/api/engagement';
 import { ENGAGEMENT_PROGRESS_FIXTURE } from '@/lib/api/engagement-fixture';
-import { gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
+import { gameBlockFixture, gameBlockWithExtrasFixture } from '@/lib/api/game-fixture';
 import { packQueryKeys } from '@/lib/api/pack-query-keys';
 import type { FramePackSummary } from '@/lib/api/packs-glory-frame';
 import { createOfflineQueue } from '@/lib/offline-queue';
 import type { SafeStorage } from '@/lib/storage';
 import { routedTransport, type RoutedReply } from '@/test-support/routed-transport';
 
-import { ATMOSPHERE_SCREEN_SHOWINGS, atmosphereDeferralsOf, atmosphereTilesOf, chooseAtmosphere, flushAtmosphereQueue, noteAtmosphereDeferred, shouldOfferAtmosphere, withAtmosphere, type AtmosphereJob } from './atmosphere';
+import {
+  ATMOSPHERE_SCREEN_SHOWINGS,
+  atmosphereDeferralsOf,
+  atmosphereMayBeOffered,
+  atmosphereTilesOf,
+  chooseAtmosphere,
+  flushAtmosphereQueue,
+  noteAtmosphereDeferred,
+  shouldOfferAtmosphere,
+  withAtmosphere,
+  type AtmosphereJob,
+} from './atmosphere';
 
 /**
  * LE CHOIX D'ATMOSPHÈRE (#10163, L10b ; D7 #10182) — une préférence de COMPTE, Afrique éternelle par défaut,
@@ -74,6 +85,18 @@ describe('l’écran se montre à Ambassadeur sans atmosphère, et se repropose 
     storage.setItem('meeshy.game.atmosphere-deferred.u1', 'beaucoup');
     expect(atmosphereDeferralsOf(storage, 'u1')).toBe(0);
   });
+
+  test('l’écran ne peut s’ouvrir que pour un compte dont le RANG photographie dans une atmosphère : avant Ambassadeur, jamais, même sans atmosphère', () => {
+    const ambassador = gameBlockFixture({ glory: 130_000 });
+    expect(ambassador.glory.rank).toBe('ambassadeur');
+    expect(atmosphereMayBeOffered({ game: ambassador, deferrals: 0 })).toBe(true);
+    expect(atmosphereMayBeOffered({ game: ambassador, deferrals: ATMOSPHERE_SCREEN_SHOWINGS })).toBe(false);
+    expect(atmosphereMayBeOffered({ game: { ...ambassador, photo: { ...withAtmosphere({ ...seed(), game: ambassador }, 'olympe').game!.photo! } }, deferrals: 0 })).toBe(false);
+    const voix = gameBlockFixture({ glory: 6_500 });
+    expect(voix.glory.rank).toBe('voix');
+    expect(atmosphereMayBeOffered({ game: voix, deferrals: 0 })).toBe(false);
+    expect(atmosphereMayBeOffered({ game: null, deferrals: 0 })).toBe(false);
+  });
 });
 
 describe('withAtmosphere', () => {
@@ -93,13 +116,23 @@ describe('chooseAtmosphere : choisir = installer, optimiste', () => {
     client.setQueryData(ENGAGEMENT_PROGRESS_QUERY_KEY, seed());
     client.setQueryData(FRAME_KEYS.catalogue, [summary('afrique', true), summary('olympe', false)]);
     client.setQueryData(FRAME_KEYS.installed, [summary('afrique', true)]);
+    /* Des écrans ouverts sur ces clés, servis par un serveur qui ne connaît ni l'extension `photo` ni le pack : une
+       invalidation les relit aussitôt, comme le hub et le carnet le feraient. */
+    const watchOldServer = (): void => {
+      new QueryObserver(client, { queryKey: ENGAGEMENT_PROGRESS_QUERY_KEY, queryFn: async () => seed() }).subscribe(() => undefined);
+      new QueryObserver(client, { queryKey: FRAME_KEYS.installed, queryFn: async () => [summary('afrique', true)] }).subscribe(() => undefined);
+    };
+    const settled = async (): Promise<void> => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      while (client.isFetching() > 0) await new Promise((resolve) => setTimeout(resolve, 0));
+    };
     const routed = routedTransport(answer);
     const queue = createOfflineQueue<AtmosphereJob>();
     const bumps: number[] = [];
     const deps = { transport: routed.transport, client, queue, isOnline: () => online, requestId: () => 'req-a', onInstalled: () => void bumps.push(1) };
     const view = () => client.getQueryData<EngagementWithGame>(ENGAGEMENT_PROGRESS_QUERY_KEY);
     const installed = () => (client.getQueryData<readonly FramePackSummary[]>(FRAME_KEYS.installed) ?? []).map((pack) => pack.slug);
-    return { client, deps, calls: routed.calls, queue, bumps, view, installed };
+    return { client, deps, calls: routed.calls, queue, bumps, view, installed, watchOldServer, settled };
   };
 
   test('le serveur accepte : l’atmosphère et le pack installé se posent AVANT la réponse, l’étagère des cadres le sait', async () => {
@@ -142,10 +175,24 @@ describe('chooseAtmosphere : choisir = installer, optimiste', () => {
     expect(b.queue.size()).toBe(1);
   });
 
-  test('un ancien serveur (404) : le choix reste local, le pack n’est pas déclaré installé par le serveur', async () => {
+  test('un ancien serveur (404) : le choix reste local APRÈS relecture — rien n’est invalidé, l’époque du catalogue n’avance pas, la file est vide', async () => {
     const b = bench(() => ({ ok: false, status: 404, error: 'Not found' }));
+    b.watchOldServer();
     expect(await chooseAtmosphere('olympe', b.deps)).toEqual({ status: 'saved', packInstalled: false });
+    await b.settled();
     expect(b.view()?.game?.photo?.atmosphere).toBe('olympe');
+    expect(b.installed()).toEqual(['afrique', 'olympe']);
+    expect(b.bumps).toHaveLength(0);
+    expect(b.queue.size()).toBe(0);
+  });
+
+  test('le serveur accepte : la relecture auprès de lui remplace l’optimiste (le choix écrit se relit), l’époque avance', async () => {
+    const b = bench(() => ({ ok: true, data: { atmosphere: 'olympe', packInstalled: true } }));
+    b.watchOldServer();
+    await chooseAtmosphere('olympe', b.deps);
+    await b.settled();
+    expect(b.installed()).toEqual(['afrique']);
+    expect(b.bumps).toHaveLength(1);
   });
 });
 

@@ -4,11 +4,12 @@ import { act } from 'react';
 import type { GloryAtmosphere } from '@meeshy/shared/types/glory-atmospheres';
 
 import { GamePhotoFlow } from '@/components/game-photo-flow';
-import { atmosphereTilesOf, type AtmosphereGate } from '@/lib/game/atmosphere';
+import { atmosphereTilesOf, type AtmosphereGate, type AtmosphereOutcome } from '@/lib/game/atmosphere';
 import { bumpGloryCatalogEpoch } from '@/lib/game-photo/glory-catalog-epoch';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import type { GloryScene, GloryStep } from '@/lib/game-photo/glory/glory-scene';
 import { rankMoment } from '@/lib/game-photo/moments';
+import { gameErrorMessage } from '@/lib/view/game-copy';
 import { choose, env, rank, settle, setupGamePhotoFlowTests } from '@/test-support/game-photo-flow-harness';
 
 const { mount, click, rerender } = setupGamePhotoFlowTests();
@@ -22,13 +23,15 @@ const { mount, click, rerender } = setupGamePhotoFlowTests();
 const ambassador = rankMoment({ rank: 'ambassadeur', division: 1 });
 const tiles = atmosphereTilesOf({ catalogue: [], installed: [], origin: 'https://gate.example' });
 
-const gate = (current: GloryAtmosphere | null, log: { chosen: GloryAtmosphere[]; deferred: number }, offers = true): AtmosphereGate => ({
+const SAVED: AtmosphereOutcome = { status: 'saved', packInstalled: true };
+
+const gate = (current: GloryAtmosphere | null, log: { chosen: GloryAtmosphere[]; deferred: number }, offers = true, outcome: AtmosphereOutcome = SAVED): AtmosphereGate => ({
   current,
   tiles,
   offers: () => offers && current === null,
   choose: async (atmosphere) => {
     log.chosen.push(atmosphere);
-    return { status: 'saved', packInstalled: true };
+    return outcome;
   },
   defer: () => void (log.deferred += 1),
 });
@@ -74,6 +77,20 @@ describe('l’atmosphère dans le déroulé (#10163)', () => {
     expect(log).toEqual({ chosen: [], deferred: 1 });
     expect(choose(host, 'selfie')).not.toBeNull();
     expect(steps.at(-1)).toMatchObject({ atmosphere: null });
+  });
+
+  test('le serveur refuse le choix : le déroulé le DIT (la photo partira dans l’Afrique éternelle), au lieu de se taire', async () => {
+    const log = { chosen: [] as GloryAtmosphere[], deferred: 0 };
+    const { env: e, log: flow } = scenic();
+    const refused: AtmosphereOutcome = { status: 'refused', code: 'GAME_WRITE_CONFLICT' };
+    const host = await mount(<GamePhotoFlow moment={ambassador} env={e} atmosphere={gate(null, log, true, refused)} onClose={(result) => flow.closed.push(result)} />);
+    await click(host.querySelector<HTMLElement>('[data-atmosphere-option="olympe"]'));
+    await click(host.querySelector<HTMLElement>('[data-atmosphere-continue]'));
+    await settle();
+    expect(log.chosen).toEqual(['olympe']);
+    expect(host.querySelector('[data-atmosphere-choice]')).toBeNull();
+    expect(choose(host, 'selfie')).not.toBeNull();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe(gameErrorMessage('GAME_WRITE_CONFLICT'));
   });
 
   test('une étape que la porte ne vise pas (Voix II), ou aucune porte : le déroulé s’ouvre directement', async () => {

@@ -20,8 +20,8 @@ import { createOfflineQueue } from '@/lib/offline-queue';
 import { safeLocalStorage } from '@/lib/storage';
 
 import {
-  ATMOSPHERE_SCREEN_SHOWINGS,
   atmosphereDeferralsOf,
+  atmosphereMayBeOffered,
   atmosphereTilesOf,
   chooseAtmosphere,
   flushAtmosphereQueue,
@@ -37,8 +37,9 @@ import {
  * LA PORTE D'ATMOSPHÈRE DE L'APPLICATION (#10163, L10b) — `useAtmosphereGate` câble la loi (`atmosphere.ts`)
  * sur le vrai transport, le cache de requêtes, le stockage de l'appareil et UNE file d'écritures partagée par
  * tous les écrans qui photographient (le dernier choix gagne), vidée au retour du réseau. Les tuiles ne se
- * chargent que si l'écran peut se montrer (atmosphère absente, reports non épuisés) ou si l'hôte les demande
- * (les réglages) : Progression ne paie pas la boutique pour un compte qui a déjà choisi.
+ * chargent que si l'écran peut se montrer (`atmosphereMayBeOffered` : rang dès Ambassadeur, atmosphère absente,
+ * reports non épuisés) ou si l'hôte les demande (les réglages) : Progression ne paie pas la boutique pour un
+ * compte qui a déjà choisi, ni pour un compte à qui l'écran ne se montrera pas encore.
  */
 const FRAME_KEYS = packQueryKeys('glory-frame');
 const STALE_TIME = 5 * 60_000;
@@ -84,7 +85,7 @@ export function useAtmosphereTiles(enabled: boolean): readonly AtmosphereTile[] 
 export function useAtmosphereGate(game: GameBlock | null | undefined, options: { readonly tiles?: boolean } = {}): AtmosphereGate {
   const userId = useViewerKey();
   const current = game?.photo?.atmosphere ?? null;
-  const mayShow = current === null && atmosphereDeferralsOf(safeLocalStorage(), userId) < ATMOSPHERE_SCREEN_SHOWINGS;
+  const mayShow = atmosphereMayBeOffered({ game, deferrals: atmosphereDeferralsOf(safeLocalStorage(), userId) });
   const tiles = useAtmosphereTiles(options.tiles === true || mayShow);
 
   useEffect(() => {

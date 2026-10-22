@@ -23,7 +23,7 @@ import { dateLabelOf } from '@/lib/game-photo/render';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { usePhotoAuthor } from '@/lib/game-photo/use-photo-author';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
-import { gameText } from '@/lib/view/game-copy';
+import { gameErrorMessage, gameText } from '@/lib/view/game-copy';
 import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 
 import { GameAtmosphereChoice } from './game-atmosphere-choice';
@@ -123,6 +123,8 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const viewerAuthor = usePhotoAuthor();
   /* L'écran de choix se décide à l'OUVERTURE : un choix fait pendant le déroulé ne le rouvre pas. */
   const [choosingAtmosphere, setChoosingAtmosphere] = useState(() => atmosphere?.offers(moment.id) === true);
+  /* Le serveur a refusé le choix d'atmosphère : le retour arrière l'a remis à zéro, la photo partira dans l'Afrique éternelle — on le dit. */
+  const [atmosphereNotice, setAtmosphereNotice] = useState<string | null>(null);
   const author = givenAuthor === undefined ? viewerAuthor : givenAuthor;
   const plate = useMemo(() => authorPlateOf(moment.emblem, author), [moment.emblem, author]);
   const [state, dispatch] = useReducer(flowReducer, { step: 'offer' } as FlowState);
@@ -617,7 +619,10 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
         tiles={atmosphere.tiles}
         kicker={`${moment.kicker} · ${moment.title}`}
         onChoose={(picked) => {
-          void atmosphere.choose(picked);
+          setAtmosphereNotice(null);
+          void atmosphere.choose(picked).then((outcome) => {
+            if (alive.current && outcome.status === 'refused') setAtmosphereNotice(gameErrorMessage(outcome.code));
+          });
           setChoosingAtmosphere(false);
         }}
         onLater={() => {
@@ -652,6 +657,11 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
             {gameText('game.photo.close')}
           </Button>
         </div>
+        {atmosphereNotice === null ? null : (
+          <p role="alert" className="text-caption" style={{ color: GAME_ERROR }}>
+            {atmosphereNotice}
+          </p>
+        )}
 
         {state.step === 'offer' ? (
           <div className="flex flex-col gap-3">
