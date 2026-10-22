@@ -49,6 +49,12 @@ const OPEN_DECISIONS: readonly OpenDecision[] = [
     openIssue: '#10182',
     point: 'registre #10162 — D22, le signal « immortalisée » (voie b)',
   },
+  {
+    record:
+      'services/gateway/decisions/2026-10-21-un-palier-de-serie-ou-de-fidelite-se-paie-en-poche-et-un-compte-non-verifie-ne-le-touche-pas-au-prix-fort-10422.md',
+    openIssue: '#10422',
+    point: 'registre #10422 — la borne des gros poids portée aux paliers de série et de fidélité (option 1 + garde-fou)',
+  },
 ];
 
 const read = (relative: string): string => readFileSync(join(REPO_ROOT, relative), 'utf8');
