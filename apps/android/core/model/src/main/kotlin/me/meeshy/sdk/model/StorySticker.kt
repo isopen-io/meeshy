@@ -18,6 +18,13 @@ data class StorySticker(
     val emoji: String = "",
     val postMediaId: String = "",
     val provider: String? = null,
+    /** Gabarit qui compose ce sticker (vide : emoji ou image) — miroir de `StorySticker.templateId`. */
+    val templateId: String = "",
+    /** Valeurs des emplacements du gabarit, par nom d'emplacement. */
+    val slots: Map<String, String> = emptyMap(),
+    /** Mouvement, tel qu'écrit sur le fil ([StickerAnimation.wireName]) ; un nom inconnu voyage intact. */
+    val animation: String? = null,
+    val sourceLanguage: String? = null,
     val x: Double = 0.5,
     val y: Double = 0.5,
     val scale: Double = 1.0,
@@ -32,4 +39,10 @@ data class StorySticker(
 ) {
     /** True once an integrated image backs this sticker — the renderer's cue to paint it over the emoji. */
     val hasImage: Boolean get() = postMediaId.isNotBlank()
+
+    /** Le mouvement connu de ce binaire, `null` pour aucun ou pour un nom plus récent. */
+    val stickerAnimation: StickerAnimation? get() = StickerAnimation.fromWire(animation)
+
+    /** Ce que le sticker EST, par le rang d'affichage ([StickerDisplayRank]). */
+    val kind: StickerKind get() = StickerDisplayRank.kindOf(templateId = templateId, postMediaId = postMediaId)
 }

@@ -67,4 +67,40 @@ class StoryStickerWireTest {
         assertThat(sticker.provider).isNull()
         assertThat(sticker.hasImage).isTrue()
     }
+
+    @Test
+    fun `un sticker gabarit ecrit par iOS fait l aller retour sans perte`() {
+        val raw = """{ "stickerObjects": [ { "id": "g1", "emoji": "", "templateId": "love.heart",
+            "slots": { "title": "Je t'aime", "name": "Léa" }, "animation": "heartbeat",
+            "sourceLanguage": "fr", "x": 0.4, "y": 0.6 } ] }"""
+        val sticker = decode(raw).stickerObjects!!.single()
+
+        assertThat(sticker.templateId).isEqualTo("love.heart")
+        assertThat(sticker.slots).containsExactly("title", "Je t'aime", "name", "Léa")
+        assertThat(sticker.stickerAnimation).isEqualTo(StickerAnimation.HEARTBEAT)
+        assertThat(sticker.sourceLanguage).isEqualTo("fr")
+
+        val relu = decode(json.encodeToString(StoryEffects.serializer(), decode(raw))).stickerObjects!!.single()
+        assertThat(relu).isEqualTo(sticker)
+    }
+
+    @Test
+    fun `un ancien sticker a les defauts neutres et ne republie aucun champ neuf`() {
+        val sticker = decode("""{ "stickerObjects": [ { "id": "s", "emoji": "😀" } ] }""").stickerObjects!!.single()
+        assertThat(sticker.templateId).isEmpty()
+        assertThat(sticker.slots).isEmpty()
+        assertThat(sticker.animation).isNull()
+        val wire = json.encodeToString(StoryEffects.serializer(), StoryEffects(stickerObjects = listOf(sticker)))
+        assertThat(wire).doesNotContain("templateId")
+        assertThat(wire).doesNotContain("slots")
+        assertThat(wire).doesNotContain("animation")
+    }
+
+    @Test
+    fun `une animation inconnue ne fait pas echouer le document et voyage intacte`() {
+        val sticker = decode("""{ "stickerObjects": [ { "id": "s", "emoji": "x", "animation": "levitate" } ] }""")
+            .stickerObjects!!.single()
+        assertThat(sticker.stickerAnimation).isNull()
+        assertThat(sticker.animation).isEqualTo("levitate")
+    }
 }

@@ -2,6 +2,7 @@ package me.meeshy.sdk.model
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 /**
  * Story canvas models — port of StoryModels.swift.
@@ -58,6 +59,8 @@ data class StoryEffects(
     @Serializable(with = StoryTransitionTolerantSerializer::class)
     val closing: StoryTransitionEffect? = null,
     val textObjects: List<StoryTextObject> = emptyList(),
+    /** Pastilles de lieu posées sur la slide — distinctes du lieu de la PUBLICATION. */
+    val locationObjects: List<StoryLocationObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject>? = null,
     val audioPlayerObjects: List<StoryAudioPlayerObject>? = null,
     /**
@@ -98,4 +101,16 @@ data class StoryEffects(
      * défaut, il n'est jamais émis par un contenu composé sur Android.
      */
     val layout: MosaicLayoutMode? = null,
+    /**
+     * Les kinds d'objet v3 que ce build ne sait pas peindre (document plus récent). Mémo de
+     * lecture : jamais écrit sur le fil v1 — voir [carriesUnpaintableContent].
+     */
+    @Transient
+    val unpaintableKinds: List<String> = emptyList(),
+    /**
+     * Les objets v3 eux-mêmes (kind réservé, mention), gardés pour être réémis tels quels :
+     * aucun composer ne les édite, leur retrait ne peut donc jamais être une volonté de l'auteur.
+     */
+    @Transient
+    val unpaintableObjects: List<ObjectV3> = emptyList(),
 )
