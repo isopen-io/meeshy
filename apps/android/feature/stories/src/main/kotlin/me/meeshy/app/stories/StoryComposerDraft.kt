@@ -5,6 +5,8 @@ import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.scene.CanvasMediaAdoption
+import me.meeshy.sdk.model.scene.StoryFilterMatrix
+import me.meeshy.sdk.model.scene.wireValue
 import me.meeshy.sdk.net.api.CreateStoryRequest
 
 /**

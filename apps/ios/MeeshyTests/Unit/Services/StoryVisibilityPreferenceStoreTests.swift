@@ -12,17 +12,17 @@ final class StoryVisibilityPreferenceStoreTests: XCTestCase {
     private var suiteName: String!
     private var defaults: UserDefaults!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         suiteName = "StoryVisibilityPreferenceStoreTests-\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         defaults.removePersistentDomain(forName: suiteName)
         defaults = nil
         suiteName = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// Loi produit 2026-08-23 : une story naît PUBLIQUE, comme un post et

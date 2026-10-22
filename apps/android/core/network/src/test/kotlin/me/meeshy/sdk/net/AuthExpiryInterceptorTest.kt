@@ -101,6 +101,48 @@ class AuthExpiryInterceptorTest {
         assertEquals(0, expired)
     }
 
+    // La seconde etape de connexion et l'attente d'une preuve rendent 401 pour un refus
+    // (code faux, jeton d'attente inconnu) : la session deja ouverte n'est pas en cause.
+    @Test
+    fun `a 401 on the second factor routes is not an expired session`() {
+        listOf("/auth/login/2fa", "/auth/2fa/verify", "/auth/2fa/cancel", "/auth/verification/status").forEach { route ->
+            var expired = 0
+            AuthExpiryInterceptor { expired++ }
+                .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1$route"))
+            assertEquals("$route a signale une session expiree", 0, expired)
+        }
+    }
+
+    // Quitter un compte dont le jeton a expire rend 401 sur /auth/logout : l'utilisateur
+    // vient de choisir de partir, la session n'a pas a lui etre annoncee « expiree ».
+    @Test
+    fun `a 401 on logout is not an expired session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/auth/logout"))
+        assertEquals(0, expired)
+    }
+
+    // Un invite dont la session est inconnue rend 401 sur /anonymous/refresh : c'est SA
+    // session, pas celle du compte inscrit eventuellement ouvert a cote.
+    @Test
+    fun `a 401 on the guest session refresh is not an expired account session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/anonymous/refresh"))
+        assertEquals(0, expired)
+    }
+
+    // Les routes du second facteur qui appartiennent a une session ouverte restent des
+    // routes de session : un 401 y est bien une expiration.
+    @Test
+    fun `a 401 on an ordinary second factor route still signals an expired session`() {
+        var expired = 0
+        AuthExpiryInterceptor { expired++ }
+            .intercept(chainReturning(401, "https://gate.meeshy.me/api/v1/auth/2fa/status"))
+        assertEquals(1, expired)
+    }
+
     // Un refus de permission doit atteindre l'appelant AVEC son code et son corps :
     // c'est ce qui permet a `apiErrorFromHttpException` (core:network/ApiCall.kt)
     // de servir le message reel de la passerelle ("Insufficient role", etc.) au lieu

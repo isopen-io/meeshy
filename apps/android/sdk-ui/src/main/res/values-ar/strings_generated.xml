@@ -1,0 +1,14 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="common_clearSearch">مسح البحث</string>
+    <string name="emoji_category_activities">الأنشطة</string>
+    <string name="emoji_category_animals">الحيوانات</string>
+    <string name="emoji_category_flags">الأعلام</string>
+    <string name="emoji_category_food">الطعام</string>
+    <string name="emoji_category_objects">الأشياء</string>
+    <string name="emoji_category_people">الأشخاص</string>
+    <string name="emoji_category_recent">الأخيرة</string>
+    <string name="emoji_category_smileys">الوجوه</string>
+    <string name="emoji_category_symbols">الرموز</string>
+    <string name="emoji_category_travel">السفر</string>
+</resources>

@@ -173,3 +173,17 @@ class SwipeToReplyTest {
             .isEqualTo(SwipeReplyRelease.Commit)
     }
 }
+
+class SwipeToReplyReadingDirectionTest {
+    @org.junit.Test
+    fun `en LTR le delta de lecture est l identite`() {
+        com.google.common.truth.Truth.assertThat(swipeReadingDelta(40f, isRtl = false)).isEqualTo(40f)
+    }
+
+    @org.junit.Test
+    fun `en RTL un glissement vers la gauche arme la reponse d un message entrant`() {
+        val reading = swipeReadingDelta(-80f, isRtl = true)
+        val drag = SwipeToReply.onDrag(SwipeReplyState(), reading, ReplyDirection.FromIncoming)
+        com.google.common.truth.Truth.assertThat(drag.state.isArmed).isTrue()
+    }
+}
