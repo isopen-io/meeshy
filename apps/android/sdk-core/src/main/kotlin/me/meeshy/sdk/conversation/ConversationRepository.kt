@@ -124,6 +124,17 @@ class ConversationRepository @Inject constructor(
     suspend fun getById(id: String): NetworkResult<ApiConversation> =
         apiCall { conversationApi.getById(id) }
 
+    /** One cached conversation by id (Room read, no network), or null when never cached or undecodable. */
+    suspend fun cachedById(id: String): ApiConversation? =
+        conversationDao.find(id)?.let {
+            runCatching { MeeshyApi.json.decodeFromString<ApiConversation>(it.payload) }.getOrNull()
+        }
+
+    /** Merges one conversation fetched by id into the cached list (upsert by id: no duplicate). */
+    suspend fun remember(conversation: ApiConversation) {
+        cacheSource.remember(conversation)
+    }
+
     suspend fun create(
         type: String,
         title: String?,

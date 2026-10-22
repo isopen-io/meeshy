@@ -23,6 +23,7 @@ import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
 import me.meeshy.app.conversations.ShareLinkPickerScreen
 import me.meeshy.app.navigation.CallRoute
+import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.Routes
 import me.meeshy.app.stories.StoryTray
 
@@ -139,6 +140,7 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         arguments = listOf(
             navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
             navArgument(ChatViewModel.DRAFT_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+            navArgument(ChatRouteArgs.HIGHLIGHT_MESSAGE_ID) { type = NavType.StringType; nullable = true; defaultValue = null },
         ),
         deepLinks = listOf(
             navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
