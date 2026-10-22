@@ -3,36 +3,40 @@ import AVFoundation
 import os
 import MeeshySDK
 
-/// **Un `AVAudioFile` ouvert, qui traverse d'un fil à l'autre (#9878).**
+/// **Les fichiers audio s'ouvrent hors du fil principal (#9878).**
 ///
 /// `AVAudioFile(forReading:)` lit l'en-tête et l'index du conteneur sur le
 /// disque : sur le fil principal, pendant le balayage d'une story ou d'un réel,
-/// c'est une image perdue. On l'ouvre donc hors du fil principal, puis on remet
-/// le fichier au mixer. Le fichier n'est lu ni écrit pendant le transfert : un
-/// seul fil le tient à la fois, d'où `@unchecked Sendable`.
-nonisolated struct ReaderOpenedAudioFile: @unchecked Sendable {
-    let file: AVAudioFile
-
-    static func load(_ url: URL) throws -> ReaderOpenedAudioFile {
-        ReaderOpenedAudioFile(file: try AVAudioFile(forReading: url))
-    }
-
+/// c'est une image perdue. Les fonctions `@concurrent` ci-dessous ouvrent hors
+/// de l'acteur et rendent leur résultat `sending` : un `AVAudioFile` neuf, que
+/// personne d'autre ne tient, passe au mixer sans être déclaré `Sendable`.
+extension ReaderAudioMixer {
     /// Ouvre chaque URL ; un fichier illisible est journalisé et SAUTÉ, comme le
     /// faisait `configure` avant (un clip manquant ne fait pas taire les autres).
-    static func openAll(_ urls: [String: URL]) -> [String: ReaderOpenedAudioFile] {
+    nonisolated static func readAudioFiles(_ urls: [String: URL]) -> [String: AVAudioFile] {
         let logger = MeeshyLog.logger(.media)
-        return urls.reduce(into: [:]) { opened, pair in
+        return urls.reduce(into: [String: AVAudioFile]()) { opened, pair in
             // AVAudioFile(forReading:) rejects HTTPS URLs with OSStatus
             // 2003334207 ("not a file") — a silent skip must stay diagnosable.
             if !pair.value.isFileURL {
                 logger.error("ReaderAudioMixer \(pair.key, privacy: .public) URL is not file:// scheme=\(pair.value.scheme ?? "nil", privacy: .public) — AVAudioFile will reject")
             }
             do {
-                opened[pair.key] = try ReaderOpenedAudioFile.load(pair.value)
+                opened[pair.key] = try AVAudioFile(forReading: pair.value)
             } catch {
                 logger.error("ReaderAudioMixer failed to load \(pair.key, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    @concurrent
+    static func openAudioFiles(_ urls: [String: URL]) async -> sending [String: AVAudioFile] {
+        readAudioFiles(urls)
+    }
+
+    @concurrent
+    static func openAudioFile(_ url: URL) async throws -> sending AVAudioFile {
+        try AVAudioFile(forReading: url)
     }
 }
 
@@ -58,9 +62,7 @@ extension ReaderAudioMixer {
                                  isStillWanted: () -> Bool = { true }) async throws {
         let ticket = claimConfigurationTicket()
         let wanted = Self.urls(urls, for: audios)
-        let files = await Task.detached(priority: .userInitiated) {
-            ReaderOpenedAudioFile.openAll(wanted)
-        }.value
+        let files = await Self.openAudioFiles(wanted)
         guard ticket == configurationTicket, isStillWanted() else { return }
         configure(audios: audios, files: files, loopsEveryClip: loopsEveryClip)
     }
@@ -74,9 +76,7 @@ extension ReaderAudioMixer {
                                            loopsEveryClip: Bool = false,
                                            isStillWanted: () -> Bool = { true }) async throws {
         let ticket = claimConfigurationTicket()
-        let file = try await Task.detached(priority: .userInitiated) {
-            try ReaderOpenedAudioFile.load(url)
-        }.value
+        let file = try await Self.openAudioFile(url)
         guard ticket == configurationTicket, isStillWanted() else { return }
         configureBackground(audio: audio, file: file, looping: looping, loopsEveryClip: loopsEveryClip)
     }
