@@ -9,6 +9,14 @@ import os
 struct CompressedImageResult {
     let data: Data
     let mimeType: String
+    /// Définition DEBOUT des octets remis, quand ils se décodent (#9885).
+    let pixelSize: CGSize?
+
+    init(data: Data, mimeType: String, pixelSize: CGSize? = nil) {
+        self.data = data
+        self.mimeType = mimeType
+        self.pixelSize = pixelSize
+    }
 
     var fileExtension: String {
         switch mimeType {
@@ -16,6 +24,7 @@ struct CompressedImageResult {
         case "image/png":   return "png"
         case "image/gif":   return "gif"
         case "image/webp":  return "webp"
+        case "image/heic":  return "heic"
         default:            return "jpg"
         }
     }
@@ -69,6 +78,32 @@ nonisolated enum MediaContext: Sendable {
     }
 }
 
+// MARK: - La politique d'envoi d'une photo (#9885)
+
+extension MediaContext {
+    /// Par défaut, la photo part en HD, en UNE génération perceptuelle à q 0,85,
+    /// lieu retiré (verdict #11247). `compresses` est la **compression forte** que
+    /// l'utilisateur choisit pour économiser des données (`compressImagesOnUpload`) :
+    /// budget du contexte et qualité de sa préférence. Un avatar se réduit toujours :
+    /// il ne s'affiche jamais en grand.
+    nonisolated func outgoingImagePolicy(compresses: Bool, qualityPercent: Int, keepsLocation: Bool) -> OutgoingImagePolicy {
+        let forte = compresses || self == .avatar
+        return OutgoingImagePolicy(maxPixelDimension: maxImageDimension, compresses: forte,
+                                   quality: forte ? OutgoingImagePolicy.quality(percent: qualityPercent)
+                                                  : OutgoingImagePolicy.perceptualQuality,
+                                   keepsLocation: keepsLocation)
+    }
+
+    /// La politique servie par les préférences de l'utilisateur.
+    @MainActor
+    func storedOutgoingImagePolicy() -> OutgoingImagePolicy {
+        let document = UserPreferencesManager.shared.document
+        return outgoingImagePolicy(compresses: document.compressImagesOnUpload,
+                                   qualityPercent: document.imageCompressionQuality,
+                                   keepsLocation: OutgoingImageLocationSetting.stored())
+    }
+}
+
 // MARK: - Sendable Wrappers for AVFoundation types
 
 private nonisolated struct SendableTrackOutput: @unchecked Sendable {
@@ -110,9 +145,16 @@ actor MediaCompressor {
 
     private static let logger = MeeshyLog.logger(.mediaCompressor)
 
+    private let preparer: any OutgoingImagePreparing
+
+    init(preparer: any OutgoingImagePreparing = OutgoingImagePreparer()) {
+        self.preparer = preparer
+    }
+
     // MARK: - From UIImage (format already lost) → always JPEG
 
-    func compressImage(_ image: UIImage, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
+    func compressImage(_ image: UIImage, maxDimension: CGFloat = 2048,
+                       quality: CGFloat = OutgoingImagePolicy.perceptualQuality) -> CompressedImageResult {
         let size = image.size
         let needsResize = size.width > maxDimension || size.height > maxDimension
 
@@ -131,64 +173,40 @@ actor MediaCompressor {
                let cg = image.cgImage,
                let downsampled = downsample(cgImage: cg, maxDimension: maxDimension) {
                 let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
-                return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
+                return CompressedImageResult(data: jpeg, mimeType: "image/jpeg", pixelSize: Self.pixels(of: downsampled))
             }
             // Fallback: legacy data-roundtrip path if CGImage isn't available.
             guard let data = image.jpegData(compressionQuality: 1.0) else {
                 return CompressedImageResult(data: Data(), mimeType: "image/jpeg")
             }
             guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/jpeg")
+                return CompressedImageResult(data: data, mimeType: "image/jpeg", pixelSize: Self.pixels(of: image))
             }
             let jpeg = downsampled.jpegData(compressionQuality: quality) ?? Data()
-            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
+            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg", pixelSize: Self.pixels(of: downsampled))
         }
 
         let jpeg = image.jpegData(compressionQuality: quality) ?? Data()
-        return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
+        return CompressedImageResult(data: jpeg, mimeType: "image/jpeg", pixelSize: Self.pixels(of: image))
     }
 
-    // MARK: - From raw Data (preserves format, hardware-accelerated downsampling)
+    /// La définition DEBOUT d'une image, en pixels.
+    private static func pixels(of image: UIImage) -> CGSize {
+        CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale)
+    }
 
-    func compressImageData(_ data: Data, maxDimension: CGFloat = 2048, quality: CGFloat = 0.8) -> CompressedImageResult {
-        let mime = detectMimeType(data)
+    // MARK: - From raw Data — une génération d'encodage au plus (#9885)
 
-        switch mime {
-        case "image/gif", "image/webp":
-            return CompressedImageResult(data: data, mimeType: mime)
-
-        case "image/png":
-            guard needsResize(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/png")
-            }
-            guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: "image/png")
-            }
-            let png = downsampled.pngData() ?? data
-            return CompressedImageResult(data: png, mimeType: "image/png")
-
-        // HEIC/HEIF ("High Efficiency" camera capture) falls straight through
-        // to `default`: most web clients (and non-Apple browsers) cannot
-        // decode HEIC inline, so re-encoding it as HEIC here would leave a
-        // format the web can't render regardless of file extension. The
-        // default branch already transcodes to a real JPEG stream with a
-        // matching mimeType/extension — reusing it fixes both the mismatched
-        // `.jpg` extension AND actual cross-platform rendering in one move.
-        //
-        // On transcode failure (corrupt/exotic source), both fallbacks below
-        // return the UNTOUCHED original bytes tagged with the ORIGINALLY
-        // detected `mime` — never hardcode "image/jpeg" here, or real HEIC
-        // bytes end up mislabeled on the failure path (the mismatch this
-        // branch exists to eliminate on the success path).
-        default:
-            guard let downsampled = downsample(data: data, maxDimension: maxDimension) else {
-                return CompressedImageResult(data: data, mimeType: mime)
-            }
-            guard let jpeg = downsampled.jpegData(compressionQuality: quality) else {
-                return CompressedImageResult(data: data, mimeType: mime)
-            }
-            return CompressedImageResult(data: jpeg, mimeType: "image/jpeg")
-        }
+    /// Les octets d'une photo, préparés pour l'envoi par la loi unique du SDK
+    /// (`OutgoingImagePreparer`) : un JPEG ou un PNG dans le budget part octet
+    /// pour octet, le lieu se retire sans ré-encoder, un PNG reste un PNG, et
+    /// une réduction ou un HEIC coûtent UN encodage. `nil` ⇒ l'image ne peut
+    /// pas partir sans un lieu que l'utilisateur n'a pas choisi de partager.
+    func compressImageData(_ data: Data, policy: OutgoingImagePolicy) -> CompressedImageResult? {
+        guard let prepared = preparer.prepare(data, policy: policy) else { return nil }
+        return CompressedImageResult(data: prepared.data,
+                                     mimeType: prepared.format.mimeType ?? "image/jpeg",
+                                     pixelSize: prepared.pixelSize)
     }
 
     // MARK: - Video (AVAssetWriter with HEVC + adaptive bitrate)
@@ -408,17 +426,6 @@ actor MediaCompressor {
         return CGSize(width: floor(w * scale), height: floor(h * scale))
     }
 
-    private func needsResize(data: Data, maxDimension: CGFloat) -> Bool {
-        let sourceOptions: [CFString: Any] = [kCGImageSourceShouldCache: false]
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary),
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? CGFloat,
-              let height = properties[kCGImagePropertyPixelHeight] as? CGFloat else {
-            return false
-        }
-        return width > maxDimension || height > maxDimension
-    }
-
     // MARK: - Video helpers
 
     private func fitSize(_ source: CGSize, within max: CGSize) -> CGSize {
@@ -562,35 +569,13 @@ actor MediaCompressor {
 
     /// **Le type d'une image, lu dans ses OCTETS et non dans son nom.**
     ///
-    /// La table de signatures ci-dessous existait déjà, en `private`, au service
-    /// de `compressImageData`. Elle est désormais consultable par les chemins
-    /// d'INGESTION, qui doivent nommer un fichier avant de le compresser : un
+    /// La table de signatures est celle du SDK (`OutgoingImageFormat`), la même
+    /// que lit `compressImageData`. Les chemins d'INGESTION la consultent, car
+    /// ils doivent nommer un fichier avant de le compresser : un
     /// GIF écrit sous le nom `.jpg` a déjà perdu son animation quand le
     /// compresseur le reçoit — le mimeType, en aval, se dérive de l'extension.
-    func imageMimeType(of data: Data) -> String { detectMimeType(data) }
-
-    private func detectMimeType(_ data: Data) -> String {
-        guard data.count >= 12 else { return "image/jpeg" }
-        let bytes = [UInt8](data.prefix(12))
-
-        if bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF {
-            return "image/jpeg"
-        }
-        if bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47 {
-            return "image/png"
-        }
-        if bytes[0] == 0x47 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x38 {
-            return "image/gif"
-        }
-        if bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46 &&
-           bytes[8] == 0x57 && bytes[9] == 0x45 && bytes[10] == 0x42 && bytes[11] == 0x50 {
-            return "image/webp"
-        }
-        if bytes[4] == 0x66 && bytes[5] == 0x74 && bytes[6] == 0x79 && bytes[7] == 0x70 {
-            return "image/heic"
-        }
-
-        return "image/jpeg"
+    func imageMimeType(of data: Data) -> String {
+        OutgoingImageFormat(sniffing: data).mimeType ?? "image/jpeg"
     }
 }
 
