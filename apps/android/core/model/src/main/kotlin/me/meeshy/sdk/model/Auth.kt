@@ -1,11 +1,24 @@
 package me.meeshy.sdk.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
+/**
+ * Corps de `POST /auth/login`.
+ *
+ * [rememberDevice] part TOUJOURS, même à `false` : `MeeshyApi.json` n'écrit pas
+ * les valeurs par défaut (`encodeDefaults = false`), donc une valeur égale à son
+ * défaut serait omise — et c'est la passerelle qui déciderait, silencieusement,
+ * de la durée de confiance de l'appareil (365 jours ou 24 h). `@EncodeDefault`
+ * rend ce choix explicite à chaque connexion.
+ */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class LoginRequest(
     val username: String,
     val password: String,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val rememberDevice: Boolean = false,
 )
 
 /**
@@ -42,6 +55,20 @@ data class RegisterRequest(
     val phoneNumber: String? = null,
     /** The selected dial-code country's ISO 3166-1 alpha-2, or `null` alongside [phoneNumber]. */
     val phoneCountryCode: String? = null,
+    /**
+     * Le code du lien d'invitation (#8058, #8075) : la passerelle rattache le compte
+     * créé à son parrain, et un code invalide ne bloque jamais l'inscription. `null`
+     * ⇒ absent de la charge.
+     */
+    val affiliateToken: String? = null,
+    /** La clé de visite de `/affiliate/track-visit`. Ne voyage qu'avec [affiliateToken] : seule, elle n'a rien à rattacher. */
+    val affiliateSessionKey: String? = null,
+    /**
+     * « Ce n'est pas moi » (#8214) : l'adresse est détenue par un autre compte, celui-ci
+     * la REVENDIQUE. Seul `true` a un sens — `null`, jamais `false`, sinon la clé part
+     * pour rien et une passerelle antérieure pourrait la refuser.
+     */
+    val claimEmail: Boolean? = null,
 )
 
 /**
