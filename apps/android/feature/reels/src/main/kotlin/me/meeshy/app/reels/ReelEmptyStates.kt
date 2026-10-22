@@ -13,6 +13,7 @@ import me.meeshy.ui.component.ContentFetchFailureView
 import me.meeshy.ui.component.MeeshyEmptyState
 import me.meeshy.ui.component.MeeshyShimmerPlaceholder
 import me.meeshy.ui.theme.MeeshyMediaChromeColors
+import me.meeshy.ui.theme.MeeshyTheme
 
 /** Ce que le pager rend quand il n'a aucun reel (iOS `ReelsPlayerView+EmptyState`). */
 sealed interface ReelEmptyKind {
@@ -38,14 +39,18 @@ sealed interface ReelEmptyKind {
 internal fun ReelEmptyStates(state: ReelsUiState, onRetry: () -> Unit, modifier: Modifier = Modifier) {
     when (val kind = ReelEmptyKind.of(state)) {
         ReelEmptyKind.Cold -> MeeshyShimmerPlaceholder(modifier, base = MeeshyMediaChromeColors.OnMedia.copy(alpha = 0.12f))
-        ReelEmptyKind.Empty -> Box(modifier.fillMaxSize()) {
-            MeeshyEmptyState(
-                icon = Icons.Filled.VideoLibrary,
-                title = stringResource(R.string.reels_empty),
-                subtitle = "",
-                accent = MeeshyMediaChromeColors.OnMedia,
-            )
+        ReelEmptyKind.Empty -> MeeshyTheme(darkTheme = true) {
+            Box(modifier.fillMaxSize()) {
+                MeeshyEmptyState(
+                    icon = Icons.Filled.VideoLibrary,
+                    title = stringResource(R.string.reels_empty),
+                    subtitle = "",
+                    accent = MeeshyMediaChromeColors.OnMedia,
+                )
+            }
         }
-        is ReelEmptyKind.Failed -> ContentFetchFailureView(kind.failure, modifier, onRetry = onRetry)
+        is ReelEmptyKind.Failed -> MeeshyTheme(darkTheme = true) {
+            ContentFetchFailureView(kind.failure, modifier, onRetry = onRetry)
+        }
     }
 }
