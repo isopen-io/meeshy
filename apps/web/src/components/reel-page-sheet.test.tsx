@@ -147,10 +147,10 @@ describe('ReelVeil — le flou vit sur une image FIXE (#11307)', () => {
     expect(html).toMatch(/filter:\s*blur\(/);
   });
 
-  test('sans affiche, il floute l’image ARRÊTÉE dessous, jamais un noir', () => {
+  test('sans affiche, il assombrit l’image ARRÊTÉE dessous, sans aucun filtre', () => {
     const html = renderToStaticMarkup(<ReelVeil src={undefined} />);
-    expect(html).toContain('data-reel-veil="backdrop"');
-    expect(html).toMatch(/backdrop-filter:\s*blur\(/);
+    expect(html).toContain('data-reel-veil="dim"');
+    expect(html).not.toContain('filter');
     expect(html).not.toContain('background-image');
   });
 });

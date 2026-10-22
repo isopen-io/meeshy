@@ -570,7 +570,7 @@ try {
           return {
             etat: pager.getAttribute('data-scene-yields'),
             filtre: getComputedStyle(pager).filter,
-            voile: veil === null ? null : (getComputedStyle(veil).filter + ' ' + getComputedStyle(veil).backdropFilter).trim(),
+            voile: veil === null ? null : getComputedStyle(veil).filter,
             enPause: video === null ? null : video.paused,
             basPager: Math.round(pager.getBoundingClientRect().bottom),
             hautFeuille: Math.round(sheet.getBoundingClientRect().top),
