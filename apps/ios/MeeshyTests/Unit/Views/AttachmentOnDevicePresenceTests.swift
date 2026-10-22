@@ -284,6 +284,55 @@ final class AttachmentOnDevicePresenceTests: XCTestCase {
         XCTAssertEqual(shown(), original)
     }
 
+    /// #11550 — la case attend la fin du téléchargement de l'original pour se
+    /// recharger. La dernière progression et la fin arrivent presque ensemble
+    /// sur l'acteur principal : la fin ne doit pas se perdre pendant que
+    /// l'attente traite la progression.
+    func test_firstLanding_finishedRightAfterAProgress_isNotLost() async {
+        let key = AttachmentDownloadCenter.key(for: "2025/10/x/landing-\(UUID().uuidString).jpg")
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let waiting = Task { @MainActor in
+            await center.firstEvent(for: key, where: BubbleImageSourceLaw.marksOriginalLanding)
+        }
+        await Task.yield()
+        await Task.yield()
+
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        center.publish(.progress(.init(downloadedBytes: 100, totalBytes: 100)), for: key)
+        center.publish(.finished(totalBytes: 100), for: key)
+
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            waiting.cancel()
+        }
+        let landed = await waiting.value
+        deadline.cancel()
+        XCTAssertEqual(landed, .finished(totalBytes: 100), "la fin du téléchargement s'est perdue : la case resterait floue")
+    }
+
+    /// Même attente quand chaque événement arrive par son propre saut sur
+    /// l'acteur principal, comme les rapports du téléchargeur et sa fin.
+    func test_firstLanding_progressAndFinishOnSeparateHops_isNotLost() async {
+        let key = AttachmentDownloadCenter.key(for: "2025/10/x/landing-\(UUID().uuidString).jpg")
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let waiting = Task { @MainActor in
+            await center.firstEvent(for: key, where: BubbleImageSourceLaw.marksOriginalLanding)
+        }
+        await Task.yield()
+        await Task.yield()
+
+        Task { @MainActor in center.publish(.progress(.init(downloadedBytes: 100, totalBytes: 100)), for: key) }
+        Task { @MainActor in center.publish(.finished(totalBytes: 100), for: key) }
+
+        let deadline = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            waiting.cancel()
+        }
+        let landed = await waiting.value
+        deadline.cancel()
+        XCTAssertEqual(landed, .finished(totalBytes: 100), "la fin du téléchargement s'est perdue : la case resterait floue")
+    }
+
     func test_marksOriginalLanding_onlyOnFinished() {
         XCTAssertTrue(BubbleImageSourceLaw.marksOriginalLanding(.finished(totalBytes: 1)))
         XCTAssertFalse(BubbleImageSourceLaw.marksOriginalLanding(.failed))
