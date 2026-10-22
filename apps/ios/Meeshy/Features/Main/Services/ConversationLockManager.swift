@@ -4,6 +4,13 @@ import CryptoKit
 import Security
 import MeeshySDK
 
+/// Où vivent les empreintes des PIN : le trousseau en production, un double en test.
+struct ConversationLockSecrets {
+    let read: (String) -> String?
+    let save: (String, String) -> Bool
+    let delete: (String) -> Void
+}
+
 @MainActor
 class ConversationLockManager: ObservableObject {
     // iOS 26.1 : deinit synthétisée ISOLÉE (SE-0466, isolation MainActor par
@@ -14,18 +21,37 @@ class ConversationLockManager: ObservableObject {
     static let shared = ConversationLockManager()
 
     @Published private(set) var lockedConversationIds: Set<String> = []
-    @Published private(set) var masterPinConfigured: Bool = false
-
-    private let keychainService = "me.meeshy.app.conversation-locks"
+    private let secrets: ConversationLockSecrets
     private let masterPinKey = "meeshy_master_pin"
     private let lockedIdsDefaultsKey = "meeshy.lockedConversationIds"
 
     private var cancellables = Set<AnyCancellable>()
 
-    private init() {
+    private convenience init() {
+        self.init(secrets: .keychain(service: "me.meeshy.app.conversation-locks"))
+    }
+
+    init(secrets: ConversationLockSecrets) {
+        self.secrets = secrets
         loadLockedIds()
-        masterPinConfigured = readFromKeychain(key: masterPinKey) != nil
         wireAuthLogoutHook()
+    }
+
+    /// Le PIN maître est-il posé ? Lu au trousseau au PREMIER besoin (#11558) :
+    /// le gestionnaire est construit pendant le rendu des premières lignes de
+    /// la liste, et la valeur ne sert qu'au geste de verrouillage et aux Réglages.
+    var masterPinConfigured: Bool {
+        if let knownMasterPin { return knownMasterPin }
+        let configured = secrets.read(masterPinKey) != nil
+        knownMasterPin = configured
+        return configured
+    }
+    /// `nil` : le trousseau n'a pas encore été lu.
+    private var knownMasterPin: Bool?
+
+    private func noteMasterPin(_ configured: Bool) {
+        objectWillChange.send()
+        knownMasterPin = configured
     }
 
     /// P7-11 — pattern calqué sur `FeedbackToastManager.wireAuthLogoutHook` :
@@ -44,30 +70,30 @@ class ConversationLockManager: ObservableObject {
     // MARK: - Master PIN (6 digits)
 
     func hasMasterPin() -> Bool {
-        readFromKeychain(key: masterPinKey) != nil
+        secrets.read(masterPinKey) != nil
     }
 
     func setMasterPin(_ pin: String) {
-        saveToKeychain(key: masterPinKey, value: sha256(pin))
-        masterPinConfigured = true
+        _ = secrets.save(masterPinKey, sha256(pin))
+        noteMasterPin(true)
     }
 
     func verifyMasterPin(_ pin: String) -> Bool {
-        guard let stored = readFromKeychain(key: masterPinKey) else { return false }
+        guard let stored = secrets.read(masterPinKey) else { return false }
         return sha256(pin) == stored
     }
 
     /// Supprime le master PIN. Ne pas appeler si des conversations sont verrouillées.
     func removeMasterPin() {
         guard lockedConversationIds.isEmpty else { return }
-        deleteFromKeychain(key: masterPinKey)
-        masterPinConfigured = false
+        secrets.delete(masterPinKey)
+        noteMasterPin(false)
     }
 
     /// Force la suppression du master PIN (pour tests / unlock all).
     func forceRemoveMasterPin() {
-        deleteFromKeychain(key: masterPinKey)
-        masterPinConfigured = false
+        secrets.delete(masterPinKey)
+        noteMasterPin(false)
     }
 
     /// P7-11 — logout = purge cross-compte totale (invariant 9). Le keychain
@@ -88,25 +114,25 @@ class ConversationLockManager: ObservableObject {
     }
 
     func setLock(conversationId: String, pin: String) {
-        saveToKeychain(key: lockKey(conversationId), value: sha256(pin))
+        _ = secrets.save(lockKey(conversationId), sha256(pin))
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
     }
 
     func verifyLock(conversationId: String, pin: String) -> Bool {
-        guard let stored = readFromKeychain(key: lockKey(conversationId)) else { return false }
+        guard let stored = secrets.read(lockKey(conversationId)) else { return false }
         return sha256(pin) == stored
     }
 
     func removeLock(conversationId: String) {
-        deleteFromKeychain(key: lockKey(conversationId))
+        secrets.delete(lockKey(conversationId))
         lockedConversationIds.remove(conversationId)
         saveLockedIds()
     }
 
     func removeAllLocks() {
         for id in lockedConversationIds {
-            deleteFromKeychain(key: lockKey(id))
+            secrets.delete(lockKey(id))
         }
         lockedConversationIds.removeAll()
         saveLockedIds()
@@ -124,45 +150,6 @@ class ConversationLockManager: ObservableObject {
         return hash.compactMap { String(format: "%02x", $0) }.joined()
     }
 
-    // MARK: - Keychain
-
-    @discardableResult
-    private func saveToKeychain(key: String, value: String) -> Bool {
-        let data = Data(value.utf8)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        ]
-        SecItemDelete(query as CFDictionary)
-        return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
-    }
-
-    private func readFromKeychain(key: String) -> String? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne
-        ]
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    private func deleteFromKeychain(key: String) {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: keychainService,
-            kSecAttrAccount as String: key
-        ]
-        SecItemDelete(query as CFDictionary)
-    }
-
     // MARK: - Persistence
 
     private func saveLockedIds() {
@@ -172,5 +159,44 @@ class ConversationLockManager: ObservableObject {
     private func loadLockedIds() {
         let ids = UserDefaults.standard.stringArray(forKey: lockedIdsDefaultsKey) ?? []
         lockedConversationIds = Set(ids)
+    }
+}
+
+extension ConversationLockSecrets {
+    static func keychain(service: String) -> ConversationLockSecrets {
+        ConversationLockSecrets(
+            read: { key in
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: key,
+                    kSecReturnData as String: true,
+                    kSecMatchLimit as String: kSecMatchLimitOne
+                ]
+                var result: AnyObject?
+                let status = SecItemCopyMatching(query as CFDictionary, &result)
+                guard status == errSecSuccess, let data = result as? Data else { return nil }
+                return String(data: data, encoding: .utf8)
+            },
+            save: { key, value in
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: key,
+                    kSecValueData as String: Data(value.utf8),
+                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                ]
+                SecItemDelete(query as CFDictionary)
+                return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
+            },
+            delete: { key in
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: service,
+                    kSecAttrAccount as String: key
+                ]
+                SecItemDelete(query as CFDictionary)
+            }
+        )
     }
 }

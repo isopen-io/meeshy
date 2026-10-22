@@ -127,4 +127,20 @@ final class ConversationVideoInlineMinimalGuardTests: XCTestCase {
         XCTAssertTrue(bubbles.contains("ConversationVideoPoster("),
                       "la tuile de débordement et la vidéo protégée montrent le poster partagé")
     }
+
+    /// #11586 — la case « +N » ne monte de lecteur dans AUCUN des deux modes :
+    /// la bulle et le Fil demandent tous deux à la même loi ce qu'ils font
+    /// d'une vidéo, et passent sa réponse au badge de téléchargement.
+    func test_laCaseDeDebordement_neMontePasDeLecteur_niEnBullesNiDansLeFil() throws {
+        for path in ["Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift",
+                     "Meeshy/Features/Main/Focal/Row/FocalAttachmentBlock.swift"] {
+            let source = try stripped(path)
+            XCTAssertTrue(source.contains("MediaTileVideoPresentation.resolve("),
+                          "\(path) décide seul de monter le lecteur sur une case de grille")
+            XCTAssertTrue(source.contains("tileHostsVideoPlayer:"),
+                          "\(path) : le badge doit savoir si la case porte un lecteur")
+            XCTAssertTrue(source.contains("ConversationVideoPoster("),
+                          "\(path) : la case sans lecteur montre le poster partagé")
+        }
+    }
 }

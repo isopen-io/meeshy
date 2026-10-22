@@ -21,12 +21,17 @@ struct ConversationVideoPoster: View {
     /// — les cotes du bouton du lecteur inline de la tuile, que la loi de la
     /// Lentille (web, `curve-media-grid.mjs`) relit sur la grille.
     var playButtonDiameter: CGFloat = 44
+    /// Bouton lecture et durée. La case « +N » les tait : elle ouvre la
+    /// galerie, et son libellé garde le centre (#11586).
+    var showsPlaybackCue: Bool = true
 
     var body: some View {
         ZStack {
             poster
-            playBadge
-            durationBadge
+            if showsPlaybackCue {
+                playBadge
+                durationBadge
+            }
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
