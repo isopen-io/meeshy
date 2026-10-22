@@ -1069,9 +1069,12 @@ jobs:
       # places et nomme l'écart par cadre. Ce qui reste : la plaque sans
       # message absente des contrats (variantes `plain`) et des couches
       # servies en q82 (mesuré le 2026-10-22 : 82 à 98 % des pixels à |Δ| ≤ 6 ;
-      # voir #10159, #10153/#10177).
+      # voir #10159, #10153/#10177). Le gate bâtit et sert le peintre par
+      # `Bun.build` / `Bun.serve` : il n'existe que dans le scénario bun, comme
+      # `setup-bun` plus haut — sous pnpm, l'étape est sautée, pas cassée
+      # (check-ci-build-order.mjs).
       - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.PACKAGE_MANAGER == 'bun' }}
         run: |
           cd apps/web
           bun scripts/check-glory-frames.ts --report
