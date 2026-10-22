@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- lot: liens-a-jeton-d-e-mail-jamais-ouverts-dans-l-app
+         Un lien a jeton d'e-mail ou une invitation touche dans une bulle s'ouvre dans un NAVIGATEUR, jamais dans
+         l'app : ChatLinkOpener epingle l'onglet sur un paquet de navigateur, et il doit pouvoir les lister
+         (visibilite des paquets, Android 11+). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+</manifest>

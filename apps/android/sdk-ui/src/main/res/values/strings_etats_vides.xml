@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="content_failure_network_title">Can\'t load this content</string>
+    <string name="content_failure_network_body">Check your connection, then try again.</string>
+    <string name="content_failure_server_title">Meeshy couldn\'t load this content</string>
+    <string name="content_failure_server_body">The problem is on our side. Try again in a moment.</string>
+    <string name="content_failure_unavailable_title">This content is no longer available</string>
+    <string name="content_failure_unavailable_body">It may have expired or been removed by its author.</string>
+    <string name="content_failure_retry">Retry</string>
+</resources>

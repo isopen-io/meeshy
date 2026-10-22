@@ -1,5 +1,6 @@
 package me.meeshy.sdk.model.auth
 
+import kotlinx.serialization.Serializable
 import me.meeshy.sdk.model.PasswordEntry
 
 /**
@@ -9,6 +10,7 @@ import me.meeshy.sdk.model.PasswordEntry
  * `MeeshyForgotPasswordView.phoneLookup`). Masking happens server-side; this type
  * carries the already-masked strings verbatim.
  */
+@Serializable
 data class MaskedUserInfo(
     val displayName: String,
     val username: String,

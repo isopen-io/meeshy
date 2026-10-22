@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fullscreen_close">إغلاق</string>
+    <string name="fullscreen_back">رجوع</string>
+    <string name="fullscreen_react">تفاعل</string>
+    <string name="fullscreen_reply">رد</string>
+    <string name="fullscreen_audio_output">مخرج الصوت</string>
+    <string name="fullscreen_play">تشغيل</string>
+    <string name="fullscreen_pause">إيقاف مؤقت</string>
+    <string name="fullscreen_show_controls">إظهار عناصر التحكم</string>
+</resources>

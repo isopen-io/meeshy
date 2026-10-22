@@ -174,7 +174,7 @@ object FeedPostBuilder {
     ): String? {
         val originalCode = post.originalLanguage.normalizedCode()
         val preferredCode = LanguageResolver
-            .preferredTranslation(post.translations.toTranslationRows(), preferences)
+            .preferredTranslation(post.translations.toTranslationRows(), preferences, post.originalLanguage)
             ?.targetLanguage?.normalizedCode()
         val requested = override.normalizedCode()?.takeIf { it.hasContentIn(post, originalCode) }
         return requested ?: (preferredCode ?: originalCode)

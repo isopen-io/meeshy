@@ -20,7 +20,8 @@ final class MessageStoreTests: XCTestCase {
         )
         store?.startObserving()
 
-        weak var weakStore = store
+        weak var weakStore: MessageStore?
+        weakStore = store
         XCTAssertNotNil(weakStore, "Store should be alive before release")
 
         store = nil

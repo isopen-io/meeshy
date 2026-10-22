@@ -158,8 +158,8 @@ class CallRecordTest {
 
     @Test
     fun `durationLabel formats sub-minute and minute durations as M SS`() {
-        assertThat(record(durationSec = 5).durationLabel).isEqualTo("0:05")
-        assertThat(record(durationSec = 65).durationLabel).isEqualTo("1:05")
+        assertThat(record(durationSec = 5).durationLabel).isEqualTo("00:05")
+        assertThat(record(durationSec = 65).durationLabel).isEqualTo("01:05")
         assertThat(record(durationSec = 600).durationLabel).isEqualTo("10:00")
     }
 
@@ -235,7 +235,7 @@ class CallRecordTest {
         assertThat(decoded.callId).isEqualTo("call_1")
         assertThat(decoded.directionKind).isEqualTo(CallDirection.OUTGOING)
         assertThat(decoded.mediaType).isEqualTo(CallMediaType.AUDIO_VIDEO)
-        assertThat(decoded.durationLabel).isEqualTo("5:00")
+        assertThat(decoded.durationLabel).isEqualTo("05:00")
         assertThat(decoded.dataLabel).isEqualTo("1.5 MB")
         assertThat(decoded.displayName).isEqualTo("Alice W.")
         assertThat(decoded.avatarUrl).isEqualTo("alice.png")

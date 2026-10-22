@@ -1,6 +1,5 @@
 package me.meeshy.sdk.model
 
-import me.meeshy.sdk.lang.LanguageResolver
 import me.meeshy.sdk.lang.LanguageResolver.ContentLanguagePreferences
 
 /** Delivery state of a story comment as the overlay renders it. */
@@ -35,31 +34,25 @@ data class StoryComment(
     val status: StoryCommentStatus,
 )
 
-private data class CommentTranslationLike(
-    override val targetLanguage: String,
-    override val translatedContent: String,
-) : LanguageResolver.TranslationLike
-
 /**
  * Maps a wire comment to its domain value, resolving the body through the Prisme
  * Linguistique: when a translation targets a preferred language it is shown
  * ([isTranslated] = true), otherwise the original content is shown (Rule 1 — never
- * an arbitrary translation). The author name falls back display name → username →
- * empty, guarding blanks so a whitespace name never renders an empty row, and a
- * blank avatar collapses to `null`. A wire comment is always [StoryCommentStatus.Sent].
+ * an arbitrary translation). The comment's [ApiPostComment.originalLanguage] competes
+ * at its own rank: a comment already written in the reader's primary language is not
+ * replaced by a translation into a lower-ranked one. The author name falls back
+ * display name → username → empty, guarding blanks so a whitespace name never renders
+ * an empty row, and a blank avatar collapses to `null`. A wire comment is always
+ * [StoryCommentStatus.Sent].
  */
 fun ApiPostComment.toStoryComment(prefs: ContentLanguagePreferences): StoryComment {
-    val candidates = translations.orEmpty().map { (language, entry) ->
-        CommentTranslationLike(targetLanguage = language, translatedContent = entry.text)
-    }
-    val match = LanguageResolver.preferredTranslation(candidates, prefs)
-    val resolved = match?.translatedContent ?: content
+    val match = translations.preferredEntry(prefs, originalLanguage)
     return StoryComment(
         id = id,
         clientId = null,
         authorName = author.resolveName(),
         avatarUrl = author?.avatar?.takeIf { it.isNotBlank() },
-        content = resolved,
+        content = match?.text ?: content,
         isTranslated = match != null,
         createdAt = createdAt,
         status = StoryCommentStatus.Sent,
