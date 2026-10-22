@@ -25,7 +25,6 @@ import javax.inject.Inject
  */
 class CallWatchdogsController @Inject constructor(
     private val signals: CallSignalManager,
-    private val coordinator: WebRtcCallCoordinator,
     private val heartbeatTicker: CallHeartbeatTicker,
     private val reconnectBudget: CallReconnectBudget,
     private val connectingWatchdog: CallConnectingWatchdog,
@@ -117,9 +116,9 @@ class CallWatchdogsController @Inject constructor(
         host.dispatch(CallEvent.ReconnectFailed)
         if (host.callState is CallState.Ended) {
             if (host.callId.isNotBlank()) signals.emitEnd(host.callId)
-            coordinator.end()
+            host.endMedia()
         } else {
-            coordinator.retryIceRestart()
+            host.restartMediaIce()
         }
     }
 
@@ -147,7 +146,7 @@ class CallWatchdogsController @Inject constructor(
             connectingWatchdog.countdown().collect {
                 host.dispatch(CallEvent.ConnectionFailed(CONNECT_TIMED_OUT))
                 if (host.callId.isNotBlank()) signals.emitEnd(host.callId)
-                coordinator.end()
+                host.endMedia()
             }
         }
     }

@@ -140,7 +140,7 @@ class CallExtensionPointsWiringTest {
         appStatePresence,
         CallPeerIndicatorsController(signalManager, silentTimer, silentRecording),
         CallWaitingController(signalManager, silentTimer),
-        CallWatchdogsController(signalManager, coordinator, silentBeats, silentTimer, silentTimer),
+        CallWatchdogsController(signalManager, silentBeats, silentTimer, silentTimer),
         CallAnalyticsController(signalManager, clock),
         CallExtensionPoints(
             controllers = CallFeatureControllerRegistry(setOfNotNull(controller)),

@@ -33,6 +33,16 @@ interface CallSessionHost {
     /** Fold [event] into the FSM exactly as a remote event would be. */
     fun dispatch(event: CallEvent)
 
+    /**
+     * Tear the call's media down (engine closed, audio route restored). The media
+     * session is the host's own — one per call surface — so a collaborator asks the
+     * host rather than holding a second coordinator of its own.
+     */
+    fun endMedia()
+
+    /** Force a fresh ICE restart of the media path (a no-op outside a stall). */
+    fun restartMediaIce()
+
     /** Rebuild and publish the [CallUiState] from the current slices. */
     fun publish()
 }

@@ -28,6 +28,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.calls.R
 import me.meeshy.sdk.model.call.CallAction
@@ -154,7 +156,10 @@ private fun CallExtraActions(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         actions.forEach { offered ->
-            IconButton(onClick = { onAction(offered.action) }) {
+            IconButton(
+                onClick = { onAction(offered.action) },
+                modifier = Modifier.semantics { selected = offered.presentation.isActive },
+            ) {
                 Icon(
                     imageVector = offered.presentation.icon,
                     contentDescription = stringResource(offered.presentation.labelRes),

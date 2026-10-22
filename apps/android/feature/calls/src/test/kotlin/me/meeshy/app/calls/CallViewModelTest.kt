@@ -183,7 +183,7 @@ class CallViewModelTest {
         signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
         CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
         CallWaitingController(signalManager, waitingTimer),
-        CallWatchdogsController(signalManager, coordinator, heartbeatTicker, reconnectBudget, connectingWatchdog),
+        CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
         CallAnalyticsController(signalManager, clock),
         extensions,
     )

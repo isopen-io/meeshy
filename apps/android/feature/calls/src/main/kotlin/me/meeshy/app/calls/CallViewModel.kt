@@ -96,6 +96,8 @@ class CallViewModel @Inject constructor(
         override val callState: CallState get() = this@CallViewModel.callState
         override val elapsedSeconds: Long get() = this@CallViewModel.elapsedSeconds
         override fun dispatch(event: CallEvent) = this@CallViewModel.dispatch(event)
+        override fun endMedia() = coordinator.end()
+        override fun restartMediaIce() = coordinator.retryIceRestart()
         override fun publish() = this@CallViewModel.publish()
     }
 

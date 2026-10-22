@@ -21,7 +21,10 @@ import javax.inject.Singleton
  *  - [videoHealth] — input: whether the app froze the outgoing video.
  *
  * Adding a capability never edits this class: it contributes to the multibindings
- * of [CallExtensionPointsModule] from its own module.
+ * of [CallExtensionPointsModule] from its own module. A capability injects the
+ * individual seam it needs ([CallToastBus], [CallHaptics]…), never this holder:
+ * the holder depends on the registries, which depend on the capabilities, so
+ * injecting it back would be a dependency cycle.
  */
 @Singleton
 class CallExtensionPoints @Inject constructor(
