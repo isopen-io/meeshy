@@ -1,5 +1,7 @@
 """Outils partagés des tests : relire un fichier de ressources Android comme aapt2."""
+import json
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 _BOLD_OPEN = "\x00B"
 _BOLD_CLOSE = "\x00E"
@@ -56,3 +58,25 @@ def parse_resources(xml_text):
         elif element.tag == "plurals":
             resources[name] = {item.get("quantity"): resolved_text(item) for item in element}
     return resources
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def write_json(directory, name, document):
+    path = Path(directory) / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def catalog_document(strings, source_language="fr"):
+    return {"sourceLanguage": source_language, "strings": strings, "version": "1.1"}
+
+
+def string_unit(value, state="translated"):
+    return {"stringUnit": {"state": state, "value": value}}
+
+
+def plural_variations(**quantities):
+    return {"variations": {"plural": {name: string_unit(text) for name, text in quantities.items()}}}

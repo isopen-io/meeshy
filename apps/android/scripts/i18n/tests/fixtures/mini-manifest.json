@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:demo": {
+      "resDir": "feature/demo/src/main/res",
+      "entries": [
+        {"catalog": "app", "iosKey": "greeting.hello", "status": "adopted"},
+        {"catalog": "app", "iosKey": "Annuler", "androidName": "common_cancel", "status": "adopted"},
+        {"catalog": "app", "iosKey": "Fermer", "androidName": "common_close", "status": "adopted"},
+        {"catalog": "app", "iosKey": "quote.special", "status": "adopted"},
+        {"catalog": "app", "iosKey": "leading.at", "status": "adopted"},
+        {"catalog": "app", "iosKey": "leading.question", "status": "adopted"},
+        {"catalog": "app", "iosKey": "message.sent.count", "status": "adopted"},
+        {"catalog": "app", "iosKey": "already.positional", "status": "adopted"},
+        {"catalog": "app", "iosKey": "bold.code", "status": "adopted"},
+        {"catalog": "app", "iosKey": "percent.done", "status": "adopted"},
+        {"catalog": "app", "iosKey": "percent.prose", "status": "adopted"},
+        {"catalog": "app", "iosKey": "pt.only", "status": "adopted"},
+        {"catalog": "app", "iosKey": "stale.removed", "status": "adopted"},
+        {"catalog": "app", "iosKey": "unread.complete", "kind": "plurals", "status": "adopted"},
+        {"catalog": "app", "iosKey": "unread.partial", "kind": "plurals", "status": "candidate"},
+        {"androidName": "demo_android_only", "status": "android-only"},
+        {"catalog": "app", "iosKey": "greeting.hello", "androidName": "demo_hello_disabled", "status": "disabled"}
+      ]
+    }
+  }
+}
