@@ -936,9 +936,10 @@ missing-key :feature:chat it participant_profile_denied_can_send_audios
 missing-key :feature:chat it participant_profile_denied_can_send_links
 missing-key :feature:chat it participant_profile_denied_can_send_locations
 
-# --- :feature:settings : dossiers ar, de, it partiels (chaînes générées seules) ----------------------
-# Les dossiers values-ar/de/it n'existent que par strings_generated.xml ; les chaînes écrites à la
-# main du module y restent en anglais tant que la génération des sept langues ne les comble pas.
+# --- feature:settings : ar, de, it ne portent que la précision du partage de position -------
+# La génération depuis iOS n a produit que les clés du partage de position dans ces trois
+# langues ; le reste des réglages (légal, notifications, ...) reste à générer pour ar, de, it
+# (./apps/android/meeshy.sh i18n). Le cliquet ne peut que rétrécir.
 missing-key :feature:settings ar legal_terms_title
 missing-key :feature:settings ar legal_privacy_title
 missing-key :feature:settings ar legal_terms_last_updated
@@ -1286,8 +1287,6 @@ missing-key :feature:settings ar sessions_current
 missing-key :feature:settings ar sessions_revoke
 missing-key :feature:settings ar sessions_revoke_others
 missing-key :feature:settings ar sessions_retry
-missing-key :feature:settings ar settings_notif_type_contact_activity
-missing-key :feature:settings ar settings_notif_type_game
 missing-key :feature:settings de legal_terms_title
 missing-key :feature:settings de legal_privacy_title
 missing-key :feature:settings de legal_terms_last_updated
@@ -1635,8 +1634,6 @@ missing-key :feature:settings de sessions_current
 missing-key :feature:settings de sessions_revoke
 missing-key :feature:settings de sessions_revoke_others
 missing-key :feature:settings de sessions_retry
-missing-key :feature:settings de settings_notif_type_contact_activity
-missing-key :feature:settings de settings_notif_type_game
 missing-key :feature:settings it legal_terms_title
 missing-key :feature:settings it legal_privacy_title
 missing-key :feature:settings it legal_terms_last_updated
@@ -1984,5 +1981,9 @@ missing-key :feature:settings it sessions_current
 missing-key :feature:settings it sessions_revoke
 missing-key :feature:settings it sessions_revoke_others
 missing-key :feature:settings it sessions_retry
+missing-key :feature:settings ar settings_notif_type_contact_activity
+missing-key :feature:settings ar settings_notif_type_game
+missing-key :feature:settings de settings_notif_type_contact_activity
+missing-key :feature:settings de settings_notif_type_game
 missing-key :feature:settings it settings_notif_type_contact_activity
 missing-key :feature:settings it settings_notif_type_game
