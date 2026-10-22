@@ -2,8 +2,8 @@ package me.meeshy.sdk.cache.store
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import me.meeshy.core.database.dao.CacheEntryDao
@@ -62,10 +62,9 @@ class RoomCacheStore<V>(
     override suspend fun saveAsStale(items: List<V>, key: String) = write(items, key, FreshnessWriteMode.AsStale)
 
     override fun observe(key: String): Flow<List<V>?> =
-        dao.observeItems(namespace, key)
-            .distinctUntilChanged()
-            .map { rows -> if (dao.meta(namespace, key) == null) null else decode(rows) }
-            .distinctUntilChanged()
+        combine(dao.observeItems(namespace, key), dao.observeMeta(namespace, key)) { rows, meta ->
+            if (meta == null) null else decode(rows)
+        }.distinctUntilChanged()
 
     override suspend fun cursor(key: String): PaginationCursor? =
         PaginationCursor.fromJson(dao.meta(namespace, key)?.payload)
