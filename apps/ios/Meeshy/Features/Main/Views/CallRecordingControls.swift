@@ -141,11 +141,11 @@ struct CallRecordingOverlay: View, Equatable {
                 recordingDot
                 Text(CallRecordingCopy.ask(name: requesterName, kind: kind))
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             Text(CallRecordingCopy.askDetail(kind: kind))
                 .font(.footnote)
-                .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: MeeshySpacing.smPlus) {
                 answerButton(CallRecordingCopy.refuse, accepted: false, tint: .white.opacity(MeeshyOpacity.light))
@@ -166,7 +166,7 @@ struct CallRecordingOverlay: View, Equatable {
         } label: {
             Text(title)
                 .font(.subheadline.weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(tint, in: Capsule())
         }
@@ -178,13 +178,13 @@ struct CallRecordingOverlay: View, Equatable {
             recordingDot
             Text(text)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             Button(action: onStop) {
                 Image(systemName: "stop.fill")
                     .font(.footnote.weight(.bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -200,12 +200,12 @@ struct CallRecordingOverlay: View, Equatable {
         HStack(spacing: MeeshySpacing.xsPlus) {
             Text(CallRecordingCopy.notice(notice))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(2)
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.caption.weight(.bold))
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }

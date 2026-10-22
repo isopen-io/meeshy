@@ -147,10 +147,10 @@ struct ConversationListQuickActions: View, Equatable {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                 Text(subtitle)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                    .foregroundColor(MeeshyColors.textSecondary(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textSecondary(isDark: isDark))
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -197,7 +197,7 @@ struct ConversationListQuickActions: View, Equatable {
                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
                     .opacity(MeeshyOpacity.intense)
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.lg)
             .frame(maxWidth: .infinity)
@@ -221,12 +221,12 @@ struct ConversationListQuickActions: View, Equatable {
             VStack(spacing: MeeshySpacing.xs) {
                 Image(systemName: action.icon)
                     .font(MeeshyFont.relative(MeeshyIconSize.xl, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 44, height: 44)
                     .background(gradientBox(action.gradient, radius: 14))
                 Text(action.title)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                    .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                    .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                     .multilineTextAlignment(.center)
                     .lineLimit(2)
                     .minimumScaleFactor(0.85)

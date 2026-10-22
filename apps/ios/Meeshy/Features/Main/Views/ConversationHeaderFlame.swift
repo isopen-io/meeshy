@@ -304,9 +304,9 @@ struct HeaderFlameCount: View, Equatable {
     var body: some View {
         ZStack {
             ForEach(Self.outline.indices, id: \.self) { index in
-                digits.foregroundColor(.white).offset(Self.outline[index])
+                digits.foregroundStyle(Color.white).offset(Self.outline[index])
             }
-            digits.foregroundColor(MeeshyColors.error)
+            digits.foregroundStyle(MeeshyColors.error)
         }
         .padding(1)
         .animation(.spring(response: 0.4, dampingFraction: 0.7), value: text)

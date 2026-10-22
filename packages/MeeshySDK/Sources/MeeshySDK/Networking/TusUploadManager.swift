@@ -159,6 +159,7 @@ private struct PendingTusUpload: Sendable {
     let thumbHash: String?
     let transcription: TusUploadTranscriptionMetadata?
     let capturedInApp: Bool
+    let fileName: String?
     let continuation: CheckedContinuation<TusUploadResult, Error>
 }
 
@@ -269,9 +270,14 @@ public actor TusUploadManager {
     /// l'application (#9775). Seul l'appelant qui a ouvert la caméra le sait ;
     /// il le DÉCLARE à la création (clé `capturedinapp` d'`Upload-Metadata`),
     /// et le serveur le rend sur `MessageAttachment.capturedInApp`.
-    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false) async throws -> TusUploadResult {
+    ///
+    /// `fileName` : le nom d'ORIGINE que le serveur garde (`originalName`,
+    /// #11531), quand le fichier sur disque porte un nom technique
+    /// (`pending-media/<cmid>/0.jpeg`). `nil` : le nom du fichier.
+    public func uploadFile(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, fileName: String? = nil) async throws -> TusUploadResult {
         let fileId = UUID().uuidString
-        let fileName = fileURL.lastPathComponent
+        let declaredName = fileName
+        let fileName = fileName ?? fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
 
@@ -293,7 +299,7 @@ public actor TusUploadManager {
                 queue.append(PendingTusUpload(
                     fileId: fileId, fileURL: fileURL, mimeType: mimeType, credential: credential,
                     uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription,
-                    capturedInApp: capturedInApp, continuation: continuation
+                    capturedInApp: capturedInApp, fileName: declaredName, continuation: continuation
                 ))
                 processQueue()
             }
@@ -332,12 +338,12 @@ public actor TusUploadManager {
             let next = queue.removeFirst()
             let (fileId, fileURL, mimeType, credential) = (next.fileId, next.fileURL, next.mimeType, next.credential)
             let (uploadContext, thumbHash, transcription) = (next.uploadContext, next.thumbHash, next.transcription)
-            let (capturedInApp, continuation) = (next.capturedInApp, next.continuation)
+            let (capturedInApp, continuation, declaredName) = (next.capturedInApp, next.continuation, next.fileName)
             activeCount += 1
             activeTasks[fileId] = Task {
                 do {
                     let result = try await withBackgroundTask(named: "tus-upload-\(fileURL.lastPathComponent)") {
-                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp, progressFileId: fileId)
+                        try await self.performTusUpload(fileURL: fileURL, mimeType: mimeType, credential: credential, uploadContext: uploadContext, thumbHash: thumbHash, transcription: transcription, capturedInApp: capturedInApp, progressFileId: fileId, fileName: declaredName)
                     }
                     // Local-first : copie le fichier qu'on vient d'uploader dans le
                     // cache média typé, sous la clé de rendu (`renderCacheKey`). L'auteur
@@ -436,9 +442,9 @@ public actor TusUploadManager {
     /// state machine directly — the same rationale as `sha256Hex` below:
     /// a pure-enough I/O sequence exercised without going through
     /// `uploadFile`'s queue/background-task ceremony.
-    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, progressFileId: String? = nil) async throws -> TusUploadResult {
+    func performTusUpload(fileURL: URL, mimeType: String, credential: MeeshyRequestCredential, uploadContext: String? = nil, thumbHash: String? = nil, transcription: TusUploadTranscriptionMetadata? = nil, capturedInApp: Bool = false, progressFileId: String? = nil, fileName declaredName: String? = nil) async throws -> TusUploadResult {
         var credential = credential
-        let fileName = fileURL.lastPathComponent
+        let fileName = declaredName ?? fileURL.lastPathComponent
         let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
         let fileSize = (attrs[.size] as? Int64) ?? 0
         // La ligne de progression de CET envoi, remise par la file. Chercher par nom de fichier tombait sur

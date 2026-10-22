@@ -27,7 +27,7 @@ private struct ProfilePostsFallback: View {
     let userId: String
     let accentColor: String
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
     @State private var posts: [APIPost] = []
     @State private var isLoading = false
     @State private var didLoad = false
@@ -77,7 +77,7 @@ private struct ProfilePostRow: View, Equatable {
         lhs.post.id == rhs.post.id && lhs.accentColor == rhs.accentColor
     }
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     var body: some View {
         VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
@@ -110,7 +110,7 @@ private struct ProfilePostRow: View, Equatable {
 
 private struct ProfilePostsEmpty: View {
     let accentColor: String
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     var body: some View {
         VStack(spacing: MeeshySpacing.smPlus) {

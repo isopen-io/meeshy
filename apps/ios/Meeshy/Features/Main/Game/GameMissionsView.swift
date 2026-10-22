@@ -190,7 +190,7 @@ private struct GameMissionRow: View {
                     }
                     Text(title)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .fixedSize(horizontal: false, vertical: true)
                     ProgressionBar(
                         progress: mission.target > 0 ? Double(mission.progress) / Double(mission.target) : 0,
@@ -205,7 +205,7 @@ private struct GameMissionRow: View {
             HStack(alignment: .center, spacing: MeeshySpacing.sm) {
                 Text(progressLine)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
                 if canReroll && !done && (phase?.allowsAction ?? true) {
@@ -219,12 +219,12 @@ private struct GameMissionRow: View {
                 Label {
                     Text(line)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 } icon: {
                     Image(systemName: "timer")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityIdentifier("game.mission.timer")
             }
@@ -258,7 +258,7 @@ private struct GameMissionRow: View {
         } label: {
             Image(systemName: "camera.fill")
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .frame(width: 44, height: 44)
                 .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.12)))
         }
@@ -274,7 +274,7 @@ private struct GameMissionRow: View {
         } label: {
             Text(GameCopy.rerollLabel)
                 .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
                 .padding(.horizontal, MeeshySpacing.md)
                 .frame(minHeight: 44)
                 .background(Capsule().fill(MeeshyColors.brandPrimary.opacity(0.12)))
@@ -349,7 +349,7 @@ private struct GameChestCard: View {
                     ChestStage(reward: chest.reward, isOpen: phase == .opening || phase == .claimed, play: play)
                     Text(String(localized: "game.chest.title", defaultValue: "L’Offrande", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                 }
                 .frame(maxWidth: .infinity)
             }

@@ -81,7 +81,7 @@ struct MessageLanguageDetailView: View {
                     .foregroundColor(originalColor)
                 Text(String(format: String(localized: "message-detail.original", defaultValue: "Original • %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Text(originalLang.uppercased())
                     .font(.system(.caption2, design: .monospaced).weight(.bold))
@@ -104,7 +104,7 @@ struct MessageLanguageDetailView: View {
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
                     .font(.footnote)
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundStyle(theme.textSecondary)
                     .lineLimit(3)
                     .padding(.horizontal, MeeshySpacing.xs)
             } else if let transcription {
@@ -114,7 +114,7 @@ struct MessageLanguageDetailView: View {
                         .foregroundColor(originalColor.opacity(MeeshyOpacity.heavy))
                     Text(transcription.text)
                         .font(.footnote)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(3)
                 }
                 .padding(.horizontal, MeeshySpacing.xs)
@@ -140,7 +140,7 @@ struct MessageLanguageDetailView: View {
                             // verre) — parité avec les autres boutons de fermeture.
                             Image(systemName: "xmark")
                                 .font(.caption.weight(.bold))
-                                .foregroundColor(theme.textMuted)
+                                .foregroundStyle(theme.textMuted)
                                 .frame(width: 28, height: 28)
                                 .adaptiveGlass(in: Circle())
                                 .contentShape(Circle())
@@ -151,7 +151,7 @@ struct MessageLanguageDetailView: View {
 
                     Text(translated)
                         .font(.subheadline)
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(MeeshySpacing.md)
@@ -179,7 +179,7 @@ struct MessageLanguageDetailView: View {
             if let translationError {
                 Text(translationError)
                     .font(.caption2)
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.top, MeeshySpacing.xs)
                     .transition(.opacity)
@@ -276,7 +276,7 @@ struct MessageLanguageDetailView: View {
                 } else if hasTranslation {
                     Text(String((translations[lang.code] ?? "").prefix(60)) + (translations[lang.code]?.count ?? 0 > 60 ? "..." : ""))
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                         .frame(maxWidth: 180, alignment: .trailing)
 
@@ -305,7 +305,7 @@ struct MessageLanguageDetailView: View {
                             .foregroundColor(langColor.opacity(0.6))
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
                             .font(.caption2)
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: 180, alignment: .trailing)

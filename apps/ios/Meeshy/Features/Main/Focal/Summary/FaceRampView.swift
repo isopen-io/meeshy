@@ -85,7 +85,7 @@ private struct FaceRampEntryButton: View {
     private var badge: some View {
         Text("\(entry.awaitingCount)")
             .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .heavy))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xs)
             .frame(minWidth: 16, minHeight: 16)
             .background(Capsule().fill(MeeshyColors.indigo500))

@@ -24,7 +24,7 @@ struct ConversationRiverLayer: View {
     @Binding var scrollState: ConversationScrollState
     @Binding var overlayState: ConversationOverlayState
     @EnvironmentObject private var storyViewModel: StoryViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     let showScript: () -> Void
     /// #11224 — LE point d'entrée du menu d'un message (`presentLongPressMenu`).
     let presentMenu: (Message) -> Void

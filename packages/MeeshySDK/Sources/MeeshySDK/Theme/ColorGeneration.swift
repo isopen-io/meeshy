@@ -25,13 +25,7 @@ public struct ConversationContext: Sendable {
         self.theme = theme; self.memberCount = memberCount
     }
 
-    public enum ConversationType: String, CaseIterable, Sendable {
-        case direct
-        case group
-        case community
-        case channel
-        case bot
-    }
+    public typealias ConversationType = MeeshyConversation.ConversationType
 
     public enum ConversationLanguage: String, CaseIterable, Sendable, Codable {
         case french

@@ -55,7 +55,7 @@ struct IncomingCallView: View {
                 .font(.system(.title, design: .rounded).weight(.semibold))
                 // Posé sur le fond sombre fixe de CallView → texte clair fixe
                 // (theme.textPrimary suit le système et virait au foncé en Light).
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.bottom, MeeshySpacing.sm)
 
             // Call type label
@@ -63,7 +63,7 @@ struct IncomingCallView: View {
                 ? String(localized: "call.incoming.video", defaultValue: "Appel vidéo entrant", bundle: .main)
                 : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main))
                 .font(.callout.weight(.medium))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundStyle(Color.white.opacity(0.7))
                 .padding(.bottom, MeeshySpacing.md)
 
             // Call type badge
@@ -190,7 +190,7 @@ struct IncomingCallView: View {
                 // doctrine 82i — initiale bornée par le cercle d'avatar fixe 110×110 ;
                 // décorative (déjà aplatie par le `.accessibilityHidden(true)` du ring parent)
                 .font(.system(size: 44, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         }
         .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
     }
@@ -217,7 +217,7 @@ struct IncomingCallView: View {
                 systemImage: "message.fill"
             )
             .font(.callout.weight(.medium))
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.xl)
             .frame(minHeight: 44)
             .adaptiveGlass(in: Capsule())
@@ -244,13 +244,13 @@ struct IncomingCallView: View {
                             // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
                             // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
                             .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
 
                         Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
                             .font(.caption2.weight(.medium))
-                            .foregroundColor(MeeshyColors.error)
+                            .foregroundStyle(MeeshyColors.error)
                     }
                 }
                 .pressable()
@@ -266,13 +266,13 @@ struct IncomingCallView: View {
                             // doctrine 82i — glyphe borné par le cercle de bouton fixe 70×70 ;
                             // le `Button` porte déjà son `.accessibilityLabel`/`.accessibilityHint`
                             .font(.system(size: 28, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(width: 70, height: 70)
                             .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)
 
                         Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
                             .font(.caption2.weight(.medium))
-                            .foregroundColor(MeeshyColors.success)
+                            .foregroundStyle(MeeshyColors.success)
                     }
                 }
                 .pressable()

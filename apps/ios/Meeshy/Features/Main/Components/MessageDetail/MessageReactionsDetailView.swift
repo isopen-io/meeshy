@@ -166,7 +166,7 @@ struct MessageReactionsDetailView: View {
 
             Text(item.username)
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             if reactionFilter == "all" {
                 Text(item.emoji)
@@ -177,7 +177,7 @@ struct MessageReactionsDetailView: View {
 
             Text(relativeDate(item.createdAt))
                 .font(.caption2)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.vertical, MeeshySpacing.sm)
         .padding(.horizontal, MeeshySpacing.xs)
@@ -190,11 +190,11 @@ struct MessageReactionsDetailView: View {
         VStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "face.smiling")
                 .font(.system(size: MeeshyIconSize.xxxl, weight: .light)) // decorative empty-state glyph (parity with MessageViewsDetailView)
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .foregroundStyle(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(String(localized: "message-detail.reactions.empty", defaultValue: "Aucune réaction", bundle: .main))
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)

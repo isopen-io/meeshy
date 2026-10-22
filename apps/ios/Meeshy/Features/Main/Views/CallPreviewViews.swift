@@ -75,7 +75,7 @@ struct CallPreviewSeenLabel: View {
             if let text = Self.text(peerName: peerName, exposure: exposure) {
                 Label(text, systemImage: exposure == .seen ? "eye.fill" : "ear.fill")
                     .font(.caption.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .padding(.horizontal, MeeshySpacing.md)
                     .padding(.vertical, MeeshySpacing.xsPlus)
                     .adaptiveGlass(in: Capsule())
@@ -158,7 +158,7 @@ struct CallPreviewOutgoingControls: View {
 
                 Text(caption)
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

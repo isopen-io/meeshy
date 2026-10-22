@@ -35,7 +35,7 @@ struct ReportUserView: View {
 
             Text("\(String(localized: "report.user.title", defaultValue: "Signaler", bundle: .main)) @\(username)")
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -46,7 +46,7 @@ struct ReportUserView: View {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.xxl))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
@@ -66,7 +66,7 @@ struct ReportUserView: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
 
@@ -103,14 +103,14 @@ struct ReportUserView: View {
 
                             Text(reason.label)
                                 .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
 
                             Spacer()
 
                             if selectedReason == reason {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(MeeshyFont.relative(MeeshyIconSize.lg))
-                                    .foregroundColor(MeeshyColors.error)
+                                    .foregroundStyle(MeeshyColors.error)
                             }
                         }
                         .padding(.horizontal, MeeshySpacing.mdPlus)
@@ -134,7 +134,7 @@ struct ReportUserView: View {
             VStack(spacing: MeeshySpacing.sm) {
                 TextEditor(text: $details)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .regular))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 100, maxHeight: 150)
                     .padding(MeeshySpacing.smPlus)
@@ -175,7 +175,7 @@ struct ReportUserView: View {
                 Text(String(localized: "report.user.submit", defaultValue: "Envoyer le signalement", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .frame(maxWidth: .infinity)
             .padding(.vertical, MeeshySpacing.mdPlus)
             .background(

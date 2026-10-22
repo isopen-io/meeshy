@@ -102,7 +102,7 @@ public struct MediaTranscriptionView: View {
     /// défaut ; l'hôte qui recouvre le haut du défilement vise plus bas.
     public var activeAnchor: UnitPoint = .center
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
     private var isDark: Bool { theme.mode.isDark }
     /// Respecte Réduire les animations : le karaoké « vague » (scale + lift +
     /// glow rebondi) est désactivé, on garde le simple changement couleur/poids.

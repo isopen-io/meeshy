@@ -181,7 +181,7 @@ extension StoryCardView {
                 Spacer()
                 Text(transcription)
                     .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.sm)
@@ -247,7 +247,7 @@ extension StoryCardView {
                     .lineLimit(1)
             }
         }
-        .foregroundColor(.white)
+        .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)
         .background(

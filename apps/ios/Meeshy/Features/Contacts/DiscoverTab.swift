@@ -10,7 +10,7 @@ struct DiscoverTab: View {
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     @State private var showSMSComposer = false
     @State private var isOfferingPhone = false
@@ -229,7 +229,7 @@ struct DiscoverTab: View {
                 ring: match.user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: match.user.id)
             )
-            .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .onTapGesture { router.openProfileSheet(profileUser) }
             .countsImpression(of: statusViewModel.statusForUser(userId: match.user.id)?.id) {
                 statusViewModel.trackImpression($0)
             }
@@ -251,7 +251,7 @@ struct DiscoverTab: View {
                 }
             }
             .contentShape(Rectangle())
-            .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .onTapGesture { router.openProfileSheet(profileUser) }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))
@@ -344,7 +344,7 @@ struct DiscoverTab: View {
                 ring: user.avatarRing,
                 onMoodTap: statusViewModel.moodTapHandler(for: user.id)
             )
-            .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .onTapGesture { router.openProfileSheet(profileUser) }
             .countsImpression(of: statusViewModel.statusForUser(userId: user.id)?.id) {
                 statusViewModel.trackImpression($0)
             }
@@ -359,7 +359,7 @@ struct DiscoverTab: View {
                     .foregroundColor(theme.textMuted)
             }
             .contentShape(Rectangle())
-            .onTapGesture { router.deepLinkProfileUser = profileUser }
+            .onTapGesture { router.openProfileSheet(profileUser) }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint(String(localized: "bubble.avatar.viewProfile", defaultValue: "Voir le profil", bundle: .main))

@@ -63,7 +63,9 @@ nonisolated enum ShareItemLoader {
         case .media(let typeIdentifier), .file(let typeIdentifier):
             _ = provider.loadFileRepresentation(
                 forTypeIdentifier: typeIdentifier,
-                completionHandler: fileHandler(typeIdentifier: typeIdentifier, index: index, context: context, deliver: deliver)
+                completionHandler: fileHandler(
+                    typeIdentifier: typeIdentifier, suggestedName: provider.suggestedName,
+                    index: index, context: context, deliver: deliver)
             )
         case .fileURL:
             deliver(.staged(ShareStagingResult(index: index, outcome: .failure(.refusedSource))))
@@ -83,12 +85,14 @@ nonisolated enum ShareItemLoader {
 
     private static func fileHandler(
         typeIdentifier: String,
+        suggestedName: String?,
         index: Int,
         context: ShareStagingContext,
         deliver: @escaping Deliver
     ) -> @Sendable (URL?, (any Error)?) -> Void {
         { url, error in
-            deliver(.staged(context.stage(url, error: error, typeIdentifier: typeIdentifier, index: index)))
+            deliver(.staged(context.stage(
+                url, error: error, typeIdentifier: typeIdentifier, index: index, suggestedName: suggestedName)))
         }
     }
 
@@ -140,15 +144,21 @@ nonisolated struct ShareStagingContext: Sendable {
     let sourcePolicy: ShareSourcePolicy
     let budget: ShareByteBudget
 
-    func stage(_ url: URL?, error: (any Error)?, typeIdentifier: String?, index: Int) -> ShareStagingResult {
-        ShareStagingResult(index: index, outcome: copy(url, error: error, typeIdentifier: typeIdentifier, index: index))
+    /// `suggestedName` : le nom que le fournisseur annonce, second candidat du
+    /// nom d'origine après celui de la copie du système (#11531).
+    func stage(
+        _ url: URL?, error: (any Error)?, typeIdentifier: String?, index: Int, suggestedName: String? = nil
+    ) -> ShareStagingResult {
+        ShareStagingResult(index: index, outcome: copy(
+            url, error: error, typeIdentifier: typeIdentifier, index: index, suggestedName: suggestedName))
     }
 
     private func copy(
         _ url: URL?,
         error: (any Error)?,
         typeIdentifier: String?,
-        index: Int
+        index: Int,
+        suggestedName: String?
     ) -> Result<ShareStagedMedia, ShareMediaStagingError> {
         guard let url else { return .failure(.copyFailed(error?.localizedDescription ?? "aucune URL fournie")) }
         guard url.isFileURL, sourcePolicy.admits(url) else { return .failure(.refusedSource) }
@@ -165,7 +175,8 @@ nonisolated struct ShareStagingContext: Sendable {
                 index: index,
                 mime: ShareMediaStaging.mimeType(typeIdentifier: typeIdentifier, fileExtension: url.pathExtension),
                 freeBytes: ShareMediaStaging.availableCapacityBytes(at: mediaRoot),
-                budget: budget
+                budget: budget,
+                suggestedName: suggestedName
             ))
         } catch let error as ShareMediaStagingError {
             return .failure(error)

@@ -51,7 +51,7 @@ struct ConversationListView: View {
     @EnvironmentObject var storyViewModel: StoryViewModel
     @EnvironmentObject var statusViewModel: StatusViewModel
     @EnvironmentObject var conversationViewModel: ConversationListViewModel
-    @EnvironmentObject var router: Router
+    @Environment(\.routerCommands) var router
 
     // Status
     @State private var showStatusComposer = false
@@ -506,7 +506,7 @@ struct ConversationListView: View {
 
     func openConversation(_ conversation: Conversation, searching: Bool = false) {
         let route = ConversationOpenRoute.resolve(conversation.id, searching: searching)
-        if route.armsSearchNow { router.pendingOpenSearch = true }
+        if route.armsSearchNow { router.armSearch() }
         guard route.presentsLockSheet else { return onSelect(conversation) }
         sheetTargets.searchAfterUnlock = route.searchesAfterUnlock
         lockSheetMode = .openConversation
@@ -572,7 +572,7 @@ struct ConversationListView: View {
             .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
                 if let user = newValue {
                     selectedProfileUser = nil
-                    router.deepLinkProfileUser = user
+                    router.openProfileSheet(user)
                 }
             }
             .modifier(ConversationListCreationSheets(

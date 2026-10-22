@@ -37,7 +37,8 @@ extension OfflineMessageQueueing {
             sticker: nil,
             deletesSourceFiles: deletesSourceFiles,
             createdAt: createdAt,
-            protection: .none
+            protection: .none,
+            originalNames: nil
         )
     }
 
@@ -73,7 +74,46 @@ extension OfflineMessageQueueing {
             sticker: sticker,
             deletesSourceFiles: deletesSourceFiles,
             createdAt: createdAt,
-            protection: .none
+            protection: .none,
+            originalNames: nil
+        )
+    }
+
+    /// Shim des appelants antérieurs au nom d'origine (#11531) : aucun nom
+    /// connu, le serveur reçoit le nom du fichier en file.
+    @discardableResult
+    public func enqueueMedia(
+        sourceMediaURLs: [URL],
+        kinds: [String],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String?,
+        replyToId: String?,
+        forwardedFromId: String?,
+        forwardedFromConversationId: String?,
+        copyAttachmentsFromClientMessageId: String?,
+        sticker: MessageSticker?,
+        deletesSourceFiles: Bool,
+        createdAt: Date?,
+        protection: MessageProtectionIntent
+    ) async throws -> OfflineQueue.EnqueueMediaResult {
+        try await enqueueMedia(
+            sourceMediaURLs: sourceMediaURLs,
+            kinds: kinds,
+            conversationId: conversationId,
+            content: content,
+            clientMessageId: clientMessageId,
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId,
+            copyAttachmentsFromClientMessageId: copyAttachmentsFromClientMessageId,
+            sticker: sticker,
+            deletesSourceFiles: deletesSourceFiles,
+            createdAt: createdAt,
+            protection: protection,
+            originalNames: nil
         )
     }
 }

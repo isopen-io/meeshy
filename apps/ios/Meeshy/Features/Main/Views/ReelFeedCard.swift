@@ -470,7 +470,7 @@ struct ReelFeedCard: View, Equatable {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(displayAuthor)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                     authorMetaLine
                 }
                 // Une ombre pour le BLOC, pas une par texte et par icône (#9702) :
@@ -651,7 +651,7 @@ struct ReelFeedCard: View, Equatable {
                 if displayLikeCount > 0 {
                     Text("\(displayLikeCount)")
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                 }
             }
@@ -678,7 +678,7 @@ struct ReelFeedCard: View, Equatable {
                 actionGlyph(outline: outline, filled: filled, tint: tint, participated: participated)
                 if count > 0 {
                     Text("\(count)").font(.footnote.weight(.medium))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .shadow(color: .black.opacity(0.4), radius: 2, y: 1)
                 }
             }

@@ -29,16 +29,16 @@ public struct CategoryPickerView: View {
                         HStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "folder.fill")
                                 .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                                .foregroundColor(MeeshyColors.blue500)
+                                .foregroundStyle(MeeshyColors.blue500)
                                 .accessibilityHidden(true)
                             Text(category.name)
                                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                                .foregroundColor(theme.textPrimary)
+                                .foregroundStyle(theme.textPrimary)
                             Spacer()
                             if selectedCategoryId == category.id {
                                 Image(systemName: "checkmark")
                                     .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.blue500)
+                                    .foregroundStyle(MeeshyColors.blue500)
                                     .accessibilityHidden(true)
                             }
                         }
@@ -53,20 +53,20 @@ public struct CategoryPickerView: View {
                     HStack(spacing: MeeshySpacing.md) {
                         Image(systemName: "folder.badge.plus")
                             .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                            .foregroundColor(MeeshyColors.blue500)
+                            .foregroundStyle(MeeshyColors.blue500)
                             .accessibilityHidden(true)
                         TextField(
                             String(localized: "category.picker.new.placeholder", defaultValue: "Nom de la catégorie", bundle: .module),
                             text: $newCategoryName
                         )
                             .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .onSubmit { Task { await createCategory() } }
                         Button {
                             Task { await createCategory() }
                         } label: {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(MeeshyColors.blue500)
+                                .foregroundStyle(MeeshyColors.blue500)
                         }
                         .disabled(newCategoryName.trimmingCharacters(in: .whitespaces).isEmpty)
                         .accessibilityLabel(String(localized: "category.picker.create.a11y", defaultValue: "Créer la catégorie", bundle: .module))
@@ -80,11 +80,11 @@ public struct CategoryPickerView: View {
                         HStack(spacing: MeeshySpacing.md) {
                             Image(systemName: "plus.circle.fill")
                                 .font(MeeshyFont.relative(MeeshyIconSize.sm))
-                                .foregroundColor(MeeshyColors.blue500)
+                                .foregroundStyle(MeeshyColors.blue500)
                                 .accessibilityHidden(true)
                             Text(String(localized: "category.picker.new.button", defaultValue: "Nouvelle catégorie", bundle: .module))
                                 .font(MeeshyFont.relative(MeeshyFont.bodySize))
-                                .foregroundColor(MeeshyColors.blue500)
+                                .foregroundStyle(MeeshyColors.blue500)
                             Spacer()
                         }
                         .padding(.horizontal, MeeshySpacing.mdPlus)

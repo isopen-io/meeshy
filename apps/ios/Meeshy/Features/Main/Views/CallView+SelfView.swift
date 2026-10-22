@@ -203,21 +203,21 @@ extension CallView {
                 Text(initial)
                     // Doctrine 86i : initiale d'avatar dans un cercle fixe 56×56 → figée.
                     .font(.system(size: 24, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .opacity(MeeshyOpacity.strong)
             // …"video paused" affordance on top.
             VStack(spacing: MeeshySpacing.xsPlus) {
                 Image(systemName: "video.slash.fill")
                     .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
+                    .foregroundStyle(MeeshyColors.warning)
                     .accessibilityHidden(true)
                 Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                 Text(String(localized: "call.video.suspended.short", defaultValue: "Reprise auto", bundle: .main))
                     .font(.caption2)
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
     }

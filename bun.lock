@@ -74,7 +74,7 @@
         "vitest": "^5.0.3",
       },
       "optionalDependencies": {
-        "@signalapp/libsignal-client": "^0.102.2",
+        "@signalapp/libsignal-client": "0.105.0",
       },
     },
     "services/agent": {
@@ -127,7 +127,7 @@
         "@meeshy/shared": "workspace:*",
         "@parse/node-apn": "^8.1.0",
         "@prisma/client": "^6.19.3",
-        "@signalapp/libsignal-client": "^0.102.3",
+        "@signalapp/libsignal-client": "0.105.0",
         "@socket.io/redis-adapter": "^8.3.0",
         "@tus/file-store": "^2.1.1",
         "@tus/server": "^2.4.5",
@@ -1022,7 +1022,7 @@
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.64.5", "", { "os": "win32", "cpu": "x64" }, "sha512-IhV6ew/DuzUWwHaYmlh7MrPCV3lKFUq/amTEwysi4r/mwNPAEfAMh5dYWeTSPTeMy2pFHGMEWYtPkHzfX3tG5A=="],
 
-    "@signalapp/libsignal-client": ["@signalapp/libsignal-client@0.102.3", "", { "dependencies": { "node-gyp-build": "^4.8.0", "type-fest": "^4.26.0" } }, "sha512-VQeBebCcvHea5d7VabBB3g7zY/gaLGew7tuWPmlSAqU5QwpFOoaI/a/yT8+NZJN0ZlKr2zoSI+g7nHr7DNCYgw=="],
+    "@signalapp/libsignal-client": ["@signalapp/libsignal-client@0.105.0", "", { "dependencies": { "node-gyp-build": "^4.8.0", "type-fest": "^4.26.0" } }, "sha512-6H7aQ6/grE6A/wG3nAm+c7aMWhj472/wtbTnNzb9z2KEPZ933PwYGi93zy6Pm63Mxd7SiOSfoa4gSTr++F44UQ=="],
 
     "@sinclair/typebox": ["@sinclair/typebox@0.34.52", "", {}, "sha512-XiMQh7qqVlxZzcVD+kkGMNGMzcTrDMLWI7S4x7z1MkCkbDPrekpZXEUK0eZqZFMuHQg2a2DZOcDIh9o5v3Gonw=="],
 

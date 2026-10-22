@@ -360,7 +360,7 @@ extension CallView {
 
             Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(.title, design: .rounded).weight(.semibold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
 
             // Duration + glyphe signal code couleur :
             // invisible sur lien sain, apparaît à la dégradation, persiste en
@@ -446,7 +446,7 @@ extension CallView {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                     .font(.system(.headline, design: .rounded).weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
 
                 CallDurationClock {
@@ -620,7 +620,7 @@ extension CallView {
                         .accessibilityHidden(true)
                     Text(String(localized: "call.video.connecting", defaultValue: "Connexion vidéo...", bundle: .main))
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundStyle(Color.white.opacity(0.4))
                         .multilineTextAlignment(.center)
                 }
                 .padding(.horizontal, MeeshySpacing.xxxl)
@@ -662,7 +662,7 @@ extension CallView {
                     Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
                         .font(.footnote.weight(.medium))
                 }
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundStyle(Color.white.opacity(0.6))
                 .accessibilityElement(children: .combine)
             }
         }
