@@ -52,7 +52,7 @@ describe('l’inventaire de parité voit ce que le routeur déclare', () => {
     expect(() => screenRoutes('export const ROUTES = new Map();')).toThrow(/route-table\.tsx/);
   });
 
-  test('les sept documents pré-rendus comptent, eux que ROUTES ne porte pas', () => {
+  test('les huit documents pré-rendus comptent, eux que ROUTES ne porte pas', () => {
     const inventaire = v31Routes();
     for (const url of institutionalRoutes()) {
       expect(inventaire).toContainEqual({ url, kind: 'document' });
@@ -61,8 +61,9 @@ describe('l’inventaire de parité voit ce que le routeur déclare', () => {
        `institutionalRoutes().length` serait tautologique — les deux viennent
        de la même source, et une famille de documents qui disparaîtrait en
        silence passerait. Sept depuis #7287 (`/help` et `/faq`, les deux
-       adresses que l'app publiée ouvre). */
-    expect(inventaire.filter((r) => r.kind === 'document')).toHaveLength(7);
+       adresses que l'app publiée ouvre), huit depuis #9923 (`/child-safety`,
+       les normes que Google Play exige). */
+    expect(inventaire.filter((r) => r.kind === 'document')).toHaveLength(8);
   });
 
   test('les motifs du routeur maison sont rendus dans la forme du legacy', () => {

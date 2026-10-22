@@ -129,6 +129,8 @@ protocol GroupPeerLinkProviding: AnyObject, Sendable {
     func close()
     /// Envoie un message sur le canal de contrôle, s'il est ouvert (#8795).
     func sendControl(_ data: Data)
+    /// La part du débit montant de ce lien (#11292), réappliquée à chaque négociation.
+    func applyVideoBudget(_ budget: CallVideoBudget)
 }
 
 @MainActor

@@ -748,7 +748,7 @@ struct StoryViewerView: View {
             storyCommentExpandedThreads: storyCommentExpandedThreads,
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
-            commentsUserLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            commentsUserLang: ReaderPrism.resolve(for: AuthManager.shared.currentUser).first ?? "fr",
             isContentReady: $isContentReady,
             showEmojiStrip: $showEmojiStrip,
             showFullEmojiPicker: $showFullEmojiPicker,
@@ -858,8 +858,8 @@ struct StoryViewerView: View {
         resolvedViewerLanguageChain.first
     }
 
-    /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
-    /// (cf. `MeeshyUser.preferredContentLanguages`). Utilisee par le reader pour resoudre
+    /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → locale appareil,
+    /// sans repli « fr » (`ReaderPrism.resolve(for:)`, #11832). Utilisee par le reader pour resoudre
     /// les traductions selon le Prisme Linguistique.
     ///
     /// Quand l'utilisateur explore une autre langue via le picker (`sessionLanguageOverride`),
@@ -873,7 +873,7 @@ struct StoryViewerView: View {
     /// documented in apps/ios/CLAUDE.md.
     var resolvedViewerLanguageChain: [String] {
         Self.viewerLanguageChain(
-            base: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            base: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             override: sessionLanguageOverride
         )
     }

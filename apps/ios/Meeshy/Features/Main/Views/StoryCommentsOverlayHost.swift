@@ -126,7 +126,7 @@ extension StoryViewerView {
             loadingReplies: storyCommentLoadingReplies,
             repliesHasMore: storyCommentRepliesHasMore,
             isLoading: isLoadingComments,
-            userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            userLang: ReaderPrism.resolve(for: AuthManager.shared.currentUser).first ?? "fr",
             isStoryExpired: currentStory?.isExpired() ?? false,
             targetCommentId: targetCommentId,
             targetParentCommentId: targetParentCommentId,

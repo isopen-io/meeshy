@@ -177,7 +177,7 @@ struct CommentRowView: View, Equatable {
                             }
                         }
 
-                        let userLangs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                        let userLangs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                         let targetLang = userLangs.first?.lowercased() ?? "fr"
                         LanguageFlagChip(code: targetLang, isActive: !showOriginal) {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -189,7 +189,7 @@ struct CommentRowView: View, Equatable {
                     } else if let onRequestTranslation,
                               comment.originalLanguage != nil,
                               comment.originalLanguage?.lowercased()
-                                != (AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr") {
+                                != (ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr") {
                         // Pas encore de traduction vers la langue préférée :
                         // « Traduire » à la demande (langues hors des 5
                         // pré-générées comprises) — le résultat remplit la

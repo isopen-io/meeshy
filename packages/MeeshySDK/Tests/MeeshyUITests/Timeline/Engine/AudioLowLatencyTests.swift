@@ -19,15 +19,33 @@ final class AudioLowLatencyTests: XCTestCase {
         )
     }
 
-    func test_configure_setsPreferredIOBufferDurationTo5ms() async {
+    func test_play_setsPreferredIOBufferDurationTo5ms() async {
         let mixer = MockAudioMixer()
         let engine = StoryTimelineEngine(audioMixer: mixer)
         await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        engine.play()
         let actual = AVAudioSession.sharedInstance().preferredIOBufferDuration
         // Simulator may clamp the value — verify our REQUEST was made (preferredIOBufferDuration
         // reflects the requested value). Accept any value <= 10ms as a valid low-latency config.
         XCTAssertLessThanOrEqual(actual, 0.01,
-                                 "Expected preferredIOBufferDuration <= 10ms after configure, got \(actual)")
+                                 "Expected preferredIOBufferDuration <= 10ms while playing, got \(actual)")
+        engine.shutdown()
+    }
+
+    /// #9884 — le tampon court n'est emprunté que pendant la lecture : ouvrir
+    /// le composer ne le pose pas, la pause le rend.
+    func test_configureThenPause_leaveTheSessionBufferUntouched() async throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setPreferredIOBufferDuration(0.02)
+        let before = session.preferredIOBufferDuration
+        let engine = StoryTimelineEngine(audioMixer: MockAudioMixer())
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        XCTAssertEqual(session.preferredIOBufferDuration, before, accuracy: 0.0005, "ouvrir n'emprunte rien")
+
+        engine.play()
+        engine.pause()
+
+        XCTAssertEqual(session.preferredIOBufferDuration, before, accuracy: 0.0005, "la pause rend le tampon")
         engine.shutdown()
     }
 

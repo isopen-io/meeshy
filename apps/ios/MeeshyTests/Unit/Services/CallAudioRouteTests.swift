@@ -236,3 +236,36 @@ final class CallAudioRouteViewModelTests: XCTestCase {
         XCTAssertNil(released)
     }
 }
+
+// MARK: - L'isolation vocale d'Apple, en un geste (#11295)
+
+@MainActor
+final class CallMicrophoneModeTests: XCTestCase {
+
+    func test_systemModes_mapToTheThreeStates() {
+        XCTAssertEqual(CallMicrophoneMode(.voiceIsolation), .voiceIsolation)
+        XCTAssertEqual(CallMicrophoneMode(.wideSpectrum), .wideSpectrum)
+        XCTAssertEqual(CallMicrophoneMode(.standard), .standard)
+    }
+
+    func test_onlyVoiceIsolation_readsAsActive() {
+        XCTAssertTrue(CallMicrophoneMode.voiceIsolation.isolatesVoice)
+        XCTAssertFalse(CallMicrophoneMode.standard.isolatesVoice)
+        XCTAssertFalse(CallMicrophoneMode.wideSpectrum.isolatesVoice)
+    }
+
+    func test_label_saysWhetherIsolationIsOn() {
+        XCTAssertNotEqual(CallMicrophoneMode.voiceIsolation.menuTitle, CallMicrophoneMode.standard.menuTitle)
+        XCTAssertEqual(CallMicrophoneMode.voiceIsolation.symbolName, "checkmark")
+        XCTAssertEqual(CallMicrophoneMode.standard.menuTitle, CallMicrophoneMode.wideSpectrum.menuTitle)
+    }
+
+    func test_outputMenu_offersTheSystemMicrophoneModes() throws {
+        let code = try AppSourceGuard.stripComments(String(contentsOf: URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Views/CallDeviceControls.swift"), encoding: .utf8))
+        XCTAssertTrue(code.contains("CallMicrophoneMode.presentSystemModes()"), "le panneau d'appel ouvre les modes micro du système")
+        XCTAssertTrue(code.contains("microphoneMode.menuTitle"), "le libellé reflète le mode actif")
+    }
+}
+

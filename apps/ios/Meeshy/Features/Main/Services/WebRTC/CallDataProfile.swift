@@ -33,6 +33,36 @@ struct CallVideoBudget: Equatable, Sendable {
     }
 }
 
+// MARK: - Maillage d'un appel de groupe (#11292)
+
+extension CallVideoBudget {
+    static let meshFramerate = 20
+    static let meshFloorBitrateBps = 150_000
+
+    /// **Le budget de CHAQUE encodage quand la caméra part vers `encodes` pairs**
+    /// (N − 1 pour N participants). Le débit montant se partage ; la définition
+    /// descend avec le nombre de liens — 540p à deux, 360p jusqu'à quatre, 240p
+    /// au-delà — et la cadence passe à 20 i/s : six participants ne paient plus
+    /// cinq encodages 720p30. Un seul encodage garde le budget entier.
+    static func meshLink(encodes: Int, uplinkBps: Int = QualityThresholds.maxVideoBitrate) -> CallVideoBudget {
+        let liens = max(1, encodes)
+        guard liens > 1 else {
+            return CallVideoBudget(maxBitrateBps: uplinkBps, maxFramerate: VideoConfig.hd720p30.maxFrameRate,
+                                   scaleResolutionDownBy: 1, degradationPreference: .maintainFramerate)
+        }
+        let hauteur: Double = liens == 2 ? 540 : liens <= 4 ? 360 : 240
+        return CallVideoBudget(maxBitrateBps: max(meshFloorBitrateBps, uplinkBps / liens), maxFramerate: meshFramerate,
+                               scaleResolutionDownBy: 720 / hauteur, degradationPreference: .maintainFramerate)
+    }
+
+    /// Le plancher de survie (`VideoSurvivalController`) : une image fixe et lisible.
+    static var survivalFloor: CallVideoBudget {
+        CallVideoBudget(maxBitrateBps: QualityThresholds.minVideoBitrate, maxFramerate: QualityThresholds.survivalFrozenFPS,
+                        scaleResolutionDownBy: max(1.0, 720.0 / Double(QualityThresholds.criticalVideoFloorHeight)),
+                        degradationPreference: .maintainResolution)
+    }
+}
+
 /// Opus as a VOICE codec: mono, DTX (silence costs nothing) and in-band FEC
 /// (a lost packet is rebuilt from the next one), bounded average bitrate.
 struct CallAudioBudget: Equatable, Sendable {

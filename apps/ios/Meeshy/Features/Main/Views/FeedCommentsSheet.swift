@@ -875,7 +875,7 @@ struct CommentsSheetView: View {
     /// du snapshot si l'API échoue. Miroir du flux optimiste d'envoi.
     /// Demande la traduction d'un commentaire vers la langue préférée du lecteur.
     private func requestTranslation(of target: FeedComment) {
-        let lang = AuthManager.shared.currentUser?.preferredContentLanguages.first?.lowercased() ?? "fr"
+        let lang = ReaderPrism.resolve(for: AuthManager.shared.currentUser).first?.lowercased() ?? "fr"
         Task {
             try? await PostService.shared.requestCommentTranslation(
                 postId: post.id, commentId: target.id, targetLanguage: lang)

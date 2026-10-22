@@ -3,6 +3,7 @@ package me.meeshy.app.stories
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StrokeSmoothing
+import me.meeshy.sdk.model.composer.ComposerBandState
 
 
 /** Pure state-to-state reducers behind the composer's freehand-drawing intents (see [StoryComposerTextReducer]). */

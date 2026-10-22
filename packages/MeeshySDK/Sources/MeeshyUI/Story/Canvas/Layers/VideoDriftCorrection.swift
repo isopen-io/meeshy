@@ -1,4 +1,6 @@
+import AVFoundation
 import CoreMedia
+import MeeshySDK
 
 /// Correction de dérive d'une vidéo de scène pendant la lecture (#9702).
 ///
@@ -17,10 +19,41 @@ nonisolated enum VideoDriftCorrection {
     /// jamais un recalage.
     static let seekTolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
 
+    /// Recale `player` sur `target` si aucun recalage n'est déjà en vol (#9884) :
+    /// sur une vidéo distante à GOP long, un seek peut durer plus que l'intervalle
+    /// de contrôle, et les recalages s'empilaient. La complétion libère le portail.
+    static func recenter(_ player: AVPlayer, to target: CMTime, gate: DriftSeekGate) {
+        guard gate.claim() else { return }
+        player.seek(to: target, toleranceBefore: seekTolerance, toleranceAfter: seekTolerance) { _ in
+            gate.release()
+        }
+    }
+
     /// Cible du recalage, ou `nil` si la vidéo est assez proche de la timeline.
     static func driftCorrection(expected: Double, actual: Double, threshold: Double) -> CMTime? {
         guard expected.isFinite, actual.isFinite, threshold.isFinite else { return nil }
         guard abs(actual - expected) > threshold else { return nil }
         return CMTime(seconds: max(0, expected), preferredTimescale: 600)
+    }
+}
+
+/// **Un recalage de dérive à la fois, par lecteur** (#9884). Une copie partage
+/// le même vol : la complétion d'un seek relâche le portail que la couche consulte.
+nonisolated struct DriftSeekGate: Sendable {
+    private let inFlight = Locked(false)
+
+    init() {}
+
+    /// `true` : la place était libre, et elle est prise jusqu'à `release()`.
+    func claim() -> Bool {
+        inFlight.mutate { pris in
+            guard !pris else { return false }
+            pris = true
+            return true
+        }
+    }
+
+    func release() {
+        inFlight.mutate { pris in pris = false }
     }
 }
