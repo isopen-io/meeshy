@@ -1,13 +1,13 @@
-import { browserFaceDetector, createFaceTracker } from '@/lib/calls/face-tracker';
-
 import { createLutStage, type LutStage } from './lens-lut-stage';
-import { createLensStage, type LensStage } from './lens-stage';
+import { createLensStage, type LensStage, type LensStageEnv } from './lens-stage';
 
 /**
- * **L'ÉTAGE LENS DU NAVIGATEUR** (W14, #11320) — la colle : le détecteur de
- * visage du navigateur (le même que les effets de visage, lu une image sur
- * cinq et lissé), et la LUT sur un canevas WebGL2 hors écran, bâti au premier
- * besoin. Il ne dépend que d'API qu'un WORKER connaît aussi.
+ * **L'ÉTAGE LENS DU NAVIGATEUR** (W14, #11320) — la colle : la LUT sur un
+ * canevas WebGL2 hors écran, bâtie au premier besoin, et le visage que l'hôte
+ * des effets lui remet (`face`, le détecteur du navigateur lu une image sur
+ * cinq et lissé). Ce chunk n'importe rien du moteur des effets : il en est
+ * chargé À LA DEMANDE (`lens-lazy.ts`), jamais l'inverse. Il ne dépend que
+ * d'API qu'un WORKER connaît aussi.
  *
  * Les fichiers d'une lens (cube de sa LUT, images de ses stickers) ne lui sont
  * pas encore remis : aucune surface du web ne télécharge un pack de lens. Une
@@ -25,11 +25,9 @@ function browserLutStage(): LutStage | null {
   }
 }
 
-export function browserLensStage(options: { readonly reducedMotion?: () => boolean } = {}): LensStage {
-  const tracker = createFaceTracker(browserFaceDetector());
-  const counter = { frame: 0 };
+export function browserLensStage(options: { readonly face: LensStageEnv['face']; readonly reducedMotion?: () => boolean }): LensStage {
   return createLensStage({
-    face: (source, frame) => tracker.next(source, frame, counter.frame++),
+    face: options.face,
     cube: () => null,
     lut: browserLutStage,
     paint: { assets: () => null },

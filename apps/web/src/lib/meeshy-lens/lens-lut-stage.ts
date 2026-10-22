@@ -1,5 +1,3 @@
-import { FRAGMENT_PRECISION } from '@/lib/calls/video-effects-blur';
-
 import type { LutCube } from './lens-lut';
 
 /**
@@ -10,9 +8,16 @@ import type { LutCube } from './lens-lut';
  * mêle à l'originale selon l'intensité de la couche. Le cube ne se téléverse
  * qu'à son PREMIER usage, et de nouveau seulement quand la lens en change.
  *
+ * La passe lit en `highp`, comme le compositeur du flou (#9203 : en
+ * `mediump`, demi-flottant sur un GPU mobile, les couleurs voisines se
+ * confondent). La constante est recopiée ici plutôt qu'importée : ce chunk
+ * est chargé à la demande et n'importe rien du moteur des effets.
+ *
  * Le coût est une lecture de texture 3D par pixel : à 720p, une passe plein
  * écran, du même ordre qu'une seule des passes du flou (argumenté, non mesuré).
  */
+const FRAGMENT_PRECISION = 'highp';
+
 const VERTEX = `#version 300 es
 in vec2 a_position;
 out vec2 v_uv;
