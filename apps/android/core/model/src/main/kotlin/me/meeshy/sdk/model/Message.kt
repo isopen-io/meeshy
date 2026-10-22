@@ -3,7 +3,13 @@ package me.meeshy.sdk.model
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.descriptors.nullable
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.JsonDecoder
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.json.JsonObject
 import me.meeshy.sdk.lang.LanguageResolver
@@ -373,8 +379,19 @@ internal object TolerantMetadataSerializer :
     KSerializer<JsonObject?> by TolerantSerializer(JsonObject.serializer())
 
 
-internal object TolerantEncryptedContentSerializer :
-    KSerializer<String?> by TolerantSerializer(String.serializer())
+/** Le cryptogramme est une chaîne ; tout autre type vaut absent, sans coûter le message. */
+internal object TolerantEncryptedContentSerializer : KSerializer<String?> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor.nullable
+
+    override fun deserialize(decoder: Decoder): String? {
+        val raw = (decoder as? JsonDecoder)?.decodeJsonElement() ?: return decoder.decodeString()
+        return (raw as? JsonPrimitive)?.takeIf { it.isString }?.content
+    }
+
+    override fun serialize(encoder: Encoder, value: String?) {
+        if (value == null) encoder.encodeNull() else encoder.encodeString(value)
+    }
+}
 
 internal object TolerantServedProfileDecorSerializer :
     KSerializer<ServedProfileDecor?> by TolerantSerializer(ServedProfileDecor.serializer())

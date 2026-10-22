@@ -72,6 +72,9 @@ public data class MessageEntity(
     @ColumnInfo(defaultValue = "0") val changeVersion: Long = 0L,
     @ColumnInfo(defaultValue = "0") val columnsBackfilled: Boolean = false,
 ) {
+    /** The same row after a write the UI must notice. */
+    public fun bumped(): MessageEntity = copy(changeVersion = changeVersion + 1)
+
     /** The same row seen again from the server: derived columns replaced, local columns kept. */
     public fun carryingLocalColumnsOf(previous: MessageEntity?): MessageEntity =
         if (previous == null) {
