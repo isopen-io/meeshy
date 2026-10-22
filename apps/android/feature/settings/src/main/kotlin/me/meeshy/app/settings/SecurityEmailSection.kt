@@ -21,16 +21,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.autofill.ContentType
+import androidx.compose.ui.autofill.AutofillType
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentType
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import me.meeshy.feature.settings.R
 import me.meeshy.sdk.model.account.ContactVerificationBadge
 import me.meeshy.ui.haptics.MeeshyHaptics
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
+import me.meeshy.ui.modifier.autofill
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshySpacing
 
@@ -52,7 +51,7 @@ internal fun SecurityEmailSection(state: AccountContactUiState, viewModel: Accou
                 onValueChange = viewModel::onNewEmailChange,
                 label = stringResource(R.string.account_contact_email_new_label),
                 keyboardType = KeyboardType.Email,
-                autofill = ContentType.EmailAddress,
+                autofill = AutofillType.EmailAddress,
                 canSubmit = state.canSubmitEmail,
                 isSubmitting = state.emailLoading,
                 haptics = haptics,
@@ -125,7 +124,7 @@ internal fun SecurityEditRow(
     onValueChange: (String) -> Unit,
     label: String,
     keyboardType: KeyboardType,
-    autofill: ContentType,
+    autofill: AutofillType,
     canSubmit: Boolean,
     isSubmitting: Boolean,
     haptics: MeeshyHaptics,
@@ -145,7 +144,7 @@ internal fun SecurityEditRow(
             placeholder = placeholder?.let { { Text(it) } },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
-            modifier = Modifier.fillMaxWidth().semantics { contentType = autofill },
+            modifier = Modifier.fillMaxWidth().autofill(listOf(autofill), onValueChange),
         )
         Row(horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.sm)) {
             TextButton(onClick = { haptics.light(); onCancel() }) {
