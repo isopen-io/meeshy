@@ -77,6 +77,8 @@ import {
 } from '../../utils/cursor-pagination';
 import { sendSuccess, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
 import { logError } from '../../utils/logger.js';
+import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedSenderRepair';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../services/attachments/attachmentIncludes';
 import { clauseDeTypeDuGenre, GENRES_DE_PIECE, type GenreDePiece } from '../conversations/messages-media-kinds';
 import { conversationIdParams } from './admin-conversation-response-schemas';
 import { messageContentIsProtected, messageContentProtectionSelect } from './media-protection';
@@ -100,8 +102,6 @@ const ORDRE_DES_PORTEURS: CursorSort = [
   { field: 'id', direction: 'desc', kind: 'objectId' },
 ];
 
-/** L'ordre des pièces SOUS un porteur — le même, sur la table des pièces. */
-const ORDRE_DES_PIECES = [{ createdAt: 'desc' }, { id: 'desc' }] as const satisfies Prisma.MessageAttachmentOrderByWithRelationInput[];
 
 // ---------------------------------------------------------------------------
 // LE `select`
@@ -127,7 +127,7 @@ export function sovereignAttachmentPageSelect(kind: GenreDePiece | undefined) {
     sender: { select: sovereignSenderSelect },
     attachments: {
       where: clauseDuGenre(kind),
-      orderBy: ORDRE_DES_PIECES,
+      orderBy: MESSAGE_ATTACHMENT_ORDER,
       select: sovereignAttachmentSelect,
     },
   } satisfies Prisma.MessageSelect;
@@ -274,12 +274,16 @@ export function registerConversationAttachmentsSovereignRoute(fastify: FastifyIn
       };
       const requete = cursorQuery({ sort: ORDRE_DES_PORTEURS, cursor, limit, where });
 
-      const rows = await fastify.prisma.message.findMany({
-        where: requete.where,
-        select: sovereignAttachmentPageSelect(kind),
-        orderBy: requete.orderBy,
-        take: requete.take,
-      });
+      // `Message.sender` est une relation REQUISE : un expéditeur disparu ferait
+      // rejeter toute la page (#6516) ; la portée est connue, la conversation du chemin.
+      const rows = await withOrphanedSenderRepair({ prisma: fastify.prisma, conversationIds: [conversationId] }, () =>
+        fastify.prisma.message.findMany({
+          where: requete.where,
+          select: sovereignAttachmentPageSelect(kind),
+          orderBy: requete.orderBy,
+          take: requete.take,
+        }),
+      );
 
       const servie = cursorPage({ sort: ORDRE_DES_PORTEURS, rows, limit });
       const data = servie.page.flatMap(piecesServiesDuPorteur);

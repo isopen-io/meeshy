@@ -25,6 +25,7 @@
  * @jest-environment node
  */
 import { describe, it, expect, jest } from '@jest/globals';
+import { MESSAGE_ATTACHMENT_ORDER } from '../../../services/attachments/attachmentIncludes';
 import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
@@ -294,7 +295,8 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
     expect(espion.findManyArgs?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
     const pieces = (espion.findManyArgs?.select as AnyRecord).attachments as AnyRecord;
     expect(pieces.where).toEqual({});
-    expect(pieces.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
+    // #9776 — les pièces SOUS un porteur suivent la loi unique : l'ordre du composeur.
+    expect(pieces.orderBy).toEqual(MESSAGE_ATTACHMENT_ORDER);
   });
 
   it('lit `limit + 1` porteurs — la sonde dit `hasMore` sans compter la table', async () => {

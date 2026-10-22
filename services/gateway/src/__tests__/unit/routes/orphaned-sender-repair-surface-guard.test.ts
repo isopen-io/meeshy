@@ -70,6 +70,9 @@ const ROUTE_SURFACES: Record<string, Classification> = {
   // de protection — jamais `sender` ; la 3e (`translationsWhere`) est la
   // jumelle de la 1re sur `GET /admin/translations`, même portée découverte.
   'admin/content.ts': { kind: 'applies', reads: 5, applications: 2 },
+  // #11510 — la pellicule souveraine charge `sender` (le porteur nommé) : enveloppée,
+  // portée connue (la conversation du chemin).
+  'admin/conversation-attachments-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
   'admin/conversation-messages-sovereign.ts': { kind: 'applies', reads: 1, applications: 1 },
   // #8876 — `enrichReports` nomme l'entité qu'un signalement désigne ; sa lecture
   // de messages charge `sender` (l'auteur) et est enveloppée — un expéditeur

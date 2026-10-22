@@ -75,7 +75,7 @@ export class AdminMetricsHandler {
   start(): void {
     if (this.unsubscribeProbe) return;
     this.deps.probe.start();
-    this.unsubscribeProbe = this.deps.probe.onSample((sample) => this.enqueue(sample));
+    this.unsubscribeProbe = this.deps.probe.onSample((sample) => this.queueSample(sample));
   }
 
   stop(): void {
@@ -114,7 +114,7 @@ export class AdminMetricsHandler {
     Promise.resolve(socket.leave(ROOMS.adminHostMetrics())).catch(() => undefined);
   }
 
-  private enqueue(sample: HostMetricsSample): void {
+  private queueSample(sample: HostMetricsSample): void {
     this.chain = this.chain
       .then(() => this.broadcast(sample))
       .catch((error) => logger.warn('admin metrics broadcast failed', { error }));
