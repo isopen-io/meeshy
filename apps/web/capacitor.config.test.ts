@@ -161,3 +161,18 @@ describe('resolveCapacitorConfig — le chemin de départ n’est qu’un param�
     });
   });
 });
+
+/**
+ * LE PLANCHER DE WEBVIEW (W19, #11325) — la coque déclare la version minimale
+ * d'Android System WebView qu'elle exige (`android.minWebViewVersion`) et la
+ * page servie en dessous (`server.errorPath`). Les deux littéraux sont ceux de
+ * `src/lib/shell/webview-floor.ts`, que le contrôle au démarrage lit aussi.
+ */
+describe('resolveCapacitorConfig — le plancher de WebView', () => {
+  test('la coque Android exige la WebView du plancher et sert l’écran de mise à jour en dessous', async () => {
+    const { MIN_ANDROID_WEBVIEW_MAJOR, WEBVIEW_UPDATE_PAGE } = await import('./src/lib/shell/webview-floor');
+    const config = resolveCapacitorConfig({});
+    expect(config.android?.minWebViewVersion).toBe(MIN_ANDROID_WEBVIEW_MAJOR);
+    expect(config.server?.errorPath).toBe(WEBVIEW_UPDATE_PAGE);
+  });
+});
