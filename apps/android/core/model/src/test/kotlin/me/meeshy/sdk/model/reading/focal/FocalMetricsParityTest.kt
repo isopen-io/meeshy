@@ -42,7 +42,8 @@ class FocalMetricsParityTest {
 
     @Test
     fun `l'interligne s'arrondit au demi-point`() {
-        assertThat(FocalMetrics.Text.lineSpacing(17f)).isEqualTo(7.5f)
+        assertThat(FocalMetrics.Text.lineSpacing(17f)).isEqualTo(7f)
+        assertThat(FocalMetrics.Text.lineSpacing(18f)).isEqualTo(7.5f)
         assertThat(FocalMetrics.Text.lineSpacing(15f)).isEqualTo(6.5f)
     }
 
