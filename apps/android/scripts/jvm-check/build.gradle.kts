@@ -14,8 +14,13 @@ layout.buildDirectory.set(rootDir.resolve("../../build/jvm-check"))
 
 kotlin { jvmToolchain(21) }
 
+apply(from = rootDir.resolve("../../gradle/call-frames-catalogue.gradle.kts"))
+
 sourceSets {
-    main { kotlin.srcDirs(module.resolve("src/main/kotlin")) }
+    main {
+        kotlin.srcDirs(module.resolve("src/main/kotlin"))
+        kotlin.srcDir(tasks.named("generateCallFrameCatalogue").flatMap { it.property("outputDir") as org.gradle.api.file.DirectoryProperty })
+    }
     test { kotlin.srcDirs(module.resolve("src/test/kotlin")) }
 }
 
