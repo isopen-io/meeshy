@@ -8,6 +8,8 @@ import android.media.projection.MediaProjection
 import com.google.common.truth.Truth.assertThat
 import io.mockk.mockk
 import io.mockk.verify
+import me.meeshy.sdk.model.ongoing.CallActivityPhase
+import me.meeshy.sdk.model.ongoing.CallActivitySnapshot
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -46,11 +48,24 @@ class MediaProjectionServiceTest {
         MediaProjectionService.entryPointResolver = originalResolver
     }
 
+    private fun snapshot(phase: CallActivityPhase) = CallActivitySnapshot(
+        phase = phase,
+        title = "Alice",
+        statusLabel = "",
+        initials = "A",
+        isVideo = false,
+        isMuted = false,
+        connectedSinceEpochMs = null,
+        showsDurationInCompact = true,
+        caption = null,
+    )
+
     private fun grant() = MediaProjectionConsent.fromResult(Activity.RESULT_OK, Intent("grant"))
         as MediaProjectionConsent.Granted
 
     private fun startedService(projection: MediaProjection?): org.robolectric.android.controller.ServiceController<MediaProjectionService> {
         MediaProjectionService.projectionFactory = { _, _, _ -> projection }
+        holder.publish(snapshot(CallActivityPhase.Connected))
         session.request(MediaProjectionPurpose.ScreenShare)
         session.onConsent(grant())
         val intent = MediaProjectionService.startIntent(context, MediaProjectionPurpose.ScreenShare, grant())
@@ -103,5 +118,13 @@ class MediaProjectionServiceTest {
         val projection = mockk<MediaProjection>(relaxed = true)
         startedService(projection).destroy()
         verify(exactly = 1) { projection.stop() }
+    }
+
+    @Test
+    fun `the end of the call stops the projection`() {
+        val projection = mockk<MediaProjection>(relaxed = true)
+        startedService(projection)
+        holder.publish(snapshot(CallActivityPhase.Ended))
+        assertThat((session.state.value as MediaProjectionState.Ended).reason).isEqualTo(MediaProjectionEndReason.CallEnded)
     }
 }
