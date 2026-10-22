@@ -41,6 +41,9 @@ material3Adaptive = "1.0.0"
 camerax = "1.4.0"
 mlkitSubjectSegmentation = "16.0.0-beta1"
 
+# lot: primitives-cryptographiques-verifiees
+tink = "1.15.0"
+
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "splashscreen" }
@@ -130,6 +133,9 @@ work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 androidx-media3-muxer = { module = "androidx.media3:media3-muxer", version.ref = "media3" }
 
 # lot: pieces-jointes-compression-image-et-video
+
+# lot: primitives-cryptographiques-verifiees
+tink-android = { module = "com.google.crypto.tink:tink-android", version.ref = "tink" }
 
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]

@@ -14,17 +14,23 @@ import okhttp3.Response
  * l'utilisateur qu'il devait se reconnecter : il ne lui restait qu'a reessayer
  * indefiniment.
  *
+ * Seule la requête PROPRIÉTAIRE de la session active signale l'expiration ([signalsExpiry]) :
+ * le 401 tardif d'un compte quitté ou d'un jeton déjà renouvelé ne déconnecte pas le compte
+ * du moment.
+ *
  * Le traitement vit ICI et non dans chaque ecran : les trois routes echouent
  * independamment, et un traitement par ecran laisserait le prochain appelant
  * reproduire le defaut a l'identique.
  */
 public class AuthExpiryInterceptor(
+    private val signalsExpiry: (okhttp3.Request) -> Boolean = { true },
     private val onSessionExpired: () -> Unit,
 ) : Interceptor {
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val response = chain.proceed(chain.request())
-        if (response.code in EXPIRY_CODES && !chain.request().url.encodedPath.isAuthEntryPoint()) {
+        val request = chain.request()
+        if (response.code in EXPIRY_CODES && !request.url.encodedPath.isAuthEntryPoint() && signalsExpiry(request)) {
             onSessionExpired()
         }
         // La reponse ressort INTACTE : l'appelant a toujours besoin de son code

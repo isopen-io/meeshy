@@ -17,7 +17,7 @@ import type { ContentPage } from './type';
 export const PAGE_TERMS: ContentPage = {
   title: "Conditions d'Utilisation",
   hero: 'Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :',
-  mention: 'Dernière mise à jour : 10 octobre 2026',
+  mention: 'Dernière mise à jour : 22 octobre 2026',
   description: 'Bienvenue sur Meeshy. En utilisant notre service, vous acceptez les conditions suivantes :',
   mee: { sticker: 'meo-ok', caption: 'Meo a tout lu. L’essentiel tient en quelques règles claires, juste en dessous.' },
   sections: [
@@ -86,6 +86,7 @@ export const PAGE_TERMS: ContentPage = {
           kind: 'list',
           items: [
             'Publier du contenu illégal, offensant ou nuisible',
+            "Publier, demander ou partager tout contenu d’abus ou d’exploitation sexuels d’enfants, ou solliciter un mineur à des fins sexuelles : voir nos Normes de sécurité des enfants",
             'Violer les droits de propriété intellectuelle',
             "Harceler, menacer ou intimider d'autres utilisateurs",
             'Diffuser du spam ou du contenu commercial non sollicité',
@@ -176,6 +177,7 @@ export const PAGE_TERMS: ContentPage = {
       { label: 'Contact', href: '/contact' },
       { label: 'Partenaires', href: '/partners' },
       { label: 'Politique de confidentialité', href: '/privacy' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
     ],
   },
 };

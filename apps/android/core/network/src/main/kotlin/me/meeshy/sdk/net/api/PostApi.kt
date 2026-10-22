@@ -1,6 +1,9 @@
 package me.meeshy.sdk.net.api
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
+import me.meeshy.sdk.model.DiscoverabilityPrecision
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiResponse
@@ -43,26 +46,22 @@ data class CreatePostRequest(
      * (`services/gateway/src/routes/posts/types.ts`, `CreatePostSchema.mediaAlt`).
      */
     val mediaAlt: Map<String, String>? = null,
+    /** Audience restreinte (`EXCEPT` / `ONLY`) : les ids concernés. */
+    val visibilityUserIds: List<String>? = null,
+    /** Scène composée (v1 + canvas v3), absente d'un post sans scène. */
+    @Serializable(with = StoryEffectsWireSerializer::class)
+    val storyEffects: StoryEffects? = null,
+    val allowSoundExtraction: Boolean? = null,
+    /** `null` = ne rien déclarer ; jamais `[]` (ne pas effacer). */
+    val mentions: List<PostMentionInput>? = null,
+    /** Légende visible par média, clé = un id de [mediaIds]. */
+    val mediaCaption: Map<String, String>? = null,
+    val discoverabilityPrecision: DiscoverabilityPrecision? = null,
 )
 
-/** Mobile transcription payload — port of MobileTranscriptionPayload (ServiceModels.swift). */
-@Serializable
-data class MobileTranscriptionPayload(
-    val text: String,
-    val language: String,
-    val confidence: Double? = null,
-    val durationMs: Int? = null,
-    val segments: List<MobileTranscriptionSegment> = emptyList(),
-)
-
-/** A mobile transcription segment — port of MobileTranscriptionSegment (ServiceModels.swift). */
-@Serializable
-data class MobileTranscriptionSegment(
-    val text: String,
-    val start: Double? = null,
-    val end: Double? = null,
-    val speakerId: String? = null,
-)
+/** Le modèle vit dans :core:model ; ces alias gardent les imports historiques valides. */
+typealias MobileTranscriptionPayload = me.meeshy.sdk.model.MobileTranscriptionPayload
+typealias MobileTranscriptionSegment = me.meeshy.sdk.model.MobileTranscriptionSegment
 
 /** Create a story — port of CreateStoryRequest (ServiceModels.swift). */
 @Serializable
@@ -75,6 +74,12 @@ data class CreateStoryRequest(
     val originalLanguage: String? = null,
     val mediaIds: List<String>? = null,
     val repostOfId: String? = null,
+    val visibilityUserIds: List<String>? = null,
+    val mentions: List<PostMentionInput>? = null,
+    val allowSoundExtraction: Boolean? = null,
+    val mediaAlt: Map<String, String>? = null,
+    val mediaCaption: Map<String, String>? = null,
+    val alsoAsReel: Boolean? = null,
 )
 
 /** Update a post — port of UpdatePostRequest (ServiceModels.swift). */
@@ -83,6 +88,20 @@ data class UpdatePostRequest(
     val content: String? = null,
     val visibility: String? = null,
     val moodEmoji: String? = null,
+    val visibilityUserIds: List<String>? = null,
+    val originalLanguage: String? = null,
+    val type: String? = null,
+    val removeMediaIds: List<String>? = null,
+    @Serializable(with = StoryEffectsWireSerializer::class)
+    val storyEffects: StoryEffects? = null,
+    val mediaIds: List<String>? = null,
+    /** `null` = clé absente ; [kotlinx.serialization.json.JsonNull] = effacer ; objet = remplacer. */
+    val location: JsonElement? = null,
+    /** `null` = clé absente ; `[]` = tout retirer. Jamais INLINE. */
+    val mentions: List<PostMentionInput>? = null,
+    val allowSoundExtraction: Boolean? = null,
+    val mediaAlt: Map<String, String>? = null,
+    val mediaCaption: Map<String, String>? = null,
 )
 
 /** Create a comment — port of CreateCommentRequest (ServiceModels.swift). */

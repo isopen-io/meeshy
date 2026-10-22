@@ -1,5 +1,10 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="common_done">Fertig</string>
+    <string name="location_map_style_hybrid">Hybrid</string>
+    <string name="location_map_style_imagery">Satellit</string>
+    <string name="location_map_style_section">Kartentyp</string>
+    <string name="location_map_style_standard">Karte</string>
     <string name="location_precision_around">Umgebung (~100 m)</string>
     <string name="location_precision_city">Stadt (~10 km)</string>
     <string name="location_precision_exact">Genau</string>
@@ -7,4 +12,9 @@
     <string name="location_precision_neighborhood">Viertel (~1 km)</string>
     <string name="location_precision_section">Freigabegenauigkeit</string>
     <string name="location_settings_title">Standortfreigabe</string>
+    <string name="settings_media_capture_header">Bei der Aufnahme</string>
+    <string name="settings_media_capture_original_subtitle">Das unbearbeitete Foto oder Video, ohne Effekt oder Rahmen, wird bei jeder Aufnahme in Fotos gesichert.</string>
+    <string name="settings_media_capture_original_title">Original sichern</string>
+    <string name="settings_media_capture_rendered_subtitle">Automatisch beim Bestätigen der Bearbeitung. Sonst sichert sie der Pfeil der Bearbeitung auf Wunsch.</string>
+    <string name="settings_media_capture_rendered_title">Version mit Effekten und Rahmen sichern</string>
 </resources>

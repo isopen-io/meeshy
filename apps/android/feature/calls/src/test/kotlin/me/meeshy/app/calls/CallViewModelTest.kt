@@ -186,6 +186,7 @@ class CallViewModelTest {
         CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
         CallAnalyticsController(signalManager, clock),
         extensions,
+        mockk(relaxed = true),
     )
 
     @Test

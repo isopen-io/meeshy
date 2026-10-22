@@ -44,6 +44,9 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     private let activeCalls: any ActiveCallServiceProviding
     private let now: () -> Date
     private let samplingInterval: Duration
+    /// #11292 — le pair principal est un encodage parmi d'autres : le maillage lui
+    /// pose le même plafond que ses liens ; `nil` le lui rend entier.
+    private let primaryVideoCeiling: @MainActor (CallVideoBudget?) -> Void
 
     private var links: [String: any GroupPeerLinkProviding] = [:]
     private var iceServers: [IceServer] = []
@@ -51,6 +54,8 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     private var boundCallId: String?
     private var appliedMicMuted: Bool?
     private var appliedVideoEnabled: Bool?
+    /// La survie vidéo de l'appel fige aussi chaque lien du maillage (#11292).
+    private var survivalFrozen = false
     private var detector = ActiveSpeakerDetector()
     private var samplingTask: Task<Void, Never>?
     /// Les appels déjà enrichis (titre, participants) — BORNÉS : le coordinateur vit toute la session et
@@ -71,13 +76,15 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         signaling: any GroupCallSignalingProviding = MessageSocketManager.shared,
         activeCalls: any ActiveCallServiceProviding = ActiveCallService.shared,
         now: @escaping () -> Date = Date.init,
-        samplingInterval: Duration = .milliseconds(400)
+        samplingInterval: Duration = .milliseconds(400),
+        primaryVideoCeiling: @escaping @MainActor (CallVideoBudget?) -> Void = { CallManager.shared.webRTCService.setGroupVideoCeiling($0) }
     ) {
         self.linkFactory = linkFactory
         self.signaling = signaling
         self.activeCalls = activeCalls
         self.now = now
         self.samplingInterval = samplingInterval
+        self.primaryVideoCeiling = primaryVideoCeiling
         self.roster = GroupCallRoster(localUserId: "")
     }
 
@@ -348,8 +355,10 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
 
     private func adoptPrimary(_ host: any GroupCallHostProviding) {
         guard let primary = primaryUserId, !primary.isEmpty, primary != host.groupLocalUserId else { return }
-        links[primary]?.close()
-        links[primary] = nil
+        if let ancien = links.removeValue(forKey: primary) {
+            ancien.close()
+            rebudgetVideo()
+        }
         let name = host.groupPrimaryDisplayName.flatMap { $0.isEmpty ? nil : $0 }
         let admitted = roster.admitting(GroupCallArrival(userId: primary, displayName: name), isPrimary: true)
         roster = admitted.updatingLink(host.isGroupPrimaryConnected ? .connected : .connecting, for: primary)
@@ -386,7 +395,24 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
             self?.handle(event, from: userId, callId: callId)
         }
         links[userId] = link
+        rebudgetVideo()
         return link
+    }
+
+    /// **Chaque lien encode à sa juste taille** (#11292) : le débit montant se
+    /// partage entre tous les encodages — le principal et chaque lien du maillage.
+    func setSurvivalFloor(_ frozen: Bool) {
+        guard boundCallId != nil || !links.isEmpty else { return }
+        survivalFrozen = frozen
+        rebudgetVideo()
+    }
+
+    private func rebudgetVideo() {
+        let encodes = links.count + (primaryUserId == nil ? 0 : 1)
+        let share = CallVideoBudget.meshLink(encodes: encodes)
+        let budget = survivalFrozen ? CallVideoBudget.survivalFloor : share
+        links.values.forEach { $0.applyVideoBudget(budget) }
+        primaryVideoCeiling(links.isEmpty ? nil : share)
     }
 
     private func handle(_ event: GroupPeerLinkEvent, from userId: String, callId: String) {
@@ -411,6 +437,7 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
     private func dropMember(_ userId: String) {
         links[userId]?.close()
         links[userId] = nil
+        rebudgetVideo()
         roster = roster.removing(userId)
         detector = detector.forgetting(userId)
         speakingUserIds = detector.speakers
@@ -491,6 +518,8 @@ final class GroupCallMeshCoordinator: ObservableObject, GroupCallMeshProviding {
         samplingTask = nil
         links.values.forEach { $0.close() }
         links = [:]
+        survivalFrozen = false
+        primaryVideoCeiling(nil)
         boundCallId = nil
         isPrimaryVacated = false
         lastOfferAt = [:]

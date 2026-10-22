@@ -34,6 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -72,8 +73,13 @@ import me.meeshy.ui.theme.formColumnWidth
 fun TwoFactorScreen(
     onBack: () -> Unit,
     viewModel: TwoFactorViewModel = hiltViewModel(),
+    startStep: String? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+
+    LaunchedEffect(startStep) {
+        viewModel.openAtStep(startStep)
+    }
 
     MeeshyBackground {
         Scaffold(

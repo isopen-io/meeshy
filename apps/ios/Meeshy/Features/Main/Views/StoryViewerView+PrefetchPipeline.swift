@@ -8,11 +8,11 @@ extension StoryViewerView {
 
     /// Languages used by the prefetcher to project `StoryItem → StorySlide`
     /// (Prisme Linguistique chain). Mirrors `resolvedViewerLanguageChain`
-    /// — both come from `MeeshyUser.preferredContentLanguages` — but exposed
+    /// — both come from `ReaderPrism.resolve(for:)` (#11832) — but exposed
     /// here so the wire-up integration tests can intercept the call without
     /// touching the private accessor.
     var preferredContentLanguagesForReader: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        ReaderPrism.resolve(for: AuthManager.shared.currentUser)
     }
 
     /// Stories of the current group, snapshotted via `currentGroup`. Empty

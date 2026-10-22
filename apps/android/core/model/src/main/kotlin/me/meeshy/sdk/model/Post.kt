@@ -17,6 +17,9 @@ data class ApiAuthor(
     /** Le décor servi avec la personne (#10945) ; absent sans contour ou sur un ancien serveur. */
     @Serializable(with = TolerantPostAuthorDecorSerializer::class)
     val profileDecor: PostAuthorDecor? = null,
+    /** Présence embarquée par le fil de stories (visibilité décidée par la passerelle) ; absente = aucun point. */
+    val isOnline: Boolean? = null,
+    val lastActiveAt: String? = null,
 ) {
     /** Le contour d'avatar équipé, ou `null`. */
     val avatarRing: PostServedRing? get() = profileDecor?.avatarRing

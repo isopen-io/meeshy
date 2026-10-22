@@ -42,6 +42,7 @@ private final class StoryMediaLayerWeakBox: @unchecked Sendable {
 /// through `CanvasGeometry` so output is bit-identical across device sizes.
 public final class StoryMediaLayer: CALayer {
     private nonisolated let layerState = Locked(uncheckedState: StoryMediaLayerState())
+    nonisolated let driftSeekGate = DriftSeekGate()
     public private(set) nonisolated var media: StoryMediaObject? { get { layerState[unchecked: \.media] } set { layerState[unchecked: \.media] = newValue } }
     public private(set) nonisolated var avPlayer: AVPlayer? { get { layerState[unchecked: \.avPlayer] } set { layerState[unchecked: \.avPlayer] = newValue } }
     public private(set) nonisolated var avPlayerLayer: AVPlayerLayer? { get { layerState[unchecked: \.avPlayerLayer] } set { layerState[unchecked: \.avPlayerLayer] = newValue } }

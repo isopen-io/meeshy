@@ -1,0 +1,22 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="onboarding_gauge_level1">%1$d / %2$d scintille per il tuo livello 1</string>
+    <string name="onboarding_gauge_reached">Livello 1 raggiunto 🎉</string>
+    <plurals name="onboarding_points_a11y">
+        <item quantity="one">%d scintilla guadagnata</item>
+        <item quantity="many">%d scintille guadagnate</item>
+        <item quantity="other">%d scintille guadagnate</item>
+    </plurals>
+    <plurals name="onboarding_points_pill">
+        <item quantity="one">%d scintilla</item>
+        <item quantity="many">%d scintille</item>
+        <item quantity="other">%d scintille</item>
+    </plurals>
+    <string name="onboarding_progress_a11y">Passo %1$d di %2$d</string>
+    <plurals name="onboarding_reward_announce">
+        <item quantity="one">Più %d scintilla</item>
+        <item quantity="many">Più %d scintille</item>
+        <item quantity="other">Più %d scintille</item>
+    </plurals>
+    <string name="onboarding_skipAll">Salta tutto</string>
+</resources>

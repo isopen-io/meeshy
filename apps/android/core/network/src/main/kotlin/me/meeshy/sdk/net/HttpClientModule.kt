@@ -7,7 +7,6 @@ import dagger.hilt.components.SingletonComponent
 import dagger.multibindings.ElementsIntoSet
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
-import javax.inject.Provider
 import javax.inject.Singleton
 
 /**
@@ -27,12 +26,14 @@ internal object HttpClientModule {
         config: MeeshyConfig,
         tokenStore: TokenStore,
         sessionExpiry: SessionExpiryNotifier,
-        api: Provider<MeeshyApi>,
+        refresher: SessionRefresher,
+        transition: SessionTransitionFlags,
     ): Set<HttpClientContributor> = builtInContributors(
         config = config,
         tokenStore = tokenStore,
         onSessionExpired = sessionExpiry::notifyExpired,
-        refresher = MeeshyApi.tokenRefresher(tokenStore) { api.get() },
+        refresher = refresher,
+        transition = transition,
     ).toSet()
 
     @Provides

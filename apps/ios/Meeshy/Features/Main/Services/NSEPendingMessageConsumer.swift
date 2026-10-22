@@ -67,11 +67,11 @@ final class NSEPendingMessageConsumer {
         let user = AuthManager.shared.currentUser
         let userId = user?.id ?? ""
         let username = user?.username
-        // Une seule construction pour tout le lot : `preferredContentLanguages`
+        // Une seule construction pour tout le lot : `ReaderPrism.resolve(for:)`
         // est CALCULÉE et alloue un tableau à chaque lecture. Dans la boucle,
         // elle se payait une fois par message pré-récupéré — sur le fil
         // principal, avant la première bulle.
-        let prism = user?.preferredContentLanguages ?? []
+        let prism = ReaderPrism.resolve(for: user)
         // Ce que GRDB GRAVE dans `replyToJson` descend le prisme STRICT du
         // lecteur (`ReaderPrism`) — la descente de la bulle et des deux autres
         // chemins d'ingestion, REST et socket — jamais la liste à repli « fr » :

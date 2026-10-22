@@ -547,4 +547,62 @@ class AccountContactViewModelTest {
 
         coVerify(exactly = 1) { userRepo.verifyPhoneChange(any()) }
     }
+
+    // ---- foreground return / resend countdown ----
+
+    @Test
+    fun onResume_withoutPendingEmail_doesNotRefreshTheSession() = runTest(dispatcher) {
+        val session = sessionWith(MutableStateFlow(user()))
+        val sut = vm(sessionRepository = session)
+        advanceUntilIdle()
+
+        sut.onResume()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { session.refresh() }
+    }
+
+    @Test
+    fun onResume_withPendingEmail_refreshesTheSession() = runTest(dispatcher) {
+        val session = sessionWith(MutableStateFlow(user()))
+        val repo = mockk<UserRepository>(relaxed = true)
+        coEvery { repo.changeEmail(any()) } returns NetworkResult.Success(ChangeEmailResponse())
+        val sut = vm(userRepository = repo, sessionRepository = session)
+        advanceUntilIdle()
+        sut.beginEditEmail()
+        sut.onNewEmailChange("new@meeshy.me")
+        sut.submitEmailChange()
+        advanceUntilIdle()
+
+        sut.onResume()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { session.refresh() }
+    }
+
+    @Test
+    fun resendCountdown_startsAtSixtySecondsAndDrainsBeforeResendIsOffered() = runTest(dispatcher) {
+        val repo = mockk<UserRepository>(relaxed = true)
+        coEvery { repo.changeEmail(any()) } returns NetworkResult.Success(ChangeEmailResponse())
+        val sut = vm(userRepository = repo)
+        advanceUntilIdle()
+        sut.beginEditEmail()
+        sut.onNewEmailChange("new@meeshy.me")
+        sut.submitEmailChange()
+        runCurrent()
+
+        assertThat(sut.state.value.resendCooldown?.remaining).isEqualTo(60)
+        assertThat(sut.state.value.canResendEmail).isFalse()
+        advanceTimeBy(60_001)
+        runCurrent()
+        assertThat(sut.state.value.canResendEmail).isTrue()
+    }
+
+    @Test
+    fun phoneCode_isLimitedToSixDigits() = runTest(dispatcher) {
+        val sut = vm()
+        advanceUntilIdle()
+        sut.onPhoneCodeChange("12a3456789")
+        assertThat(sut.state.value.phoneCode).isEqualTo("123456")
+    }
 }

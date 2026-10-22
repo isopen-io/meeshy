@@ -80,6 +80,7 @@ object Routes {
     const val CHANGE_PASSWORD = "settings/change-password"
     const val TWO_FACTOR = "settings/two-factor"
     const val ACCOUNT_CONTACT = "settings/account-contact"
+    const val SECURITY = "settings/security"
     const val MEDIA_DOWNLOAD = "settings/media-download"
     const val MEDIA_CACHE = "settings/media-cache"
     const val PRIVACY = "settings/privacy"

@@ -83,6 +83,37 @@ final class StoryLayerImageDecodingTests: XCTestCase {
         XCTAssertNil(decoded)
     }
 
+    /// #9872 — le chemin SYNCHRONE (export, capture, instantané) lit le fichier
+    /// par ImageIO, sans recopier ses octets en mémoire, et rend les mêmes pixels.
+    func test_decodedImageNow_fromFile_returnsThePixels_withoutResampling() throws {
+        let url = try writeTemporary(try makePNG(width: 900, height: 1600))
+
+        let decoded = try XCTUnwrap(StoryLayerImageDecoding.decodedImageNow(fileAt: url))
+
+        XCTAssertEqual(decoded.cgImage?.width, 900)
+        XCTAssertEqual(decoded.cgImage?.height, 1600)
+    }
+
+    func test_decodedImageNow_missingFile_returnsNil() {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("absent-\(UUID().uuidString).png")
+
+        XCTAssertNil(StoryLayerImageDecoding.decodedImageNow(fileAt: url))
+    }
+
+    func test_mediaLayer_copiesNoFileIntoMemoryOnTheMainActor() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Sources/MeeshyUI/Story/Canvas/Layers/StoryMediaLayer+ImageLoading.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertFalse(source.contains("Data(contentsOf:"),
+                       "`StoryMediaLayer` ne recopie plus un fichier sous @MainActor : ImageIO le lit (#9872).")
+        XCTAssertTrue(source.contains("StoryLayerImageDecoding.decodedImageNow(fileAt:"))
+    }
+
     /// Garde de SOURCE : la fonction est `async` depuis toujours, donc rien
     /// n'empêche un correctif futur de reposer un `UIImage(data:)` dans son
     /// corps MainActor. C'est exactement ce qui y vivait.

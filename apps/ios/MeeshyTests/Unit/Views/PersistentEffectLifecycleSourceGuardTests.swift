@@ -113,7 +113,6 @@ final class PersistentEffectLifecycleSourceGuardTests: XCTestCase {
 
         for (declaration, expected) in [
             ("struct GlowEffect", StopMechanism.resetsStateWithoutAnimation),
-            ("struct PulseEffect", .resetsStateWithoutAnimation),
             ("struct RainbowEffect", .unmountsWhileOffScreen),
             ("struct SparkleEffect", .pausesItsClock)
         ] {
@@ -125,6 +124,22 @@ final class PersistentEffectLifecycleSourceGuardTests: XCTestCase {
                 + "que personne ne voit. Mécanismes trouvés : \(mechanisms.map(\.rawValue).sorted())."
             )
         }
+    }
+
+    /// **`pulse` n'a plus de jumelle app-side** (#9891) : l'effet d'un message
+    /// est l'unique `PulseEffect` du SDK, qui doit lui aussi s'arrêter à la
+    /// disparition — et l'app ne redéclare pas ce nom.
+    func test_thePulseEffect_isTheSDKOne_andStopsOffScreen() throws {
+        let sdk = AppSourceGuard.stripComments(
+            try AppSourceGuard.unit("../../packages/MeeshySDK/Sources/MeeshyUI/Theme/ViewModifiers.swift")
+        )
+        let pulse = try block("public struct PulseEffect", in: sdk)
+        XCTAssertTrue(Self.stopMechanisms(in: pulse).contains(.resetsStateWithoutAnimation),
+                      "`PulseEffect` (SDK) ne coupe plus sa boucle à la disparition.")
+        XCTAssertFalse(try source().contains("struct PulseEffect"),
+                       "Une seconde `PulseEffect` est revenue dans l'app : c'est l'atome du SDK qu'on règle.")
+        XCTAssertTrue(try source().contains("PulseEffect(intensity:"),
+                      "L'effet `pulse` d'un message passe par l'atome du SDK.")
     }
 
     /// La comète est `Animatable` : SwiftUI rappelle son `body` à la fréquence
@@ -159,8 +174,9 @@ final class PersistentEffectLifecycleSourceGuardTests: XCTestCase {
         }
 
         XCTAssertGreaterThanOrEqual(
-            scanned, 4,
-            "Balayage trop maigre : les quatre effets persistants connus doivent au moins y figurer. "
+            scanned, 3,
+            "Balayage trop maigre : les trois effets persistants de ce fichier (le quatrième, "
+            + "`pulse`, est l'atome du SDK depuis #9891) doivent au moins y figurer. "
             + "Un balayage vide ne doit jamais être indiscernable d'un succès."
         )
         XCTAssertTrue(

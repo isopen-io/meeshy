@@ -262,4 +262,19 @@ class SessionTeardownTest {
 
         assertThat(after.clears).isEqualTo(1)
     }
+
+    @Test
+    fun wipe_emptiesTheGenericCacheTables() = runTest {
+        db.keyedJsonCacheDao().upsert(
+            me.meeshy.core.database.entity.KeyedJsonCacheEntity("community:list", "k", "{}", 1L),
+        )
+        db.cacheEntryDao().upsert(
+            listOf(me.meeshy.core.database.entity.CacheEntryEntity("ns", "k", "a", 0, "h", 1L, "{}")),
+        )
+
+        teardown().wipe()
+
+        assertThat(db.keyedJsonCacheDao().find("community:list", "k")).isNull()
+        assertThat(db.cacheEntryDao().itemCount("ns")).isEqualTo(0)
+    }
 }

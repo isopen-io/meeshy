@@ -103,6 +103,7 @@ final class StoryPhotoSaveService: ObservableObject {
         self.photoSaver = photoSaver
         self.toasts = toasts ?? FeedbackToastManager.shared
         self.preferredLanguages = preferredLanguages
+            // Défaut de COMPOSITION (langue proposée, repli « fr ») — pas une lecture (#11875).
             ?? { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] }
         self.dressings = StoryExportDressingResolver(viewerIntro: intro, authorIntro: authorIntro,
                                                      timeout: introTimeout)

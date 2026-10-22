@@ -231,36 +231,33 @@ final class AttachmentPreparationService {
 
     // MARK: - Private: Image pipeline
 
+    /// Une image RENDUE (retouche, scène) n'a pas d'octets d'origine : elle
+    /// s'encode une fois, au budget que la préférence de compression autorise.
     private func runImagePreparation(prep: PreparingAttachment,
                                      image: UIImage,
                                      context: MediaContext) async {
-        let result = await MediaCompressor.shared.compressImage(image, maxDimension: context.maxImageDimension)
-        await populateImage(prep: prep, result: result, sourceImage: image)
-    }
-
-    private func runImageDataPreparation(prep: PreparingAttachment,
-                                         data: Data,
-                                         image: UIImage,
-                                         context: MediaContext) async {
-        let result = await MediaCompressor.shared.compressImageData(data, maxDimension: context.maxImageDimension)
-        await populateImage(prep: prep, result: result, sourceImage: image)
+        let policy = context.storedOutgoingImagePolicy()
+        let result = await MediaCompressor.shared.compressImage(image, maxDimension: policy.pixelBudget,
+                                                                quality: policy.quality)
+        await populateImage(prep: prep, result: result, preview: image)
     }
 
     private func populateImage(prep: PreparingAttachment,
                                result: CompressedImageResult,
-                               sourceImage: UIImage) async {
+                               preview: UIImage) async {
         let fileName = "image_\(prep.id).\(result.fileExtension)"
         let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
         prep.stage = .hashing
-        // Écriture JPEG + ThumbHash (~5-15 ms) hors MainActor : une sélection
-        // multi-photos empile plusieurs `populateImage` en vol, et ces deux
-        // étapes n'ont besoin d'aucune isolation — seul le retour à
-        // `prep.finish`/`prep.fail` doit se faire sur MainActor. `imageBox`
-        // suit la discipline de `StickerSendPipeline.SendableStickerImage` :
-        // l'image n'est que LUE (encodage du hash), jamais mutée.
+        // Écriture + ThumbHash hors MainActor : une sélection multi-photos
+        // empile plusieurs `populateImage` en vol, et ces deux étapes n'ont
+        // besoin d'aucune isolation — seul le retour à `prep.finish`/`prep.fail`
+        // doit se faire sur MainActor. Le ThumbHash se calcule sur l'APERÇU
+        // (1 024 px), jamais sur la pleine définition (#9885). `imageBox` suit
+        // la discipline de `StickerSendPipeline.SendableStickerImage` : l'image
+        // n'est que LUE (encodage du hash), jamais mutée.
         let data = result.data
-        let imageBox = SendableAttachmentImage(image: sourceImage)
+        let imageBox = SendableAttachmentImage(image: preview)
         let thumbHash: String?
         do {
             thumbHash = try await Task.detached(priority: .userInitiated) {
@@ -280,8 +277,8 @@ final class AttachmentPreparationService {
             mimeType: result.mimeType,
             fileSize: result.data.count,
             fileUrl: tempURL.absoluteString,
-            width: Int(sourceImage.size.width),
-            height: Int(sourceImage.size.height),
+            width: result.pixelSize.map { Int($0.width) },
+            height: result.pixelSize.map { Int($0.height) },
             thumbHash: thumbHash,
             thumbnailColor: prep.accentColor
         )
@@ -358,21 +355,30 @@ final class AttachmentPreparationService {
         }
     }
 
+    /// Les OCTETS d'une photo — sélecteur, grille des récents, prise de
+    /// l'objectif, fichier déposé : jamais décodés sur le fil principal (#9885).
+    /// L'aperçu 1 024 px s'affiche dès qu'il est prêt et sert au ThumbHash ; le
+    /// fichier qui part est celui de `compressImageData` — les octets d'origine
+    /// tant qu'ils tiennent dans le budget.
     private func runPickedImageData(_ data: Data,
                                     prep: PreparingAttachment,
                                     context: MediaContext) async {
-        guard let fullImage = UIImage(data: data) else {
+        let policy = context.storedOutgoingImagePolicy()
+        let preview = await Task.detached(priority: .userInitiated) {
+            Self.downsampledPreview(from: data).map(SendableAttachmentImage.init(image:))
+        }.value
+        guard let preview else {
             prep.fail("Image illisible")
             return
         }
-        // Pose immédiatement un aperçu léger (downsampling ImageIO, faible
-        // empreinte mémoire) pour que l'image sélectionnée apparaisse
-        // « directement » dans la zone d'attachement. La décompression
-        // pleine résolution + le ThumbHash restent réservés au pipeline de
-        // traitement en arrière-plan ci-dessous.
-        prep.thumbnail = Self.downsampledPreview(from: data) ?? fullImage
+        prep.thumbnail = preview.image
         prep.stage = .compressing
-        await runImageDataPreparation(prep: prep, data: data, image: fullImage, context: context)
+        guard let result = await MediaCompressor.shared.compressImageData(data, policy: policy) else {
+            log.error("image preparation refused: location could not be removed")
+            prep.fail("Image illisible")
+            return
+        }
+        await populateImage(prep: prep, result: result, preview: preview.image)
     }
 
     private func loadPickerVideo(item: PhotosPickerItem,
@@ -443,8 +449,8 @@ final class AttachmentPreparationService {
     /// `UIImage` just to fill a ~56pt tray tile (cf. SOTA image audit). Used to
     /// surface the picked photo in the attachment zone the instant its bytes
     /// land, before the heavier compression pipeline runs. Returns `nil` when
-    /// the bytes can't be decoded, so the caller falls back to the full image.
-    static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
+    /// the bytes can't be decoded: the caller then refuses the image.
+    nonisolated static func downsampledPreview(from data: Data, maxPixelSize: CGFloat = 1024) -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,

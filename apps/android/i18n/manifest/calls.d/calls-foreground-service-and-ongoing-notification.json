@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_service_channel_name",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_service_on_hold",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_service_reconnecting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_service_unmute",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}

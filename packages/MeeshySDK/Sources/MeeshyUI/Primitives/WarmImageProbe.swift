@@ -79,6 +79,20 @@ public enum WarmImageProbe {
         )
     }
 
+    /// **La même porte, au palier de la taille AFFICHÉE** (#9872). Ce qui est
+    /// déjà résident sert d'abord — le palier demandé, puis le plein format —,
+    /// et la sonde disque décode au palier, jamais au plafond d'écran. L'absence
+    /// se mémorise par adresse : un fichier absent l'est à toutes les tailles.
+    /// Sans taille (`nil`), c'est la porte plein format ci-dessus.
+    public static func warmedImage(for resolved: String, maxPixelSize: CGFloat?) -> UIImage? {
+        guard let maxPixelSize else { return warmedImage(for: resolved) }
+        return warmedImage(
+            for: resolved,
+            resident: { DiskCacheStore.cachedImage(for: $0, maxPixelSize: maxPixelSize) ?? DiskCacheStore.cachedImage(for: $0) },
+            probe: { CacheCoordinator.warmedImage(for: $0, maxPixelSize: maxPixelSize) }
+        )
+    }
+
     /// **L'image déjà en MÉMOIRE, sans jamais toucher le disque** (#10354).
     ///
     /// L'`init` d'une image ne lit plus le disque : `warmedImage` y décodait le
