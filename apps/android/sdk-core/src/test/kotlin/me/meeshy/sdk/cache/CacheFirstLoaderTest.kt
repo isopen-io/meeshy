@@ -376,7 +376,7 @@ class CacheFirstLoaderTest {
         val states = loaderOver(FakeStore(cached = stale("old"))).load(networkDown).toStates().toList()
 
         assertThat(states).containsExactly(
-            CacheFirstState(emptyList(), LoadState.Idle),
+            CacheFirstState(emptyList<String>(), LoadState.Idle),
             CacheFirstState(listOf("old"), LoadState.CachedStale),
             CacheFirstState(listOf("old"), LoadState.Offline),
         ).inOrder()
