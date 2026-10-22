@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_audio_sheet_title">Audio output</string>
+    <string name="call_audio_button">Output</string>
+    <string name="call_audio_earpiece">Earpiece</string>
+    <string name="call_audio_speaker">Speaker</string>
+    <string name="call_audio_bluetooth">Bluetooth</string>
+    <string name="call_audio_wired">Headphones</string>
+    <string name="call_audio_usb">USB audio</string>
+    <string name="call_audio_hearing_aid">Hearing aid</string>
+    <string name="call_audio_car">Car</string>
+    <string name="call_audio_other">Other output</string>
+    <string name="call_audio_selected">Selected</string>
+    <string name="call_audio_bluetooth_permission">Allow Bluetooth access to see Bluetooth devices</string>
+    <string name="call_audio_bluetooth_allow">Allow</string>
+    <string name="call_audio_select_failed">Couldn\'t switch the audio output</string>
+</resources>
