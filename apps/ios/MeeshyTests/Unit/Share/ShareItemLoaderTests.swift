@@ -343,6 +343,14 @@ final class ShareOriginalNameTests: XCTestCase {
         XCTAssertEqual(name(["  ..cache.jpg  "]), "cache.jpg")
     }
 
+    /// Un point final ne laisse pas un double point devant l'extension :
+    /// `photo.` devient `photo.jpeg`, jamais `photo..jpeg`.
+    func test_sanitized_trailingDots_doNotDoubleTheExtensionDot() {
+        XCTAssertEqual(name(["photo."]), "photo.jpeg")
+        XCTAssertEqual(name(["notes . "], ext: "txt"), "notes.txt")
+        XCTAssertNil(name(["...", " . "]))
+    }
+
     func test_sanitized_aLongName_isCappedAndKeepsItsExtension() throws {
         let result = try XCTUnwrap(name([String(repeating: "é", count: 300) + ".MOV"], ext: "mov"))
 
