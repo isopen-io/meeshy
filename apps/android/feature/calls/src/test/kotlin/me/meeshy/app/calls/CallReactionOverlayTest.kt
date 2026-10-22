@@ -19,11 +19,15 @@ class CallReactionOverlayTest {
     private val fire = FloatingCallReaction(1L, CallReactionEmoji.FIRE, lane = 2)
 
     @Test
-    fun `a reaction is announced by its glyph, rising or not`() {
-        listOf(false, true).forEach { reduceMotion ->
-            rule.setContent { MeeshyTheme { CallReactionOverlay(listOf(fire), reduceMotion, onFinished = {}) } }
-            rule.onNodeWithContentDescription("Reaction 🔥").assertExists()
-        }
+    fun `a rising reaction is announced by its glyph`() {
+        rule.setContent { MeeshyTheme { CallReactionOverlay(listOf(fire), false, onFinished = {}) } }
+        rule.onNodeWithContentDescription("Reaction 🔥").assertExists()
+    }
+
+    @Test
+    fun `a reaction is announced by its glyph under reduced motion`() {
+        rule.setContent { MeeshyTheme { CallReactionOverlay(listOf(fire), true, onFinished = {}) } }
+        rule.onNodeWithContentDescription("Reaction 🔥").assertExists()
     }
 
     @Test
