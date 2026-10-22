@@ -16,9 +16,9 @@ final class LensPainterTests: XCTestCase {
     func test_paint_runsTheStagesInLensOrder_whateverOrderTheHostGivesThem() {
         let journal = Journal()
         let couches = [LensStage.particles, .overlays, .face, .lut, .frame, .segmentation]
-            .map { stage in LensLayer(stage) { image, _ in journal.note(stage); return image } }
+            .map { stage in LensPass(stage) { image, _ in journal.note(stage); return image } }
 
-        _ = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), layers: couches, input: LensFrameInput())
+        _ = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), passes: couches, input: LensFrameInput())
 
         XCTAssertEqual(journal.stages, [.segmentation, .lut, .face, .frame, .overlays, .particles])
     }
@@ -27,10 +27,10 @@ final class LensPainterTests: XCTestCase {
     func test_paint_keepsTheHostOrderWithinAStage() {
         let journal = Journal()
         let couches = (0..<3).map { rang in
-            LensLayer(.overlays) { image, _ in journal.noteRank(rang); return image }
+            LensPass(.overlays) { image, _ in journal.noteRank(rang); return image }
         }
 
-        _ = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), layers: couches, input: LensFrameInput())
+        _ = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), passes: couches, input: LensFrameInput())
 
         XCTAssertEqual(journal.ranks, [0, 1, 2])
     }
@@ -39,11 +39,31 @@ final class LensPainterTests: XCTestCase {
         let visage = LensFaceFrame(boundingBox: CGRect(x: 0.3, y: 0.3, width: 0.4, height: 0.4), points: [],
                                    leftEye: [], rightEye: [], innerLips: [], yaw: 0.1, roll: nil, pitch: nil)
         let journal = Journal()
-        let couche = LensLayer(.face) { image, input in journal.noteFace(input.face); return image }
+        let couche = LensPass(.face) { image, input in journal.noteFace(input.face); return image }
 
-        _ = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), layers: [couche], input: LensFrameInput(face: visage))
+        _ = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), passes: [couche], input: LensFrameInput(face: visage))
 
         XCTAssertEqual(journal.faces, [visage])
+    }
+
+    /// Chaque couche d'un document MeeshyLens v1 a sa place dans l'ordre.
+    func test_stage_ofEachDocumentLayer() {
+        let ecran = LensAnchor.screen(x: 0.5, y: 0.5)
+        let visage = LensAnchor.face(point: .noseTip, dx: nil, dy: nil)
+        let sticker = { (anchor: LensAnchor) in
+            LensLayer.sticker(LensStickerLayer(id: "s", asset: "a", anchor: anchor, size: 0.2, rotation: nil))
+        }
+        let texte = { (anchor: LensAnchor) in
+            LensLayer.text(LensTextLayer(id: "t", text: ["fr": "Salut"], font: .manrope, color: "#FFFFFF", size: 0.1, anchor: anchor))
+        }
+
+        XCTAssertEqual(LensStage(layer: .lut(LensLutLayer(id: "l", asset: "a", intensity: nil))), .lut)
+        XCTAssertEqual(LensStage(layer: .frame(LensFrameLayer(id: "f", motif: "m", opacity: nil))), .frame)
+        XCTAssertEqual(LensStage(layer: .particles(LensParticlesLayer(id: "p", preset: .sparkles, density: .low, anchor: nil))), .particles)
+        XCTAssertEqual(LensStage(layer: sticker(ecran)), .overlays)
+        XCTAssertEqual(LensStage(layer: sticker(visage)), .face)
+        XCTAssertEqual(LensStage(layer: texte(ecran)), .overlays)
+        XCTAssertEqual(LensStage(layer: texte(visage)), .face)
     }
 
     // MARK: - Les étages fournis
@@ -54,7 +74,7 @@ final class LensPainterTests: XCTestCase {
         let fond = Self.solid(red: 0, green: 0, blue: 1)
         let masque = Self.halfMask(personOnTheLeft: true)
 
-        let peinte = LensPainter.paint(source, layers: [.segmentation(background: fond)],
+        let peinte = LensPainter.paint(source, passes: [.segmentation(background: fond)],
                                        input: LensFrameInput(personMask: masque))
 
         XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 8, y: 32)), [255, 0, 0])
@@ -65,7 +85,7 @@ final class LensPainterTests: XCTestCase {
     func test_segmentation_withoutAMask_leavesTheImage() throws {
         let source = Self.solid(red: 1, green: 0, blue: 0)
 
-        let peinte = LensPainter.paint(source, layers: [.segmentation(background: Self.solid(red: 0, green: 0, blue: 1))],
+        let peinte = LensPainter.paint(source, passes: [.segmentation(background: Self.solid(red: 0, green: 0, blue: 1))],
                                        input: LensFrameInput())
 
         XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 56, y: 32)), [255, 0, 0])
@@ -76,7 +96,7 @@ final class LensPainterTests: XCTestCase {
         let source = Self.solid(red: 1, green: 0, blue: 0)
         let peinte = LensPainter.paint(
             source,
-            layers: [.lut(cube: Self.allGreenCube(), dimension: 2, colorSpace: Self.sRGB),
+            passes: [.lut(cube: Self.allGreenCube(), dimension: 2, colorSpace: Self.sRGB),
                      .segmentation(background: Self.solid(red: 0, green: 0, blue: 1))],
             input: LensFrameInput(personMask: Self.halfMask(personOnTheLeft: true)))
 
@@ -86,7 +106,7 @@ final class LensPainterTests: XCTestCase {
 
     func test_lut_identityCube_keepsTheColor() throws {
         let peinte = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0),
-                                       layers: [.lut(cube: Self.identityCube(), dimension: 2, colorSpace: Self.sRGB)],
+                                       passes: [.lut(cube: Self.identityCube(), dimension: 2, colorSpace: Self.sRGB)],
                                        input: LensFrameInput())
 
         XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 32, y: 32)), [255, 0, 0])
@@ -95,7 +115,7 @@ final class LensPainterTests: XCTestCase {
     /// Un cube aux octets incohérents n'efface pas l'image : l'étage s'abstient.
     func test_lut_malformedCube_leavesTheImage() throws {
         let peinte = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0),
-                                       layers: [.lut(cube: Data([1, 2, 3]), dimension: 2, colorSpace: Self.sRGB)],
+                                       passes: [.lut(cube: Data([1, 2, 3]), dimension: 2, colorSpace: Self.sRGB)],
                                        input: LensFrameInput())
 
         XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 32, y: 32)), [255, 0, 0])
@@ -109,7 +129,7 @@ final class LensPainterTests: XCTestCase {
 
         let peinte = LensPainter.paint(
             Self.solid(red: 1, green: 0, blue: 0),
-            layers: [.overlay(particule, stage: .particles), .overlay(sticker, stage: .overlays), .overlay(cadre, stage: .frame)],
+            passes: [.overlay(particule, stage: .particles), .overlay(sticker, stage: .overlays), .overlay(cadre, stage: .frame)],
             input: LensFrameInput())
 
         XCTAssertEqual(try Self.pixel(of: peinte, at: CGPoint(x: 8, y: 32)), [255, 255, 255])
@@ -126,14 +146,14 @@ final class LensPainterTests: XCTestCase {
     /// Le témoin « golden » : deux hôtes qui remettent la même recette et la même
     /// image obtiennent les mêmes pixels, octet pour octet.
     func test_paint_sameRecipeOnTwoHosts_givesTheSamePixels() throws {
-        let recette: () -> [LensLayer] = {
+        let recette: () -> [LensPass] = {
             [.segmentation(background: Self.solid(red: 0, green: 0, blue: 1)),
              .lut(cube: Self.identityCube(), dimension: 2, colorSpace: Self.sRGB),
              .overlay(Self.solid(red: 0, green: 1, blue: 0).cropped(to: CGRect(x: 0, y: 0, width: 20, height: 20)), stage: .overlays)]
         }
         let entree = LensFrameInput(personMask: Self.halfMask(personOnTheLeft: true))
-        let apercu = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), layers: recette(), input: entree)
-        let appel = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), layers: recette(), input: entree)
+        let apercu = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), passes: recette(), input: entree)
+        let appel = LensPainter.paint(Self.solid(red: 1, green: 0, blue: 0), passes: recette(), input: entree)
 
         XCTAssertEqual(try Self.bitmap(of: apercu), try Self.bitmap(of: appel))
     }
