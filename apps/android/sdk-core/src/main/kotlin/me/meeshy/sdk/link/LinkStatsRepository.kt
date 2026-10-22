@@ -5,6 +5,7 @@ import kotlinx.coroutines.coroutineScope
 import me.meeshy.sdk.model.CommunityLinkStats
 import me.meeshy.sdk.model.LinkStatsCard
 import me.meeshy.sdk.model.LinkStatsSnapshot
+import me.meeshy.sdk.model.toLinkStats
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.CommunityLinksApi
 import me.meeshy.sdk.net.apiCall
@@ -37,7 +38,7 @@ public class LinkStatsRepository @Inject constructor(
     }
 
     private suspend fun loadCommunity(): LinkStatsCard<CommunityLinkStats> =
-        apiCall { communityApi.mine(ADMIN_ROLES) }.map { CommunityLinkStats.from(it) }.asCard()
+        apiCall { communityApi.mine(ADMIN_ROLES) }.map { it.toLinkStats() }.asCard()
 
     private fun <T> NetworkResult<T>.asCard(): LinkStatsCard<T> = when (this) {
         is NetworkResult.Success -> LinkStatsCard.Loaded(data)

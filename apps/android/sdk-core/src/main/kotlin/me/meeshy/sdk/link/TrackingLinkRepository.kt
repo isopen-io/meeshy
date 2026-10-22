@@ -34,7 +34,7 @@ public class TrackingLinkRepository @Inject constructor(
             is NetworkResult.Failure -> TrackingShortLinkResult.Failed(
                 reason = when {
                     result.error.code == NETWORK_CODE -> TrackingShortLinkResult.Reason.OFFLINE
-                    result.error.httpStatus in CLIENT_REFUSALS -> TrackingShortLinkResult.Reason.REJECTED
+                    (result.error.httpStatus ?: 0) in CLIENT_REFUSALS -> TrackingShortLinkResult.Reason.REJECTED
                     else -> TrackingShortLinkResult.Reason.UNAVAILABLE
                 },
                 fallbackUrl = url,

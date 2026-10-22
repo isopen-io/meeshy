@@ -33,20 +33,12 @@ data class CommunityMini(
     val createdAt: String? = null,
 )
 
-/** Port de `CommunityLinkStats` : totaux calculés sur les communautés administrées. */
-data class CommunityLinkStats(
-    val totalCommunities: Int,
-    val totalMembers: Int,
-    val activeCommunities: Int,
-) {
-    companion object {
-        fun from(communities: List<CommunityMini>): CommunityLinkStats = CommunityLinkStats(
-            totalCommunities = communities.size,
-            totalMembers = communities.sumOf { it.memberCount ?: 0 },
-            activeCommunities = communities.count { it.isActive },
-        )
-    }
-}
+/** Totaux « communautés » calculés sur les communautés administrées. */
+fun List<CommunityMini>.toLinkStats(): CommunityLinkStats = CommunityLinkStats(
+    totalCommunities = size,
+    totalMembers = sumOf { it.memberCount ?: 0 },
+    activeCommunities = count { it.isActive },
+)
 
 /**
  * Corps de `POST /tracking-links` : la passerelle ENVELOPPE le lien (`trackingLink`, `existed`) ;
