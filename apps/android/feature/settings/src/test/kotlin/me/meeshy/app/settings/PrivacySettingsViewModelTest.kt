@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.model.PrivacyToggle
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
@@ -98,15 +99,40 @@ class PrivacySettingsViewModelTest {
         val vm = vm(store = store)
         advanceUntilIdle()
 
-        vm.setToggle(PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS, true)
+        // « Appels hors contacts » est vrai par défaut : le fermer est le vrai changement.
+        vm.setToggle(PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS, false)
         vm.setToggle(PrivacyToggle.BLOCK_SCREENSHOTS, true)
-        vm.setToggle(PrivacyToggle.ALLOW_ANALYTICS, false)
+        vm.setToggle(PrivacyToggle.ALLOW_ANALYTICS, true)
         advanceUntilIdle()
 
         val prefs = store.preferences.value
-        assertThat(prefs.allowCallsFromNonContacts).isTrue()
+        assertThat(prefs.acceptCallsFromNonContacts).isFalse()
         assertThat(prefs.blockScreenshots).isTrue()
-        assertThat(prefs.allowAnalytics).isFalse()
+        assertThat(prefs.allowAnalytics).isTrue()
+    }
+
+    @Test
+    fun state_showsTheCallsSwitchOpenByDefault_likeTheServer() = runTest {
+        val vm = vm()
+        advanceUntilIdle()
+
+        assertThat(vm.state.value.preferences.acceptCallsFromNonContacts).isTrue()
+    }
+
+    @Test
+    fun setToggle_closingTheCalls_syncsTheCanonicalFieldToTheGateway() = runTest {
+        val store = RecordingStore()
+        val sync = mockk<PrivacyPreferencesSyncRepository>()
+        val captured = slot<PrivacyPreferences>()
+        coEvery { sync.enqueueSync(capture(captured)) } returns "cmid_1"
+        val vm = vm(store = store, sync = sync)
+        advanceUntilIdle()
+
+        vm.setToggle(PrivacyToggle.ALLOW_CALLS_FROM_NON_CONTACTS, false)
+        advanceUntilIdle()
+
+        assertThat(captured.captured.acceptCallsFromNonContacts).isFalse()
+        assertThat(PrivacyPreferenceSyncBody.from(captured.captured).acceptCallsFromNonContacts).isFalse()
     }
 
     @Test

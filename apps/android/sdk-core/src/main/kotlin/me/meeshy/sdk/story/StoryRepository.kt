@@ -36,6 +36,7 @@ import me.meeshy.sdk.outbox.OutboxRepository
 import me.meeshy.sdk.outbox.OutboxState
 import me.meeshy.sdk.outbox.kindEnum
 import me.meeshy.sdk.outbox.stateEnum
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -155,10 +156,27 @@ class StoryRepository @Inject constructor(
                 kind = OutboxKind.PUBLISH_STORY,
                 lane = OutboxLanes.STORY,
                 targetId = "pending_${UUID.randomUUID()}",
-                payload = MeeshyApi.json.encodeToString(request),
+                payload = MeeshyApi.json.encodeToString(sealedForPublication(request)),
                 dependsOn = dependsOn.toSet(),
             ),
         )
+
+    /**
+     * A published canvas may only designate media the post owns (#5280): a canvas
+     * naming a row the post does not list paints BLANK for every viewer, with no
+     * error anywhere. The orphans are journaled (ids only — never content), then
+     * [PublishMediaWriteBack.seal] attaches everything the canvas designates —
+     * pre-uploaded media, sounds, stickers — so the server does not sweep it a day
+     * later as an abandoned upload. A caller that prefers to refuse the send asks
+     * [PublishMediaWriteBack.coherenceOf] first.
+     */
+    private fun sealedForPublication(request: CreateStoryRequest): CreateStoryRequest {
+        val coherence = PublishMediaWriteBack.coherenceOf(request)
+        if (coherence is PublishCoherence.Orphans) {
+            Timber.w("publish: canvas designates %d media the post did not list: %s", coherence.ids.size, coherence.ids)
+        }
+        return PublishMediaWriteBack.seal(request)
+    }
 
     /**
      * The story-publish queue as a **single consistent snapshot** (ARCHITECTURE.md

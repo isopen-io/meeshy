@@ -1,0 +1,9 @@
+# Langues dont chaque module qui porte des chaînes livre un dossier de ressources
+# (en = values/, le défaut). Lue par LocalizationGuardTest : un module qui perd l'un
+# de ces dossiers fait échouer le test. Un dossier d'une AUTRE langue n'est accepté
+# pour un module que complet (toutes ses clés traduisibles, toutes les quantités
+# plurielles de sa langue). Une ligne par locale, sans région (pt sert pt-BR).
+en
+fr
+es
+pt
