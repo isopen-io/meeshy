@@ -161,10 +161,10 @@ final class ComposerLanguagePillReachTests: XCTestCase {
 
     private var screens: [RenderedScreen] = []
 
-    override func tearDown() {
+    override func tearDown() async throws {
         screens.forEach { $0.dismount() }
         screens = []
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private static var pillLabel: String {

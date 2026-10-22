@@ -51,4 +51,10 @@ data class StoryAudioPlayerObject(
     val fadeIn: Float? = null,
     val fadeOut: Float? = null,
     val sourceLanguage: String? = null,
+    /** Keyframes de l'automation (canal volume). */
+    val keyframes: List<StoryKeyframe>? = null,
+    /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
+    val name: String? = null,
+    /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
+    val mutedVolumeMemento: Float? = null,
 )

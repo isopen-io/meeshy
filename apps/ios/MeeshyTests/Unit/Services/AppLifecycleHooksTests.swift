@@ -21,6 +21,10 @@ final class AppLifecycleHooksTests: XCTestCase {
         var sessions: [Bool] = []
     }
 
+    private final class Session {
+        var isAuthenticated = true
+    }
+
     private func makeHooks(
         center: NotificationCenter,
         subject: PassthroughSubject<Bool, Never>,
@@ -67,10 +71,10 @@ final class AppLifecycleHooksTests: XCTestCase {
         let center = NotificationCenter()
         let subject = PassthroughSubject<Bool, Never>()
         let recorder = Recorder()
-        var authenticated = true
-        let hooks = makeHooks(center: center, subject: subject, isAuthenticated: { authenticated }, recorder: recorder)
+        let session = Session()
+        let hooks = makeHooks(center: center, subject: subject, isAuthenticated: { session.isAuthenticated }, recorder: recorder)
 
-        authenticated = false
+        session.isAuthenticated = false
         subject.send(false)
         subject.send(false)
         drainMainQueue()
@@ -85,12 +89,12 @@ final class AppLifecycleHooksTests: XCTestCase {
         let center = NotificationCenter()
         let subject = PassthroughSubject<Bool, Never>()
         let recorder = Recorder()
-        var authenticated = true
-        let hooks = makeHooks(center: center, subject: subject, isAuthenticated: { authenticated }, recorder: recorder)
+        let session = Session()
+        let hooks = makeHooks(center: center, subject: subject, isAuthenticated: { session.isAuthenticated }, recorder: recorder)
 
-        authenticated = false
+        session.isAuthenticated = false
         subject.send(false)
-        authenticated = true
+        session.isAuthenticated = true
         subject.send(true)
         drainMainQueue()
 

@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.FriendRequest
 import me.meeshy.sdk.model.FriendRequestUser
 import me.meeshy.sdk.model.PresenceState
 import me.meeshy.sdk.model.UserPresence
+import me.meeshy.sdk.model.isoToEpochMillisOrNull
 
 /**
  * The filter a Contacts-list surface applies over the friend list. Port of the
@@ -86,15 +87,40 @@ data class ContactReconcile(
 object ContactList {
 
     /**
-     * Assemble the accepted-friend list from the current user's received and
-     * sent friend requests (the app has no dedicated `/friends` endpoint — the
-     * friend graph is exactly the accepted requests, exactly like iOS).
+     * Assemble the accepted-friend list from ONE `direction=any&status=accepted` listing
+     * (`GET /directory/friend-requests`, read by cursor) — the friend graph is exactly the
+     * accepted requests, there is no dedicated `/friends` endpoint. Port of the iOS
+     * `FriendListAggregator.aggregate`.
      *
-     * For each accepted request the counterparty is the party that is **not**
-     * the current user (sender for received, receiver for sent, falling back to
-     * the other side for malformed rows). Deduplicated by user id (first record
-     * wins) and sorted online-first, then most-recently-active first.
+     * For each accepted request the counterparty is the party that is **not** the current
+     * user, whichever side initiated (the sender when the user received it, the receiver
+     * when the user sent it). A row with no such party is skipped, and the current user
+     * is excluded defensively so a self-referencing request can never list them as their
+     * own contact. Deduplicated by user id — the FIRST occurrence wins — and sorted
+     * online-first, then most-recently-active first.
      */
+    fun fromAcceptedRequests(
+        requests: List<FriendRequest>,
+        currentUserId: String,
+    ): List<FriendRequestUser> {
+        val byId = LinkedHashMap<String, FriendRequestUser>()
+        for (request in requests) {
+            if (request.status != ACCEPTED) continue
+            counterparty(request.sender, request.receiver, currentUserId)?.let { byId.putIfAbsent(it.id, it) }
+        }
+        return byId.values.sortedWith(onlineFirst)
+    }
+
+    /**
+     * The pre-cursor assembly from the two directional reads (`received` + `sent`).
+     * Kept compilable while its consumers migrate to [fromAcceptedRequests] over a single
+     * `direction=any` listing, which also sees the accepted relations the `received`
+     * read never returned.
+     */
+    @Deprecated(
+        message = "Read one direction=any listing and use fromAcceptedRequests(requests, currentUserId).",
+        replaceWith = ReplaceWith("fromAcceptedRequests(received + sent, currentUserId)"),
+    )
     fun fromAcceptedRequests(
         received: List<FriendRequest>,
         sent: List<FriendRequest>,
@@ -178,9 +204,14 @@ object ContactList {
         return fallback?.takeIf { it.id != currentUserId }
     }
 
+    /**
+     * Online first, then the most recent activity. The activity is compared as an INSTANT
+     * (an unparseable or absent stamp sorts last): two ISO strings in different offsets
+     * do not order the same as text.
+     */
     private val onlineFirst: Comparator<FriendRequestUser> =
         compareByDescending<FriendRequestUser> { it.isOnline == true }
-            .thenByDescending { it.lastActiveAt ?: "" }
+            .thenByDescending { isoToEpochMillisOrNull(it.lastActiveAt) ?: Long.MIN_VALUE }
 
     private const val ACCEPTED = "accepted"
 }

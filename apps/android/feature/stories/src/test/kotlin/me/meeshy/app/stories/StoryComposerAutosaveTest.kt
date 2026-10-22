@@ -8,6 +8,12 @@ import me.meeshy.sdk.model.StoryDraftSlideSnapshot
 import me.meeshy.sdk.model.StoryDraftTextElementSnapshot
 import me.meeshy.sdk.model.StoryDraftTransformSnapshot
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.scene.StoryCanvasTransform
+import me.meeshy.sdk.model.scene.StoryElementTiming
+import me.meeshy.sdk.model.scene.StoryFilterMatrix
+import me.meeshy.sdk.model.scene.StoryTextBackground
+import me.meeshy.sdk.model.scene.StoryTextFade
+import me.meeshy.sdk.model.scene.StoryTextOutline
 import org.junit.Test
 
 /**

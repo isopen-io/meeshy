@@ -39,6 +39,7 @@ final class CallVideoEffectsPerformanceTests: XCTestCase {
         measureProcess(VideoFilterConfig.default.withBackgroundBlur(true), pipeline: pipeline)
     }
 
+    @MainActor
     func test_process_backgroundBlurWithMask_reportsTheFrameP95() {
         let frames = makeFrames()
         let sut = VideoFilterPipeline(

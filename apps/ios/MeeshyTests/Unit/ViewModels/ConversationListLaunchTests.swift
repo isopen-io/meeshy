@@ -13,14 +13,14 @@ import MeeshySDK
 @MainActor
 final class ConversationListLaunchTests: XCTestCase {
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         ConversationListVMOwner.resetForTesting()
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ConversationListVMOwner.resetForTesting()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeList(syncEngine: MockConversationSyncEngine = MockConversationSyncEngine()) -> LaunchCountingListViewModel {

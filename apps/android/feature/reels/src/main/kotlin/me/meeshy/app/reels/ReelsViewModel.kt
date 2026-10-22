@@ -14,6 +14,8 @@ import me.meeshy.sdk.model.EngagementSurface
 import me.meeshy.sdk.model.QualifiedView
 import me.meeshy.sdk.net.MeeshyConfig
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.net.toContentFetchFailure
+import me.meeshy.sdk.model.ContentFetchFailure
 import me.meeshy.sdk.post.PostRepository
 import me.meeshy.sdk.privacy.PrivacyPreferencesStore
 import me.meeshy.sdk.session.SessionRepository
@@ -26,6 +28,10 @@ data class ReelsUiState(
     val isLoading: Boolean = false,
     val isLoadingMore: Boolean = false,
     val errorMessage: String? = null,
+    /** Cause typee du dernier echec du premier chargement (null = aucun echec en cours). */
+    val loadFailure: ContentFetchFailure? = null,
+    /** Faux jusqu'a la fin du premier chargement : distingue froid / vide / echec. */
+    val hasLoadedOnce: Boolean = false,
 )
 
 @HiltViewModel
@@ -109,7 +115,7 @@ class ReelsViewModel @Inject constructor(
             .orEmpty()
         val seedInCache = seed != null && cachedFeed.any { it.id == seed }
         val cached = ReelBuilder.withSeedFirst(cachedFeed, seed)
-        _state.update { it.copy(reels = cached, isLoading = cached.isEmpty(), errorMessage = null) }
+        _state.update { it.copy(reels = cached, isLoading = cached.isEmpty(), errorMessage = null, loadFailure = null, hasLoadedOnce = cached.isNotEmpty()) }
 
         if (seed != null && !seedInCache) loadSeedAndPrepend(seed)
 
@@ -129,17 +135,26 @@ class ReelsViewModel @Inject constructor(
                         } else {
                             fresh
                         }
-                        current.copy(reels = reels, isLoading = false)
+                        current.copy(reels = reels, isLoading = false, loadFailure = null, hasLoadedOnce = true)
                     }
                 }
                 is NetworkResult.Failure -> _state.update {
                     // The cache-seeded reels (if any) are left in place rather than cleared —
                     // a network failure degrades to what the Feed already had, never to blank.
-                    it.copy(isLoading = false, errorMessage = if (cached.isEmpty()) result.error.message else it.errorMessage)
+                    it.copy(
+                        isLoading = false,
+                        errorMessage = if (cached.isEmpty()) result.error.message else it.errorMessage,
+                        loadFailure = if (cached.isEmpty()) result.error.toContentFetchFailure() else it.loadFailure,
+                    )
                 }
             }
         }
     }
+
+    /**
+     * Rejoue le chargement du lecteur DEJA ouvert (meme graine), sans repasser par le detail.
+     */
+    fun retry() = load(currentSeed)
 
     /**
      * Fetches [seedId] by id and pins it at the front of the thread, for the cold-start case

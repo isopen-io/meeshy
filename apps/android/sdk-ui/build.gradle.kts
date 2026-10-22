@@ -31,6 +31,7 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            isReturnDefaultValues = true
         }
     }
 }
@@ -45,6 +46,8 @@ dependencies {
     implementation(platform(libs.compose.bom))
     api(libs.bundles.compose)
     implementation(libs.coil.compose)
+    implementation(libs.coil.gif)
+    implementation(libs.lottie.compose)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     debugImplementation(libs.compose.ui.tooling)
@@ -53,10 +56,11 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.activity.compose)
     testImplementation(platform(libs.compose.bom))
     testImplementation(libs.compose.ui.test.junit4)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(platform(libs.compose.bom))
-    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.turbine)
+    testImplementation(libs.mockk)
 }
