@@ -1,0 +1,58 @@
+"""Outils partagés des tests : relire un fichier de ressources Android comme aapt2."""
+import xml.etree.ElementTree as ET
+
+_BOLD_OPEN = "\x00B"
+_BOLD_CLOSE = "\x00E"
+
+
+def android_unescape(raw):
+    """Applique les règles de aapt2 à un contenu de chaîne : guillemets, échappements, blancs."""
+    resolved = []
+    in_quote = False
+    pending_space = False
+
+    def emit(char):
+        nonlocal pending_space
+        if pending_space and resolved:
+            resolved.append(" ")
+        pending_space = False
+        resolved.append(char)
+
+    index = 0
+    while index < len(raw):
+        char = raw[index]
+        if char == "\\" and index + 1 < len(raw):
+            index += 1
+            emit({"n": "\n", "t": "\t"}.get(raw[index], raw[index]))
+        elif char == '"':
+            in_quote = not in_quote
+        elif char in " \t\n\r" and not in_quote:
+            pending_space = True
+        else:
+            emit(char)
+        index += 1
+    return "".join(resolved)
+
+
+def _inner(element):
+    parts = [element.text or ""]
+    for child in element:
+        parts.append(_BOLD_OPEN + _inner(child) + _BOLD_CLOSE + (child.tail or ""))
+    return "".join(parts)
+
+
+def resolved_text(element):
+    return android_unescape(_inner(element)).replace(_BOLD_OPEN, "<b>").replace(_BOLD_CLOSE, "</b>")
+
+
+def parse_resources(xml_text):
+    """nom -> texte résolu (chaîne) ou {quantité: texte} (pluriel)."""
+    root = ET.fromstring(xml_text)
+    resources = {}
+    for element in root:
+        name = element.get("name")
+        if element.tag == "string":
+            resources[name] = resolved_text(element)
+        elif element.tag == "plurals":
+            resources[name] = {item.get("quantity"): resolved_text(item) for item in element}
+    return resources
