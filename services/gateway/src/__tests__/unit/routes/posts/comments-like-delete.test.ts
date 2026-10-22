@@ -506,7 +506,7 @@ describe('DELETE /posts/:postId/comments/:commentId — retrait par la modérati
     expect(mockCreateNotification).toHaveBeenCalledWith(expect.objectContaining({
       userId: OTHER,
       type: 'content_removed',
-      title: 'Votre commentaire a été retiré par un administrateur',
+      title: 'Votre commentaire a été retiré par la modération',
       metadata: { contentType: 'comment', contentId: COMMENT_ID, postId: POST_ID, reason: 'Harcèlement' },
     }));
   });

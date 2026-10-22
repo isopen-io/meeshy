@@ -12,6 +12,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.withLink
 import me.meeshy.sdk.model.MessageSegment
 import me.meeshy.sdk.model.MessageTextParser
 import me.meeshy.sdk.model.TextStyles
+import me.meeshy.sdk.model.text.LinkDisplayLaw
 
 /**
  * Renders a message body as rich text — markdown emphasis, `@mention` /
@@ -87,6 +89,22 @@ internal fun buildMessageAnnotatedString(
                     appendLink(segment.display, segment.url, linkColor, FontWeight.SemiBold)
                 is MessageSegment.MeeshyTokenLink ->
                     appendLink(segment.display, segment.url, linkColor, FontWeight.Medium)
+                is MessageSegment.Code -> {
+                    val start = length
+                    append(segment.text)
+                    addStyle(spanStyleFor(segment.styles, baseColor).copy(fontFamily = FontFamily.Monospace), start, length)
+                }
+                is MessageSegment.HashtagLink ->
+                    appendLink(segment.display, segment.url, linkColor, FontWeight.SemiBold)
+                is MessageSegment.Link -> {
+                    val shown = LinkDisplayLaw.resolve(segment.written, trackedLinks)
+                    appendLink(shown.text, shown.url, linkColor, FontWeight.Medium)
+                    if (shown.remainder.isNotEmpty()) {
+                        val start = length
+                        append(shown.remainder)
+                        addStyle(SpanStyle(color = baseColor), start, length)
+                    }
+                }
                 is MessageSegment.UrlLink ->
                     appendLink(
                         segment.display,

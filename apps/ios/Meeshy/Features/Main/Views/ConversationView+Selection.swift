@@ -115,7 +115,7 @@ extension ConversationView {
                 Image(systemName: "trash")
             }
             .disabled(overlayState.selectedMessageIds.isEmpty)
-            .accessibilityLabel(String(localized: "conversation.view.delete_message.title", bundle: .main))
+            .accessibilityLabel(MessageDeleteConfirmation.title(count: overlayState.selectedMessageIds.count))
             .accessibilityIdentifier("conversation.selection.delete")
 
             Spacer(minLength: 0)

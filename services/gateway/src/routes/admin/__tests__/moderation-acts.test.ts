@@ -368,7 +368,7 @@ describe("un retrait de la console prévient l'auteur (#11158)", () => {
     expect((await act(app, { action: 'make-private' })).statusCode).toBe(200);
     await flush();
     expect(removedFor()).toEqual([
-      expect.objectContaining({ userId: AUTHOR, title: 'Votre story a été rendue privée par un administrateur', content: '', metadata: { contentType: 'story', contentId: POST, postId: POST, madePrivate: true } }),
+      expect.objectContaining({ userId: AUTHOR, title: 'Votre story a été rendue privée par la modération', content: '', metadata: { contentType: 'story', contentId: POST, postId: POST, madePrivate: true } }),
     ]);
     await app.close();
   });
