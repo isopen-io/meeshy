@@ -66,7 +66,8 @@ class AttachmentThumbnailer @Inject constructor(
             val height = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull()
             val frame = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
             val base = frame?.let { saved(it, outputDir, id) } ?: AttachmentThumbnail()
-            return base.copy(width = width, height = height, durationMs = duration)
+            val learned = base.copy(width = width, height = height, durationMs = duration)
+            return learned.takeUnless { it == AttachmentThumbnail() }
         } finally {
             runCatching { retriever.release() }
         }
