@@ -8,6 +8,14 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.toIntSize
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -34,13 +42,27 @@ fun MeeshyBackground(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val dark = MeeshyTheme.isDark
-    Box(
-        modifier
-            .fillMaxSize()
-            .background(MeeshyGradients.mainBackground(dark)),
-    ) {
-        AmbientOrbs(dark)
-        content()
+    val layer = rememberGraphicsLayer()
+    val backdrop = remember(layer) { GlassBackdrop(layer) }
+    CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
+        Box(
+            modifier
+                .fillMaxSize()
+                .onGloballyPositioned { backdrop.origin = it.positionInWindow() },
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .drawWithContent {
+                        layer.record(this, layoutDirection, size.toIntSize()) { this@drawWithContent.drawContent() }
+                        drawLayer(layer)
+                    }
+                    .background(MeeshyGradients.mainBackground(dark)),
+            ) {
+                AmbientOrbs(dark)
+            }
+            content()
+        }
     }
 }
 
