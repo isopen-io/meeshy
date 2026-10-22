@@ -206,6 +206,23 @@ final class ReaderAudioSharedEngineTests: XCTestCase {
                      "une slide quittée pendant l'ouverture de ses fichiers n'écrase pas la suivante")
     }
 
+    func test_aLoadWhoseSlideWasLeft_duringTheOpening_isDropped() async throws {
+        let fixture = try Self.makeAudioFixture()
+        let mixer = ReaderAudioMixer(engineHost: ReaderAudioEngineHost(),
+                                     scheduler: RecordingAudioScheduler())
+        try mixer.configure(audios: [Self.audio(id: "current")], urls: ["current": fixture])
+
+        try await mixer.loadAndConfigure(audios: [Self.audio(id: "left")],
+                                         urls: ["left": fixture]) { false }
+        try await mixer.loadAndConfigureBackground(audio: Self.audio(id: "bg"), url: fixture,
+                                                   looping: false) { false }
+
+        XCTAssertNotNil(mixer.loopSource(for: .foreground("current")),
+                        "l'hôte a changé de slide pendant l'ouverture : la slide affichée garde son son")
+        XCTAssertNil(mixer.loopSource(for: .foreground("left")))
+        XCTAssertEqual(mixer.backgroundClipCount, 0)
+    }
+
     func test_unreadableBackground_throws_andKeepsThePriorBackground() async throws {
         let fixture = try Self.makeAudioFixture()
         let mixer = ReaderAudioMixer(engineHost: ReaderAudioEngineHost(),
