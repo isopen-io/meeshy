@@ -14,7 +14,9 @@ import os
 /// précédent que le filigrane (`MeeshyVideoWatermarkBaker`) :
 /// `applyingCIFiltersWithHandler` redresse la source et cale la toile sur la
 /// piste transformée, et une vidéo dont l'orientation ne serait pas tenue n'est
-/// pas rendue couchée — la prise brute repart plutôt que perdue.
+/// pas rendue couchée — la prise brute repart plutôt que perdue. Le rendu
+/// s'écrit en UNE passe au plafond des publications (`VideoEncodePass.render`,
+/// #11849).
 nonisolated enum ComposerLookVideoExporter {
 
     /// - Returns: la vidéo regardée, `url` telle quelle sans look, sans cadrage
@@ -63,7 +65,11 @@ nonisolated enum ComposerLookVideoExporter {
             composition.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
             composition.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
             let mixage = await audioMix(asset, gain: audioGain)
-            return await write(asset, composition: composition, audioMix: mixage, timeRange: timeRange)
+            // La date de création et le lieu de la prise suivent la vidéo rendue.
+            let metadonnees = (try? await asset.load(.metadata)) ?? []
+            return try await VideoEncodePass.render(asset, composition: composition, audioMix: mixage,
+                                                    timeRange: timeRange, metadata: metadonnees,
+                                                    context: renderBudget)
         } catch {
             Logger.media.error("Live look video export failed: \(error.localizedDescription, privacy: .public)")
             return nil
@@ -71,6 +77,14 @@ nonisolated enum ComposerLookVideoExporter {
     }
 
     private struct UnpaintedFrame: Error {}
+
+    /// **Le plafond du rendu est celui des publications** (#11849) : une story et
+    /// un post (1080×1920, 4 Mb/s) REMUXENT ce fichier dans `compressVideo` au lieu
+    /// de le ré-encoder — une seule génération entre la prise et l'envoi. La copie
+    /// en galerie est la même : ce qu'on publie est ce qu'on garde, le brut restant
+    /// dans Photos quand il y a été écrit (#10284). Un message (720p) le
+    /// ré-encode encore, jusqu'à ce que sa définition rejoigne la HD (#11915).
+    static let renderBudget: MediaContext = .story
 
     /// **Ce que l'export doit faire de la prise** (#9889).
     nonisolated enum Plan: Equatable, Sendable {
@@ -125,18 +139,6 @@ nonisolated enum ComposerLookVideoExporter {
         }
         return ComposerTakeBoostTap.audioMix(trackIDs: pistes.map(\.trackID), volume: ComposerTakeGain.volume(gain),
                                              level: ComposerTakeBoostLevel(boost: amplification))
-    }
-
-    private static func write(_ asset: AVAsset, composition: AVVideoComposition, audioMix: AVAudioMix?,
-                              timeRange: CMTimeRange?) async -> URL? {
-        guard let session = AVAssetExportSession(asset: asset, presetName: AVAssetExportPresetHighestQuality) else {
-            return nil
-        }
-        session.videoComposition = composition
-        session.audioMix = audioMix
-        // La date de création et le lieu de la prise suivent la vidéo rendue.
-        session.metadata = (try? await asset.load(.metadata)) ?? []
-        return await run(session, timeRange: timeRange, name: "video_look")
     }
 
     private static func run(_ session: AVAssetExportSession, timeRange: CMTimeRange?, name: String) async -> URL? {
