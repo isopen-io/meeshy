@@ -106,7 +106,7 @@ def _arguments(specifiers: List[Tuple[_Specifier, int]]) -> Tuple[Argument, ...]
     return tuple(Argument(position, conversions[position]) for position in sorted(conversions))
 
 
-def convert_specifiers(text: str) -> ConvertedText:
+def convert_specifiers(text: str, *, always_formatted: bool = False) -> ConvertedText:
     matches = list(_TOKEN.finditer(text))
     specifiers = [(_parse_specifier(m), m) for m in matches if m.group(0) != "%%"]
     positional_count = sum(1 for specifier, _ in specifiers if specifier.position is not None)
@@ -122,7 +122,7 @@ def convert_specifiers(text: str) -> ConvertedText:
 
     rendered = {match.start(): _render(specifier, position, positional)
                 for (specifier, match), (_, position) in zip(specifiers, numbered)}
-    has_arguments = bool(arguments)
+    has_arguments = bool(arguments) or always_formatted
     pieces: List[str] = []
     has_prose_percent = False
     cursor = 0

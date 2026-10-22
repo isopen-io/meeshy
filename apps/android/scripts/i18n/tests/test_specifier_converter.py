@@ -102,6 +102,16 @@ class PercentTests(unittest.TestCase):
         self.assertFalse(result.formatted)
 
 
+class AlwaysFormattedTests(unittest.TestCase):
+    def test_plural_item_without_argument_doubles_prose_percent(self):
+        result = convert_specifiers("30 % de plus", always_formatted=True)
+        self.assertEqual(result.text, "30 %% de plus")
+        self.assertTrue(result.formatted)
+
+    def test_plural_item_keeps_existing_escaped_percent(self):
+        self.assertEqual(convert_specifiers("100%%", always_formatted=True).text, "100%%")
+
+
 class MultipleSpecifiersTests(unittest.TestCase):
     def test_two_mixed_specifiers_become_positional_in_order(self):
         result = converted("%@ a envoyé %lld messages")
