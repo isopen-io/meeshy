@@ -21,7 +21,7 @@ import type { ContentPage } from './type';
  */
 export const PAGE_PRIVACY: ContentPage = {
   title: 'Politique de Confidentialité',
-  mention: 'Dernière mise à jour : 10 octobre 2026',
+  mention: 'Dernière mise à jour : 22 octobre 2026',
   description: 'Chez Meeshy, nous prenons votre vie privée au sérieux. Cette politique explique comment nous collectons, utilisons et protégeons vos informations personnelles conformément au RGPD.',
   mee: { sticker: 'mee-rougit', caption: 'Mee se cache les yeux : vos conversations ne regardent que vous.' },
   sections: [
@@ -355,6 +355,7 @@ export const PAGE_PRIVACY: ContentPage = {
       { label: 'À propos', href: '/about' },
       { label: 'Contact', href: '/contact' },
       { label: 'Partenaires', href: '/partners' },
+      { label: 'Sécurité des enfants', href: '/child-safety' },
     ],
   },
 };

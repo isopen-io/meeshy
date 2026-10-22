@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { PAGE_PRIVACY } from './privacy';
-import type { Block, Section } from './type';
+import { sectionText } from './text';
 
 /**
  * LA POLITIQUE DIT CE QUE DEVIENT LE CARNET D'ADRESSES (#8130).
@@ -12,28 +12,6 @@ import type { Block, Section } from './type';
  * exige chacune des cinq réponses — quoi, pourquoi, combien de temps, comment
  * l'effacer, et ce que Meeshy ne fait PAS à la place de l'utilisateur.
  */
-const blockText = (block: Block): string => {
-  switch (block.kind) {
-    case 'paragraphes':
-      return block.body.join(' ');
-    case 'list':
-      return block.items.join(' ');
-    case 'accent':
-      return block.body;
-    case 'encadre':
-      return block.rows.map((row) => row.text).join(' ');
-    case 'cartes':
-      return block.cards
-        .map((card) => [card.title, card.body ?? '', ...(card.items ?? [])].join(' '))
-        .join(' ');
-    case 'mee':
-      return block.views.map((view) => view.caption).join(' ');
-  }
-};
-
-const sectionText = (section: Section): string =>
-  [section.title, ...section.blocks.map(blockText)].join(' ');
-
 const addressBook = PAGE_PRIVACY.sections.find((section) => /carnet d'adresses/i.test(section.title));
 
 describe("Politique de confidentialité — le carnet d'adresses (#8130)", () => {
@@ -86,6 +64,7 @@ describe("Politique de confidentialité — le carnet d'adresses (#8130)", () =>
   });
 
   test('la date de mise à jour suit la modification', () => {
-    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 10 octobre 2026');
+    expect(PAGE_PRIVACY.mention).toBe('Dernière mise à jour : 22 octobre 2026');
   });
 });
+
