@@ -28,7 +28,7 @@ object VCardParser {
         if (begin < 0) return null
         val endRel = lines.drop(begin).indexOfFirst { it.uppercase() == "END:VCARD" }
         val end = if (endRel < 0) lines.size else begin + endRel
-        val properties = lines.subList(begin + 1, end).mapNotNull(Property::parse)
+        val properties = lines.subList(begin + 1, end).mapNotNull { Property.parse(it) }
         val card = build(properties)
         return card.takeUnless { it.isEmpty }
     }
