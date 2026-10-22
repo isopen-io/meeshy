@@ -1,0 +1,19 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="onboarding_gauge_level1">%1$d / %2$d sparks to reach level 1</string>
+    <string name="onboarding_gauge_reached">Level 1 reached 🎉</string>
+    <plurals name="onboarding_points_a11y">
+        <item quantity="one">%d spark earned</item>
+        <item quantity="other">%d sparks earned</item>
+    </plurals>
+    <plurals name="onboarding_points_pill">
+        <item quantity="one">%d spark</item>
+        <item quantity="other">%d sparks</item>
+    </plurals>
+    <string name="onboarding_progress_a11y">Step %1$d of %2$d</string>
+    <plurals name="onboarding_reward_announce">
+        <item quantity="one">Plus %d spark</item>
+        <item quantity="other">Plus %d sparks</item>
+    </plurals>
+    <string name="onboarding_skipAll">Skip all</string>
+</resources>
