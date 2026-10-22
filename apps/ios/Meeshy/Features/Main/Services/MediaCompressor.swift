@@ -461,6 +461,19 @@ actor MediaCompressor {
 
 // MARK: - Une passe d'encodage (#11290, #11849)
 
+/// Ce qu'un rendu écrit : la copie GARDÉE par l'utilisateur (définition de la
+/// source, plafond de sauvegarde) ou l'ENVOI (budget du contexte).
+nonisolated struct VideoRenderTarget: Equatable, Sendable {
+    let maxSize: CGSize?
+    let bitRateCeiling: Int?
+
+    static let sourceDefinition = VideoRenderTarget(maxSize: nil, bitRateCeiling: nil)
+
+    static func sending(_ context: MediaContext) -> VideoRenderTarget {
+        VideoRenderTarget(maxSize: context.maxVideoResolution, bitRateCeiling: context.videoBitRate)
+    }
+}
+
 /// **La passe UNIQUE entre un lecteur et un écrivain**, partagée par la
 /// compression (`MediaCompressor.compressVideo`) et le rendu d'une retouche
 /// (`ComposerLookVideoExporter`). Les réglages viennent de `VideoTranscodeRecipe` ;
@@ -473,22 +486,24 @@ nonisolated enum VideoEncodePass {
         let input: AVAssetWriterInput
     }
 
-    /// **Une retouche (look, cadrage, son réglé) s'encode UNE fois** (#11849).
+    /// **Une retouche (look, cadrage, son réglé) s'encode UNE fois par fichier** (#11849).
     ///
     /// La composition est lue image par image (`AVAssetReaderVideoCompositionOutput`)
     /// et le mixage avec elle (`AVAssetReaderAudioMixOutput`, tap d'amplification
-    /// compris), puis écrite au plafond de `context` par la loi des réglages : HEVC
-    /// à qualité visée, définition ramenée au budget. Ce fichier entre ensuite dans
-    /// `compressVideo` sans dépasser son budget : il y est REMUXÉ, pas ré-encodé.
+    /// compris), puis écrite par la loi des réglages, HEVC à qualité visée, pour
+    /// `target` : la copie de l'utilisateur garde la définition de la source,
+    /// l'envoi suit son budget et entre dans `compressVideo` pour y être REMUXÉ.
     /// Avant, l'export passait par `AVAssetExportPresetHighestQuality` puis
     /// `compressVideo` ré-encodait : deux générations.
     static func render(_ asset: AVAsset, composition: AVVideoComposition, audioMix: AVAudioMix?,
-                       timeRange: CMTimeRange?, metadata: [AVMetadataItem], context: MediaContext) async throws -> URL {
+                       timeRange: CMTimeRange?, metadata: [AVMetadataItem], target: VideoRenderTarget) async throws -> URL {
         let videoTracks = try await asset.loadTracks(withMediaType: .video)
         guard let first = videoTracks.first else { throw CompressionError.noVideoTrack }
         let audioTracks = try await asset.loadTracks(withMediaType: .audio)
-        let recipe = VideoTranscodeRecipe(source: try await traits(of: composition, video: first, audio: audioTracks.first),
-                                          bitRateCeiling: context.videoBitRate,
+        let source = try await traits(of: composition, video: first, audio: audioTracks.first)
+        let size = outputSize(of: composition.renderSize, for: target)
+        let recipe = VideoTranscodeRecipe(source: source,
+                                          bitRateCeiling: bitRateCeiling(for: target, size: size, frameRate: source.nominalFrameRate),
                                           encodesHEVC: VideoEncoderAvailability.encodesHEVC)
 
         let sortie = FileManager.default.temporaryDirectory.appendingPathComponent("video_look_\(UUID().uuidString).mov")
@@ -496,7 +511,6 @@ nonisolated enum VideoEncodePass {
         let writer = try AVAssetWriter(outputURL: sortie, fileType: .mov)
         writer.shouldOptimizeForNetworkUse = true
         writer.metadata = metadata
-        let size = fitSize(composition.renderSize, within: context.maxVideoResolution)
         let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: videoSettings(recipe, size: size, for: writer))
         videoInput.expectsMediaDataInRealTime = false
         writer.add(videoInput)
@@ -522,6 +536,19 @@ nonisolated enum VideoEncodePass {
             throw error
         }
         return sortie
+    }
+
+    /// La définition écrite : celle de la toile pour la copie gardée, ramenée au
+    /// budget pour l'envoi — jamais agrandie, toujours paire.
+    static func outputSize(of canvas: CGSize, for target: VideoRenderTarget) -> CGSize {
+        fitSize(canvas, within: target.maxSize ?? canvas)
+    }
+
+    /// Le débit d'envoi borne l'envoi ; la copie gardée n'a qu'un plafond de
+    /// sauvegarde proportionnel à sa définition (`archivalCeiling`).
+    static func bitRateCeiling(for target: VideoRenderTarget, size: CGSize, frameRate: Float) -> Int {
+        target.bitRateCeiling ?? VideoTranscodeRecipe.archivalCeiling(width: Int(size.width), height: Int(size.height),
+                                                                      frameRate: frameRate)
     }
 
     /// La composition ÉMET ses propres couleurs : c'est elles que l'encodeur

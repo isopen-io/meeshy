@@ -308,9 +308,9 @@ extension ComposerCaptureSession {
             let rendue = await ComposerLookVideoExporter.export(url, look: regard, aspect: proportions,
                                                                  person: auteur, date: date,
                                                                  declaredSpaceName: espace)
-            guard let rendue else { return }
-            let enregistree = await ComposerCaptureSession.writeVideo(rendue, original: url, originalInLibrary: brut != nil,
-                                                                      gallery: galerie)
+            guard let rendue = rendue?.gallery else { return }
+            let enregistree = await ComposerVideoGalleryCopy.write(rendue, original: url, originalInLibrary: brut != nil,
+                                                                   gallery: galerie)
             if rendue != url {
                 FileManager.default.removeItemLogging(at: rendue, context: "rendu enregistré en galerie",
                                                       logger: .media)
@@ -318,18 +318,6 @@ extension ComposerCaptureSession {
             guard enregistree else { return }
             FeedbackToastManager.shared.showSuccess(ComposerCaptureCopy.savedToPhotos)
         }
-    }
-
-    /// **Le chemin UNIQUE d'une vidéo vers Photos** (#9684) — miniature, flèche
-    /// ⬇︎ et « Terminé ». Un rendu distinct s'écrit ; un rendu identique à
-    /// l'original ne s'écrit que si l'original n'y est pas déjà — un FAIT de la
-    /// prise (son brut écrit par la caméra, `editRawSave`), jamais une lecture du
-    /// réglage : un segment assemblé à d'autres n'est pas le brut écrit, et une
-    /// écriture refusée n'a rien mis dans Photos. `true` : la prise est dans Photos.
-    static func writeVideo(_ rendue: URL, original: URL, originalInLibrary: Bool,
-                           gallery: any ComposerGalleryProviding) async -> Bool {
-        guard rendue != original || !originalInLibrary else { return true }
-        return await gallery.saveVideo(at: rendue)
     }
 
     /// Le fichier temporaire part — une fois le brut lu par la galerie.
