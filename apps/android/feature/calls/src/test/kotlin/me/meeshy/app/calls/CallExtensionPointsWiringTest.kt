@@ -149,6 +149,7 @@ class CallExtensionPointsWiringTest {
             toasts = CallToastBus(clock),
             videoHealth = videoHealth,
         ),
+        io.mockk.mockk(relaxed = true),
     )
 
     @Test

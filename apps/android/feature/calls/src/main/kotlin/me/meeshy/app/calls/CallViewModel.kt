@@ -54,6 +54,7 @@ class CallViewModel @Inject constructor(
     private val analytics: CallAnalyticsController,
     /** The seams capabilities plug into; the call screen reads the UI ones from here. */
     val extensions: CallExtensionPoints,
+    private val ongoing: CallOngoingController,
 ) : ViewModel() {
 
     /** The local user id used as the `from` on every outbound WebRTC signal. */
@@ -117,6 +118,7 @@ class CallViewModel @Inject constructor(
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
+        ongoing.attach(viewModelScope, state, hangUp = ::hangUp, toggleMute = ::toggleMute)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
         }
@@ -383,6 +385,7 @@ class CallViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        ongoing.detach()
         toneController.release()
         telecomReporter.release()
         extensions.controllers.notifyCleared()
