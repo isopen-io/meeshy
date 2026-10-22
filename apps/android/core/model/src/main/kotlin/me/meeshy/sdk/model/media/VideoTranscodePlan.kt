@@ -81,7 +81,7 @@ public object VideoTranscodePlanner {
         return modern && fits && light
     }
 
-    private fun transcode(source: VideoSourceInfo, budget: VideoBudget, hardwareHevc: Boolean): VideoTranscodePlan {
+    public fun transcode(source: VideoSourceInfo, budget: VideoBudget, hardwareHevc: Boolean): VideoTranscodePlan.Transcode {
         val (width, height) = fit(source.displayWidth, source.displayHeight, budget)
         return VideoTranscodePlan.Transcode(
             codec = if (hardwareHevc) VideoTargetCodec.HEVC else VideoTargetCodec.H264,
