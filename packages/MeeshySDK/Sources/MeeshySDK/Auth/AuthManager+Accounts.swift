@@ -326,7 +326,7 @@ extension AuthManager {
 
         APIClient.shared.authToken = token
         // Le jeton de session suit le JWT (#4213).
-        APIClient.shared.registeredSessionToken = currentSessionToken
+        APIClient.shared.registeredSessionToken = sessionToken
         sessionOrigin = .restored
         // #8674 — sans effet quand le cache est déjà le sien (démarrage à
         // froid, changement de compte qui l'a déjà rendu).
@@ -336,7 +336,7 @@ extension AuthManager {
 
         // Proactive refresh, detached: a slow network must never hold the
         // splash hostage (APIClient's reactive 401-refresh covers the rest).
-        if isCurrentTokenExpired, sessionToken != nil, NetworkMonitor.shared.isOnline {
+        if Self.isTokenExpired(token, now: Date()), sessionToken != nil, NetworkMonitor.shared.isOnline {
             Task { [weak self] in
                 do {
                     _ = try await self?.refreshSession(force: false)
@@ -429,8 +429,11 @@ extension AuthManager {
         persistSavedAccounts()
     }
 
-    /// Update lastActiveAt without resetting the token saved-at date.
+    /// Update lastActiveAt without resetting the token saved-at date. Rien n'est réécrit quand le
+    /// compte est déjà en tête sous la même identité : l'ordre est acquis (#11558).
     func updateSavedAccountActivity(from user: MeeshyUser) {
+        if let head = savedAccounts.first, head.id == user.id, head.username == user.username,
+           head.displayName == user.displayName, head.avatarURL == user.avatar { return }
         upsertSavedAccount(from: user)
     }
 
