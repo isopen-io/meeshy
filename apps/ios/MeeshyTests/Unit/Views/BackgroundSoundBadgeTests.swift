@@ -20,6 +20,7 @@ import SwiftUI
 /// caractères fixe (`MyStoriesSourceCorpus`, déjà comment-strippée). Le
 /// texte du crédit, lui, est une fonction PURE (`creditText`) — testée
 /// directement, sans détour par la vue.
+@MainActor
 final class BackgroundSoundBadgeTests: XCTestCase {
 
     private func source() throws -> String {

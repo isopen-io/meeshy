@@ -229,4 +229,78 @@ final class ImagerAccessTests: XCTestCase {
             XCTAssertNil(MessageCardExportMenu.request(comment: comment, showOriginal: false, accentColor: "#6366F1", viewer: viewer(), handle: nil), "\(flag)")
         }
     }
+
+    // MARK: - Le média de tête d'un commentaire de post (#11783)
+
+    private static let headPhoto = FeedMedia(id: "pic", type: .image, url: "https://x/p.jpg", width: 1600, height: 900)
+    private static let headClip = FeedMedia(id: "vid", type: .video, url: "https://x/v.mp4", thumbnailUrl: "https://x/v.jpg", width: 1080, height: 1920)
+    private static let headVoice = FeedMedia(
+        id: "aud", type: .audio, url: "https://x/a-fr.m4a", duration: 5,
+        transcription: MessageTranscription(attachmentId: "aud", text: "Bonjour", language: "fr", confidence: 0.9, durationMs: 5_000, segments: []),
+        translatedAudios: [MessageTranslatedAudio(id: "ta", attachmentId: "aud", targetLanguage: "en", url: "https://x/a-en.m4a",
+                                                  transcription: "Hello", durationMs: 4_000, format: "m4a", cloned: false,
+                                                  quality: 0.9, ttsModel: "chatterbox", segments: [])]
+    )
+
+    private func supportPost(_ media: [FeedMedia], visibility: String = "PUBLIC") -> FeedPost {
+        var post = FeedPost(id: "p", author: "Awa", authorId: "awa", authorUsername: "awa", type: "POST",
+                            content: "Coucher de soleil", timestamp: Date(), media: media, originalLanguage: "fr")
+        post.visibility = visibility
+        return post
+    }
+
+    private func postComment() -> FeedComment {
+        FeedComment(id: "c", author: "Bob", authorId: "bob", authorUsername: "bob", content: "Magnifique", timestamp: Date())
+    }
+
+    private func composition(_ post: FeedPost, prism: [String] = []) throws -> MessageCardCommentComposition {
+        let request = try XCTUnwrap(MessageCardExportMenu.request(post: post, comment: postComment(), thread: [], showOriginal: false,
+                                                                  accentColor: "#6366F1", viewer: viewer(), handle: "moi", audioPrism: prism))
+        return try XCTUnwrap(request.composition)
+    }
+
+    func test_postComment_offersEachMediaOfThePostForTheHead_andPaintsTheChosenOne() throws {
+        let composition = try composition(supportPost([Self.headPhoto, Self.headClip, Self.headVoice]))
+        XCTAssertEqual(composition.headMedia.map(\.media.id), ["pic", "vid", "aud"])
+        XCTAssertTrue(composition.offersHeadChoice)
+        XCTAssertEqual(composition.defaultHeadMediaID, "pic")
+        XCTAssertEqual(composition.subject(mode: .postAndComment, showsPost: true, chosen: [])?.heroID, "pic")
+        XCTAssertEqual(composition.subject(mode: .postAndComment, showsPost: true, chosen: [], headMediaID: "vid")?.heroID, "vid")
+        let sound = composition.subject(mode: .postAndComment, showsPost: true, chosen: [], headMediaID: "aud")
+        XCTAssertNil(sound?.heroID)
+        XCTAssertEqual(sound?.media.first?.media.kind, .audio)
+    }
+
+    func test_postComment_theHeadPickerShows_onlyWhenThePostIsOnTop_andHasSeveralMedia() throws {
+        let several = try composition(supportPost([Self.headPhoto, Self.headClip]))
+        XCTAssertTrue(MessageCardCompositionBar.showsHeadPicker(offersHeadChoice: several.offersHeadChoice, showsPost: true))
+        XCTAssertFalse(MessageCardCompositionBar.showsHeadPicker(offersHeadChoice: several.offersHeadChoice, showsPost: false))
+        let single = try composition(supportPost([Self.headPhoto]))
+        XCTAssertFalse(single.offersHeadChoice)
+        XCTAssertFalse(MessageCardCompositionBar.showsHeadPicker(offersHeadChoice: single.offersHeadChoice, showsPost: true))
+    }
+
+    func test_postComment_aFriendsPost_saysItsAudienceWithholdsIt() throws {
+        let composition = try composition(supportPost([Self.headPhoto], visibility: "FRIENDS"))
+        XCTAssertEqual(composition.modes, [.commentAlone])
+        XCTAssertTrue(composition.withheldByAudience)
+        XCTAssertTrue(composition.showsBar, "la feuille DIT pourquoi le média manque")
+        XCTAssertTrue(composition.headMedia.isEmpty)
+        XCTAssertFalse(MessageCardCommentComposition.withheldNotice.isEmpty)
+    }
+
+    func test_postComment_aPublicPost_saysNothingAboutItsAudience() throws {
+        XCTAssertFalse(try composition(supportPost([Self.headPhoto])).withheldByAudience)
+    }
+
+    func test_postComment_theSoundOfThePostHeadsInTheTrackTheReaderHears() throws {
+        let composition = try composition(supportPost([Self.headVoice]), prism: ["en", "fr"])
+        let subject = try XCTUnwrap(composition.subject(mode: .postAndComment, showsPost: true, chosen: []))
+        XCTAssertEqual(subject.media.first?.fileURL, "https://x/a-en.m4a", "le Prisme du lecteur sert la piste anglaise du son du post")
+    }
+
+    func test_postComment_aHeadMediaIsNamedByItsKindAndPosition() {
+        XCTAssertFalse(MessageCardCommentComposition.headLabel(of: .image, position: 1).isEmpty)
+        XCTAssertTrue(MessageCardCommentComposition.headLabel(of: .audio, position: 3).contains("3"))
+    }
 }

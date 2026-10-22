@@ -17,6 +17,7 @@ import XCTest
 /// `entryStory(of:)` est `static` (aucune dépendance à `self`/`@State`) —
 /// testable directement sans instancier la View, pattern déjà établi dans ce
 /// repo pour `StoryViewerView.computeLikedIds`/`viewerLanguageChain`.
+@MainActor
 final class StoryViewerNeighborEntryTests: XCTestCase {
 
     private let referenceNow = Date(timeIntervalSince1970: 1_800_000_000)

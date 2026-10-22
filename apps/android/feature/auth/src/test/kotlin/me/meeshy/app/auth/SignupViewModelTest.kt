@@ -60,7 +60,7 @@ class SignupViewModelTest {
         val captured: MutableList<RegisterRequest> = mutableListOf(),
         val availabilityCalls: MutableList<Triple<String?, String?, String?>> = mutableListOf(),
     ) : AuthApi {
-        override suspend fun login(body: LoginRequest) = ApiResponse<AuthSession>(success = false)
+        override suspend fun login(body: LoginRequest) = ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
         override suspend fun register(body: RegisterRequest): ApiResponse<RegisterResponse> {
             captured += body
             registerFailure?.let { throw it }
@@ -85,7 +85,7 @@ class SignupViewModelTest {
         override suspend fun revokeSession(sessionId: String) = ApiResponse<Unit>(success = true)
         override suspend fun revokeOtherSessions() = ApiResponse<Unit>(success = true)
         override suspend fun validateMagicLink(body: me.meeshy.sdk.net.api.MagicLinkValidateRequest) =
-            ApiResponse<AuthSession>(success = false)
+            ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
         override suspend fun getTwoFactorStatus() =
             ApiResponse<me.meeshy.sdk.net.api.TwoFactorStatusInfo>(success = false)
         override suspend fun beginTwoFactorSetup() =
@@ -96,6 +96,37 @@ class SignupViewModelTest {
             ApiResponse<Unit>(success = true)
         override suspend fun regenerateTwoFactorBackupCodes(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
             ApiResponse<me.meeshy.sdk.net.api.TwoFactorBackupCodesInfo>(success = false)
+        override suspend fun completeLoginWith2FA(body: me.meeshy.sdk.model.auth.TwoFactorLoginRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
+        override suspend fun verifyEmail(body: me.meeshy.sdk.model.auth.EmailVerificationRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.LoginResponse>(success = false)
+        override suspend fun resendVerification(body: me.meeshy.sdk.model.auth.ResendVerificationRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun verificationStatus(body: me.meeshy.sdk.model.auth.VerificationStatusRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.VerificationStatusData>(success = false)
+        override suspend fun verifyResetToken(body: me.meeshy.sdk.model.auth.ResetTokenVerificationRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.ResetTokenVerification>(success = false)
+        override suspend fun resetPassword(body: me.meeshy.sdk.model.auth.ResetPasswordRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun phoneRecoveryLookup(body: me.meeshy.sdk.model.auth.PhoneRecoveryLookupRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryLookupData>(success = false)
+        override suspend fun phoneRecoveryVerifyIdentity(body: me.meeshy.sdk.model.auth.PhoneRecoveryIdentityRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryIdentityData>(success = false)
+        override suspend fun phoneRecoveryVerifyCode(body: me.meeshy.sdk.model.auth.PhoneRecoveryCodeRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.PhoneRecoveryCodeData>(success = false)
+        override suspend fun phoneRecoveryResend(body: me.meeshy.sdk.model.auth.PhoneRecoveryResendRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun sendPhoneCode(body: me.meeshy.sdk.model.auth.SendPhoneCodeRequest) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun verifyPhone(body: me.meeshy.sdk.model.auth.VerifyPhoneRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.VerifyPhoneData>(success = false)
+        override suspend fun logout(authorization: String?, sessionToken: String?) =
+            ApiResponse<Unit>(success = true)
+        override suspend fun verifyTwoFactor(body: me.meeshy.sdk.net.api.TwoFactorCodeRequest) =
+            ApiResponse<me.meeshy.sdk.model.auth.TwoFactorVerifyResult>(success = false)
+        override suspend fun cancelTwoFactorSetup() = ApiResponse<Unit>(success = true)
+        override suspend fun meSecurity(fields: String, expand: String) =
+            ApiResponse<me.meeshy.sdk.model.auth.MeSecurityEnvelope>(success = false)
     }
 
     /** Locale déterministe — les deux `null` conduisent au repli du cœur (fr / en / pays prioritaire). */

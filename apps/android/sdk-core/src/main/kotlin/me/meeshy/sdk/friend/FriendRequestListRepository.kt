@@ -27,6 +27,14 @@ import javax.inject.Singleton
  * **cold** cache (never synced); an empty list is a **synced-but-empty**
  * roster — the two are distinguished by `sync_meta` per direction so the UI
  * shows a skeleton only on the former.
+ *
+ * What is persisted is the FIRST page of PENDING requests per direction, as
+ * [FriendRepository.pendingRequests] serves it by cursor (most recent first,
+ * order kept by `sortIndex`): later pages are read on demand and never cached,
+ * so a cold start replays exactly what the top of the tab shows. A request's
+ * people ride with it, including the avatar ring they equipped
+ * (`FriendRequestUser.profileDecor`); rows cached before that field existed
+ * replay with no ring.
  */
 @Singleton
 class FriendRequestListRepository @Inject constructor(

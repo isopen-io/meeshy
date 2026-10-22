@@ -2,8 +2,10 @@ import { useMemo, useState, type ComponentProps } from 'react';
 
 import {
   postCommentCardChoosable,
+  postCommentCardHeadMedia,
   postCommentCardModes,
   postCommentCardOffersPost,
+  postCommentCardWithheldByAudience,
   type PostCommentCardComment,
 } from '@meeshy/shared/utils/comment-card-composition';
 
@@ -22,7 +24,7 @@ import {
 import { translateExportCard } from '@/lib/i18n-export-card-catalog';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 
-import { CommentComposeBar } from './comment-compose-bar';
+import { CommentComposeBar, type ComposeHeadChoice } from './comment-compose-bar';
 import { ExportCatalogGate } from './export-catalog-gate';
 import { MessageExportSheet } from './thread-export-sheet';
 
@@ -66,6 +68,12 @@ type SheetProps = { readonly handle: string | null; readonly onClose: () => void
 
 const REPLY_EXCERPT = 24;
 
+/** La vignette d'un média de tête : la photo, la première image d'une vidéo ; un son n'en a pas (#11783). */
+const headChoiceOf = (entry: PostCommentCardEntry): ComposeHeadChoice => ({
+  kind: entry.kind,
+  thumbnail: entry.kind === 'audio' ? null : (entry.item.posterUrl ?? (entry.kind === 'image' ? entry.item.url : null)),
+});
+
 const replyLabelOf = (comment: PostCommentCardComment<PostCommentCardEntry>): string => {
   const name = comment.author.displayName?.trim() || comment.author.username?.trim() || 'Meeshy';
   const flat = comment.text.replace(/\s+/g, ' ').trim();
@@ -91,7 +99,7 @@ function ComposedCommentImage({ request, composition, handle, onClose, announce,
   const [pick, setPick] = useState(NO_POST_COMMENT_PICK);
   const choice = postCommentChoiceOf(source, pick);
   const chosenKey = choice === null ? '' : [...choice.chosen].sort().join(',');
-  const subjectKey = choice === null ? '' : `${choice.mode}|${choice.showsPost}|${chosenKey}|${source.thread.map((comment) => comment.id).join(',')}`;
+  const subjectKey = choice === null ? '' : `${choice.mode}|${choice.showsPost}|${chosenKey}|${choice.headMediaIndex}|${source.thread.map((comment) => comment.id).join(',')}`;
   const subject = useMemo(
     () =>
       choice === null
@@ -105,6 +113,7 @@ function ComposedCommentImage({ request, composition, handle, onClose, announce,
   if (choice === null || subject === null) return null;
   const act = (action: PostCommentPickAction) => setPick((current) => postCommentPickAfter(source, current, action));
   const offersPostToggle = source.target.parentId !== null && postCommentCardOffersPost(source);
+  const headMedia = postCommentCardHeadMedia(source);
   const bar = (
     <CommentComposeBar
       language={language}
@@ -114,6 +123,8 @@ function ComposedCommentImage({ request, composition, handle, onClose, announce,
       postToggle={offersPostToggle ? { pressed: choice.showsPost, onToggle: () => act({ kind: 'togglePost' }) } : null}
       replies={choice.mode === 'chosenReplies' ? { choices: postCommentCardChoosable(source).map((comment) => ({ id: comment.id, label: replyLabelOf(comment) })), chosen: choice.chosen } : null}
       onReply={(id) => act({ kind: 'reply', id })}
+      heads={headMedia.length > 1 && choice.showsPost ? { choices: headMedia.map(headChoiceOf), selected: choice.headMediaIndex, onPick: (index) => act({ kind: 'head', index }) } : null}
+      withheld={postCommentCardWithheldByAudience(source)}
     />
   );
   return (

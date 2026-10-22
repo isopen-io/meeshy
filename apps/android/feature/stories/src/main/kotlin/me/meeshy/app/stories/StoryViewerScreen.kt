@@ -99,6 +99,7 @@ import me.meeshy.feature.stories.R
 import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StorySlideDuration
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.scene.StoryTextBackground
 import me.meeshy.ui.component.EmojiFullPicker
 import me.meeshy.ui.component.EmojiQuickStrip
 import me.meeshy.ui.component.LanguageQuickOption

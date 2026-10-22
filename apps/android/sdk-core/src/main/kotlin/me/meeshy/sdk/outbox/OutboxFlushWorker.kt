@@ -11,46 +11,15 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkerParameters
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.serialization.json.Json
-import me.meeshy.sdk.conversation.MessageMediaWriteBack
-import me.meeshy.sdk.conversation.MessageRepository
-import me.meeshy.sdk.friend.BlockCache
-import me.meeshy.sdk.friend.FriendRepository
-import me.meeshy.sdk.friend.FriendRequestDelivery
-import me.meeshy.sdk.friend.FriendRequestSend
-import me.meeshy.sdk.friend.FriendshipCache
-import me.meeshy.sdk.media.MediaBlobStore
-import me.meeshy.sdk.media.MediaRepository
-import me.meeshy.sdk.media.MediaUploadSender
-import me.meeshy.sdk.media.TusUploadRepository
-import me.meeshy.sdk.model.NotificationPreferenceSyncBody
-import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
-import me.meeshy.sdk.model.SendMessageRequest
-import me.meeshy.sdk.model.UpdateProfileRequest
-import me.meeshy.sdk.model.media.TusUploadContext
-import me.meeshy.sdk.net.NetworkResult
-import me.meeshy.sdk.net.api.AddReactionRequest
-import me.meeshy.sdk.net.api.BlockApi
-import me.meeshy.sdk.net.api.ConversationApi
-import me.meeshy.sdk.net.api.ConversationPreferencesUpdate
-import me.meeshy.sdk.net.api.CreateStoryRequest
-import me.meeshy.sdk.net.api.EditMessageRequest
-import me.meeshy.sdk.net.api.MessageApi
-import me.meeshy.sdk.net.api.PostApi
-import me.meeshy.sdk.net.api.PreferencesApi
-import me.meeshy.sdk.net.api.ReactionApi
-import me.meeshy.sdk.net.apiCall
-import me.meeshy.sdk.post.PostRepository
-import me.meeshy.sdk.session.SessionRepository
-import me.meeshy.sdk.story.PublishMediaWriteBack
-import me.meeshy.sdk.user.UserRepository
-import timber.log.Timber
 import java.util.concurrent.TimeUnit
 
 /**
  * WorkManager worker that drains all outbox lanes (ARCHITECTURE.md §5; ADR-006).
  *
  * Runs on every network reconnect and after any [OutboxRepository.enqueue] call.
+ * It is thin glue: delivery, exhaustion rollbacks and upload write-backs all live in
+ * the per-kind handlers the [MutationSenderRegistry] gathers (see [OutboxKindKey]), so
+ * adding a mutation kind never edits this class.
  * Each lane drains independently; a transient failure in one lane does not block others.
  * Exponential backoff is handled by WorkManager if [Result.retry] is returned.
  */
@@ -59,303 +28,19 @@ class OutboxFlushWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val outboxRepository: OutboxRepository,
-    private val messageRepository: MessageRepository,
-    private val messageApi: MessageApi,
-    private val reactionApi: ReactionApi,
-    private val conversationApi: ConversationApi,
-    private val postApi: PostApi,
-    private val mediaRepository: MediaRepository,
-    private val tusUploadRepository: TusUploadRepository,
-    private val mediaBlobStore: MediaBlobStore,
-    private val blockApi: BlockApi,
-    private val preferencesApi: PreferencesApi,
-    private val blockCache: BlockCache,
-    private val friendRepository: FriendRepository,
-    private val friendshipCache: FriendshipCache,
-    private val userRepository: UserRepository,
-    private val sessionRepository: SessionRepository,
-    private val postRepository: PostRepository,
-    private val json: Json,
+    private val registry: MutationSenderRegistry,
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         outboxRepository.recoverInflight()
 
-        val senders = buildSenders()
-        val drainer = OutboxDrainer(
-            outboxRepository,
-            senders,
-            onExhausted = { row ->
-                when (row.kindEnum) {
-                    OutboxKind.SEND_MESSAGE -> messageRepository.markSendFailed(row.cmid)
-                    OutboxKind.UPLOAD_MEDIA -> mediaBlobStore.remove(row.cmid)
-                    // A hard-exhausted block/unblock rolls the optimistic SSOT flip
-                    // back so the blocklist re-hydrates truthfully on next load.
-                    OutboxKind.BLOCK_USER -> blockCache.setBlocked(row.targetId, blocked = false)
-                    OutboxKind.UNBLOCK_USER -> blockCache.setBlocked(row.targetId, blocked = true)
-                    // A hard-exhausted friend request rolls the optimistic pending
-                    // entry back so the connect button re-offers on next resolve.
-                    OutboxKind.SEND_FRIEND_REQUEST -> friendshipCache.rollbackSendRequest(row.targetId)
-                    // A hard-exhausted profile edit reverts the optimistic paint to
-                    // the gateway's truth so the identity never drifts from the server.
-                    OutboxKind.UPDATE_PROFILE -> sessionRepository.refresh()
-                    // A hard-exhausted pin/unpin refreshes the conversation so the
-                    // optimistic pinnedAt flip is reconciled with the server truth.
-                    OutboxKind.PIN_MESSAGE, OutboxKind.UNPIN_MESSAGE ->
-                        runCatching { json.decodeFromString<PinPayload>(row.payload) }
-                            .getOrNull()
-                            ?.let { messageRepository.refresh(it.conversationId) }
-                    // A hard-exhausted like/bookmark rolls the optimistic flip back to
-                    // the state it was in before this row was enqueued.
-                    OutboxKind.LIKE_POST -> postRepository.rollbackLike(row.targetId, liked = false)
-                    OutboxKind.UNLIKE_POST -> postRepository.rollbackLike(row.targetId, liked = true)
-                    OutboxKind.BOOKMARK_POST -> postRepository.rollbackBookmark(row.targetId, bookmarked = false)
-                    OutboxKind.UNBOOKMARK_POST -> postRepository.rollbackBookmark(row.targetId, bookmarked = true)
-                    else -> Unit
-                }
-            },
-            // A delivered upload's real id must reach both dependent shapes: a
-            // still-queued chat send (attachmentIds) and a story publish (mediaIds).
-            // Each graft owns one payload shape and declines the other, so order is
-            // immaterial (see OutboxPayloadGrafts).
-            graftProducedId = OutboxPayloadGrafts.firstOf(
-                MessageMediaWriteBack::graft,
-                PublishMediaWriteBack::graft,
-            ),
-        )
-
-        // Derived from the kind→lane SSOT so a registered sender can never be
-        // stranded on an undrained lane (see OutboxLaneMap).
-        val lanes = OutboxLaneMap.sharedDrainLanes
-
-        val reports = mutableListOf<DrainReport>()
-
-        // Drain per-conversation message lanes. Lane ids are dynamic (only known at enqueue
-        // time), so they are discovered via activeMessageLanes() rather than enumerated like
-        // the fixed shared lanes below.
-        val messageLanes = outboxRepository.activeMessageLanes()
-        for (lane in messageLanes) {
-            val report = drainer.drainLane(lane)
-            Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
-            reports += report
-        }
-
-        // Drain shared lanes
-        for (lane in lanes) {
-            val report = drainer.drainLane(lane)
-            Timber.d("OutboxFlush lane=$lane delivered=${report.delivered} exhausted=${report.exhausted}")
-            reports += report
-        }
+        val reports = registry.drainAll(outboxRepository)
 
         return when (OutboxFlushPlan.outcome(reports)) {
             FlushOutcome.RETRY -> Result.retry()
             FlushOutcome.SUCCESS -> Result.success()
         }
     }
-
-    private fun buildSenders(): Map<OutboxKind, MutationSender> = mapOf(
-        OutboxKind.SEND_MESSAGE to MutationSender { row ->
-            val req = runCatching { json.decodeFromString<SendMessageRequest>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (val result = apiCall { messageApi.send(row.targetId, req) }) {
-                is NetworkResult.Success -> {
-                    messageRepository.reconcileSent(row.cmid, result.data)
-                    SendResult.Success
-                }
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.EDIT_MESSAGE to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<EditMessageRequest>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.edit(row.targetId, body) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.DELETE_MESSAGE to MutationSender { row ->
-            when (apiCall { messageApi.delete(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.ADD_REACTION to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<ReactionPayload>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { reactionApi.add(AddReactionRequest(messageId = row.targetId, emoji = body.emoji)) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.REMOVE_REACTION to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<ReactionPayload>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { reactionApi.remove(row.targetId, body.emoji) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.READ_RECEIPT to MutationSender { row ->
-            when (apiCall { conversationApi.markRead(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.MARK_UNREAD to MutationSender { row ->
-            when (apiCall { conversationApi.markUnread(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UPDATE_CONVERSATION_PREFS to MutationSender { row ->
-            val prefs = runCatching { json.decodeFromString<ConversationPrefsPayload>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            val body = ConversationPreferencesUpdate(
-                isPinned = prefs.isPinned,
-                isMuted = prefs.isMuted,
-                isArchived = prefs.isArchived,
-                mentionsOnly = prefs.mentionsOnly,
-                categoryId = prefs.categoryId,
-                customName = prefs.customName,
-                reaction = prefs.reaction,
-                tags = prefs.tags,
-            )
-            when (apiCall { conversationApi.updatePreferences(row.targetId, body) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.PUBLISH_STORY to MutationSender { row ->
-            val req = runCatching { json.decodeFromString<CreateStoryRequest>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (val result = apiCall { postApi.createStory(req) }) {
-                is NetworkResult.Success -> {
-                    // The story now has its server id: every like / bookmark that waited on the
-                    // `pending_` handle is re-addressed to it and leaves the hold.
-                    runCatching { outboxRepository.resolveLocalId(row.targetId, result.data.id) }
-                    SendResult.Success
-                }
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UPLOAD_MEDIA to MutationSender { row ->
-            val item = mediaBlobStore.get(row.cmid)
-            // A blank payload (every row enqueued before MediaUploadPayload existed,
-            // and every still-legacy chat-attachment enqueue) means "no TUS context" —
-            // not a decode failure, so it is not routed through the PermanentFailure
-            // path the other kinds use for a genuinely malformed payload.
-            val context = row.payload.takeIf { it.isNotBlank() }
-                ?.let { runCatching { json.decodeFromString<MediaUploadPayload>(it) }.getOrNull() }
-                ?.uploadContext
-                ?.let { TusUploadContext.fromWire(it) }
-            val result = if (context != null) {
-                MediaUploadSender.send(item) { tusUploadRepository.upload(it, context) }
-            } else {
-                MediaUploadSender.send(item) { mediaRepository.upload(listOf(it)) }
-            }
-            if (result !is SendResult.TransientFailure) {
-                mediaBlobStore.remove(row.cmid)
-            }
-            result
-        },
-        OutboxKind.BLOCK_USER to MutationSender { row ->
-            when (apiCall { blockApi.block(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UNBLOCK_USER to MutationSender { row ->
-            when (apiCall { blockApi.unblock(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UPDATE_PROFILE to MutationSender { row ->
-            val req = runCatching { json.decodeFromString<UpdateProfileRequest>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (val result = userRepository.updateProfile(req)) {
-                is NetworkResult.Success -> {
-                    // Reconcile the optimistic paint with the server-authoritative user
-                    // (server may normalise names / derive fields the local merge cannot).
-                    sessionRepository.adopt(result.data)
-                    SendResult.Success
-                }
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UPDATE_SETTINGS to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<NotificationPreferenceSyncBody>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { preferencesApi.updateNotification(body) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UPDATE_PRIVACY_SETTINGS to MutationSender { row ->
-            val body = runCatching { json.decodeFromString<PrivacyPreferenceSyncBody>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { preferencesApi.updatePrivacy(body) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.PIN_MESSAGE to MutationSender { row ->
-            val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.pin(payload.conversationId, row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UNPIN_MESSAGE to MutationSender { row ->
-            val payload = runCatching { json.decodeFromString<PinPayload>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            when (apiCall { messageApi.unpin(payload.conversationId, row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.LIKE_POST to MutationSender { row ->
-            when (apiCall { postApi.like(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UNLIKE_POST to MutationSender { row ->
-            when (apiCall { postApi.unlike(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.BOOKMARK_POST to MutationSender { row ->
-            when (apiCall { postApi.bookmark(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.UNBOOKMARK_POST to MutationSender { row ->
-            when (apiCall { postApi.removeBookmark(row.targetId) }) {
-                is NetworkResult.Success -> SendResult.Success
-                is NetworkResult.Failure -> SendResult.TransientFailure
-            }
-        },
-        OutboxKind.SEND_FRIEND_REQUEST to MutationSender { row ->
-            val payload = runCatching { json.decodeFromString<FriendRequestPayload>(row.payload) }
-                .getOrElse { return@MutationSender SendResult.PermanentFailure("Bad payload: ${it.message}") }
-            val result = friendRepository.sendFriendRequest(row.targetId, payload.message)
-            when (val delivery = FriendRequestSend.classify(result)) {
-                is FriendRequestDelivery.Delivered -> {
-                    // Graft the real request id over the optimistic placeholder so
-                    // a later cancel/accept targets the true request.
-                    friendshipCache.didSendRequest(row.targetId, delivery.requestId)
-                    SendResult.Success
-                }
-                FriendRequestDelivery.AlreadyExists -> SendResult.Success
-                FriendRequestDelivery.Retry -> SendResult.TransientFailure
-                is FriendRequestDelivery.Rejected -> SendResult.PermanentFailure(delivery.reason)
-            }
-        },
-    )
 
     companion object {
         const val TAG = "OutboxFlushWorker"

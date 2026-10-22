@@ -30,7 +30,8 @@ struct KeychainPrefetchPlan: Sendable {
 /// - une réponse ne sert qu'UNE fois : la lecture suivante va au trousseau ;
 /// - une écriture du processus la retire, même arrivée pendant la lecture ;
 /// - un trousseau indisponible n'est jamais servi : la lecture directe décide ;
-/// - ce que personne n'a pris disparaît de la mémoire après `lifetime`.
+/// - ce que personne n'a pris disparaît de la mémoire après `lifetime` : la
+///   lecture suivante, la constatant expirée, purge tout — sans minuterie.
 final class KeychainPrefetch: Sendable {
     private enum Phase: Sendable { case idle, inFlight, settled }
 
@@ -39,14 +40,17 @@ final class KeychainPrefetch: Sendable {
         var entries: [String: KeychainRead] = [:]
         var touchedInFlight: Set<String> = []
         var discardOnLanding = false
+        var expiresAt: Date?
     }
 
     private let state = Locked(State())
     private let landing = DispatchGroup()
     private let waitLimit: DispatchTimeInterval
+    private let now: @Sendable () -> Date
 
-    init(waitLimit: DispatchTimeInterval = .seconds(2)) {
+    init(waitLimit: DispatchTimeInterval = .seconds(2), now: @escaping @Sendable () -> Date = Date.init) {
         self.waitLimit = waitLimit
+        self.now = now
     }
 
     func start(_ plan: KeychainPrefetchPlan, on queue: DispatchQueue, lifetime: DispatchTimeInterval,
@@ -62,20 +66,21 @@ final class KeychainPrefetch: Sendable {
             let first = Dictionary(plan.keys.map { ($0, read($0)) }, uniquingKeysWith: { a, _ in a })
             let following = plan.followUp(first).filter { first[$0] == nil }
             let found = first.merging(following.map { ($0, read($0)) }, uniquingKeysWith: { a, _ in a })
-            land(found)
+            land(found, lifetime: Self.seconds(lifetime))
             landing.leave()
-            queue.asyncAfter(deadline: .now() + lifetime) { [self] in discardAll() }
         }
     }
 
     /// La réponse lue d'avance pour `key`, UNE fois. `nil` : lire le trousseau.
     func take(_ key: String) -> KeychainRead? {
         settle()
+        let instant = now()
         return state.mutate { state -> KeychainRead? in
             guard state.phase == .settled else {
                 state.touchedInFlight.insert(key)
                 return nil
             }
+            if let expiresAt = state.expiresAt, instant >= expiresAt { state.entries = [:] }
             return state.entries.removeValue(forKey: key)
         }
     }
@@ -97,19 +102,28 @@ final class KeychainPrefetch: Sendable {
         }
     }
 
-    private func land(_ found: [String: KeychainRead]) {
+    private func land(_ found: [String: KeychainRead], lifetime: TimeInterval) {
+        let landedAt = now()
         state.mutate { state in
             state.entries = state.discardOnLanding ? [:] : found.filter {
                 $0.value != .unavailable && !state.touchedInFlight.contains($0.key)
             }
             state.touchedInFlight = []
             state.discardOnLanding = false
+            state.expiresAt = landedAt.addingTimeInterval(lifetime)
             state.phase = .settled
         }
     }
 
-    private func discardAll() {
-        state.mutate { $0.entries = [:] }
+    private static func seconds(_ interval: DispatchTimeInterval) -> TimeInterval {
+        switch interval {
+        case .seconds(let value): TimeInterval(value)
+        case .milliseconds(let value): TimeInterval(value) / 1_000
+        case .microseconds(let value): TimeInterval(value) / 1_000_000
+        case .nanoseconds(let value): TimeInterval(value) / 1_000_000_000
+        case .never: .infinity
+        @unknown default: 0
+        }
     }
 
     private func settle() {
