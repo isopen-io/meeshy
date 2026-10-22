@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "location.settings.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "location.precision.section",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "location.precision.exact",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "location.precision.around",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "location.precision.neighborhood",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "location.precision.city",
+          "status": "adopted"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "location.precision.footnote",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
