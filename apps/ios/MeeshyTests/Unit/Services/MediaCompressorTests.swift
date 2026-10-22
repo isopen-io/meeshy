@@ -497,7 +497,21 @@ final class MediaCompressorTests: XCTestCase {
         let code = try String(contentsOf: racine.appendingPathComponent(
             "Meeshy/Features/Main/Services/MediaCompressor.swift"), encoding: .utf8)
         XCTAssertTrue(code.contains("VideoColorTagging.properties(of:)"))
-        XCTAssertTrue(code.contains("[AVVideoColorPropertiesKey: $0]"))
+        XCTAssertTrue(code.contains("VideoTranscodeRecipe(source:"),
+                      "l'étiquette lue alimente la loi des réglages, qui la reporte (#11290)")
+    }
+
+    /// #11290 — le choix du codec se lit sur les ENCODEURS : savoir lire du
+    /// HEVC ne dit pas qu'on sait en écrire.
+    func test_compressVideo_choisitLeCodecSurLEncodeur() throws {
+        let racine = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let code = try String(contentsOf: racine.appendingPathComponent(
+            "Meeshy/Features/Main/Services/MediaCompressor.swift"), encoding: .utf8)
+        XCTAssertTrue(code.contains("VideoEncoderAvailability.encodesHEVC"))
+        XCTAssertFalse(code.contains("VTIsHardwareDecodeSupported"))
+        XCTAssertFalse(code.contains("AVSampleRateKey: 44100"), "le son part en 48 kHz, réglé par la loi")
     }
 
     private static func formatDescription(extensions: [CFString: Any]) -> CMFormatDescription? {
