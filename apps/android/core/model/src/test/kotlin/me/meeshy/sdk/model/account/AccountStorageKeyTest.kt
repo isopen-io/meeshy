@@ -147,6 +147,24 @@ class AccountStorageKeyTest {
         )
 
         assertThat(restored).isEqualTo(original)
-        assertThat(restored.fingerprint).isEqualTo(original.fingerprint)
+        assertThat(restored!!.fingerprint).isEqualTo(original.fingerprint)
+    }
+
+    @Test
+    fun `un marqueur sans identifiant ne nomme aucun compte`() {
+        assertThat(AccountStorageKey.ofNormalized(userId = "  ", environmentHost = "gate.meeshy.me")).isNull()
+    }
+
+    @Test
+    fun `un port vide est abandonne`() {
+        assertThat(key(origin = "https://gate.meeshy.me:")!!.environmentHost).isEqualTo("gate.meeshy.me")
+    }
+
+    @Test
+    fun `la cle ne se journalise que par son empreinte`() {
+        val account = key()!!
+
+        assertThat(account.toString()).isEqualTo("AccountStorageKey(${account.fingerprint})")
+        assertThat(account.toString()).doesNotContain(userId)
     }
 }
