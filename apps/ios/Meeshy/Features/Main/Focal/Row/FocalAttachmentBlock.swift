@@ -295,12 +295,13 @@ struct FocalGridCell: View {
         .onTapGesture(perform: handleTap)
         .task(id: isRevealed) { await reblurAfterVisibility() }
         .overlay { protectionOverlay }
-        .overlay(alignment: .bottomTrailing) {
+        .overlay(alignment: downloadPlacement.alignment) {
             if case .none = protectionState {
                 DownloadBadgeView(
                     attachment: attachment,
                     accentColor: accentHex,
-                    messageDeliveryStatus: messageDeliveryStatus
+                    messageDeliveryStatus: messageDeliveryStatus,
+                    form: downloadPlacement.form
                 )
             }
         }
@@ -407,11 +408,14 @@ struct FocalGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if slot.overflowCount > 0 {
-            Color.black.opacity(0.5)
-            Text("+\(slot.overflowCount)")
-                .font(MeeshyFont.relative(24, weight: .bold))
-                .foregroundColor(.white)
+            MediaTileOverflowLabel(count: slot.overflowCount)
         }
+    }
+
+    /// #11569 — la MÊME loi que la tuile de bulle : sur la case « +N », le
+    /// badge prend le coin en forme compacte et laisse le centre au libellé.
+    private var downloadPlacement: MediaTileDownloadPlacement {
+        MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: slot.overflowCount)
     }
 
     /// Recouvrement flou/masqué — natif (voir doc de tête). Rendu SEUL
