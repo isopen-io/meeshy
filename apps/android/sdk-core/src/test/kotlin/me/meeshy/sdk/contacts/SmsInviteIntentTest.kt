@@ -1,6 +1,7 @@
 package me.meeshy.sdk.contacts
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.content.pm.ResolveInfo
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
@@ -46,7 +47,15 @@ class SmsInviteIntentTest {
     fun `avec une application SMS la resolution reussit`() {
         val app = ApplicationProvider.getApplicationContext<android.app.Application>()
         val intent = ready("0612345678")
-        shadowOf(app.packageManager).addResolveInfoForIntent(intent, ResolveInfo())
+        shadowOf(app.packageManager).addResolveInfoForIntent(
+            intent,
+            ResolveInfo().apply {
+                activityInfo = ActivityInfo().apply {
+                    packageName = "com.example.sms"
+                    name = "com.example.sms.Compose"
+                }
+            },
+        )
         assertThat(SmsInviteIntent.canResolve(app.packageManager, intent)).isTrue()
     }
 }
