@@ -300,7 +300,7 @@ struct ReelFeedCard: View, Equatable {
                     document: document,
                     isActive: isActive,
                     accentColor: accentHex,
-                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    preferredContentLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser)
                 )
                 .equatable()
                 .frame(width: width, height: height)

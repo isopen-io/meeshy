@@ -40,7 +40,7 @@ struct ReelNotificationOpener {
                     return nil
                 }
             },
-            preferredLanguages: { AuthManager.shared.currentUser?.preferredContentLanguages ?? [] },
+            preferredLanguages: { ReaderPrism.resolve(for: AuthManager.shared.currentUser) },
             drainPrefetchedPosts: { await NSEPendingPostConsumer.shared.consumeAll() }
         )
     }
