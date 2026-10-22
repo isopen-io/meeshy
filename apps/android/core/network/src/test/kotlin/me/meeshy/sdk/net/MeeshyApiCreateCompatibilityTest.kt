@@ -9,6 +9,10 @@ import retrofit2.http.GET
 
 class MeeshyApiCreateCompatibilityTest {
 
+    /** Un jeton qui n'expire pas pendant le test : le renouvellement préventif le laisse partir tel quel. */
+    private val LIVE_JWT = "h." + java.util.Base64.getUrlEncoder().withoutPadding()
+        .encodeToString("""{"exp":4102444800}""".toByteArray()) + ".s"
+
     interface Probe {
         @GET("probe")
         suspend fun probe(): okhttp3.ResponseBody
@@ -18,7 +22,7 @@ class MeeshyApiCreateCompatibilityTest {
         val server = MockWebServer().apply { responses.forEach(::enqueue); start() }
         try {
             val config = MeeshyConfig(apiBaseUrl = server.url("/api/v1/").toString(), socketUrl = "x")
-            block(server, MeeshyApi.create(config, InMemoryTokenStore(jwt = "jwt-1")) {})
+            block(server, MeeshyApi.create(config, InMemoryTokenStore(jwt = LIVE_JWT)) {})
         } finally {
             server.shutdown()
         }
@@ -29,7 +33,7 @@ class MeeshyApiCreateCompatibilityTest {
         kotlinx.coroutines.runBlocking { api.service(Probe::class.java).probe() }
 
         val request = server.takeRequest()
-        assertThat(request.getHeader("Authorization")).isEqualTo("Bearer jwt-1")
+        assertThat(request.getHeader("Authorization")).isEqualTo("Bearer $LIVE_JWT")
         assertThat(request.path).isEqualTo("/api/v1/probe")
     }
 
@@ -43,11 +47,11 @@ class MeeshyApiCreateCompatibilityTest {
                 })
             }
             val config = MeeshyConfig(apiBaseUrl = server.url("/api/v1/").toString(), socketUrl = "x")
-            val api = MeeshyApi.create(config, InMemoryTokenStore(jwt = "jwt-1"), extraContributors = listOf(extra))
+            val api = MeeshyApi.create(config, InMemoryTokenStore(jwt = LIVE_JWT), extraContributors = listOf(extra))
             kotlinx.coroutines.runBlocking { api.service(Probe::class.java).probe() }
 
             // priorite 1050 : apres AuthInterceptor (1000), il voit donc deja l'identite.
-            assertThat(server.takeRequest().getHeader("X-Probe")).isEqualTo("Bearer jwt-1")
+            assertThat(server.takeRequest().getHeader("X-Probe")).isEqualTo("Bearer $LIVE_JWT")
         } finally {
             server.shutdown()
         }
