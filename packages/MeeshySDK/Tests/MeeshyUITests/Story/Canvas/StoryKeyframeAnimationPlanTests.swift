@@ -163,8 +163,11 @@ final class StoryKeyframeAnimationPlanTests: XCTestCase {
 
     private static func assertParity(_ plan: StoryKeyframeAnimationPlan, keyframes: [StoryKeyframe],
                                      startTime: Double, label: String) throws {
+        // Décalé de 3,7 ms : la parité se juge ENTRE les clés, là où l'évaluateur
+        // d'aujourd'hui (Float) et Core Animation (Double) ne peuvent pas
+        // trancher une égalité stricte différemment.
         for step in 0...240 {
-            let t = startTime + Double(step) / 40
+            let t = startTime + Double(step) / 40 + 0.0037
             let expected = StoryRenderer.applyKeyframes(keyframes: keyframes, at: t, startTime: startTime)
             switch (expected.position, plan.value(of: .position, at: t)) {
             case (nil, nil): break
