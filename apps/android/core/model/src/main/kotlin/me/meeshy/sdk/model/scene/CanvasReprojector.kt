@@ -1,54 +1,49 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryMediaObject
 import me.meeshy.sdk.model.StorySticker
 import me.meeshy.sdk.model.StoryTextObject
 
-/**
- * Size of a story canvas in design pixels — the Android stand-in for iOS's
- * `CGSize` in `CanvasReprojector` (a source or target canvas shape). Positions
- * on the canvas are normalized `[0, 1]`; the size only feeds the source→target
- * rescale ratio, so a portrait `1080×1920` and a landscape `1920×1080` produce
- * opposite reprojection factors — exactly what a repost across aspect ratios
- * needs.
- */
-internal data class CanvasSize(val width: Double, val height: Double)
+/** Une position normalisée `[0, 1]` sur le cadre : abscisse sur la largeur, ordonnée sur la hauteur. */
+data class NormalizedPosition(val x: Double, val y: Double)
 
 /**
- * A warning raised when a reprojected position fell outside `[0, 1]` in the
- * target space and had to be clamped back into bounds — port of iOS
- * `CanvasReprojector.ReprojectionWarning`. The composer counts these to surface
- * the discreet "N item(s) repositioned for the new aspect ratio" banner.
+ * Avertissement levé quand une position reprojetée sortait de `[0, 1]` dans
+ * l'espace cible et a dû être ramenée dans le cadre — port de
+ * `CanvasReprojector.ReprojectionWarning` (iOS). Le composer les compte pour
+ * afficher la bannière discrète « N élément(s) repositionné(s) pour le nouveau
+ * format ». Les coordonnées d'origine sont normalisées sur le cadre SOURCE.
  */
-internal sealed interface ReprojectionWarning {
+sealed interface ReprojectionWarning {
     data class Clamped(val originalX: Double, val originalY: Double) : ReprojectionWarning
 }
 
-/** One reprojected object paired with its optional clamp [warning]. */
-internal data class ReprojectedItem<T>(val value: T, val warning: ReprojectionWarning?)
+/** Un objet reprojeté, avec son avertissement éventuel. */
+data class ReprojectedItem<T>(val value: T, val warning: ReprojectionWarning?)
 
 /**
- * The canvas objects carried by a repost, in the four positioned families the
- * pure reprojector handles. Mirrors the spatial subset of iOS `RepostPayload`;
- * `StoryLocationObject` (no Android model yet) and the PencilKit drawing blob
- * (device-bound; Android's freehand strokes are the pure `StoryDrawingStroke`
- * wire model, reprojected on a separate follow-up) are deliberately left out.
+ * Les objets portés par un repost, dans les familles que le reprojecteur sait
+ * déplacer : texte, médias, stickers, puces audio (sans position, laissées
+ * telles quelles) et traits de dessin. La famille des lieux rejoint cette
+ * liste avec son modèle de fil (voir [CanvasReprojector.reprojectPosition]).
  */
-internal data class CanvasObjects(
+data class CanvasObjects(
     val textObjects: List<StoryTextObject> = emptyList(),
     val mediaObjects: List<StoryMediaObject> = emptyList(),
     val stickers: List<StorySticker> = emptyList(),
     val audioPlayerObjects: List<StoryAudioPlayerObject> = emptyList(),
+    val drawingStrokes: List<StoryDrawingStroke> = emptyList(),
 )
 
 /**
- * The full result of reprojecting a [CanvasObjects] set to a target canvas: the
- * reprojected objects plus every clamp [warnings]. [repositionedCount] drives
- * the composer's "items repositioned" banner (iOS `reprojectionWarnings.count`);
- * [hasClampedItems] gates whether the banner shows at all (iOS `hasClampedItems`).
+ * Le résultat complet d'une reprojection : les objets reprojetés et chaque
+ * avertissement. [repositionedCount] alimente la bannière « N éléments
+ * repositionnés » (iOS `reprojectionWarnings.count`), [hasClampedItems] dit si
+ * la bannière s'affiche (iOS `hasClampedItems`).
  */
-internal data class RepostReprojection(
+data class RepostReprojection(
     val objects: CanvasObjects,
     val warnings: List<ReprojectionWarning>,
 ) {
@@ -57,77 +52,139 @@ internal data class RepostReprojection(
 }
 
 /**
- * Reprojects canvas object positions from one aspect ratio to another — the
- * Android port of iOS `CanvasReprojector` (`MeeshyUI/Story/Canvas`).
+ * Reprojette les positions d'un cadre vers un autre (portrait 9:16 ↔ paysage
+ * 16:9, ou toute paire de tailles) — port de `CanvasReprojector` (iOS,
+ * `MeeshyUI/Story/Canvas`), rapatrié dans `:core:model` avec la conversion de
+ * format.
  *
- * Positions are normalized `[0, 1]` in both source and target. The center
- * `(0.5, 0.5)` is always preserved; an object projected outside `[0, 1]` is
- * clamped back into bounds and reported with a [ReprojectionWarning.Clamped].
- * Scale, aspect ratio and rotation are invariant under reprojection — only the
- * position moves.
+ * Les positions sont normalisées `[0, 1]` des deux côtés. Le centre
+ * `(0.5, 0.5)` est toujours préservé ; la distance au centre en pixels de
+ * design l'est aussi (les deux cadres ont la même largeur design), si bien
+ * qu'un objet qui sortirait du cadre cible est ramené dedans et signalé par un
+ * [ReprojectionWarning.Clamped]. L'échelle, le rapport d'aspect et la rotation
+ * sont invariants : seule la position bouge.
  *
- * SOTA over iOS: a degenerate target (a non-positive width or height, which
- * iOS's raw `CGSize` division would turn into `Infinity`/`NaN`) is treated as an
- * identity reprojection — the position is returned unchanged with no warning —
- * so a malformed canvas size can never corrupt an object's coordinates.
+ * Les traits de dessin, eux, forment UNE image : ils gardent leur forme par une
+ * échelle uniforme (le plus petit des deux rapports cible / source) appliquée
+ * autour du centre — iOS ancre la transformation de son `PKDrawing` à
+ * l'origine, ce qui ne préserve pas le centre. Un point qui sortirait encore
+ * du cadre cible est ramené dedans et le trait porte UN seul avertissement.
+ *
+ * Plus robuste qu'iOS : une taille dégénérée (côté nul, négatif ou non fini),
+ * que la division brute d'iOS transformerait en `Infinity` / `NaN`, rend une
+ * reprojection identité sans avertissement — une taille de cadre malformée ne
+ * corrompt jamais les coordonnées d'un objet.
  */
-internal class CanvasReprojector(
+class CanvasReprojector(
     private val source: CanvasSize,
     private val target: CanvasSize,
 ) {
+
     fun reproject(text: StoryTextObject): ReprojectedItem<StoryTextObject> {
-        val p = reprojectNormalized(text.x, text.y)
-        return ReprojectedItem(text.copy(x = p.x, y = p.y), p.warning)
+        val p = reprojectPosition(text.x, text.y)
+        return ReprojectedItem(text.copy(x = p.value.x, y = p.value.y), p.warning)
     }
 
     fun reproject(media: StoryMediaObject): ReprojectedItem<StoryMediaObject> {
-        val p = reprojectNormalized(media.x, media.y)
-        return ReprojectedItem(media.copy(x = p.x, y = p.y), p.warning)
+        val p = reprojectPosition(media.x, media.y)
+        return ReprojectedItem(media.copy(x = p.value.x, y = p.value.y), p.warning)
     }
 
     fun reproject(sticker: StorySticker): ReprojectedItem<StorySticker> {
-        val p = reprojectNormalized(sticker.x, sticker.y)
-        return ReprojectedItem(sticker.copy(x = p.x, y = p.y), p.warning)
+        val p = reprojectPosition(sticker.x, sticker.y)
+        return ReprojectedItem(sticker.copy(x = p.value.x, y = p.value.y), p.warning)
     }
 
-    /** Audio has no spatial position — pass-through identity, never a warning. */
+    /** L'audio n'a pas de position spatiale : identité, jamais d'avertissement. */
     fun reproject(audio: StoryAudioPlayerObject): ReprojectedItem<StoryAudioPlayerObject> =
         ReprojectedItem(audio, null)
 
     /**
-     * Reprojects every object in [objects] to the target canvas, collecting the
-     * clamp warnings in encounter order (text → media → sticker; audio is
-     * identity and contributes none). Port of iOS `UnifiedPostComposer`'s
-     * `RepostReprojectionResult.reproject(payload:targetSize:)`.
+     * Reprojette une position normalisée nue : la loi unique de tout objet
+     * posé sur le cadre. C'est la couture des familles dont le modèle de fil
+     * n'est pas encore dans `:core:model` (les lieux) — elles appellent cette
+     * fonction plutôt que de réécrire la formule.
+     */
+    fun reprojectPosition(x: Double, y: Double): ReprojectedItem<NormalizedPosition> {
+        if (!source.isRenderable || !target.isRenderable) {
+            return ReprojectedItem(NormalizedPosition(x, y), null)
+        }
+        val projectedX = CENTER + (x - CENTER) * (source.width / target.width)
+        val projectedY = CENTER + (y - CENTER) * (source.height / target.height)
+        val needsClamp = projectedX < 0.0 || projectedX > 1.0 || projectedY < 0.0 || projectedY > 1.0
+        return ReprojectedItem(
+            value = NormalizedPosition(projectedX.coerceIn(0.0, 1.0), projectedY.coerceIn(0.0, 1.0)),
+            warning = if (needsClamp) ReprojectionWarning.Clamped(x, y) else null,
+        )
+    }
+
+    /**
+     * Reprojette un trait de dessin. Les points et l'épaisseur vivent en
+     * pixels de design ; la pression, l'outil, la couleur et l'identité sont
+     * inchangés.
+     */
+    fun reproject(stroke: StoryDrawingStroke): ReprojectedItem<StoryDrawingStroke> {
+        if (!source.isRenderable || !target.isRenderable) return ReprojectedItem(stroke, null)
+        val scale = minOf(target.width / source.width, target.height / source.height)
+        val projected = stroke.points.map {
+            it.copy(
+                x = projectAxis(it.x, source.width, target.width, scale),
+                y = projectAxis(it.y, source.height, target.height, scale),
+            )
+        }
+        val firstOverflow = stroke.points.zip(projected)
+            .firstOrNull { (_, point) -> overflows(point.x, target.width) || overflows(point.y, target.height) }
+        val moved = stroke.copy(
+            points = projected.map {
+                it.copy(x = it.x.coerceIn(0.0, target.width), y = it.y.coerceIn(0.0, target.height))
+            },
+            width = stroke.width * scale,
+        )
+        val warning = firstOverflow?.let { (original, _) ->
+            ReprojectionWarning.Clamped(originalX = original.x / source.width, originalY = original.y / source.height)
+        }
+        return ReprojectedItem(moved, warning)
+    }
+
+    /**
+     * Reprojette tous les objets de [objects] vers le cadre cible et collecte
+     * les avertissements dans l'ordre de rencontre : texte, médias, stickers,
+     * traits (l'audio est une identité et n'en apporte aucun). Port du
+     * `RepostReprojectionResult.reproject(payload:targetSize:)` d'iOS.
      */
     fun reprojectAll(objects: CanvasObjects): RepostReprojection {
-        val warnings = mutableListOf<ReprojectionWarning>()
-        val texts = objects.textObjects.map { reproject(it).also { r -> r.warning?.let(warnings::add) } }
-        val media = objects.mediaObjects.map { reproject(it).also { r -> r.warning?.let(warnings::add) } }
-        val stickers = objects.stickers.map { reproject(it).also { r -> r.warning?.let(warnings::add) } }
+        val texts = objects.textObjects.map { reproject(it) }
+        val media = objects.mediaObjects.map { reproject(it) }
+        val stickers = objects.stickers.map { reproject(it) }
         val audios = objects.audioPlayerObjects.map { reproject(it) }
+        val strokes = objects.drawingStrokes.map { reproject(it) }
         return RepostReprojection(
             objects = CanvasObjects(
                 textObjects = texts.map { it.value },
                 mediaObjects = media.map { it.value },
                 stickers = stickers.map { it.value },
                 audioPlayerObjects = audios.map { it.value },
+                drawingStrokes = strokes.map { it.value },
             ),
-            warnings = warnings.toList(),
+            warnings = (texts.map { it.warning } + media.map { it.warning } +
+                stickers.map { it.warning } + strokes.map { it.warning }).filterNotNull(),
         )
     }
 
-    private data class Projected(val x: Double, val y: Double, val warning: ReprojectionWarning?)
-
-    private fun reprojectNormalized(x: Double, y: Double): Projected {
-        if (target.width <= 0.0 || target.height <= 0.0) return Projected(x, y, null)
-        val scaleX = source.width / target.width
-        val scaleY = source.height / target.height
-        val projectedX = 0.5 + (x - 0.5) * scaleX
-        val projectedY = 0.5 + (y - 0.5) * scaleY
-        val needsClamp = projectedX < 0.0 || projectedX > 1.0 || projectedY < 0.0 || projectedY > 1.0
-        val clampedX = projectedX.coerceIn(0.0, 1.0)
-        val clampedY = projectedY.coerceIn(0.0, 1.0)
-        return Projected(clampedX, clampedY, if (needsClamp) ReprojectionWarning.Clamped(x, y) else null)
+    companion object {
+        /** La conversion portrait ↔ paysage : chaque cadre est décrit par sa taille design. */
+        fun between(from: CanvasFormat, to: CanvasFormat): CanvasReprojector =
+            CanvasReprojector(CanvasGeometry.designSize(from), CanvasGeometry.designSize(to))
     }
 }
+
+private const val CENTER = 0.5
+
+/** Marge qui absorbe l'erreur d'arrondi d'un point posé exactement sur le bord du cadre. */
+private const val OVERFLOW_TOLERANCE = 1e-6
+
+private fun projectAxis(value: Double, sourceExtent: Double, targetExtent: Double, scale: Double): Double =
+    targetExtent / 2 + (value - sourceExtent / 2) * scale
+
+private fun overflows(value: Double, extent: Double): Boolean =
+    value < -OVERFLOW_TOLERANCE || value > extent + OVERFLOW_TOLERANCE

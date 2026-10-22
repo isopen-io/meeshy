@@ -139,6 +139,15 @@ class CanvasReprojectorTest {
     }
 
     @Test
+    fun `a degenerate source size is an identity reprojection, never a collapse to center`() {
+        val result = CanvasReprojector(CanvasSize(0.0, 1920.0), portrait).reproject(text(0.2, 0.95))
+
+        assertThat(result.value.x).isEqualTo(0.2)
+        assertThat(result.value.y).isEqualTo(0.95)
+        assertThat(result.warning).isNull()
+    }
+
+    @Test
     fun `reprojectAll counts every clamped item across families for the banner`() {
         val objects = CanvasObjects(
             textObjects = listOf(text(0.5, 0.5), text(0.5, 0.95)), // 2nd clamps
