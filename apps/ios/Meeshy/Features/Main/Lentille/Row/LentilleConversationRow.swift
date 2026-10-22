@@ -528,7 +528,7 @@ struct LentilleConversationRow: View {
                 .italic()
                 .foregroundColor(accent)
                 .lineLimit(1)
-            LentilleTypingDots(accentColorHex: accentColorHex)
+            MeeshyTypingDots(color: Color(hex: accentColorHex))
         }
     }
 
@@ -714,41 +714,6 @@ private struct LentilleRowTimestamp: View {
                 Text(RelativeTimeFormatter.shortString(for: date))
             }
         }
-    }
-}
-
-// MARK: - Indicateur de saisie
-
-/// Même patron que `ThemedConversationRow.TypingDotsView` (privée à ce
-/// fichier interdit), reproduit ici pour le rang plat — trois points
-/// pulsés, désactivés par Reduce Motion (repos à la phase HAUTE, jamais
-/// figés à mi-animation).
-private struct LentilleTypingDots: View {
-    let accentColorHex: String
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isAnimating = false
-
-    var body: some View {
-        HStack(spacing: MeeshySpacing.xxs) {
-            ForEach(0..<3, id: \.self) { i in
-                Circle()
-                    .fill(Color(hex: accentColorHex))
-                    .frame(width: 5, height: 5)
-                    .scaleEffect(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.5))
-                    .opacity(reduceMotion ? 1.0 : (isAnimating ? 1.0 : 0.4))
-                    .animation(
-                        reduceMotion
-                            ? nil
-                            : Animation.easeInOut(duration: 0.5)
-                                .repeatForever(autoreverses: true)
-                                .delay(Double(i) * 0.18),
-                        value: isAnimating
-                    )
-            }
-        }
-        .onAppear { isAnimating = true }
-        .onDisappear { isAnimating = false }
-        .accessibilityHidden(true)
     }
 }
 
