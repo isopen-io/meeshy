@@ -23,7 +23,12 @@
  *   · FEUILLE : chaque fichier a sa `@font-face`, chaque `@font-face` son fichier ;
  *   · IMPORTEUR : la feuille n'est importée que par `lib/game-photo/glory-fonts.ts`
  *     — l'unique arête qui la relie au graphe, que le témoin d'entrée
- *     (`glory-fonts.test.ts`) prouve hors du socle (leçon 589) ;
+ *     (`glory-fonts.test.ts`) prouve hors du socle (leçon 589). Le relevé
+ *     compte TOUTE arête qui nomme la feuille, quel que soit son idiome
+ *     (`@import './glory-fonts.css'` depuis une feuille voisine, `url(...)`,
+ *     `?inline` / `?url`, `import()` dynamique, `<link href>` de `index.html`) :
+ *     sa première forme ne connaissait que deux graphies et laissait passer
+ *     celle que le dépôt emploie réellement pour ses feuilles (2026-10-22) ;
  *   · NOTICE : chaque fichier redistribué y est nommé (la licence l'exige) ;
  *   · PRECACHE : si `dist/sw.js` existe, aucune police de cadre n'y figure.
  */
@@ -41,7 +46,10 @@ const SOLE_IMPORTER = 'src/lib/game-photo/glory-fonts.ts';
 
 const GLORY_FILE = /^glory-[A-Za-z0-9_-]+\.woff2$/;
 const SHEET_URL = /url\(['"]?\.\/fonts\/(glory-[A-Za-z0-9_-]+\.woff2)['"]?\)/g;
-const SHEET_IMPORT = /from\s+['"]@\/styles\/glory-fonts\.css['"]|import\s+['"]@\/styles\/glory-fonts\.css['"]|['"](?:\.\.\/)+styles\/glory-fonts\.css['"]/;
+const COMMENTS = /\/\*[\s\S]*?\*\/|(^|[^:'"\\])\/\/[^\n]*/g;
+const QUOTED_SPECIFIER = /['"]([^'"\n]*?)['"]/g;
+const URL_SPECIFIER = /url\(\s*([^'")\s]+)\s*\)/g;
+const SHEET_PATH = /(?:^|\/)glory-fonts\.css$/;
 
 const sum = (files) => files.reduce((total, f) => total + f.bytes, 0);
 
@@ -87,11 +95,30 @@ export function auditGloryFonts({ files, budget, sheet, importers, notice, preca
   return failures;
 }
 
+/**
+ * Le relevé des IMPORTEURS, pur : les chemins (triés) des entrées dont la
+ * source nomme la feuille par une arête — spécificateur entre guillemets ou
+ * `url(...)`, commentaires ôtés, suffixe Vite (`?inline`, `?url`) toléré. La
+ * reconnaissance est LARGE à dessein : un faux positif rougit en nommant le
+ * fichier, un faux négatif se tait.
+ */
+export function sheetImportersOf(entries) {
+  const namesSheet = (source) => {
+    const code = source.replace(COMMENTS, '$1');
+    const specifiers = [...code.matchAll(QUOTED_SPECIFIER), ...code.matchAll(URL_SPECIFIER)].map((m) => m[1].replace(/[?#].*$/, ''));
+    return specifiers.some((specifier) => SHEET_PATH.test(specifier));
+  };
+  return entries
+    .filter((entry) => namesSheet(entry.source))
+    .map((entry) => entry.path)
+    .sort();
+}
+
 const sources = (dir) =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
     if (entry.isDirectory()) return sources(path);
-    return /\.(tsx?|css)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
+    return /\.(tsx?|jsx?|mjs|css|html)$/.test(entry.name) && !/\.test\.tsx?$/.test(entry.name) ? [path] : [];
   });
 
 /** Les faits, relevés sur l'arbre de travail — jamais sur `dist`, sauf le manifeste du service worker s'il existe. */
@@ -103,10 +130,11 @@ export function collectGloryFonts() {
   const spec = JSON.parse(readFileSync(BUDGETS, 'utf8')).glory_fonts ?? {};
   const budget = { files: spec.files?.value ?? NaN, bytes: spec.bytes?.value ?? NaN };
   const sheet = readFileSync(SHEET, 'utf8');
-  const importers = sources(join(APP, 'src'))
-    .filter((path) => SHEET_IMPORT.test(readFileSync(path, 'utf8')))
-    .map((path) => relative(APP, path))
-    .sort();
+  const importers = sheetImportersOf(
+    [...sources(join(APP, 'src')), join(APP, 'index.html')]
+      .filter((path) => path !== SHEET)
+      .map((path) => ({ path: relative(APP, path), source: readFileSync(path, 'utf8') })),
+  );
   const notice = readFileSync(NOTICE, 'utf8');
   const precached = existsSync(SW) ? [...readFileSync(SW, 'utf8').matchAll(/"([^"]+\.woff2)"/g)].map((m) => m[1]) : [];
   return { files, budget, sheet, importers, notice, precached };

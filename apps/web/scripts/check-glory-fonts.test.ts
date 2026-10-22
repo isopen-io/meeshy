@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 // @ts-expect-error — module .mjs sans déclaration de types ; ce témoin
 // interroge son API publique exactement comme le pilote le fait.
-import { auditGloryFonts, collectGloryFonts } from './check-glory-fonts.mjs';
+import { auditGloryFonts, collectGloryFonts, sheetImportersOf } from './check-glory-fonts.mjs';
 
 /**
  * LE GATE DES POLICES DE CADRE (#10158, L6, § 5.6) — le budget en octets tenu
@@ -101,6 +101,63 @@ describe('auditGloryFonts — chaque façon de faire peser une police est nommé
   test('une police de cadre au manifeste du service worker : PRÉCACHE', () => {
     const failures = audit({ ...conforme(), precached: ['assets/glory-a-latin-h4sh.woff2'] });
     expect(failures.some((f) => f.includes('PRECACHE') && f.includes('glory-a-latin-h4sh.woff2'))).toBe(true);
+  });
+});
+
+/**
+ * LE RELEVÉ DES IMPORTEURS (correctif du 2026-10-22, #10158). La première
+ * forme du relevé ne reconnaissait que `@/styles/glory-fonts.css` et
+ * `(../)+styles/glory-fonts.css` : un `@import './glory-fonts.css';` posé dans
+ * `app.css` — la feuille CRITIQUE, l'idiome exact de ses voisines — rendait
+ * « importée par glory-fonts.ts seul », exit 0. Le même vert pour `?inline` et
+ * pour un `import()` dynamique. La loi était testée ; le relevé ne l'était que
+ * par « le dépôt tel qu'il est », qui ne peut pas tomber sur ce cas (leçon 231).
+ *
+ * Le relevé est donc une fonction PURE sur `{ path, source }`, et ce témoin la
+ * fait tomber forme par forme : toute arête qui nomme la feuille compte, quel
+ * que soit son idiome. Un faux positif rougit en nommant le fichier ; un faux
+ * négatif se tait — c'est pourquoi la reconnaissance est large.
+ */
+type Entry = { readonly path: string; readonly source: string };
+const importers = (entries: readonly Entry[]): readonly string[] => sheetImportersOf(entries) as readonly string[];
+const SOLE: Entry = { path: 'src/lib/game-photo/glory-fonts.ts', source: "import '@/styles/glory-fonts.css';\nexport const x = 1;" };
+
+describe('sheetImportersOf — toute arête qui nomme la feuille compte, quel que soit son idiome', () => {
+  test('la feuille CRITIQUE qui l’importe par chemin relatif, comme ses voisines : relevée', () => {
+    const app: Entry = { path: 'src/styles/app.css', source: "@import './ios.css';\n@import './glory-fonts.css';\n@import './ui.css';" };
+    expect(importers([SOLE, app])).toEqual(['src/lib/game-photo/glory-fonts.ts', 'src/styles/app.css']);
+  });
+
+  test('`@import url(...)`, avec ou sans guillemets : relevé', () => {
+    const a: Entry = { path: 'src/styles/a.css', source: '@import url(./glory-fonts.css);' };
+    const b: Entry = { path: 'src/styles/b.css', source: '@import url("../styles/glory-fonts.css") screen;' };
+    expect(importers([SOLE, a, b])).toEqual(['src/lib/game-photo/glory-fonts.ts', 'src/styles/a.css', 'src/styles/b.css']);
+  });
+
+  test('un import TS avec suffixe Vite (`?inline`, `?url`) : relevé', () => {
+    const inline: Entry = { path: 'src/lib/zz-probe.ts', source: "import s from '@/styles/glory-fonts.css?inline';\nexport { s };" };
+    const url: Entry = { path: 'src/lib/zz-url.ts', source: 'import href from "../styles/glory-fonts.css?url";\nexport { href };' };
+    expect(importers([SOLE, inline, url])).toEqual(['src/lib/game-photo/glory-fonts.ts', 'src/lib/zz-probe.ts', 'src/lib/zz-url.ts']);
+  });
+
+  test('un `import()` dynamique : une arête paresseuse est encore une arête', () => {
+    const lazy: Entry = { path: 'src/screens/zz.tsx', source: "export const load = () => import('@/styles/glory-fonts.css');" };
+    expect(importers([SOLE, lazy])).toEqual(['src/lib/game-photo/glory-fonts.ts', 'src/screens/zz.tsx']);
+  });
+
+  test('une feuille liée depuis le document d’entrée : relevée', () => {
+    const html: Entry = { path: 'index.html', source: '<link rel="stylesheet" href="/src/styles/glory-fonts.css" />' };
+    expect(importers([SOLE, html])).toEqual(['index.html', 'src/lib/game-photo/glory-fonts.ts']);
+  });
+
+  test('nommer la feuille dans un commentaire n’est pas l’importer ; une autre feuille non plus', () => {
+    const prose: Entry = { path: 'src/lib/a.ts', source: '// la feuille `glory-fonts.css` n’est pas dans le premier affichage\n/* @import "./glory-fonts.css" ne doit pas apparaitre ici */\nexport const a = 1;' };
+    const other: Entry = { path: 'src/styles/story.css', source: "@import './story-fonts.css';" };
+    expect(importers([SOLE, prose, other])).toEqual(['src/lib/game-photo/glory-fonts.ts']);
+  });
+
+  test('sans aucun importeur, le relevé est vide — et la loi le nomme', () => {
+    expect(importers([{ path: 'src/main.tsx', source: "import './styles/app.css';" }])).toEqual([]);
   });
 });
 
