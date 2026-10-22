@@ -119,14 +119,18 @@ data class ApiMessage(
 ) {
     /**
      * Content to display under the Prisme Linguistique: the preferred translation,
-     * or the original [content] when no translation targets a preferred language.
+     * or the original [content] when no translation targets a preferred language —
+     * or when the message is already written in one of the reader's languages that
+     * ranks above every available translation ([originalLanguage] competes at its
+     * own rank, never as a short-circuit).
      */
     fun displayContent(prefs: LanguageResolver.ContentLanguagePreferences): String =
-        LanguageResolver.preferredTranslation(translations, prefs)?.translatedContent ?: content
+        LanguageResolver.preferredTranslation(translations, prefs, originalLanguage)
+            ?.translatedContent ?: content
 
     /** True when the displayed content is a translation rather than the original. */
     fun isTranslated(prefs: LanguageResolver.ContentLanguagePreferences): Boolean =
-        LanguageResolver.preferredTranslation(translations, prefs) != null
+        LanguageResolver.preferredTranslation(translations, prefs, originalLanguage) != null
 
     /**
      * The resolved visual/lifecycle effects for this message. A positive
