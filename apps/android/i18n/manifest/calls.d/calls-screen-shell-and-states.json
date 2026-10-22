@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:calls": {
+      "resDir": "feature/calls/src/main/res",
+      "entries": [
+        {
+          "androidName": "call_a11y_connected",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_a11y_connecting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_a11y_ended",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_a11y_reconnecting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_avatar_you",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_connecting_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_duration_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_ended_local",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_ended_remote",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_a11y",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_accept",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_accept_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_badge_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_badge_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_decline",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_decline_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_incoming_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_outgoing_ringing",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_outgoing_waiting",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_outgoing_waiting_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_type_audio",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_type_video",
+          "status": "android-only"
+        },
+        {
+          "androidName": "call_unknown_peer",
+          "status": "android-only"
+        }
+      ]
+    }
+  }
+}
