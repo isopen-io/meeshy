@@ -67,6 +67,8 @@ class SessionTeardownTest {
         friendshipCache: FriendshipCache = FriendshipCache(),
         notificationRepository: NotificationRepository = NotificationRepository(mockk(relaxed = true)),
         blockCache: BlockCache = BlockCache(),
+        preferenceSnapshots: me.meeshy.sdk.preferences.PreferenceSnapshotStore =
+            me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore(),
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -76,6 +78,7 @@ class SessionTeardownTest {
         friendshipCache,
         notificationRepository,
         blockCache,
+        preferenceSnapshots,
     )
 
     private fun composerDraft() = StoryComposerDraftSnapshot(
@@ -94,6 +97,17 @@ class SessionTeardownTest {
         teardown().wipe()
 
         assertThat(outboxRepository.observeAll().first()).isEmpty()
+    }
+
+    @Test
+    fun wipe_clearsTheAccountPreferenceSnapshots() = runTest {
+        val snapshots = me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore()
+        snapshots.save("all", "{}", 5L)
+
+        teardown(preferenceSnapshots = snapshots).wipe()
+
+        assertThat(snapshots.observe("all").first()).isNull()
+        assertThat(snapshots.lastSyncedAt("all").first()).isNull()
     }
 
     @Test

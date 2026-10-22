@@ -19,6 +19,7 @@ import me.meeshy.sdk.cache.CacheClock
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.category.CategorySnapshotStore
 import me.meeshy.sdk.category.DataStoreCategorySnapshotStore
+import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.chat.DataStoreConversationDraftStore
 import me.meeshy.sdk.chat.LocallyHiddenMessagesStore
@@ -273,6 +274,7 @@ object SdkModule {
         friendshipCache: FriendshipCache,
         notificationRepository: NotificationRepository,
         blockCache: BlockCache,
+        preferenceSnapshotStore: PreferenceSnapshotStore,
     ): SessionTeardown =
         DefaultSessionTeardown(
             database,
@@ -283,6 +285,7 @@ object SdkModule {
             friendshipCache,
             notificationRepository,
             blockCache,
+            preferenceSnapshotStore,
         )
 
     @Provides
