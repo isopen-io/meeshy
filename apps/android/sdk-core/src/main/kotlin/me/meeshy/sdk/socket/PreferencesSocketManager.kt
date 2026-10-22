@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -97,7 +98,7 @@ class PreferencesSocketManager @Inject constructor(
     }
 
     private companion object {
-        const val EVENT = "user:preferences-updated"
+        const val EVENT = SocketEventNames.USER_PREFERENCES_UPDATED
         const val CONVERSATION_SCOPE_KEY = "conversationId"
         const val CATEGORY_SCOPE_KEY = "category"
     }

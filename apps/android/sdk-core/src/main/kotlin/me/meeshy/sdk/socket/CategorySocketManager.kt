@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -38,10 +39,10 @@ class CategorySocketManager @Inject constructor(
     val categoryEvents: SharedFlow<CategoryEvent> = _categoryEvents.asSharedFlow()
 
     fun attach() {
-        listen<CategoryUpsertedSocketData>("category:created") { it.toEvent() }
-        listen<CategoryUpsertedSocketData>("category:updated") { it.toEvent() }
-        listen<CategoryDeletedSocketData>("category:deleted") { it.toEvent() }
-        listen<CategoriesReorderedSocketData>("categories:reordered") { it.toEvent() }
+        listen<CategoryUpsertedSocketData>(SocketEventNames.CATEGORY_CREATED) { it.toEvent() }
+        listen<CategoryUpsertedSocketData>(SocketEventNames.CATEGORY_UPDATED) { it.toEvent() }
+        listen<CategoryDeletedSocketData>(SocketEventNames.CATEGORY_DELETED) { it.toEvent() }
+        listen<CategoriesReorderedSocketData>(SocketEventNames.CATEGORIES_REORDERED) { it.toEvent() }
     }
 
     private inline fun <reified T> listen(event: String, crossinline toEvent: (T) -> CategoryEvent) {

@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -160,58 +161,58 @@ class MessageSocketManager @Inject constructor(
     val notificationCounts: SharedFlow<NotificationCountsSocketEvent> = _notificationCounts.asSharedFlow()
 
     fun attach() {
-        listen("message:new", _messageReceived)
-        listen("message:edited", _messageEdited)
-        listen("message:deleted", _messageDeleted)
-        listen("message:expired", _messageExpired)
-        listen("message:pinned", _messagePinned)
-        listen("message:unpinned", _messageUnpinned)
-        listen("typing:start", _typingStarted)
-        listen("typing:stop", _typingStopped)
-        listen("reaction:added", _reactionAdded)
-        listen("reaction:removed", _reactionRemoved)
-        listen("conversation:unread-updated", _unreadUpdated)
-        listen("message:translation", _translationReceived)
-        listen("audio:transcription-ready", _transcriptionReady)
-        listen("audio:translation-ready", _audioTranslationReady)
-        listen("message:attachment-updated", _attachmentUpdated)
-        listen("conversation:updated", _conversationUpdated)
-        listen("conversation:deleted", _conversationDeleted)
-        listen("conversation:restored", _conversationRestored)
-        listen("conversation:closed", _conversationClosed)
-        listen("user:status", _userStatus)
-        listen("presence:snapshot", _presenceSnapshot)
-        listen("conversation:participant-left", _participantLeft)
-        listen("conversation:participant-banned", _participantBanned)
-        listen("participant:role-updated", _participantRoleUpdated)
-        listen("read-status:updated", _readStatusUpdated)
-        listen("location:live-started", _liveLocationStarted)
-        listen("location:live-updated", _liveLocationUpdated)
-        listen("location:live-stopped", _liveLocationStopped)
+        listen(SocketEventNames.MESSAGE_NEW, _messageReceived)
+        listen(SocketEventNames.MESSAGE_EDITED, _messageEdited)
+        listen(SocketEventNames.MESSAGE_DELETED, _messageDeleted)
+        listen(SocketEventNames.MESSAGE_EXPIRED, _messageExpired)
+        listen(SocketEventNames.MESSAGE_PINNED, _messagePinned)
+        listen(SocketEventNames.MESSAGE_UNPINNED, _messageUnpinned)
+        listen(SocketEventNames.TYPING_START, _typingStarted)
+        listen(SocketEventNames.TYPING_STOP, _typingStopped)
+        listen(SocketEventNames.REACTION_ADDED, _reactionAdded)
+        listen(SocketEventNames.REACTION_REMOVED, _reactionRemoved)
+        listen(SocketEventNames.CONVERSATION_UNREAD_UPDATED, _unreadUpdated)
+        listen(SocketEventNames.MESSAGE_TRANSLATION, _translationReceived)
+        listen(SocketEventNames.AUDIO_TRANSCRIPTION_READY, _transcriptionReady)
+        listen(SocketEventNames.AUDIO_TRANSLATION_READY, _audioTranslationReady)
+        listen(SocketEventNames.MESSAGE_ATTACHMENT_UPDATED, _attachmentUpdated)
+        listen(SocketEventNames.CONVERSATION_UPDATED, _conversationUpdated)
+        listen(SocketEventNames.CONVERSATION_DELETED, _conversationDeleted)
+        listen(SocketEventNames.CONVERSATION_RESTORED, _conversationRestored)
+        listen(SocketEventNames.CONVERSATION_CLOSED, _conversationClosed)
+        listen(SocketEventNames.USER_STATUS, _userStatus)
+        listen(SocketEventNames.PRESENCE_SNAPSHOT, _presenceSnapshot)
+        listen(SocketEventNames.CONVERSATION_PARTICIPANT_LEFT, _participantLeft)
+        listen(SocketEventNames.CONVERSATION_PARTICIPANT_BANNED, _participantBanned)
+        listen(SocketEventNames.PARTICIPANT_ROLE_UPDATED, _participantRoleUpdated)
+        listen(SocketEventNames.READ_STATUS_UPDATED, _readStatusUpdated)
+        listen(SocketEventNames.LOCATION_LIVE_STARTED, _liveLocationStarted)
+        listen(SocketEventNames.LOCATION_LIVE_UPDATED, _liveLocationUpdated)
+        listen(SocketEventNames.LOCATION_LIVE_STOPPED, _liveLocationStopped)
         // SyncEngine — observer le `_seq` AVANT de livrer l'event, comme le web
         // (`notification-socketio.singleton.ts`) : un trou prouve que des
         // notifications ont été manquées. Le curseur suit le flux SERVEUR, donc il
         // avance même si le décodage échoue ensuite (un décodage raté est notre
         // bug, pas un trou d'émission) et même si aucun écran n'écoute.
-        listen("notification:new", _notificationReceived) { raw ->
+        listen(SocketEventNames.NOTIFICATION_NEW, _notificationReceived) { raw ->
             syncSeqTracker.observe((raw.opt(SEQ_KEY) as? Number)?.toLong())
         }
         // Plain emissions (no `_seq`) — the gateway deliberately does not stamp them, so unlike
-        // "notification:new" above there is no cursor to observe here.
-        listen("notification:read", _notificationRead)
-        listen("notification:read-bulk", _notificationReadBulk)
-        listen("notification:deleted", _notificationDeleted)
-        listen("notification:deleted-bulk", _notificationDeletedBulk)
-        listen("notification:counts", _notificationCounts)
+        // SocketEventNames.NOTIFICATION_NEW above there is no cursor to observe here.
+        listen(SocketEventNames.NOTIFICATION_READ, _notificationRead)
+        listen(SocketEventNames.NOTIFICATION_READ_BULK, _notificationReadBulk)
+        listen(SocketEventNames.NOTIFICATION_DELETED, _notificationDeleted)
+        listen(SocketEventNames.NOTIFICATION_DELETED_BULK, _notificationDeletedBulk)
+        listen(SocketEventNames.NOTIFICATION_COUNTS, _notificationCounts)
     }
 
     /** Typing emission is fire-and-forget — an offline typing signal has no replay value. */
     fun emitTypingStart(conversationId: String) {
-        socketManager.emit("typing:start", JSONObject().put("conversationId", conversationId))
+        socketManager.emit(SocketEventNames.TYPING_START, JSONObject().put("conversationId", conversationId))
     }
 
     fun emitTypingStop(conversationId: String) {
-        socketManager.emit("typing:stop", JSONObject().put("conversationId", conversationId))
+        socketManager.emit(SocketEventNames.TYPING_STOP, JSONObject().put("conversationId", conversationId))
     }
 
     /**

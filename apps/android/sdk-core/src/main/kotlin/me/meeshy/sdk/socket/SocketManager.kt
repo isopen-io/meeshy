@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import io.socket.client.Socket
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -233,8 +234,8 @@ class SocketManager internal constructor(
     }
 
     private companion object {
-        const val EVENT_TOKEN_EXPIRED = "auth:token-expired"
-        const val EVENT_SESSION_REVOKED = "auth:session-revoked"
+        const val EVENT_TOKEN_EXPIRED = SocketEventNames.AUTH_TOKEN_EXPIRED
+        const val EVENT_SESSION_REVOKED = SocketEventNames.AUTH_SESSION_REVOKED
         const val EVENT_ERROR = "error"
     }
 }

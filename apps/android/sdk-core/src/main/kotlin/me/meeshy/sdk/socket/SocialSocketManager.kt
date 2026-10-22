@@ -1,5 +1,6 @@
 package me.meeshy.sdk.socket
 
+import me.meeshy.sdk.model.socket.SocketEventNames
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -172,35 +173,35 @@ class SocialSocketManager @Inject constructor(
     val statusUnreacted: SharedFlow<SocketStatusUnreactedData> = _statusUnreacted.asSharedFlow()
 
     fun attach() {
-        listen("post:created", _postCreated)
-        listen("post:updated", _postUpdated)
-        listen("post:reposted", _postReposted)
-        listen("post:liked", _postLiked)
-        listen("post:unliked", _postUnliked)
-        listen("post:bookmarked", _postBookmarked)
-        listen("post:deleted", _postDeleted)
-        listen("post:translation-updated", _postTranslationUpdated)
-        listen("comment:added", _commentAdded)
-        listen("comment:updated", _commentUpdated)
-        listen("comment:liked", _commentLiked)
-        listen("comment:unliked", _commentUnliked)
-        listen("comment:deleted", _commentDeleted)
-        listen("comment:reaction-added", _commentReactionAdded)
-        listen("comment:reaction-removed", _commentReactionRemoved)
-        listen("comment:translation-updated", _commentTranslationUpdated)
-        listen("media:caption-translation-updated", _mediaCaptionTranslationUpdated)
-        listen("story:created", _storyCreated)
-        listen("story:updated", _storyUpdated)
-        listen("story:viewed", _storyViewed)
-        listen("story:reacted", _storyReacted)
-        listen("story:unreacted", _storyUnreacted)
-        listen("story:deleted", _storyDeleted)
-        listen("story:translation-updated", _storyTranslationUpdated)
-        listen("status:created", _statusCreated)
-        listen("status:updated", _statusUpdated)
-        listen("status:deleted", _statusDeleted)
-        listen("status:reacted", _statusReacted)
-        listen("status:unreacted", _statusUnreacted)
+        listen(SocketEventNames.POST_CREATED, _postCreated)
+        listen(SocketEventNames.POST_UPDATED, _postUpdated)
+        listen(SocketEventNames.POST_REPOSTED, _postReposted)
+        listen(SocketEventNames.POST_LIKED, _postLiked)
+        listen(SocketEventNames.POST_UNLIKED, _postUnliked)
+        listen(SocketEventNames.POST_BOOKMARKED, _postBookmarked)
+        listen(SocketEventNames.POST_DELETED, _postDeleted)
+        listen(SocketEventNames.POST_TRANSLATION_UPDATED, _postTranslationUpdated)
+        listen(SocketEventNames.COMMENT_ADDED, _commentAdded)
+        listen(SocketEventNames.COMMENT_UPDATED, _commentUpdated)
+        listen(SocketEventNames.COMMENT_LIKED, _commentLiked)
+        listen(SocketEventNames.COMMENT_UNLIKED, _commentUnliked)
+        listen(SocketEventNames.COMMENT_DELETED, _commentDeleted)
+        listen(SocketEventNames.COMMENT_REACTION_ADDED, _commentReactionAdded)
+        listen(SocketEventNames.COMMENT_REACTION_REMOVED, _commentReactionRemoved)
+        listen(SocketEventNames.COMMENT_TRANSLATION_UPDATED, _commentTranslationUpdated)
+        listen(SocketEventNames.MEDIA_CAPTION_TRANSLATION_UPDATED, _mediaCaptionTranslationUpdated)
+        listen(SocketEventNames.STORY_CREATED, _storyCreated)
+        listen(SocketEventNames.STORY_UPDATED, _storyUpdated)
+        listen(SocketEventNames.STORY_VIEWED, _storyViewed)
+        listen(SocketEventNames.STORY_REACTED, _storyReacted)
+        listen(SocketEventNames.STORY_UNREACTED, _storyUnreacted)
+        listen(SocketEventNames.STORY_DELETED, _storyDeleted)
+        listen(SocketEventNames.STORY_TRANSLATION_UPDATED, _storyTranslationUpdated)
+        listen(SocketEventNames.STATUS_CREATED, _statusCreated)
+        listen(SocketEventNames.STATUS_UPDATED, _statusUpdated)
+        listen(SocketEventNames.STATUS_DELETED, _statusDeleted)
+        listen(SocketEventNames.STATUS_REACTED, _statusReacted)
+        listen(SocketEventNames.STATUS_UNREACTED, _statusUnreacted)
     }
 
     /**
@@ -209,12 +210,12 @@ class SocialSocketManager @Inject constructor(
      * post the viewer isn't otherwise implicitly subscribed to via a friend's feed room.
      */
     fun joinPostRoom(postId: String) {
-        socketManager.emit("post:join", JSONObject().put("postId", postId))
+        socketManager.emit(SocketEventNames.POST_JOIN, JSONObject().put("postId", postId))
     }
 
     /** Leaves the post-detail realtime room — pairs with [joinPostRoom]. */
     fun leavePostRoom(postId: String) {
-        socketManager.emit("post:leave", JSONObject().put("postId", postId))
+        socketManager.emit(SocketEventNames.POST_LEAVE, JSONObject().put("postId", postId))
     }
 
     private inline fun <reified T> listen(event: String, flow: MutableSharedFlow<T>) {
