@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +17,8 @@ import me.meeshy.sdk.model.MyShareLink
 import me.meeshy.sdk.model.MyShareLinksPhase
 import me.meeshy.sdk.model.MyShareLinksState
 import me.meeshy.sdk.model.ShareLinkExpiration
+import me.meeshy.sdk.model.ShareLinksReloadLaw
+import me.meeshy.sdk.model.ShareLinksReloadTrigger
 import me.meeshy.sdk.model.joinUrl
 import me.meeshy.sdk.model.auth.ServerEnvironmentResolver
 import me.meeshy.sdk.net.MeeshyConfig
@@ -47,6 +52,8 @@ class MyShareLinksViewModel @Inject constructor(
     @VisibleForTesting
     internal var now: () -> Long = { System.currentTimeMillis() }
 
+    private var loadJob: Job? = null
+
     init {
         load()
     }
@@ -54,17 +61,56 @@ class MyShareLinksViewModel @Inject constructor(
     /** Shareable join URL for [link] under the resolved [webOrigin]. */
     fun joinUrlFor(link: MyShareLink): String = link.joinUrl(webOrigin)
 
-    fun load() {
-        _state.update { it.loading() }
+    /** Retour sur l'écran (ex. après une création) : le cache frais dispense du réseau, un cache périmé non. */
+    fun onResumed() = load(ShareLinksReloadTrigger.Appear)
+
+    fun refresh() = load(ShareLinksReloadTrigger.PullToRefresh)
+
+    /**
+     * Cache-first : la liste en cache est peinte AU PREMIER INSTANT (jamais de spinner sur un
+     * cache non vide) ; [ShareLinksReloadLaw] décide ensuite si le serveur est interrogé. Un
+     * échec garde la liste précédente sous un bandeau.
+     */
+    fun load(trigger: ShareLinksReloadTrigger = ShareLinksReloadTrigger.Appear) {
+        if (loadJob?.isActive == true && trigger == ShareLinksReloadTrigger.Appear) return
+        val cached = repository.cache.read()
+        if (cached != null && trigger == ShareLinksReloadTrigger.Appear) {
+            _state.update { it.fromCache(cached.links) }
+        }
+        if (!ShareLinksReloadLaw.mustFetch(trigger, cacheIsFresh = cached?.isFresh == true)) {
+            if (_state.value.stats == null) loadStats()
+            return
+        }
+        _state.update { if (trigger == ShareLinksReloadTrigger.Appear) it.loading() else it.refreshing() }
+        loadJob = viewModelScope.launch { fetchFromServer() }
+    }
+
+    private suspend fun fetchFromServer() {
+        try {
+            val (links, stats) = coroutineScope {
+                val l = async { repository.listMyLinks() }
+                val st = async { repository.fetchMyStats() }
+                l.await() to st.await()
+            }
+            val fetched = (links as? NetworkResult.Success)?.data
+            _state.update { current ->
+                if (fetched == null) {
+                    current.failed((links as NetworkResult.Failure).error.message)
+                } else {
+                    current.loaded(ShareLinksReloadLaw.linksAfterFetch(current.links, fetched), stats.getOrNull())
+                }
+            }
+            if (fetched != null) repository.cache.put(fetched)
+        } catch (e: CancellationException) {
+            throw e
+        }
+    }
+
+    private fun loadStats() {
         viewModelScope.launch {
             try {
-                val links = repository.listMyLinks()
-                val stats = repository.fetchMyStats()
-                _state.update { current ->
-                    when (links) {
-                        is NetworkResult.Success -> current.loaded(links.data, stats.getOrNull())
-                        is NetworkResult.Failure -> current.failed(links.error.message)
-                    }
+                repository.fetchMyStats().getOrNull()?.let { stats ->
+                    _state.update { it.copy(stats = stats) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -72,14 +118,18 @@ class MyShareLinksViewModel @Inject constructor(
         }
     }
 
+    private fun mirrorToCache() = repository.cache.setLinks(_state.value.links)
+
     fun toggleActive(link: MyShareLink) {
         val snapshot = _state.value
         _state.update { it.toggled(link.linkId) }
+        mirrorToCache()
         viewModelScope.launch {
             try {
                 val result = repository.setActive(link.linkId, !link.isActive)
                 if (result is NetworkResult.Failure) {
                     _state.value = snapshot.failed(result.error.message)
+                    mirrorToCache()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -90,11 +140,13 @@ class MyShareLinksViewModel @Inject constructor(
     fun delete(link: MyShareLink) {
         val snapshot = _state.value
         _state.update { it.removed(link.linkId) }
+        mirrorToCache()
         viewModelScope.launch {
             try {
                 val result = repository.delete(link.linkId)
                 if (result is NetworkResult.Failure) {
                     _state.value = snapshot.failed(result.error.message)
+                    mirrorToCache()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -112,11 +164,13 @@ class MyShareLinksViewModel @Inject constructor(
         val expiresAtIso = expiration.expiresAtIso(now()) ?: return
         val snapshot = _state.value
         _state.update { it.extended(link.linkId, expiresAtIso) }
+        mirrorToCache()
         viewModelScope.launch {
             try {
                 val result = repository.extend(link.linkId, expiresAtIso)
                 if (result is NetworkResult.Failure) {
                     _state.value = snapshot.failed(result.error.message)
+                    mirrorToCache()
                 }
             } catch (e: CancellationException) {
                 throw e

@@ -38,6 +38,18 @@ class CreateShareLinkViewModelTest {
         var response: ApiResponse<CreateShareLinkResponse> = ApiResponse(success = false),
         val requests: MutableList<CreateShareLinkRequest> = mutableListOf(),
     ) : LinkApi {
+        var updateResponse: ApiResponse<Unit> = ApiResponse(success = true, data = Unit)
+        var lastUpdate: Pair<String, kotlinx.serialization.json.JsonObject>? = null
+        var lastExpand: String? = null
+
+        override suspend fun update(
+            linkId: String,
+            body: kotlinx.serialization.json.JsonObject,
+        ): ApiResponse<Unit> {
+            lastUpdate = linkId to body
+            return updateResponse
+        }
+
         override suspend fun create(body: CreateShareLinkRequest): ApiResponse<CreateShareLinkResponse> {
             requests += body
             return response
@@ -46,6 +58,7 @@ class CreateShareLinkViewModelTest {
         override suspend fun listMyLinks(
             offset: Int,
             limit: Int,
+            expand: String?,
         ): ApiResponse<List<me.meeshy.sdk.model.MyShareLink>> = ApiResponse(success = true, data = emptyList())
 
         override suspend fun fetchMyStats(): ApiResponse<me.meeshy.sdk.model.MyShareLinkStats> =
