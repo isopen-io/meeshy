@@ -333,3 +333,34 @@ describe('la bannière n’est là qu’à l’ouverture de l’application', ()
     expect(css).toMatch(/prefers-reduced-motion[\s\S]*\.player-banner-slot-expiring \{\s*animation: player-banner-fade/);
   });
 });
+
+/**
+ * L'HÔTE DES INVITATIONS À IMMORTALISER (#10174) — monté au repos, après la
+ * première peinture, pour un compte connecté seulement : la première peinture
+ * ne le paie pas, et un invité ne le charge jamais.
+ */
+describe('l’hôte des invitations', () => {
+  const waitForHost = async (host: ParentNode): Promise<Element | null> => {
+    for (let attempt = 0; attempt < 40 && host.querySelector('[data-photo-alert-host]') === null; attempt += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+    }
+    return host.querySelector('[data-photo-alert-host]');
+  };
+
+  test('connecté : l’hôte arrive après le repos, sans bannière tant que rien n’est franchi', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn />);
+    expect(host.querySelector('[data-photo-alert-host]')).toBeNull();
+    expect(await waitForHost(host)).not.toBeNull();
+    expect(host.querySelector('[data-photo-alert-banner]')).toBeNull();
+  });
+
+  test('invité : jamais monté', async () => {
+    const host = await mount(<TopBand routeKey="list" signedIn={false} />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    expect(host.querySelector('[data-photo-alert-host]')).toBeNull();
+  });
+});

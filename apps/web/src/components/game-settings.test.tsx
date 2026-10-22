@@ -184,3 +184,29 @@ describe('aucun lien transverse', () => {
     for (const path of ['/me/progression/regles', '/me/progression/carnet', '/me/progression/ligue']) expect(html).not.toContain(`href="${path}"`);
   });
 });
+
+/**
+ * « ME PROPOSER D'IMMORTALISER » (#10174, L18) — trois choix, une préférence de compte ; le réglage dit que la
+ * Chronique garde tout ; sans branchement, pas de carte.
+ */
+describe('les invitations à immortaliser', () => {
+  test('trois choix, le courant coché, et le choix envoyé', async () => {
+    const calls: string[] = [];
+    const host = await mount(<GameSettings {...props({ invitations: { current: 'every', onChange: (next) => calls.push(next) } })} />);
+    const inputs = [...host.querySelectorAll<HTMLInputElement>('[data-game-setting-invitations]')];
+    expect(inputs.map((input) => [input.value, input.checked])).toEqual([
+      ['every', true],
+      ['major', false],
+      ['never', false],
+    ]);
+    await click(host.querySelector('[data-game-setting-invitations="major"]'));
+    expect(calls).toEqual(['major']);
+    expect(host.textContent).toContain('la Chronique garde tout');
+  });
+
+  test('sans branchement : pas de carte ; hors ligne, la carte dit que le choix partira avec la connexion', () => {
+    expect(renderToStaticMarkup(<GameSettings {...props()} />)).not.toContain('data-game-setting-invitations');
+    const queued = renderToStaticMarkup(<GameSettings {...props({ invitations: { current: 'never', onChange: () => undefined, notice: 'Hors ligne : ton choix partira avec la connexion.' } })} />);
+    expect(text(queued)).toContain('partira avec la connexion');
+  });
+});
