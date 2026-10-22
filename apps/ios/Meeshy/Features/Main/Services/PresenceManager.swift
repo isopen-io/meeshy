@@ -324,8 +324,7 @@ final class PresenceManager: ObservableObject {
         restTasks[key]?.cancel()
         let hold = activityHold
         restTasks[key] = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(hold * 1_000_000_000))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(hold)), !Task.isCancelled, let self else { return }
             self.restTasks[key] = nil
             self.conversationViewers = self.conversationViewers.resting(userId: change.userId, conversationId: change.conversationId)
         }
@@ -422,8 +421,7 @@ final class PresenceManager: ObservableObject {
     private nonisolated func schedulePersist() {
         persistTask?.cancel()
         persistTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.persistDebounce * 1_000_000_000))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(Self.persistDebounce)), !Task.isCancelled, let self else { return }
             self.persistToDisk()
         }
     }
@@ -445,8 +443,7 @@ final class PresenceManager: ObservableObject {
     private nonisolated func scheduleVersionBump() {
         versionBumpTask?.cancel()
         versionBumpTask = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.versionBumpDebounce * 1_000_000_000))
-            guard !Task.isCancelled, let self else { return }
+            guard await cancellableSleep(for: .seconds(Self.versionBumpDebounce)), !Task.isCancelled, let self else { return }
             self.publishedStates = Self.resolvedStates(of: self.presenceMap, at: Date())
             self.refreshSignal.bump()
         }

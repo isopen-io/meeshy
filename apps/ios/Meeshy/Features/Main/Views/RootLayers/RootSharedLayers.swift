@@ -237,6 +237,9 @@ struct RootIntentRoutingLayer: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // La porte du verrou PIN (#11386) : toute ouverture retenue par le
+            // routeur se présente ici, sur les deux racines.
+            .modifier(ConversationLockGateLayer(router: router))
             .onAppear {
                 navigationHandoff?.rootAppeared(rootToken)
                 reopenTornDownComposer()

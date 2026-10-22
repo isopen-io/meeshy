@@ -10,7 +10,7 @@ struct ImageEditorHistoryOverlay: View {
     let onJump: (UUID) -> Void
     let onClose: () -> Void
 
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     private var isDark: Bool { theme.mode.isDark }
     private var accent: Color { Color(hex: accentColor) }

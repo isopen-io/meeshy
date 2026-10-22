@@ -26,11 +26,11 @@ struct GamePhotoOfferView: View {
                     VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                         Text(String(localized: "game.photo.offer.title", defaultValue: "On immortalise ?", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .accessibilityAddTraits(.isHeader)
                         Text(moment.title)
                             .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                     }
                     Spacer(minLength: 0)
                 }
@@ -41,7 +41,7 @@ struct GamePhotoOfferView: View {
                     } label: {
                         Text(String(localized: "game.photo.offer.start", defaultValue: "Photographier", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .padding(.horizontal, MeeshySpacing.lg)
                             .frame(minHeight: 44)
                             .background(Capsule().fill(MeeshyColors.brandPrimary))
@@ -54,7 +54,7 @@ struct GamePhotoOfferView: View {
                     } label: {
                         Text(String(localized: "game.photo.later", defaultValue: "Plus tard", bundle: .main))
                             .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                            .foregroundColor(theme.textMuted)
+                            .foregroundStyle(theme.textMuted)
                             .padding(.horizontal, MeeshySpacing.sm)
                             .frame(minHeight: 44)
                     }

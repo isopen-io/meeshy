@@ -141,6 +141,13 @@ export type ConversationPreviewMessage = {
   readonly originalLanguage?: string | null;
   readonly translations?: Readonly<Record<string, string>> | null;
   readonly createdAt: Instant;
+  /**
+   * Le message a été supprimé (par son auteur, ou retiré par la modération) :
+   * la ligne dit « Message supprimé », comme la bulle, et ne sert plus rien
+   * d'autre de lui (#11466). Un client ne le pose que le temps que l'aperçu
+   * recalculé du serveur arrive.
+   */
+  readonly deletedAt?: Instant | null;
   readonly messageType?: string | null;
   readonly effectFlags?: number | null;
   readonly ephemeralDuration?: number | null;
@@ -314,6 +321,9 @@ function authorOf(message: ConversationPreviewMessage, viewerId: string, str: St
 }
 
 function messageLine(message: ConversationPreviewMessage, input: ConversationPreviewInput, str: Str): ConversationPreview {
+  if (message.deletedAt != null) {
+    return preview({ kind: 'message', author: authorOf(message, input.viewerId, str), segments: [label(str('message.deleted'))] });
+  }
   if (message.callSummary) return callLine(message.callSummary, input.viewerId, str);
   if (message.messageType === 'system') return systemLine(message, input, str);
 

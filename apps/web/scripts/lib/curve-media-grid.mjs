@@ -39,6 +39,10 @@ export function mediaGridCurveFailures({ root, count }) {
     `${root}apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift`,
     'utf8',
   );
+  const downloadBadgeSwift = readFileSync(
+    `${root}apps/ios/Meeshy/Features/Main/Views/DownloadBadgeView.swift`,
+    'utf8',
+  );
   const filmstripSwift = readFileSync(
     `${root}apps/ios/Meeshy/Features/Main/Views/ConversationMediaFilmstrip.swift`,
     'utf8',
@@ -116,9 +120,15 @@ export function mediaGridCurveFailures({ root, count }) {
   );
 
   // --- Le voile `+N` (BubbleStandardLayout+Media.swift § overflowOverlay) ---
+  // Depuis #11569, la bulle et le Fil délèguent le dessin à UNE vue,
+  // `MediaTileOverflowLabel` (DownloadBadgeView.swift) : le site qui la monte
+  // ne porte plus de cote, on suit la délégation jusqu'à la vue qui la dessine.
   const overflowOverlaySwift = (() => {
     const m = /private var overflowOverlay:[\s\S]*?\n\s*\}\n\s*\}/.exec(bubbleMediaSwift);
-    return m === null ? '' : m[0];
+    const site = m === null ? '' : m[0];
+    if (!/\bMediaTileOverflowLabel\(/.test(site)) return site;
+    const label = /\nstruct MediaTileOverflowLabel: View \{[\s\S]*?\n\}/.exec(downloadBadgeSwift);
+    return label === null ? '' : label[0];
   })();
   const overflowOpacitySwift = (() => {
     const literal = new RegExp(`Color\\.black\\.opacity\\(${SWIFT_VALUE}\\)`).exec(overflowOverlaySwift);

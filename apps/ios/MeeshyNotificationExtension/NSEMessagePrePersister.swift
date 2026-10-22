@@ -4,7 +4,7 @@ import MeeshySDK
 
 /// Pré-enregistrement GRDB de la bulle d'un message qui arrive (extrait de
 /// `NotificationService`, comportement identique).
-nonisolated enum NSEMessagePrePersister {
+enum NSEMessagePrePersister {
 
     /// Writes the incoming message directly to the App Group GRDB store so that
     /// when the user taps the notification banner the message is already available
@@ -18,13 +18,12 @@ nonisolated enum NSEMessagePrePersister {
     /// commune : l'extension survit d'un push à l'autre, et un changement de
     /// compte entre deux pushes doit la faire écrire ailleurs. Personne de
     /// connecté ⇒ aucune base, aucune écriture.
-    private static let poolLock = NSLock()
-    nonisolated(unsafe) private static var poolsByPath: [String: DatabasePool] = [:]
+    private static let pools = Locked(uncheckedState: [String: DatabasePool]())
 
     private static func recipientPool() -> DatabasePool? {
         guard let path = recipientDatabasePath() else { return nil }
-        return poolLock.withLock {
-            if let pool = poolsByPath[path] { return pool }
+        return pools.mutateUnchecked { pools in
+            if let pool = pools[path] { return pool }
             do {
                 // N1 — mirror of `DependencyContainer.dbConfig()`'s busy timeout:
                 // the main app holds its own pool on this same file, and GRDB's
@@ -35,7 +34,7 @@ nonisolated enum NSEMessagePrePersister {
                 config.busyMode = .timeout(5)
                 let pool = try DatabasePool(path: path, configuration: config)
                 try MessageDatabaseMigrations.runAll(on: pool)
-                poolsByPath[path] = pool
+                pools[path] = pool
                 return pool
             } catch { return nil }
         }

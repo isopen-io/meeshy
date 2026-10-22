@@ -17,18 +17,18 @@ struct SecurityVerificationView: View {
                     // Hero glyph ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
                     Image(systemName: "lock.shield.fill")
                         .font(MeeshyFont.relative(64))
-                        .foregroundColor(MeeshyColors.indigo400)
+                        .foregroundStyle(MeeshyColors.indigo400)
                         .padding(.top, MeeshySpacing.xxxl + MeeshySpacing.sm)
                         .accessibilityHidden(true)
 
                     Text(String(localized: "security.verify.title", defaultValue: "Chiffrement de bout en bout", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .accessibilityAddTraits(.isHeader)
 
                     Text(String(localized: "security.verify.description", defaultValue: "Les messages avec \(conversationName) sont chiffrés de bout en bout.", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, MeeshySpacing.xxxl)
 
@@ -46,7 +46,7 @@ struct SecurityVerificationView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
                         Text(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)).bold()
-                            .foregroundColor(MeeshyColors.indigo400)
+                            .foregroundStyle(MeeshyColors.indigo400)
                     }
                 }
             }
@@ -83,12 +83,12 @@ struct SecurityVerificationView: View {
         VStack(spacing: MeeshySpacing.sm) {
             Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .textCase(.uppercase)
 
             Text(formatSafetyNumber(safetyNumber))
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold, design: .monospaced))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxl)
         }
@@ -100,7 +100,7 @@ struct SecurityVerificationView: View {
 
         Text(String(localized: "security.verify.howto", defaultValue: "Pour vérifier, comparez ce nombre avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.", bundle: .main))
             .font(MeeshyFont.relative(MeeshyFont.captionSize))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .multilineTextAlignment(.center)
             .padding(.horizontal, MeeshySpacing.xxl)
             .padding(.top, MeeshySpacing.lg)
@@ -113,17 +113,17 @@ struct SecurityVerificationView: View {
             // Glyphe d'état ≥40pt : décoratif, le titre adjacent porte le sens — masqué VoiceOver (doctrine 74i/86i)
             Image(systemName: "hourglass.circle")
                 .font(MeeshyFont.relative(40))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             Text(String(localized: "security.verify.unavailable.title", defaultValue: "Vérification indisponible", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .bold))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .accessibilityAddTraits(.isHeader)
 
             Text(String(localized: "security.verify.unavailable.description", defaultValue: "La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.captionSize))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, MeeshySpacing.xxl)
         }

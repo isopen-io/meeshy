@@ -124,8 +124,7 @@ struct ComposerSceneCameraBar: View {
         }
         .task(id: sliderTimer.generation) { @MainActor in
             let echeance = sliderTimer.generation
-            try? await Task.sleep(nanoseconds: UInt64(ComposerFlashSliderTimer.lifetime * 1_000_000_000))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .seconds(ComposerFlashSliderTimer.lifetime)), !Task.isCancelled else { return }
             sliderTimer.expire(echeance, voiceOver: voiceOverEnabled)
         }
     }

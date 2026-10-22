@@ -213,7 +213,7 @@ struct ShareLinkDetailView: View {
         UIAccessibility.post(notification: .announcement, argument: ShareLinkDetailCopy.copied)
         withAnimation { copiedFeedback = true }
         Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
+            _ = await cancellableSleep(for: .seconds(2))
             withAnimation { copiedFeedback = false }
         }
     }

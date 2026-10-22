@@ -81,18 +81,18 @@ struct CallLiveFrameProposalCard: View {
             HStack(alignment: .top, spacing: MeeshySpacing.sm) {
                 Image(systemName: "photo.artframe")
                     .font(.body.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .accessibilityHidden(true)
                 Text(text)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .fixedSize(horizontal: false, vertical: true)
             }
             HStack(spacing: MeeshySpacing.sm) {
                 Button(action: onDecline) {
                     Text(CallLiveFrameCopy.decline)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(Capsule().fill(Color.white.opacity(0.16)))
                 }
@@ -100,7 +100,7 @@ struct CallLiveFrameProposalCard: View {
                 Button(action: onAccept) {
                     Text(CallLiveFrameCopy.accept)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(Capsule().fill(MeeshyColors.brandGradient))
                 }
@@ -125,7 +125,7 @@ struct CallLiveFrameNotice: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(.footnote.weight(.semibold))
-        .foregroundColor(.white)
+        .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.sm)
         .background(Capsule().fill(.ultraThinMaterial).environment(\.colorScheme, .dark))

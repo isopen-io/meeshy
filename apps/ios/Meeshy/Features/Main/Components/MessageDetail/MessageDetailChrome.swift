@@ -28,10 +28,10 @@ struct MessageDetailTimelineBanner: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
                     .font(.footnote.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(detail)
                     .font(.caption2)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             Spacer()
@@ -77,11 +77,11 @@ struct MessageDetailEmptyState: View {
             // not text) and hidden from VoiceOver via the `.combine` parent.
             Image(systemName: icon)
                 .font(.system(size: MeeshyIconSize.xxxl, weight: .light))
-                .foregroundColor(theme.textMuted.opacity(0.4))
+                .foregroundStyle(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)

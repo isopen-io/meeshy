@@ -52,7 +52,8 @@ private struct MintCeremonyHost: View {
     init(request: MintCeremonyRequest, answer: MintCeremonyAnswer, onFinish: @escaping () -> Void) {
         self.answer = answer
         _run = StateObject(wrappedValue: MintCeremonyRun(
-            edition: request.edition, number: request.number, reduced: UIAccessibility.isReduceMotionEnabled, onFinish: onFinish
+            edition: request.edition, look: request.look, number: request.number, reduced: UIAccessibility.isReduceMotionEnabled,
+            onFinish: onFinish
         ))
     }
 

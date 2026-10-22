@@ -54,13 +54,6 @@ final class AudioTrackActivationWiringGuardTests: XCTestCase {
         XCTAssertLessThan(restore, giveBack)
     }
 
-    func test_flatThumbnail_bindsItsPlayerAsAlwaysMuted() throws {
-        let text = try source("Sources/MeeshyUI/Media/MeeshyVideoPlayer+FlatRenderer.swift")
-        XCTAssertTrue(text.contains("audioTracks.bind(to: queue, effectiveMuted: { true })"),
-                      "la vignette muette de chaque bulle et carte du fil ne décode pas d'audio")
-        XCTAssertTrue(text.contains("audioTracks.release()"))
-    }
-
     func test_longPressPreview_bindsItsPlayerAsAlwaysMuted() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent().deletingLastPathComponent()

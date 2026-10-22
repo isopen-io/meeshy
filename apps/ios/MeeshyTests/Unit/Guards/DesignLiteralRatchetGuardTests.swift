@@ -299,8 +299,10 @@ final class DesignLiteralRatchetGuardTests: XCTestCase {
     private static let rgbCeiling = 3
 
     /// Rayons numériques hors cadre libre. **Ne doit que DESCENDRE.**
-    /// `… | xargs grep -Po 'cornerRadius(:|\()[ \t]*[0-9]' | wc -l` → 120.
-    private static let cornerRadiusCeiling = 120
+    /// `… | xargs grep -Po 'cornerRadius(:|\()[ \t]*[0-9]' | wc -l` → 120 au 2026-09-30 ;
+    /// 119 au 2026-10-21, quand les styles de survol pointeur passent sur `MeeshyRadius`
+    /// et `MeeshyPointerShape.rectangle`.
+    private static let cornerRadiusCeiling = 119
 
     /// Marges numériques hors cadre libre. **Ne doit que DESCENDRE.**
     /// `… | xargs grep -Po '\.padding\((\.[a-z]+,[ \t]*|\[[^\]\n]*\],[ \t]*)?[0-9]' | wc -l` → 190.

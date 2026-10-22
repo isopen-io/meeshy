@@ -40,6 +40,17 @@ final class SharePendingSendConsumer {
         let ext: String
         let mime: String
         let bytes: Int
+        /// Miroir de `ShareStagedMedia.originalName` (#11531) : le nom que le
+        /// serveur garde. Absent des fiches écrites avant lui.
+        let originalName: String?
+
+        init(relPath: String, ext: String, mime: String, bytes: Int, originalName: String? = nil) {
+            self.relPath = relPath
+            self.ext = ext
+            self.mime = mime
+            self.bytes = bytes
+            self.originalName = originalName
+        }
     }
 
     nonisolated enum PendingTargetState: String, Codable, Equatable {
@@ -463,10 +474,13 @@ final class SharePendingSendConsumer {
                 forwardedFromId: nil,
                 forwardedFromConversationId: nil,
                 copyAttachmentsFromClientMessageId: nil,
+                sticker: nil,
                 // Les octets sont PARTAGÉS entre les cibles : les balayer ici
                 // laisserait les suivantes sans rien.
                 deletesSourceFiles: false,
-                createdAt: createdAt
+                createdAt: createdAt,
+                protection: .none,
+                originalNames: share.media.map(\.originalName)
             )
             return
         }

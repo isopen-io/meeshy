@@ -47,7 +47,7 @@ final class VoicePlaybackLiveActivityCoordinator {
     private func makeHost() -> (any LiveActivityHostProviding<VoicePlaybackSnapshot>)? {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return nil }
-        return LiveActivityHost<VoicePlaybackActivityAttributes> {
+        return LiveActivityHost<VoicePlaybackActivityAttributes, VoicePlaybackSnapshot> {
             VoicePlaybackActivityAttributes(labels: VoicePlaybackLabels(
                 play: String(localized: "media.playAudio", defaultValue: "Lire l'audio", bundle: .main),
                 pause: String(localized: "mini_player.pause", defaultValue: "Mettre en pause", bundle: .main),

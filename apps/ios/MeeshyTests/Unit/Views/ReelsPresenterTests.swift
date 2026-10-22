@@ -14,9 +14,9 @@ import MeeshySDK
 @MainActor
 final class ReelsPresenterTests: XCTestCase {
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ReelsPresenter.shared.dismiss()
-        super.tearDown()
+        try await super.tearDown()
     }
 
     // MARK: - presentFresh (appui long sur le bouton flottant)

@@ -18,10 +18,10 @@ final class GameFicheHierarchyTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func n(_ value: Int) -> String { GameCopy.formatCount(value) }
@@ -123,6 +123,75 @@ final class GameFicheHierarchyTests: XCTestCase {
                        "la tête de l'Héritage ne dit aucun prix")
         XCTAssertNil(GameHeritageHeadModel(balance: 0, treasury: TreasuryStanding(held: 0, tier: nil, next: nil), minted: 0).minted,
                      "rien de frappé : la ligne se tait")
+    }
+
+    // MARK: - La tête de l'Héritage : la dernière pièce, et un compte qui monte APRÈS la frappe (#11483, #11482)
+
+    func test_theHeritageHead_showsTheLastCoinStruck_drawnInTheHighestEditionReached() {
+        let treasury = TreasuryStanding(held: 0, tier: nil, next: nil)
+        XCTAssertNil(GameHeritageHeadModel(balance: 0, treasury: treasury, minted: 0).coin, "rien de frappé : le flan d'argent")
+        XCTAssertNil(GameHeritageHeadModel(balance: 0, treasury: treasury, minted: nil).coin)
+        XCTAssertEqual(GameHeritageHeadModel(balance: 88, treasury: treasury, minted: 91).coin?.number, 91,
+                       "la dernière pièce porte le numéro des frappées depuis toujours")
+        XCTAssertEqual(GameHeritageCoin(number: 91).edition, .silver)
+        XCTAssertEqual(GameHeritageCoin(number: 100).edition, .gold)
+        XCTAssertEqual(GameHeritageCoin(number: 247).edition, .gold, "le n° 247 dessiné en or (porteur, 2026-10-21)")
+        XCTAssertEqual(GameHeritageCoin(number: 1_247).edition, .prism)
+    }
+
+    func test_duringTheCeremony_theHeritageKeepsItsCountAndCoin_thenRisesByOne_whenTheCeremonyEnds() async throws {
+        let (game, wallet) = Self.porteur()
+        let (vm, service) = await loadedViewModelAndService(game, wallet)
+        let before = try XCTUnwrap(Self.heritage(vm))
+        let hold = GameHeritageHold(before: before, settled: vm.mintSettlement)
+        let probe = HeritageProbe()
+        service.duringMint = { @MainActor in
+            probe.servedInFlight = Self.heritage(vm)
+            probe.shownInFlight = Self.heritage(vm).map { GameHeritageHold.shown(served: $0, hold: hold, settled: vm.mintSettlement) }
+        }
+        service.mintResult = .success(APIMeeshMintResult(status: "minted", balance: 89, mintedLifetime: 92, number: 92, edition: .silver))
+        service.fetchProgressResult = .success(GameFixture.snapshot(
+            GameFixture.game(score: 367_329, glory: 45_600, minted: 92, held: 89),
+            meesh: GameFixture.meesh(balance: 89, minted: 92, debitable: 97_810)
+        ))
+
+        await vm.mint()
+
+        XCTAssertNotEqual(probe.servedInFlight, before, "l'écran optimiste a déjà compté la pièce pendant le vol")
+        XCTAssertEqual(probe.shownInFlight, before, "… mais la tête garde le compte et la pièce d'AVANT pendant l'attente de la passerelle")
+        let served = try XCTUnwrap(Self.heritage(vm))
+        XCTAssertEqual(GameHeritageHold.shown(served: served, hold: hold, settled: vm.mintSettlement), before,
+                       "la passerelle a confirmé, mais la cérémonie n'est pas finie : rien ne bouge")
+        let shown = GameHeritageHold.shown(served: served, hold: hold.ended(), settled: vm.mintSettlement)
+        XCTAssertEqual(shown.held, ProgressionFactText(GameCopy.meeshes(89), .meeshHeld), "la fin de la cérémonie : une Meesh de plus")
+        XCTAssertEqual(shown.coin, GameHeritageCoin(number: 92), "… et la nouvelle pièce prend la tête")
+    }
+
+    func test_aCeremonySkippedBeforeTheGatewayAnswers_waitsForItsAnswer() {
+        let (game, wallet) = Self.porteur()
+        let before = GameHeritageHeadModel(balance: wallet.balance, treasury: game.treasury, minted: 91)
+        let after = GameHeritageHeadModel(balance: 89, treasury: game.treasury, minted: 92)
+        let earlier = GameMintSettlement(outcome: .minted(number: 91), key: 4)
+        let hold = GameHeritageHold(before: before, settled: earlier).ended()
+
+        XCTAssertEqual(GameHeritageHold.shown(served: after, hold: hold, settled: earlier), before,
+                       "la frappe réglée AVANT le toucher ne libère pas la tête")
+        XCTAssertEqual(GameHeritageHold.shown(served: after, hold: hold, settled: GameMintSettlement(outcome: .minted(number: 92), key: 5)),
+                       after, "la réponse d'après le toucher, cérémonie passée : le compte monte, une fois")
+    }
+
+    func test_aRefusedStrike_changesNeitherTheCountNorTheCoin() async throws {
+        let (game, wallet) = Self.porteur()
+        let (vm, service) = await loadedViewModelAndService(game, wallet)
+        let before = try XCTUnwrap(Self.heritage(vm))
+        let hold = GameHeritageHold(before: before, settled: vm.mintSettlement)
+        service.mintResult = .failure(URLError(.notConnectedToInternet))
+
+        await vm.mint()
+
+        let served = try XCTUnwrap(Self.heritage(vm))
+        XCTAssertEqual(GameHeritageHold.shown(served: served, hold: hold.ended(), settled: vm.mintSettlement), before,
+                       "un refus : ni le compte ni la pièce ne changent")
     }
 
     func test_theMintFrame_saysThePriceOnce_inASentenceWithYourLight_andTheGloryInsideTheButton() {
@@ -259,6 +328,12 @@ final class GameFicheHierarchyTests: XCTestCase {
     }
 
     private func loadedViewModel(_ game: GameBlock, _ wallet: APIEngagementProgress.Meesh) async -> ProgressionViewModel {
+        await loadedViewModelAndService(game, wallet).vm
+    }
+
+    private func loadedViewModelAndService(
+        _ game: GameBlock, _ wallet: APIEngagementProgress.Meesh
+    ) async -> (vm: ProgressionViewModel, service: MockEngagementProgressService) {
         let service = MockEngagementProgressService()
         service.fetchProgressResult = .success(GameFixture.snapshot(game, meesh: wallet))
         let vm = ProgressionViewModel(
@@ -269,7 +344,13 @@ final class GameFicheHierarchyTests: XCTestCase {
             notebook: MockGamePhotoNotebook()
         )
         await vm.load(forceNetwork: true)
-        return vm
+        return (vm, service)
+    }
+
+    /// La tête de l'Héritage telle que la fiche la compose depuis l'état servi.
+    private static func heritage(_ vm: ProgressionViewModel) -> GameHeritageHeadModel? {
+        guard let progress = vm.progress, let game = vm.game else { return nil }
+        return GameHeritageHeadModel.served(progress: progress, game: game)
     }
 
     private static func source(_ path: String) -> URL {
@@ -283,4 +364,11 @@ final class GameFicheHierarchyTests: XCTestCase {
 @MainActor
 private final class FactsProbe {
     var facts: [ProgressionFactID] = []
+}
+
+/// Ce que la tête servait, et montrait, pendant que la frappe était en vol.
+@MainActor
+private final class HeritageProbe {
+    var servedInFlight: GameHeritageHeadModel?
+    var shownInFlight: GameHeritageHeadModel?
 }

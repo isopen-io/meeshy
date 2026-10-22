@@ -114,11 +114,11 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * #10005 — `insetsHandling: 'css'` (le defaut, ecrit pour etre lu) injecte les
  * encoches reelles sous les WebView qui les taisent. L'indice
  * `initialViewportFitValueHint` est lu par `SystemBars.java` (Capacitor 8,
- * `getConfig().getString("initialViewportFitValueHint")`) mais absent du type
- * de `@capacitor/cli` : une constante NON litterale le laisse passer sans
- * assertion, `insetsHandling` portant la ressemblance avec le type declare.
+ * `getConfig().getString("initialViewportFitValueHint")`). Depuis `@capacitor/cli`
+ * 8.5.3, le type le declare (`"auto" | "contain" | "cover"`) : la valeur est
+ * donc un litteral, comme `insetsHandling`.
  */
-const SYSTEM_BARS = { insetsHandling: 'css' as const, initialViewportFitValueHint: 'cover' };
+const SYSTEM_BARS = { insetsHandling: 'css' as const, initialViewportFitValueHint: 'cover' as const };
 
 export function resolveCapacitorConfig(env: Readonly<Record<string, string | undefined>>): CapacitorConfig {
   const startPath = env.MEESHY_SHELL_START_PATH;

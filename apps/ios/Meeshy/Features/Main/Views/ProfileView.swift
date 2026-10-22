@@ -7,7 +7,7 @@ import os
 
 struct ProfileView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var authManager: AuthManager
 
@@ -72,7 +72,7 @@ struct ProfileView: View {
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .task {
-                    try? await Task.sleep(for: .seconds(3))
+                    _ = await cancellableSleep(for: .seconds(3))
                     withAnimation { self.errorMessage = nil }
                 }
             }

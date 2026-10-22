@@ -2,8 +2,12 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   ADMIN_SOUVERAIN_PREFIXE,
+  adminConversationMediaQueryKey,
   adminConversationThreadQueryKey,
+  decodeAdminSovereignMedia,
+  loadAdminSovereignMedia,
   mergeAdminThreadPages,
+  nextAdminMediaCursor,
   nextAdminThreadOffset,
   ADMIN_CONVERSATIONS_ROOT_KEY,
   adminConversationsQueryKey,
@@ -455,5 +459,144 @@ describe('les pages du fil souverain se recousent dans l’ordre du fil (#11457)
     expect(nextAdminThreadOffset(page([row('m2', 2)], 0, true))).toBe(30);
     expect(nextAdminThreadOffset(page([row('m1', 1)], 30, true))).toBe(60);
     expect(nextAdminThreadOffset(page([row('m1', 1)], 60, false))).toBeUndefined();
+  });
+});
+
+/**
+ * **LES PIÈCES D'UNE CONVERSATION, SANS REMONTER LE FIL** (#11510) — le décodeur
+ * de `GET /admin/conversations/:id/attachments`.
+ *
+ * La passerelle VOILE déjà une pièce protégée ; ces témoins se mesurent sur une
+ * charge PLUS BAVARDE que ce qu'elle sert — un témoin fail-closed ne vaut que là.
+ */
+describe('decodeAdminSovereignMedia — les pièces, voilées chez le client aussi (#11510)', () => {
+  const porteur = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    createdAt: '2026-06-02T10:00:00.000Z',
+    senderId: 'u1',
+    senderParticipantId: 'p1',
+    sender: { id: 'p1', userId: 'u1', displayName: 'Alice', avatar: null, user: { id: 'u1', username: 'alice' } },
+    isProtected: false,
+    ...extra,
+  });
+  const piece = (id: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    messageId: 'm1',
+    originalName: `${id}.png`,
+    mimeType: 'image/png',
+    fileSize: 96,
+    fileUrl: `data:image/png;base64,${id.toUpperCase()}`,
+    thumbnailUrl: null,
+    thumbHash: null,
+    imageVariants: [],
+    transcription: null,
+    translations: null,
+    isViewOnce: false,
+    isBlurred: false,
+    effectFlags: 0,
+    isProtected: false,
+    message: porteur('m1'),
+    ...extra,
+  });
+  const charge = (data: readonly unknown[], pagination: Record<string, unknown> = { limit: 60, hasMore: false, nextCursor: null, form: 'keyset' }) =>
+    ({ data, pagination });
+
+  test('une pièce LIBRE devient un élément de pellicule : son genre, sa clé, son porteur daté et nommé', () => {
+    const page = decodeAdminSovereignMedia(servie(charge([piece('a1')])));
+    expect(page.items).toHaveLength(1);
+    const [item] = page.items;
+    expect(item?.kind).toBe('visual');
+    expect(item?.key).toBe('m1:a1');
+    expect(item?.messageId).toBe('m1');
+    expect(item?.attachment.fileUrl).toBe('data:image/png;base64,A1');
+    expect(item?.message.sender?.displayName).toBe('Alice');
+    expect(item?.message.createdAt).toBeInstanceOf(Date);
+    expect(item?.message.senderId).toBe('u1');
+  });
+
+  test('le genre suit la MÊME partition que l’index du produit — audio, document, contact', () => {
+    const page = decodeAdminSovereignMedia(
+      servie(
+        charge([
+          piece('a-son', { mimeType: 'audio/mp4' }),
+          piece('a-pdf', { mimeType: 'application/pdf' }),
+          piece('a-carte', { mimeType: 'text/vcard' }),
+        ]),
+      ),
+    );
+    expect(page.items.map((item) => item.kind)).toEqual(['audio', 'document', 'contact']);
+  });
+
+  test('une pièce VOILÉE par ses drapeaux reste listée, et ce que la charge porte en trop est RETIRÉ', () => {
+    const page = decodeAdminSovereignMedia(
+      servie(
+        charge([
+          piece('a-vue-unique', { isViewOnce: true, isProtected: true, fileUrl: 'data:image/png;base64,FUITE', thumbnailUrl: 'data:FUITE-VIGNETTE', thumbHash: 'FUITE-HASH', transcription: { text: 'FUITE-TEXTE' } }),
+        ]),
+      ),
+    );
+    expect(page.items).toHaveLength(1);
+    const [item] = page.items;
+    expect(item?.attachment.isViewOnce).toBe(true);
+    expect(JSON.stringify(item?.attachment)).not.toContain('FUITE');
+  });
+
+  test('une pièce RETENUE par son MESSAGE (chiffré, vue unique, expiré) n’entre pas : le fil en dit le constat', () => {
+    const page = decodeAdminSovereignMedia(
+      servie(charge([piece('a-chiffre', { isProtected: true, fileUrl: 'data:image/png;base64,FUITE', message: porteur('m1', { isProtected: true }) })])),
+    );
+    expect(page.items).toEqual([]);
+  });
+
+  test('une pièce sans porteur, sans identifiant ou sans type est ÉCARTÉE, jamais réparée', () => {
+    const page = decodeAdminSovereignMedia(
+      servie(charge([piece('a-orpheline', { message: null }), piece('', {}), piece('a-sans-type', { mimeType: undefined })])),
+    );
+    expect(page.items).toEqual([]);
+  });
+
+  test('le curseur suivant vient de la pagination À CÔTÉ de `data`, et s’éteint quand la passerelle dit qu’il n’y a plus rien', () => {
+    expect(decodeAdminSovereignMedia(servie(charge([piece('a1')], { limit: 60, hasMore: true, nextCursor: 'jeton', form: 'keyset' }))).nextCursor).toBe('jeton');
+    expect(decodeAdminSovereignMedia(servie(charge([piece('a1')], { limit: 60, hasMore: false, nextCursor: null, form: 'keyset' }))).nextCursor).toBeNull();
+    expect(nextAdminMediaCursor({ items: [], nextCursor: 'jeton' })).toBe('jeton');
+    expect(nextAdminMediaCursor({ items: [], nextCursor: null })).toBeUndefined();
+  });
+
+  test('la requête part sur l’adresse du catalogue, avec le curseur, le genre et le motif en QUERYSTRING', async () => {
+    const vu: { path?: string } = {};
+    const resultat = await loadAdminSovereignMedia({
+      source: 'gateway',
+      transport: transportQuiRend(charge([piece('a1')]), vu),
+      conversationId: 'conv 1',
+      cursor: 'jeton',
+      kind: 'visual',
+      reason: 'Enquête sur un signalement (#9142)',
+    } as never);
+    expect(resultat.ok).toBe(true);
+    expect(vu.path).toContain('/api/v1/admin/conversations/conv%201/attachments?');
+    expect(vu.path).toContain('cursor=jeton');
+    expect(vu.path).toContain('kind=visual');
+    expect(vu.path).toContain('reason=');
+  });
+
+  test('sans genre ni curseur, ni `kind=` ni `cursor=` ne partent — le rang souverain part aussi sans motif', async () => {
+    const vu: { path?: string } = {};
+    await loadAdminSovereignMedia({
+      source: 'gateway',
+      transport: transportQuiRend(charge([]), vu),
+      conversationId: 'c1',
+      cursor: null,
+      kind: null,
+      reason: null,
+    } as never);
+    expect(vu.path).not.toContain('kind=');
+    expect(vu.path).not.toContain('cursor=');
+    expect(vu.path).not.toContain('reason=');
+  });
+
+  test('la clé de requête des pièces porte le préfixe souverain — rien n’en persiste sur le poste', () => {
+    expect(adminConversationMediaQueryKey('c1', null)[0]).toBe(ADMIN_SOUVERAIN_PREFIXE);
+    expect(estClefSouveraine(adminConversationMediaQueryKey('c1', 'audio'))).toBe(true);
+    expect(adminConversationMediaQueryKey('c1', null)).not.toEqual(adminConversationMediaQueryKey('c1', 'audio'));
   });
 });

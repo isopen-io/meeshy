@@ -2,6 +2,7 @@ import { act } from 'react';
 import { describe, expect, test } from 'bun:test';
 
 import type { AdminDeps } from '@/lib/api/admin';
+import { sessionStore, type AuthenticatedSession } from '@/lib/api/session';
 import type { ApiResult, HttpRequest } from '@/lib/api/http';
 import { adminIdentityFixture } from '@/test-support/admin-assertions';
 import { setupAdminKitTests } from '@/test-support/admin-harness';
@@ -11,6 +12,13 @@ import { AdminReportActBar } from './admin-report-acts';
 /** UN SIGNALEMENT SE TRAITE EN UN GESTE (#10394) — l'acte et la clôture partent ensemble, en deux gestes au plus. */
 const { mount, mounter } = setupAdminKitTests({ languages: ['fr'] });
 const REPORT = '64f1c2a9e8b7d6c5b4a39281';
+const ME = '64f1c2a9e8b7d6c5b4a39201';
+const OTHER = '64f1c2a9e8b7d6c5b4a39202';
+
+const asMe = () =>
+  sessionStore.setState({
+    session: { status: 'authenticated', token: 'jwt', sessionToken: 's', expiresAt: Number.MAX_SAFE_INTEGER, user: { id: ME, username: 'moi', displayName: 'Moi' } } as unknown as AuthenticatedSession,
+  });
 
 function depsOf(answer: ApiResult<unknown>) {
   const calls: HttpRequest[] = [];
@@ -61,5 +69,31 @@ describe('traiter un signalement en un geste', () => {
     mounter.type(document, '[data-admin-motive]', 'Non fondé');
     await click(document.querySelector('[data-admin-action="confirm"]'));
     expect(calls[0]?.body).toEqual({ action: 'dismiss', reason: 'Non fondé' });
+  });
+});
+
+describe('un signalement qui vise le lecteur ne se traite pas par lui (#10458)', () => {
+  test('les boutons se désactivent, et le motif se lit', async () => {
+    asMe();
+    const { deps, calls } = depsOf({ ok: true, data: {} });
+    const host = await mount(
+      <>
+        <AdminReportActBar language="fr" report={{ id: REPORT, reportedType: 'post', reportedEntityId: 'p', reportedEntity: { owner: { id: ME } }, status: 'pending' }} onAnnounce={() => undefined} deps={deps} />
+        <AdminReportActBar language="fr" report={{ id: 'u', reportedType: 'user', reportedEntityId: ME, reportedEntity: null, status: 'pending' }} onAnnounce={() => undefined} deps={deps} />
+        <AdminReportActBar language="fr" report={{ id: 'o', reportedType: 'comment', reportedEntityId: 'c', reportedEntity: { owner: { id: OTHER } }, status: 'pending' }} onAnnounce={() => undefined} deps={deps} />
+      </>,
+      adminIdentityFixture({ role: 'MODERATOR' }),
+    );
+    const mine = [...host.querySelectorAll(`[data-admin-report-acts="${REPORT}"] [data-admin-report-act]`)] as HTMLButtonElement[];
+    expect(mine.map((button) => button.disabled)).toEqual([true, true, true]);
+    expect(host.querySelector(`[data-admin-report-acts="${REPORT}"] [data-admin-report-self]`)?.textContent).toBe('Ce signalement vise votre propre contenu : un autre modérateur le traitera.');
+    expect(host.querySelector(`[data-admin-report-acts="${REPORT}"]`)?.getAttribute('aria-describedby')).toBe(host.querySelector(`[data-admin-report-acts="${REPORT}"] [data-admin-report-self]`)?.id);
+    expect((host.querySelector('[data-admin-report-acts="u"] [data-admin-report-act="dismiss"]') as HTMLButtonElement).disabled).toBe(true);
+    expect((host.querySelector('[data-admin-report-acts="o"] [data-admin-report-act="dismiss"]') as HTMLButtonElement).disabled).toBe(false);
+    expect(host.querySelector('[data-admin-report-acts="o"] [data-admin-report-self]')).toBeNull();
+    await click(mine[2] ?? null);
+    expect(document.querySelector('[data-admin-confirm]')).toBeNull();
+    expect(calls).toHaveLength(0);
+    sessionStore.setState({ session: { status: 'anonymous' } });
   });
 });

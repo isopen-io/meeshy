@@ -11,7 +11,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "me.meeshy.app"
+        applicationId = "me.meeshy.android"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -77,6 +77,7 @@ dependencies {
     implementation(libs.timber)
     implementation(libs.androidx.glance.appwidget)
     implementation(libs.coil.compose)
+    implementation(libs.okhttp)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

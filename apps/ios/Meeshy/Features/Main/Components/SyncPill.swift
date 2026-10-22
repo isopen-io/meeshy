@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 import MeeshySDK
 import MeeshyUI
@@ -26,14 +27,13 @@ enum SyncPillDotStyle: Equatable, Sendable {
 /// when `source != nil`.
 /// Métriques partagées de la pastille — la taille qu'elle prend. Sa POSITION
 /// ne vit pas ici : c'est `SyncPillPlacement` qui la décide, pour tous ses
-/// points de montage (#10840).
+/// points de montage.
 ///
-/// **Deux tailles, et la frappe seule ouvre la grande** (#10893, porteur
-/// 2026-10-17 : « la taille du syncPill doit être diminuée, et la taille
-/// actuelle affichée UNIQUEMENT lorsqu'on a des frappes d'amis en cours dans
-/// les conversations communes »). Au repos — envoi, synchronisation, hors
-/// ligne — la pastille reprend ses mesures d'avant #10371 ; une entrée de
-/// frappe lui rend l'agrandissement ×1,6 de #10371.
+/// **Deux tailles, et la frappe seule ouvre la grande.** La grande taille
+/// n'est affichée QUE lorsque des amis écrivent dans les conversations
+/// communes. Au repos — envoi, synchronisation, hors ligne — la pastille
+/// garde sa taille compacte (22 pt) ; une entrée de frappe lui rend
+/// l'agrandissement ×1,6.
 nonisolated struct SyncPillMetrics: Equatable, Sendable {
     /// Hauteur rendue de la capsule, à la taille de texte par défaut : ligne de
     /// `labelSize` + `verticalPadding` des deux côtés ; Dynamic Type la fait
@@ -48,7 +48,7 @@ nonisolated struct SyncPillMetrics: Equatable, Sendable {
     let itemSpacing: CGFloat
     let maxTextWidth: CGFloat
 
-    /// La pastille d'avant #10371 (22 pt).
+    /// La pastille compacte (22 pt).
     static let compact = SyncPillMetrics(
         height: 22,
         labelSize: MeeshyFont.footnoteSize,
@@ -61,8 +61,8 @@ nonisolated struct SyncPillMetrics: Equatable, Sendable {
         maxTextWidth: 160
     )
 
-    /// L'agrandissement ×1,6 de #10371 (retour porteur 2026-10-12), réservé à
-    /// la frappe depuis #10893.
+    /// L'agrandissement ×1,6, réservé à
+    /// la frappe.
     static let typing = SyncPillMetrics(
         height: 35,
         labelSize: MeeshyFont.bodySize,
@@ -103,14 +103,14 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     /// permanently failed) so a finished operation never reads as ongoing.
     let showsActivityDots: Bool
     /// **L'identifiant de la ligne outbox à RELANCER** quand cette entrée dit
-    /// un échec définitif (#5830). `nil` partout ailleurs.
+    /// un échec définitif. `nil` partout ailleurs.
     ///
     /// Il vit ICI plutôt que dans `source` parce que ce n'est pas une
     /// destination : relancer une publication ne mène nulle part, ça agit sur
     /// place. Et il vit sur l'ENTRÉE plutôt que chez les deux racines parce que
     /// `RootView` et `iPadRootView` montent des arbres différents — un geste
-    /// écrit deux fois diverge, et la divergence ne rougit nulle part (mesurée
-    /// le 2026-09-08 sur « Publier un post »). La pastille est le seul étage
+    /// écrit deux fois diverge, et la divergence ne rougit nulle part
+    /// (« Publier un post »). La pastille est le seul étage
     /// que les deux racines partagent.
     let retryOutboxId: String?
 
@@ -139,7 +139,7 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     /// RELANCER est ce que le doigt veut. Naviguer vers « l'emplacement de
     /// l'opération » n'a d'ailleurs pas de sens pour une publication — le post
     /// n'existe pas encore, et c'est bien pour ça que `mapCreatePost` rend
-    /// `.unknown` et que le tap tombait dans un `break` (#5830).
+    /// `.unknown`.
     enum TapOutcome: Equatable {
         case retry(outboxId: String)
         case navigate(OutboxUIItem.Source)
@@ -155,24 +155,23 @@ struct SyncPillEntry: Identifiable, Equatable, Sendable {
     }
 }
 
-/// **Les contextes auxquels la pastille CÈDE, en un seul endroit** (#4028).
+/// **Les contextes auxquels la pastille CÈDE, en un seul endroit.**
 ///
-/// La règle était écrite en morceaux : le viewer de story dans la bannière, les
-/// réels chez l'hôte iPhone, rien chez l'iPad. Trois écritures d'une même
-/// question sont trois occasions de diverger — et c'est arrivé, l'iPad n'ayant
-/// jamais reçu la garde des réels (pour une raison documentée, mais que rien ne
-/// distinguait d'un oubli).
+/// La règle tient en UNE écriture : trois écritures d'une même question
+/// (le viewer de story dans la bannière, les réels chez l'hôte iPhone,
+/// l'iPad) sont trois occasions de diverger, et une garde des réels absente
+/// de l'iPad ne se distinguerait pas d'un oubli.
 ///
-/// Elle applique la doctrine du #4051 : **un contenu qui prend le haut de
+/// Elle applique la doctrine : **un contenu qui prend le haut de
 /// l'écran est un contexte à lui, et le chrome lui cède.** Une notification
-/// in-app en est un — et l'ordre de rendu ne pouvait de toute façon pas les
+/// in-app en est un — et l'ordre de rendu ne peut de toute façon pas les
 /// départager, la pastille étant un `.overlay` appliqué APRÈS le `ZStack` qui
-/// porte le toast : aucun `zIndex` interne ne pouvait la passer.
+/// porte le toast : aucun `zIndex` interne ne pourrait la passer.
 nonisolated enum SyncPillVisibility {
     static func isVisible(storyViewerPresenting: Bool,
                           inAppNoticePresenting: Bool) -> Bool {
         #if DEBUG
-        // Vitrine (#8855) : le serveur injoignable est voulu, son bandeau hors champ.
+        // Vitrine : le serveur injoignable est voulu, son bandeau hors champ.
         if VitrineLaunch.isActive { return false }
         #endif
         return !storyViewerPresenting && !inAppNoticePresenting
@@ -189,12 +188,12 @@ nonisolated enum SyncPillVisibility {
 /// - Rotates one entry per 2.7 s; pauses 5 s on manual tap.
 /// - Auto-hides after `SyncPillRotator.maxCycles` (3) complete passes.
 /// - Tap on an entry with `retryOutboxId != nil` invokes `onRetry(id)` —
-///   une publication définitivement échouée se RELANCE d'un doigt (#5830).
+///   une publication définitivement échouée se RELANCE d'un doigt.
 /// - Tap on an entry with `source != nil` invokes `onTap(source)` so the
 ///   caller can route to the conversation / post / story where the
 ///   operation is taking place.
 ///
-/// ## Où elle s'affiche — et où elle ne s'affiche PAS (#4051, tranché 2026-08-30)
+/// ## Où elle s'affiche — et où elle ne s'affiche PAS
 ///
 /// **La pastille ne traverse pas une présentation modale.** Une `sheet` ou un
 /// `fullScreenCover` est posé par le système AU-DESSUS de la vue présentante,
@@ -209,7 +208,7 @@ nonisolated enum SyncPillVisibility {
 /// recalculée à chaque rendu, donc à la fermeture de la feuille la pastille dit
 /// la vérité du moment, jamais un retard), et aucune n'est ACTIONNABLE depuis
 /// une feuille — on n'y répond pas à une frappe, et la relance d'une
-/// publication échouée (#5830), seule entrée ACTIONNABLE, attend sans
+/// publication échouée, seule entrée ACTIONNABLE, attend sans
 /// s'évaporer : la ligne reste `.exhausted` jusqu'à ce qu'on la touche, donc
 /// rien n'est perdu à la voir une feuille plus tard.
 ///
@@ -269,7 +268,7 @@ struct SyncPill: View {
     /// justificatif de conformité pour cette SC (elle ne couvre que la
     /// 2.3.3). Un second appui long relance.
     @State private var isPausedByUser = false
-    // MARK: - Activité récente : afficher, accentuer, s'effacer (#4017 / #4018)
+    // MARK: - Activité récente : afficher, accentuer, s'effacer
 
     /// Identifiants d'entrées déjà vus — sert à détecter l'arrivée d'une
     /// entrée NEUVE (un nouveau typing, un nouvel envoi) pour déclencher
@@ -280,15 +279,15 @@ struct SyncPill: View {
     /// sauf état PERSISTANT (hors-ligne, échec), qui la garde affichée.
     @State private var isVisible: Bool = false
     /// Effacement différé (one-shot, annulable) — réarmé à chaque nouvelle
-    /// entrée. Borné, jamais `repeatForever` (cf. audit chauffe #3940).
+    /// entrée. Borné, jamais `repeatForever`.
     @State private var hideSettle = Debouncer()
 
-    /// **La pastille est-elle en train d'enfler ?** (#6188)
+    /// **La pastille est-elle en train d'enfler ?**
     ///
     /// Un état à DEUX valeurs, et le retour au repos est programmé dans le même
-    /// geste que la montée : le défaut des révisions #4018 → #4050 n'était pas
-    /// l'amplitude, c'était une pastille qui restait grosse quand la fenêtre
-    /// d'accent se réarmait. `TypingAnnouncementLaw.scale(emphasizing:)` tient
+    /// geste que la montée : le défaut à éviter n'est pas l'amplitude mais une
+    /// pastille qui reste grosse quand une nouvelle entrée arrive.
+    /// `TypingAnnouncementLaw.scale(emphasizing:)` tient
     /// l'amplitude, et `emphasisTotalDuration` le retour — les deux sortent de
     /// la même loi pour qu'ils ne puissent pas diverger.
     @State private var isEmphasizing = false
@@ -298,7 +297,7 @@ struct SyncPill: View {
     @State private var emphasisSettle = Debouncer()
 
     /// Délai sans NOUVELLE entrée après lequel la pastille s'efface — évite
-    /// l'affichage permanent au repos (#4017). Réarmé à chaque arrivée.
+    /// l'affichage permanent au repos. Réarmé à chaque arrivée.
     private static let idleHideDelay: TimeInterval = 6.0
 
     init(
@@ -313,7 +312,7 @@ struct SyncPill: View {
 
     private var isDark: Bool { colorScheme == .dark }
 
-    /// Compacte au repos, grande pendant une frappe (#10893).
+    /// Compacte au repos, grande pendant une frappe.
     private var metrics: SyncPillMetrics { .for(entries: entries) }
 
     /// Entry shown right now. Clamped against `entries.count` so a list
@@ -377,17 +376,15 @@ struct SyncPill: View {
             return
         }
 
-        // La pastille porte de nouveau l'annonce de frappe, et elle enfle pour
-        // le dire (#6188, directive porteur 2026-09-12). Elle avait cédé ce
-        // rôle à `IslandEmergingBanner` le 2026-08-28 (#4066) ; l'île se tait
-        // désormais pour la frappe — elle sert encore la qualité d'appel
-        // dégradée, montée par `CallView`.
+        // La pastille porte l'annonce de frappe, et elle enfle pour
+        // le dire. L'île se tait pour la frappe : elle sert encore la qualité
+        // d'appel dégradée, montée par `CallView`.
         if !newIDs.isEmpty { isVisible = true }
         emphasizeIfTypingStarted(among: entries.filter { newIDs.contains($0.id) })
         scheduleAutoHide()
     }
 
-    /// **L'accent du début de frappe** (#6188) : la pastille enfle, tient, puis
+    /// **L'accent du début de frappe** : la pastille enfle, tient, puis
     /// revient à sa taille.
     ///
     /// Ne se joue que sur une entrée de frappe NEUVE — une frappe qui continue
@@ -415,7 +412,7 @@ struct SyncPill: View {
         }
     }
 
-    /// Programme l'effacement au repos (#4017). Un état persistant l'annule et
+    /// Programme l'effacement au repos. Un état persistant l'annule et
     /// garde la pastille affichée. One-shot borné (jamais `repeatForever`).
     private func scheduleAutoHide() {
         hideSettle.cancel()
@@ -449,22 +446,18 @@ struct SyncPill: View {
                 .fill(capsuleBackground)
                 .shadow(color: Color.black.opacity(isDark ? 0.35 : 0.12), radius: 6, x: 0, y: 2)
         )
-        // Le passage compacte ⇄ grande (#10893) se fait en douceur, jamais d'un saut.
+        // Le passage compacte ⇄ grande se fait en douceur, jamais d'un saut.
         .animation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.85), value: metrics)
-        // **La pastille enfle au début d'une frappe, puis redescend** (#6188,
-        // directive porteur 2026-09-12 ; amplitude ×1,1 depuis #10840).
+        // **La pastille enfle au début d'une frappe, puis redescend** (amplitude
+        // ×1,1).
         //
-        // Cinquième révision du même geste : accent ×1.5 (#4018), lié à la
-        // durée du signal (#4026), fenêtre réarmable (#4050), retiré au profit
-        // d'`IslandEmergingBanner` (#4066, `960f7d1df0`, 2026-08-28), rendu ici
-        // le 2026-09-12 ; ramené de ×1,18 à ×1,1 le 2026-10-16 (#10840). Le commentaire est TENU À JOUR plutôt que retiré : c'est lui
-        // qui a permis, à chaque reprise, de savoir que l'argument adverse
-        // (« une capsule de STATUT n'est pas le porteur d'une annonce ») avait
-        // déjà été tenu — et tranché dans l'autre sens par le porteur.
+        // L'argument adverse (« une capsule de STATUT n'est pas le porteur d'une
+        // annonce ») a été tenu, et tranché dans l'autre sens par le porteur : la
+        // pastille porte l'annonce de frappe, l'île se tait.
         //
         // L'amplitude et le retour sortent tous deux de `TypingAnnouncementLaw`
-        // pour qu'ils ne puissent pas diverger : le défaut des reprises
-        // précédentes n'était pas la taille, c'était le retour au repos.
+        // pour qu'ils ne puissent pas diverger : le risque n'est pas la taille,
+        // c'est le retour au repos.
         .scaleEffect(TypingAnnouncementLaw.scale(emphasizing: isEmphasizing))
         .contentShape(Capsule())
         .onTapGesture(perform: handleTap)
@@ -481,11 +474,11 @@ struct SyncPill: View {
             togglePause()
         }
         // L'abonnement vit ICI, dans la branche VISIBLE — pas sur le `Group`
-        // racine. Attaché à la racine, `.onReceive` connectait l'`autoconnect`
-        // même quand `entries` était vide (l'état nominal : connecté +
+        // racine. Attaché à la racine, `.onReceive` connecterait l'`autoconnect`
+        // même quand `entries` est vide (l'état nominal : connecté +
         // synchronisé → EmptyView) : un réveil main-thread 2×/s en permanence
-        // dans le chrome de l'app, pour un garde qui ne faisait que jeter le
-        // tick (audit chauffe 2026-08-26). Ici, la pill démontée = abonnement
+        // dans le chrome de l'app, pour un garde qui ne ferait que jeter le
+        // tick. Ici, la pill démontée = abonnement
         // annulé = timer déconnecté ; le pulse ne coûte que quand il s'affiche.
         // La rotation, elle, est déjà coupée par SyncPillRotator à
         // itemCount == 0.
@@ -528,9 +521,9 @@ struct SyncPill: View {
                 // `maxTextWidth` n'est qu'un plafond qui ne mord que si le texte
                 // défile.
                 // Les points d'activité vivent dans une place RÉSERVÉE à la
-                // largeur de « ... » : concaténés au libellé, ils faisaient
+                // largeur de « ... » : concaténés au libellé, ils feraient
                 // respirer la capsule deux fois par seconde pendant toute une
-                // frappe (#10840 — « préserver la taille initiale »).
+                // frappe (la taille initiale est préservée).
                 HStack(spacing: 0) {
                     Text(label)
                     if showsDots {
@@ -625,10 +618,10 @@ struct SyncPill: View {
     /// Une courbe `repeatForever` réarmée par ce même tic ne serait pas
     /// REMPLACÉE par la suivante : n'ayant pas de fin, l'animation précédente
     /// est toujours en vol, et SwiftUI les COMBINE. Le jeu d'animations
-    /// concurrentes de l'attribut s'allongeait donc de deux entrées par seconde,
+    /// concurrentes de l'attribut s'allongerait donc de deux entrées par seconde,
     /// indéfiniment, chacune réévaluée à CHAQUE frame (120 Hz en ProMotion) —
     /// une chauffe qui ne se voit pas à l'ouverture de l'écran mais CROÎT avec
-    /// le temps qu'on y passe. Mesuré sur iPhone 16 Pro Max / iOS 26.6 (#3940) :
+    /// le temps qu'on y passe : mesurée sur iPhone 16 Pro Max / iOS 26.6,
     /// conversation ouverte et INACTIVE, 9,4 % à 15,3 % de CPU selon le mode de
     /// lecture, dont 44 % à 68 % dans `DefaultCombiningAnimation.animate` sur
     /// le fil `com.apple.SwiftUI.AsyncRenderer`.
@@ -680,8 +673,8 @@ struct SyncPill: View {
         }
     }
 
-    /// Fond de la capsule — OPAQUE (#4016 : plus de fond quasi transparent à
-    /// 0,05/0,08 d'opacité). Une seule forme, en toute circonstance (#4066).
+    /// Fond de la capsule — OPAQUE (pas de fond quasi transparent à
+    /// 0,05/0,08 d'opacité). Une seule forme, en toute circonstance.
     private var capsuleBackground: AnyShapeStyle {
         AnyShapeStyle(isDark ? Color(white: 0.17) : Color.white)
     }
@@ -740,7 +733,7 @@ struct SyncPill: View {
     }
 }
 
-/// **Les points d'activité « . .. ... » d'une entrée en cours** (#10840).
+/// **Les points d'activité « . .. ... » d'une entrée en cours**
 ///
 /// Leur place est RÉSERVÉE à la largeur de trois points : seuls les points
 /// visibles changent au tic, jamais la largeur de la capsule. Une frappe

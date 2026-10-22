@@ -7,6 +7,8 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import me.meeshy.sdk.model.PrivacyPreferenceSyncBody
 import me.meeshy.sdk.model.PrivacyPreferences
 import me.meeshy.sdk.net.MeeshyApi
@@ -108,5 +110,31 @@ class PrivacyPreferencesSyncRepositoryTest {
         val cmid = repo(session, outbox).enqueueSync(PrivacyPreferences(blockScreenshots = true))
 
         assertThat(cmid).isNull()
+    }
+
+    /**
+     * The last link before the network: the queued payload is exactly what the PATCH carries, so
+     * this is where a closed "Appels hors contacts" switch is seen to reach the gateway under the
+     * key it still reads — and an OPEN one is seen NOT to be dropped as a default by the wire
+     * `Json` (`encodeDefaults = false`).
+     */
+    @Test
+    fun `enqueueSync sends the canonical calls key whatever its value and never the dead alias`() = runTest {
+        val session = mockk<SessionRepository>(relaxed = true)
+        coEvery { session.currentUserId } returns "me-42"
+        val outbox = mockk<OutboxRepository>()
+        val captured = slot<OutboxMutation>()
+        coEvery { outbox.enqueue(capture(captured)) } returns "cmid_1"
+        val repo = repo(session, outbox)
+
+        repo.enqueueSync(PrivacyPreferences(acceptCallsFromNonContacts = false))
+        val closed = MeeshyApi.json.parseToJsonElement(captured.captured.payload).jsonObject
+        repo.enqueueSync(PrivacyPreferences(acceptCallsFromNonContacts = true))
+        val open = MeeshyApi.json.parseToJsonElement(captured.captured.payload).jsonObject
+
+        assertThat(closed["acceptCallsFromNonContacts"]!!.jsonPrimitive.content).isEqualTo("false")
+        assertThat(open["acceptCallsFromNonContacts"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(open["notifyContactsOnReturn"]!!.jsonPrimitive.content).isEqualTo("true")
+        assertThat(closed.keys).doesNotContain("allowCallsFromNonContacts")
     }
 }

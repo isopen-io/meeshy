@@ -843,7 +843,8 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
             return XCTFail("`insertOptimisticMediaMessage` introuvable — la pose optimiste d'un média a changé de nom")
         }
         let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
-        let corps = String(send[insert.lowerBound...]) + records
+        let stager = try source(at: "Features/Main/ViewModels/Conversation/OptimisticMessageStager.swift")
+        let corps = String(send[insert.lowerBound...]) + records + stager
         XCTAssertFalse(corps.contains("expiresAt: nil, effectFlags: 0"),
                        "La ligne optimiste d'un média ne doit plus naître sans protection.")
         XCTAssertTrue(corps.contains("ephemeralDuration: protection.ephemeralDurationSeconds"),
@@ -860,11 +861,13 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_aucuneLigneOptimiste_neGraveDÉchéanceClient() throws {
         let send = try source(at: "Features/Main/ViewModels/ConversationViewModel+Send.swift")
         let records = try source(at: "Features/Main/ViewModels/ConversationViewModel+OptimisticRecords.swift")
-        XCTAssertFalse((send + records).contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
-        XCTAssertFalse((send + records).contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
-        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
+        let stager = try source(at: "Features/Main/ViewModels/Conversation/OptimisticMessageStager.swift")
+        let rows = send + records + stager
+        XCTAssertFalse(rows.contains("intent.expiresAt("), "Une échéance calculée à l'envoi fait décompter l'expéditeur.")
+        XCTAssertFalse(rows.contains("protection.expiresAt("), "Idem pour la ligne d'un média.")
+        XCTAssertEqual(rows.components(separatedBy: "ephemeralDuration: intent.ephemeralDurationSeconds").count - 1, 1,
                        "La ligne HORS LIGNE porte la durée.")
-        XCTAssertEqual(send.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
+        XCTAssertEqual(rows.components(separatedBy: "ephemeralDuration: resolvedEphemeralDuration\n").count - 1, 1,
                        "La ligne EN LIGNE porte la durée.")
     }
 
@@ -901,6 +904,7 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
             let poses = src.components(separatedBy: "insertOptimisticMediaMessage(").count - 1
             guard poses > 0 else { continue }
             let nommées = src.components(separatedBy: "protection: protection").count - 1
+                + src.components(separatedBy: "protection: intent.protection").count - 1
             XCTAssertGreaterThanOrEqual(
                 nommées, poses,
                 "\(chemin) pose \(poses) bulle(s) optimiste(s) : chacune doit nommer la protection "
@@ -914,15 +918,18 @@ final class ComposerProtectionTravelsGuardTests: XCTestCase {
     func test_leTap_saisitUneFoisEtSertTousLesGroupes() throws {
         let src = try source(at: "Features/Main/Views/ConversationView+AttachmentHandlers.swift")
         XCTAssertEqual(
-            src.components(separatedBy: "viewModel.captureArmedProtection(replyingTo: replyId)").count - 1, 1,
+            src.components(separatedBy: "viewModel.captureArmedProtection(replyingTo: route.replyToId)").count - 1, 1,
             "Une seule saisie par tap : deux saisies rendraient la seconde vide."
         )
-        let envois = src.components(separatedBy: "viewModel.send(OutgoingMessage(").count - 1
-        let servis = src.components(separatedBy: "protection: protection").count - 1
+        let textOnly = src.components(separatedBy: "protection: intent.protection, originalLanguage").count - 1
+        XCTAssertEqual(textOnly, 1, "L'envoi texte seul de ce tap doit recevoir la protection saisie.")
+        let runner = try source(at: "Features/Main/Views/AttachmentSendRunner.swift")
+        let envois = runner.components(separatedBy: "host.send(OutgoingMessage(").count - 1
+        let servis = runner.components(separatedBy: "protection: batch.protection").count - 1
+        XCTAssertGreaterThanOrEqual(envois, 2, "Le coureur envoie chaque groupe, puis le texte ou le lieu.")
         XCTAssertGreaterThanOrEqual(
-            servis, envois - 1,
-            "Chaque envoi de ce tap — média comme texte — doit recevoir la protection saisie. "
-                + "Le -1 tolère l'envoi de repli qui ne part pas d'un tap."
+            servis, envois,
+            "Chaque envoi de ce tap — média comme texte — doit recevoir la protection saisie."
         )
     }
 }

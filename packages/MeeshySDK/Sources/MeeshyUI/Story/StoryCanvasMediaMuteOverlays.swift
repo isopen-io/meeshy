@@ -35,8 +35,8 @@ struct StoryCanvasMediaMuteOverlays: View {
     /// `isBackground != true`). La position vient du modèle (`x`/`y`
     /// normalisés) ; le drag local est éphémère et ne pousse que sur release
     /// pour éviter le scintillement des vues observant le VM. L'icône absente
-    /// venait du fait que `StoryAudioPlayerView` n'était wired nulle part —
-    /// ce chip est plus léger et dédié à la composition.
+    /// venait du fait que l'ancienne pastille de lecture n'était wired nulle
+    /// part (retirée, #9890) — ce chip est plus léger et dédié à la composition.
     @ViewBuilder
     private var audioForegroundOverlay: some View {
         if !viewModel.isDrawingActive {
@@ -113,7 +113,7 @@ struct StoryCanvasMediaMuteOverlays: View {
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 30, height: 30)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))
@@ -173,7 +173,7 @@ struct StoryCanvasMediaMuteOverlays: View {
         } label: {
             Image(systemName: muted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(width: 30, height: 30)
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 1))

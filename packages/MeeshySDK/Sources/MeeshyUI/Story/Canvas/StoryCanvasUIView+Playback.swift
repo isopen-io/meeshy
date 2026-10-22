@@ -270,7 +270,7 @@ extension StoryCanvasUIView {
         playheadTickClock = PlayheadTickClock()
         // Proxy weak partagé : le link ne retient pas le canvas — un canvas
         // jamais fenêtré (setMode avant attach puis jeté) reste libérable.
-        let cadence = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
+        let cadence = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
         let link = WeakDisplayLinkTarget.makeLink(frameRateRange: cadence) { [weak self] link in
             guard let self else {
                 link.invalidate()
@@ -361,7 +361,7 @@ extension StoryCanvasUIView {
     /// qui approche, un audio qui se planifie ou un hôte qui s'abonne changent
     /// le palier sans repasser par `startPlayback`. N'écrit que sur changement.
     func applyPlaybackCadence(to link: CADisplayLink) {
-        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier())
+        let range = StoryPlaybackCadence.frameRateRange(for: playbackCadenceTier(), mediaTier: DeviceMediaTier.current)
         let current = link.preferredFrameRateRange
         guard current.minimum != range.minimum
                 || current.maximum != range.maximum

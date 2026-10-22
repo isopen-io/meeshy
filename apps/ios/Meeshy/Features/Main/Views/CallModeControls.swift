@@ -188,7 +188,7 @@ struct CallEffectsModeControls: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "wand.and.rays.inverse")
                     .font(.footnote)
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
                 Slider(value: smoothingBinding, in: Double(range.lowerBound) ... Double(range.upperBound))
                     .tint(.white)
@@ -196,7 +196,7 @@ struct CallEffectsModeControls: View {
                     .accessibilityValue(LocalizedNumber.percent(Int((config.skinSmoothingIntensity * 100).rounded())))
                 Image(systemName: "wand.and.rays")
                     .font(.footnote)
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)
@@ -218,7 +218,7 @@ struct CallEffectsModeControls: View {
             HStack(spacing: MeeshySpacing.sm) {
                 Image(systemName: "sun.min")
                     .font(.footnote)
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
                 Slider(value: brightnessBinding, in: -limit ... limit)
                     .tint(.white)
@@ -226,7 +226,7 @@ struct CallEffectsModeControls: View {
                     .accessibilityValue(percent)
                 Image(systemName: "sun.max")
                     .font(.footnote)
-                    .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                    .foregroundStyle(MeeshyColors.mediaChromeSecondary)
                     .accessibilityHidden(true)
             }
             .frame(minHeight: 44)

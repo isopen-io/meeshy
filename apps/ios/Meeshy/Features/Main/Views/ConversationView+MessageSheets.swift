@@ -19,7 +19,7 @@ struct ConversationMessageActions {
     let beginSelection: (String) -> Void
     let deleteMedia: (Message) -> Void
     let requestDelete: (String) -> Void
-    let edit: (Message) -> Void
+    let beginEdit: (Message) -> Void
     let export: (Message, Bool) -> Void
     let compose: (Message) -> Void
 }
@@ -73,9 +73,9 @@ struct ConversationMessageSheets: ViewModifier {
                         HapticFeedback.light()
                     },
                     onDeleteMessage: { actions.requestDelete(msg.id) },
-                    onEdit: { actions.edit(msg) },
+                    onEdit: { actions.beginEdit(msg) },
                     onCopy: {
-                        guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
+                        guard MessageExitTransport.copyDisplayed(msg, in: viewModel) else { return }
                         HapticFeedback.success()
                     },
                     onShare: { if MessageExitTransport.mayShare(msg) { overlayState.shareMessage = msg } }, onImagine: { actions.export(msg, false) },

@@ -36,6 +36,7 @@ import { resolveCallEndedRooms } from '../utils/callEndedFanout';
 import { handleMediaToggle as handleMediaToggleBody, mapMediaToggleError, registerMediaToggleListeners } from './call-media-toggle';
 import { announceRecordingArrival, registerCallRecordingEvents } from './call-recording-events';
 import { evictStaleSameUserSockets } from './call-room-eviction';
+import { CallSignalReplay } from './call-signal-replay';
 import { DISCONNECT_GRACE_MS, GRACE_EXTENSION_MS, MAX_GRACE_EXTENSIONS, alreadyActiveCallDetails, isCallRevenant } from './call-rejoin';
 import { forceLeaveSparesLiveCall } from './call-force-leave-scope';
 import { departedMemberParticipantWhere, participantKeyWhere } from './departed-member-participant-where';
@@ -180,6 +181,8 @@ export class CallEventsHandler {
    */
   private bufferedOffers = new Map<string, { signal: CallSignalEvent; bufferedAt: number }>();
   private static readonly OFFER_BUFFER_TTL_MS = 150_000;
+  /** #11468 — candidats ICE et sockets déjà servies de chaque slot de `bufferedOffers`. */
+  private readonly signalReplay = new CallSignalReplay();
 
   /**
    * Idempotency guard for `createMissedCallNotifications`, keyed by callId →
@@ -312,6 +315,7 @@ export class CallEventsHandler {
           this.bufferedOffers.delete(key);
         }
       }
+      this.signalReplay.sweep(CallEventsHandler.OFFER_BUFFER_TTL_MS);
       for (const [callId, entry] of this.signalSessionCache) {
         if (now - entry.fetchedAt >= CallEventsHandler.SIGNAL_SESSION_TTL_MS) {
           this.signalSessionCache.delete(callId);
@@ -1121,7 +1125,9 @@ export class CallEventsHandler {
         this.bufferedOffers.delete(key);
       }
     }
-    this.bufferedOffers.set(`${callId}:${signal.signal.to}`, { signal, bufferedAt: now });
+    const slot = `${callId}:${signal.signal.to}`;
+    this.signalReplay.descriptionBuffered(slot, this.bufferedOffers.has(slot));
+    this.bufferedOffers.set(slot, { signal, bufferedAt: now });
   }
 
   /**
@@ -1140,6 +1146,7 @@ export class CallEventsHandler {
         this.bufferedOffers.delete(key);
       }
     }
+    this.signalReplay.clearCall(callId);
   }
 
   /**
@@ -1171,6 +1178,7 @@ export class CallEventsHandler {
     for (const id of participantIdentities) {
       if (!id) continue;
       this.bufferedOffers.delete(`${callId}:${id}`);
+      this.signalReplay.clearSlot(`${callId}:${id}`);
     }
   }
 
@@ -2155,11 +2163,21 @@ export class CallEventsHandler {
 
         const { callSession, iceServers } = joinResult;
 
+        // #11468 — tant que l'appelé n'a pas décroché, chacun de ses appareils
+        // qui sonne garde sa place dans la room (l'offre doit atteindre celui qui
+        // décrochera) ; un même utilisateur déjà participant n'est réannoncé
+        // qu'après le décroché, sur une socket neuve (reconnexion).
+        const alreadyInRoom = socket.rooms?.has(ROOMS.call(data.callId)) === true;
+        const calleeStillRinging = !callSession.answeredAt && callSession.initiatorId !== userId;
+        const idempotentJoin = joinResult.rejoined === true && (alreadyInRoom || calleeStillRinging);
+
         // Join call room
         await socket.join(ROOMS.call(data.callId));
 
         // C8 — evict our own stale sockets; the remaining room feeds the broadcast below (#9087).
-        const roomAfterEviction = await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
+        const roomAfterEviction = calleeStillRinging
+          ? null
+          : await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
 
         // Get the participant that just joined
         const participant = callSession.participants.find(
@@ -2201,7 +2219,7 @@ export class CallEventsHandler {
         // connectionMap, `remoteUserId` serait toujours undefined, entraînant le
         // fallback STUN-only à chaque broadcast — ICE échouait sur tout call entre
         // devices derrière des NATs distincts (simulator ↔ device cellulaire, par ex.).
-        const socketsInRoom = roomAfterEviction ?? await io.in(ROOMS.call(data.callId)).fetchSockets();
+        const socketsInRoom = idempotentJoin ? [] : (roomAfterEviction ?? await io.in(ROOMS.call(data.callId)).fetchSockets());
         for (const remoteSocket of socketsInRoom) {
           if (remoteSocket.id === socket.id) continue;
           const remoteUserId = getUserId(remoteSocket.id);
@@ -2245,14 +2263,19 @@ export class CallEventsHandler {
                 p.participantId === senderId
               )
           );
-          if (senderActive) {
+          const slot = `${data.callId}:${replayOffer.signal.to}`;
+          if (senderActive && !this.signalReplay.wasDeliveredTo(slot, socket.id)) {
+            const candidates = this.signalReplay.candidatesFor(slot);
             socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
+            candidates.forEach((candidate) => socket.emit(CALL_EVENTS.SIGNAL, candidate));
+            this.signalReplay.delivered(slot, [socket.id]);
             logger.info('📦 [CALL] Replayed buffered offer on (re)join', {
               callId: data.callId,
               to: userId,
-              type: replayOffer.signal.type
+              type: replayOffer.signal.type,
+              candidates: candidates.length
             });
-          } else {
+          } else if (!senderActive) {
             // Vague 138 — scoped to THIS joiner's own stale slot, mirroring
             // `clearBufferedOfferFor`'s doc comment (the group-call bug it
             // fixed for call:leave/call:force-leave/call:end). This branch
@@ -2925,6 +2948,9 @@ export class CallEventsHandler {
           // recovery path, stalling the call one-sided. The caller still gets
           // success:false so its at-least-once retry can also fire; the
           // buffer is the backstop.
+          if (data.signal.type === 'ice-candidate') {
+            this.signalReplay.candidateRelayed(`${data.callId}:${data.signal.to}`, { callId: validation.data.callId, signal: validation.data.signal });
+          }
           if (data.signal.type === 'offer' || data.signal.type === 'ice-restart' || data.signal.type === 'answer') {
             this.bufferOffer(data.callId, validation.data as CallSignalEvent);
             logger.info('📦 [CALL] Buffered signal for late (re)join', {
@@ -3002,6 +3028,10 @@ export class CallEventsHandler {
         // lets it recover on rejoin (epoch-guarded, last-write-wins).
         if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
           this.bufferOffer(data.callId, relayedSignal);
+          this.signalReplay.delivered(`${data.callId}:${data.signal.to}`, targetSocketIds);
+        }
+        if (data.signal.type === 'ice-candidate') {
+          this.signalReplay.candidateRelayed(`${data.callId}:${data.signal.to}`, relayedSignal);
         }
 
         // Transition to active on first successful signal exchange
@@ -3050,6 +3080,8 @@ export class CallEventsHandler {
           // identifies the FIRST answer (never a later renegotiation answer,
           // e.g. enabling video mid-call, which would already have it set).
           const isFirstAnswer = !callSession.answeredAt;
+          // #11468 — l'appareil qui répond devient la seule socket de son utilisateur dans la room.
+          await evictStaleSameUserSockets({ io, callId: data.callId, userId, socketId: socket.id, getUserId });
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch((err) => logger.warn('call:status update failed (active on answer)', { callId: data.callId, err }));
 
           // Audit Vague 27 — relocated from call:join, where this was

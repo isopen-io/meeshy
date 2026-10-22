@@ -348,9 +348,9 @@ final class GamePhotoSession: ObservableObject {
         haptics.play(GameHapticPattern.strikeInPlace)
         if strikeDuration > 0 {
             // Un rendu à 0 d'abord : sans lui, l'emblème naîtrait déjà posé et rien ne s'animerait.
-            try? await Task.sleep(nanoseconds: 40_000_000)
+            _ = await cancellableSleep(for: .milliseconds(40))
             strike = 1
-            try? await Task.sleep(nanoseconds: strikeDuration)
+            _ = await cancellableSleep(for: .nanoseconds(strikeDuration))
         } else {
             strike = 1
         }

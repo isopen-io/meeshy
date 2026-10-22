@@ -36,6 +36,7 @@ final class CallLiveActivityCoordinator {
         cancellables = []
         guard let host = makeHost() else { return }
         self.host = host
+        host.onStarted = { [weak self] _ in self?.publishAvatarIfNeeded() }
         host.endOrphans()
         avatars.sweep(keeping: [])
         LiveActivityCommandBinding.shared.install()
@@ -56,7 +57,7 @@ final class CallLiveActivityCoordinator {
     private func makeHost() -> (any LiveActivityHostProviding<CallActivitySnapshot>)? {
         #if canImport(ActivityKit)
         guard #available(iOS 16.1, *) else { return nil }
-        return LiveActivityHost<CallActivityAttributes> {
+        return LiveActivityHost<CallActivityAttributes, CallActivitySnapshot> {
             CallActivityAttributes(labels: CallActivityLabels(
                 mute: String(localized: "call.pill.mute", defaultValue: "Couper le micro", bundle: .main),
                 unmute: String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro", bundle: .main),
@@ -88,13 +89,13 @@ final class CallLiveActivityCoordinator {
         case .none:
             guard let running, !host.isRunning, UIApplication.shared.applicationState == .active else { return }
             host.start(running)
-            publishAvatarIfNeeded(host: host)
+            publishAvatarIfNeeded()
         case .start(let snapshot):
             host.start(snapshot)
-            publishAvatarIfNeeded(host: host)
+            publishAvatarIfNeeded()
         case .update(let snapshot):
             host.isRunning ? host.update(snapshot) : host.start(snapshot)
-            publishAvatarIfNeeded(host: host)
+            publishAvatarIfNeeded()
         case .end(let snapshot):
             encryption = nil
             withdrawAvatar(host: host)
@@ -102,8 +103,10 @@ final class CallLiveActivityCoordinator {
         }
     }
 
-    private func publishAvatarIfNeeded(host: any LiveActivityHostProviding<CallActivitySnapshot>) {
-        guard let manager, !manager.isGroupMeshCall,
+    /// L'ouverture se fait hors du fil principal : l'id n'existe qu'une fois
+    /// l'activité ouverte (`onStarted`), jamais juste après `start`.
+    private func publishAvatarIfNeeded() {
+        guard let manager, let host, !manager.isGroupMeshCall,
               let remoteUserId = manager.remoteUserId, !remoteUserId.isEmpty,
               let activityID = host.activityID,
               publishedAvatarActivityID != activityID else { return }

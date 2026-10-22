@@ -35,7 +35,7 @@ extension CallView {
 
                 Text(String(localized: "call.filters", defaultValue: "Filtres", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
             }
         }
         .buttonStyle(CallPressButtonStyle())
@@ -58,12 +58,12 @@ extension CallView {
                 Image(systemName: "phone.down.fill")
                     // Doctrine 86i : glyphe de fin d'appel dans un cercle glass fixe (diameter 56) → figé.
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .endCallGlass(diameter: 56)
 
                 Text(String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                    .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }

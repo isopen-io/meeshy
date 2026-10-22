@@ -6,8 +6,10 @@ import type { Message, Participant } from '@/lib/api/types';
 import type { Viewer } from '@/lib/api/viewer';
 import { buildLivingSummary, resolveSkeleton } from '@/lib/summary/assembly';
 import type { ConversationEpisode, FaceRampEntry } from '@/lib/summary/types';
+import type { SummaryEntryMenu } from '@/lib/view/summary-exits';
 
 import { LivingSummary } from './living-summary';
+import { useSummaryEntryMenu } from './summary-entry-menu';
 
 /**
  * LE MONTAGE DU RÉSUMÉ VIVANT (#5695, étape 8) — le module LAZY
@@ -50,6 +52,7 @@ export function SummaryHost({
   onReplyToPerson,
   onOpenEpisode,
   onResumeThread,
+  entryMenu,
 }: {
   readonly conversationId: string;
   readonly messages: readonly Message[];
@@ -61,6 +64,8 @@ export function SummaryHost({
   readonly onReplyToPerson: (entry: FaceRampEntry) => void;
   readonly onOpenEpisode: (episode: ConversationEpisode) => void;
   readonly onResumeThread: () => void;
+  /** Le menu d'appui long des entrées (#11225) — absent, aucune entrée n'en porte. */
+  readonly entryMenu?: SummaryEntryMenu;
 }) {
   const nowRef = useMemo(() => Date.now(), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -107,19 +112,24 @@ export function SummaryHost({
       });
     return () => controller.abort();
   }, [conversationId, viewer.isAnonymous]);
+  const entryPress = useSummaryEntryMenu(entryMenu);
   const showsSkeleton = resolveSkeleton({ digest: model.digest, faceRamp: model.faceRamp, agentSummary });
 
   return (
-    <LivingSummary
-      model={model}
-      agentSummary={agentSummary}
-      showsSkeleton={showsSkeleton}
-      isComplete={model.digest.isComplete}
-      onReplyToPerson={onReplyToPerson}
-      onOpenEpisode={onOpenEpisode}
-      onResumeThread={onResumeThread}
-      {...(lang !== undefined ? { lang } : {})}
-    />
+    <>
+      <LivingSummary
+        model={model}
+        agentSummary={agentSummary}
+        showsSkeleton={showsSkeleton}
+        isComplete={model.digest.isComplete}
+        onReplyToPerson={entryPress.guard(onReplyToPerson)}
+        onOpenEpisode={entryPress.guard(onOpenEpisode)}
+        onResumeThread={onResumeThread}
+        {...(lang !== undefined ? { lang } : {})}
+        {...(entryPress.press === undefined ? {} : { press: entryPress.press })}
+      />
+      {entryPress.panel}
+    </>
   );
 }
 

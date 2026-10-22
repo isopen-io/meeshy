@@ -28,10 +28,9 @@ final class CallPreviewSocketTests: XCTestCase {
         XCTAssertEqual(signal?["sdp"] as? String, "v=0")
     }
 
-    func test_previewHandlers_areRegisteredOnTheSocket() throws {
-        let source = try String(contentsOf: URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("Sources/MeeshySDK/Sockets/MessageSocketManager+EventHandlers.swift"), encoding: .utf8)
-        XCTAssertTrue(source.contains("registerCallPreviewHandlers(on: socket)"))
+    func test_previewRoutes_areInTheMessageTable() {
+        let events = Set(MessageSocketRoutes.all(for: .shared).map(\.event))
+        XCTAssertTrue(events.contains(.callPreviewRequested))
+        XCTAssertTrue(events.contains(.callPreviewSignal))
     }
 }

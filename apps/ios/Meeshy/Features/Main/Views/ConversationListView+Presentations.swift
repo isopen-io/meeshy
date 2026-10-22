@@ -14,7 +14,7 @@ struct ConversationListCreationSheets: ViewModifier {
     @Binding var showCreateAffiliate: Bool
     @Binding var showCreateTrackingLink: Bool
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     func body(content: Content) -> some View {
         content

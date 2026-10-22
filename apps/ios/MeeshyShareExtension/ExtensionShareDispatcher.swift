@@ -118,7 +118,7 @@ final class ExtensionShareDispatcher: ShareDispatching {
         guard !relayedConversationIds.isEmpty else { return nil }
         return ShareRelayHandoff(
             shareId: shareId, createdAt: createdAt, text: relayedText,
-            media: relayedMedia.map { ShareRelayHandoff.Media(relPath: $0.relPath, mime: $0.mime, bytes: $0.bytes) },
+            media: relayedMedia.map(ShareRelayHandoff.Media.init(staged:)),
             conversationIds: relayedConversationIds,
             ownerUserId: session?.userId
         )
@@ -172,4 +172,12 @@ final class ExtensionShareDispatcher: ShareDispatching {
     private static var signedOutReason: String { ShareSheetCopy.signInTitle }
 
     private static var unreachableReason: String { ShareSheetCopy.unreachable }
+}
+
+nonisolated extension ShareRelayHandoff.Media {
+    /// La pièce relayée garde tout ce que la copie sait d'elle, son nom
+    /// d'origine compris (#11531).
+    init(staged: ShareStagedMedia) {
+        self.init(relPath: staged.relPath, mime: staged.mime, bytes: staged.bytes, originalName: staged.originalName)
+    }
 }

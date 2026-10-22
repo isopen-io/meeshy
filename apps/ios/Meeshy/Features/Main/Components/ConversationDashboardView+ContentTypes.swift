@@ -24,7 +24,7 @@ struct ConversationDashboardContentTypesSection: View {
 
                     Text(stat.type)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .frame(width: 60, alignment: .leading)
 
                     GeometryReader { geo in
@@ -45,7 +45,7 @@ struct ConversationDashboardContentTypesSection: View {
 
                     Text("\(stat.count)")
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .bold, design: .rounded))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .frame(width: 40, alignment: .trailing)
                 }
                 .padding(.vertical, MeeshySpacing.xxs)

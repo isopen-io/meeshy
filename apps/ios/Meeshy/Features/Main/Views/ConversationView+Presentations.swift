@@ -98,10 +98,12 @@ struct ConversationComposeCovers: ViewModifier {
             }
             .conversationCover(item: $composerState.previewMedia) { media in
                 switch media.type {
-                case "video":
-                    VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
-                case "audio":
-                    VideoFullscreenPlayer(urlString: media.url.absoluteString, speed: .x1_0)
+                case "video", "audio":
+                    ComposerQuotedPlaybackFullscreen(
+                        media: media,
+                        accentColor: accentColor,
+                        onClose: { composerState.previewMedia = nil }
+                    )
                 default:
                     ImageFullscreen(imageUrl: media.url, accentColor: accentColor).contentExitGate(ComposerPreviewExit.gate)
                 }

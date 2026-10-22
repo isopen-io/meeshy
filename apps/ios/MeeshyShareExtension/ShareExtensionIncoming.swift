@@ -17,7 +17,8 @@ nonisolated enum ShareExtensionIncoming {
                     id: staged.relPath,
                     mimeType: staged.mime,
                     bytes: staged.bytes,
-                    fileURL: mediaRoot?.appendingPathComponent(staged.relPath)
+                    fileURL: mediaRoot?.appendingPathComponent(staged.relPath),
+                    originalName: staged.originalName
                 )
             },
             text: text,

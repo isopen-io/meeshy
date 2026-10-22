@@ -424,9 +424,7 @@ public class NotificationVoiceService extends Service {
     private Notification notification() {
         ensureChannel();
         NotificationVoiceRules.Voice current = voice;
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-            ? new Notification.Builder(this, CHANNEL)
-            : new Notification.Builder(this);
+        Notification.Builder builder = builder();
         builder.setSmallIcon(R.drawable.ic_stat_meeshy)
             .setColor(ContextCompat.getColor(this, R.color.meeshy_notification_accent))
             // L'ecran verrouille ne nomme personne : la version publique est generique.
@@ -456,10 +454,16 @@ public class NotificationVoiceService extends Service {
         return builder.build();
     }
 
-    private Notification publicVersion() {
-        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+    // Le constructeur sans canal est la seule voie avant l'API 26 (minSdk 24).
+    @SuppressWarnings("deprecation")
+    private Notification.Builder builder() {
+        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
             ? new Notification.Builder(this, CHANNEL)
             : new Notification.Builder(this);
+    }
+
+    private Notification publicVersion() {
+        Notification.Builder builder = builder();
         return builder.setSmallIcon(R.drawable.ic_stat_meeshy)
             .setColor(ContextCompat.getColor(this, R.color.meeshy_notification_accent))
             .setContentTitle(getString(R.string.notification_voice_title))
@@ -528,6 +532,12 @@ public class NotificationVoiceService extends Service {
                 .build();
             return audio.requestAudioFocus(focusRequest) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         }
+        return requestLegacyFocus();
+    }
+
+    // AudioFocusRequest n'existe qu'a partir de l'API 26 (minSdk 24).
+    @SuppressWarnings("deprecation")
+    private boolean requestLegacyFocus() {
         return audio.requestAudioFocus(focus, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
             == AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
     }
@@ -538,8 +548,14 @@ public class NotificationVoiceService extends Service {
             if (focusRequest != null) audio.abandonAudioFocusRequest(focusRequest);
             focusRequest = null;
         } else {
-            audio.abandonAudioFocus(focus);
+            abandonLegacyFocus();
         }
+    }
+
+    // AudioFocusRequest n'existe qu'a partir de l'API 26 (minSdk 24).
+    @SuppressWarnings("deprecation")
+    private void abandonLegacyFocus() {
+        audio.abandonAudioFocus(focus);
     }
 
     private void unregisterNoisy() {

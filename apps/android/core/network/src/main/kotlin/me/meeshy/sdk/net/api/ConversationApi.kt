@@ -9,6 +9,7 @@ import me.meeshy.sdk.model.ConversationAnalysis
 import me.meeshy.sdk.model.ConversationMessageStatsResponse
 import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.model.JoinAuthenticatedResponse
+import me.meeshy.sdk.model.MarkedCountResult
 import me.meeshy.sdk.model.PaginatedParticipantsResponse
 import me.meeshy.sdk.model.UpdateConversationResponse
 import me.meeshy.sdk.model.UpdateConversationSettingsRequest
@@ -110,6 +111,18 @@ interface ConversationApi {
     @POST("conversations")
     suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
 
+    /**
+     * `GET /conversations?type=direct&withUserId=…&limit=1` — the most recent direct conversation
+     * the caller shares with [withUserId] (gateway `core-list.ts`, parity iOS
+     * `ConversationService.findDirectWith`). An empty list is "none yet", not an error.
+     */
+    @GET("conversations")
+    suspend fun directWith(
+        @Query("type") type: String,
+        @Query("withUserId") withUserId: String,
+        @Query("limit") limit: Int,
+    ): ApiResponse<List<ApiConversation>>
+
     // Empty-body POST (no @Body — like markRead): the gateway derives the joiner
     // from the JWT. Idempotent server-side (routes/conversations/sharing.ts
     // resolveConversationEntry): an existing member gets the same canonical
@@ -123,6 +136,20 @@ interface ConversationApi {
     // et les badges ne se vidaient jamais durablement.
     @POST("conversations/{id}/mark-as-read")
     suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
+
+    /**
+     * L'accusé de RÉCEPTION de toute la conversation (le curseur de livraison : la
+     * double coche de l'expéditeur) — gateway `routes/message-read-status.ts`,
+     * `POST /conversations/:conversationId/mark-as-received`. Idempotent côté
+     * serveur ; la charge rend `{ markedCount }`.
+     *
+     * Adresse HISTORIQUE d'une écriture dont le successeur est la collection
+     * `receipts` (le `type` voyage alors dans le corps) : elle reste servie le
+     * temps de la queue des versions installées, et c'est elle qu'utilise iOS
+     * (`PushDeliveryReceiptService`). Elle ne se retire qu'à zéro usage mesuré.
+     */
+    @POST("conversations/{id}/mark-as-received")
+    suspend fun markReceived(@Path("id") id: String): ApiResponse<MarkedCountResult>
 
     // POST /conversations/{id}/mark-unread (gateway routes/conversations/messages.ts):
     // moves the read cursor back before the latest message so the conversation

@@ -12,7 +12,7 @@ struct KeypadTab: View {
     var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
 
     private var theme: ThemeManager { ThemeManager.shared }
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     private static let keys: [[KeypadKey]] = [
         [.init("1", ""), .init("2", "ABC"), .init("3", "DEF")],
@@ -194,7 +194,7 @@ struct KeypadTab: View {
     }
 
     private func openProfile(_ user: UserSearchResult) {
-        router.deepLinkProfileUser = ProfileSheetUser(username: user.username)
+        router.openProfileSheet(ProfileSheetUser(username: user.username))
         HapticFeedback.light()
     }
 

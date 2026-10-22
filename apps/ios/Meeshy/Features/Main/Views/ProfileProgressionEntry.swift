@@ -31,17 +31,17 @@ struct ProfileProgressionEntry: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(String(localized: "profile.progression.title", defaultValue: "Progression", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(String(localized: "profile.progression.subtitle", defaultValue: "Badges, niveau et série", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
                 Image(systemName: "chevron.forward")
                     .font(MeeshyFont.relative(MeeshyIconSize.xs, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .accessibilityHidden(true)
             }
             .padding(.horizontal, MeeshySpacing.mdPlus)

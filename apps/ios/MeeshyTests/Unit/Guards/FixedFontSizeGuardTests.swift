@@ -137,7 +137,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Components/MessageDetail/MessageDetailChrome.swift",
         "Features/Main/Components/MessageDetail/MessageReactionsDetailView.swift",
         "Features/Main/Components/MessageDetail/MessageTranscriptionDetailView.swift",
-        "Features/Main/Components/MessageDetailSentimentTab.swift",
         "Features/Main/Components/MessageEffectModifiers.swift",
         "Features/Main/Components/MessageOverlayPreviewAudioPlayer.swift",
         // RELOCALISATION pure (#9043) : le lecteur vidéo de l'aperçu d'appui
@@ -163,7 +162,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         //
         // C'est le pendant de la leçon 347 pour un cliquet : une liste qui
         // nomme des FICHIERS se périme au premier découpage.
-        "Features/Main/Components/UniversalComposerBar+Send.swift",
         "Features/Main/Composer/ComposerMoodSurface.swift",
         "Features/Main/Composer/ComposerTopBar.swift",
         // #4102 — RELOCALISATION pure : le meuble est découpé, ses sites figés
@@ -303,7 +301,6 @@ final class FixedFontSizeGuardTests: XCTestCase {
         "Features/Main/Views/ShareLinksView.swift",
         "Features/Main/Views/StoryExportShareSheet.swift",
         "Features/Main/Views/StoryLanguageQuickBar.swift",
-        "Features/Main/Views/StoryReactionFlightView.swift",
         "Features/Main/Views/StoryTrayView.swift",
         "Features/Main/Views/StoryViewerContainer.swift",
         // #8878 — `StoryViewerView+ActionButton.swift` sort de la liste (règle 4) :
@@ -351,7 +348,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     /// descend pas quand la population descend cesse d'être un cliquet.
     // 35 → 34 (#8878) : le libellé de 10 pt du rail de la story part avec son fichier.
     // 34 → 33 (#10366) : le code pays figé de la puce de langue repasse en `.caption2`.
-    private static let textCeiling = 33
+    // 33 → 26 (S7c, #11494) : sept emoji passent par `MeeshyFont.emoji`.
+    private static let textCeiling = 26
 
     /// Tous receveurs confondus. **Ne doit que DESCENDRE.** 247 avant le
     /// correctif du 264i, 245 après (le glyphe et le chiffre de la tuile de
@@ -462,7 +460,8 @@ final class FixedFontSizeGuardTests: XCTestCase {
     // rangée de fichier reconstruite part avec son glyphe figé.
     // `MessageOverlayMenu.swift` sort de `bearingFiles` (règle 4) ; le texte
     // figé ne bouge pas.
-    private static let totalCeiling = 185
+    // 185 → 178 (S7c, #11494) : les mêmes sept emoji.
+    private static let totalCeiling = 178
 
     // MARK: - Règle 1 — aucun écran neuf n'introduit de taille figée
 
@@ -561,17 +560,11 @@ final class FixedFontSizeGuardTests: XCTestCase {
 
     private static let exactSizeTextExceptions: Set<ExactSizeTextSite> = [
         ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
-                          head: #"Text("\u{1F4AD}")"#),
-        ExactSizeTextSite(file: "Features/Main/Views/StoryTrayView.swift",
                           head: #"Text("\(Int(displayedProgress * 100))%")"#),
         ExactSizeTextSite(file: "Features/Main/Views/ConversationHelperViews.swift",
                           head: "Text(Self.displayedUnread(unreadCount))"),
         ExactSizeTextSite(file: "Features/Main/Views/StoryCommentRowView.swift",
                           head: "Text(String(comment.author.prefix(1)).uppercased())"),
-        ExactSizeTextSite(file: "Features/Main/Views/StoryLanguageQuickBar.swift",
-                          head: "Text(language.flag)"),
-        ExactSizeTextSite(file: "Features/Main/Views/StoryReactionFlightView.swift",
-                          head: "Text(flight.emoji)"),
         ExactSizeTextSite(file: "Features/Main/Views/GlobalSearchView.swift",
                           head: #"Text("\(result.unreadCount)")"#),
         ExactSizeTextSite(file: "Features/Main/Components/ConversationDashboardView.swift",
@@ -727,6 +720,65 @@ final class FixedFontSizeGuardTests: XCTestCase {
         Text(x).font(.system(size: 11))
         """
         XCTAssertEqual(Self.frozenSites(in: commented).count, 1)
+    }
+
+    // MARK: - Règle 6 — un emoji seul porte la police emoji du design system
+
+    struct EmojiSite {
+        let file: String
+        let head: String
+        let marker: String
+    }
+
+    private static let emojiSites: [EmojiSite] = [
+        EmojiSite(file: "Features/Main/Components/MessageDetailSentimentTab.swift",
+                  head: "Text(Self.sentimentEmoji(score))",
+                  marker: ".font(MeeshyFont.emoji(56))"),
+        EmojiSite(file: "Features/Stories/Notifications/StoryExpiredContent.swift",
+                  head: "Text(emoji)",
+                  marker: ".font(MeeshyFont.emoji(64))"),
+        EmojiSite(file: "Features/Main/Views/StoryReactionFlightView.swift",
+                  head: "Text(flight.emoji)",
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.displaySize))"),
+        EmojiSite(file: "Features/Main/Components/UniversalComposerBar+Send.swift",
+                  head: "Text(emoji)",
+                  marker: ".font(MeeshyFont.emoji(QuickEmojiGrid.emojiSize))"),
+        EmojiSite(file: "Features/Main/Views/ConversationAnimatedBackground.swift",
+                  head: "Text(flags[i])",
+                  marker: ".font(MeeshyFont.emoji(24))"),
+        EmojiSite(file: "Features/Main/Views/StoryLanguageQuickBar.swift",
+                  head: "Text(language.flag)",
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.titleSize))"),
+        EmojiSite(file: "Features/Main/Views/StoryTrayView.swift",
+                  head: #"Text("\u{1F4AD}")"#,
+                  marker: ".font(MeeshyFont.emoji(MeeshyFont.title3Size))")
+    ]
+
+    private static func headIsFollowedByMarker(_ site: EmojiSite, in source: String) -> Bool {
+        var searchRange = source.startIndex..<source.endIndex
+        while let found = source.range(of: site.head, range: searchRange) {
+            let window = source[found.upperBound...].prefix(160)
+            if window.contains(site.marker) { return true }
+            searchRange = found.upperBound..<source.endIndex
+        }
+        return false
+    }
+
+    func test_unEmojiSeulPorteLaPoliceEmojiDuDesignSysteme() {
+        let unmarked = Self.emojiSites.filter { site in
+            let url = appRoot.appendingPathComponent(site.file)
+            return !Self.headIsFollowedByMarker(site, in: text(of: url))
+        }
+        XCTAssertTrue(
+            unmarked.isEmpty,
+            "un emoji seul doit passer par `MeeshyFont.emoji(_:)` : \(unmarked.map(\.file))"
+        )
+    }
+
+    func test_laPoliceEmojiRendLaTailleFigeeAuPointPres() {
+        XCTAssertEqual(MeeshyFont.emoji(56), Font.system(size: 56))
+        XCTAssertEqual(MeeshyFont.emoji(MeeshyFont.displaySize), Font.system(size: MeeshyFont.displaySize))
+        XCTAssertEqual(MeeshyFont.emoji(MeeshyFont.title3Size), Font.system(size: MeeshyFont.title3Size))
     }
 
     // MARK: - Balayage

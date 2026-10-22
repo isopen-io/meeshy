@@ -126,6 +126,8 @@ export { ENGAGEMENT_ROUTE };
 type CreditDay = {
   readonly today: Date;
   readonly timezone: string | null;
+  /** Un e-mail ou un téléphone vérifié, lu avec le jour — ce qui ouvre un palier de gros poids en entier (#10422). */
+  readonly verified: boolean;
   readonly postType?: EngagementStreakPostType;
   readonly conversationId?: string;
 };
@@ -352,6 +354,7 @@ export class EngagementService {
     await this.credit(scale, userId, operationKey, points, {
       today,
       timezone: inputs.timezone,
+      verified: inputs.verified,
       ...(options.postType !== undefined ? { postType: options.postType } : {}),
       ...(conversationId !== undefined ? { conversationId } : {}),
     }, options.actorId);
@@ -532,6 +535,7 @@ export class EngagementService {
       operationKey,
       today: civilDayKey(day.today),
       timezone: day.timezone,
+      verified: day.verified,
       ...(day.postType !== undefined ? { postType: day.postType } : {}),
       ...(day.conversationId !== undefined ? { conversationId: day.conversationId } : {}),
     });
@@ -593,7 +597,7 @@ export class EngagementService {
     }
     const visitNumber = await this.quotas.increment(creatorId, operationKey, `link:${linkKey}`);
     const points = linkVisitPoints(rules, visitNumber);
-    await this.credit(scale, creatorId, operationKey, points, { today, timezone: inputs.timezone });
+    await this.credit(scale, creatorId, operationKey, points, { today, timezone: inputs.timezone, verified: inputs.verified });
     return points;
   }
 

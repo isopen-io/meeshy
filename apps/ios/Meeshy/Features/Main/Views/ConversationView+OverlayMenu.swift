@@ -40,12 +40,11 @@ struct ConversationOverlayMenu: View {
             // #11214 — la fabrique unique : les verdicts de la loi partagée.
             menuContext: MessageMenuContext.make(message: msg, viewModel: viewModel, authority: authority),
             onCopy: {
-                // Prisme: copy what's DISPLAYED (the preferred translation when
-                // one is showing), never the original — like the quick bar's Copier.
-                guard MessageExitTransport.copy(viewModel.preferredTranslation(for: msg.id)?.translatedContent ?? msg.content, of: msg) else { return }
+                // Prisme : copie ce que la bulle AFFICHE, drapeau basculé compris (#11233).
+                guard MessageExitTransport.copyDisplayed(msg, in: viewModel) else { return }
                 HapticFeedback.success()
             },
-            onEdit: { actions.edit(msg) },
+            onEdit: { actions.beginEdit(msg) },
             onReply: { actions.reply(msg) },
             onRetry: { Task { await viewModel.retryMessage(messageId: msg.id) } },
             textTranslations: viewModel.messageTranslations[msg.id] ?? [],

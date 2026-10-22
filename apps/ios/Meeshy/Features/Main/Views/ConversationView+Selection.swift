@@ -5,29 +5,42 @@ import MeeshyUI
 
 // MARK: - Multi-Message Selection (#4005)
 
+/// **Un lecteur sans interface de sélection rend la main au Script** (#11224) :
+/// la Rivière et le Résumé n'ont ni coche ni toucher de sélection, et la barre
+/// s'ouvrirait derrière eux sur des messages qu'on ne voit pas.
+enum ConversationSelectionHost {
+    static func landing(from mode: ConversationReadingMode) -> ConversationReadingMode? {
+        switch mode {
+        case .river, .summary: return .script
+        case .focal, .script, .bubbles: return nil
+        }
+    }
+}
+
 extension ConversationView {
 
-    /// **Entre en mode sélection, en semant le premier message tapé.**
-    /// Appelée depuis « Sélectionner » (menu longpress custom ET natif) —
-    /// point d'entrée UNIQUE, comme `beginEdit`/`presentLongPressMenu`.
+    /// **Entre en mode sélection, en semant le premier message tapé** — point
+    /// d'entrée UNIQUE (menus d'appui long), comme `beginEdit`/`presentLongPressMenu`.
     func beginSelectionMode(seedingWith messageId: String) {
         overlayState.showOverlayMenu = false
+        if let landing = ConversationSelectionHost.landing(from: readingModeController.mode) {
+            readingModeController.select(landing)
+            scrollState.scrollToMessageId = messageId
+            scrollState.scrollToMessageTrigger += 1
+        }
         overlayState.isSelectionModeActive = true
         overlayState.selectedMessageIds = [messageId]
         HapticFeedback.light()
     }
 
-    /// Quitte le mode sélection — la sélection ne survit JAMAIS à la sortie
-    /// (pas de sélection résiduente qui réapparaîtrait au prochain longpress).
+    /// Quitte le mode : la sélection ne survit JAMAIS à la sortie.
     func endSelectionMode() {
         overlayState.isSelectionModeActive = false
         overlayState.selectedMessageIds = []
     }
 
-    /// Bascule UN message dans la sélection, plafonné à
-    /// `ConversationOverlayState.selectionCap` (retour porteur 2026-08-27 :
-    /// « maximum 100 messages »). Tenter d'en ajouter un 101ᵉ est un NO-OP
-    /// signalé (haptique d'erreur + toast), jamais un dépassement silencieux.
+    /// Bascule UN message, plafonné à `selectionCap` (« maximum 100 messages », 2026-08-27) :
+    /// un 101ᵉ est un NO-OP signalé (haptique d'erreur + toast), jamais un dépassement silencieux.
     func toggleMessageSelection(_ messageId: String) {
         if overlayState.selectedMessageIds.contains(messageId) {
             overlayState.selectedMessageIds.remove(messageId)
@@ -45,40 +58,37 @@ extension ConversationView {
         HapticFeedback.light()
     }
 
-    /// Les messages sélectionnés, dans l'ORDRE du fil (pas l'ordre de tap) —
-    /// un transfert groupé qui inverserait l'ordre de lecture serait un
-    /// défaut, pas un détail.
+    /// La sélection dans l'ORDRE du fil, jamais l'ordre de tap : un transfert groupé garde l'ordre de lecture.
     var selectedMessagesInThreadOrder: [Message] {
         viewModel.messages.filter { overlayState.selectedMessageIds.contains($0.id) }
     }
 
-    /// **Une sélection qui contient un message non transférable n'offre pas
-    /// « Transférer »** (#9573) : la loi de sortie le refuse (vue unique,
-    /// flamme après lecture, flou), et le lot partirait amputé. Le bouton
-    /// n'est pas rendu — jamais grisé.
+    /// **Un message non transférable retire « Transférer » à la sélection** (#9573) : la loi de sortie
+    /// le refuse (vue unique, flamme après lecture, flou) ; le bouton n'est pas rendu, jamais grisé.
     var selectionOffersForward: Bool {
         MessageExitOffer.selectionOffersForward(selectedMessagesInThreadOrder)
     }
 
-    /// #4024 — « pour tous » n'est proposé QUE si TOUS les messages
-    /// sélectionnés sont éligibles (miens, non supprimés — sans fenêtre, #11214) ;
-    /// une sélection vide n'autorise rien.
+    /// #4024 — « pour tous » exige que TOUS soient éligibles (miens, non supprimés, sans fenêtre — #11214).
     var selectionAllowsDeleteForAll: Bool {
         let selected = selectedMessagesInThreadOrder
         guard !selected.isEmpty else { return false }
         return selected.allSatisfy { viewModel.canDeleteForEveryone($0) }
     }
 
-    /// #4024 — supprime toute la sélection dans le mode demandé, puis quitte
-    /// le mode sélection. Réutilise `deleteMessage(messageId:mode:)`, le même
-    /// chemin que la suppression d'un seul message.
+    /// « Pour moi » n'est offert que si un message au moins est admis par la loi, ou n'est jamais parti (#11221).
+    var selectionAllowsDeleteForMe: Bool {
+        !ConversationForMeRemoval(viewModel: viewModel).plan(overlayState.selectedMessageIds, authority: menuAuthority).isEmpty
+    }
+
+    /// #4024 — supprime la sélection, puis quitte le mode : « pour moi » en UNE requête (#11221).
     func deleteSelectedMessages(mode: ConversationViewModel.DeleteMode) {
         let ids = overlayState.selectedMessageIds
+        let (removal, authority) = (ConversationForMeRemoval(viewModel: viewModel), menuAuthority)
         endSelectionMode()
         Task {
-            for id in ids {
-                await viewModel.deleteMessage(messageId: id, mode: mode)
-            }
+            guard mode == .everyone else { return await removal.runSelection(ids, authority: authority) }
+            for id in ids { await viewModel.deleteMessage(messageId: id, mode: mode) }
         }
     }
 
@@ -105,7 +115,7 @@ extension ConversationView {
                 Image(systemName: "trash")
             }
             .disabled(overlayState.selectedMessageIds.isEmpty)
-            .accessibilityLabel(String(localized: "conversation.view.delete_message.title", bundle: .main))
+            .accessibilityLabel(MessageDeleteConfirmation.title(count: overlayState.selectedMessageIds.count))
             .accessibilityIdentifier("conversation.selection.delete")
 
             Spacer(minLength: 0)

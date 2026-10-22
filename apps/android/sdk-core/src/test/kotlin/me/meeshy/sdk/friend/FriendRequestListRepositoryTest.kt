@@ -4,8 +4,12 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.entity.FriendRequestEntity
 import me.meeshy.sdk.model.FriendRequest
+import me.meeshy.sdk.model.FriendRequestUser
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -111,5 +115,45 @@ class FriendRequestListRepositoryTest {
         repo.persistSent(emptyList())
 
         assertThat(repo.cachedSent()).isEqualTo(emptyList<FriendRequest>())
+    }
+
+    // --- Le contour d'avatar servi avec la personne ------------------------
+
+    @Test
+    fun `a person's equipped avatar ring survives the cold-start replay`() = runTest {
+        val repo = repository()
+        val ring = buildJsonObject {
+            put("avatarRing", buildJsonObject { put("pack", "neon"); put("item", "pulse") })
+        }
+        val withRing = FriendRequest(
+            id = "r1",
+            status = "pending",
+            sender = FriendRequestUser(id = "alice", username = "alice", profileDecor = ring),
+        )
+
+        repo.persistReceived(listOf(withRing))
+
+        assertThat(repo.cachedReceived()).containsExactly(withRing)
+        assertThat(repo.cachedReceived()!!.single().sender!!.profileDecor).isEqualTo(ring)
+    }
+
+    @Test
+    fun `a row cached before the decor field existed still replays`() = runTest {
+        db.friendRequestDao().upsertAll(
+            listOf(
+                FriendRequestEntity(
+                    id = "old",
+                    direction = FriendRequestListRepository.DIRECTION_RECEIVED,
+                    payload = """{"id":"old","status":"pending","sender":{"id":"u1","username":"alice"}}""",
+                    sortIndex = 0,
+                    cachedAt = 1L,
+                ),
+            ),
+        )
+
+        val replayed = repository().cachedReceived()
+
+        assertThat(replayed!!.single().sender!!.profileDecor).isNull()
+        assertThat(replayed.single().sender!!.username).isEqualTo("alice")
     }
 }

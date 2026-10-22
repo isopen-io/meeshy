@@ -11,7 +11,7 @@ public protocol InterfaceLanguageProviding {
     func publish(_ code: String?)
 }
 
-public struct AppGroupInterfaceLanguageStore: InterfaceLanguageProviding {
+public struct AppGroupInterfaceLanguageStore: InterfaceLanguageProviding, Sendable {
     public static let appGroupSuite = "group.me.meeshy.apps"
     public static let key = "meeshy.interface.language"
 

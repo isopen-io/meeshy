@@ -343,10 +343,7 @@ extension ConversationSyncEngine {
     }
 
     public func noteUnreadRemaining(_ conversationId: String, _ remaining: Int) {
-        stateQueue.sync {
-            guard _openConversationCounts[conversationId] != nil else { return }
-            _unreadToRestoreOnClose[conversationId] = max(0, remaining)
-        }
+        openLedger.mutate { $0.noteUnreadRemaining(conversationId, remaining) }
     }
 
     /// Redonne à la conversation qu'on QUITTE le compte que la lecture a
@@ -359,7 +356,7 @@ extension ConversationSyncEngine {
     /// nulle arrivée du serveur depuis la fermeture fait autorité.
     /* partagé entre les fichiers du moteur (#4172) */ func restoreUnreadOnClose(_ conversationId: String, _ remaining: Int) {
         guard remaining > 0 else { return }
-        stateQueue.sync { _unreadByConversation[conversationId] = remaining }
+        openLedger.mutate { $0.unreadByConversation[conversationId] = remaining }
         Task {
             await self.cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
@@ -507,7 +504,7 @@ extension ConversationSyncEngine {
             cached.map { ($0.id, $0.userState.unreadCount) },
             uniquingKeysWith: { first, _ in first }
         )
-        stateQueue.sync { _unreadByConversation = mirror }
+        openLedger.mutate { $0.unreadByConversation = mirror }
         publishTotalUnread()
     }
 
@@ -524,11 +521,7 @@ extension ConversationSyncEngine {
     /// juste après, recevait le total INCLUANT la conversation qu'on vient
     /// d'ouvrir : la pastille affichait « 99 » puis retombait — le glitch.
     /* partagé entre les fichiers du moteur (#4172) */ func publishTotalUnread() {
-        let (mirror, openIds) = stateQueue.sync { (_unreadByConversation, _openConversationCounts) }
-        let total = mirror.reduce(0) { acc, entry in
-            guard openIds[entry.key] == nil else { return acc }
-            return acc + max(0, entry.value)
-        }
+        let total = openLedger.read { $0.aggregateUnread() }
         _totalConversationsUnread.send(total)
     }
 

@@ -399,8 +399,7 @@ struct ConnectionBanner: View {
     private func scheduleReconnectingGrace() {
         reconnectingGraceTimer?.cancel()
         reconnectingGraceTimer = Task { @MainActor [graceDuration = Self.reconnectingGraceDuration] in
-            try? await Task.sleep(for: graceDuration)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: graceDuration), !Task.isCancelled else { return }
             guard Self.shouldSurfaceReconnecting(statusAtDeadline: statusVM.status) else { return }
             showReconnecting = true
             downWasSurfaced = true
@@ -419,8 +418,7 @@ struct ConnectionBanner: View {
         justReturnedOnlineTimer?.cancel()
         showJustReturnedOnline = true
         justReturnedOnlineTimer = Task { @MainActor [showDuration = Self.onlineAckDuration] in
-            try? await Task.sleep(for: showDuration)
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: showDuration), !Task.isCancelled else { return }
             showJustReturnedOnline = false
         }
     }

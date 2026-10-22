@@ -15,7 +15,7 @@
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ENGAGEMENT_OPERATIONS } from '@meeshy/shared/types/engagement-operations';
-import { mergeEngagementScaleBody, parseEngagementScale } from '@meeshy/shared/types/engagement-scale';
+import { mergeEngagementScaleBody, parseEngagementScale, type EngagementScale } from '@meeshy/shared/types/engagement-scale';
 import { ENGAGEMENT_STREAK_ACTS } from '@meeshy/shared/types/engagement-act-streaks';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { requireAdminRank, withAudit } from '../../middleware/authorize';
@@ -29,6 +29,7 @@ import {
   ENGAGEMENT_SCALE_KEY,
   engagementScaleServiceFor,
 } from '../../services/engagement/EngagementScaleService';
+import { PUBLICATION_RECLAIM_WINDOW_DAYS } from '../../services/posts/postEngagementCredits';
 
 const logger = enhancedLogger.child({ module: 'admin/engagement-scale' });
 
@@ -146,6 +147,22 @@ export const engagementScaleDocumentResponseSchema = {
   },
 } as const;
 
+/**
+ * #11525 — `abuse.clawbackHours` ne se règle plus (#11491) et ne s'écrit plus,
+ * mais il reste SERVI, figé à la loi des 30 jours : une console d'avant la
+ * décision (onglet en cache, coque Android) le décode comme un entier 0–720
+ * obligatoire, et sans lui déclare le barème illisible. À retirer quand plus
+ * aucune console d'avant #11491 ne tourne.
+ */
+const LEGACY_CLAWBACK_HOURS = PUBLICATION_RECLAIM_WINDOW_DAYS * 24;
+
+type ServedDocument = { readonly scale: EngagementScale; readonly updatedBy: string | null };
+
+const withLegacyClawbackHours = (scale: EngagementScale) => ({
+  ...scale,
+  abuse: { ...scale.abuse, clawbackHours: LEGACY_CLAWBACK_HOURS },
+});
+
 const refusals = {
   401: errorResponseSchema,
   403: errorResponseSchema,
@@ -156,10 +173,11 @@ export async function engagementScaleAdminRoutes(fastify: FastifyInstance): Prom
   const scaleService = () => engagementScaleServiceFor(fastify.prisma);
 
   /** Le document, avec « réglé par » résolu en personne (côté administration seulement). */
-  async function withUpdatedByPerson<D extends { readonly updatedBy: string | null }>(document: D) {
-    if (!document.updatedBy) return { ...document, updatedByPerson: null };
+  async function withUpdatedByPerson<D extends ServedDocument>(document: D) {
+    const served = { ...document, scale: withLegacyClawbackHours(document.scale) };
+    if (!document.updatedBy) return { ...served, updatedByPerson: null };
     const people = await loadAdminPeople(fastify.prisma, [document.updatedBy]);
-    return { ...document, updatedByPerson: people.get(document.updatedBy) ?? null };
+    return { ...served, updatedByPerson: people.get(document.updatedBy) ?? null };
   }
 
   fastify.get('/engagement-scale', {

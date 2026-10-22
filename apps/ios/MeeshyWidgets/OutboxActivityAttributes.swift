@@ -34,7 +34,7 @@ nonisolated struct OutboxActivitySnapshot: Codable, Hashable, Sendable {
 
 #if canImport(ActivityKit)
 @available(iOS 16.1, *)
-nonisolated struct OutboxActivityAttributes: ActivityAttributes {
+nonisolated struct OutboxActivityAttributes: ActivityAttributes, Sendable {
     typealias ContentState = OutboxActivitySnapshot
 }
 #endif

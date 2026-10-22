@@ -105,10 +105,7 @@ nonisolated enum FileURLPasteDetector {
 
     /// Une occurrence `file://` suivie d'au moins un caractère non blanc.
     /// Le motif est un littéral prouvé par `FileURLPasteDetectorTests`.
-    private static let fileURLRegex: NSRegularExpression = {
-        // swiftlint:disable:next force_try
-        try! NSRegularExpression(pattern: "file://[^\\s]+")
-    }()
+    private static let fileURLRegex = LiteralRegex.compile(pattern: "file://[^\\s]+")
 
     /// Extrait les occurrences `file://…` du texte, décode leur
     /// pourcentage-encodage, et rend le texte débarrassé de ces occurrences

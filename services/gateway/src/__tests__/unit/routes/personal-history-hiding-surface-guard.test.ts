@@ -236,6 +236,11 @@ const SURFACES: Record<string, Classification> = {
   // des seuls identifiants pour compter les signalements reçus) : aucune ne
   // sert un message, la fiche d'un membre ne rend que des nombres.
   'admin/user-member-stats.ts': { kind: 'exempt', reads: 2, why: 'Surface admin/modération.' },
+  // #11510 — la pellicule de la même lecture SOUVERAINE : UNE lecture des
+  // porteurs (`message.findMany` au curseur) pour servir leurs pièces, sous la
+  // même projection de protection que la route des messages. Même raison
+  // d'exemption que l'entrée ci-dessous.
+  'admin/conversation-attachments-sovereign.ts': { kind: 'exempt', reads: 1, why: 'Lecture SOUVERAINE (#11510), même régime que admin/conversation-messages-sovereign.ts.' },
   'admin/conversation-messages-sovereign.ts': {
     kind: 'exempt',
     reads: 2,

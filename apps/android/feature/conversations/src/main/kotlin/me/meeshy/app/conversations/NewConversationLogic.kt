@@ -1,5 +1,8 @@
 package me.meeshy.app.conversations
 
+import me.meeshy.sdk.model.CreateConversationRequest
+import me.meeshy.sdk.model.DIRECT_CONVERSATION_TYPE
+import me.meeshy.sdk.model.directConversationRequest
 import me.meeshy.sdk.net.api.UserSearchResult
 
 /**
@@ -23,7 +26,7 @@ data class SelectableUser(
  * ViewModel and the Compose screen never re-derive the type/title contract.
  */
 object NewConversationLogic {
-    const val TYPE_DIRECT: String = "direct"
+    const val TYPE_DIRECT: String = DIRECT_CONVERSATION_TYPE
     const val TYPE_GROUP: String = "group"
 
     /** Min selected participants before a conversation can be created. */
@@ -38,6 +41,20 @@ object NewConversationLogic {
     /** Group conversations carry a user-typed title; direct chats derive theirs. */
     fun resolvedTitle(rawTitle: String, selectedCount: Int): String? =
         rawTitle.trim().takeIf { it.isNotEmpty() && conversationType(selectedCount) == TYPE_GROUP }
+
+    /**
+     * The creation request for the picker's selection. A single peer is a DIRECT, built by the
+     * very [directConversationRequest] that the story/mood reply and a profile's Message button
+     * create through (`ConversationRepository.directConversationWith`, #11615) — so no two
+     * entry points can ever describe a direct differently; two or more peers are a group.
+     */
+    fun request(participantIds: List<String>, rawTitle: String): CreateConversationRequest =
+        participantIds.singleOrNull()?.let(::directConversationRequest)
+            ?: CreateConversationRequest(
+                type = conversationType(participantIds.size),
+                title = resolvedTitle(rawTitle, participantIds.size),
+                participantIds = participantIds,
+            )
 
     fun displayName(result: UserSearchResult): String =
         result.displayName?.takeIf { it.isNotBlank() } ?: result.username

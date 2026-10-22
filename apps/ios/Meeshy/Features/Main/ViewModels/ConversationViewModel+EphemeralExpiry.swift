@@ -99,52 +99,37 @@ extension ConversationViewModel {
     /// recalculé à l'instant, qui dit ce qui est échu. L'appelant n'a pas à
     /// tenir cette liste à jour entre deux réveils.
     func expireEphemeralsIfNeeded(_ ids: [String] = []) {
-        let now = Date()
-        let deadlines = ephemeralDeadlines
-        let due = Set(ids)
-            .union(deadlines.compactMap { $0.value <= now ? $0.key : nil })
-            // #7552 — ce qui est DÉJÀ échu n'a plus d'échéance future : sans
-            // cette union, un éphémère expiré hors ligne restait à l'écran.
-            .union(elapsedEphemeralIds)
-        guard !due.isEmpty else {
-            // **Le réveil du SEUIL** (#7467). Rien n'est échu : ce réveil-ci
-            // marque le passage sous la dernière minute, où la flamme gagne son
-            // compteur. Rien n'a changé dans la DONNÉE — c'est l'HORLOGE qui a
-            // bougé —, or une vue ne se reconstruit que si son entrée change.
-            // Réassigner la ligne telle quelle est donc le geste juste : il ne
-            // ment sur rien et fait re-résoudre `protection()` avec un `now`
-            // frais, qui rendra `.imminent` au lieu de `.running`.
-            restampMessagesEnteringLastMinute(deadlines, now: now)
+        let outcome = EphemeralExpiryTriage.triage(
+            ids: ids,
+            deadlines: ephemeralDeadlines,
+            elapsed: elapsedEphemeralIds,
+            now: Date(),
+            isBurning: { id in messageIndex(for: id).map { messages[$0].isBurning } }
+        )
+        switch outcome {
+        case .threshold(let restamp):
+            // Rien n'a changé dans la DONNÉE — c'est l'HORLOGE qui a bougé —,
+            // or une vue ne se reconstruit que si son entrée change. Réassigner
+            // la ligne telle quelle est donc le geste juste : il ne ment sur
+            // rien et fait re-résoudre `protection()` avec un `now` frais, qui
+            // rendra `.imminent` au lieu de `.running`.
+            restampMessages(withIds: restamp)
             refreshEphemeralExpirySchedule()
-            return
-        }
-
-        // **La destruction se VOIT** (#7467). Le message n'est pas retiré tout
-        // de suite : il passe d'abord par l'état EN DESTRUCTION, le temps que
-        // la combustion se joue. Retirer sans transition se lit comme un SAUT
-        // de liste — le lecteur croit avoir raté un défilement et cherche le
-        // message plus haut.
-        let fresh = due.filter { id in
-            guard let index = messageIndex(for: id) else { return false }
-            return !messages[index].isBurning
-        }
-        guard !fresh.isEmpty else {
+        case .alreadyBurning:
             // Déjà en combustion : le réveil suivant n'en rallume pas une
             // seconde, et ne replanifie pas un second retrait.
             refreshEphemeralExpirySchedule()
-            return
+        case .expire(let alreadyDead, let burning):
+            retire(alreadyDead: alreadyDead, burning: burning)
         }
+    }
 
-        // #8352 — un mort DÉJÀ gravé (flamme-œil consommée, `message:expired`
-        // reçu) que le fil recharge part SANS rejouer sa combustion : elle a
-        // déjà été vue, et le serveur peut resservir la ligne à chaque resync.
-        let alreadyDead = fresh.filter { EphemeralReceiptLedger.shared.destruction(of: $0) != nil }
+    private func retire(alreadyDead: Set<String>, burning: Set<String>) {
         if !alreadyDead.isEmpty {
             messages.removeAll { alreadyDead.contains($0.id) }
             messageStore.dropGoneEphemerals()
             purgeQuoteCascade(fromDead: Array(alreadyDead))
         }
-        let burning = fresh.subtracting(alreadyDead)
         guard !burning.isEmpty else { return }
 
         for id in burning {
@@ -206,10 +191,8 @@ extension ConversationViewModel {
     /// Bornée aux messages CONCERNÉS — jamais la liste entière : réassigner
     /// tout le fil à chaque réveil coûterait une reconstruction complète pour
     /// un badge.
-    private func restampMessagesEnteringLastMinute(_ deadlines: [String: Date], now: Date) {
-        for (id, deadline) in deadlines {
-            let remaining = deadline.timeIntervalSince(now)
-            guard remaining > 0, remaining <= EphemeralDeadline.countdownThreshold else { continue }
+    private func restampMessages(withIds ids: [String]) {
+        for id in ids {
             guard let index = messageIndex(for: id) else { continue }
             let message = messages[index]
             messages[index] = message

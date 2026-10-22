@@ -5,7 +5,7 @@ import type { AvatarRingDesign } from '@meeshy/shared/types/avatar-ring-design';
 import type { BannerFrameDesign } from '@meeshy/shared/types/banner-frame-design';
 import type { ServedProfileDecor } from '@meeshy/shared/types/profile-decor';
 
-import { apiConfig } from '../api/config';
+import { apiOrigin } from '../api/api-origin';
 import { createContractLoader, type ContractLoader } from './contracts';
 import { resolveBanner, resolveBannerFrame, resolveRing, type ContractStore } from './resolve';
 
@@ -18,13 +18,6 @@ import { resolveBanner, resolveBannerFrame, resolveRing, type ContractStore } fr
  * apparaît à son arrivée — jamais un spinner, jamais une erreur.
  */
 
-const apiOrigin = (): string => {
-  try {
-    return new URL(apiConfig.base === '' ? location.href : apiConfig.base, location.href).origin;
-  } catch {
-    return '';
-  }
-};
 
 let shared: ContractLoader | null = null;
 

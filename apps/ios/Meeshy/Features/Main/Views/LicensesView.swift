@@ -39,7 +39,7 @@ struct LicensesView: View {
 
             Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliothèques open source suivantes.", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, MeeshySpacing.xs)
                 .textSelection(.enabled)
@@ -64,18 +64,18 @@ struct LicensesView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                     Text(license.name)
                         .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
 
                     Text(license.author)
                         .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
 
                 Spacer()
 
                 Text(license.licenseType)
                     .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .padding(.horizontal, MeeshySpacing.sm)
                     .padding(.vertical, MeeshySpacing.xs)
                     .background(

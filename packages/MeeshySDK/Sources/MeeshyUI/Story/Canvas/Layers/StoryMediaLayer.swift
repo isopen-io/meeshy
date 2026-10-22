@@ -41,9 +41,10 @@ private final class StoryMediaLayerWeakBox: @unchecked Sendable {
 /// Position and size live in design space (1080-référentiel) before being projected
 /// through `CanvasGeometry` so output is bit-identical across device sizes.
 public final class StoryMediaLayer: CALayer {
-    public private(set) nonisolated(unsafe) var media: StoryMediaObject?
-    public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
-    public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
+    private nonisolated let layerState = Locked(uncheckedState: StoryMediaLayerState())
+    public private(set) nonisolated var media: StoryMediaObject? { get { layerState[unchecked: \.media] } set { layerState[unchecked: \.media] = newValue } }
+    public private(set) nonisolated var avPlayer: AVPlayer? { get { layerState[unchecked: \.avPlayer] } set { layerState[unchecked: \.avPlayer] = newValue } }
+    public private(set) nonisolated var avPlayerLayer: AVPlayerLayer? { get { layerState[unchecked: \.avPlayerLayer] } set { layerState[unchecked: \.avPlayerLayer] = newValue } }
 
     private static let logger = MeeshyLog.logger(.media)
 
@@ -60,7 +61,7 @@ public final class StoryMediaLayer: CALayer {
     /// vraie fenêtre arrive (rattrapée par `alignToTimelineThenPlay` dès que
     /// `applyResolvedTrimBounds` la pose, via le même seuil de dérive que le
     /// calage timeline normal).
-    private(set) nonisolated(unsafe) var currentTrimBounds: MediaTrimBounds?
+    private(set) nonisolated var currentTrimBounds: MediaTrimBounds? { get { layerState[unchecked: \.currentTrimBounds] } set { layerState[unchecked: \.currentTrimBounds] = newValue } }
 
     /// Reflète l'état de mute global du reader (bouton sidebar / contexte). Le
     /// canvas synchronise cette propriété sur chaque media layer dès qu'un
@@ -137,7 +138,7 @@ public final class StoryMediaLayer: CALayer {
 
     static let timelineSeekDriftThreshold: Double = StoryMediaLayerRules.timelineSeekDriftThreshold
 
-    private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
+    private nonisolated var loopObserver: NSObjectProtocol? { get { layerState[unchecked: \.loopObserver] } set { layerState[unchecked: \.loopObserver] = newValue } }
 
     /// Levé par le canvas composer (`StoryCanvasUIView.playsVideoInEditMode`)
     /// pour que les vidéos foreground JOUENT et bouclent en mode `.edit` (live
@@ -156,33 +157,39 @@ public final class StoryMediaLayer: CALayer {
     /// Image loader used by `configureImage` (`StoryMediaLayer+ImageLoading.swift`). Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
     /// `_setImageLoaderForTesting(_:)` to inject a deterministic stub.
-    /// `nonisolated(unsafe)` so the `nonisolated init()` can populate the
-    /// default value; readers/writers below are explicitly `@MainActor` so
-    /// mutation always happens on a single isolation context.
-    nonisolated(unsafe) var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
+    /// Held in `StoryMediaLayerState` so the `nonisolated init()` can populate
+    /// the default value.
+    nonisolated var imageLoader: any StoryMediaImageLoading { get { layerState[unchecked: \.imageLoader] } set { layerState[unchecked: \.imageLoader] = newValue } }
 
     /// In-flight network/cache fetch for the current media URL. Captured so a
     /// subsequent `configure(with:geometry:mode:)` call (recycled layer, new
     /// slide, scrub) cancels the previous load before it can stamp a stale
     /// CGImage into `contents`. `Task<Void, Never>` because the closure
     /// swallows all errors — it either sets `contents` or no-ops.
-    nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
+    nonisolated var currentLoadTask: Task<Void, Never>? { get { layerState[unchecked: \.currentLoadTask] } set { layerState[unchecked: \.currentLoadTask] = newValue } }
+
+    /// La cuisson hors du fil principal du look d'une image REPEINTE en place
+    /// pendant qu'un curseur glisse (#9873) — `StoryMediaLayer+ImageLoading`.
+    @MainActor var liveLookStorage: StoryLiveLook?
+    /// L'image du composer dont la couche montre le look — seule une source
+    /// DÉJÀ montrée se repeint hors du fil principal ; une autre se pose sur place.
+    @MainActor weak var lookSource: UIImage?
 
     /// In-flight video load (pré-cache + AVPlayer setup). Annulé à chaque
     /// `configureVideo` pour éviter qu'une URL obsolète stamp la layer après
     /// une re-configure (live composer, scrub).
-    private nonisolated(unsafe) var currentVideoLoadTask: Task<Void, Never>?
+    private nonisolated var currentVideoLoadTask: Task<Void, Never>? { get { layerState[unchecked: \.currentVideoLoadTask] } set { layerState[unchecked: \.currentVideoLoadTask] = newValue } }
 
     /// Génération token incrémenté à chaque `configureVideo` (et à chaque
     /// `tearDownPlayback`). Une `Task` lancée avec la valeur `N` ne touche
     /// plus la layer si le token a depuis incrémenté — protection race entre
     /// `await videoLocalFileURLAwait` et `prune(keepIds:)` → `tearDownPlayback`
     /// → re-`configure(...)` rapide sur le même layer.
-    private nonisolated(unsafe) var videoLoadGeneration: UInt64 = 0
+    private nonisolated var videoLoadGeneration: UInt64 { get { layerState[unchecked: \.videoLoadGeneration] } set { layerState[unchecked: \.videoLoadGeneration] = newValue } }
 
     /// Placeholder CALayer affichant le ThumbHash décodé pendant le fetch
     /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
-    private nonisolated(unsafe) var placeholderLayer: CALayer?
+    private nonisolated var placeholderLayer: CALayer? { get { layerState[unchecked: \.placeholderLayer] } set { layerState[unchecked: \.placeholderLayer] = newValue } }
 
     /// URL actuellement attachée au player. Garde d'idempotence
     /// d'`attachPlayer` : reconfigurer la layer avec la MÊME URL (cache `.edit`
@@ -190,22 +197,22 @@ public final class StoryMediaLayer: CALayer {
     /// canvas composer) ne doit PAS `replaceCurrentItem` ni re-seek — la
     /// lecture en cours continue sans coupure (impératif user 2026-07-11 :
     /// manipuler un élément ne fait pas sauter les vidéos qui jouent).
-    private nonisolated(unsafe) var attachedURL: URL?
+    private nonisolated var attachedURL: URL? { get { layerState[unchecked: \.attachedURL] } set { layerState[unchecked: \.attachedURL] = newValue } }
 
     /// Fournisseur du player du média porteur (O16), posé par `configure` depuis
     /// le contexte de LECTURE. `nil` en composition : la couche ouvre le sien.
-    private nonisolated(unsafe) var playerProvider: (any StoryCarrierPlayerProviding)?
+    private nonisolated var playerProvider: (any StoryCarrierPlayerProviding)? { get { layerState[unchecked: \.playerProvider] } set { layerState[unchecked: \.playerProvider] = newValue } }
 
     /// `true` quand le player courant a été PRÊTÉ par le fournisseur : la couche
     /// s'en détache à la fermeture, elle ne le vide jamais — l'item appartient à
     /// la surface qui le porte.
-    private nonisolated(unsafe) var playsAProvidedPlayer = false
+    private nonisolated var playsAProvidedPlayer: Bool { get { layerState[unchecked: \.playsAProvidedPlayer] } set { layerState[unchecked: \.playsAProvidedPlayer] = newValue } }
 
     /// Les réglages que l'item courant PEINT (#9169) — son identité et la
     /// signature des valeurs —, et la construction en vol de sa composition.
     /// Voir `StoryMediaLayer+VideoLook.swift`.
-    nonisolated(unsafe) var appliedVideoLook: (item: ObjectIdentifier, signature: String)?
-    nonisolated(unsafe) var videoLookTask: Task<Void, Never>?
+    nonisolated var appliedVideoLook: (item: ObjectIdentifier, signature: String)? { get { layerState[unchecked: \.appliedVideoLook] } set { layerState[unchecked: \.appliedVideoLook] = newValue } }
+    nonisolated var videoLookTask: Task<Void, Never>? { get { layerState[unchecked: \.videoLookTask] } set { layerState[unchecked: \.videoLookTask] = newValue } }
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
@@ -215,7 +222,7 @@ public final class StoryMediaLayer: CALayer {
         fatalError("StoryMediaLayer does not support NSCoder")
     }
 
-    // `nonisolated` : ne touche que `loopObserver` (nonisolated(unsafe)). Évite
+    // `nonisolated` : ne touche que `loopObserver` (état sous Locked). Évite
     // le shim `swift_task_deinitOnExecutorMainActorBackDeploy` qui double-free le
     // TaskLocal scope et abort à la libération (cf. CommandStack/ReaderAudioMixer).
     nonisolated deinit {

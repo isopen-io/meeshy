@@ -32,7 +32,7 @@ struct BubbleDeliveryCheck: View, Equatable {
         if isOffline, isInFlight {
             Image(systemName: "hourglass")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.offlinePending))
         } else {
             glyph
@@ -60,7 +60,7 @@ struct BubbleDeliveryCheck: View, Equatable {
             // distingue toujours l'envoi lent/retenté d'un envoi frais.
             Image(systemName: "clock")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
+                .foregroundStyle(MeeshyColors.warning)
                 .accessibilityLabel(Self.label(.slow))
         case .sent:
             // Poids `.regular` comme le double check (`.delivered`) et le
@@ -81,7 +81,7 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .bold))
-                .foregroundColor(MeeshyColors.stateFailed)
+                .foregroundStyle(MeeshyColors.stateFailed)
                 .accessibilityLabel(Self.label(.failed))
         }
     }
@@ -169,7 +169,7 @@ struct BubbleDeliveryCheck: View, Equatable {
                 guard !isRevealed, let sendStartedAt else { return }
                 let remaining = Self.revealDelay - Date().timeIntervalSince(sendStartedAt)
                 if remaining > 0 {
-                    try? await Task.sleep(nanoseconds: UInt64(remaining * 1_000_000_000))
+                    _ = await cancellableSleep(for: .seconds(remaining))
                 }
                 guard !Task.isCancelled else { return }
                 isRevealed = true

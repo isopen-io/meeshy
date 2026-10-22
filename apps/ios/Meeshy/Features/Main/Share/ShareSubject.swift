@@ -84,6 +84,9 @@ nonisolated struct ShareIncomingMedia: Identifiable, Equatable, Sendable {
     let mimeType: String
     let bytes: Int
     let fileURL: URL?
+    /// Le nom que le fichier portait chez l'app hôte (#11531) : ce que le
+    /// serveur garde, quand `fileURL` porte un nom technique (`0.jpeg`).
+    var originalName: String? = nil
 
     var kind: AttachmentKind { AttachmentKind(mimeType: mimeType) }
 }

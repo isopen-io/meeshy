@@ -14,6 +14,9 @@ enum MeeshyLaunch {
     static func main() {
         // #10854 — AVANT toute session ou socket : sous XCTest, rien ne part.
         TestHarnessNetworkSeal.installIfUnderTestHarness()
+        // #11587 — le trousseau, le groupe d'app et le client REST du premier
+        // écran se préparent pendant que UIKit monte la scène.
+        LaunchPrefetch.start()
         UILanguageOverride.applyIfNeeded()
         MeeshyApp.main()
     }

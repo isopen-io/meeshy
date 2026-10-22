@@ -5,9 +5,11 @@ import kotlinx.serialization.Serializable
 /**
  * The wire body for `PATCH /me/preferences/privacy` (feature-parity §L).
  *
- * Projected from the device-local [PrivacyPreferences] block by [from], this carries exactly the
- * **twelve editable privacy booleans** the user can change on Android — the same set catalogued by
- * [PrivacyCatalog]. It deliberately **omits the encryption leg** (`encryptionPreference`,
+ * Projected from the device-local [PrivacyPreferences] block by [from], this carries the
+ * **twelve editable privacy booleans** the user can change on Android — the set catalogued by
+ * [PrivacyCatalog] — plus [notifyContactsOnReturn] (#8285), all under the CANONICAL gateway keys
+ * (`acceptCallsFromNonContacts`, #8073 — never the dead alias `allowCallsFromNonContacts` the
+ * gateway no longer reads). It deliberately **omits the encryption leg** (`encryptionPreference`,
  * `autoEncryptNewConversations`, `showEncryptionStatus`, `warnOnUnencrypted`) and the local-only
  * `extras` map:
  *
@@ -21,6 +23,14 @@ import kotlinx.serialization.Serializable
  *
  * Serialised with `encodeDefaults`, it is both the durable outbox payload and the request body, so
  * the enqueued snapshot and the delivered PATCH are byte-identical.
+ *
+ * The two keys this lot introduced ([acceptCallsFromNonContacts], [notifyContactsOnReturn]) are
+ * nullable and `null` means "say nothing", because the same class decodes two things that predate
+ * them: an outbox row queued by an earlier build (which carries the dead alias and neither key) and
+ * a gateway response that does not hold them yet. Replaying the row must not invent a `true` over
+ * what the user closed on another device, and reading the response must not reset what this device
+ * holds ([toPreferences] keeps the local value). [from] always fills both, so a body built from the
+ * local block never leaves them out — `encodeDefaults` or not, a non-null value is not the default.
  */
 @Serializable
 public data class PrivacyPreferenceSyncBody(
@@ -29,9 +39,10 @@ public data class PrivacyPreferenceSyncBody(
     val showReadReceipts: Boolean,
     val showTypingIndicator: Boolean,
     val hideProfileFromSearch: Boolean,
+    val notifyContactsOnReturn: Boolean? = null,
     val allowContactRequests: Boolean,
     val allowGroupInvites: Boolean,
-    val allowCallsFromNonContacts: Boolean,
+    val acceptCallsFromNonContacts: Boolean? = null,
     val saveMediaToGallery: Boolean,
     val allowAnalytics: Boolean,
     val shareUsageData: Boolean,
@@ -46,8 +57,9 @@ public data class PrivacyPreferenceSyncBody(
      * point: the write side omits the four encryption fields precisely so a device sync never
      * stamps its defaults over a value set on web or iOS. A read that rebuilt the block from
      * the response alone would do exactly that damage in the other direction — reset the
-     * encryption leg, and the local-only `extras`, on every broadcast. Only the twelve
-     * editable toggles come from the wire.
+     * encryption leg, and the local-only `extras`, on every broadcast. Only the editable
+     * toggles come from the wire — and a toggle the response does not carry keeps its local
+     * value.
      */
     public fun toPreferences(current: PrivacyPreferences): PrivacyPreferences =
         current.copy(
@@ -56,9 +68,10 @@ public data class PrivacyPreferenceSyncBody(
             showReadReceipts = showReadReceipts,
             showTypingIndicator = showTypingIndicator,
             hideProfileFromSearch = hideProfileFromSearch,
+            notifyContactsOnReturn = notifyContactsOnReturn ?: current.notifyContactsOnReturn,
             allowContactRequests = allowContactRequests,
             allowGroupInvites = allowGroupInvites,
-            allowCallsFromNonContacts = allowCallsFromNonContacts,
+            acceptCallsFromNonContacts = acceptCallsFromNonContacts ?: current.acceptCallsFromNonContacts,
             saveMediaToGallery = saveMediaToGallery,
             allowAnalytics = allowAnalytics,
             shareUsageData = shareUsageData,
@@ -67,8 +80,8 @@ public data class PrivacyPreferenceSyncBody(
 
     public companion object {
         /**
-         * Projects the device-local block into the gateway wire body — the twelve editable toggles
-         * only (drops the read-only encryption leg and `extras`).
+         * Projects the device-local block into the gateway wire body — the editable toggles only
+         * (drops the read-only encryption leg and `extras`).
          */
         public fun from(prefs: PrivacyPreferences): PrivacyPreferenceSyncBody =
             PrivacyPreferenceSyncBody(
@@ -77,9 +90,10 @@ public data class PrivacyPreferenceSyncBody(
                 showReadReceipts = prefs.showReadReceipts,
                 showTypingIndicator = prefs.showTypingIndicator,
                 hideProfileFromSearch = prefs.hideProfileFromSearch,
+                notifyContactsOnReturn = prefs.notifyContactsOnReturn,
                 allowContactRequests = prefs.allowContactRequests,
                 allowGroupInvites = prefs.allowGroupInvites,
-                allowCallsFromNonContacts = prefs.allowCallsFromNonContacts,
+                acceptCallsFromNonContacts = prefs.acceptCallsFromNonContacts,
                 saveMediaToGallery = prefs.saveMediaToGallery,
                 allowAnalytics = prefs.allowAnalytics,
                 shareUsageData = prefs.shareUsageData,

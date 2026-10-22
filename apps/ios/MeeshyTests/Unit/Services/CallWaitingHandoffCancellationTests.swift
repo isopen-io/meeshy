@@ -8,10 +8,10 @@ import XCTest
 @MainActor
 final class CallWaitingHandoffCancellationTests: XCTestCase {
 
-    override func tearDown() {
+    override func tearDown() async throws {
         CallManager.shared.answeringPendingCallId = nil
         CallManager.shared.pendingIncomingCall = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     func test_theWaitingCallerHangingUpDuringTheHandoff_cancelsTheAnswer() {

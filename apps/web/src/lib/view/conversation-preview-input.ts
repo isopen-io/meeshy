@@ -101,6 +101,7 @@ function messageOf(conversation: Conversation, context: PreviewContext): Convers
     originalLanguage: conversation.lastMessageOriginalLanguage ?? message.originalLanguage ?? null,
     translations: conversation.lastMessageTranslations ?? null,
     createdAt: message.createdAt,
+    deletedAt: message.deletedAt ?? null,
     messageType: message.messageType ?? null,
     effectFlags: message.effectFlags ?? null,
     ephemeralDuration: message.ephemeralDuration ?? null,

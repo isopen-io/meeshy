@@ -119,6 +119,26 @@ final class AttachmentDownloaderTests: XCTestCase {
         )
     }
 
+    /// #11586 — la case « +N » ne monte pas de lecteur : la vidéo n'y a plus
+    /// d'autre affordance de téléchargement que le badge, comme la photo.
+    func test_downloadBadge_forVideoOnATileWithoutPlayer_keepsItsBadge() {
+        let video = MeeshyMessageAttachment(
+            id: "att-vid-\(UUID().uuidString)",
+            mimeType: "video/mp4",
+            fileUrl: "https://cdn.example.com/clip.mp4",
+            uploadedBy: "user-test"
+        )
+        let badge = DownloadBadgeView(
+            attachment: video,
+            accentColor: "#6366F1",
+            messageDeliveryStatus: .sent,
+            tileHostsVideoPlayer: false
+        )
+
+        XCTAssertFalse(badge.yieldsToThePlayer,
+                       "sans lecteur sur la case, le badge est le seul chemin de téléchargement de la vidéo")
+    }
+
     func test_downloadBadge_forConfirmedServerMedia_isVisible() {
         let badge = makeBadge(
             attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
@@ -165,7 +185,7 @@ final class AttachmentDownloaderTests: XCTestCase {
         XCTAssertFalse(source.contains(".bytes(from:"), "le centre ne doit plus ouvrir URLSession.bytes")
         XCTAssertFalse(source.contains("registerInFlightDownload"), "le dédoublonnage appartient au funnel du store")
         XCTAssertTrue(
-            source.contains("store.data(for: resolvedKey, progress:"),
+            source.contains("store.data(for: resolvedKey, profile: profile, progress:"),
             "le centre télécharge par le funnel en flux du store, qui rapporte la progression"
         )
     }
@@ -558,5 +578,91 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         await fulfillment(of: [failed], timeout: 15)
         XCTAssertEqual(haptics, [], "un échec d'auto-téléchargement ne vibre pas")
         subscription.cancel()
+    }
+}
+
+/// #11569 — sur la dernière case d'une grille (« +N »), le badge de
+/// téléchargement se posait au CENTRE, par-dessus le libellé : on ne lisait ni
+/// l'un ni l'autre tant que la photo n'était pas téléchargée. Une seule loi de
+/// placement sert la bulle et le Fil.
+final class MediaTileDownloadPlacementTests: XCTestCase {
+
+    func test_resolve_overflowTile_sameCompactCornerInBubbleAndFocal() {
+        let bubble = MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: 3)
+        let focal = MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: 3)
+
+        XCTAssertEqual(bubble, focal, "la case « +N » a la même disposition dans les deux modes")
+        XCTAssertEqual(bubble.alignment, .topLeading)
+        XCTAssertEqual(bubble.form, .compact)
+    }
+
+    /// Sur la dernière case, la bulle pose l'heure et l'état d'envoi en bas à
+    /// droite ; les deux modes posent les réactions en bas à gauche et le
+    /// compteur de vue unique en haut à droite.
+    func test_resolve_overflowTile_takesTheOnlyCornerNoOtherBadgeHolds() {
+        let held: [Alignment] = [.bottomTrailing, .bottomLeading, .topTrailing]
+        for surface in [MediaTileDownloadPlacement.Surface.bubbleGrid, .focalGrid] {
+            let placement = MediaTileDownloadPlacement.resolve(surface: surface, overflowCount: 2)
+            XCTAssertFalse(held.contains(placement.alignment),
+                           "le badge de la case « +N » ne se pose sur aucune autre pastille (\(surface))")
+        }
+    }
+
+    func test_resolve_overflowTile_badgeNeverSharesTheOverflowLabelAnchor() {
+        for surface in [MediaTileDownloadPlacement.Surface.bubbleGrid, .focalGrid] {
+            let placement = MediaTileDownloadPlacement.resolve(surface: surface, overflowCount: 1)
+            XCTAssertNotEqual(placement.alignment, MediaTileDownloadPlacement.overflowLabelAlignment,
+                              "le badge ne se pose jamais sur le « +N » (\(surface))")
+        }
+    }
+
+    func test_resolve_plainBubbleTile_keepsTheCentredProminentBadge() {
+        let placement = MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: 0)
+
+        XCTAssertEqual(placement, MediaTileDownloadPlacement(alignment: .center, form: .prominent))
+    }
+
+    func test_resolve_plainFocalTile_keepsItsCornerProminentBadge() {
+        let placement = MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: 0)
+
+        XCTAssertEqual(placement, MediaTileDownloadPlacement(alignment: .bottomTrailing, form: .prominent))
+    }
+
+    func test_compactForm_keepsTheMinimumTapTarget() {
+        XCTAssertGreaterThanOrEqual(MediaTileDownloadPlacement.compactHitTarget, MeeshyControlSize.tapTarget)
+    }
+}
+
+/// #11586 — une vidéo posée sur la case « +N » montait le lecteur inline (Fil)
+/// ou un poster à bouton lecture (Bulles) sous le voile : un bouton central
+/// par-dessus le « +N », sur une case dont le toucher ouvre la galerie. Une
+/// seule loi dit ce que la case fait d'une vidéo, pour la bulle et le Fil.
+final class MediaTileVideoPresentationTests: XCTestCase {
+
+    func test_resolve_overflowTile_showsAStillPosterWithoutPlaybackCue() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 3, isHiddenByProtection: false)
+
+        XCTAssertEqual(presentation, .poster(showsPlaybackCue: false))
+        XCTAssertFalse(presentation.hostsPlayer, "la case « +N » ouvre la galerie : aucun lecteur ne s'y monte")
+        XCTAssertFalse(presentation.showsPlaybackCue, "aucun bouton lecture ne se pose sur le « +N »")
+    }
+
+    func test_resolve_overflowTile_winsOverProtection() {
+        XCTAssertEqual(MediaTileVideoPresentation.resolve(overflowCount: 1, isHiddenByProtection: true),
+                       .poster(showsPlaybackCue: false))
+    }
+
+    func test_resolve_hiddenProtectedTile_keepsThePosterAndItsCue() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 0, isHiddenByProtection: true)
+
+        XCTAssertEqual(presentation, .poster(showsPlaybackCue: true))
+        XCTAssertFalse(presentation.hostsPlayer)
+    }
+
+    func test_resolve_plainTile_mountsTheInlinePlayer() {
+        let presentation = MediaTileVideoPresentation.resolve(overflowCount: 0, isHiddenByProtection: false)
+
+        XCTAssertEqual(presentation, .inlinePlayer)
+        XCTAssertTrue(presentation.hostsPlayer)
     }
 }

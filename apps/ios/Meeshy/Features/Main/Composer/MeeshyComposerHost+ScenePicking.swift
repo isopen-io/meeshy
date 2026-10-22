@@ -24,7 +24,7 @@ extension MeeshyComposerHost {
     /// **La photothèque à l'ouverture** — après l'apparition du composer, qui
     /// doit être à l'écran pour présenter une feuille par-dessus lui.
     func presentOpeningPickerIfNeeded() async {
-        try? await Task.sleep(nanoseconds: 450_000_000)
+        _ = await cancellableSleep(for: .milliseconds(450))
         guard ComposerScenePicking.opensOnPicker(origin: intent.origin,
                                                  compositionIsEmpty: compositionIsEmpty) else { return }
         openingPickFoundsScenes = true

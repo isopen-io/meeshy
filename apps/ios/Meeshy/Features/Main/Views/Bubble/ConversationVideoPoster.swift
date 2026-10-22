@@ -21,12 +21,17 @@ struct ConversationVideoPoster: View {
     /// — les cotes du bouton du lecteur inline de la tuile, que la loi de la
     /// Lentille (web, `curve-media-grid.mjs`) relit sur la grille.
     var playButtonDiameter: CGFloat = 44
+    /// Bouton lecture et durée. La case « +N » les tait : elle ouvre la
+    /// galerie, et son libellé garde le centre (#11586).
+    var showsPlaybackCue: Bool = true
 
     var body: some View {
         ZStack {
             poster
-            playBadge
-            durationBadge
+            if showsPlaybackCue {
+                playBadge
+                durationBadge
+            }
         }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
@@ -60,7 +65,7 @@ struct ConversationVideoPoster: View {
                 .resizable()
                 .scaledToFit()
                 .frame(width: playButtonDiameter * 0.3, height: playButtonDiameter * 0.3)
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .offset(x: playButtonDiameter / 24)
         }
         .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 6, y: 3)
@@ -75,7 +80,7 @@ struct ConversationVideoPoster: View {
                     Spacer()
                     Text(formatted)
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.xs)
                         .padding(.vertical, MeeshySpacing.xxs)
                         .background(Capsule().fill(MeeshyColors.mediaScrim))

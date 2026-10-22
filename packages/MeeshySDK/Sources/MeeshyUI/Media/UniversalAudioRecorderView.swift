@@ -23,7 +23,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     let onCancel: () -> Void
 
     @ObservedObject private var recorder: Recorder
-    @ObservedObject private var theme: ThemeManager = .shared
+    @ResolvedThemePalette private var theme
 
     @State private var recordedURL: URL?
     @State private var showPreview = false

@@ -78,9 +78,17 @@ function matches(row: Record<string, unknown>, where: Record<string, unknown>): 
     }
     const value = row[field];
     if (condition !== null && typeof condition === 'object') {
-      const c = condition as { startsWith?: string; in?: unknown[] };
+      const c = condition as { startsWith?: string; in?: unknown[]; gte?: string; lt?: string };
       if (c.startsWith !== undefined) return typeof value === 'string' && value.startsWith(c.startsWith);
       if (c.in !== undefined) return c.in.includes(value);
+      // `prefixRange()` (utils/prefix-range.ts, #11492) remplace `startsWith`
+      // par un intervalle de chaînes `[gte, lt)` pour filePath.
+      if (c.gte !== undefined || c.lt !== undefined) {
+        if (typeof value !== 'string') return false;
+        if (c.gte !== undefined && value < c.gte) return false;
+        if (c.lt !== undefined && value >= c.lt) return false;
+        return true;
+      }
       return false;
     }
     return value === condition;

@@ -22,7 +22,7 @@ extension CallView {
                         // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
                         // (diameter 40) → taille figée (ne doit pas déborder du cercle).
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .callControlGlass(diameter: 40, isActive: false, tint: .white)
                         // Visual glass circle stays 40pt (doctrine 82i), but the
                         // tappable area must meet the HIG 44×44 minimum.
@@ -46,7 +46,7 @@ extension CallView {
                             // Doctrine 82i : glyphe de chrome dans un cadre
                             // glass fixe (diameter 40) → taille figée.
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .callControlGlass(diameter: 40, isActive: false, tint: .white)
                             // Cercle glass 40pt (doctrine 82i) mais cible
                             // tactile HIG 44×44.
@@ -90,7 +90,7 @@ extension CallView {
                 TransientCallSignalGlyph(strength: signalStrength)
                 Text(callManager.formattedDuration)
                     .font(.caption2.weight(.medium).monospacedDigit())
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                 if callManager.isRemoteQualityDegraded {
                     Image(systemName: "wifi.exclamationmark")
                         .font(.caption2.weight(.semibold))
@@ -154,7 +154,7 @@ extension CallView {
             pipMorphProgress = 1
         }
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000)
+            _ = await cancellableSleep(for: .milliseconds(300))
             var swap = Transaction()
             swap.disablesAnimations = true
             withTransaction(swap) {
@@ -173,7 +173,7 @@ extension CallView {
         HapticFeedback.medium()
         callManager.startSystemPiP()
         Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 600_000_000)
+            _ = await cancellableSleep(for: .milliseconds(600))
             guard CallPiPPolicy.shouldFallBackToPill(
                 isPiPActive: callManager.isSystemPiPActive,
                 displayMode: callManager.displayMode

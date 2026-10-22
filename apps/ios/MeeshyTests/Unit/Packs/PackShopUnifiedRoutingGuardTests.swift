@@ -8,6 +8,7 @@ import MeeshySDK
 /// cadres) qui ne lisaient ni le prix ni la possession servis par `/packs/shop`. Un pack payant
 /// y aurait été « installable » gratuitement. Le témoin garde le LIEN : les Réglages routent ces
 /// deux domaines vers `UnifiedShopView`, comme les fonds, contours et bannières.
+@MainActor
 final class PackShopUnifiedRoutingGuardTests: XCTestCase {
 
     private static let path = "Meeshy/Features/Main/Views/PacksSettingsView.swift"

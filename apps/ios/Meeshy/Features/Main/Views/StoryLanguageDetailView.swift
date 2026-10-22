@@ -318,7 +318,7 @@ struct StoryLanguageDetailView: View {
                         onTranslate(lang.code, true)
                         let code = lang.code
                         Task {
-                            try? await Task.sleep(for: Self.retranslateTimeout)
+                            _ = await cancellableSleep(for: Self.retranslateTimeout)
                             retranslateBaseline[code] = nil
                         }
                     } label: {

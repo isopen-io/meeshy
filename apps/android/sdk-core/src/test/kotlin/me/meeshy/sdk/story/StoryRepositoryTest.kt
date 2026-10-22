@@ -9,13 +9,17 @@ import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.encodeToString
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.core.database.entity.StoryEntity
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.StoryAudioPlayerObject
+import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryItem
+import me.meeshy.sdk.model.StorySticker
 import me.meeshy.sdk.model.StoryTranslation
 import me.meeshy.sdk.model.StoryViewerWire
 import me.meeshy.sdk.model.StoryViewersResponse
@@ -367,6 +371,41 @@ class StoryRepositoryTest {
 
         val payload = outbox.deliverable(OutboxLanes.STORY).single().payload
         assertThat(MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)).isEqualTo(request)
+    }
+
+    @Test
+    fun `enqueuePublish attaches the sound and the sticker the canvas designates to the post`() = runTest {
+        val outbox = outbox()
+        val request = CreateStoryRequest(
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(StoryAudioPlayerObject(id = "s", postMediaId = "son-1")),
+                stickerObjects = listOf(StorySticker(id = "k", postMediaId = "autocollant-1")),
+            ),
+            mediaIds = listOf("photo-1"),
+        )
+
+        repository(outbox).enqueuePublish(request)
+
+        val payload = outbox.deliverable(OutboxLanes.STORY).single().payload
+        val stored = MeeshyApi.json.decodeFromString<CreateStoryRequest>(payload)
+        assertThat(stored.mediaIds).containsExactly("photo-1", "son-1", "autocollant-1").inOrder()
+        assertThat(stored.storyEffects).isEqualTo(request.storyEffects)
+    }
+
+    @Test
+    fun `enqueuePublish leaves a request that lists everything it designates untouched`() = runTest {
+        val outbox = outbox()
+        val request = CreateStoryRequest(
+            storyEffects = StoryEffects(
+                audioPlayerObjects = listOf(StoryAudioPlayerObject(id = "s", postMediaId = "son-1")),
+            ),
+            mediaIds = listOf("son-1"),
+        )
+
+        repository(outbox).enqueuePublish(request)
+
+        val payload = outbox.deliverable(OutboxLanes.STORY).single().payload
+        assertThat(payload).isEqualTo(MeeshyApi.json.encodeToString(request))
     }
 
     @Test

@@ -1,6 +1,6 @@
 // #9196 — Teint naturel + Peau lissée, en UNE passe Core Image.
 //
-// Compilé comme noyau Core Image (`-fcikernel` / `-cikernel`, project.yml).
+// Compilé comme noyau Core Image (`-fcikernel` à la compilation et à l'édition de liens, project.yml).
 // Entrées : l'image, sa basse fréquence lissée en préservant les bords
 // (sous-échantillonnage + CIEdgePreserveUpsampleFilter guidé par l'image) et
 // une passe fine (flou de ~1 px) dont la différence avec l'image est la texture

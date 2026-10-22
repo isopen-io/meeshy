@@ -218,11 +218,11 @@ public struct SeasonSchedule: Codable, Sendable, Equatable {
     }
 
     /// Aucun lien, domaine ni adresse dans un texte de saison (il devient un événement App Store).
-    private static let linkPattern = try! NSRegularExpression(
+    private static let linkPattern = LiteralRegex.compile(
         pattern: #"[a-z][a-z0-9+.-]*://|www\.|[a-z0-9-]+\.[a-z]{2,}(?:/|(?![A-Za-z0-9_]))|@[a-z0-9-]+\."#, options: [.caseInsensitive])
     /// Aucune devise : une saison ne promet jamais d'argent. Le `\b` ASCII du TS s'écrit en regards explicites :
     /// celui d'ICU est Unicode, et un « é » collé au sigle ou au domaine y changerait le verdict.
-    private static let moneyPattern = try! NSRegularExpression(
+    private static let moneyPattern = LiteralRegex.compile(
         pattern: #"[$€£¥₹₦₩₽¢]|(?<![A-Za-z0-9_])(?:USD|EUR|XAF|XOF|FCFA|GBP|CFA)(?![A-Za-z0-9_])"#, options: [.caseInsensitive])
 
     /// Ni contrôle, ni contrôle bidirectionnel, ni caractère sans chasse : rien qui retourne ou cache un texte.

@@ -3,15 +3,15 @@ import AVFoundation
 import MeeshySDK
 import MeeshyUI
 
-/// **La surface de SCÈNE — la quatrième vue du meuble** (#4070, planche § P4
+/// **La surface de SCÈNE — la quatrième vue du meuble** (planche § P4
 /// et tâche 4.3).
 ///
 /// ## Pourquoi elle existe
 ///
-/// La scène incrustée (Phase 2, #3939) vivait comme un `if showsScene` dans
-/// `ComposerDocumentSurface`, avec ses propres entrées — la slide, son ratio,
-/// les relais de sélection, l'inspecteur, la description. Chacune était une
-/// exception que la règle du DOCUMENT devait porter.
+/// La scène incrustée n'est pas un `if showsScene` dans
+/// `ComposerDocumentSurface` : elle aurait ses propres entrées — la slide,
+/// son ratio, les relais de sélection, l'inspecteur, la description —
+/// chacune une exception que la règle du DOCUMENT devrait porter.
 ///
 /// C'est exactement ce que la tâche 4.3 de la planche a fermé pour le mood :
 ///
@@ -21,7 +21,7 @@ import MeeshyUI
 ///
 /// Une scène n'est pas un document avec une image. Elle a ses portes, ses
 /// contrôleurs, sa géométrie et sa description ; les loger dans le document
-/// obligeait ce dernier à savoir ce qu'est un `MeeshySceneObject`.
+/// obligerait ce dernier à savoir ce qu'est un `MeeshySceneObject`.
 ///
 /// ## Ce qu'elle porte, et sur quel niveau du modèle
 ///
@@ -29,7 +29,7 @@ import MeeshyUI
 /// |---|---|
 /// | barre haute (`ComposerTopBar`) | la `MeeshyPublication` |
 /// | rail *leading* — les portes | crée un `MeeshySceneObject` (sauf « description ») |
-/// | la scène, cadrée sur le viewport entier (#8370) | une `MeeshyScene` |
+/// | la scène, cadrée sur le viewport entier | une `MeeshyScene` |
 /// | rail *trailing* — les contrôleurs | UN `MeeshySceneObject` |
 /// | la description | la `MeeshySlide` |
 ///
@@ -39,13 +39,13 @@ struct ComposerSceneSurface: View {
 
     // MARK: - La publication
 
-    /// **Le rail des SCÈNES**, monté par l'hôte (constat porteur 2026-09-06).
+    /// **Le rail des SCÈNES**, monté par l'hôte.
     /// Slot opaque, comme `formatFan` : une mini-preview demande les effets
     /// vivants et les bitmaps chargés, donc le ViewModel — que cette surface ne
     /// connaît pas. `nil` ⇒ pas de rail.
     var slideRailSlot: AnyView?
     /// **Le format COURANT, parce que la géographie des rails en dépend**
-    /// (#4893). Lieu, hashtag, mention et corpus de texte ne se posent sur la
+    /// Lieu, hashtag, mention et corpus de texte ne se posent sur la
     /// scène qu'en Story ; ailleurs ils qualifient la publication et vivent en
     /// bas. La surface ne décide de rien — elle ne peut simplement pas
     /// interroger `ComposerSceneFloatingRail` sans dire pour quoi elle compose.
@@ -59,41 +59,40 @@ struct ComposerSceneSurface: View {
     let aspectRatio: CGFloat
     let plateauTint: Color
     var sceneImages: [String: UIImage] = [:]
-    /// Octets animés des stickers collés, keyés par `sticker.id` (#3956).
+    /// Octets animés des stickers collés, keyés par `sticker.id`.
     var sceneStickerAnimations: [String: Data] = [:]
     var sceneImagesVersion: UInt64 = 0
     /// Les médias adoptés rendus à leur fichier local : l'échange avec l'URL
-    /// téléversée ne se voit pas (retour porteur 2026-09-28).
+    /// téléversée ne se voit pas.
     var sceneLocalMediaAliases: [String: URL] = [:]
     var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
 
     /// **« Modifier » — l'appui long, et l'action VoiceOver du même nom**
-    /// (#4074, vue `1d`).
+    /// (vue `1d`).
     ///
-    /// La scène ne transmettait pas ce rappel : `hasEditor` était faux et le
-    /// menu n'offrait que deux actions sur quatre. `editableKinds` dit à quels
+    /// Sans ce rappel, `hasEditor` serait faux et le
+    /// menu n'offrirait que deux actions sur quatre. `editableKinds` dit à quels
     /// objets le MEUBLE sait répondre — `[.text]` ici, tant qu'aucun éditeur
-    /// média n'y est monté (#4082) — pour que « Modifier » ne paraisse jamais
+    /// média n'y est monté — pour que « Modifier » ne paraisse jamais
     /// sur un objet que personne n'éditera.
     var onItemEdit: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
-    /// **« Rogner » dans l'appui long** (#8370, lot 6) : le rail des
-    /// contrôleurs qui le portait est parti avec la directive du 2026-09-27.
+    /// **« Rogner » dans l'appui long** : les actions possibles apparaissent au
+    /// long press, pas dans un rail de contrôleurs.
     var onItemTrim: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil
-    /// **Le menu d'appui long, peint par le meuble en verre** (#8717). Le
+    /// **Le menu d'appui long, peint par le meuble en verre.** Le
     /// canvas remet l'objet et le point du doigt normalisé sur la carte ; une
     /// puce sonore, que le canvas ne peint pas, le demande par son propre appui
     /// long.
     var onItemMenu: ((String, StoryCanvasUIView.CanvasItemKind, CGPoint) -> Void)? = nil
-    /// **Les familles dont l'hôte sait ouvrir l'éditeur** (#4937).
+    /// **Les familles dont l'hôte sait ouvrir l'éditeur.**
     ///
-    /// Elle valait `[.text]` tant que l'éditeur d'objet ne savait éditer qu'un
-    /// texte. Depuis que les cinq familles y ont leur fenêtre et leur timeline,
-    /// les quatre autres s'y ouvrent aussi.
+    /// Les cinq familles ont leur fenêtre et leur timeline dans l'éditeur
+    /// d'objet : les quatre autres s'y ouvrent comme le texte.
     ///
     /// **Ce jeu et le `switch` d'`onItemEdit` se tiennent la main** : servir
     /// l'un sans l'autre rend « Modifier » offert et INERTE — le doc-comment de
-    /// l'hôte le dit depuis #4082, et `ComposerSceneEditableKindsTests` le garde
-    /// désormais plutôt que de le rappeler.
+    /// l'hôte le dit, et `ComposerSceneEditableKindsTests` le garde plutôt que
+    /// de le rappeler.
     var editableSceneKinds: Set<StoryCanvasUIView.CanvasItemKind> = defaultEditableSceneKinds
 
     /// Le défaut, NOMMÉ pour que la garde puisse le lire — un littéral posé dans
@@ -104,11 +103,11 @@ struct ComposerSceneSurface: View {
 
     var onBackgroundTapped: (() -> Void)?
 
-    /// **L'appui long sur une scène VIDE ouvre la caméra** (#4036, planche
+    /// **L'appui long sur une scène VIDE ouvre la caméra** (planche
     /// `2b`). L'hôte décide du mode ; la surface ne fait que transmettre.
     var onBackgroundLongPressed: (() -> Void)?
 
-    /// **L'appui long sur un média DE FOND demande son MENU** (#5041).
+    /// **L'appui long sur un média DE FOND demande son MENU.**
     ///
     /// Distinct du jumeau ci-dessus, qui appartient au viseur : une scène qui
     /// porte un fond n'est pas vide. Tant que le meuble ne le branche pas, la
@@ -116,29 +115,29 @@ struct ComposerSceneSurface: View {
     /// — le geste ne devient jamais muet en attendant son hôte.
     var onBackgroundMediaLongPressed: ((String) -> Void)?
 
-    /// **La durée d'un appui long ARMÉ** (#5041) : la translation pendant qu'on
-    /// tient, puis le relâchement. Le `.began` seul ouvrait un objectif ; ces
+    /// **La durée d'un appui long ARMÉ** : la translation pendant qu'on
+    /// tient, puis le relâchement. Le `.began` seul ouvre un objectif ; ces
     /// deux-là permettent de TENIR une prise.
     var onBackgroundLongPressChanged: ((CGPoint) -> Void)?
     var onBackgroundLongPressEnded: (() -> Void)?
 
     /// **L'étape du viseur — la seule chose que la scène ait encore besoin de
-    /// savoir de la caméra** (directive porteur 2026-09-04).
+    /// savoir de la caméra**.
     ///
-    /// La surface PEIGNAIT le viseur ; elle n'en publie plus que la place
+    /// La surface ne PEINT pas le viseur ; elle n'en publie que la place
     /// (`ComposerSceneCameraFrameKey`), le meuble le montant en un site unique
     /// pour couvrir le socle. Tout le reste du contrat caméra — session,
-    /// permission, taille, mode, flash, segments et leurs onze rappels — est
-    /// parti AVEC la vue qui les lisait.
+    /// permission, taille, mode, flash, segments et leurs onze rappels — vit
+    /// avec la vue qui les lit.
     ///
     /// Ce champ reste parce qu'un autre consommateur le lit ici : la zone de
     /// description s'efface pendant qu'on cadre
     /// (`ComposerSceneCameraOverlay.isServed(.description, stage:)`). Le
-    /// garder « au cas où » aurait été une dette ; le garder pour un lecteur
+    /// garder « au cas où » serait une dette ; le garder pour un lecteur
     /// nommé est un contrat.
     var cameraStage: ComposerSceneCameraStage = .off
 
-    /// **L'indication grise d'une scène vide** (#8653) — déjà résolue par le
+    /// **L'indication grise d'une scène vide** — déjà résolue par le
     /// meuble (`ComposerSceneQuickCapture`). `nil` ⇒ rien à dire.
     var quickCaptureHint: ComposerSceneQuickCapture.Hint?
 
@@ -149,17 +148,17 @@ struct ComposerSceneSurface: View {
     /// loi 4 divergerait de la première.
     var railMode: ComposerRailMode = .doors([])
 
-    /// **Ce que chaque porte PORTE DÉJÀ** (#4994) — déjà compté par
+    /// **Ce que chaque porte PORTE DÉJÀ** — déjà compté par
     /// `ComposerRailDoorBadge`. Cette vue ne compte rien : elle relaie, comme
     /// pour les portes elles-mêmes. Une entrée absente vaut « rien à dire ».
     var railBadges: [ComposerRailDoor: Int] = [:]
     var onRailDoor: ((ComposerRailDoor) -> Void)?
-    /// L'appui long d'une porte (#10357) : la photothèque propose ses sources.
+    /// L'appui long d'une porte : la photothèque propose ses sources.
     var onRailDoorLongPress: ComposerRailDoorLongPressHandler?
     var onRailToolControl: ((ComposerToolControl) -> Void)?
     var onRailExitTool: (() -> Void)?
 
-    /// Le bouton SYSTÈME du rail — le collage (#4092). Une vue entière, parce
+    /// Le bouton SYSTÈME du rail — le collage. Une vue entière, parce
     /// qu'un `PasteButton` doit ÊTRE le bouton pour garder son privilège : accès
     /// au presse-papier sans bannière, et extinction automatique quand il n'y a
     /// rien à coller.
@@ -170,32 +169,32 @@ struct ComposerSceneSurface: View {
     var trailingActions: [StoryCanvasContextAction] = []
     var onTrailingAction: ((StoryCanvasContextAction) -> Void)?
 
-    /// **Les options du moment, en haut du rail droit** (#8713, #8714) — les
+    /// **Les options du moment, en haut du rail droit** — les
     /// contrôleurs de l'outil ouvert ou les options de l'objet touché, puis
     /// leur `(x)`. Déjà composées par `ComposerTrailingColumn.options` :
     /// cette vue ne re-filtre rien.
     var trailingOptions: [ComposerTrailingColumn.Entry] = []
     var onTrailingOption: ((ComposerTrailingColumn.Entry) -> Void)?
 
-    /// **L'éclair et le Cadre, au rail GAUCHE après le lieu** (#8713). Déjà
+    /// **L'éclair et le Cadre, au rail GAUCHE après le lieu.** Déjà
     /// servis par `ComposerLeadingSceneToggles` ; le rail les range après la
     /// porte que la même règle désigne.
     var sceneToggles: [ComposerSceneToggleEntry] = []
 
-    /// **L'HISTORIQUE, descendu du socle au rail droit** (#4586, directive
-    /// porteur 2026-08-31). `nil` ⇒ rien à défaire, donc aucun bouton : la
+    /// **L'HISTORIQUE, descendu du socle au rail droit.**
+    /// `nil` ⇒ rien à défaire, donc aucun bouton : la
     /// surface ne re-décide rien, le meuble a déjà posé la question.
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
 
-    // MARK: - L'inspecteur de l'objet sélectionné (#4073, vue `1c`)
+    // MARK: - L'inspecteur de l'objet sélectionné (vue `1c`)
 
     /// Les jetons SERVIS — déjà résolus par `ComposerObjectChips.chips(forSelected:in:)`.
     /// Vide ⇒ aucun objet sélectionné, donc aucune rangée : cette vue ne
     /// re-filtre rien, exactement comme pour les deux rails et la bande.
     ///
-    /// **Ils vivent EN BAS, et c'est la sémantique de placement du porteur**
-    /// (2026-08-31) : les contrôles à gauche, le document et les slides à
+    /// **Ils vivent EN BAS, et c'est la sémantique de placement du porteur** :
+    /// les contrôles à gauche, le document et les slides à
     /// droite, et le bas pour ce qui règle l'OUTIL ou l'OBJET du moment. Un
     /// objet sélectionné n'est aucune des deux premières places.
     var objectChips: [ComposerObjectChips.Chip] = []
@@ -206,13 +205,13 @@ struct ComposerSceneSurface: View {
         ComposerToolFocus.toolIsOpen(railOpensTool: railMode.opensTool, editsInline: editsInline)
     }
 
-    /// **Plus d'`activeObjectChipId`** (2026-09-05) : un jeton ouvrait une
+    /// **Pas d'`activeObjectChipId`** : un jeton ouvrirait une
     /// bande montée SOUS la scène, donc visible en même temps que lui — d'où un
-    /// état encadré. Il ouvre désormais l'éditeur plein écran, qui couvre cette
+    /// état encadré. Il ouvre l'éditeur plein écran, qui couvre cette
     /// surface : aucun jeton n'est visible en même temps que ce qu'il a ouvert.
     var onObjectChip: ((String) -> Void)?
 
-    /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (#4073, vue `1c`).
+    /// **Ce que le canvas ENCADRE, et ce qu'il en dit** (vue `1c`).
     ///
     /// Déjà résolus par le meuble — cette vue ne re-filtre rien, exactement
     /// comme pour les deux rails, la bande et les jetons. Le badge est une
@@ -224,23 +223,22 @@ struct ComposerSceneSurface: View {
     // MARK: - La bande contextuelle
 
     /// La bande OUVERTE — déjà résolue par `ComposerSceneBand.opened`. `nil` ⇒
-    /// le bas ne porte que le socle (#4064). Cette vue ne re-filtre rien : une
+    /// le bas ne porte que le socle. Cette vue ne re-filtre rien : une
     /// seconde loi 4 divergerait de la première, exactement comme pour les
     /// deux rails.
     ///
-    /// **Les deux contenus injectés sont partis avec leurs bandes**
-    /// (2026-09-05) : `timeline` (#4082) et `textStyles` (#4083) éditaient un
-    /// objet déjà posé, et la première vue n'édite plus. Leurs jumelles vivent
-    /// dans l'éditeur plein écran — `.media(.trim)` et `.tool(.style)`.
+    /// **Pas de contenu injecté pour la timeline ni les styles de texte** :
+    /// ils éditent un objet déjà posé, et la première vue n'édite pas. Leurs
+    /// jumelles vivent dans l'éditeur plein écran — `.media(.trim)` et `.tool(.style)`.
     var band: ComposerSceneBand?
     var bandColors: [String] = []
     var onPickBandColor: ((String) -> Void)?
 
     /// L'effet d'ouverture, servi par la même bande que les couleurs — c'est
-    /// le contenu du panneau « Fond » de l'atelier, en entier (#4403).
+    /// le contenu du panneau « Fond » de l'atelier, en entier.
     var bandOpeningEffect: StoryTransitionEffect?
     var onPickBandOpening: ((StoryTransitionEffect?) -> Void)?
-    /// Le panneau Cadre (#8414) : le cadrage et le fond que le meuble lit sur
+    /// Le panneau Cadre : le cadrage et le fond que le meuble lit sur
     /// la slide, et les deux écritures qu'il en attend.
     var bandFitMode: String = StoryBackgroundFraming.fill
     var bandBackdrop: StoryBackdrop = .blur
@@ -248,40 +246,39 @@ struct ComposerSceneSurface: View {
     var onPickBandBackdrop: ((StoryBackdrop) -> Void)?
 
     /// **Ce que la barre haute porte avant le `⋯`** : le `(+)` d'une nouvelle
-    /// scène, à la place qu'occupait l'éclair (#8713, directive porteur
-    /// 2026-09-29). `nil` ⇒ rien — l'aller-retour d'une image vers une
+    /// scène, à la place de l'éclair. `nil` ⇒ rien — l'aller-retour d'une image vers une
     /// conversation ne crée pas de scène.
     var topBarAccessory: AnyView?
-    /// **Le mode Animé** (#8415) : la frise qui prend le bas tant qu'elle est
+    /// **Le mode Animé** : la frise qui prend le bas tant qu'elle est
     /// ouverte, et le pont qui la laisse piloter le canvas. Sa bascule vit au
-    /// rail gauche depuis #8713 (`sceneToggles`).
+    /// rail gauche (`sceneToggles`).
     var onTimeButton: (() -> Void)? = nil
     var timeIsOpen: Bool = false
     var timelinePanel: AnyView?
     var timelineBridge: StoryCanvasTimelineBridge?
 
     /// **Le panneau d'OPTIONS de l'outil déplié**, monté sous la scène
-    /// (directive porteur 2026-08-30). Les BULLES vivent au rail ; ce qui a
+    /// Les BULLES vivent au rail ; ce qui a
     /// besoin de largeur — palette, glissière — vit ici.
     ///
-    /// **Il ne porte plus que le DESSIN depuis le 2026-09-05.** Les dix-huit
-    /// styles et les sept autres outils de texte sont partis à l'éditeur plein
+    /// **Il ne porte que le DESSIN.** Les dix-huit
+    /// styles et les sept autres outils de texte vivent dans l'éditeur plein
     /// écran avec le reste de l'édition ; ce qui reste ici règle le PINCEAU,
     /// c'est-à-dire le geste qui AJOUTE — pas un objet déjà posé. Le meuble
     /// tient la distinction (`ComposerFirstView.lowZoneShowsToolOptions`).
     var toolOptions: AnyView?
-    /// **Un objet s'édite EN PLACE** (#8847 pour le fond, #9138 pour toutes
+    /// **Un objet s'édite EN PLACE** (le fond comme toutes
     /// les familles) : ses sous-outils au rail droit — et tout le reste du
     /// chrome cède, comme à un outil du rail (`ComposerToolFocus.toolIsOpen`).
     var editsInline: Bool = false
-    /// **L'auteur ÉCRIT une légende ou le corps du post** (#6131, #6132) —
+    /// **L'auteur ÉCRIT une légende ou le corps du post** —
     /// clavier levé : les rails et les étages du bas lui cèdent la place,
     /// par `ComposerToolFocus.isShown(_:toolIsOpen:writesText:)`.
     var writesText: Bool = false
-    /// **Et ce qu'il écrit est le CORPS du post** (#9448) : le panneau du corps
+    /// **Et ce qu'il écrit est le CORPS du post** : le panneau du corps
     /// recouvre le volet de légende, qui sort alors de l'arbre.
     var writesPostBody: Bool = false
-    /// **Les options du sous-outil ouvert, à droite, depuis le haut** (#9138) —
+    /// **Les options du sous-outil ouvert, à droite, depuis le haut** —
     /// le panneau entier, déjà composé et placé (`ComposerInlineToolPanel`) ;
     /// la surface le pose sur la scène libre, à côté de la colonne droite.
     var inlinePanel: AnyView?
@@ -295,19 +292,18 @@ struct ComposerSceneSurface: View {
     var onInlineTextChanged: ((String, String) -> Void)?
     var onInlineTextEditEnded: ((String) -> Void)?
 
-    /// **La bande de mention du texte de SCÈNE a quitté cette surface**
-    /// (2026-09-05).
+    /// **La bande de mention du texte de SCÈNE n'est pas sur cette surface.**
     ///
-    /// Elle interprétait la frappe INLINE sur le canvas (#4475). Or la frappe
-    /// n'a plus lieu ici : `openObjectEditor` est le seul chemin vers l'édition
-    /// d'un texte — mesuré, `enterTextEditingMode` n'a que deux appelants, et
-    /// tous deux montent l'écran modal par-dessus cette surface. La bande était
-    /// donc peinte sous un écran plein, pour une requête `@` qui se formait
+    /// Elle interprète la frappe INLINE sur le canvas. Or la frappe
+    /// n'a pas lieu ici : `openObjectEditor` est le seul chemin vers l'édition
+    /// d'un texte — `enterTextEditingMode` n'a que deux appelants, et
+    /// tous deux montent l'écran modal par-dessus cette surface. La bande serait
+    /// donc peinte sous un écran plein, pour une requête `@` qui se forme
     /// ailleurs.
     ///
-    /// Elle vit désormais dans `ComposerObjectEditorView`, où le doigt tape.
+    /// Elle vit dans `ComposerObjectEditorView`, où le doigt tape.
 
-    /// **Le volet de description, replié ou non** (#4742). Construit par le
+    /// **Le volet de description, replié ou non.** Construit par le
     /// MEUBLE — la surface n'a ni le texte, ni le binding de repli, ni le
     /// chemin vers la saisie ; elle sait seulement OÙ il va.
     ///
@@ -321,7 +317,7 @@ struct ComposerSceneSurface: View {
     /// doit le RETIRER, sans quoi le trait s'affiche deux fois.
     var drawingSurface: AnyView?
 
-    // MARK: - Le son de FOND de la slide (#4918)
+    // MARK: - Le son de FOND de la slide
 
     /// **Le fond sonore dont la scène montre la trace** — `nil` ⇒ aucun fond,
     /// et le bas de l'écran reste ce qu'il était.
@@ -337,13 +333,13 @@ struct ComposerSceneSurface: View {
 
     /// **Ce que le doigt ouvre sur la trace** — `nil` ⇒ elle reste une lecture.
     ///
-    /// Le RETRAIT passe par là (critère 2 de #4918) : la feuille porte le (x)
+    /// Le RETRAIT passe par là : la feuille porte le (x)
     /// de `deleteEditedSound`, et son doc-comment dit pourquoi le geste vit là
     /// et nulle part ailleurs — « trois boutons dispersés auraient été trois
     /// lois ». Deux gestes, ce que la dimension 7 demande.
     var onEditBackgroundSound: (() -> Void)?
 
-    /// **Le RETRAIT du son de fond, par appui long** (#4930).
+    /// **Le RETRAIT du son de fond, par appui long.**
     ///
     /// `nil` ⇒ aucun menu. Deux cas le rendent : aucun fond, et un fond LEGACY
     /// — celui que `resolvedBackgroundAudio` synthétise depuis
@@ -351,12 +347,12 @@ struct ComposerSceneSurface: View {
     /// la surface ne fait que peindre ce qu'elle reçoit.
     var onDeleteBackgroundSound: (() -> Void)?
 
-    /// **Sortir le son du FOND pour le poser sur la scène** (#5018), par l'appui
+    /// **Sortir le son du FOND pour le poser sur la scène**, par l'appui
     /// long de la trace. `nil` ⇒ l'entrée disparaît — un fond LEGACY n'a aucun
     /// objet à basculer, et l'hôte le sait avant nous.
     var onPromoteBackgroundSound: (() -> Void)?
 
-    // MARK: - Ce que la publication EMPORTE (#5002)
+    // MARK: - Ce que la publication EMPORTE
 
     /// Les balises DÉRIVÉES du texte de la publication, sans leur `#`. La
     /// surface les REÇOIT : les dériver ici ouvrirait un second chemin vers le
@@ -380,10 +376,10 @@ struct ComposerSceneSurface: View {
     let descriptionPlaceholder: String
 
 
-    /// **Les boutons de CONTRÔLE, à GAUCHE** (directive porteur 2026-08-31).
+    /// **Les boutons de CONTRÔLE, à GAUCHE**
     ///
     /// Un outil ouvert y remplace les portes par SES contrôleurs et leur `(x)`,
-    /// et tout le reste du chrome s'efface (#8652, directive 2026-09-29) : la
+    /// et tout le reste du chrome s'efface : la
     /// place reste celle où l'on agit, l'outil en cours en est le seul
     /// occupant — `ComposerToolFocus` en porte la règle.
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -398,16 +394,14 @@ struct ComposerSceneSurface: View {
     private var edge: CGFloat { ComposerRailGeometry.edgeMargin(roomy: isRoomy) }
 
     /// **Le rail de gauche — les portes, ou les contrôleurs de l'outil
-    /// ouvert À LEUR PLACE** (#8652, directive porteur 2026-09-29 : « les
-    /// tools de la scène principale laissent place aux tools de l'outil
-    /// sélectionné avec (X) »). Une seule colonne, au même endroit : le doigt
+    /// ouvert À LEUR PLACE** : les tools de la scène principale laissent place
+    /// aux tools de l'outil sélectionné avec (X). Une seule colonne, au même endroit : le doigt
     /// qui vient d'ouvrir l'outil y trouve ses réglages, et le `(x)` qui le
     /// referme rend les portes à la même place.
     ///
-    /// **Les contrôleurs de l'outil ont quitté ce rail pour le DROIT** (#8713,
-    /// directive porteur 2026-09-29 : « en bas undo et redo toujours, même pour
-    /// les outils type dessin, et au-dessus les options de l'outil
-    /// sélectionné »). Un outil ouvert vide donc ce côté : les portes cèdent,
+    /// **Les contrôleurs de l'outil sont au rail DROIT** : en bas undo et redo
+    /// toujours, même pour les outils type dessin, et au-dessus les options de l'outil
+    /// sélectionné. Un outil ouvert vide donc ce côté : les portes cèdent,
     /// comme le reste du chrome, et ses réglages vivent au-dessus de
     /// l'historique.
     private var floatingRail: AnyView {
@@ -429,9 +423,9 @@ struct ComposerSceneSurface: View {
                                 sceneToggles: sceneToggles,
                                 sceneTogglesAfter: ComposerLeadingSceneToggles.anchor(in: portes))
                 // Les MÊMES deux marges que le rail *trailing* : depuis la
-                // scène plein écran (#8370), elles le posent SUR la scène, à
+                // scène plein écran, elles le posent SUR la scène, à
                 // `outerMargin` du bord — et d'un bouton plus haut que la
-                // gouttière (directive porteur 2026-09-28).
+                // gouttière.
                 .padding(.leading, edge)
                 .padding(.bottom, ComposerRailGeometry.floatingBottomInset)
                 .id(toolIsOpen)
@@ -443,7 +437,7 @@ struct ComposerSceneSurface: View {
     /// ouvert : la rangée ferait alors concurrence aux contrôleurs de l'outil,
     /// et l'arbitrage donne la priorité du bas à l'outil en cours.
     private var lowToolRow: AnyView {
-        // **Un outil ouvert ne prend plus le bas** (#8652) : ses contrôleurs
+        // **Un outil ouvert ne prend pas le bas** : ses contrôleurs
         // remplacent les portes du rail de gauche, et la rangée basse cède
         // avec le reste du chrome.
         guard ComposerToolFocus.isShown(.sceneDoors, toolIsOpen: toolIsOpen),
@@ -467,13 +461,13 @@ struct ComposerSceneSurface: View {
         )
     }
 
-    /// **Le volet de description, borné à la CARTE** (#4993).
+    /// **Le volet de description, borné à la CARTE.**
     ///
     /// Les marges valent la place d'un rail de chaque côté (`lane`) : sans
     /// elles, le volet s'étalerait sur toute la largeur et croiserait les deux
-    /// rails, qui flottent sur la scène à cette hauteur. Elles se lisaient des
-    /// couloirs (`sceneInset`), qui valent zéro depuis la scène plein écran
-    /// (#8370) — le volet recouvrait alors le bas des deux rails (#8388).
+    /// rails, qui flottent sur la scène à cette hauteur. Elles ne se lisent pas
+    /// des couloirs (`sceneInset`), qui valent zéro avec la scène plein écran
+    /// — le volet recouvrirait alors le bas des deux rails.
     @ViewBuilder
     private var descriptionOverlay: some View {
         if let descriptionPanel {
@@ -489,12 +483,12 @@ struct ComposerSceneSurface: View {
     /// (#5011). `0` tant que la première passe de mise en page n'a pas eu lieu.
     @State private var sceneCardLeading: CGFloat = 0
 
-    /// La largeur du DESSIN, mesurée par le canvas (#5008) : la flèche du volet
+    /// La largeur du DESSIN, mesurée par le canvas : la flèche du volet
     /// s'y proportionne. `0` avant la première passe ⇒ le volet se mesure seul.
     @State private var sceneCardWidth: CGFloat = 0
 
     /// Le cadre du DESSIN dans l'écran : le panneau d'options s'y repère pour
-    /// laisser voir l'objet qu'il règle (#9495).
+    /// laisser voir l'objet qu'il règle.
     @State private var sceneCardFrame: CGRect = .null
 
     /// Le cadre de la scène LIBRE, dans le même repère que la carte : le rail
@@ -511,7 +505,7 @@ struct ComposerSceneSurface: View {
                                                             withSpring: !trailingFootFollowsOptions))
     }
 
-    /// **La hauteur des étages du bas, mesurée** (#8712) — ce qu'un panneau
+    /// **La hauteur des étages du bas, mesurée** — ce qu'un panneau
     /// ouvert y occupe, et donc de combien la scène doit REMONTER.
     @State private var lowerFloorsHeight: CGFloat = 0
 
@@ -528,16 +522,15 @@ struct ComposerSceneSurface: View {
             panelHeight: lowerFloorsHeight)
     }
 
-    // MARK: - La scène PREND LE VIEWPORT, le chrome flotte dessus (#8370)
+    // MARK: - La scène PREND LE VIEWPORT, le chrome flotte dessus
 
-    /// **Deux calques, et c'est toute la disposition** (directive porteur
-    /// 2026-09-27, maquette `docs/product/composer-plein-ecran/iOS.dc.html` :
-    /// « la scène est en plein écran et le reste des contrôleurs sont par-dessus
-    /// la scène »).
+    /// **Deux calques, et c'est toute la disposition** (maquette
+    /// `docs/product/composer-plein-ecran/iOS.dc.html` : « la scène est en plein
+    /// écran et le reste des contrôleurs sont par-dessus la scène »).
     ///
     /// La carte vivait dans une `VStack`, entre la barre haute et les rangées du
     /// bas : chaque bande qu'on y ajoutait lui prenait sa hauteur, et elle ne
-    /// pouvait JAMAIS occuper l'écran. Elle se cadre désormais sur le viewport
+    /// pouvait JAMAIS occuper l'écran. Elle se cadre sur le viewport
     /// entier (`ignoresSafeArea`), et barre haute, trace du son, rails, volet,
     /// bandes et rangée basse forment un calque qui flotte par-dessus. Le socle
     /// du meuble flotte au-dessus des deux (`composerFloatingSocle`) : il réduit
@@ -557,14 +550,14 @@ struct ComposerSceneSurface: View {
         .onPreferenceChange(ComposerSceneCardFrameKey.self) { sceneCardFrame = $0 }
         .onPreferenceChange(ComposerFreeZoneFrameKey.self) { freeZoneFrame = $0 }
         .onPreferenceChange(ComposerLowerFloorsHeightKey.self) { lowerFloorsHeight = $0 }
-        // **La bascule outil <-> scène se fait en fondu** (#8652), coupé sous
+        // **La bascule outil <-> scène se fait en fondu**, coupé sous
         // Reduce Motion ; VoiceOver est prévenu que l'écran a changé, et son
-        // curseur rejoint le rail qui porte désormais les réglages et le `(x)`.
+        // curseur rejoint le rail qui porte les réglages et le `(x)`.
         .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: toolIsOpen)
-        // **Écrire efface les rails et les étages du bas, et les rend** (#6131,
-        // #6132) — en fondu, à l'aller comme au retour : rien ne saute.
+        // **Écrire efface les rails et les étages du bas, et les rend**
+        // — en fondu, à l'aller comme au retour : rien ne saute.
         // Au retour, le chrome attend que le panneau du corps soit parti
-        // (#9448) — sinon le panneau sortant passe sur les rangées qui reviennent.
+        // — sinon le panneau sortant passe sur les rangées qui reviennent.
         .animation(ComposerWritingExit.chromeAnimation(reduceMotion: reduceMotion, writesText: writesText),
                    value: writesText)
         .adaptiveOnChange(of: toolIsOpen) { _, _ in
@@ -576,15 +569,15 @@ struct ComposerSceneSurface: View {
             }
         }
         .onPreferenceChange(ComposerSafeTopKey.self) { safeTop = $0 }
-        // **La barre de statut s'efface** (directive porteur 2026-09-27 : la
-        // croix et le `⋯` « un peu plus haut pour ne pas être sur la scène »).
+        // **La barre de statut s'efface** : la croix et le `⋯` se posent
+        // « un peu plus haut pour ne pas être sur la scène ».
         // Comme le lecteur de stories : la rangée de l'horloge rend sa hauteur,
         // et la croix monte dans celle de la Dynamic Island, aux coins.
         .statusBarHidden(true)
     }
 
     /// **Le SOL de la scène : le thumbhash de son propre résultat** (directive
-    /// porteur 2026-09-27 : « la scène doit avoir un sol peint en thumbhash du
+    /// porteur : « la scène doit avoir un sol peint en thumbhash du
     /// résultat de la scène »).
     ///
     /// Une scène 9:16 est moins haute qu'un iPhone, et elle se cadre entre la
@@ -597,8 +590,8 @@ struct ComposerSceneSurface: View {
     /// Tapable comme le fond du canvas, dont il prolonge l'apparence ; inerte
     /// pendant un tracé, qui possède l'écran entier.
     private var sceneLetterbox: some View {
-        // **Le sol est BORNÉ par un calque neutre** (retour porteur 2026-09-28 :
-        // en dessin, les contrôleurs « s'étirent et sortent » du viewport).
+        // **Le sol est BORNÉ par un calque neutre** : en dessin, les
+        // contrôleurs ne doivent pas « s'étirer et sortir » du viewport.
         // `SceneBackdropView` peint le thumbhash en `.scaledToFill()` et laisse
         // l'hôte clipper : une image en fill ANNONCE la taille de son
         // remplissage, plus large que l'écran dès que son rapport diffère —
@@ -631,16 +624,14 @@ struct ComposerSceneSurface: View {
 
     @State private var floorHash: String?
 
-    /// La zone sûre du haut, mesurée : la barre haute s'y LOGE (#8370, retour
-    /// porteur 2026-09-27 : « remonte encore le bouton X et ⋯ »).
+    /// La zone sûre du haut, mesurée : la barre haute s'y LOGE.
     @State private var safeTop: CGFloat = 0
 
     /// **De combien la barre haute monte dans la zone sûre** : jusqu'à la
     /// rangée de la Dynamic Island, où la barre de statut effacée a rendu la
     /// place. Aux coins, la croix et le `⋯` ne croisent pas l'îlot, centré.
     ///
-    /// **Redescendue de moitié** (retour porteur 2026-09-28 : « profites pour
-    /// redescendre (X) et (…) ») : la barre ne monte plus jusqu'à la rangée de
+    /// **Redescendue de moitié** : la barre ne monte pas jusqu'à la rangée de
     /// l'îlot, elle s'arrête à mi-chemin — sous la Dynamic Island, jamais sur
     /// la scène. `ComposerTopBar.liftShare` est la part de montée gardée.
     private var chromeLift: CGFloat {
@@ -652,10 +643,10 @@ struct ComposerSceneSurface: View {
             slide: $slide,
             aspectRatio: aspectRatio,
             cornerRadius: MeeshyRadius.xlPlus,
-            // **Le dessin se pose DANS la carte, pas sur le cadre** (#4515) : un
+            // **Le dessin se pose DANS la carte, pas sur le cadre** : un
             // trait hors du canvas est perdu à la publication.
             canvasOverlay: drawingSurface,
-            // Les sons posés sur la scène (#4722) — retirés pendant le dessin,
+            // Les sons posés sur la scène — retirés pendant le dessin,
             // dont le calque prend la carte entière.
             objectOverlay: drawingSurface == nil
                 ? { taille in AnyView(ComposerSceneSoundChips(
@@ -679,7 +670,7 @@ struct ComposerSceneSurface: View {
             editingTextId: editingTextId,
             onInlineTextChanged: onInlineTextChanged,
             onInlineTextEditEnded: onInlineTextEditEnded,
-            // « Un seul objet à la fois » a son témoin sur la scène (#4073).
+            // « Un seul objet à la fois » a son témoin sur la scène.
             selectedItemId: selectedItemId,
             selectionBadge: selectionBadge,
             timelineBridge: timelineBridge,
@@ -687,7 +678,7 @@ struct ComposerSceneSurface: View {
             onItemMenuRequested: onItemMenu,
             localMediaAliases: sceneLocalMediaAliases
         )
-        // La RESPIRATION latérale (retour porteur 2026-09-28) — la même valeur
+        // La RESPIRATION latérale — la même valeur
         // que la mesure du bord gauche ci-dessous lit : les deux ne peuvent pas
         // diverger.
         .padding(.horizontal, edge)
@@ -695,8 +686,8 @@ struct ComposerSceneSurface: View {
         .overlay {
             if let quickCaptureHint { ComposerSceneQuickCaptureHint(hint: quickCaptureHint) }
         }
-        // **La surface PUBLIE la place du viseur, elle ne le peint pas**
-        // (#4080, directive porteur 2026-09-04). Le meuble le monte une seule
+        // **La surface PUBLIE la place du viseur, elle ne le peint pas.**
+        // Le meuble le monte une seule
         // fois ; `Color.clear` + `aspectRatio(.fit)` reproduit exactement le
         // rectangle du dessin dans le repère où la carte se cadre.
         .overlay {
@@ -712,7 +703,7 @@ struct ComposerSceneSurface: View {
                 .padding(.horizontal, edge)
                 .allowsHitTesting(false)
         }
-        // **Le bord gauche du DESSIN, mesuré ici et remonté** (#5011) : la
+        // **Le bord gauche du DESSIN, mesuré ici et remonté** : la
         // trace du son et le pied des références s'alignent sur la carte, qui
         // se centre dans le viewport et n'en touche le bord que si la largeur la
         // contraint.
@@ -724,19 +715,19 @@ struct ComposerSceneSurface: View {
                 Color.clear
                     .preference(key: ComposerSceneCardLeadingKey.self, value: bordGauche)
                     // La carte se CENTRE : sa largeur est ce que les deux bords
-                    // lui laissent. Le volet en proportionne sa flèche (#5008).
+                    // lui laissent. Le volet en proportionne sa flèche.
                     .preference(key: ComposerSceneCardWidthPreferenceKey.self,
                                 value: max(0, geo.size.width - 2 * bordGauche))
             }
         }
-        // **La scène se pose ENTRE la barre haute et le socle** (directive
-        // porteur 2026-09-27). Ni la croix ni la capsule Publier ne se posent
+        // **La scène se pose ENTRE la barre haute et le socle.**
+        // Ni la croix ni la capsule Publier ne se posent
         // sur le dessin : la zone sûre du bas porte déjà le socle
         // (`composerFloatingSocle`), celle du haut porte la barre, et la carte
         // se cadre dans ce qui reste. Le clavier, lui, ne la pousse pas — le
         // sol et le chrome montent, la scène reste où l'auteur la regarde.
         .padding(.top, ComposerTopBar.height + 4 - chromeLift)
-        // **Un panneau ouvert en bas fait REMONTER la scène** (#8712) : la
+        // **Un panneau ouvert en bas fait REMONTER la scène** : la
         // carte se cadre au-dessus de lui, le haut ne bouge pas.
         .padding(.bottom, sceneLiftInset)
         .animation(ComposerToolFocus.transition(reduceMotion: reduceMotion), value: sceneLiftInset)
@@ -746,7 +737,7 @@ struct ComposerSceneSurface: View {
 
     private var chromeLayer: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // **Un outil ouvert RETIRE la barre haute** (#8652, #9138) : le
+            // **Un outil ouvert RETIRE la barre haute** : le
             // `(x)` de l'outil devient la seule sortie à l'écran, et la place
             // qu'elle occupait revient à la colonne droite et au panneau
             // d'options, qui partent alors du haut. La scène ne saute pas : elle
@@ -764,7 +755,7 @@ struct ComposerSceneSurface: View {
                 .transition(.opacity)
             }
 
-            // **La trace du son de FOND, en tête** (#5001, #5017) : elle se lit
+            // **La trace du son de FOND, en tête** : elle se lit
             // AVEC la scène, comme un titre avec ce qu'il titre. Aucun `tint:` —
             // `plateauTint` est un FOND, et le passer en couleur de contenu peint
             // la capsule dans la couleur de ce qu'elle recouvre (#5011).
@@ -778,13 +769,13 @@ struct ComposerSceneSurface: View {
 
             freeZone
 
-            // **La frise prend le bas tant qu'elle est ouverte** (#8415) : les
+            // **La frise prend le bas tant qu'elle est ouverte** : les
             // étages qui outillent la scène image par image n'ont rien à y
             // faire, et deux zones basses se recouvriraient.
             if let timelinePanel {
                 timelinePanel
             } else if ComposerToolFocus.lowerFloorsAreShown(writesText: writesText) {
-                // **Clavier levé, le bas est au clavier** (#6132) : références,
+                // **Clavier levé, le bas est au clavier** : références,
                 // jetons et rangée basse y seraient couverts ou hors du pouce.
                 lowerFloors
                     .background {
@@ -800,9 +791,9 @@ struct ComposerSceneSurface: View {
     @ViewBuilder
     private var lowerFloors: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // **Ce que la publication EMPORTE** (#5002, #5036) — hashtags et
+            // **Ce que la publication EMPORTE** — hashtags et
             // mentions, juste sous la scène libre. Il CÈDE aux options d'un
-            // outil (#5010), par `ComposerCanonicalZone`, jamais par un
+            // outil, par `ComposerCanonicalZone`, jamais par un
             // `!toolIsOpen` écrit ici.
             if ComposerCanonicalZone.isServed(.references, toolIsOpen: toolIsOpen), band == nil {
                 ComposerSceneReferenceFooter(hashtags: sceneHashtags,
@@ -812,16 +803,16 @@ struct ComposerSceneSurface: View {
                                              onOpenMentions: onOpenMentions)
             }
 
-            // **Le panneau d'options passe AVANT la bande de fond** (#4064) :
+            // **Le panneau d'options passe AVANT la bande de fond** :
             // l'outil ouvert a la priorité sur le bas, et les deux ne
             // coexistent jamais. L'exclusion se lit sur `railMode`, par
             // `ComposerLowZone`, jamais sur la présence du panneau.
             switch ComposerLowZone.resolve(toolIsOpen: toolIsOpen, band: band) {
             case .toolOptions:
                 // La marge des rails : les options d'un outil ne touchent pas
-                // le bord du verre (retour porteur 2026-09-28).
+                // le bord du verre.
                 // Sur une PLAQUE DE VERRE, comme les options de l'éditeur
-                // d'objet (directive porteur 2026-09-27).
+                // d'objet.
                 if let toolOptions {
                     toolOptions
                         .padding(MeeshySpacing.smPlus)
@@ -837,18 +828,17 @@ struct ComposerSceneSurface: View {
             case .nothing:
                 EmptyView()
             }
-            // L'inspecteur de l'objet sélectionné (#4073) — un outil ouvert
+            // L'inspecteur de l'objet sélectionné — un outil ouvert
             // lui prend la place, par le MODE DU RAIL.
             if ComposerObjectChips.isServed(toolIsOpen: toolIsOpen, chips: objectChips) {
                 ComposerObjectChipsRow(chips: objectChips,
                                        onSelect: onObjectChip)
             }
-            // **La rangée basse — une PLACE permanente, un contenu qui change**
-            // (#4072, #5010) : outil ouvert, ses contrôleurs ; sinon, les portes
-            // qui font ENTRER de la matière ; viseur armé, ses commandes (#4080).
-            // **Une bande ouverte prend le bas pour elle seule** (directive
-            // porteur 2026-09-27 : la mention, le hashtag et le lieu s'effacent
-            // aussi le temps du panneau). Un OUTIL ouvert garde la rangée : elle
+            // **La rangée basse — une PLACE permanente, un contenu qui change** :
+            // outil ouvert, ses contrôleurs ; sinon, les portes
+            // qui font ENTRER de la matière ; viseur armé, ses commandes.
+            // **Une bande ouverte prend le bas pour elle seule** : la mention, le
+            // hashtag et le lieu s'effacent aussi le temps du panneau. Un OUTIL ouvert garde la rangée : elle
             // porte alors ses propres contrôleurs.
             if band == nil || toolIsOpen { lowToolRow }
         }
@@ -856,10 +846,10 @@ struct ComposerSceneSurface: View {
 
     /// **La scène LIBRE** — le vide du calque de chrome, où la scène se voit et
     /// se touche. Les deux rails y flottent au bas, à portée du pouce, avec les
-    /// MÊMES marges (#4633) ; le volet de description s'y pose entre eux (#4993).
+    /// MÊMES marges ; le volet de description s'y pose entre eux.
     private var freeZone: some View {
         ZStack(alignment: .bottom) {
-            // **Frise ouverte, la scène se RÈGLE dans le temps** (#8415) : les
+            // **Frise ouverte, la scène se RÈGLE dans le temps** : les
             // rails et le volet s'effacent, et le canvas ne prend plus de geste.
             // La frise réécrit la slide à sa fermeture ; une pose ou un
             // déplacement faits pendant qu'elle est ouverte seraient écrasés.
@@ -874,13 +864,13 @@ struct ComposerSceneSurface: View {
                 Color.clear.preference(key: ComposerFreeZoneFrameKey.self, value: geo.frame(in: .global))
             }
         }
-        // **Les options du sous-outil ouvert, à droite depuis le haut** (#9138)
+        // **Les options du sous-outil ouvert, à droite depuis le haut**
         // — sur la scène libre, alignées sur le haut de la colonne droite.
         .overlay {
             if timelinePanel == nil, let inlinePanel {
                 inlinePanel
                     // Aligné sur le haut de la colonne droite, donc de la carte
-                    // (#10542) : la plaque pose elle-même sa gouttière.
+                    // — la plaque pose elle-même sa gouttière.
                     .padding(.top, trailingBand.top - ComposerRailGeometry.gutter)
                     .environment(\.composerSceneCardFrame, sceneCardFrame)
                     .transition(.opacity)
@@ -888,7 +878,7 @@ struct ComposerSceneSurface: View {
         }
     }
 
-    /// « Temps » reste où il était — AU-DESSUS de l'historique (#8713) : la
+    /// « Temps » reste où il était — AU-DESSUS de l'historique : la
     /// frise masque annuler et rétablir (elle réécrit la slide à sa fermeture),
     /// mais leur place est gardée, sans quoi le bouton qui la RANGE descendrait
     /// sous le doigt qui vient de l'ouvrir.
@@ -916,7 +906,7 @@ struct ComposerSceneSurface: View {
                 floatingRail
                 Spacer(minLength: 0)
                 if ComposerToolFocus.isShown(.trailingRail, toolIsOpen: toolIsOpen, writesText: writesText) {
-                // **Les options EN HAUT, l'historique EN BAS** (#8713, #8714) :
+                // **Les options EN HAUT, l'historique EN BAS** :
                 // la colonne prend la hauteur de la scène libre dès qu'elle a
                 // des options, et son pied reste au pouce.
                 ComposerTrailingRail(actions: trailingActions,
@@ -931,7 +921,7 @@ struct ComposerSceneSurface: View {
                                      onTime: toolIsOpen ? nil : onTimeButton,
                                      timeIsOpen: timeIsOpen,
                                      footFollowsOptions: trailingFootFollowsOptions)
-                    // **Dans la hauteur de la CARTE** (#10542) : un outil
+                    // **Dans la hauteur de la CARTE** : un outil
                     // ouvert retire la barre haute, et la scène libre remonte
                     // au-dessus de la carte — le rail, lui, n'en sort pas.
                     .padding(.top, trailingBand.top)
@@ -941,10 +931,10 @@ struct ComposerSceneSurface: View {
                 }
             }
             .frame(maxHeight: .infinity, alignment: isRoomy ? .center : .bottom)
-            // **Le volet CÈDE au viseur** (#4080) : la question passe par la
+            // **Le volet CÈDE au viseur** : la question passe par la
             // règle, jamais par un `cameraStage != .off` écrit ici.
-            // **Un outil ou une bande ouverts prennent le bas pour eux seuls**
-            // (retour porteur 2026-09-28) : la légende s'efface le temps du
+            // **Un outil ou une bande ouverts prennent le bas pour eux seuls** :
+            // la légende s'efface le temps du
             // dessin ou du Cadre, comme la barre canonique sous un panneau.
             if ComposerSceneCameraOverlay.isServed(.description, stage: cameraStage),
                ComposerToolFocus.isShown(.description, toolIsOpen: toolIsOpen, writing: writing), band == nil {
@@ -981,15 +971,15 @@ struct ComposerSceneSurface: View {
         }
     }
 
-    // **Le champ PERMANENT est parti** (directive porteur 2026-08-30) :
+    // **Le champ PERMANENT est absent** :
     //
     // > « La zone de description en bas ne doit pas être affichée si on ne
     // > touche pas l'icône description, même si une description existe ! »
     //
-    // Il vivait ici en calque de lecture (#4065) et occupait le bas dès qu'un
+    // Un calque de lecture permanent occuperait le bas dès qu'un
     // texte existait — la place que la scène centrée réclame, pour un texte que
     // l'auteur ne regarde pas la plupart du temps. La description s'ouvre
-    // désormais par sa PORTE, comme les autres niveaux du modèle, et le meuble
+    // par sa PORTE, comme les autres niveaux du modèle, et le meuble
     // monte l'éditeur en zone basse (`sceneDescriptionEditor`).
     //
     // `description` et `descriptionPlaceholder` restent au contrat : la porte

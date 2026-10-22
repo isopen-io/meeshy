@@ -484,7 +484,7 @@ public struct MeeshyAvatar: View {
                     .contentShape(Circle())
                     .onTapGesture(perform: performTap)
                     .accessibilityAddTraits(.isButton)
-                    .accessibilityAction(performTap)
+                    .accessibilityAction { performTap() }
             } else { visual }
         }
 

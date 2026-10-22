@@ -25,8 +25,7 @@ final class FeedMediaPrefetcher {
         lastPrefetchIndex = index
         prefetchDebounceTask?.cancel()
         prefetchDebounceTask = Task {
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else { return }
+            guard await cancellableSleep(for: .milliseconds(150)), !Task.isCancelled else { return }
             prefetchMedia(around: index)
         }
     }

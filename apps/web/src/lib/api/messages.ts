@@ -462,6 +462,24 @@ export function latestCachedThreadMessage(queryClient: QueryClient, conversation
 }
 
 /**
+ * `latestSurvivingThreadMessage` (#11466) — le message le plus récent du fil en
+ * cache qui reste VISIBLE une fois `excludingId` supprimé : ni supprimé, ni
+ * bulle optimiste. Toutes les fenêtres et toutes les pages, parce que le
+ * remplaçant peut vivre sur une page plus ancienne que celle du supprimé.
+ * `undefined` si le fil n'est pas chargé ou ne porte aucun survivant — seul le
+ * serveur sait alors ce qui précède. Miroir iOS `mostRecentSurvivor`.
+ */
+export function latestSurvivingThreadMessage(queryClient: QueryClient, conversationId: string, excludingId: string): Message | undefined {
+  return threadWindowsOf(queryClient, conversationId)
+    .flatMap((data) => data.pages.flatMap((page) => page.messages))
+    .filter((m) => m.id !== excludingId && m.deletedAt == null && !isUnconfirmedLocalMessage(m))
+    .reduce<Message | undefined>(
+      (latest, m) => (latest === undefined || new Date(m.createdAt).getTime() > new Date(latest.createdAt).getTime() ? m : latest),
+      undefined,
+    );
+}
+
+/**
  * L'ENVOI D'UN MESSAGE (#5813, étape 2 ; étendu #5668 aux pièces jointes) —
  * `POST conversations.byIdMessages`
  * (`services/gateway/src/routes/conversations/messages-send.ts:117-120`,

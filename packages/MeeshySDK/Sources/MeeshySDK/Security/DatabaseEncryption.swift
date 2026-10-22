@@ -26,7 +26,7 @@ public extension DatabaseEncryptionProviding {
 public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
     public static let shared = DatabaseEncryption()
 
-    private static let keychainKey = "meeshy_db_encryption_key"
+    static let keychainKey = "meeshy_db_encryption_key"
     fileprivate static let logger = MeeshyLog.logger(.dbEncryption, subsystem: .legacySDK)
     private var logger: Logger { Self.logger }
     private let key: SymmetricKey

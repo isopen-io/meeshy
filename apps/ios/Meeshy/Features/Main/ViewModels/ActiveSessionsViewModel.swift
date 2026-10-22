@@ -45,7 +45,7 @@ final class ActiveSessionsViewModel: ObservableObject {
 
     init(
         sessionService: SessionServiceProviding = SessionService.shared,
-        cacheProvider: @escaping @MainActor () async -> ActiveSessionsCache? = { await CacheCoordinator.shared.sessions },
+        cacheProvider: @escaping @MainActor () async -> ActiveSessionsCache? = { CacheCoordinator.shared.sessions },
         networkMonitor: any NetworkMonitorProviding = NetworkMonitor.shared
     ) {
         self.sessionService = sessionService

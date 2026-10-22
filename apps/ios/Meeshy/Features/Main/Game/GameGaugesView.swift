@@ -39,7 +39,7 @@ private struct GameTile<Drawing: View, Lines: View>: View {
                 Text(title)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                     .textCase(.uppercase)
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                 lines()
             }
             .multilineTextAlignment(.center)
@@ -53,7 +53,7 @@ private struct GameTile<Drawing: View, Lines: View>: View {
 private func headline(_ text: String) -> some View {
     Text(text)
         .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-        .foregroundColor(ThemeManager.shared.textPrimary)
+        .foregroundStyle(ThemeManager.shared.textPrimary)
         .fixedSize(horizontal: false, vertical: true)
 }
 

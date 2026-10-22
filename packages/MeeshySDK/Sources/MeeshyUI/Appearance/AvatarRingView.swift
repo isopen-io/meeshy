@@ -38,7 +38,7 @@ public struct AvatarRingView: View, Equatable {
         return FrameMotionPlan.make(elements: elements, motions: design.motion, center: CGPoint(x: Self.box / 2, y: Self.box / 2))
     }
 
-    private static let box: Double = 100
+    nonisolated private static let box: Double = 100
     private static let dots = 28
     private static let dashes = 36
     private static let arcs = 24

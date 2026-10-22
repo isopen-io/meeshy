@@ -14,6 +14,7 @@ actor MockConversationCommandPersistence: ConversationCommandPersisting {
         case appendReaction(localId: String, emoji: String, participantId: String?)
         case removeReaction(localId: String, emoji: String, participantId: String?)
         case updateViewOnceCount(localId: String, count: Int)
+        case purgeMessages(ids: [String])
     }
 
     private(set) var calls: [Call] = []
@@ -69,6 +70,10 @@ actor MockConversationCommandPersistence: ConversationCommandPersisting {
 
     func updateViewOnceCount(localId: String, count: Int) async throws {
         calls.append(.updateViewOnceCount(localId: localId, count: count))
+    }
+
+    func purgeMessages(ids: [String]) async throws {
+        calls.append(.purgeMessages(ids: ids))
     }
 }
 

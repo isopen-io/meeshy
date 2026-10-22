@@ -4,7 +4,6 @@ import MeeshySDK
 import MeeshyUI
 
 /// **Une SCÈNE de post, posée dans la galerie comme une page parmi les autres**
-/// (#6709).
 ///
 /// La galerie feuillette des `MessageAttachment` et range tout ce qu'elle sait
 /// d'une page dans des cartes indexées par identifiant — légende, auteur. Une
@@ -19,7 +18,7 @@ import MeeshyUI
 /// aucune extraction de poster, aucun préchauffage, aucune libération du player
 /// partagé ne s'arme sur une scène.
 /// **Ce qu'une scène présente sur UNE surface** — son cadre et son fond, rendus
-/// ensemble (#6806).
+/// ensemble.
 ///
 /// Deux valeurs dans un type plutôt que deux propriétés voisines : voisines,
 /// elles se lisent séparément, et c'est exactement ainsi qu'un lot a changé
@@ -40,20 +39,20 @@ nonisolated struct GallerySceneItem: Equatable {
     let document: CanvasV3
     let sceneIndex: Int
     /// Le porteur de la scène : le document dit ce qu'il faut peindre, pas où
-    /// vivent les pixels. Sans lui, une scène de MÉDIA se peint vide (#4926).
+    /// vivent les pixels. Sans lui, une scène de MÉDIA se peint vide.
     let carrier: StoryItem
     /// Le média du post que la scène MONTRE (`SceneCaption.mediaIdentity`), ou
     /// `nil` pour une scène de texte, de dessin ou de couleur. C'est lui qu'une
     /// citation désigne, et lui qu'une citation rouvre.
     let mediaId: String?
     /// Le rapport largeur / hauteur auquel la scène se cadre SUR UNE CARTE —
-    /// TOUJOURS `SceneShape.aspect` depuis #6896/#6904 (voir
+    /// TOUJOURS `SceneShape.aspect` (voir
     /// `PostGalleryLot.sceneAspect`) : une scène qui n'est qu'une image ne se
     /// cadre plus au rapport de cette image.
     let aspect: CGFloat
 
-    /// **Le rapport du CANVAS lui-même** (#6806) — celui auquel la scène se
-    /// présente en PLEIN CADRE. Identique à `aspect` depuis #6896/#6904 (les
+    /// **Le rapport du CANVAS lui-même** — celui auquel la scène se
+    /// présente en PLEIN CADRE. Identique à `aspect` (les
     /// deux sont TOUJOURS `SceneShape.aspect`) : le champ survit pour que
     /// `mediaRatio(of:scenes:presentation:)` garde un site unique par
     /// présentation, `surface(inFullFrame:)`, plutôt que de brancher sur
@@ -65,11 +64,11 @@ nonisolated struct GallerySceneItem: Equatable {
     let moves: Bool
     let thumbHash: String?
     let thumbnailURL: String?
-    /// **La durée de la timeline, ou `nil` si la scène ne bouge pas** (#8598).
+    /// **La durée de la timeline, ou `nil` si la scène ne bouge pas.**
     /// C'est elle qui fait naître le curseur au couloir de transport
     /// (`GallerySceneTimeline`).
     var timeline: TimeInterval? = nil
-    /// L'auteur du post, que le filigrane d'un enregistrement nomme (recette #9681).
+    /// L'auteur du post, que le filigrane d'un enregistrement nomme.
     var authorUsername: String? = nil
 
     /// La scène elle-même, et non le document entier : deux pages d'un même
@@ -79,58 +78,54 @@ nonisolated struct GallerySceneItem: Equatable {
         document.scenes.indices.contains(sceneIndex) ? document.scenes[sceneIndex] : nil
     }
 
-    /// **Le canvas repeint-il le fond que la galerie peint déjà ?** (#6791,
-    /// directive porteur 2026-09-16).
+    /// **Le canvas repeint-il le fond que la galerie peint déjà ?** Il faut
+    /// utiliser le fond comme canvas une fois plutôt que de refaire un cadre de
+    /// canvas : sinon deux fonds thumbHash au lieu d'un.
     ///
-    /// > « Il faut utiliser le fond comme canvas une fois plutôt que de refaire
-    /// > un cadre de canvas […] on a deux fonds thumbHash au lieu d'en avoir
-    /// > qu'une »
+    /// La page pose déjà le ThumbHash sous le cadre (`MediaStageBackdrop`).
+    /// Quand la scène n'est QU'UNE image, elle se présenterait au rapport de
+    /// cette image (`PostGalleryLot.sceneAspect`) : ses bandes sortiraient alors
+    /// du cadre présenté, et le calque que le canvas y peint
+    /// (`StoryLetterboxFill`) n'ajouterait aucun pixel visible — il ajouterait un
+    /// SECOND dégradé du même hachage, étiré dans un autre cadre : deux teintes
+    /// distinctes au-dessus du même média.
     ///
-    /// La page pose déjà le ThumbHash sous le cadre (`MediaStageBackdrop`,
-    /// #6143). Quand la scène n'est QU'UNE image, elle se présente au rapport de
-    /// cette image (`PostGalleryLot.sceneAspect`) : ses bandes sortent alors du
-    /// cadre présenté, et le calque que le canvas y peint
-    /// (`StoryLetterboxFill`) n'ajoute aucun pixel visible — il ajoute un
-    /// SECOND dégradé du même hachage, étiré dans un autre cadre. Mesuré au
-    /// simulateur : deux teintes distinctes au-dessus du même média.
-    ///
-    /// C'est la règle de #6636 — « si rien ne sort des cadres de l'image, il ne
-    /// faut pas afficher le canvas » — que le lecteur de stories porte depuis ce
-    /// jour-là (`imageOnlyRect(of:)`) et que cette page, née après, n'avait
-    /// jamais reçue.
+    /// C'est la règle « si rien ne sort des cadres de l'image, il ne faut pas
+    /// afficher le canvas », que le lecteur de stories porte
+    /// (`imageOnlyRect(of:)`).
     ///
     /// **Ce qu'une scène PRÉSENTE, et ce n'est pas la même chose selon la
-    /// surface qui la porte** (#6806 + #6791, tenus par UNE réponse).
+    /// surface qui la porte** (le rapport du cadre et le fond, tenus par UNE
+    /// réponse).
     ///
     /// Le rapport du cadre et le fond que le canvas peint sont la MÊME
-    /// question — le doc-comment de l'ancienne `servesLetterboxFill` (retirée
-    /// au lot #6904, sans consommateur depuis que la CARTE peint seule) le
-    /// disait déjà : « un second prédicat à tenir d'accord avec `sceneAspect`
-    /// divergerait le jour où l'un des deux changerait ». Ce jour est arrivé
-    /// le 2026-09-16 : un lot
-    /// a fait passer le plein cadre au rapport du canvas **sans** toucher au
-    /// fond. Géométrie exacte (`media = 402 × 714,7`, le sol divisé par trois),
-    /// rendu PIRE — la photo ne grandissait pas, elle glissait vers le haut en
-    /// laissant ~340 pt de vide. Ce vide était la bande du canvas, que plus
-    /// personne ne peignait.
+    /// question : un second prédicat à tenir d'accord avec `sceneAspect`
+    /// divergerait le jour où l'un des deux changerait. Faire passer le plein
+    /// cadre au rapport du canvas **sans** toucher au fond donnerait une
+    /// géométrie exacte (`media = 402 × 714,7`, le sol divisé par trois) mais un
+    /// rendu PIRE — la photo ne grandirait pas, elle glisserait vers le haut en
+    /// laissant ~340 pt de vide, la bande du canvas que plus personne ne
+    /// peindrait.
     ///
     /// La règle, une fois les deux moitiés ensemble :
     /// - **cardée**, on ouvre la PHOTO : le cadre prend le rapport de l'image,
-    ///   ses bandes SORTENT du cadre, le canvas ne les peint pas (#6791) ;
+    ///   ses bandes SORTENT du cadre, le canvas ne les peint pas ;
     /// - **en plein cadre**, on ouvre la SCÈNE : le cadre prend le rapport du
     ///   canvas, ses bandes entrent DANS le cadre, le canvas les habille.
     ///
-    /// Rendre les deux d'un seul appel est ce qui interdit la divergence : on
-    /// ne peut plus changer le cadre en oubliant le fond.
+    /// La scène étant TOUJOURS 9:16 (`SceneShape.aspect`), les deux surfaces
+    /// rendent aujourd'hui le même rapport ; rendre les deux moitiés d'un seul
+    /// appel reste ce qui interdit la divergence : on ne peut pas changer le
+    /// cadre en oubliant le fond.
     func surface(inFullFrame: Bool) -> SceneSurface {
-        // **La scène est TOUJOURS 9:16, cardée ou en plein cadre** (#6896,
-        // #6904) : `inFullFrame` ne fait plus varier le rapport présenté, et
+        // **La scène est TOUJOURS 9:16, cardée ou en plein cadre** :
+        // `inFullFrame` ne fait pas varier le rapport présenté, et
         // le canvas ne peint plus jamais de bandes — `SceneShape.layout(...)`
         // dit qui peint le hors-champ (le plateau).
         SceneSurface(aspect: SceneShape.aspect, paintsLetterbox: false)
     }
 
-    /// **LA SLIDE DE CETTE SCÈNE-CI, prête pour l'exporteur** (#7052).
+    /// **LA SLIDE DE CETTE SCÈNE-CI, prête pour l'exporteur.**
     ///
     /// `carrier.toRenderableSlide()` ne peut pas servir seul : le carrier est
     /// bâti UNE FOIS PAR POST (`PostGalleryLot.compose`) et remis identiquement
@@ -174,7 +169,7 @@ nonisolated struct GallerySceneItem: Equatable {
 }
 
 /// **D'où vient la légende d'une scène** — la légende propre de son média, ou le
-/// texte du post en repli (`SceneCaption.Origin`, #6280). Les deux se traduisent
+/// texte du post en repli (`SceneCaption.Origin`). Les deux se traduisent
 /// par des routes distinctes, et la chaîne seule ne dit pas laquelle on affiche.
 nonisolated struct GallerySceneCaption: Equatable {
     let origin: SceneCaption.Origin
@@ -188,8 +183,8 @@ nonisolated struct GallerySceneCaption: Equatable {
 
     /// **La langue affichée, résolue UNE fois** — le choix du lecteur, sinon la
     /// descente du Prisme. Le texte ET le drapeau actif la lisent : deux
-    /// résolutions parallèles ont déjà marqué « Français » actif sur un texte
-    /// portugais (#6531).
+    /// résolutions parallèles marqueraient « Français » actif sur un texte
+    /// portugais.
     func displayedLanguage(in post: FeedPost,
                            preferredLanguages: [String],
                            chosenLanguage: String?) -> String? {
@@ -210,8 +205,7 @@ nonisolated struct GallerySceneCaption: Equatable {
     }
 }
 
-/// **Le LOT que le plein écran d'un post feuillette** (#6709, #6710, directive
-/// porteur 2026-09-15).
+/// **Le LOT que le plein écran d'un post feuillette.**
 ///
 /// > « lorsqu'on ouvre les scènes de poste, on doit utiliser LE même composant
 /// > qu'on utilise pour afficher les attachements de conversation ! Et afficher
@@ -234,7 +228,7 @@ nonisolated struct GallerySceneCaption: Equatable {
 nonisolated struct PostGalleryLot {
 
     /// **Qui a posé la pièce, et quand.** L'auteur du POST pour ses scènes et ses
-    /// médias ; l'auteur du COMMENTAIRE pour les médias qu'il a joints (#6710).
+    /// médias ; l'auteur du COMMENTAIRE pour les médias qu'il a joints.
     struct Attribution: Equatable {
         let name: String
         let avatarURL: String?
@@ -259,7 +253,7 @@ nonisolated struct PostGalleryLot {
     let sceneCaptions: [String: GallerySceneCaption]
     let captionServings: [String: SocialMediaCaptionServing]
     let captionMap: [String: String]
-    /// Page → la carte des liens suivis de SON porteur (#9075) : le post pour ses
+    /// Page → la carte des liens suivis de SON porteur : le post pour ses
     /// scènes et ses médias, le commentaire pour le média qu'il a joint.
     let captionLinks: [String: [String: String]]
     let attributions: [String: Attribution]
@@ -298,8 +292,8 @@ nonisolated struct PostGalleryLot {
         return pagesScene[min(max(0, startSceneIndex), pagesScene.count - 1)].id
     }
 
-    /// **La citation que « Répondre » pose sur cette page** — la même que #6578,
-    /// jamais un second format.
+    /// **La citation que « Répondre » pose sur cette page** — le format
+    /// unique de citation, jamais un second format.
     ///
     /// Une page scène cite le média qu'elle MONTRE ; une page média cite son
     /// média. Un média JOINT à un commentaire n'est pas un média du post : le
@@ -323,10 +317,10 @@ nonisolated struct PostGalleryLot {
         return candidat
     }
 
-    /// **« Créer avec CE média »** (#6709) — la cible du média que la page montre,
-    /// par la règle d'offre unique (`ComposerSeedTarget(post:mediaId:)`). Recette du
-    /// 2026-09-16 : sur les posts à plusieurs scènes, la colonne n'offrait que
-    /// « Répondre », parce que l'offre était résolue pour le POST entier.
+    /// **« Créer avec CE média »** — la cible du média que la page montre,
+    /// par la règle d'offre unique (`ComposerSeedTarget(post:mediaId:)`). Sur
+    /// les posts à plusieurs scènes, une offre résolue pour le POST entier ne
+    /// laisserait que « Répondre » dans la colonne.
     @MainActor
     func composeTarget(for pieceId: String, in post: FeedPost) -> ComposerSeedTarget? {
         postMediaId(for: pieceId, in: post).flatMap { ComposerSeedTarget(post: post, mediaId: $0) }
@@ -342,12 +336,12 @@ nonisolated struct PostGalleryLot {
 
     /// **Le rapport auquel une scène se présente — point UNIQUE de la galerie.**
     ///
-    /// TOUJOURS `SceneShape.aspect` (9:16, #6896/#6904) : la scène ne se
-    /// présente plus au rapport d'une image ni d'un `carrierAspect` logé —
+    /// TOUJOURS `SceneShape.aspect` (9:16) : la scène ne se
+    /// présente pas au rapport d'une image ni d'un `carrierAspect` logé —
     /// ceux-là ne gouvernent que la manière dont un fond se POSE dans les
     /// 9:16 (`SceneShape.mediaBand`), jamais le cadre présenté. L'index et le
     /// document restent des paramètres pour que la signature ne change pas
-    /// au fil des surfaces qui l'appellent — aucun des deux n'est plus lu.
+    /// au fil des surfaces qui l'appellent — aucun des deux n'est lu.
     static func sceneAspect(_ document: CanvasV3, sceneIndex: Int) -> CGFloat {
         SceneShape.aspect
     }
@@ -421,8 +415,8 @@ nonisolated struct PostGalleryLot {
             createdAt: post.timestamp,
             thumbnailColor: media?.thumbnailColor ?? "000000"
         )
-        // **En plein écran, la légende est OBLIGATOIRE** (directive porteur
-        // 2026-09-06) : le texte du post tient lieu de légende quand la scène
+        // **En plein écran, la légende est OBLIGATOIRE** : le texte du post tient
+        // lieu de légende quand la scène
         // n'en porte pas.
         let legende = SceneCaption.resolveWithOrigin(sceneIndex: index, in: document, post: post,
                                                      carrierFallback: true)
@@ -446,7 +440,7 @@ nonisolated struct PostGalleryLot {
             scenes: [:],
             sceneCaptions: [:],
             // `captionMap` est le chemin simple, `captionServings` le chemin
-            // riche qui porte les alternatives de langue (#4934).
+            // riche qui porte les alternatives de langue.
             captionServings: SocialMediaCaption.serving(for: post.media, carrier: .from(post: post),
                                                         preferredLanguages: preferredLanguages),
             captionMap: SocialMediaCaption.map(for: post.media, carrierText: post.displayContent,
@@ -518,7 +512,7 @@ nonisolated struct PostGalleryLot {
     }
 }
 
-/// **Le fil de commentaires que la pellicule suit pendant la lecture** (#6710).
+/// **Le fil de commentaires que la pellicule suit pendant la lecture.**
 ///
 /// La page ouverte ne doit jamais sauter sous le doigt : ce que la galerie
 /// montre garde son rang, et ce qui arrive vient APRÈS.
@@ -551,7 +545,7 @@ nonisolated enum PostGalleryCommentFeed {
     }
 }
 
-/// **Ce que la commande de lecture d'une scène devient après une porte** (#6142).
+/// **Ce que la commande de lecture d'une scène devient après une porte.**
 ///
 /// La galerie tient UNE commande pour la scène ouverte, comme le player partagé
 /// en tient une pour la vidéo ouverte : l'appui long l'arrête en entrant dans le

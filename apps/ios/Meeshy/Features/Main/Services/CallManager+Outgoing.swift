@@ -106,7 +106,7 @@ extension CallManager {
             return false
         }
 
-        analyticsCallInitiatedDate = Date()
+        analytics.callInitiatedDate = Date()
 
         // Optimistic local state — `currentCallId` is reassigned to the real
         // gateway-issued ObjectId once the ACK lands.
@@ -226,7 +226,7 @@ extension CallManager {
                 // Petit délai (250ms) pour laisser le gateway commiter le
                 // cleanup MongoDB avant qu'on émette call:initiate.
                 MessageSocketManager.shared.emitCallForceLeave(conversationId: conversationId)
-                try? await Task.sleep(for: .milliseconds(250))
+                _ = await cancellableSleep(for: .milliseconds(250))
                 guard self.activeCallUUID == uuid else {
                     Logger.calls.info("[CALL_SETUP] force-leave wait — uuid changed, discarding")
                     return
@@ -341,7 +341,7 @@ extension CallManager {
             return false
         }
 
-        analyticsCallInitiatedDate = Date()
+        analytics.callInitiatedDate = Date()
         currentCallId = callId
         CallResumeLedger.shared.begin(callId)
         self.remoteUserId = remoteUserId

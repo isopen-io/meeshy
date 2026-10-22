@@ -175,7 +175,7 @@ const f = {
   'admin.scale.loyalty.presetLabel': 'Um ano de fidelidade',
   'admin.scale.big.warning': 'Níveis acima de 10 000 pontos: {count}. Verifique-os antes de salvar — nada é bloqueado.',
   'admin.scale.abuse.title': 'Proteções dos pesos altos',
-  'admin.scale.abuse.intro': 'Uma operação que vale pelo menos o limiar só credita uma vez por conteúdo, devolve seus pontos se o conteúdo for excluído dentro da janela e fica limitada para uma conta sem e-mail nem telefone verificado. Interagir com o próprio conteúdo nunca rende nada.',
+  'admin.scale.abuse.intro': 'Uma operação que vale pelo menos o limiar só credita uma vez por conteúdo, devolve seus pontos se o conteúdo for excluído em até 30 dias e fica limitada para uma conta sem e-mail nem telefone verificado. Um patamar de sequência ou de fidelidade que atinge esse limiar segue o mesmo limite. Interagir com o próprio conteúdo nunca rende nada.',
   'admin.scale.abuse.heavyPoints': 'Limiar de peso alto (pontos)',
   'admin.scale.abuse.clawbackHours': 'Estorno se excluído em até (horas)',
   'admin.scale.abuse.unverifiedMaxPoints': 'Pontos no máximo por ação, conta não verificada',

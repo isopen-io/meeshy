@@ -69,7 +69,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
             messageId: "00000000000000000000cd55", clientMessageId: nil
         )
 
-        let sent = await sut.viewModel.sendMessage(content: "Salut")
+        let sent = await sut.viewModel.send(outgoingMessage(content: "Salut", conversationId: sut.viewModel.conversationId)).isAccepted
 
         XCTAssertTrue(sent)
         let cid = try XCTUnwrap(sut.socket.lastSendViaSocketFallbackClientMessageId)
@@ -85,7 +85,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
             messageId: "00000000000000000000cd56", clientMessageId: nil
         )
 
-        _ = await sut.viewModel.sendMessage(content: "Salut")
+        _ = await sut.viewModel.send(outgoingMessage(content: "Salut", conversationId: sut.viewModel.conversationId)).isAccepted
 
         XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 1)
         XCTAssertEqual(sut.socket.lastSendViaSocketFallbackIsEncrypted, false)
@@ -96,7 +96,7 @@ final class ConversationViewModelDirectEncryptionSendTests: XCTestCase {
     func test_sendMessage_sessionE2EEEtablie_partChiffreParREST() async throws {
         let sut = try await makeSUT(encryptor: SucceedingEncryptor())
 
-        _ = await sut.viewModel.sendMessage(content: "Salut")
+        _ = await sut.viewModel.send(outgoingMessage(content: "Salut", conversationId: sut.viewModel.conversationId)).isAccepted
 
         XCTAssertEqual(sut.socket.sendViaSocketFallbackCallCount, 0,
                        "un message chiffré ne part jamais par le socket-first")

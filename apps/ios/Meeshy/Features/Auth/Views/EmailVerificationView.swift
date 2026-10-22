@@ -60,7 +60,7 @@ struct EmailVerificationView: View {
             .task(id: viewModel.verificationSuccess) {
                 guard viewModel.verificationSuccess else { return }
                 onVerified(viewModel.openProvenSession)
-                try? await Task.sleep(for: Self.successPause)
+                _ = await cancellableSleep(for: Self.successPause)
                 dismiss()
             }
             .navigationTitle(String(localized: "emailVerification.nav.title", defaultValue: "Vérification de l'email"))

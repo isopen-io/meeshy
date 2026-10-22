@@ -133,7 +133,7 @@ extension ConversationView {
                 accentHex: accentColor,
                 focusedPieceId: $overlayState.overlayPieceId,
                 isPresented: $overlayState.showOverlayMenu,
-                canDelete: menu.canDeleteOnServer, canForward: menu.canForward,
+                canDelete: menu.canDeleteOnServer, canForward: menu.canForward, canReply: menu.canReply, canReact: menu.canReact,
                 onReact: { piece, emoji in
                     viewModel.toggleAttachmentReaction(attachmentId: piece.id, messageId: messageId, emoji: emoji)
                 },
@@ -209,7 +209,7 @@ extension ConversationView {
             // n'apparaît que si `selectionAllowsDeleteForAll` (TOUS les
             // messages sélectionnés sont miens, sans fenêtre — #11214).
             .confirmationDialog(
-                String(localized: "conversation.view.delete_message.title", bundle: .main),
+                MessageDeleteConfirmation.title(count: overlayState.selectedMessageIds.count),
                 isPresented: $overlayState.deleteConfirmSelectionActive,
                 titleVisibility: .visible
             ) {
@@ -220,12 +220,27 @@ extension ConversationView {
                 }
                 ContentRemovalOffer.selectionButton(selectedMessagesInThreadOrder, ids: overlayState.selectedMessageIds,
                     viewModel: viewModel, mayRemove: canRemoveMessage, onConfirmed: endSelectionMode)
-                Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
-                    deleteSelectedMessages(mode: .local)
+                if selectionAllowsDeleteForMe {
+                    Button(String(localized: "conversation.view.delete_for_me", bundle: .main), role: .destructive) {
+                        deleteSelectedMessages(mode: .local)
+                    }
                 }
                 Button(String(localized: "common.cancel", bundle: .main), role: .cancel) { }
             } message: {
                 Text(String(localized: "conversation.view.delete_for_everyone.hint", bundle: .main))
             }
+    }
+}
+
+/// Le titre de la confirmation de suppression (#11533) : une sélection de
+/// plusieurs messages dit combien partent, comme la feuille de retrait (#11520).
+enum MessageDeleteConfirmation {
+    static func titleKey(count: Int) -> String {
+        count > 1 ? "conversation.view.delete_messages.title" : "conversation.view.delete_message.title"
+    }
+
+    static func title(count: Int) -> String {
+        guard count > 1 else { return String(localized: "conversation.view.delete_message.title", bundle: .main) }
+        return String(localized: "conversation.view.delete_messages.title", defaultValue: "Supprimer \(count) messages ?", bundle: .main)
     }
 }

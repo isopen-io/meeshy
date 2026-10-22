@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import MeeshyUI
+import MeeshySDK
 
 enum CallCaptureCopy {
     static var control: String {
@@ -112,7 +113,7 @@ struct CallCaptureFlash: View {
             .task(id: capture.flashCount) {
                 guard capture.flashCount > 0 else { return }
                 opacity = reduceMotion ? 0.35 : 0.85
-                try? await Task.sleep(nanoseconds: 30_000_000)
+                _ = await cancellableSleep(for: .milliseconds(30))
                 withAnimation(.easeOut(duration: reduceMotion ? 0.3 : 0.45)) { opacity = 0 }
             }
     }

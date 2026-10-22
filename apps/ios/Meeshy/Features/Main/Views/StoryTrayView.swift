@@ -396,7 +396,7 @@ private struct MyStoryButton: View {
                             // (cf. MeeshyAvatar.badgeSize .storyTray).
                             // Emoji dans un cercle de dimension fixe 32×32 : figé (déborderait s'il scalait, doctrine 86i)
                             Text("\u{1F4AD}")
-                                .font(.system(size: MeeshyFont.title3Size))
+                                .font(MeeshyFont.emoji(MeeshyFont.title3Size))
                                 .frame(width: MeeshyControlSize.compact, height: MeeshyControlSize.compact)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Source unique des libellés de média (lot media-vocabulaire-partage). -->
+    <string name="media_label_photo">Foto</string>
+    <string name="media_label_video">Video</string>
+    <string name="media_label_audio">Audio</string>
+    <string name="media_label_file">Datei</string>
+    <string name="media_label_location">Standort</string>
+    <string name="media_summary_photo">📷 Foto</string>
+    <string name="media_summary_video">🎥 Video</string>
+    <string name="media_summary_voice">🎙️ Sprachnachricht</string>
+    <string name="media_summary_file">📎 Datei</string>
+    <string name="media_summary_location">📍 Standort</string>
+    <string name="media_voice_message">Sprachnachricht</string>
+    <string name="media_voice_recording">Sprachnachricht (%1$s)</string>
+    <plurals name="media_duration_minutes">
+        <item quantity="one">%1$d Minute</item>
+        <item quantity="other">%1$d Minuten</item>
+    </plurals>
+    <plurals name="media_duration_seconds">
+        <item quantity="one">%1$d Sekunde</item>
+        <item quantity="other">%1$d Sekunden</item>
+    </plurals>
+    <string name="media_composer_placeholder_message">Nachricht...</string>
+    <string name="media_composer_placeholder_post">Was gibt\'s Neues?</string>
+    <string name="media_composer_placeholder_status">Dein Status...</string>
+    <string name="media_composer_placeholder_story">Antworten...</string>
+    <string name="media_composer_placeholder_comment">Kommentieren...</string>
+    <string name="media_composer_placeholder_caption">Bildunterschrift hinzufügen...</string>
+</resources>
