@@ -1,0 +1,71 @@
+import type { Lens } from '@meeshy/shared/types/lens-format';
+
+import type { Box } from '@/lib/calls/face-effects';
+import type { Surface2D } from '@/lib/calls/video-effects-frames';
+
+import type { FrameSize } from './face-anchor';
+import type { LutCube } from './lens-lut';
+import type { LutStage } from './lens-lut-stage';
+import { paintLens, type LensPaintEnv } from './lens-paint';
+import { lensLutOf, planLens, type LensDrawOp, type LensLevel } from './lens-plan';
+
+/**
+ * **L'ÉTAGE LENS D'UNE IMAGE D'APPEL** (W14, #11320) — ce que le moteur des
+ * images (`video-effects-frames.ts`, dans le worker) appelle quand les
+ * réglages portent une lens : l'ÉTALONNAGE par la LUT sur le GPU, avant le
+ * canevas ; puis, sur l'image déjà recadrée, le PLAN (`planLens`, sur la boîte
+ * du visage que suit le détecteur) et la PEINTURE 2D des cadres, stickers,
+ * textes et particules par-dessus.
+ *
+ * Tout ce qui manque se passe en silence : sans WebGL2 ou sans le cube de sa
+ * LUT, la lens se joue sans étalonnage ; sans un fichier de sticker, sans ce
+ * sticker. Une image d'appel part TOUJOURS.
+ *
+ * Les réglages (`LensSettings`) traversent `postMessage` : une lens LUE
+ * (`parseLens`), les langues du lecteur et le palier de dégradation — que des
+ * données, jamais un fichier.
+ */
+export type LensSettings = { readonly lens: Lens; readonly languages: readonly string[]; readonly level: LensLevel };
+
+export type LensStageEnv = {
+  readonly face: (source: CanvasImageSource, frame: FrameSize) => Box;
+  readonly cube: (asset: string) => LutCube | null;
+  readonly lut?: () => LutStage | null;
+  readonly paint: LensPaintEnv;
+  /** `prefers-reduced-motion` : le temps de la lens est figé, ses particules ne bougent plus. */
+  readonly reducedMotion?: () => boolean;
+};
+
+export type LensStage = {
+  readonly plan: (settings: LensSettings, source: CanvasImageSource, frame: FrameSize, t: number) => readonly LensDrawOp[];
+  readonly grade: (image: CanvasImageSource, settings: LensSettings, frame: FrameSize) => CanvasImageSource;
+  readonly paint: (context: Surface2D, ops: readonly LensDrawOp[], frame: FrameSize) => void;
+  readonly close: () => void;
+};
+
+const FROZEN_T = 0;
+
+export function createLensStage(env: LensStageEnv): LensStage {
+  let lut: LutStage | null | undefined;
+  return {
+    plan: (settings, source, frame, t) => planLens({ ...settings, frame, face: env.face(source, frame), t: env.reducedMotion?.() === true ? FROZEN_T : t }),
+    grade: (image, settings, frame) => {
+      const op = lensLutOf(settings.lens, settings.level);
+      if (op === null) return image;
+      const cube = env.cube(op.asset);
+      if (cube === null) return image;
+      lut ??= env.lut?.() ?? null;
+      if (lut === null) return image;
+      try {
+        return lut.render(image, frame.width, frame.height, cube, op.intensity);
+      } catch {
+        return image;
+      }
+    },
+    paint: (context, ops, frame) => paintLens(context, ops, frame, env.paint),
+    close: () => {
+      lut?.release();
+      lut = null;
+    },
+  };
+}

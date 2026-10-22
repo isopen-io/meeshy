@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseLens, type Lens, type LensLayer } from '@meeshy/shared/types/lens-format';
 
 import { anchorPointOf, anchorScaleOf, facePointOf } from './face-anchor';
-import { planLens, type LensDrawOp, type LensLevel } from './lens-plan';
+import { lensLutOf, planLens, type LensDrawOp, type LensLevel } from './lens-plan';
 
 /**
  * CE QU'UNE LENS PEINT SUR UNE IMAGE (W14, #11320) — le plan lit une lens du
@@ -140,5 +140,17 @@ describe('planLens — les particules sont déterministes', () => {
       expect(dot.alpha).toBeGreaterThanOrEqual(0);
       expect(dot.alpha).toBeLessThanOrEqual(1);
     });
+  });
+});
+
+describe('lensLutOf — la LUT que l’étage GPU joue', () => {
+  test('la couche LUT de la lens, à son intensité', () => {
+    expect(lensLutOf(sharedLens(), 'full')).toEqual({ kind: 'lut', id: 'grade', asset: 'aaaaaaaaaaaaaaaa.png', intensity: 0.8 });
+  });
+
+  test('une LUT que la lens masque à ce palier n’est pas jouée', () => {
+    const lut: LensLayer = { kind: 'lut', id: 'teinte', asset: 'aaaaaaaaaaaaaaaa.png' };
+    expect(lensLutOf(lensOf([lut], { reduced: { hide: ['teinte'] } }), 'reduced')).toBeNull();
+    expect(lensLutOf(lensOf([lut], { reduced: { hide: ['teinte'] } }), 'full')).toMatchObject({ intensity: 1 });
   });
 });

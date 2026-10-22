@@ -1,9 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
+import type { Lens, LensLayer } from '@meeshy/shared/types/lens-format';
+
 import { identityStrip, lutCubeOf, type LutCube } from './lens-lut';
 import { createLutStage, LUT_FRAGMENT_SHADER } from './lens-lut-stage';
-import { createLensStage, type LensStageEnv } from './lens-stage';
-import type { LensDrawOp } from './lens-plan';
+import { createLensStage, type LensSettings, type LensStageEnv } from './lens-stage';
 import type { LutStage } from './lens-lut-stage';
 
 /**
@@ -51,6 +52,18 @@ const cube = (): LutCube => {
 
 const frame = { name: 'image' } as unknown as CanvasImageSource;
 
+const LENS: Lens = {
+  schema: 1,
+  id: 'essai',
+  name: 'Essai',
+  credits: { author: 'Studio', createdAt: '2026-10-01' },
+  surfaces: ['live'],
+  cost: 'light',
+  window: { startsAt: '2026-10-01T00:00:00Z', endsAt: '2026-12-31T00:00:00Z' },
+  layers: [],
+  triggers: [],
+};
+
 describe('createLutStage', () => {
   test('la passe lit une texture 3D en highp, et mêle selon l’intensité', () => {
     expect(LUT_FRAGMENT_SHADER).toContain('precision highp float');
@@ -79,7 +92,9 @@ describe('createLutStage', () => {
 });
 
 describe('createLensStage — l’étalonnage se passe en silence de ce qui manque', () => {
-  const lutOp: LensDrawOp = { kind: 'lut', id: 'g', asset: 'aaaaaaaaaaaaaaaa.png', intensity: 0.8 };
+  const lutLayer: LensLayer = { kind: 'lut', id: 'g', asset: 'aaaaaaaaaaaaaaaa.png', intensity: 0.8 };
+  const settingsOf = (layers: readonly LensLayer[]): LensSettings => ({ lens: { ...LENS, layers }, languages: ['fr'], level: 'full' });
+  const withLut = settingsOf([lutLayer]);
   const graded = { name: 'graded' } as unknown as CanvasImageSource;
   const stageOf = (render: LutStage['render']): LutStage => ({ render, release: () => undefined });
   const env = (overrides: Partial<LensStageEnv> = {}): LensStageEnv => ({
@@ -94,15 +109,32 @@ describe('createLensStage — l’étalonnage se passe en silence de ce qui manq
   test('avec son cube et WebGL2 : l’image étalonnée, à l’intensité de la couche', () => {
     const seen: number[] = [];
     const lens = createLensStage(env({ lut: () => stageOf((_s, _w, _h, _c, intensity) => (seen.push(intensity), graded)) }));
-    expect(lens.grade(frame, [lutOp], size)).toBe(graded);
+    expect(lens.grade(frame, withLut, size)).toBe(graded);
     expect(seen).toEqual([0.8]);
   });
 
   test('sans couche LUT, sans cube, sans WebGL2 ou sur une passe qui lève : l’image telle quelle', () => {
-    expect(createLensStage(env()).grade(frame, [], size)).toBe(frame);
-    expect(createLensStage(env({ cube: () => null })).grade(frame, [lutOp], size)).toBe(frame);
-    expect(createLensStage(env({ lut: () => null })).grade(frame, [lutOp], size)).toBe(frame);
+    expect(createLensStage(env()).grade(frame, settingsOf([{ kind: 'frame', id: 'c', motif: 'elegant.art-deco' }]), size)).toBe(frame);
+    expect(createLensStage(env({ cube: () => null })).grade(frame, withLut, size)).toBe(frame);
+    expect(createLensStage(env({ lut: () => null })).grade(frame, withLut, size)).toBe(frame);
     const failing = createLensStage(env({ lut: () => stageOf(() => { throw new Error('perdu'); }) }));
-    expect(failing.grade(frame, [lutOp], size)).toBe(frame);
+    expect(failing.grade(frame, withLut, size)).toBe(frame);
+  });
+});
+
+describe('createLensStage — le mouvement réduit', () => {
+  const settings: LensSettings = {
+    lens: { ...LENS, layers: [{ kind: 'particles', id: 'neige', preset: 'snow', density: 'low' }] },
+    languages: ['fr'],
+    level: 'full',
+  };
+  const env = (reduced: boolean): LensStageEnv => ({ face: () => ({ x: 0, y: 0, width: 10, height: 10 }), cube: () => null, paint: { assets: () => null }, reducedMotion: () => reduced });
+  const size = { width: 1280, height: 720 };
+
+  test('sous prefers-reduced-motion, les particules ne bougent plus d’une image à l’autre', () => {
+    const still = createLensStage(env(true));
+    expect(still.plan(settings, frame, size, 100)).toEqual(still.plan(settings, frame, size, 2600));
+    const moving = createLensStage(env(false));
+    expect(moving.plan(settings, frame, size, 100)).not.toEqual(moving.plan(settings, frame, size, 2600));
   });
 });

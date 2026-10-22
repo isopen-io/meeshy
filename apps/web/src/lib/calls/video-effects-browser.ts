@@ -1,3 +1,5 @@
+import { browserLensStage } from '@/lib/meeshy-lens/lens-browser';
+
 import { currentDeviceTier } from '../device/capability-tier';
 
 import { browserReducedMotion, createFaceLayer } from './face-effects-draw';
@@ -54,7 +56,8 @@ export function browserBlur(): BlurStage | null {
 
 export function browserFrameEnv(options: { readonly reducedMotion?: () => boolean } = {}): LocalFrameEnv {
   const face = createFaceLayer(browserFaceDetector(), options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion });
-  return { surface: offscreen2d, now, face, blur: browserBlur, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
+  const lens = browserLensStage(options.reducedMotion === undefined ? {} : { reducedMotion: options.reducedMotion });
+  return { surface: offscreen2d, now, face, blur: browserBlur, lens, frameFrom: (canvas, init) => new VideoFrame(canvas, init) };
 }
 
 /** Le repli du fil principal : `matchMedia` y existe, le calque de visage le lit lui-même. */
