@@ -24,7 +24,7 @@ class AudioPassIdentityTest {
     @Test fun `stable quand on edite un texte ou le volume`() {
         val base = StoryEffects(audioPlayerObjects = listOf(audio("a")))
         val edited = base.copy(
-            textObjects = listOf(StoryTextObject(id = "t", content = "bonjour")),
+            textObjects = listOf(StoryTextObject(id = "t", text = "bonjour")),
             audioPlayerObjects = listOf(audio("a").copy(volume = 0.2f)),
         )
         assertThat(AudioPassIdentity.key(slide(edited), langs)).isEqualTo(AudioPassIdentity.key(slide(base), langs))
