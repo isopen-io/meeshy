@@ -15,6 +15,7 @@ import me.meeshy.sdk.model.search.SearchQueryCache
 import me.meeshy.sdk.search.GlobalSearchRepository
 import me.meeshy.sdk.search.RecentSearchesStore
 import me.meeshy.sdk.search.GlobalSearchResults
+import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.MessageSocketManager
 import javax.inject.Inject
 
@@ -36,6 +37,12 @@ data class GlobalSearchUiState(
     val isSearching: Boolean = false,
     val hasSearched: Boolean = false,
     val results: GlobalSearchResults = GlobalSearchResults(),
+    /**
+     * Le LECTEUR : l'interlocuteur d'un direct s'elit contre lui (#11615). Sans lui, une
+     * ligne de resultat « conversation » ne pourrait pas nommer l'autre personne et
+     * retomberait sur le nom generique.
+     */
+    val currentUserId: String? = null,
 ) {
     fun countFor(tab: GlobalSearchTab): Int = when (tab) {
         GlobalSearchTab.MESSAGES -> results.messages.size
@@ -67,6 +74,7 @@ class GlobalSearchViewModel @Inject constructor(
     private val recentSearchesStore: RecentSearchesStore,
     private val messageSocket: MessageSocketManager,
     private val clock: CacheClock,
+    sessionRepository: SessionRepository,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(GlobalSearchUiState())
@@ -76,6 +84,11 @@ class GlobalSearchViewModel @Inject constructor(
     private var queryCache = SearchQueryCache.empty<GlobalSearchResults>()
 
     init {
+        viewModelScope.launch {
+            sessionRepository.currentUser.collect { user ->
+                _state.update { it.copy(currentUserId = user?.id) }
+            }
+        }
         viewModelScope.launch {
             recentSearchesStore.searches.collect { recents ->
                 _state.update { it.copy(recentSearches = recents) }
