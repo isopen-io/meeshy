@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -89,29 +90,34 @@ public fun MediaTrimStrip(
     live.value = bounds
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(MeeshySpacing.xsPlus)) {
         BoxWithConstraints(Modifier.fillMaxWidth().height(StripHeight)) {
-            val stripWidth = maxWidth
+            // Les poignées débordent de la bande d'une demi-cible : sans cette marge, la moitié
+            // extérieure serait hors des bornes du parent, donc intouchable.
+            val inset = MediaTrimHandleTarget / 2
+            val stripWidth = (maxWidth - inset * 2).coerceAtLeast(0.dp)
             val density = LocalDensity.current
             val widthPx = with(density) { stripWidth.toPx() }
             val startX = positionOf(bounds.start, sourceDuration, stripWidth)
             val endX = positionOf(bounds.end, sourceDuration, stripWidth)
 
-            Box(Modifier.fillMaxWidth().height(StripHeight).clip(RoundedCornerShape(MeeshyRadius.xs))) {
-                StripSource(content, frames, waveform, accent)
-                Box(Modifier.width(startX).fillMaxHeight().background(ScrimColor))
-                Box(Modifier.offset(x = endX).width((stripWidth - endX).coerceAtLeast(0.dp)).fillMaxHeight().background(ScrimColor))
+            Box(Modifier.padding(horizontal = inset).fillMaxWidth().height(StripHeight)) {
+                Box(Modifier.fillMaxWidth().height(StripHeight).clip(RoundedCornerShape(MeeshyRadius.xs))) {
+                    StripSource(content, frames, waveform, accent)
+                    Box(Modifier.width(startX).fillMaxHeight().background(ScrimColor))
+                    Box(Modifier.offset(x = endX).width((stripWidth - endX).coerceAtLeast(0.dp)).fillMaxHeight().background(ScrimColor))
+                }
+                Box(
+                    Modifier
+                        .offset(x = startX)
+                        .width((endX - startX).coerceAtLeast(0.dp))
+                        .height(StripHeight)
+                        .border(2.dp, accent, RoundedCornerShape(MeeshyRadius.xs)),
+                )
             }
-            Box(
-                Modifier
-                    .offset(x = startX)
-                    .width((endX - startX).coerceAtLeast(0.dp))
-                    .height(StripHeight)
-                    .border(2.dp, accent, RoundedCornerShape(MeeshyRadius.xs)),
-            )
             TrimHandle(
                 tag = MEDIA_TRIM_START_HANDLE_TAG,
                 label = stringResource(R.string.media_trim_handle_start),
                 spoken = spokenSecond(bounds.start),
-                centerX = startX,
+                centerX = inset + startX,
                 accent = accent,
                 onDelta = { px -> live.move(true, px, widthPx, sourceDuration, onChange) },
                 onCommit = onCommit,
@@ -120,7 +126,7 @@ public fun MediaTrimStrip(
                 tag = MEDIA_TRIM_END_HANDLE_TAG,
                 label = stringResource(R.string.media_trim_handle_end),
                 spoken = spokenSecond(bounds.end),
-                centerX = endX,
+                centerX = inset + endX,
                 accent = accent,
                 onDelta = { px -> live.move(false, px, widthPx, sourceDuration, onChange) },
                 onCommit = onCommit,
