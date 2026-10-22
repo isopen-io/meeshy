@@ -10,10 +10,12 @@ import MeeshySDK
 /// c'est une image perdue. Les fonctions `@concurrent` ci-dessous ouvrent hors
 /// de l'acteur et rendent leur résultat `sending` : un `AVAudioFile` neuf, que
 /// personne d'autre ne tient, passe au mixer sans être déclaré `Sendable`.
-extension ReaderAudioMixer {
+/// Un type `nonisolated` à part : le mixer est isolé au fil principal, et ses
+/// membres ne peuvent pas être `@concurrent`.
+nonisolated enum ReaderAudioFileReader {
     /// Ouvre chaque URL ; un fichier illisible est journalisé et SAUTÉ, comme le
     /// faisait `configure` avant (un clip manquant ne fait pas taire les autres).
-    nonisolated static func readAudioFiles(_ urls: [String: URL]) -> [String: AVAudioFile] {
+    static func readAudioFiles(_ urls: [String: URL]) -> [String: AVAudioFile] {
         let logger = MeeshyLog.logger(.media)
         return urls.reduce(into: [String: AVAudioFile]()) { opened, pair in
             // AVAudioFile(forReading:) rejects HTTPS URLs with OSStatus
@@ -62,7 +64,7 @@ extension ReaderAudioMixer {
                                  isStillWanted: () -> Bool = { true }) async throws {
         let ticket = claimConfigurationTicket()
         let wanted = Self.urls(urls, for: audios)
-        let files = await Self.openAudioFiles(wanted)
+        let files = await ReaderAudioFileReader.openAudioFiles(wanted)
         guard ticket == configurationTicket, isStillWanted() else { return }
         configure(audios: audios, files: files, loopsEveryClip: loopsEveryClip)
     }
@@ -76,7 +78,7 @@ extension ReaderAudioMixer {
                                            loopsEveryClip: Bool = false,
                                            isStillWanted: () -> Bool = { true }) async throws {
         let ticket = claimConfigurationTicket()
-        let file = try await Self.openAudioFile(url)
+        let file = try await ReaderAudioFileReader.openAudioFile(url)
         guard ticket == configurationTicket, isStillWanted() else { return }
         configureBackground(audio: audio, file: file, looping: looping, loopsEveryClip: loopsEveryClip)
     }
