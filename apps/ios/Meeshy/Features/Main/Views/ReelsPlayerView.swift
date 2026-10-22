@@ -913,7 +913,7 @@ struct ReelPageView: View {
         guard selectedLanguage == nil, let audioMedia else { return }
         selectedLanguage = ReelAudioLanguageResolver.preferredAudioLanguage(
             original: metaOriginalLanguage,
-            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser),
             availableLanguages: audioMedia.translatedAudios.map(\.targetLanguage)
         )
     }

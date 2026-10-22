@@ -360,7 +360,7 @@ final class ReelPagerPreloader {
     /// que la lecture lira (`CacheCoordinator.audio`, URL résolue). Le cache
     /// disque est borné par son budget ; rien à rendre en s'éloignant.
     private func prefetchAudio(reels: [FeedPost], plan: [ReelPreloadWindow.Step]) async {
-        let languages = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let languages = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
         for step in plan where ReelAudioPrefetch.prefetches(tier: step.tier) {
             for url in ReelAudioPrefetch.urls(for: reels[step.index], preferredLanguages: languages)
             where CacheCoordinator.audioLocalFileURL(for: url.absoluteString) == nil {
