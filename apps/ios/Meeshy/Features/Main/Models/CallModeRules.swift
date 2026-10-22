@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-enum CallModeCarouselRule {
+nonisolated enum CallModeCarouselRule {
     static let selectedScale: CGFloat = 1
     static let neighbourScale: CGFloat = 0.78
     static let selectedOpacity: Double = 1
@@ -75,7 +75,7 @@ enum CallModeCarouselRule {
 /// #8736 — l'état du défilement d'un carrousel : qui le fait bouger (le
 /// doigt, ou le carrousel qui amène au centre un élément touché), et ce que
 /// le repos choisit.
-struct CallModeCarouselMotion<Item: Equatable> {
+nonisolated struct CallModeCarouselMotion<Item: Equatable> {
     private(set) var settling: Item?
     private(set) var isInteracting = false
 

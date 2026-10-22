@@ -790,13 +790,13 @@ final class DeepLinkRouter: ObservableObject {
 
     // MARK: - Consume
 
-    @discardableResult
     /// L'écran de connexion est affiché : une demande d'appel en attente est
     /// oubliée — se connecter ne relance rien.
     func discardPendingCallRequest() {
         if case .callRequest = pendingDeepLink { pendingDeepLink = nil }
     }
 
+    @discardableResult
     func consumePendingDeepLink() -> DeepLink? {
         let link = pendingDeepLink
         pendingDeepLink = nil

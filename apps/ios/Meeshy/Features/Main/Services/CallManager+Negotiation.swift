@@ -303,12 +303,15 @@ extension CallManager {
         // gateway résout `missed` au lieu de `rejected` — le même mislabel
         // que l'arc reject 2026-07-12 fermait déjà sur les autres chemins,
         // ici rouvert par la seule fenêtre "connecté mais jamais livré".
-        Task { [weak self] in
-            let acked = await MessageSocketManager.shared.emitCallRejectWithAck(callId: callId)
-            if !acked {
-                MessageSocketManager.shared.emitCallReject(callId: callId)
-                self?.armPendingEndReconciliation(callId: callId, reason: "rejected")
-                Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+        // Émis ICI, avant le démontage local (D2, #11468) : seul l'accusé attend.
+        MessageSocketManager.shared.emitCallRejectWithAck(callId: callId) { [weak self] acked in
+            let manager = self
+            Task { @MainActor in
+                if !acked {
+                    MessageSocketManager.shared.emitCallReject(callId: callId)
+                    manager?.armPendingEndReconciliation(callId: callId, reason: "rejected")
+                    Logger.calls.warning("call:end (rejected) ACK failed pour \(callId) — fallback émis + réconciliation armée pour le prochain connect")
+                }
             }
         }
     }
