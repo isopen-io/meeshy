@@ -951,14 +951,10 @@ class PostDetailViewModel: ObservableObject {
         preferredLanguages: [String]
     ) -> String? {
         guard let translations, !translations.isEmpty else { return nil }
-        let origLower = originalLanguage?.lowercased()
-        for lang in preferredLanguages {
-            let langLower = lang.lowercased()
-            if let orig = origLower, orig == langLower { return nil }
-            if let match = translations.first(where: { $0.key.lowercased() == langLower }) {
-                return match.value.text
-            }
-        }
-        return nil
+        return PrismTranslationResolver.resolve(
+            originalLanguage: originalLanguage,
+            translations: translations.mapValues(\.text),
+            preferredLanguages: preferredLanguages
+        )?.text
     }
 }
