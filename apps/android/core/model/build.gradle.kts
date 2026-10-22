@@ -35,7 +35,7 @@ android {
 
 androidComponents {
     onVariants { variant ->
-        variant.sources.kotlin?.addGeneratedSourceDirectory(
+        variant.sources.java?.addGeneratedSourceDirectory(
             tasks.named<Task>("generateCallFrameCatalogue"),
             { task: Task -> task.property("outputDir") as org.gradle.api.file.DirectoryProperty },
         )

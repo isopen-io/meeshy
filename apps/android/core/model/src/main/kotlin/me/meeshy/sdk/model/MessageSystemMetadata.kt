@@ -28,20 +28,6 @@ data class MessageSystemEvent(
 )
 
 /**
- * Un lien sortant suivi par la passerelle : l'URL brute et le jeton de redirection.
- * Miroir de `TrackedLink` (iOS).
- */
-@Serializable
-data class TrackedLink(
-    val url: String,
-    val token: String,
-)
-
-/** `[url: jeton]` — le dernier jeton gagne sur une URL en double. */
-val List<TrackedLink>.trackedLinkMap: Map<String, String>
-    get() = associate { it.url to it.token }
-
-/**
  * Lecture du blob libre `Message.metadata`, partagé par toutes les familles d'avis.
  *
  * Chaque lecteur VALIDE son `kind` au lieu de caster : un `kind` inconnu — publié par

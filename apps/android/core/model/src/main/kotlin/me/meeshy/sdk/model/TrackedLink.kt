@@ -16,3 +16,7 @@ public data class TrackedLink(
 /** `[urlBrute: jeton]` — le dernier jeton gagne sur une URL dupliquée. */
 public fun Iterable<TrackedLink>.trackedLinkMap(): Map<String, String> =
     fold(LinkedHashMap()) { acc, link -> acc.also { it[link.url] = link.token } }
+
+/** La même carte, en propriété, pour les lecteurs du fil (`ApiMessage.trackedLinkMap`). */
+public val List<TrackedLink>.trackedLinkMap: Map<String, String>
+    get() = trackedLinkMap()
