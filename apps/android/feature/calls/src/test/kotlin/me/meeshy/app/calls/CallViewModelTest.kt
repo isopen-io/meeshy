@@ -170,10 +170,22 @@ class CallViewModelTest {
         Dispatchers.resetMain()
     }
 
+    /** The extension points with nothing registered — the core call, as it was before they existed. */
+    private val extensions = CallExtensionPoints(
+        controllers = CallFeatureControllerRegistry(emptySet()),
+        overlays = CallOverlayRegistry(emptySet()),
+        actions = CallActionDispatcher(emptyMap()),
+        toasts = CallToastBus(clock),
+        videoHealth = NoopCallVideoHealth(),
+    )
+
     private fun vm() = CallViewModel(
-        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, waitingTimer,
-        heartbeatTicker, appStatePresence, qualityResetTimer, screenRecordingDetector, clock, reconnectBudget,
-        connectingWatchdog,
+        signalManager, coordinator, sessionRepository, ticker, tones, telecom, qualitySampler, appStatePresence,
+        CallPeerIndicatorsController(signalManager, qualityResetTimer, screenRecordingDetector),
+        CallWaitingController(signalManager, waitingTimer),
+        CallWatchdogsController(signalManager, heartbeatTicker, reconnectBudget, connectingWatchdog),
+        CallAnalyticsController(signalManager, clock),
+        extensions,
     )
 
     @Test
