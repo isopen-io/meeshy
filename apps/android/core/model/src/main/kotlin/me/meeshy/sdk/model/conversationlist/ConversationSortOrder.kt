@@ -37,9 +37,9 @@ object ConversationSortOrder {
         if (a.hasCategory) {
             val byCategory = a.categoryId.orEmpty().compareTo(b.categoryId.orEmpty())
             if (byCategory != 0) return@Comparator byCategory
-            val byOrder = (a.orderInCategory ?: Double.POSITIVE_INFINITY)
-                .compareTo(b.orderInCategory ?: Double.POSITIVE_INFINITY)
-            if (byOrder != 0) return@Comparator byOrder
+            val aOrder = a.orderInCategory ?: Double.POSITIVE_INFINITY
+            val bOrder = b.orderInCategory ?: Double.POSITIVE_INFINITY
+            if (aOrder != bOrder) return@Comparator if (aOrder < bOrder) -1 else 1
         }
         val byTime = b.effectiveTimestampMillis.compareTo(a.effectiveTimestampMillis)
         if (byTime != 0) return@Comparator byTime
