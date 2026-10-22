@@ -341,7 +341,7 @@ const ar = {
   'game.photo.author.label.mission': 'حلم حقّقه \u2068{name}\u2069',
   'game.photo.kicker.mission': 'حلم محقّق',
   'game.photo.title.flame_days': '{count} يومًا من اللهب',
-  'game.photo.kicker.day': 'إنجاز اليوم · اليوم {day}',
+  'game.photo.kicker.day': 'مأثرة اليوم · اليوم {day}',
   'game.photo.title.day': 'فُتحت العطيّة',
   'game.photo.plate.meeshes_kept.one': 'Meesh واحدة محفوظة',
   'game.photo.plate.meeshes_kept.two': 'Meesh اثنتان محفوظتان',

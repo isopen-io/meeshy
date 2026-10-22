@@ -341,7 +341,7 @@ const es = {
   'game.photo.author.label.mission': 'Sueño hecho realidad por {name}',
   'game.photo.kicker.mission': 'Sueño hecho realidad',
   'game.photo.title.flame_days': '{count} días de Llama',
-  'game.photo.kicker.day': 'Logro del día · Día {day}',
+  'game.photo.kicker.day': 'Hazaña del día · Día {day}',
   'game.photo.title.day': 'La Ofrenda abierta',
   'game.photo.plate.meeshes_kept.one': '{count} Meesh guardada',
   'game.photo.plate.meeshes_kept.other': '{count} Meeshes guardadas',
