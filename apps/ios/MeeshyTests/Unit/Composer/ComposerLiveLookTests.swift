@@ -200,7 +200,7 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 720, height: 1280), within: CGSize(width: 1080, height: 1920)),
                        CGSize(width: 720, height: 1280), "une toile déjà dans le budget n'est pas agrandie")
         XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 1441, height: 1081), within: CGSize(width: 1080, height: 1920)),
-                       CGSize(width: 1080, height: 810), "dimensions paires, proportions gardées")
+                       CGSize(width: 1440, height: 1080), "dimensions paires et arrondies, proportions gardées, boîte tournée au paysage (#11915)")
     }
 
     func test_rendu_leMixageEtLaPlageVontAuLecteur() throws {

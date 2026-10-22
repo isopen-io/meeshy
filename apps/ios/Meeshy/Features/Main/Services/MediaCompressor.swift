@@ -51,7 +51,7 @@ nonisolated enum MediaContext: Sendable {
 
     var videoBitRate: Int {
         switch self {
-        case .message:    return 2_500_000
+        case .message:    return 4_000_000
         case .story:      return 4_000_000
         case .feedPost:   return 4_000_000
         case .avatar:     return 1_000_000
@@ -61,7 +61,7 @@ nonisolated enum MediaContext: Sendable {
 
     var maxVideoResolution: CGSize {
         switch self {
-        case .message:    return CGSize(width: 720, height: 1280)
+        case .message:    return CGSize(width: 1080, height: 1920)
         case .story:      return CGSize(width: 1080, height: 1920)
         case .feedPost:   return CGSize(width: 1080, height: 1920)
         case .avatar:     return CGSize(width: 480, height: 480)
@@ -101,6 +101,45 @@ extension MediaContext {
         return outgoingImagePolicy(compresses: document.compressImagesOnUpload,
                                    qualityPercent: document.imageCompressionQuality,
                                    keepsLocation: OutgoingImageLocationSetting.stored())
+    }
+}
+
+// MARK: - Le budget d'ENVOI d'une vidéo (#11915)
+
+/// **Une vidéo part en HD** (verdict #11247) : au plus 1080p, la définition de la
+/// source si elle est plus basse, une génération visée sur la qualité
+/// (`VideoTranscodeRecipe`) sous un plafond de débit. La boîte est en portrait et
+/// se tourne avec la vidéo : un paysage 1080p reste 1920×1080.
+///
+/// Plafond par défaut 4 Mb/s, celui des publications : au pire 15,5 Mo pour 30 s
+/// et 31 Mo pour 60 s (son de 128 kb/s compris). Une prise d'iPhone visée à
+/// q 0,6 en HEVC 1080p descend en général sous ce plafond. Et un rendu du composer
+/// se remuxe ainsi pour un message comme pour une story. La compression FORTE
+/// reste un choix de l'utilisateur (`compressImagesOnUpload`, « À l'envoi ») :
+/// 720p à 2,5 Mb/s, ≤ 9,9 Mo pour 30 s.
+nonisolated struct VideoSendBudget: Equatable, Sendable {
+    let maxResolution: CGSize
+    let bitRate: Int
+
+    static let strong = VideoSendBudget(maxResolution: CGSize(width: 720, height: 1280), bitRate: 2_500_000)
+
+    /// Le poids au plafond, image et son, en octets.
+    func maximumBytes(seconds: Int) -> Int {
+        (bitRate + VideoTranscodeRecipe.audioBitRate) * seconds / 8
+    }
+}
+
+extension MediaContext {
+    nonisolated func videoSendBudget(compresses: Bool) -> VideoSendBudget {
+        let haute = VideoSendBudget(maxResolution: maxVideoResolution, bitRate: videoBitRate)
+        guard compresses, self != .avatar else { return haute }
+        return .strong
+    }
+
+    /// Le budget servi par les préférences de l'utilisateur.
+    @MainActor
+    func storedVideoSendBudget() -> VideoSendBudget {
+        videoSendBudget(compresses: UserPreferencesManager.shared.document.compressImagesOnUpload)
     }
 }
 
@@ -212,7 +251,9 @@ actor MediaCompressor {
 
     // MARK: - Video (AVAssetWriter, réglages dérivés de la source — #11290)
 
-    func compressVideo(_ url: URL, context: MediaContext = .message) async throws -> URL {
+    func compressVideo(_ url: URL, context: MediaContext = .message,
+                       budget: VideoSendBudget? = nil) async throws -> URL {
+        let budget = budget ?? context.videoSendBudget(compresses: false)
         let asset = AVURLAsset(url: url)
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("compressed_\(UUID().uuidString).mp4")
@@ -223,7 +264,7 @@ actor MediaCompressor {
         // Une source déjà au format cible se REMUXE (≈ 1 s) au lieu d'un
         // ré-encodage de 10 à 60 s : voir `passthroughIfPossible`.
         if let fastPath = try? await passthroughIfPossible(asset: asset, sourceURL: url,
-                                                           outputURL: outputURL, context: context) {
+                                                           outputURL: outputURL, budget: budget) {
             return fastPath
         }
 
@@ -231,9 +272,9 @@ actor MediaCompressor {
             throw CompressionError.noVideoTrack
         }
         let audioTrack = try await asset.loadTracks(withMediaType: .audio).first
-        let geometry = try await writerGeometry(of: videoTrack, within: context.maxVideoResolution)
+        let geometry = try await writerGeometry(of: videoTrack, within: budget.maxResolution)
         let recipe = VideoTranscodeRecipe(source: try await sourceTraits(video: videoTrack, audio: audioTrack),
-                                          bitRateCeiling: context.videoBitRate,
+                                          bitRateCeiling: budget.bitRate,
                                           encodesHEVC: VideoEncoderAvailability.encodesHEVC)
 
         let writer = try AVAssetWriter(outputURL: outputURL, fileType: .mp4)
@@ -262,7 +303,7 @@ actor MediaCompressor {
                                         audio: audio,
                                         start: .zero)
 
-        Self.logger.info("Video compressed: \(recipe.codec == .hevc ? "HEVC" : "H.264", privacy: .public) \(recipe.keepsTenBits ? "10-bit" : "8-bit", privacy: .public) \(Int(geometry.display.width))x\(Int(geometry.display.height)) display, quality \(VideoTranscodeRecipe.perceptualQuality) under \(context.videoBitRate / 1000)kbps")
+        Self.logger.info("Video compressed: \(recipe.codec == .hevc ? "HEVC" : "H.264", privacy: .public) \(recipe.keepsTenBits ? "10-bit" : "8-bit", privacy: .public) \(Int(geometry.display.width))x\(Int(geometry.display.height)) display, quality \(VideoTranscodeRecipe.perceptualQuality) under \(budget.bitRate / 1000)kbps")
 
         return outputURL
     }
@@ -372,7 +413,7 @@ actor MediaCompressor {
         asset: AVURLAsset,
         sourceURL: URL,
         outputURL: URL,
-        context: MediaContext
+        budget: VideoSendBudget
     ) async throws -> URL? {
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             return nil
@@ -391,7 +432,7 @@ actor MediaCompressor {
         // rotation préférée) au budget. Si le source dépasse, on a besoin
         // de rescaler → on ne peut pas remux.
         let displaySize = try await videoTrack.naturalDisplaySize()
-        let target = context.maxVideoResolution
+        let target = VideoEncodePass.oriented(budget.maxResolution, like: displaySize)
         let fitsInBudget = displaySize.width <= target.width + 1 &&
                            displaySize.height <= target.height + 1
         guard fitsInBudget else { return nil }
@@ -402,7 +443,7 @@ actor MediaCompressor {
         // qu'on accepte au prix d'un fichier marginalement plus gros
         // plutôt qu'un re-encode de 30+ s.
         let estimatedBitrate = try await videoTrack.load(.estimatedDataRate)
-        let bitrateBudget = Float(context.videoBitRate * 2)
+        let bitrateBudget = Float(budget.bitRate * 2)
         guard estimatedBitrate <= bitrateBudget else { return nil }
 
         // Tous les checks passent → remux via passthrough.
@@ -457,7 +498,8 @@ nonisolated struct VideoRenderTarget: Equatable, Sendable {
     static let sourceDefinition = VideoRenderTarget(maxSize: nil, bitRateCeiling: nil)
 
     static func sending(_ context: MediaContext) -> VideoRenderTarget {
-        VideoRenderTarget(maxSize: context.maxVideoResolution, bitRateCeiling: context.videoBitRate)
+        let budget = context.videoSendBudget(compresses: false)
+        return VideoRenderTarget(maxSize: budget.maxResolution, bitRateCeiling: budget.bitRate)
     }
 }
 
@@ -608,7 +650,16 @@ nonisolated enum VideoEncodePass {
         }
     }
 
-    static func fitSize(_ source: CGSize, within max: CGSize) -> CGSize {
+    /// Une boîte tournée comme la vidéo : un budget 1080×1920 vaut 1920×1080 pour
+    /// un paysage (#11915) — la HD ne se rabote pas parce que la vidéo est couchée.
+    static func oriented(_ box: CGSize, like source: CGSize) -> CGSize {
+        let paysage = source.width > source.height
+        guard paysage != (box.width > box.height), source.width != source.height else { return box }
+        return CGSize(width: box.height, height: box.width)
+    }
+
+    static func fitSize(_ source: CGSize, within box: CGSize) -> CGSize {
+        let max = oriented(box, like: source)
         guard source.width > max.width || source.height > max.height else {
             return CGSize(width: evenNumber(source.width), height: evenNumber(source.height))
         }
@@ -617,7 +668,7 @@ nonisolated enum VideoEncodePass {
     }
 
     private static func evenNumber(_ value: CGFloat) -> CGFloat {
-        let rounded = Int(value)
+        let rounded = Int(value.rounded())
         return CGFloat(rounded % 2 == 0 ? rounded : rounded - 1)
     }
 

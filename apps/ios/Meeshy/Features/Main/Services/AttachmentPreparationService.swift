@@ -299,7 +299,8 @@ final class AttachmentPreparationService {
                                      context: MediaContext) async {
         let compressedURL: URL
         do {
-            compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context)
+            compressedURL = try await MediaCompressor.shared.compressVideo(sourceURL, context: context,
+                                                                           budget: context.storedVideoSendBudget())
             if deleteSource, compressedURL != sourceURL {
                 FileManager.default.removeItemLogging(at: sourceURL, context: "post-compression source cleanup", logger: log)
             }
