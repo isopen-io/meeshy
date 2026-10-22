@@ -12,6 +12,11 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symboles</string>
     <string name="emoji_category_travel">Voyages</string>
+    <string name="notification_date_ago">il y a %s</string>
+    <string name="notification_date_hours">%d h</string>
+    <string name="notification_date_minutes">%d min</string>
+    <string name="notification_date_now">à l’instant</string>
+    <string name="notification_date_yesterdayAt">hier %s</string>
     <string name="settings_info_button_label">En savoir plus sur %s</string>
     <string name="sticker_sheet_instants_lieu">Lieux</string>
     <string name="sticker_sheet_instants_message">Messages</string>
@@ -35,4 +40,9 @@
     <string name="sticker_sheet_intent_soutien_title">Consoler et soutenir</string>
     <string name="sticker_sheet_intent_surprise_hint">Pour l’étonnement, la peur, la gêne ou un « oups »</string>
     <string name="sticker_sheet_intent_surprise_title">Surprise et frisson</string>
+    <string name="time_lastSeen_beforeYesterdayAt">Vu avant-hier à %s</string>
+    <string name="time_lastSeen_dateAt">Vu le %1$s à %2$s</string>
+    <string name="time_lastSeen_online">En ligne</string>
+    <string name="time_lastSeen_seen">Vu %s</string>
+    <string name="time_lastSeen_yesterdayAt">Vu hier à %s</string>
 </resources>

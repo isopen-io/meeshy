@@ -2,7 +2,9 @@ package me.meeshy.app.profile
 
 import androidx.compose.runtime.Immutable
 import me.meeshy.sdk.model.UserStats
+import java.util.Locale
 import kotlin.math.roundToInt
+import me.meeshy.sdk.model.format.CompactCountFormat
 
 /** Which activity metric a [StatTile] reports. Fixed dashboard order. */
 enum class StatMetric { MESSAGES, CONVERSATIONS, TRANSLATIONS, FRIEND_REQUESTS, LANGUAGES, MEMBER_DAYS }
@@ -59,7 +61,7 @@ data class UserStatsPresentation(
  */
 object UserStatsBuilder {
 
-    fun build(stats: UserStats): UserStatsPresentation {
+    fun build(stats: UserStats, locale: Locale = Locale.getDefault()): UserStatsPresentation {
         val badges = stats.achievements
             .map { achievement ->
                 val current = achievement.current.coerceAtLeast(0)
@@ -85,12 +87,12 @@ object UserStatsBuilder {
 
         return UserStatsPresentation(
             tiles = listOf(
-                tile(StatMetric.MESSAGES, stats.totalMessages),
-                tile(StatMetric.CONVERSATIONS, stats.totalConversations),
-                tile(StatMetric.TRANSLATIONS, stats.totalTranslations),
-                tile(StatMetric.FRIEND_REQUESTS, stats.friendRequestsReceived),
-                tile(StatMetric.LANGUAGES, stats.languagesUsed),
-                tile(StatMetric.MEMBER_DAYS, stats.memberDays),
+                tile(StatMetric.MESSAGES, stats.totalMessages, locale),
+                tile(StatMetric.CONVERSATIONS, stats.totalConversations, locale),
+                tile(StatMetric.TRANSLATIONS, stats.totalTranslations, locale),
+                tile(StatMetric.FRIEND_REQUESTS, stats.friendRequestsReceived, locale),
+                tile(StatMetric.LANGUAGES, stats.languagesUsed, locale),
+                tile(StatMetric.MEMBER_DAYS, stats.memberDays, locale),
             ),
             badges = badges,
             unlockedCount = badges.count { it.isUnlocked },
@@ -98,31 +100,8 @@ object UserStatsBuilder {
         )
     }
 
-    private fun tile(metric: StatMetric, rawValue: Int): StatTile {
+    private fun tile(metric: StatMetric, rawValue: Int, locale: Locale): StatTile {
         val value = rawValue.coerceAtLeast(0)
-        return StatTile(metric = metric, value = value, formattedValue = formatCompactCount(value))
+        return StatTile(metric = metric, value = value, formattedValue = CompactCountFormat.text(value, locale))
     }
-}
-
-/**
- * A compact, boundary-safe count label: `0..999` verbatim, then `K`/`M`/`B`
- * tiers with a single decimal. The tier thresholds are the pre-rounding
- * magnitudes (`999_950`, `999_950_000`) so a value just below a tier can never
- * render as `1000.0K`/`1000.0M` — it rolls over to `1M`/`1B` instead. A trailing
- * `.0` is dropped (`1K`, not `1.0K`). Negative input is floored to `0`.
- */
-fun formatCompactCount(count: Int): String {
-    val n = count.coerceAtLeast(0)
-    return when {
-        n < 1_000 -> n.toString()
-        n < 999_950 -> withSuffix(n / 1_000.0, "K")
-        n < 999_950_000 -> withSuffix(n / 1_000_000.0, "M")
-        else -> withSuffix(n / 1_000_000_000.0, "B")
-    }
-}
-
-private fun withSuffix(value: Double, suffix: String): String {
-    val rounded = (value * 10).roundToInt() / 10.0
-    val mantissa = if (rounded % 1.0 == 0.0) rounded.toInt().toString() else rounded.toString()
-    return "$mantissa$suffix"
 }

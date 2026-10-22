@@ -36,4 +36,18 @@ class AttachmentKindTest {
         assertThat(AttachmentKind.IMAGE.hasTimebasedTrack).isFalse()
         assertThat(AttachmentKind.PDF.isMedia).isFalse()
     }
+
+    @Test fun `teintes hex par famille`() {
+        val tints = AttachmentKind.entries.associateWith { it.hexTintColor }
+        assertThat(tints[AttachmentKind.IMAGE]).isEqualTo("4ECDC4")
+        assertThat(tints[AttachmentKind.VIDEO]).isEqualTo("FF6B6B")
+        assertThat(tints[AttachmentKind.AUDIO]).isEqualTo("9B59B6")
+        assertThat(tints[AttachmentKind.PDF]).isEqualTo("F39C12")
+        assertThat(tints[AttachmentKind.SPREADSHEET]).isEqualTo("21803D")
+        assertThat(tints[AttachmentKind.DOCUMENT]).isEqualTo("2A56B5")
+        assertThat(tints[AttachmentKind.PRESENTATION]).isEqualTo("D96921")
+        assertThat(tints[AttachmentKind.CODE]).isEqualTo("6366F1")
+        assertThat(tints[AttachmentKind.ARCHIVE]).isEqualTo("808080")
+        assertThat(tints[AttachmentKind.OTHER]).isEqualTo("808080")
+    }
 }
