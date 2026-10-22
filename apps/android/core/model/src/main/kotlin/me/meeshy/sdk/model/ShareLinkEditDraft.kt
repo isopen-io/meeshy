@@ -112,7 +112,7 @@ public data class ShareLinkEditDraft(
             if (requireEmail != baseline.requireEmail) put("requireEmail", JsonPrimitive(requireEmail))
             if (requireBirthday != baseline.requireBirthday) put("requireBirthday", JsonPrimitive(requireBirthday))
             if (allowedLanguages != baseline.allowedLanguages) {
-                put("allowedLanguages", JsonArray(allowedLanguages.map(::JsonPrimitive)))
+                put("allowedLanguages", JsonArray(allowedLanguages.map { JsonPrimitive(it) }))
             }
             if (allowMessages != baseline.allowMessages) put("allowAnonymousMessages", JsonPrimitive(allowMessages))
             if (allowImages != baseline.allowImages) put("allowAnonymousImages", JsonPrimitive(allowImages))

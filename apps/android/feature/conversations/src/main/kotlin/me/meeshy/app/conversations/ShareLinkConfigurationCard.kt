@@ -52,7 +52,7 @@ internal fun ShareLinkConfigurationCard(link: MyShareLink, onEdit: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                SectionTitle(stringResource(R.string.shareLink_detail_configuration))
+                ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_configuration))
                 TextButton(onClick = onEdit, modifier = Modifier.heightIn(min = 48.dp)) {
                     Text(
                         stringResource(R.string.shareLink_detail_edit),
@@ -112,7 +112,7 @@ internal fun ShareLinkConfigurationCard(link: MyShareLink, onEdit: () -> Unit) {
 private fun Int.formatted(): String = String.format(Locale.getDefault(), "%,d", this)
 
 @Composable
-internal fun SectionTitle(text: String) {
+internal fun ShareLinkSectionTitle(text: String) {
     Text(
         text = text.uppercase(Locale.getDefault()),
         style = MaterialTheme.typography.labelMedium,

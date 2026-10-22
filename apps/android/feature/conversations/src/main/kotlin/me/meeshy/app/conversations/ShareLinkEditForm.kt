@@ -96,7 +96,7 @@ internal fun ShareLinkEditForm(
             )
         }
 
-        SectionTitle(stringResource(R.string.shareLink_detail_limits))
+        ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_limits))
         FormGroup {
             SwitchRow(
                 label = stringResource(R.string.shareLink_detail_expiration),
@@ -124,7 +124,7 @@ internal fun ShareLinkEditForm(
             }
         }
 
-        SectionTitle(stringResource(R.string.shareLink_detail_entryConditions))
+        ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_entryConditions))
         FormGroup {
             SwitchRow(stringResource(R.string.shareLink_detail_requireAccount), draft.requireAccount) {
                 onDraftChange(draft.copy(requireAccount = it))
@@ -140,7 +140,7 @@ internal fun ShareLinkEditForm(
             }
         }
 
-        SectionTitle(stringResource(R.string.shareLink_detail_allowedLanguages))
+        ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_allowedLanguages))
         FormGroup {
             SwitchRow(stringResource(R.string.shareLink_detail_allLanguages), draft.allowsAllLanguages) { all ->
                 onDraftChange(draft.withAllLanguages(all, Locale.getDefault().language.ifEmpty { "fr" }))
@@ -166,7 +166,7 @@ internal fun ShareLinkEditForm(
             }
         }
 
-        SectionTitle(stringResource(R.string.shareLink_detail_guestRights))
+        ShareLinkSectionTitle(stringResource(R.string.shareLink_detail_guestRights))
         FormGroup {
             SwitchRow(stringResource(R.string.share_link_permission_messages), draft.allowMessages) {
                 onDraftChange(draft.copy(allowMessages = it))
