@@ -320,8 +320,7 @@ public struct AudioPlayerView: View {
                 let autoplayUrl = attachment.fileUrl
                 // Capture weak en défense : la closure vit dans un registre
                 // STATIQUE — une entrée orpheline ne doit pas retenir le moteur.
-                let autoplayEngine = player
-                AudioPlaybackManager.registerAutoplay(id: attachment.id, url: autoplayUrl) { [weak autoplayEngine] in
+                AudioPlaybackManager.registerAutoplay(id: attachment.id, url: autoplayUrl) { [weak autoplayEngine = player] in
                     guard let player = autoplayEngine else { return }
                     // Optimistic local audio can never load through the cache
                     // (DiskCacheStore.data(for:) rejects file://) — autoplay it
