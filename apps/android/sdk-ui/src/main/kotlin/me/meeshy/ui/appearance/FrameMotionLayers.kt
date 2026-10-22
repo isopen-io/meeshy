@@ -169,7 +169,7 @@ private fun Modifier.stepModifier(step: FrameMotionStep, progress: State<Float>,
         }
         FrameStepKind.TWINKLE -> graphicsLayer { alpha = stepValue(step, progress.value) }
         FrameStepKind.SKEW -> drawWithContent {
-            val matrix = Matrix().apply { this[Matrix.SkewX] = tan(Math.toRadians(stepValue(step, progress.value).toDouble())).toFloat() }
+            val matrix = Matrix().apply { values[Matrix.SkewX] = tan(Math.toRadians(stepValue(step, progress.value).toDouble())).toFloat() }
             withTransform({
                 translate(pivotX * size.width, pivotY * size.height)
                 transform(matrix)
@@ -245,7 +245,7 @@ private fun Modifier.sweepLayer(
     val end = start + size.width + band * 3f
     val p = progress.value
     val x = if (sweep.reverse) end + (start - end) * p else start + (end - start) * p
-    val skew = Matrix().apply { this[Matrix.SkewX] = tan(Math.toRadians(SWEEP_SKEW_DEGREES.toDouble())).toFloat() }
+    val skew = Matrix().apply { values[Matrix.SkewX] = tan(Math.toRadians(SWEEP_SKEW_DEGREES.toDouble())).toFloat() }
     withTransform({
         translate(x, size.height / 2)
         transform(skew)
