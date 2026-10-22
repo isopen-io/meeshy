@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import os
 @testable import Meeshy
 
 /// Garde anti-débordement de pile pour les `body` les plus lourds de l'app.
@@ -234,20 +235,21 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
     /// dette n'est pas remboursée. Le harnais ne doit pas crasher pour dire
     /// qu'il y a trop de profondeur — il doit le MESURER.
     private static func measureOnDeepStack(_ type: Any.Type) throws -> Measurement {
-        var result: Measurement?
+        let result = OSAllocatedUnfairLock<Measurement?>(initialState: nil)
         let thread = Thread {
             let name = _typeName(type, qualified: false)
-            result = Measurement(
+            let measured = Measurement(
                 depth: maxAngleBracketDepth(of: name),
                 typeNameLength: name.count,
                 excerpt: String(name.prefix(600))
             )
+            result.withLock { $0 = measured }
         }
         thread.stackSize = 64 * 1024 * 1024
         thread.start()
         let deadline = Date().addingTimeInterval(60)
-        while result == nil, Date() < deadline { usleep(2000) }
-        guard let measured = result else {
+        while result.withLock({ $0 }) == nil, Date() < deadline { usleep(2000) }
+        guard let measured = result.withLock({ $0 }) else {
             throw XCTSkip("Mesure de profondeur de type non terminée en 60 s")
         }
         return measured
@@ -257,7 +259,7 @@ final class ConversationViewBodyTypeDepthTests: XCTestCase {
     /// `TupleView<(A, B, C)>` comptent pour un seul niveau de chevron mais
     /// chacun de leurs éléments porte sa propre imbrication — c'est bien le
     /// maximum atteint sur un chemin qui borne la récursion du démangleur.
-    static func maxAngleBracketDepth(of typeName: String) -> Int {
+    nonisolated static func maxAngleBracketDepth(of typeName: String) -> Int {
         var depth = 0
         var maximum = 0
         for character in typeName {
