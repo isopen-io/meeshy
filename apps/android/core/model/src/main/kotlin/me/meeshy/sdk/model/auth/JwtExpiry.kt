@@ -154,6 +154,30 @@ object TokenRefreshPolicy {
     private const val ACCOUNT_DELETION_ENDPOINT: String = "/me/account/deletion"
 
     /**
+     * Les portes dont un 401 dit « code ou jeton refusé », jamais « session
+     * expirée » : la seconde étape de la connexion (`/auth/login/2fa`, déjà couvert
+     * par le préfixe `/auth/login`) et ses jumelles `/auth/2fa/verify` et
+     * `/auth/2fa/cancel`, où un code de second facteur faux rend 401 ; l'attente
+     * d'une preuve d'adresse (`/auth/verification/status`, #8083), où un jeton
+     * d'attente inconnu rend 401 `PENDING_TOKEN_INVALID` — rafraîchir ou démonter
+     * la session déjà ouverte d'un AUTRE compte sur cette réponse serait faux.
+     *
+     * `/auth/logout` : on quitte la session avec ses jetons FIGÉS, et un 401 (jeton
+     * expiré) ne doit ni rafraîchir ni démonter ce que le compte SUIVANT vient de
+     * poser dans le porte-jetons. `/anonymous/refresh` : la session d'un invité, pas
+     * celle du compte inscrit — un 401 y est « session d'invité inconnue », et le
+     * compte inscrit, s'il y en a un d'ouvert, n'est jamais touché.
+     */
+    private val CREDENTIALS_REFUSAL_ENDPOINTS: Set<String> = setOf(
+        ACCOUNT_DELETION_ENDPOINT,
+        "/auth/2fa/verify",
+        "/auth/2fa/cancel",
+        "/auth/verification/status",
+        "/auth/logout",
+        "/anonymous/refresh",
+    )
+
+    /**
      * iOS `mapUnauthorized(endpoint:serverMessage:)`: a 401 on `/auth/login*` (Android
      * addition: also [ACCOUNT_DELETION_ENDPOINT]) means the supplied credentials are
      * wrong (there is no session to expire), so it must never tear anything down;
@@ -166,7 +190,7 @@ object TokenRefreshPolicy {
         // un 401 sur la connexion — ou sur la confirmation par mot de passe de la
         // suppression de compte — dit « identifiants refusés », jamais
         // « session expirée ». Prédicat, pas appel.
-        val isCredentialsEndpoint = endpoint.startsWith("/auth/login") || endpoint == ACCOUNT_DELETION_ENDPOINT
+        val isCredentialsEndpoint = endpoint.startsWith("/auth/login") || endpoint in CREDENTIALS_REFUSAL_ENDPOINTS
         if (!isCredentialsEndpoint) return UnauthorizedMapping.SessionExpired
         val message = serverMessage?.takeIf { it.isNotBlank() } ?: DEFAULT_INVALID_CREDENTIALS_MESSAGE
         return UnauthorizedMapping.InvalidCredentials(message)

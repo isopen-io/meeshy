@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="fullscreen_close">Chiudi</string>
+    <string name="fullscreen_back">Indietro</string>
+    <string name="fullscreen_react">Reagisci</string>
+    <string name="fullscreen_reply">Rispondi</string>
+    <string name="fullscreen_audio_output">Uscita audio</string>
+    <string name="fullscreen_play">Riproduci</string>
+    <string name="fullscreen_pause">Pausa</string>
+    <string name="fullscreen_show_controls">Mostra i controlli</string>
+</resources>

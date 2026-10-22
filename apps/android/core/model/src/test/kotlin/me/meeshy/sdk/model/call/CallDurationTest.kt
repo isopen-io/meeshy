@@ -6,26 +6,27 @@ import org.junit.Test
 class CallDurationTest {
 
     @Test
-    fun `zero formats as 0 00 so a running timer starts there`() {
-        assertThat(CallDuration.clock(0)).isEqualTo("0:00")
+    fun `zero formats as 00 00 so a running timer starts there`() {
+        assertThat(CallDuration.clock(0)).isEqualTo("00:00")
     }
 
     @Test
     fun `a negative count is clamped to zero`() {
-        assertThat(CallDuration.clock(-5)).isEqualTo("0:00")
+        assertThat(CallDuration.clock(-5)).isEqualTo("00:00")
     }
 
     @Test
-    fun `sub-minute pads the seconds`() {
-        assertThat(CallDuration.clock(5)).isEqualTo("0:05")
-        assertThat(CallDuration.clock(59)).isEqualTo("0:59")
+    fun `sub-minute pads the seconds and the minutes`() {
+        assertThat(CallDuration.clock(5)).isEqualTo("00:05")
+        assertThat(CallDuration.clock(59)).isEqualTo("00:59")
     }
 
     @Test
-    fun `minute boundary rolls the seconds and shows minutes`() {
-        assertThat(CallDuration.clock(60)).isEqualTo("1:00")
-        assertThat(CallDuration.clock(65)).isEqualTo("1:05")
+    fun `minute boundary rolls the seconds and keeps two minute digits`() {
+        assertThat(CallDuration.clock(60)).isEqualTo("01:00")
+        assertThat(CallDuration.clock(125)).isEqualTo("02:05")
         assertThat(CallDuration.clock(600)).isEqualTo("10:00")
+        assertThat(CallDuration.clock(3599)).isEqualTo("59:59")
     }
 
     @Test
