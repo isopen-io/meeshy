@@ -44,9 +44,10 @@ missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories es stories_publish_media_summary
 missing-quantity :feature:stories pt stories_publish_media_summary
 
-# --- sdk-ui : chaînes de bulle absentes en ar, de, it ----------------------------------------
-# values-ar/de/it ne portent que strings_media_permissions.xml ; les chaînes de bulle n'y sont pas
-# traduites. Comblé par le lot qui génère les ressources des sept langues depuis les catalogues iOS.
+# --- sdk-ui : atomes d'authentification absents en ar, de, it ---------------------------------
+# Le mot de passe révélable, la jauge de robustesse et la signature de marque n'ont pas encore
+# de traduction arabe, allemande ni italienne. Comblé par la génération des sept langues
+# depuis les catalogues iOS (./apps/android/meeshy.sh i18n).
 missing-key :sdk-ui ar password_reveal_show
 missing-key :sdk-ui ar password_reveal_hide
 missing-key :sdk-ui ar password_reveal_state_revealed
@@ -83,29 +84,3 @@ missing-key :sdk-ui it auth_password_strength_strong
 missing-key :sdk-ui it auth_password_strength_excellent
 missing-key :sdk-ui it brand_signature_accessibilityLabel
 missing-key :sdk-ui it brand_signature_credit_open
-
-# --- Intégration des lots Android du 2026-10-22 : écarts apportés par les lots fusionnés ensemble ---
-missing-key :sdk-ui ar fullscreen_close
-missing-key :sdk-ui ar fullscreen_back
-missing-key :sdk-ui ar fullscreen_react
-missing-key :sdk-ui ar fullscreen_reply
-missing-key :sdk-ui ar fullscreen_audio_output
-missing-key :sdk-ui ar fullscreen_play
-missing-key :sdk-ui ar fullscreen_pause
-missing-key :sdk-ui ar fullscreen_show_controls
-missing-key :sdk-ui de fullscreen_close
-missing-key :sdk-ui de fullscreen_back
-missing-key :sdk-ui de fullscreen_react
-missing-key :sdk-ui de fullscreen_reply
-missing-key :sdk-ui de fullscreen_audio_output
-missing-key :sdk-ui de fullscreen_play
-missing-key :sdk-ui de fullscreen_pause
-missing-key :sdk-ui de fullscreen_show_controls
-missing-key :sdk-ui it fullscreen_close
-missing-key :sdk-ui it fullscreen_back
-missing-key :sdk-ui it fullscreen_react
-missing-key :sdk-ui it fullscreen_reply
-missing-key :sdk-ui it fullscreen_audio_output
-missing-key :sdk-ui it fullscreen_play
-missing-key :sdk-ui it fullscreen_pause
-missing-key :sdk-ui it fullscreen_show_controls

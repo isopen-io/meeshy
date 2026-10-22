@@ -123,6 +123,9 @@ androidx-glance-material3 = { module = "androidx.glance:glance-material3", versi
 androidx-lifecycle-service = { module = "androidx.lifecycle:lifecycle-service", version.ref = "lifecycle" }
 mlkit-subject-segmentation = { module = "com.google.android.gms:play-services-mlkit-subject-segmentation", version.ref = "mlkitSubjectSegmentation" }
 
+# lot: persist-outbox-registre-senders
+work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
+
 [bundles]
 compose = ["compose-ui", "compose-ui-graphics", "compose-ui-tooling-preview", "compose-material3", "compose-material-icons"]
 
