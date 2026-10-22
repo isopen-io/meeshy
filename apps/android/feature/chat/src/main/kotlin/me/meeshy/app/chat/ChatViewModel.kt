@@ -159,6 +159,7 @@ class ChatViewModel @Inject constructor(
         messageSocketManager = messageSocketManager,
         workManager = workManager,
         clock = clock,
+        pendingTray = { controllers.find<ComposerTrayController>() },
     )
 
     private val reactions = ChatReactionController(
@@ -577,6 +578,10 @@ class ChatViewModel @Inject constructor(
     /** Sends a file picked from the system document/photo picker through the durable upload chain. */
     fun sendFileAttachment(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
         composer.sendFileAttachment(bytes, fileName, declaredMimeType)
+
+    /** Un fichier choisi, une photo ou un vocal rejoint le plateau : rien ne part avant [send]. */
+    fun onPickFile(bytes: ByteArray, fileName: String, declaredMimeType: String?) =
+        controllers.find<ComposerTrayController>()?.stageBytes(bytes, fileName, declaredMimeType)
 
     /** Present the composer's message-effects picker sheet. */
     fun openEffectsPicker() = composer.openEffectsPicker()
