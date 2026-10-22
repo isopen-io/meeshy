@@ -42,6 +42,7 @@ const auditCreateMany = jest.fn<any>();
 const auditCreate = jest.fn<any>();
 const userFindMany = jest.fn<any>();
 const commentFindFirst = jest.fn<any>();
+const commentFindUnique = jest.fn<any>();
 const commentFindMany = jest.fn<any>();
 const commentUpdateMany = jest.fn<any>();
 const commentUpdate = jest.fn<any>();
@@ -50,7 +51,7 @@ const transaction = jest.fn<any>((fn: (tx: unknown) => Promise<unknown>) => fn(p
 const prisma = {
   report: { findUnique: reportFindUnique, update: reportUpdate },
   post: { findMany: postFindMany, updateMany: postUpdateMany, update: postUpdate, findUnique: postFindUnique },
-  postComment: { findFirst: commentFindFirst, findMany: commentFindMany, updateMany: commentUpdateMany, update: commentUpdate },
+  postComment: { findFirst: commentFindFirst, findUnique: commentFindUnique, findMany: commentFindMany, updateMany: commentUpdateMany, update: commentUpdate },
   adminAuditLog: { createMany: auditCreateMany, create: auditCreate },
   user: { findMany: userFindMany, findUnique: jest.fn<any>().mockResolvedValue({ systemLanguage: 'fr' }) },
   notification: { findMany: jest.fn<any>().mockResolvedValue([]), deleteMany: jest.fn<any>().mockResolvedValue({ count: 0 }) },
@@ -124,6 +125,8 @@ beforeEach(() => {
   auditCreateMany.mockResolvedValue({ count: 1 });
   auditCreate.mockResolvedValue({});
   reportUpdate.mockImplementation(async (args: any) => ({ ...report(), ...args.data }));
+  postFindUnique.mockResolvedValue({ authorId: AUTHOR });
+  commentFindUnique.mockResolvedValue({ authorId: AUTHOR });
   postFindMany.mockImplementation(async (args: any) => ('updatedAt' in (args.select ?? {}) ? [viewRow()] : [postRow()]));
 });
 
@@ -243,6 +246,42 @@ describe('POST /admin/reports/:reportId/act — classer', () => {
     const res = await act(app, { action: 'dismiss', reason: 'Non fondé' });
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('SELF_MODERATION');
+    await app.close();
+  });
+
+  it.each([
+    ['post', POST],
+    ['story', POST],
+  ])("refuse de classer le signalement de SA propre publication (%s) : 403 SELF_MODERATION, rien d'écrit, le refus journalisé (#10458)", async (reportedType, reportedEntityId) => {
+    reportFindUnique.mockResolvedValue(report({ reportedType, reportedEntityId }));
+    postFindUnique.mockResolvedValue({ authorId: ACTOR });
+    const app = await buildApp('MODERATOR');
+    const res = await act(app, { action: 'dismiss', reason: 'Non fondé' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('SELF_MODERATION');
+    expect(reportUpdate).not.toHaveBeenCalled();
+    expect(notifyReportResolved).not.toHaveBeenCalled();
+    expect((auditCreate.mock.calls[0]?.[0] as any).data).toMatchObject({ action: 'ADMIN_REPORT_SELF_MODERATION_REFUSED', entity: 'Report', entityId: REPORT, adminId: ACTOR });
+    expect(JSON.parse((auditCreate.mock.calls[0]?.[0] as any).data.metadata)).toEqual({ code: 'SELF_MODERATION', gesture: 'act', act: 'dismiss', reportedType });
+    await app.close();
+  });
+
+  it('refuse de classer le signalement de SON propre commentaire, même retiré entre-temps', async () => {
+    reportFindUnique.mockResolvedValue(report({ reportedType: 'comment', reportedEntityId: COMMENT }));
+    commentFindUnique.mockResolvedValue({ authorId: ACTOR });
+    const app = await buildApp('ADMIN');
+    const res = await act(app, { action: 'dismiss', reason: 'Non fondé' });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('SELF_MODERATION');
+    expect(reportUpdate).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("classe le signalement d'une publication disparue : plus d'auteur à protéger", async () => {
+    reportFindUnique.mockResolvedValue(report());
+    postFindUnique.mockResolvedValue(null);
+    const app = await buildApp('ADMIN');
+    expect((await act(app, { action: 'dismiss', reason: 'Non fondé' })).statusCode).toBe(200);
     await app.close();
   });
 

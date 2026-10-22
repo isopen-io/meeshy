@@ -49,6 +49,24 @@ export type PaintContext = {
   textBaseline: CanvasTextBaseline;
   shadowColor: string;
   shadowBlur: number;
+  /**
+   * CE QU'UN CADRE DE GLOIRE DEMANDE EN PLUS (#10159, L7), en membres OPTIONNELS :
+   * la découpe de la photo par sa fenêtre, la mesure du texte vivant, l'opacité
+   * d'une couche, `screen` et `multiply` pour les passes de `grade`, le sens
+   * d'écriture de l'arabe, l'interlettrage, un contour de texte et la matrice
+   * d'un emplacement tourné. Un vieux moteur sans l'un d'eux peint moins bien,
+   * jamais faux : le peintre vérifie chaque membre avant de s'en servir.
+   */
+  clip?(): void;
+  rect?(x: number, y: number, w: number, h: number): void;
+  rotate?(angle: number): void;
+  transform?(a: number, b: number, c: number, d: number, e: number, f: number): void;
+  measureText?(text: string): { readonly width: number };
+  strokeText?(text: string, x: number, y: number): void;
+  globalAlpha?: number;
+  globalCompositeOperation?: GlobalCompositeOperation;
+  direction?: CanvasDirection;
+  letterSpacing?: string;
 };
 
 export type PhotoArt = {
@@ -183,7 +201,7 @@ const naturalSize = (image: CanvasImageSource): { width: number; height: number 
 };
 
 /** Un dessin garde SA proportion dans son cadre : l'emblème de rang n'est pas carré (200 × 184). */
-function drawContained(ctx: PaintContext, image: CanvasImageSource, frame: Rect): void {
+export function drawContained(ctx: PaintContext, image: CanvasImageSource, frame: Rect): void {
   const rect = containFit(naturalSize(image), frame);
   ctx.drawImage(image, rect.x, rect.y, rect.w, rect.h);
 }
@@ -224,7 +242,7 @@ function paintQr(ctx: PaintContext, slot: Rect, square: QrSquare): void {
 }
 
 /** Le contenu du bandeau, après sa Signature : la phrase, la Flamme et ses jours, puis le carré QR du lien en fin de ligne. */
-function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: PaintInput, text: PhotoBanner): void {
+function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: Pick<PaintInput, 'palette' | 'fontFamily' | 'art'>, text: PhotoBanner): void {
   const { palette, fontFamily, art } = input;
   ctx.textBaseline = 'alphabetic';
   ctx.shadowBlur = 0;
@@ -245,6 +263,13 @@ function paintBannerContent(ctx: PaintContext, banner: BannerLayout, input: Pain
 
   if (text.placeholder === true) return traceQrPlaceholder(ctx, banner.qr, palette);
   if (text.qr !== null) paintQr(ctx, banner.qr, text.qr);
+}
+
+/** Le bandeau de parrainage, fond puis contenu, à la mise en page donnée — partagé avec le peintre des cadres de gloire (#10159). */
+export function paintReferralBanner(ctx: PaintContext, banner: BannerLayout, input: Pick<PaintInput, 'palette' | 'fontFamily' | 'art'>, text: PhotoBanner): void {
+  paintBannerFrame(ctx, banner, input.palette);
+  drawContained(ctx, input.art.signature, banner.signature);
+  paintBannerContent(ctx, banner, input, text);
 }
 
 export function paintPhoto(ctx: PaintContext, input: PaintInput): void {

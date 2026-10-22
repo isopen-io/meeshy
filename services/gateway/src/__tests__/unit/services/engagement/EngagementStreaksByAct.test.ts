@@ -1,6 +1,6 @@
 /**
  * Les séries par acte, la série globale sans plafond à 1000 et la fidélité
- * (#10388, #10389, #10390).
+ * (#10388, #10389, #10390) — et ce qu'un palier paie à un compte non vérifié (#10422).
  * @jest-environment node
  *
  * Quotas et séries tournent sur des magasins EN MÉMOIRE qui appliquent les
@@ -84,6 +84,8 @@ function makePrisma(options: {
   readonly globalStreak?: { readonly current: number; readonly lastDay: Date | null };
   readonly createdAt?: Date;
   readonly actRows?: readonly ActRow[];
+  /** Un e-mail vérifié par défaut ; `false` pose un compte sans aucun contact prouvé. */
+  readonly verified?: boolean;
 } = {}) {
   const quotas = quotaStore();
   const actStreaks = actStreakStore(options.actRows);
@@ -100,7 +102,7 @@ function makePrisma(options: {
       findUnique: jest.fn(async () => ({
         engagementScore: 0,
         timezone: null,
-        emailVerifiedAt: new Date('2026-01-01'),
+        emailVerifiedAt: options.verified === false ? null : new Date('2026-01-01'),
         phoneVerifiedAt: null,
         createdAt: options.createdAt ?? new Date(),
         currentStreakDays: options.globalStreak?.current ?? 0,
@@ -231,6 +233,55 @@ describe('la fidélité', () => {
 
     expect(bonuses(counterWrite)).toEqual([7, 100_000]);
     expect(quotas.rows.get('u1|streak.bonus|loyalty:365')).toBe(2);
+  });
+});
+
+describe('un palier payé à un compte non vérifié (#10422)', () => {
+  it('fidélité 365 j → 100 000 : payé entier à un compte vérifié, borné à la valeur d’un gros acte sinon', async () => {
+    const paidTo = async (verified: boolean) => {
+      const { prisma, counterWrite, quotas } = makePrisma({
+        globalStreak: { current: 1, lastDay: utcMidnight(-1) },
+        createdAt: utcMidnight(-400),
+        verified,
+      });
+      const service = new EngagementService(prisma, scaleWith({ loyalty: [{ days: 365, points: 100_000 }] }));
+      await service.recordActivity('u1', 'tool.sticker');
+      return { paid: bonuses(counterWrite), bucket: quotas.rows.get('u1|streak.bonus|loyalty:365') };
+    };
+
+    await expect(paidTo(true)).resolves.toEqual({ paid: [100_000], bucket: 1 });
+    // Le seau se consomme au montant payé : vérifier son contact plus tard ne rattrape rien.
+    await expect(paidTo(false)).resolves.toEqual({ paid: [DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints], bucket: 1 });
+  });
+
+  it('série globale 365 j → 100 000 : la même borne que la fidélité', async () => {
+    const { prisma, counterWrite } = makePrisma({ globalStreak: { current: 364, lastDay: utcMidnight(-1) }, verified: false });
+    const service = new EngagementService(prisma, scaleWith({ global: [{ days: 365, points: 100_000 }] }));
+
+    await service.recordActivity('u1', 'tool.sticker');
+
+    expect(bonuses(counterWrite)).toEqual([DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints]);
+  });
+
+  it('série d’acte 7 j → 100 : la même borne, sur la troisième horloge', async () => {
+    const { prisma, counterWrite } = makePrisma({ actRows: [row('story', 6, todayKey(-1))], verified: false });
+    const service = new EngagementService(prisma, scaleWith({ acts: { story: [{ days: 7, points: 100 }] } }));
+
+    await service.recordActivity('u1', 'content.story', { targetId: 's1' });
+
+    expect(bonuses(counterWrite)).toEqual([DEFAULT_ENGAGEMENT_SCALE.abuse.unverifiedMaxPoints]);
+  });
+
+  it('série 7 j → 10 : sous le seuil des gros poids, payé entier aux deux', async () => {
+    const paidTo = async (verified: boolean) => {
+      const { prisma, counterWrite } = makePrisma({ globalStreak: { current: 6, lastDay: utcMidnight(-1) }, verified });
+      const service = new EngagementService(prisma, scaleWith({ global: [{ days: 7, points: 10 }] }));
+      await service.recordActivity('u1', 'tool.sticker');
+      return bonuses(counterWrite);
+    };
+
+    await expect(paidTo(true)).resolves.toEqual([10]);
+    await expect(paidTo(false)).resolves.toEqual([10]);
   });
 });
 

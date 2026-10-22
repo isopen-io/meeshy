@@ -226,6 +226,31 @@ jobs:
           cd packages/shared
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} translator-languages:check
 
+      # #10278 — la version d'un pack de cadres de gloire ne redescend jamais
+      # et ne sert jamais deux contenus. `generate:glory-frames` la dérive de la
+      # valeur COMMITÉE : le témoin de fraîcheur ne voit ni une version abaissée
+      # à la main, ni deux branches qui montent chacune v1 en v2 avec deux
+      # contenus (la fusion garde un v2, l'autre a été publié en staging sous le
+      # même numéro). Le cliquet confronte le registre à `retained.json` ET au
+      # registre de la BRANCHE CIBLE — `github.base_ref` sur une PR, la branche
+      # poussée sinon : `dev` figé ferait tomber une PR de correctif vers `main`
+      # dès que `dev` a monté une version que `main` n'a pas encore reçue. La
+      # seconde commande prouve que le cliquet rougit (chaque pack tombe, nommé,
+      # à sa version abaissée de 1 ⇒ sortie 1). La base se lit par `git show`,
+      # d'où le fetch : le checkout de ce job est à profondeur 1. Le témoin
+      # `__tests__/ci/glory-frame-ratchet-baseline.test.ts` garde cette forme.
+      - name: Versions des packs de cadres de gloire (cliquet #10278)
+        env:
+          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_BRANCH"
+          cd packages/shared
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH"
+          if ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH" --mutate lower-version; then
+            echo "::error::le cliquet des versions ne rougit pas sous mutation (version abaissée de 1)"
+            exit 1
+          fi
+
       # #5442 : cette étape passe par le cache Turborepo (`bun run lint` sans
       # filtre), donc son verdict dépend de la température du cache — un run à
       # cache chaud rejoue d'anciens logs sans jamais relinter. Elle reste
@@ -301,6 +326,14 @@ jobs:
           ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} build
           node scripts/check-utilities.mjs
           node scripts/measure-weight.mjs
+          # #10158 — le budget des polices de CADRE tenu sur les SOURCES, avant
+          # toute émission (`measure-weight.mjs` ne compte que ce que Vite
+          # émet, donc rien tant qu'aucun peintre n'importe la feuille). Sa
+          # facette PRECACHE lit `dist/sw.js`, donc il vient après le build
+          # ci-dessus ; le job `bun test` web rejoue les autres facettes sans
+          # `dist/`, et celle-ci n'existait nulle part en CI tant que ce
+          # maillon n'était qu'au composite (2026-10-22).
+          node scripts/check-glory-fonts.mjs
           # #6862 — le seul gate qui fasse DÉCIDER le service worker construit.
           # Workbox stringifie le `urlPattern` du seau `api` : un prédicat
           # importé s'y perd, et la règle « aucune réponse /api/v1/admin/** sur
@@ -1019,6 +1052,35 @@ jobs:
           cd apps/web
           node scripts/check-story-studio.mjs
 
+      # #10159 — LES CADRES DE GLOIRE SE PEIGNENT AVEC LE VRAI PEINTRE (§ 8.3) :
+      # l'échantillon de L21a (20 cibles, poses exclues) composé par
+      # `lib/game-photo/glory/` depuis les contrats versionnés, les couches du
+      # magasin et la photo fixture ; deux peintures identiques à l'octet ; la
+      # composition descendue à 540 × 960 par la même moyenne 2 × 2 que les
+      # cibles et comparée hors boîtes de texte, de blason et d'oiseaux. Un
+      # cadre qui ne se compose pas, une couche absente du magasin, une
+      # peinture instable, une collection sans manifeste versionné hors liste
+      # de démonstration ou zéro cible composée est ROUGE, `--report` ou non
+      # (`scripts/lib/glory-gate-verdict.ts`). Les mesures de tolérance sont
+      # IMPRIMÉES (`--report`) : les cibles ne sont PAS composées avec les
+      # mêmes entrées que le peintre — le générateur applique
+      # `generateur/lib/anchors.json` (L2, #10153 : Mee et Meo déplacés) que le
+      # contrat versionné ne porte pas ; le gate exclut les oiseaux aux deux
+      # places et nomme l'écart par cadre. Ce qui reste : la plaque sans
+      # message absente des contrats (variantes `plain`) et des couches
+      # servies en q82 (mesuré le 2026-10-22 : 82 à 98 % des pixels à |Δ| ≤ 6 ;
+      # voir #10159, #10153/#10177). Le gate bâtit et sert le peintre par
+      # `Bun.build` / `Bun.serve` : il n'existe que dans le scénario bun, comme
+      # `setup-bun` plus haut — sous pnpm, l'étape est sautée, pas cassée
+      # (check-ci-build-order.mjs, qui lit le scénario AVANT `!cancelled()` :
+      # un appel de fonction lui est opaque, et « opaque && faux » ne se lit
+      # pas comme faux).
+      - name: Gate cadres de gloire (peintre, échantillon de L21a, stabilité)
+        if: ${{ env.PACKAGE_MANAGER == 'bun' && !cancelled() }}
+        run: |
+          cd apps/web
+          bun scripts/check-glory-frames.ts --report
+
       # #6943/#6944 — LE PLATEAU : poser DEUX objets texte, en déplacer un au
       # POINTEUR puis le tourner et l'agrandir au CLAVIER, choisir sa langue et
       # son style (et vérifier qu'ils sont PEINTS, pas seulement annoncés),
@@ -1396,7 +1458,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: changes
     if: needs.changes.outputs.glory_frames == 'true'
-    timeout-minutes: 30
+    # 60 : plafond de secours au-dessus du jeu complet des cibles (40 min, sur
+    # workflow_dispatch seulement) ; une PR tient en une douzaine de minutes.
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: docs/product/cadres-de-gloire/generateur
@@ -1417,10 +1481,24 @@ jobs:
       - name: Ateliers (numpy et Pillow, l'atelier poses)
         run: python -m pip install --disable-pip-version-check numpy==2.5.4 Pillow==12.3.0
 
-      - name: Playwright épinglé (Chromium)
+      # sharp encode les cibles de fidélité (L21a, lib/cible.mjs) ; la version
+      # épinglée est celle du workspace de la passerelle (lib/sharp.mjs), lue
+      # ici par $SHARP_MODULE puisque ce job n'installe rien du monorepo.
+      # playwright@1.56.1 livre Chromium 141.0.7390.37 : celui qui a rendu les
+      # cibles versionnées (docs/product/cadres-de-gloire/cible/index.json).
+      # Bumper l'épingle sans régénérer l'échantillon rougit les témoins du
+      # générateur (lib/cible-ci.test.mjs) : la comparaison plus bas ne vaut
+      # qu'à Chromium identique.
+      - name: Playwright épinglé (Chromium) et sharp
         run: |
-          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0
+          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1 sharp@0.35.5
           ./node_modules/.bin/playwright install --with-deps chromium
+
+      # Les témoins du générateur : le plan des cibles sans navigateur
+      # (lib/cible-plan.test.mjs) et la cohérence de ce que ce job épingle —
+      # Playwright donc Chromium, sharp — avec cible/index.json.
+      - name: Témoins du générateur
+        run: node --test lib/*.test.mjs
 
       - name: Générer les SVG des ateliers
         run: for atelier in ateliers/*/; do (cd "$atelier" && python -B gen.py > /dev/null); done
@@ -1432,8 +1510,48 @@ jobs:
             exit 1
           fi
 
-      - name: Garde d'empiètement (191 cadres)
+      - name: Garde d'empiètement (197 cadres)
         run: node lib/overlap.mjs --check --jobs 2
+
+      # Les cibles de fidélité (lot L21a, #10177, prompt § 8.3) : l'échantillon
+      # versionné sous docs/product/cadres-de-gloire/cible/ se régénère ici,
+      # chaque cible rendue deux fois (une cible instable rougit). Un écart
+      # d'OCTETS avec les cibles versionnées n'est que signalé : la fraîcheur
+      # se juge sur l'export normalisé, jamais sur les octets de Chromium
+      # (version, hinting, GPU). Le jeu complet (197 × 2) n'est produit, en
+      # artefact, que sur workflow_dispatch : il coûte une demi-heure.
+      - name: Cibles de fidélité — l'échantillon se régénère (L21a)
+        env:
+          SHARP_MODULE: sharp
+        run: |
+          node lib/cible.mjs --generate --jobs 2 --cible cible-echantillon
+          if ! diff -rq cible-echantillon ../cible; then
+            echo "::warning::les cibles régénérées diffèrent des cibles versionnées (docs/product/cadres-de-gloire/cible/) : voir le journal"
+          fi
+
+      - name: Publier l'échantillon régénéré
+        uses: actions/upload-artifact@v7
+        with:
+          name: cadres-de-gloire-cibles-${{ github.run_number }}
+          path: docs/product/cadres-de-gloire/generateur/cible-echantillon
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Cibles de fidélité — le jeu complet (workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        timeout-minutes: 40
+        env:
+          SHARP_MODULE: sharp
+        run: node lib/cible.mjs --full --jobs 2
+
+      - name: Publier le jeu complet des cibles
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v7
+        with:
+          name: cadres-de-gloire-cibles-completes-${{ github.run_number }}
+          path: docs/product/cadres-de-gloire/generateur/cible-complete
+          retention-days: 7
+          if-no-files-found: error
 
   # ===========================================================================
   # TEST: Unit Tests with Coverage (Parallel by package)

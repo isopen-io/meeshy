@@ -28,9 +28,9 @@ public final class NotificationToastManager: ObservableObject {
     /// Mirrors `NotificationCoordinator.inAppNotificationUnread`. Kept as a
     /// `@Published` convenience so legacy SwiftUI views that observe
     /// `NotificationToastManager.shared` continue to refresh without changes.
-    @Published public private(set) var unreadCount: Int = 0
+    @Published public internal(set) var unreadCount: Int = 0
 
-    @Published public private(set) var currentToast: SocketNotificationEvent?
+    @Published public internal(set) var currentToast: SocketNotificationEvent?
 
     /// **Ce que la bannière courante AFFICHE, résolu UNE fois à la pose**
     /// (#7167).
@@ -70,7 +70,7 @@ public final class NotificationToastManager: ObservableObject {
     /// Même raisonnement, et même formulation, que
     /// `ConversationStateStore.messages`. Ne pas les republier sans montrer
     /// d'abord une vue qui les LIT.
-    public private(set) var activeConversationId: String?
+    public internal(set) var activeConversationId: String?
     public var activePostId: String?
 
     /// **Les conversations OUVERTES, et pas seulement la dernière** — iPad
@@ -87,8 +87,8 @@ public final class NotificationToastManager: ObservableObject {
     /// exclusivement par les écrans réellement activés
     /// (`ConversationSocketHandler.activate()` / son `deinit`), une ouverture
     /// pour une fermeture — c'est ce qui rend le compte juste.
-    private var openConversationStack: [String] = []
-    private var openConversationCounts: [String: Int] = [:]
+    var openConversationStack: [String] = []
+    var openConversationCounts: [String: Int] = [:]
 
     /// Vrai tant qu'au moins un écran affiche cette conversation, dans
     /// n'importe quelle fenêtre.
@@ -216,12 +216,12 @@ public final class NotificationToastManager: ObservableObject {
         event.bannerPresentation(groupName: resolvedConversationGroupName(for: event))
     }
 
-    private var cancellables = Set<AnyCancellable>()
+    var cancellables = Set<AnyCancellable>()
     private var toastDismissTask: Task<Void, Never>?
     private static let toastDuration: Duration = .seconds(7)
 
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
-    private var recentNotificationIds = Set<String>()
+    var recentNotificationIds = Set<String>()
 
     // Coalescing du compteur non-lu : `refreshUnreadCount` a 8 appelants (boot app,
     // login, RootView, iPadRootView, NotificationListView…) qui se déclenchent quasi
@@ -241,15 +241,15 @@ public final class NotificationToastManager: ObservableObject {
     // arrivent pendant que la conversation est OUVERTE sont déjà marquées
     // unitairement par `handleNewNotification`, donc sauter un POST redondant
     // dans la fenêtre de cooldown n'introduit pas de dérive durable.
-    private var conversationReadTasks: [String: Task<Void, Never>] = [:]
-    private var lastConversationReadAt: [String: Date] = [:]
-    private static let conversationReadMinInterval: TimeInterval = 5
+    var conversationReadTasks: [String: Task<Void, Never>] = [:]
+    var lastConversationReadAt: [String: Date] = [:]
+    static let conversationReadMinInterval: TimeInterval = 5
 
     // Même protection anti-rafale pour les posts / stories : le viewer de story
     // ré-annonce la story courante à chaque révélation de slide et à chaque
     // retour d'interlude.
-    private var postReadTasks: [String: Task<Void, Never>] = [:]
-    private var lastPostReadAt: [String: Date] = [:]
+    var postReadTasks: [String: Task<Void, Never>] = [:]
+    var lastPostReadAt: [String: Date] = [:]
 
     /// Les lectures dont CET appareil est l'auteur — voir
     /// `NotificationSelfReadLedger`. `internal` : les chemins de consommation
@@ -293,403 +293,6 @@ public final class NotificationToastManager: ObservableObject {
         await task.value
     }
 
-    public func onConversationOpened(_ conversationId: String) {
-        // Gate idempotent : un parent qui observe ce manager (RootView / iPadRootView)
-        // se re-render à chaque mutation `@Published`, ce qui fait re-construire à
-        // SwiftUI un `ConversationViewModel` jetable → un `ConversationSocketHandler`
-        // jetable → un nouvel appel à `onConversationOpened` pour la conversation DÉJÀ
-        // ouverte. Sans ce gate, chaque tour relance `markConversationRead` +
-        // `refreshUnreadCount` ET re-publie `activeConversationId`/`unreadCount`, ce
-        // qui re-render le parent → boucle auto-entretenue (storm 429 sur `/read`).
-        // Re-ouvrir réellement une autre conversation, ou la même après
-        // `onConversationClosed()` (→ nil), passe normalement.
-        //
-        // Le compte, lui, passe AVANT le gate : la même conversation ouverte
-        // dans une seconde fenêtre est une seconde ouverture, que sa
-        // fermeture devra équilibrer.
-        openConversationCounts[conversationId, default: 0] += 1
-        openConversationStack.removeAll { $0 == conversationId }
-        openConversationStack.append(conversationId)
-        MessageSocketManager.shared.openConversationIds = openConversationIds
-        guard conversationId != activeConversationId else { return }
-
-        activeConversationId = conversationId
-        MessageSocketManager.shared.activeConversationId = conversationId
-
-        if let toast = currentToast, toast.conversationId == conversationId {
-            dismissToast()
-        }
-
-        consumeConversationLocally(conversationId)
-    }
-
-    /// Variante de `onConversationOpened` pour un marquage SANS ouverture : la
-    /// quick-action « Marquer lu » d'une bannière push et l'action du widget
-    /// consomment la conversation sans jamais l'afficher. Fait le même triplet
-    /// (publisher in-app + patch du cache GRDB + marquage serveur coalescé)
-    /// mais ne déclare PAS la conversation active — l'app peut être en
-    /// arrière-plan, aucune surface n'est ouverte.
-    public func onConversationMarkedRead(_ conversationId: String) {
-        if let toast = currentToast, toast.conversationId == conversationId {
-            dismissToast()
-        }
-
-        consumeConversationLocally(conversationId)
-    }
-
-    /// Ce qu'une conversation consommée déclenche, en UN site (#6999).
-    ///
-    /// On informe d'abord la liste in-app (mise à jour optimiste instantanée),
-    /// puis on marque côté serveur (qui ré-émet `notification:counts` → la
-    /// cloche et le badge se recalent, le compteur étant ensuite rafraîchi),
-    /// et enfin — c'est le geste qui MANQUAIT — on retire du centre iOS les
-    /// bannières du fil : le contenu était réputé consommé partout sauf là où
-    /// l'utilisateur allait le relire.
-    ///
-    /// Site unique parce que ses deux appelants (`onConversationOpened` et
-    /// `onConversationMarkedRead`) avaient déjà divergé une fois : le second
-    /// est né en copiant le premier, et tout ce qu'on ajoute à l'un doit être
-    /// ajouté à l'autre pour rester vrai.
-    private func consumeConversationLocally(_ conversationId: String) {
-        conversationNotificationsRead.send(conversationId)
-        applyReadToCache(.conversation(id: conversationId))
-        markConversationNotificationsRead(conversationId)
-        deliveredBannerPurger?(.conversation(id: conversationId))
-    }
-
-    /// Pendant de `onConversationOpened` pour un contenu social : story, statut
-    /// ou post de feed. Le contenu étant consommé, ses notifications (« X a
-    /// publié une story », commentaires et réactions dessus) ne doivent plus
-    /// apparaître comme non lues.
-    ///
-    /// Ne PAS confondre avec l'appel opportuniste que le gateway fait déjà
-    /// depuis `POST /posts/:postId/view` : celui-là est borné à la PREMIÈRE vue,
-    /// et le « vu » client est coalescé (binaire) donc une seconde ouverture ne
-    /// repart même pas. Une notification arrivée après la première vue resterait
-    /// non lue pour toujours.
-    public func onPostOpened(_ postId: String) {
-        guard postId != activePostId else { return }
-
-        activePostId = postId
-
-        if let toast = currentToast, toast.postId == postId {
-            dismissToast()
-        }
-
-        consumePostLocally(postId)
-    }
-
-    /// Jumelle de `onConversationMarkedRead` pour un POST : consomme ses
-    /// notifications SANS déclarer le contenu actif.
-    ///
-    /// C'est la forme qu'il faut à `consume(.post(id:))` quand l'ordre vient
-    /// d'une bannière push tapée ou d'une action rapide de commentaire :
-    /// l'app peut être en arrière-plan, aucun viewer n'est monté, et poser
-    /// `activePostId` ferait taire les toasts d'un contenu que personne ne
-    /// regarde — jusqu'à un `onPostClosed` qui ne viendrait jamais.
-    public func onPostConsumed(_ postId: String) {
-        if let toast = currentToast, toast.postId == postId {
-            dismissToast()
-        }
-
-        consumePostLocally(postId)
-    }
-
-    /// Le pendant de `consumeConversationLocally` pour un post — même raison
-    /// d'être un site unique, mêmes deux appelants jumeaux.
-    private func consumePostLocally(_ postId: String) {
-        postNotificationsRead.send(postId)
-        applyReadToCache(.post(id: postId))
-        markPostNotificationsRead(postId)
-        deliveredBannerPurger?(.post(id: postId))
-    }
-
-    /// Relâche la déclaration de contenu actif — appelé à la fermeture du
-    /// viewer. Conditionnel à l'identité pour rester correct sur un
-    /// enchaînement rapide A→B où le `onDisappear` de A arrive après le
-    /// `onAppear` de B.
-    public func onPostClosed(_ postId: String? = nil) {
-        guard postId == nil || postId == activePostId else { return }
-        activePostId = nil
-    }
-
-    /// Même gate que `markConversationNotificationsRead` : au plus un POST par
-    /// post et par fenêtre, jamais deux en vol.
-    private func stampPostRead(_ postId: String) {
-        lastPostReadAt = Self.stampingCooldown(lastPostReadAt, key: postId, at: Date(), window: Self.conversationReadMinInterval)
-    }
-
-    /// Pose l'horodatage de `key` et oublie ceux dont la fenêtre est passée : ils ne bloquent plus rien.
-    /// Sans cet élagage, chaque conversation et chaque post jamais ouverts gardaient leur entrée jusqu'à la
-    /// déconnexion — des milliers sur une session de plusieurs jours.
-    nonisolated static func stampingCooldown(
-        _ stamps: [String: Date], key: String, at now: Date, window: TimeInterval
-    ) -> [String: Date] {
-        var kept = stamps.filter { now.timeIntervalSince($0.value) < window }
-        kept[key] = now
-        return kept
-    }
-
-    private func markPostNotificationsRead(_ postId: String) {
-        guard postReadTasks[postId] == nil else { return }
-        if let last = lastPostReadAt[postId],
-           Date().timeIntervalSince(last) < Self.conversationReadMinInterval {
-            // #7000 — le cooldown protège le POST, jamais la LECTURE du
-            // compteur. Sortir sec sautait aussi `refreshUnreadCount()` : une
-            // réouverture dans les cinq secondes laissait la pastille sur sa
-            // valeur d'avant, et rien d'autre ne la recalait tant qu'aucune
-            // mutation ne provoquait de `notification:counts`.
-            Task { [weak self] in await self?.refreshUnreadCount() }
-            return
-        }
-        postReadTasks[postId] = Task { [weak self] in
-            // Chaque slide de story est un post distinct : sans ce filtre, une
-            // story de dix slides émettrait dix POST. Quand le cache de la
-            // cloche est peuplé et ne référence AUCUNE notification non lue pour
-            // ce post, il n'y a rien à marquer. Cache vide ou inconnu → on
-            // appelle quand même, le serveur fait autorité.
-            if await Self.hasNoKnownUnreadNotification(forPost: postId) {
-                self?.stampPostRead(postId)
-                self?.postReadTasks[postId] = nil
-                return
-            }
-            do {
-                try await NotificationService.shared.markPostRead(postId: postId)
-            } catch {
-                logger.error("Failed to mark post \(postId) read: \(error.localizedDescription)")
-            }
-            await self?.refreshUnreadCount()
-            self?.stampPostRead(postId)
-            self?.postReadTasks[postId] = nil
-        }
-    }
-
-    /// `true` seulement quand on SAIT qu'il n'y a rien à marquer — c'est-à-dire
-    /// quand le cache de la cloche est peuplé et ne contient aucune ligne non
-    /// lue portant ce `postId`. Un cache vide répond `false` (« je ne sais
-    /// pas »), ce qui laisse partir la requête.
-    private static func hasNoKnownUnreadNotification(forPost postId: String) async -> Bool {
-        guard let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all"),
-              !cached.items.isEmpty else { return false }
-        return !cached.items.contains { !$0.isRead && $0.context?.postId == postId }
-    }
-
-    /// Écrit l'état « lu » DANS LE CACHE durable, pas seulement dans les vues.
-    ///
-    /// Sans ça, `NotificationListViewModel.loadInitial()` — qui lit le cache
-    /// avant le réseau, avec une fenêtre fraîche de 2 minutes — re-servait
-    /// l'instantané d'avant le marquage : les notifications lues repartaient
-    /// non lues à la réouverture de la cloche.
-    /// `internal` (pas `private`) : les chemins de consommation vivent dans
-    /// `NotificationConsumption.swift` — la responsabilité « marquer lu », qui
-    /// a sa propre optimisation optimiste et son rollback, sortie d'ici pour
-    /// tenir le budget de fichier.
-    func applyReadToCache(_ scope: NotificationReadScope) {
-        Task {
-            await CacheCoordinator.shared.notifications.update(for: "all") { items in
-                NotificationCachePatch.markingRead(items, scope: scope)
-            }
-        }
-    }
-
-    /// Le geste INVERSE — la seule chose qu'un rollback puisse écrire. Le
-    /// réseau a refusé le marquage : la ligne doit redevenir non lue DANS LE
-    /// CACHE, sans quoi la prochaine lecture de la cloche (`loadInitial()` lit
-    /// le cache avant le réseau) re-servirait une ligne lue que le serveur
-    /// n'a jamais marquée.
-    func applyUnreadToCache(_ notificationId: String) {
-        Task {
-            await CacheCoordinator.shared.notifications.update(for: "all") { items in
-                NotificationCachePatch.markingUnread(items, id: notificationId)
-            }
-        }
-    }
-
-    /// L'ÉCRITURE elle-même, séparée de son ORDONNANCEMENT — c'est la
-    /// distinction qui compte pour le push de révocation (#3894) : le chemin
-    /// socket peut la lancer sans l'attendre (l'app est vivante, le flush
-    /// débounce de `GRDBCacheStore` a tout le temps de partir), le chemin push
-    /// doit l'ATTENDRE (le processus est suspendu dans la seconde qui suit
-    /// `completionHandler`).
-    private static func removeFromCache(_ notificationId: String) async {
-        await CacheCoordinator.shared.notifications.update(for: "all") { items in
-            NotificationCachePatch.removing(items, id: notificationId)
-        }
-    }
-
-    /// Retire durablement une ligne supprimée — même raison que ci-dessus : sans
-    /// écriture cache, la notification supprimée réapparaissait au prochain
-    /// `loadInitial()` servi par le cache.
-    private func applyDeletionToCache(_ notificationId: String) {
-        Task { await Self.removeFromCache(notificationId) }
-    }
-
-    /// Cache + republication pour UNE notification déjà retirée côté serveur —
-    /// l'atome PARTAGÉ entre `delete()` (geste local) et
-    /// `handleNotificationDeleted` (socket `notification:deleted`), tous deux
-    /// joués app VIVANTE. Sa jumelle `applyRevocationDurably(_:)` sert le push
-    /// (#3894), où l'écriture doit être attendue. La republication
-    /// (`notificationWasDeleted`) est ce que `NotificationActionHandler.observeRevocations`
-    /// traduit en retrait de bannière livrée. `internal` (pas `private`) :
-    /// point d'entrée de test pour le comportement cache + publication sans
-    /// déclencher le réseau de `refreshUnreadCount()`.
-    func applyRevocationLocally(_ notificationId: String) {
-        applyDeletionToCache(notificationId)
-        notificationWasDeleted.send(notificationId)
-    }
-
-    /// Jumelle DURABLE de l'atome ci-dessus : même patch cache, même
-    /// republication, mais l'écriture est ATTENDUE au lieu d'être confiée à un
-    /// `Task` détaché.
-    ///
-    /// C'est la seule forme utilisable depuis un réveil en arrière-plan
-    /// (#3894) : `applyDeletionToCache` rend la main avant que la mutation ait
-    /// touché L1, et `GRDBCacheStore` ne pousse L1 vers SQLite qu'après un
-    /// débounce de 2 s. Or le push de révocation appelle
-    /// `completionHandler(.noData)` dès le retour — iOS suspend puis tue
-    /// couramment un processus lancé en arrière-plan avant ce débounce, et la
-    /// ligne révoquée ressuscitait au démarrage à froid suivant, servie par le
-    /// cache. Le prix d'une ligne perdue est connu du dépôt : « l'oubli du
-    /// store notifications perdait l'état "lu" au kill » (`GRDBDirtyFlushing`).
-    func applyRevocationDurably(_ notificationId: String) async {
-        await Self.removeFromCache(notificationId)
-        notificationWasDeleted.send(notificationId)
-    }
-
-    /// Supprime UNE notification : serveur + cache + publication vers les vues.
-    @discardableResult
-    public func delete(notificationId: String) async -> Bool {
-        do {
-            try await NotificationService.shared.delete(notificationId: notificationId)
-        } catch {
-            logger.error("Failed to delete notification \(notificationId): \(error.localizedDescription)")
-            return false
-        }
-        applyRevocationLocally(notificationId)
-        await refreshUnreadCount()
-        return true
-    }
-
-    /// Applique, pour un LOT de notifications déjà révoquées côté SERVEUR, le
-    /// même geste que le socket `notification:deleted` fait une par une —
-    /// cache + republication (retrait de bannière via
-    /// `NotificationActionHandler.observeRevocations`) — PLUS le recalcul du
-    /// compteur de la cloche.
-    ///
-    /// Point d'entrée du push de contrôle `notification_revoked`
-    /// (`AppDelegate`, app fermée/arrière-plan, #3894) : ce canal n'a PAS le
-    /// `notification:counts` compagnon que le socket reçoit pour recaler la
-    /// cloche (un seul push de contrôle par révocation — voir
-    /// `notificationRevocationPush.ts` côté gateway) ; cette méthode referme
-    /// la boucle en le redemandant elle-même via `refreshUnreadCount()`, le
-    /// MÊME appel que `delete()` utilise pour le geste local équivalent.
-    ///
-    /// La part locale est DURABLE (`applyServerRevocationLocally`, ci-dessous)
-    /// et se joue AVANT le réseau : l'appelant rend la main à iOS
-    /// (`completionHandler(.noData)`) dès le retour, et ce qui n'a pas atteint
-    /// SQLite d'ici là ne l'atteindra peut-être jamais.
-    public func applyServerRevocation(notificationIds: [String]) async {
-        guard await applyServerRevocationLocally(notificationIds: notificationIds) else { return }
-        await refreshUnreadCount()
-    }
-
-    /// La part LOCALE et DURABLE de la révocation — cache patché, écriture
-    /// SQLite forcée, ids republiés — rendue `internal` pour que les tests
-    /// l'exercent en comportement RÉEL sans déclencher le recalcul réseau du
-    /// compteur (`NotificationToastManager` est un singleton pur, sans seam
-    /// d'injection). Rend `false` quand il n'y avait rien à révoquer.
-    ///
-    /// Deux points que le lot d'origine n'avait pas :
-    ///
-    /// 1. **Les ids VIDES sont écartés ici, pas au parseur.**
-    ///    `NotificationRevocationPayload.ids(from:)` ne filtre plus rien — le
-    ///    RANG y porte un sens (`conversationIds[i]` qualifie
-    ///    `notificationIds[i]`) — donc c'est au CONSOMMATEUR d'être honnête :
-    ///    sans ce filtre, un `notificationIds` réduit à des vides (`""` →
-    ///    `[""]`) passait le garde d'entrée, republiait un id vide sur
-    ///    `notificationWasDeleted` (un aller-retour `getDeliveredNotifications`
-    ///    pour rien) et émettait un `GET /notifications/unread-count` inutile.
-    /// 2. **Le flush est explicite et précède le réseau.** La durabilité ne
-    ///    doit pas être l'otage d'un GET lent : ce qu'iOS peut interrompre
-    ///    après `completionHandler` doit déjà être sur le disque.
-    func applyServerRevocationLocally(notificationIds: [String]) async -> Bool {
-        let ids = notificationIds.filter { !$0.isEmpty }
-        guard !ids.isEmpty else { return false }
-        for id in ids {
-            await applyRevocationDurably(id)
-        }
-        await CacheCoordinator.shared.notifications.flushDirtyKeys()
-        return true
-    }
-
-    /// Émet le `POST /notifications/conversation/:id/read` au plus une fois
-    /// par conversation et par fenêtre de `conversationReadMinInterval`, et
-    /// jamais deux fois en vol simultanément. Voir le commentaire des
-    /// propriétés `conversationReadTasks` / `lastConversationReadAt`.
-    private func markConversationNotificationsRead(_ conversationId: String) {
-        guard conversationReadTasks[conversationId] == nil else { return }
-        if let last = lastConversationReadAt[conversationId],
-           Date().timeIntervalSince(last) < Self.conversationReadMinInterval {
-            // #7000 — même correction que sur le chemin post : le cooldown
-            // protège le POST, pas la LECTURE. `refreshUnreadCount()` est
-            // lui-même coalescé (1,5 s + tâche partagée), donc le redemander
-            // ici ne rouvre aucune rafale.
-            Task { [weak self] in await self?.refreshUnreadCount() }
-            return
-        }
-        conversationReadTasks[conversationId] = Task { [weak self] in
-            do {
-                try await NotificationService.shared.markConversationRead(conversationId: conversationId)
-            } catch {
-                logger.error("Failed to mark conversation \(conversationId) read: \(error.localizedDescription)")
-            }
-            await self?.refreshUnreadCount()
-            if let self {
-                self.lastConversationReadAt = Self.stampingCooldown(
-                    self.lastConversationReadAt, key: conversationId, at: Date(), window: Self.conversationReadMinInterval)
-            }
-            self?.conversationReadTasks[conversationId] = nil
-        }
-    }
-
-    /// **Ferme UNE conversation nommée — et seulement si c'est elle** (#5938).
-    ///
-    /// Elle effaçait `activeConversationId` sans savoir ce qu'elle fermait, et
-    /// elle part d'un `deinit`, donc d'une `Task` DIFFÉRÉE. En passant d'une
-    /// conversation à l'autre, l'ordre réel est : on quitte A (fermeture
-    /// planifiée), on ouvre B (synchrone), puis la fermeture de A s'exécute —
-    /// et remettait tout à `nil`. On était dans B pendant que l'app se croyait
-    /// nulle part, si bien que le garde de `handleNewNotification` ne filtrait
-    /// plus rien : chaque message de B s'affichait en toast par-dessus le fil
-    /// qu'on lisait.
-    ///
-    /// Une fermeture arrivée après l'ouverture de la suivante devient donc un
-    /// no-op, ce qu'elle aurait toujours dû être. Un `deinit` ne dit pas
-    /// seulement SI l'on ferme : il doit dire QUOI.
-    ///
-    /// **Multi-fenêtre** : fermer la conversation active rend la main à celle
-    /// qui reste affichée ailleurs (la plus récemment ouverte), au lieu de
-    /// remettre l'app « nulle part ». Le moteur de synchro, lui, tient son
-    /// propre ensemble de conversations ouvertes : celle qui reste à l'écran
-    /// ne s'est jamais remise à compter ses messages comme non lus.
-    public func onConversationClosed(_ conversationId: String) {
-        if let count = openConversationCounts[conversationId] {
-            if count > 1 {
-                openConversationCounts[conversationId] = count - 1
-            } else {
-                openConversationCounts.removeValue(forKey: conversationId)
-                openConversationStack.removeAll { $0 == conversationId }
-            }
-        }
-        MessageSocketManager.shared.openConversationIds = openConversationIds
-        guard conversationId == activeConversationId,
-              !isConversationOpen(conversationId) else { return }
-        let remaining = openConversationStack.last
-        activeConversationId = remaining
-        MessageSocketManager.shared.activeConversationId = remaining
-        // Le moteur de synchro n'a plus à être relancé ici : il tient lui-même l'ENSEMBLE des conversations ouvertes
-        // (`openConversation` / `closeConversation`), celle qui reste à l'écran n'en est jamais sortie.
-    }
 
     public func dismissToast() {
         toastDismissTask?.cancel()
@@ -717,215 +320,6 @@ public final class NotificationToastManager: ObservableObject {
         // duplicate that write here or both paths will race.
     }
 
-    // MARK: - Coordinator Mirror
-
-    private func subscribeToCoordinator() {
-        NotificationCoordinator.shared.$inAppNotificationUnread
-            .receive(on: DispatchQueue.main)
-            .assign(to: &$unreadCount)
-    }
-
-    // MARK: - Socket Subscriptions
-
-    private func subscribeToSocketEvents() {
-        let socket = MessageSocketManager.shared
-
-        socket.notificationReceived
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleNewNotification(event)
-            }
-            .store(in: &cancellables)
-
-        socket.notificationRead
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleNotificationRead(event)
-            }
-            .store(in: &cancellables)
-
-        socket.notificationDeleted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleNotificationDeleted(event)
-            }
-            .store(in: &cancellables)
-
-        socket.notificationReadBulk
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleNotificationReadBulk(event)
-            }
-            .store(in: &cancellables)
-
-        socket.notificationDeletedBulk
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.handleNotificationDeletedBulk(event)
-            }
-            .store(in: &cancellables)
-
-        // `notification:counts` is handled by NotificationCoordinator directly —
-        // we used to duplicate the subscription here, but that race was the
-        // source of the drift between the bell and the badge.
-    }
-
-    // MARK: - Event Handlers
-
-    // Interne (pas private) : point d'entrée des tests pour dérouler le
-    // pipeline complet dedup → persist → prefs → toast/haptique.
-    func handleNewNotification(_ event: SocketNotificationEvent) {
-        // Muting logic: suppress the in-app toast if the user is already
-        // viewing the relevant content. Le contenu étant consommé en direct,
-        // la notification ne doit pas rester non lue : on la marque lue côté
-        // serveur (qui ré-émet `notification:counts`). On NE l'incrémente pas
-        // localement (on sort avant `incrementInAppNotificationUnread`).
-        if let convId = event.conversationId, isConversationOpen(convId) || convId == activeConversationId {
-            markConsumedOnArrival(event)
-            return
-        }
-
-        // NOTE — un contenu social à l'écran (story ouverte, détail de post) ne
-        // supprime PLUS la bannière. La règle produit ne connaît qu'UNE
-        // exception, la conversation ouverte ci-dessus : tout le reste doit
-        // remonter à l'utilisateur tant qu'il est dans l'application. Une story
-        // ouverte reste donc signalée, et sa notification suit le chemin
-        // nominal — persistée NON lue, comptée, affichée. `activePostId` garde
-        // ses autres emplois (`onPostOpened` marque lu à l'OUVERTURE, ce qui
-        // couvre le rattrapage du compteur).
-
-        // Keep FriendshipCache in sync with real-time friend request events
-        updateFriendshipCacheIfNeeded(event)
-
-        // Dedup: APN foreground + socket `notification:new` can fire for the same
-        // event within milliseconds of each other. Guard here — after friendship
-        // cache update (which is idempotent and safe to run twice) but before the
-        // unread increment and toast, which must fire exactly once per notification.
-        guard !recentNotificationIds.contains(event.id) else {
-            return
-        }
-        recentNotificationIds.insert(event.id)
-        Task { [weak self] in
-            _ = await cancellableSleep(for: .seconds(2))
-            self?.recentNotificationIds.remove(event.id)
-        }
-
-        // Durably persist the notification into the local cache so the bell list
-        // shows it after a cold start / offline reopen — the toast is ephemeral.
-        persistToCache(event)
-
-        // The unread counter reflects what the *server* thinks — increment it
-        // regardless of local prefs so the coordinator stays aligned with the
-        // authoritative count. Local prefs only gate the TOAST surface.
-        NotificationCoordinator.shared.incrementInAppNotificationUnread()
-        newNotificationReceived.send(event)
-
-        // La bannière in-app a sa propre règle, plus permissive que celle du
-        // push : `allowsInAppBanner` n'applique que les interrupteurs PAR TYPE.
-        // `pushEnabled`, la fenêtre « Ne pas déranger » et le Focus iOS
-        // protègent l'attention de l'utilisateur ABSENT — ici il est devant
-        // l'écran. Cf. le doc-comment de `allowsInAppBanner(type:)`.
-        let prefs = UserPreferencesManager.shared.notification
-        if prefs.allowsInAppBanner(type: event.notificationType) {
-            showToast(event)
-        }
-    }
-
-    /// Le contenu visé est DÉJÀ à l'écran : la notification naît consommée.
-    /// On la persiste quand même (elle doit exister dans l'historique de la
-    /// cloche), mais lue, et on la marque lue côté serveur — qui ré-émet
-    /// `notification:counts`, recalant cloche et badge. On sort avant
-    /// `incrementInAppNotificationUnread` : rien n'est en attente.
-    private func markConsumedOnArrival(_ event: SocketNotificationEvent) {
-        let notificationId = event.id
-        persistToCache(event, isRead: true)
-        // #7000 — ce chemin marque lu SANS avoir incrémenté : on sort avant
-        // `incrementInAppNotificationUnread`. L'écho `notification:read` que
-        // le gateway renvoie derrière décrémentait pourtant, retirant du
-        // compteur une notification qui n'y avait jamais été ajoutée. Le
-        // registre le déclare pour que l'écho soit ignoré comme le nôtre.
-        selfReadLedger.register(notificationId)
-        Task {
-            try? await NotificationService.shared.markAsRead(notificationId: notificationId)
-        }
-        notificationMarkedRead.send(notificationId)
-    }
-
-    /// Durably append the freshly received notification to the `notifications`
-    /// cache so it survives an app restart / offline reopen. Strict no-op when the
-    /// list cache was never populated (see `prependToExisting`): fabricating a
-    /// single-item `.fresh` cache would suppress the next authoritative REST
-    /// refresh. De-duplicated by id, so an APN + socket double-delivery (already
-    /// guarded above) or a later REST refresh never doubles the row.
-    private func persistToCache(_ event: SocketNotificationEvent, isRead: Bool = false) {
-        let createdAtStr = WireDate.string(from: Date())
-        let base = event.toAPINotification(createdAt: createdAtStr)
-        let apiNotification = isRead ? base.withReadState(true) : base
-        Task {
-            await CacheCoordinator.shared.notifications.prependToExisting(apiNotification, for: "all")
-        }
-    }
-
-    private func updateFriendshipCacheIfNeeded(_ event: SocketNotificationEvent) {
-        let cacheChanged: Bool
-        switch event.notificationType {
-        case .friendRequest:
-            guard let senderId = event.senderId,
-                  let requestId = event.context?.friendRequestId else { return }
-            FriendshipCache.shared.didReceiveRequest(from: senderId, requestId: requestId)
-            cacheChanged = true
-        case .friendAccepted:
-            guard let accepterId = event.senderId else { return }
-            FriendshipCache.shared.didAcceptRequest(from: accepterId)
-            cacheChanged = true
-        default:
-            cacheChanged = false
-        }
-        // Real-time mutations from the gateway flip the in-memory FriendshipCache
-        // but the persistent GRDB stores (friends list, received / sent requests)
-        // would still serve `.fresh` data without the new state, masking the
-        // event until the natural TTL elapses. Invalidate them so the next
-        // `loadFriends()` / `loadReceived()` round-trips the gateway and writes
-        // the freshly-mutated truth to SQLite. Fire-and-forget — the local
-        // optimistic state in `FriendshipCache` already drives the UI.
-        if cacheChanged {
-            Task { await FriendshipCache.shared.invalidatePersistedFriendCaches() }
-        }
-    }
-
-    private func handleNotificationDeleted(_ event: NotificationDeletedEvent) {
-        applyRevocationLocally(event.notificationId)
-    }
-
-    /// Jumeau côté PURGE de `handleNotificationReadBulk`
-    /// (`NotificationConsumption.swift`). Cas plus fort que lui : `notification:counts`
-    /// est MUET sur une purge des lues (`unread` est inchangé par
-    /// construction), donc sans ce prédicat rien n'annoncerait la purge à cet
-    /// appareil — les lignes purgées ressusciteraient à la prochaine lecture du
-    /// cache.
-    ///
-    /// Les ids sont relevés AVANT l'écriture pour republier ligne à ligne par
-    /// `notificationWasDeleted`, le canal que la liste montée écoute déjà :
-    /// patcher le seul cache laisserait les lignes purgées à l'écran jusqu'au
-    /// prochain chargement.
-    ///
-    /// Interne (pas `private`) : point d'entrée des tests.
-    func handleNotificationDeletedBulk(_ event: NotificationDeletedBulkEvent) {
-        guard NotificationBulkScopeMapping.purgesReadRows(event.scope) else {
-            logger.error("notification:deleted-bulk ignoré — portée inconnue (kind: \(event.scope.kind))")
-            return
-        }
-        Task { [weak self] in
-            let cached = await CacheCoordinator.shared.notifications.loadIgnoringExpiry(for: "all")
-            let purgedIds = (cached?.items ?? []).filter { $0.isRead }.map(\.id)
-            guard !purgedIds.isEmpty else { return }
-            await CacheCoordinator.shared.notifications.update(for: "all") { items in
-                NotificationBulkScopeMapping.removingRead(items)
-            }
-            purgedIds.forEach { self?.notificationWasDeleted.send($0) }
-        }
-    }
-
     // MARK: - Toast
 
     #if DEBUG
@@ -936,7 +330,7 @@ public final class NotificationToastManager: ObservableObject {
     }
     #endif
 
-    private func showToast(_ event: SocketNotificationEvent) {
+    func showToast(_ event: SocketNotificationEvent) {
         if UserPreferencesManager.shared.notification.vibrationEnabled {
             hapticPlayer?()
         }

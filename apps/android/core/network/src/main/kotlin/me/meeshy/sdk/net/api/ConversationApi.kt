@@ -111,6 +111,18 @@ interface ConversationApi {
     @POST("conversations")
     suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
 
+    /**
+     * `GET /conversations?type=direct&withUserId=…&limit=1` — the most recent direct conversation
+     * the caller shares with [withUserId] (gateway `core-list.ts`, parity iOS
+     * `ConversationService.findDirectWith`). An empty list is "none yet", not an error.
+     */
+    @GET("conversations")
+    suspend fun directWith(
+        @Query("type") type: String,
+        @Query("withUserId") withUserId: String,
+        @Query("limit") limit: Int,
+    ): ApiResponse<List<ApiConversation>>
+
     // Empty-body POST (no @Body — like markRead): the gateway derives the joiner
     // from the JWT. Idempotent server-side (routes/conversations/sharing.ts
     // resolveConversationEntry): an existing member gets the same canonical
