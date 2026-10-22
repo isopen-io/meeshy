@@ -710,12 +710,10 @@ final class DependencyContainer {
 
     // MARK: - App Group shared path (O6)
 
+    /// Le conteneur est résolu hors du fil principal dès l'entrée du processus
+    /// (`LaunchPrefetch`, #11558), jamais gardé d'un lancement à l'autre.
     static func databaseDirectory() -> URL {
-        databaseDirectory(
-            groupContainer: FileManager.default.containerURL(
-                forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
-            )
-        )
+        databaseDirectory(groupContainer: AppGroupContainer.url)
     }
 
     /// Le dossier des bases de messages — une par compte.

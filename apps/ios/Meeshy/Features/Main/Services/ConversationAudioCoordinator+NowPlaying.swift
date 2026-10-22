@@ -37,6 +37,10 @@ extension ConversationAudioCoordinator {
     /// Activates the system NowPlaying + RemoteCommand bridge. Idempotent —
     /// subsequent calls are no-ops. Call once at app root mount (from the
     /// root view's `.task { ... }`).
+    ///
+    /// Les transports système (`MPRemoteCommandCenter`, un aller-retour XPC
+    /// synchrone vers `mediaremoted`) s'installent au premier vocal à jouer,
+    /// plus au montage de la racine pendant le démarrage à froid (#11558).
     public func activateNowPlayingBridge() {
         guard !_isNowPlayingActivated else { return }
         _isNowPlayingActivated = true
@@ -69,7 +73,18 @@ extension ConversationAudioCoordinator {
             }
             .store(in: &_nowPlayingCancellables)
 
+        $activeContext
+            .compactMap { $0 }
+            .first()
+            .sink { [weak self] _ in self?.installRemoteCommandsOnce() }
+            .store(in: &_nowPlayingCancellables)
+    }
+
+    /// Installées pendant un appel, les commandes restent désarmées jusqu'à sa fin.
+    private func installRemoteCommandsOnce() {
+        guard _remoteCommandTokens.isEmpty else { return }
         installRemoteCommands()
+        if _isSuspendedBySystemCall { setRemoteCommandsEnabled(false) }
     }
 
     // MARK: - NowPlayingInfoCenter
@@ -184,7 +199,7 @@ extension ConversationAudioCoordinator {
     /// `nextTrackCommand` et `changePlaybackPositionCommand` n'en avaient aucune,
     /// et la première détruisait la tête de file.
     func setRemoteCommandsEnabled(_ enabled: Bool) {
-        guard _isNowPlayingActivated else { return }
+        guard _isNowPlayingActivated, !_remoteCommandTokens.isEmpty else { return }
         let cc = MPRemoteCommandCenter.shared()
         cc.playCommand.isEnabled = enabled
         cc.pauseCommand.isEnabled = enabled

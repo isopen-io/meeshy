@@ -140,11 +140,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     #endif
 
     // Legacy global keys kept only for one-time migration
-    private let legacyTokenKey = "meeshy_auth_token"
-    private let legacyUserKey = "meeshy_current_user"
+    private let legacyTokenKey = AuthStorageKeys.legacyToken
+    private let legacyUserKey = AuthStorageKeys.legacyUser
 
     // UserDefaults keys (non-sensitive)
-    let savedAccountsUDKey = "meeshy_saved_accounts"
+    let savedAccountsUDKey = AuthStorageKeys.savedAccounts
 
     private init(
         keychain: any KeychainStoring = KeychainManager.shared,

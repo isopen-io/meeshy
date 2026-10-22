@@ -24,8 +24,43 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
 
     private let service = "me.meeshy.app"
     private let logger = MeeshyLog.logger(.keychain, subsystem: .legacySDK)
+    /// Les lectures du premier écran, faites d'avance hors du fil principal (#11587).
+    let prefetch = KeychainPrefetch()
+    private static let prefetchQueue = DispatchQueue(label: "me.meeshy.keychain.prefetch", qos: .userInitiated)
 
     private init() {}
+
+    // MARK: - Lecture d'avance du premier écran
+
+    /// Lance, sur une file à part, les lectures dont le premier écran a besoin
+    /// (`ColdStartKeychainPlan`) : `load` ramassera leurs réponses au lieu
+    /// d'aller-retours XPC synchrones sur le fil principal (#11587). Sans effet
+    /// au second appel.
+    public func prefetchColdStartSession() {
+        let service = service
+        prefetch.start(ColdStartKeychainPlan.plan, on: Self.prefetchQueue, lifetime: .seconds(30)) { key in
+            Self.read(key, service: service)
+        }
+    }
+
+    private static func read(_ resolvedKey: String, service: String) -> KeychainRead {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: resolvedKey,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        if status == errSecItemNotFound { return .absent }
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let value = String(data: data, encoding: .utf8) else {
+            return .unavailable
+        }
+        return .value(value)
+    }
 
     // MARK: - Namespace Helper
 
@@ -47,6 +82,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
         guard let data = value.data(using: .utf8) else { return }
 
         let resolvedKey = namespacedKey(key, account: account)
+        prefetch.invalidate(resolvedKey)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -76,25 +112,18 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     /// Loads a value for `key`, optionally scoped to `account` (a userId).
     /// - Parameter account: When non-nil, only values stored under the user's namespace are
     ///   returned. A call with `account: nil` will NOT return namespaced values.
+    ///
+    /// Une réponse lue d'avance (`prefetchColdStartSession`) est ramassée une
+    /// fois ; un trousseau indisponible n'en laisse aucune, et la lecture
+    /// directe tranche.
     public func load(forKey key: String, account: String? = nil) -> String? {
         let resolvedKey = namespacedKey(key, account: account)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: resolvedKey,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-
-        var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let value = String(data: data, encoding: .utf8) else {
-            return nil
+        switch prefetch.take(resolvedKey) {
+        case .value(let value)?: return value
+        case .absent?: return nil
+        case .unavailable?, nil: break
         }
-
+        guard case .value(let value) = Self.read(resolvedKey, service: service) else { return nil }
         return value
     }
 
@@ -103,6 +132,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     /// Deletes the value for `key`, optionally scoped to `account` (a userId).
     public func delete(forKey key: String, account: String? = nil) {
         let resolvedKey = namespacedKey(key, account: account)
+        prefetch.invalidate(resolvedKey)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -115,6 +145,7 @@ public final class KeychainManager: KeychainStoring, @unchecked Sendable {
     // MARK: - Delete All
 
     public func deleteAll() {
+        prefetch.invalidateAll()
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
