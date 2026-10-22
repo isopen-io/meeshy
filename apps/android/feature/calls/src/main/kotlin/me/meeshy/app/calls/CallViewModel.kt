@@ -118,7 +118,7 @@ class CallViewModel @Inject constructor(
         waiting.attach(host)
         watchdogs.attach(host)
         analytics.attach(host)
-        ongoing.attach(viewModelScope, state, hangUp = ::hangUp, toggleMute = ::toggleMute)
+        ongoing.attach(viewModelScope, state, onHangUp = ::hangUp, onToggleMute = ::toggleMute)
         viewModelScope.launch {
             signalManager.events.collect(::onRemoteEvent)
         }

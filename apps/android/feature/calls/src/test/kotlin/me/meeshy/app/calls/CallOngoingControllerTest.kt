@@ -53,7 +53,7 @@ class CallOngoingControllerTest {
     )
 
     private fun TestScope.attach(state: MutableStateFlow<CallUiState>) {
-        controller.attach(this, state, hangUp = { hangUps += 1 }, toggleMute = { mutes += 1 })
+        controller.attach(this, state, onHangUp = { hangUps += 1 }, onToggleMute = { mutes += 1 })
         runCurrent()
     }
 

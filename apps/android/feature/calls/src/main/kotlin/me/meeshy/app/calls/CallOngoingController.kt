@@ -55,11 +55,11 @@ class CallOngoingController @Inject constructor(
     private var running: CallActivitySnapshot? = null
     private var connectedSince: Long? = null
 
-    fun attach(scope: CoroutineScope, ui: StateFlow<CallUiState>, hangUp: () -> Unit, toggleMute: () -> Unit) {
+    fun attach(scope: CoroutineScope, ui: StateFlow<CallUiState>, onHangUp: () -> Unit, onToggleMute: () -> Unit) {
         detach()
         val bound = object : ActiveCallCommands {
-            override fun hangUp() = hangUp()
-            override fun toggleMute() = toggleMute()
+            override fun hangUp() = onHangUp()
+            override fun toggleMute() = onToggleMute()
         }
         commands = bound
         holder.attach(bound)
