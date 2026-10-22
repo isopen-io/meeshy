@@ -47,8 +47,9 @@ class PreferenceSyncBodyReadProjectionTest {
           "postLikeEnabled": false, "postCommentEnabled": false, "postRepostEnabled": false,
           "storyReactionEnabled": false, "commentReplyEnabled": false, "commentLikeEnabled": true,
           "friendContentEnabled": false,
+          "contactActivityEnabled": false, "gameEnabled": false,
           "dndEnabled": true, "dndStartTime": "23:30", "dndEndTime": "07:15",
-          "dndDays": ["mon", "fri"],
+          "dndDays": ["mon", "fri"], "dndUtcOffsetMinutes": 540,
           "showPreview": false, "showSenderName": false, "groupNotifications": false,
           "notificationBadgeEnabled": false
         }
@@ -74,6 +75,34 @@ class PreferenceSyncBodyReadProjectionTest {
         // projection that ignored them would wrongly report true here.
         assertThat(next.callsEnabled).isFalse()
         assertThat(next.friendContentEnabled).isFalse()
+        // The three fields this lot added, each on a wire value that differs from its local default.
+        assertThat(next.contactActivityEnabled).isFalse()
+        assertThat(next.gameEnabled).isFalse()
+        assertThat(next.dndUtcOffsetMinutes).isEqualTo(540)
+    }
+
+    /**
+     * A gateway block stored before these fields existed does not carry them. Reading it must
+     * keep what this device holds — resetting to a default would be the read-side twin of the
+     * write-side damage the body is built to avoid.
+     */
+    @Test
+    fun `a notification response without the new fields keeps the local values`() {
+        val legacyResponse = notificationResponse
+            .replace(""""contactActivityEnabled": false, "gameEnabled": false,""", "")
+            .replace(""", "dndUtcOffsetMinutes": 540""", "")
+        val local = UserNotificationPreferences(
+            contactActivityEnabled = false,
+            gameEnabled = false,
+            dndUtcOffsetMinutes = 60,
+        )
+
+        val next = json.decodeFromString<NotificationPreferenceSyncBody>(legacyResponse).toPreferences(local)
+
+        assertThat(next.contactActivityEnabled).isFalse()
+        assertThat(next.gameEnabled).isFalse()
+        assertThat(next.dndUtcOffsetMinutes).isEqualTo(60)
+        assertThat(next.pushEnabled).isFalse()
     }
 
     /**
@@ -118,7 +147,8 @@ class PreferenceSyncBodyReadProjectionTest {
           "showOnlineStatus": false, "showLastSeen": false, "showReadReceipts": false,
           "showTypingIndicator": false, "hideProfileFromSearch": true,
           "allowContactRequests": false, "allowGroupInvites": false,
-          "allowCallsFromNonContacts": true, "saveMediaToGallery": true,
+          "acceptCallsFromNonContacts": false, "notifyContactsOnReturn": false,
+          "saveMediaToGallery": true,
           "allowAnalytics": false, "shareUsageData": true, "blockScreenshots": true,
           "encryptionPreference": "always", "autoEncryptNewConversations": true,
           "showEncryptionStatus": false, "warnOnUnencrypted": true
@@ -126,7 +156,7 @@ class PreferenceSyncBodyReadProjectionTest {
     """.trimIndent()
 
     @Test
-    fun `the privacy block decodes its twelve editable toggles`() {
+    fun `the privacy block decodes its editable toggles`() {
         val body = json.decodeFromString<PrivacyPreferenceSyncBody>(privacyResponse)
 
         val next = body.toPreferences(PrivacyPreferences())
@@ -134,7 +164,9 @@ class PreferenceSyncBodyReadProjectionTest {
         assertThat(next.showOnlineStatus).isFalse()
         assertThat(next.showLastSeen).isFalse()
         assertThat(next.hideProfileFromSearch).isTrue()
-        assertThat(next.allowCallsFromNonContacts).isTrue()
+        // The wire says CLOSED; the local default says open — only a real read lands false here.
+        assertThat(next.acceptCallsFromNonContacts).isFalse()
+        assertThat(next.notifyContactsOnReturn).isFalse()
         assertThat(next.saveMediaToGallery).isTrue()
         assertThat(next.shareUsageData).isTrue()
         assertThat(next.blockScreenshots).isTrue()
@@ -179,6 +211,25 @@ class PreferenceSyncBodyReadProjectionTest {
         assertThat(next.autoEncryptNewConversations).isFalse()
         assertThat(next.showEncryptionStatus).isTrue()
         assertThat(next.warnOnUnencrypted).isFalse()
+    }
+
+    /**
+     * `GET /me/preferences/privacy` from a gateway that only knows the dead alias (or a stored
+     * block that predates the canonical key). It reads without error — and closes nothing:
+     * the alias is not a switch anyone reads any more (#8073).
+     */
+    @Test
+    fun `a response carrying only the legacy alias reads without error and closes nothing`() {
+        val aliasOnly = privacyResponse
+            .replace(""""acceptCallsFromNonContacts": false, "notifyContactsOnReturn": false,""", """"allowCallsFromNonContacts": false,""")
+
+        val body = json.decodeFromString<PrivacyPreferenceSyncBody>(aliasOnly)
+
+        assertThat(body.acceptCallsFromNonContacts).isNull()
+        assertThat(body.toPreferences(PrivacyPreferences()).acceptCallsFromNonContacts).isTrue()
+        // And what this device already closed is not reopened by a response that says nothing.
+        val closedHere = PrivacyPreferences(acceptCallsFromNonContacts = false)
+        assertThat(body.toPreferences(closedHere).acceptCallsFromNonContacts).isFalse()
     }
 
     @Test
