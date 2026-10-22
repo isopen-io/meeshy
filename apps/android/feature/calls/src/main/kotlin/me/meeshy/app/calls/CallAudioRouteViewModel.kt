@@ -75,7 +75,8 @@ class CallAudioRouteViewModel @Inject constructor(
         val platform = service.snapshot()
         val next = _state.value.route.withRoutes(platform.routes, platform.activeId)
         _state.update { it.copy(route = next) }
-        if (platform.activeId == null && next.activeId != null) service.select(next.activeId)
+        val resolved = next.activeId
+        if (platform.activeId == null && resolved != null) service.select(resolved)
     }
 
     private fun select(id: Int) {
