@@ -42,6 +42,8 @@ import me.meeshy.ui.theme.hexColor
  * glue: it renders whatever the resolver decided and calls back with the tapped
  * [AttachmentTileKind]; it holds no "which tile" logic of its own.
  *
+ * [recentMedia] is the optional recent-media grid shown under the tiles (iOS `RecentMediaStrip`).
+ *
  * Parity with iOS `UniversalComposerBar+Attachments.carouselTile` — the same
  * per-kind gradient (top-leading → bottom-trailing, base colour → 70% alpha) and
  * a label under each disc.
@@ -51,9 +53,21 @@ internal fun ComposerAttachmentTray(
     tiles: List<AttachmentTile>,
     onTileClick: (AttachmentTileKind) -> Unit,
     modifier: Modifier = Modifier,
+    recentMedia: (@Composable () -> Unit)? = null,
+) {
+    Column(modifier = modifier.fillMaxWidth()) {
+        AttachmentTileRow(tiles = tiles, onTileClick = onTileClick)
+        recentMedia?.invoke()
+    }
+}
+
+@Composable
+private fun AttachmentTileRow(
+    tiles: List<AttachmentTile>,
+    onTileClick: (AttachmentTileKind) -> Unit,
 ) {
     Row(
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState())
             .padding(horizontal = MeeshySpacing.md, vertical = MeeshySpacing.sm),

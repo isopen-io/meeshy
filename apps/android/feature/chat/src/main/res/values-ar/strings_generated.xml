@@ -1,0 +1,21 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="composer_a11y_addSelection">إضافة التحديد</string>
+    <string name="composer_a11y_cancelSelection">إلغاء التحديد</string>
+    <string name="composer_a11y_openFullLibrary">فتح مكتبة الصور كاملة</string>
+    <string name="composer_a11y_recentPhoto">صورة حديثة</string>
+    <string name="composer_a11y_recentVideo">فيديو حديث</string>
+    <string name="composer_a11y_selectedState">محدّد</string>
+    <string name="composer_recent_accessDenied">تم رفض الوصول إلى الصور</string>
+    <string name="composer_recent_accessDenied_hint">اضغط لفتح الإعدادات</string>
+    <string name="composer_recent_add">إضافة</string>
+    <string name="composer_recent_addSelected">إضافة (%d)</string>
+    <string name="composer_recent_alreadyAttached">موجود بالفعل في المرفقات</string>
+    <string name="composer_recent_cancelSelection">إلغاء</string>
+    <string name="composer_recent_edit">تحرير</string>
+    <string name="composer_recent_grantAccess">السماح بالوصول إلى الصور</string>
+    <string name="composer_recent_grantAccess_hint">لعرض وسائطك الأخيرة هنا</string>
+    <string name="composer_recent_select">تحديد</string>
+    <string name="recentMedia_resolveFailed">تعذّر تحضير هذه الوسائط — استخدم مكتبة الصور الكاملة</string>
+    <string name="recentMedia_resolveFailed_multiple">تعذّر تجهيز %d من الوسائط — استخدم مكتبة الصور كاملة</string>
+</resources>
