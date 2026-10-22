@@ -90,28 +90,6 @@ data class ApiAttachmentTranslation(
     val segments: List<TranscriptionSegment>? = null,
 )
 
-/** A message attachment in an API response — port of APIMessageAttachment (MessageModels.swift). */
-@Serializable
-data class ApiMessageAttachment(
-    val id: String,
-    val fileName: String? = null,
-    val originalName: String? = null,
-    val mimeType: String? = null,
-    val fileSize: Int? = null,
-    val fileUrl: String? = null,
-    val thumbnailUrl: String? = null,
-    val thumbHash: String? = null,
-    val width: Int? = null,
-    val height: Int? = null,
-    val duration: Int? = null,
-    val latitude: Double? = null,
-    val longitude: Double? = null,
-    /** Author-authored accessibility description (`MessageAttachment.alt`, #6813). Bare pass-through, no Prisme translation. */
-    val alt: String? = null,
-    val transcription: ApiAttachmentTranscription? = null,
-    val translations: Map<String, ApiAttachmentTranslation>? = null,
-)
-
 /** The message a forward originates from — port of APIForwardedFrom (MessageModels.swift). */
 @Serializable
 data class ApiForwardedFrom(
@@ -120,6 +98,7 @@ data class ApiForwardedFrom(
     val messageType: String? = null,
     val createdAt: String? = null,
     val sender: ApiMessageSenderDetail? = null,
+    @Serializable(with = LossyApiMessageAttachmentListOrNullSerializer::class)
     val attachments: List<ApiMessageAttachment>? = null,
 )
 

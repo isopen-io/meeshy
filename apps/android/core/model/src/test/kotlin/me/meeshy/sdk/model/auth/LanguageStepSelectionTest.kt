@@ -65,6 +65,19 @@ class LanguageStepSelectionTest {
     }
 
     @Test
+    fun filter_ignoresAccents_inTheNativeNameAndInTheQuery() {
+        assertThat(LanguageStepSelection.filter("francais").map { it.code }).contains("fr")
+        assertThat(LanguageStepSelection.filter("ESPANOL").map { it.code }).contains("es")
+        assertThat(LanguageStepSelection.filter("português").map { it.code }).contains("pt")
+        assertThat(LanguageStepSelection.filter("Tieng Viet").map { it.code }).contains("vi")
+    }
+
+    @Test
+    fun filter_findsANativeScriptNameByItsOwnScript() {
+        assertThat(LanguageStepSelection.filter("한국어").map { it.code }).containsExactly("ko")
+    }
+
+    @Test
     fun filter_matchesByCode() {
         val result = LanguageStepSelection.filter("ja")
         assertThat(result.map { it.code }).contains("ja")
