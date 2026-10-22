@@ -46,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -338,8 +339,9 @@ private fun ShareLinkRow(
                     maxLines = 1,
                 )
                 Text(
-                    text = "$statusText · " + stringResource(
-                        R.string.my_share_links_joined_count,
+                    text = "$statusText · " + pluralStringResource(
+                        R.plurals.my_share_links_joined_count,
+                        link.currentUses,
                         link.currentUses,
                     ),
                     style = MaterialTheme.typography.labelMedium,
