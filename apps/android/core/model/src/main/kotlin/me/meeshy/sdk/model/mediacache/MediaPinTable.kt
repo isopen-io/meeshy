@@ -19,8 +19,10 @@ public data class MediaPinTable(
 
     public fun unpin(key: String): MediaPinTable = copy(expiries = expiries - key)
 
-    public fun isPinned(key: String, nowEpochMillis: Long): Boolean =
-        (expiries[key] ?: return false) > nowEpochMillis
+    public fun isPinned(key: String, nowEpochMillis: Long): Boolean {
+        val until = expiries[key] ?: return false
+        return until > nowEpochMillis
+    }
 
     /** Retire les épingles échues pour que la table (et son sidecar) ne grossisse pas sans borne. */
     public fun pruned(nowEpochMillis: Long): MediaPinTable =
