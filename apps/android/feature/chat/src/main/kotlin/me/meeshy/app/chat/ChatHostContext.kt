@@ -9,6 +9,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.flow.StateFlow
 import me.meeshy.sdk.model.EphemeralDuration
 import me.meeshy.sdk.model.MentionCandidate
 import me.meeshy.sdk.model.call.ActiveCallSession
@@ -49,6 +50,7 @@ internal class ChatSheetVisibility {
 @Stable
 internal class ChatHostContext(
     val state: ChatUiState,
+    val composerText: StateFlow<ComposerTextState>,
     val pending: PendingAttachmentsState,
     val accentColor: Color,
     val actions: ChatHostActions,
@@ -60,6 +62,7 @@ internal class ChatHostContext(
 @Composable
 internal fun rememberChatHostContext(
     state: ChatUiState,
+    composerText: StateFlow<ComposerTextState>,
     pending: PendingAttachmentsState,
     accentColor: Color,
     actions: ChatHostActions,
@@ -69,7 +72,7 @@ internal fun rememberChatHostContext(
     // A plain map, not snapshot state: written from onGloballyPositioned without forcing
     // recomposition, read only when the overlay opens.
     val bubbleFrames = remember { mutableMapOf<String, Rect>() }
-    return ChatHostContext(state, pending, accentColor, actions, navigation, sheets, bubbleFrames)
+    return ChatHostContext(state, composerText, pending, accentColor, actions, navigation, sheets, bubbleFrames)
 }
 
 /** The ViewModel's user-intent entry points, as plain callbacks. */

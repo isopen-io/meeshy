@@ -54,6 +54,7 @@ fun ChatScreen(
     val pending by (pendingTray?.state ?: NO_PENDING).collectAsStateWithLifecycle()
     val host = rememberChatHostContext(
         state = state,
+        composerText = viewModel.composerText,
         pending = pending,
         accentColor = accentColor,
         actions = actions,

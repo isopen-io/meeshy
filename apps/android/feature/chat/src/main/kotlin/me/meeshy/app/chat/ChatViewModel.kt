@@ -114,8 +114,16 @@ class ChatViewModel @Inject constructor(
         ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrDefault(it) }
         ?.takeIf { it.isNotBlank() }
 
-    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId, draft = initialDraft.orEmpty()))
+    private val _state = MutableStateFlow(ChatUiState(conversationId = conversationId))
     val state: StateFlow<ChatUiState> = _state.asStateFlow()
+
+    private val composerTextHolder = ComposerTextHolder(initialDraft.orEmpty())
+
+    /**
+     * The composer's text, apart from [state]: typing moves only this flow, so the message
+     * list (which reads [state]) is not recomposed per character.
+     */
+    val composerText: StateFlow<ComposerTextState> = composerTextHolder.flow
 
     private val recipientCount = MutableStateFlow(0)
     private val typingCleanupJobs = mutableMapOf<String, Job>()
@@ -160,6 +168,7 @@ class ChatViewModel @Inject constructor(
         workManager = workManager,
         clock = clock,
         pendingTray = { controllers.find<ComposerTrayController>() },
+        composerText = composerTextHolder,
     )
 
     private val reactions = ChatReactionController(

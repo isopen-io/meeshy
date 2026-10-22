@@ -97,6 +97,7 @@ class ChatHostsSmokeTest {
 
     private fun host(state: ChatUiState = ChatUiState(conversationTitle = "Équipe")) = ChatHostContext(
         state = state,
+        composerText = kotlinx.coroutines.flow.MutableStateFlow(ComposerTextState()),
         pending = PendingAttachmentsState(),
         accentColor = MeeshyPalette.Indigo500,
         actions = noopActions(),
