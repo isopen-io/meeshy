@@ -19,7 +19,7 @@ internal data class DeepLinkUrl(
 ) {
     /** Decoded path segments without empty or `.` ones: `//join/X` reads as `/join/X`. */
     val segments: List<String>
-        get() = rawPath.split('/').map(DeepLinkUrl::percentDecode).filter { it.isNotEmpty() && it != "." }
+        get() = rawPath.split('/').map { percentDecode(it) }.filter { it.isNotEmpty() && it != "." }
 
     /** A trimmed query value, or null when absent or blank. */
     fun queryValue(name: String): String? =

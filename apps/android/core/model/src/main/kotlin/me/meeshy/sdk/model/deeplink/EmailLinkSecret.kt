@@ -53,7 +53,7 @@ internal object EmailLinkSecret {
     private const val MAX_DECODE_ROUNDS = 4
     private val pathTokenPattern = Regex("^[A-Za-z0-9_-]+$")
 
-    fun carriesSecret(url: DeepLinkUrl): Boolean = rawPaths(url).any(::carriesSecret)
+    fun carriesSecret(url: DeepLinkUrl): Boolean = rawPaths(url).any { carriesSecret(it) }
 
     fun carriesSecret(path: String): Boolean {
         val normalized = normalize(path)
