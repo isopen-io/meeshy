@@ -160,7 +160,7 @@ object Routes {
     const val MY_SHARE_LINKS = "share-links"
     const val SHARE_LINK_DETAIL = "share-links/{${ShareLinkDetailViewModel.LINK_ID_ARG}}"
     fun shareLinkDetail(linkId: String): String = "share-links/$linkId"
-    const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}"
+    const val CHAT = "chat/{${ChatViewModel.CONVERSATION_ID_ARG}}?${ChatRouteArgs.HIGHLIGHT_MESSAGE_ID}={${ChatRouteArgs.HIGHLIGHT_MESSAGE_ID}}"
     const val CHAT_DEEP_LINK = "meeshy://$CHAT"
     const val CONVERSATION_DEEP_LINK = "meeshy://conversations/{${ChatViewModel.CONVERSATION_ID_ARG}}"
     const val CONVERSATION_SINGULAR_DEEP_LINK = "meeshy://conversation/{${ChatViewModel.CONVERSATION_ID_ARG}}"
@@ -234,7 +234,8 @@ object Routes {
         "story_composer?$STORY_COMPOSER_REPOST_ARG=${Uri.encode(storyId)}"
 
     fun postDetail(postId: String): String = "feed/post/$postId"
-    fun chat(conversationId: String): String = "chat/$conversationId"
+    fun chat(conversationId: String, highlightMessageId: String? = null): String =
+        ChatRouteArgs.route(conversationId, highlightMessageId)
     fun profile(userId: String): String = "profile/$userId"
     fun userPosts(userId: String): String = "profile/$userId/posts"
     fun reportUser(userId: String, username: String): String =
@@ -818,6 +819,7 @@ fun MeeshyApp(
                 arguments = listOf(
                     navArgument(ChatViewModel.CONVERSATION_ID_ARG) { type = NavType.StringType },
                     navArgument(ChatViewModel.DRAFT_ARG) { type = NavType.StringType; nullable = true; defaultValue = null },
+                    navArgument(ChatRouteArgs.HIGHLIGHT_MESSAGE_ID) { type = NavType.StringType; nullable = true; defaultValue = null },
                 ),
                 deepLinks = listOf(
                     navDeepLink { uriPattern = Routes.CHAT_DEEP_LINK },
