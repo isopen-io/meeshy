@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_fullscreen_dial">Posizione nel messaggio vocale</string>
     <string name="common_clearSearch">Cancella la ricerca</string>
     <string name="common_close">Chiudi</string>
     <string name="emoji_category_activities">Attività</string>
