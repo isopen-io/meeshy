@@ -279,7 +279,7 @@ internal fun RecentMediaGrid(
                     onOpenLibrary = ::openLibrary,
                 )
             }
-            androidx.compose.animation.AnimatedVisibility(visible = failures > 0, modifier = Modifier.align(Alignment.BottomCenter)) {
+            if (failures > 0) {
                 MeeshyFeedbackToast(
                     message = if (failures > 1) {
                         stringResource(R.string.recentMedia_resolveFailed_multiple, failures)
@@ -287,7 +287,7 @@ internal fun RecentMediaGrid(
                         stringResource(R.string.recentMedia_resolveFailed)
                     },
                     kind = FeedbackKind.Error,
-                    modifier = Modifier.padding(MeeshySpacing.md),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(MeeshySpacing.md),
                 )
             }
         }
