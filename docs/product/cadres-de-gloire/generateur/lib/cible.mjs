@@ -8,6 +8,8 @@
 //                                            jamais versionné : c'est l'artefact du job du générateur
 // Options : --only savane,poses · --jobs 3 · --final (garde le 1080×1920, sans descente à l'échelle de design)
 //           --out out · --plates out-plate (les SVG des deux variantes, CADRES_PLATE)
+//           --only et --final EXIGENT --cible (hors --check) : le dossier versionné ne reçoit que l'échantillon complet,
+//           et un plan vide (collection inconnue, dossier `out` vide) est rouge, jamais un index à zéro cible.
 //
 // Méthode, par cible (Chromium par lib/launch.mjs, 1080×1920, polices aux graisses exactes) :
 //   - la fenêtre est trouvée comme à l'export (photo factice magenta puis verte) ; la photo FIXTURE
@@ -20,7 +22,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { generateAteliers } from './ateliers.mjs';
-import { halve, indexOf, planTargets, RENDERED, targetName } from './cible-plan.mjs';
+import { destinationOf, halve, indexOf, planTargets, RENDERED, selectCollections, targetName } from './cible-plan.mjs';
 import { FIXTURE } from './fixture.mjs';
 import { launch } from './launch.mjs';
 import { classify, show } from './layers.mjs';
@@ -38,8 +40,8 @@ const CHECK = has('--check');
 const FINAL = has('--final');
 const OUT = path.resolve(arg('--out', path.join(HERE, '../out')));
 const PLATES = path.resolve(arg('--plates', path.join(HERE, '../out-plate')));
-const CIBLE = path.resolve(arg('--cible', FULL ? path.join(HERE, '../cible-complete') : path.join(HERE, '../../cible')));
 const ONLY = arg('--only') ? new Set(arg('--only').split(',')) : null;
+const CIBLE = destinationOf({ here: HERE, cible: arg('--cible'), full: FULL, only: Boolean(ONLY), final: FINAL, check: CHECK });
 const JOBS = Number(arg('--jobs', '3'));
 const [FW, FH] = RENDERED;
 
@@ -91,7 +93,7 @@ async function renderTarget(handle, target) {
   return { ...target, file: targetName(target), window: first.window, bytes: webp.length, sha256: sha256(webp), stable, webp };
 }
 
-const collections = fs.readdirSync(OUT).filter((d) => fs.existsSync(path.join(OUT, d, 'manifest.json')) && (!ONLY || ONLY.has(d)));
+const collections = selectCollections({ available: fs.readdirSync(OUT).filter((d) => fs.existsSync(path.join(OUT, d, 'manifest.json'))), only: ONLY });
 const manifests = Object.fromEntries(collections.map((c) => [c, JSON.parse(fs.readFileSync(path.join(OUT, c, 'manifest.json'), 'utf8'))]));
 const targets = planTargets({ collections, manifests, full: FULL });
 

@@ -1430,10 +1430,21 @@ jobs:
       # sharp encode les cibles de fidélité (L21a, lib/cible.mjs) ; la version
       # épinglée est celle du workspace de la passerelle (lib/sharp.mjs), lue
       # ici par $SHARP_MODULE puisque ce job n'installe rien du monorepo.
+      # playwright@1.56.1 livre Chromium 141.0.7390.37 : celui qui a rendu les
+      # cibles versionnées (docs/product/cadres-de-gloire/cible/index.json).
+      # Bumper l'épingle sans régénérer l'échantillon rougit les témoins du
+      # générateur (lib/cible-ci.test.mjs) : la comparaison plus bas ne vaut
+      # qu'à Chromium identique.
       - name: Playwright épinglé (Chromium) et sharp
         run: |
-          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.64.0 sharp@0.35.5
+          npm install --prefix . --no-save --no-package-lock --no-audit --no-fund playwright@1.56.1 sharp@0.35.5
           ./node_modules/.bin/playwright install --with-deps chromium
+
+      # Les témoins du générateur : le plan des cibles sans navigateur
+      # (lib/cible-plan.test.mjs) et la cohérence de ce que ce job épingle —
+      # Playwright donc Chromium, sharp — avec cible/index.json.
+      - name: Témoins du générateur
+        run: node --test lib/*.test.mjs
 
       - name: Générer les SVG des ateliers
         run: for atelier in ateliers/*/; do (cd "$atelier" && python -B gen.py > /dev/null); done

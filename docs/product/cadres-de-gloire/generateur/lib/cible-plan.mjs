@@ -3,6 +3,8 @@
 // que le contrat lui connaît (chaque cadre en déclare exactement une, `birds.default`), dans les DEUX variantes de
 // plaque (`plain` sans message, `message` avec), en 9:16. Le carré n'existe pas : D1 (#10180) tient le 1:1 d'un cadre
 // décoré pour la carte simple (`formats.square: null`), le médaillon viendra en lot additif avec sa propre cible.
+import path from 'node:path';
+
 export const VARIANTS = ['plain', 'message'];
 
 // Le cadre échantillon de chaque collection : l'Ambassadeur I des sept atmosphères, comme la référence L0
@@ -16,7 +18,29 @@ export const SIZE = [540, 960];
 
 const frameOf = (entry) => entry.file.replace(/\.jpg$/, '');
 
+// Les collections à rendre : celles du dossier généré, filtrées par `--only`. Un nom que le dossier ne connaît pas est
+// une faute de frappe, pas un plan vide : il se nomme, et zéro collection rougit (un plan vide était vert, et
+// réécrivait l'index versionné avec `count: 0`).
+export function selectCollections({ available, only = null }) {
+  const unknown = only ? [...only].filter((c) => !available.includes(c)) : [];
+  if (unknown.length > 0) throw new Error(`collection(s) inconnue(s) de --only : ${unknown.join(', ')} (connues : ${[...available].sort().join(', ') || 'aucune'})`);
+  const selected = [...available].filter((c) => !only || only.has(c)).sort();
+  if (selected.length === 0) throw new Error('aucune collection à rendre : lancer --generate, ou vérifier --only');
+  return selected;
+}
+
+// Où les cibles s'écrivent. Le dossier VERSIONNÉ (docs/product/cadres-de-gloire/cible/) n'est la destination par défaut
+// que du rendu COMPLET de l'échantillon : `--only` (une partie des collections) et `--final` (1080×1920) y écraseraient
+// les cibles et l'index, ils exigent `--cible`. `--check` compare sans écrire : il rend à part, contre ce dossier.
+export function destinationOf({ here, cible = null, full = false, only = false, final = false, check = false }) {
+  if (cible) return path.resolve(cible);
+  if (full) return path.join(here, '../cible-complete');
+  if ((only || final) && !check) throw new Error('--only et --final exigent --cible : sans lui, ils écraseraient l\'échantillon versionné (docs/product/cadres-de-gloire/cible/)');
+  return path.join(here, '../../cible');
+}
+
 export function planTargets({ collections, manifests, full = false }) {
+  if (collections.length === 0) throw new Error('aucune cible à rendre : le plan est vide');
   return [...collections].sort().flatMap((collection) => {
     const manifest = manifests[collection];
     if (!manifest) throw new Error(`collection sans manifeste généré : ${collection}`);

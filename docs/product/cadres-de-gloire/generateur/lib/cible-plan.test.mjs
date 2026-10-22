@@ -3,7 +3,7 @@
 // design, et ce que l'index versionné déclare. Usage : node --test lib/cible-plan.test.mjs
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SAMPLE_FRAMES, VARIANTS, halve, indexOf, planTargets, targetName } from './cible-plan.mjs';
+import { SAMPLE_FRAMES, VARIANTS, destinationOf, halve, indexOf, planTargets, selectCollections, targetName } from './cible-plan.mjs';
 
 const manifests = {
   savane: [{ file: 'savane-ambassadeur-5.jpg', layout: 'perchés sur les huttes', message: null }, { file: 'savane-ambassadeur-1.jpg', layout: 'ruban (Mee fête, Meo champagne)', message: 'Pour toi' }],
@@ -77,4 +77,23 @@ test("l'index déclare le format 9:16 seul, le carré nul (D1, #10180), la photo
   assert.equal(index.count, 1);
   assert.equal(index.targets[0].stable, true);
   assert.ok(!('note' in index.targets[0]));
+});
+
+test('un plan vide est rouge : une collection inconnue de `--only` est nommée, et zéro cible ne se rend pas', () => {
+  assert.deepEqual(selectCollections({ available: ['savane', 'poses'], only: null }), ['poses', 'savane']);
+  assert.deepEqual(selectCollections({ available: ['savane', 'poses'], only: new Set(['savane']) }), ['savane']);
+  assert.throws(() => selectCollections({ available: ['savane', 'poses'], only: new Set(['nope', 'savane']) }), /nope/);
+  assert.throws(() => selectCollections({ available: [], only: null }), /aucune collection/);
+  assert.throws(() => planTargets({ collections: [], manifests }), /aucune cible/);
+});
+
+test("`--only` et `--final` exigent `--cible` : sans lui, ils écraseraient l'échantillon versionné ; `--check` compare sans écrire", () => {
+  const here = '/repo/docs/product/cadres-de-gloire/generateur/lib';
+  assert.equal(destinationOf({ here }), '/repo/docs/product/cadres-de-gloire/cible');
+  assert.equal(destinationOf({ here, full: true }), '/repo/docs/product/cadres-de-gloire/generateur/cible-complete');
+  assert.equal(destinationOf({ here, only: true, cible: '/tmp/x' }), '/tmp/x');
+  assert.throws(() => destinationOf({ here, only: true }), /--cible/);
+  assert.throws(() => destinationOf({ here, final: true }), /--cible/);
+  assert.equal(destinationOf({ here, only: true, full: true }), '/repo/docs/product/cadres-de-gloire/generateur/cible-complete');
+  assert.equal(destinationOf({ here, only: true, check: true }), '/repo/docs/product/cadres-de-gloire/cible');
 });
