@@ -81,15 +81,17 @@ nonisolated enum MediaContext: Sendable {
 // MARK: - La politique d'envoi d'une photo (#9885)
 
 extension MediaContext {
-    /// Le budget du contexte, et les deux choix de l'utilisateur : compresser à
-    /// l'envoi (`compressImagesOnUpload`, coupé par défaut ⇒ la définition HD
-    /// part intacte) et conserver le lieu (coupé par défaut, verdict #11247).
-    /// Un avatar se réduit toujours : il ne s'affiche jamais en grand.
+    /// Par défaut, la photo part en HD, en UNE génération perceptuelle à q 0,85,
+    /// lieu retiré (verdict #11247). `compresses` est la **compression forte** que
+    /// l'utilisateur choisit pour économiser des données (`compressImagesOnUpload`) :
+    /// budget du contexte et qualité de sa préférence. Un avatar se réduit toujours :
+    /// il ne s'affiche jamais en grand.
     nonisolated func outgoingImagePolicy(compresses: Bool, qualityPercent: Int, keepsLocation: Bool) -> OutgoingImagePolicy {
-        OutgoingImagePolicy(maxPixelDimension: maxImageDimension,
-                            compresses: compresses || self == .avatar,
-                            quality: OutgoingImagePolicy.quality(percent: qualityPercent),
-                            keepsLocation: keepsLocation)
+        let forte = compresses || self == .avatar
+        return OutgoingImagePolicy(maxPixelDimension: maxImageDimension, compresses: forte,
+                                   quality: forte ? OutgoingImagePolicy.quality(percent: qualityPercent)
+                                                  : OutgoingImagePolicy.perceptualQuality,
+                                   keepsLocation: keepsLocation)
     }
 
     /// La politique servie par les préférences de l'utilisateur.

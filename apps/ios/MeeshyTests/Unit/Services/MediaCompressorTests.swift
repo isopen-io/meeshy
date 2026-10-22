@@ -310,11 +310,12 @@ final class MediaCompressorTests: XCTestCase {
         XCTAssertEqual(try pixelSize(of: result.data), CGSize(width: 1200, height: 600))
     }
 
-    func test_outgoingPolicy_compressionOff_keepsTheHDCeiling() {
-        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 85, keepsLocation: false)
+    /// Par défaut : HD et q 0,85, quelle que soit la qualité réglée pour la compression forte.
+    func test_outgoingPolicy_compressionOff_keepsTheHDCeiling_atThePerceptualQuality() {
+        let policy = MediaContext.message.outgoingImagePolicy(compresses: false, qualityPercent: 40, keepsLocation: false)
 
         XCTAssertFalse(policy.compresses)
-        XCTAssertEqual(policy.pixelBudget(byteCount: 1_000_000), OutgoingImagePolicy.defaultHDPixelCeiling)
+        XCTAssertEqual(policy.pixelBudget, OutgoingImagePolicy.defaultHDPixelCeiling)
         XCTAssertEqual(policy.quality, 0.85, accuracy: 0.0001)
         XCTAssertFalse(policy.keepsLocation)
     }
@@ -322,7 +323,7 @@ final class MediaCompressorTests: XCTestCase {
     func test_outgoingPolicy_compressionOn_usesTheContextBudgetAndQuality() {
         let policy = MediaContext.message.outgoingImagePolicy(compresses: true, qualityPercent: 70, keepsLocation: true)
 
-        XCTAssertEqual(policy.pixelBudget(byteCount: 1_000_000), MediaContext.message.maxImageDimension)
+        XCTAssertEqual(policy.pixelBudget, MediaContext.message.maxImageDimension)
         XCTAssertEqual(policy.quality, 0.70, accuracy: 0.0001)
         XCTAssertTrue(policy.keepsLocation)
     }
@@ -330,7 +331,7 @@ final class MediaCompressorTests: XCTestCase {
     func test_outgoingPolicy_avatarAlwaysCompresses() {
         let policy = MediaContext.avatar.outgoingImagePolicy(compresses: false, qualityPercent: 85, keepsLocation: false)
 
-        XCTAssertEqual(policy.pixelBudget(byteCount: 1), MediaContext.avatar.maxImageDimension)
+        XCTAssertEqual(policy.pixelBudget, MediaContext.avatar.maxImageDimension)
     }
 
     // MARK: - compressImageData — Short data fallback

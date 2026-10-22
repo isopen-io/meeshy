@@ -70,31 +70,44 @@ public enum OutgoingImageFormat: String, Sendable, Equatable, CaseIterable {
     var isLossy: Bool { self != .png }
 }
 
+/// **Ce que l'envoi fait d'une photo** (#9885, verdict #11247).
+///
+/// Par défaut (`compresses == false`) : la définition HD est gardée (au plus
+/// `hdPixelCeiling` de côté long) et la photo part en UNE génération perceptuelle
+/// à q 0,85, sauf si l'original est déjà aussi efficace. Au-delà de `byteCeiling`,
+/// la définition descend par paliers HD (`hdSteps`), jamais au budget du contexte.
+///
+/// `compresses == true` est la **compression forte** que l'utilisateur choisit
+/// pour économiser des données (`compressImagesOnUpload`) : budget du contexte
+/// (1 200 px pour un message) et qualité de sa préférence.
 public struct OutgoingImagePolicy: Sendable, Equatable {
     /// Le plancher perceptuel du verdict #11247.
     public static let perceptualQuality: CGFloat = 0.85
-    /// Préférence `compressImagesOnUpload` coupée : la définition HD part intacte
-    /// jusqu'à ce plafond (12 Mpx d'un iPhone tiennent dessous).
     public static let defaultHDPixelCeiling: CGFloat = 4096
-    /// Au-delà, même sans compression demandée, la photo revient au budget du contexte.
-    public static let defaultPassthroughByteCeiling = 12 * 1024 * 1024
+    /// Les paliers HD, du plus grand au plus petit, qu'une photo trop lourde descend.
+    public static let hdSteps: [CGFloat] = [4096, 3072, 2560]
+    /// Le poids jugé déraisonnable pour une photo HD (au-delà, palier suivant).
+    public static let defaultByteCeiling = 8 * 1024 * 1024
+    /// Un réencodage qui gagne moins que cette part du poids ne paie pas sa
+    /// génération : l'original, déjà efficace, part tel quel.
+    public static let minimumGain = 0.15
 
     public let maxPixelDimension: CGFloat
     public let compresses: Bool
     public let quality: CGFloat
     public let keepsLocation: Bool
     public let hdPixelCeiling: CGFloat
-    public let passthroughByteCeiling: Int
+    public let byteCeiling: Int
 
     public init(maxPixelDimension: CGFloat, compresses: Bool, quality: CGFloat, keepsLocation: Bool,
                 hdPixelCeiling: CGFloat = OutgoingImagePolicy.defaultHDPixelCeiling,
-                passthroughByteCeiling: Int = OutgoingImagePolicy.defaultPassthroughByteCeiling) {
+                byteCeiling: Int = OutgoingImagePolicy.defaultByteCeiling) {
         self.maxPixelDimension = max(maxPixelDimension, 1)
         self.compresses = compresses
         self.quality = min(max(quality, 0.5), 1)
         self.keepsLocation = keepsLocation
         self.hdPixelCeiling = max(hdPixelCeiling, self.maxPixelDimension)
-        self.passthroughByteCeiling = passthroughByteCeiling
+        self.byteCeiling = byteCeiling
     }
 
     /// `imageCompressionQuality` (0–100) ramené à une qualité d'encodeur bornée.
@@ -102,9 +115,17 @@ public struct OutgoingImagePolicy: Sendable, Equatable {
         min(max(CGFloat(percent) / 100, 0.5), 1)
     }
 
-    /// La plus grande dimension admise pour ce fichier.
-    public func pixelBudget(byteCount: Int) -> CGFloat {
-        compresses || byteCount > passthroughByteCeiling ? maxPixelDimension : hdPixelCeiling
+    /// La plus grande dimension admise : le budget du contexte en compression
+    /// forte, le plafond HD sinon.
+    public var pixelBudget: CGFloat {
+        compresses ? maxPixelDimension : hdPixelCeiling
+    }
+
+    /// Le palier HD suivant, strictement sous `longestSide` ; `nil` en compression
+    /// forte (déjà au budget) ou sous le dernier palier.
+    public func step(below longestSide: CGFloat) -> CGFloat? {
+        guard !compresses else { return nil }
+        return Self.hdSteps.first { $0 < longestSide && $0 <= hdPixelCeiling }
     }
 }
 
@@ -115,22 +136,33 @@ public enum OutgoingImagePlan: Sendable, Equatable {
     case stripLocation
     /// UNE génération d'encodage ; `maxPixelDimension == nil` garde la définition.
     case reencode(OutgoingImageFormat, maxPixelDimension: CGFloat?)
+    /// Une génération, SAUF si l'original pèse déjà à peine plus que l'essai
+    /// (gain < `minimumGain`) : il part alors tel quel, lieu retiré.
+    case reencodeUnlessAlreadyEfficient(OutgoingImageFormat, maxPixelDimension: CGFloat?)
 }
 
 public enum OutgoingImagePlanner {
     public static func plan(format: OutgoingImageFormat, pixelSize: CGSize, byteCount: Int,
                             carriesLocation: Bool, policy: OutgoingImagePolicy) -> OutgoingImagePlan {
-        let budget = policy.pixelBudget(byteCount: byteCount)
+        let budget = policy.pixelBudget
         let resize: CGFloat? = max(pixelSize.width, pixelSize.height) > budget ? budget : nil
         switch format {
         case .gif, .webp:
             return .passthrough
         case .heic, .unknown:
             return .reencode(.jpeg, maxPixelDimension: resize)
-        case .jpeg, .png:
-            if let resize { return .reencode(format, maxPixelDimension: resize) }
+        case .png:
+            if let resize { return .reencode(.png, maxPixelDimension: resize) }
             return carriesLocation && !policy.keepsLocation ? .stripLocation : .passthrough
+        case .jpeg:
+            if let resize { return .reencode(.jpeg, maxPixelDimension: resize) }
+            return .reencodeUnlessAlreadyEfficient(.jpeg, maxPixelDimension: nil)
         }
+    }
+
+    /// L'essai ne gagne pas assez sur l'original pour payer une génération.
+    public static func originalIsAlreadyEfficient(originalBytes: Int, reencodedBytes: Int) -> Bool {
+        Double(reencodedBytes) > Double(originalBytes) * (1 - OutgoingImagePolicy.minimumGain)
     }
 }
 
@@ -160,24 +192,52 @@ public struct OutgoingImagePreparer: OutgoingImagePreparing {
               let stored = OutgoingImageGeometry.storedSize(properties) else {
             return OutgoingImage(data: data, format: format, pixelSize: nil, encodedGenerations: 0)
         }
-        let upright = OutgoingImageGeometry.upright(stored, properties: properties)
-        let carriesLocation = properties[kCGImagePropertyGPSDictionary] != nil
-        let original = OutgoingImage(data: data, format: format, pixelSize: upright, encodedGenerations: 0)
-        let mayFallBackToOriginal = !carriesLocation || policy.keepsLocation
-        switch OutgoingImagePlanner.plan(format: format, pixelSize: upright, byteCount: data.count,
-                                         carriesLocation: carriesLocation, policy: policy) {
+        let original = OriginalImage(data: data, source: source, properties: properties, format: format,
+                                     upright: OutgoingImageGeometry.upright(stored, properties: properties))
+        switch OutgoingImagePlanner.plan(format: format, pixelSize: original.upright, byteCount: data.count,
+                                         carriesLocation: original.carriesLocation, policy: policy) {
         case .passthrough:
-            return original
+            return original.asIs
         case .stripLocation:
-            let stripped = OutgoingImageWriter.withoutLocation(source)
-                .map { OutgoingImage(data: $0, format: format, pixelSize: upright, encodedGenerations: 0) }
-            return stripped ?? OutgoingImageWriter.reencoded(source, properties: properties, as: format,
-                                                             maxPixelDimension: nil, policy: policy)
+            return original.withoutLocation(policy: policy)
+                ?? OutgoingImageWriter.encode(original, as: format, maxPixelDimension: nil, policy: policy)
         case .reencode(let target, let maxPixelDimension):
-            let reencoded = OutgoingImageWriter.reencoded(source, properties: properties, as: target,
-                                                          maxPixelDimension: maxPixelDimension, policy: policy)
-            return reencoded ?? (mayFallBackToOriginal ? original : nil)
+            return OutgoingImageWriter.encode(original, as: target, maxPixelDimension: maxPixelDimension, policy: policy)
+                ?? original.fallback(policy: policy)
+        case .reencodeUnlessAlreadyEfficient(let target, let maxPixelDimension):
+            guard let essai = OutgoingImageWriter.encode(original, as: target, maxPixelDimension: maxPixelDimension,
+                                                         policy: policy) else { return original.fallback(policy: policy) }
+            let efficace = data.count <= policy.byteCeiling
+                && OutgoingImagePlanner.originalIsAlreadyEfficient(originalBytes: data.count, reencodedBytes: essai.data.count)
+            return efficace ? (original.withoutLocation(policy: policy) ?? essai) : essai
         }
+    }
+}
+
+/// L'image d'origine, lue une fois, et ce qu'elle peut devenir sans ré-encodage.
+struct OriginalImage {
+    let data: Data
+    let source: CGImageSource
+    let properties: [CFString: Any]
+    let format: OutgoingImageFormat
+    let upright: CGSize
+
+    var carriesLocation: Bool { properties[kCGImagePropertyGPSDictionary] != nil }
+
+    var asIs: OutgoingImage {
+        OutgoingImage(data: data, format: format, pixelSize: upright, encodedGenerations: 0)
+    }
+
+    /// Les octets d'origine, lieu retiré s'il le faut ; `nil` si le retrait échoue.
+    func withoutLocation(policy: OutgoingImagePolicy) -> OutgoingImage? {
+        guard carriesLocation, !policy.keepsLocation else { return asIs }
+        return OutgoingImageWriter.withoutLocation(source)
+            .map { OutgoingImage(data: $0, format: format, pixelSize: upright, encodedGenerations: 0) }
+    }
+
+    /// Un encodage a échoué : l'original part s'il n'emporte aucun lieu interdit.
+    func fallback(policy: OutgoingImagePolicy) -> OutgoingImage? {
+        !carriesLocation || policy.keepsLocation ? asIs : nil
     }
 }
 
@@ -187,6 +247,10 @@ enum OutgoingImageGeometry {
               let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.doubleValue,
               width > 0, height > 0 else { return nil }
         return CGSize(width: width, height: height)
+    }
+
+    static func isUpright(_ properties: [CFString: Any]) -> Bool {
+        ((properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1) == 1
     }
 
     /// Les orientations EXIF 5 à 8 couchent l'image : sa définition debout s'inverse.
@@ -207,30 +271,62 @@ enum OutgoingImageWriter {
         return buffer as Data
     }
 
-    /// LA génération d'encodage : décodage réduit et redressé par ImageIO, profil
-    /// couleur porté par l'image, métadonnées de la prise sans le lieu sauf choix contraire.
-    static func reencoded(_ source: CGImageSource, properties: [CFString: Any], as format: OutgoingImageFormat,
-                          maxPixelDimension: CGFloat?, policy: OutgoingImagePolicy) -> OutgoingImage? {
-        guard let type = format.typeIdentifier,
-              let stored = OutgoingImageGeometry.storedSize(properties) else { return nil }
-        let limit = maxPixelDimension ?? max(stored.width, stored.height)
+    /// LA génération d'encodage. Au-delà de `byteCeiling`, l'essai recommence
+    /// au palier HD suivant — toujours depuis l'ORIGINAL, donc toujours une seule
+    /// génération sur les pixels qui partent.
+    static func encode(_ original: OriginalImage, as format: OutgoingImageFormat, maxPixelDimension: CGFloat?,
+                       policy: OutgoingImagePolicy) -> OutgoingImage? {
+        let limit = maxPixelDimension ?? max(original.upright.width, original.upright.height)
+        guard let essai = encodeOnce(original, as: format, limit: limit, policy: policy) else { return nil }
+        guard essai.data.count > policy.byteCeiling, let palier = policy.step(below: limit) else { return essai }
+        return encode(original, as: format, maxPixelDimension: palier, policy: policy) ?? essai
+    }
+
+    /// Décodage réduit et redressé par ImageIO ; le profil couleur suit l'image ;
+    /// les métadonnées de la prise suivent, sans le lieu sauf choix contraire ;
+    /// la carte de gain HDR suit quand l'image n'a pas eu à être redressée.
+    private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
+                                   policy: OutgoingImagePolicy) -> OutgoingImage? {
+        guard let type = format.typeIdentifier else { return nil }
         let thumbnailOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: limit,
         ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions as CFDictionary) else { return nil }
-        let carried = PhotoCaptureMetadata.carried(from: properties)
+        guard let image = CGImageSourceCreateThumbnailAtIndex(original.source, 0, thumbnailOptions as CFDictionary) else {
+            return nil
+        }
+        let carried = PhotoCaptureMetadata.carried(from: original.properties)
             .filter { policy.keepsLocation || $0.key != kCGImagePropertyGPSDictionary }
         let quality: [CFString: Any] = format.isLossy ? [kCGImageDestinationLossyCompressionQuality: policy.quality] : [:]
         let options = carried.merging(quality) { _, requested in requested }
         let buffer = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
+        if format.isLossy, OutgoingImageGeometry.isUpright(original.properties) {
+            OutgoingImageGainMap.carry(from: original.source, to: destination)
+        }
         guard CGImageDestinationFinalize(destination) else { return nil }
         return OutgoingImage(data: buffer as Data, format: format,
                              pixelSize: CGSize(width: image.width, height: image.height), encodedGenerations: 1)
+    }
+}
+
+/// **Le HDR suit la photo** (verdict #11247) : la carte de gain d'une prise HDR
+/// (Apple, et ISO 21496-1 depuis iOS 18) est une donnée auxiliaire, relative à
+/// l'image — elle suit une réduction, pas un redressement des pixels.
+enum OutgoingImageGainMap {
+    static func carry(from source: CGImageSource, to destination: CGImageDestination) {
+        gainMapTypes.forEach { type in
+            guard let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type) else { return }
+            CGImageDestinationAddAuxiliaryDataInfo(destination, type, info)
+        }
+    }
+
+    private static var gainMapTypes: [CFString] {
+        guard #available(iOS 18.0, *) else { return [kCGImageAuxiliaryDataTypeHDRGainMap] }
+        return [kCGImageAuxiliaryDataTypeHDRGainMap, kCGImageAuxiliaryDataTypeISOGainMap]
     }
 }
 

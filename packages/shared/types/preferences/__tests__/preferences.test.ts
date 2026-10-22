@@ -316,6 +316,13 @@ describe('DocumentPreferenceSchema', () => {
     expect(result).toEqual(valid);
   });
 
+  test('la compression forte est un choix explicite, coupé par défaut, et un ancien client sans le champ reste valide (#9885)', () => {
+    const ancien = DocumentPreferenceSchema.parse({});
+    expect(ancien.compressImagesOnUpload).toBe(false);
+    expect(ancien.imageCompressionQuality).toBe(85);
+    expect(DOCUMENT_PREFERENCE_DEFAULTS.compressImagesOnUpload).toBe(false);
+  });
+
   test('devrait valider les limites de taille', () => {
     expect(() => {
       DocumentPreferenceSchema.parse({ autoDownloadMaxSize: 0 });

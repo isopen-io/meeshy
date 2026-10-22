@@ -237,7 +237,7 @@ final class AttachmentPreparationService {
                                      image: UIImage,
                                      context: MediaContext) async {
         let policy = context.storedOutgoingImagePolicy()
-        let result = await MediaCompressor.shared.compressImage(image, maxDimension: policy.pixelBudget(byteCount: 0),
+        let result = await MediaCompressor.shared.compressImage(image, maxDimension: policy.pixelBudget,
                                                                 quality: policy.quality)
         await populateImage(prep: prep, result: result, preview: image)
     }

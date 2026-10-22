@@ -165859,43 +165859,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "تصغير الصور المرسلة"
+            "value": "ضغط قوي للصور"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Gesendete Fotos verkleinern"
+            "value": "Starke Fotokomprimierung"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reduce sent photos"
+            "value": "Strong photo compression"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reducir las fotos enviadas"
+            "value": "Compresión fuerte de fotos"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Réduire les photos envoyées"
+            "value": "Compression forte des photos"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Riduci le foto inviate"
+            "value": "Compressione forte delle foto"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Reduzir as fotos enviadas"
+            "value": "Compressão forte das fotos"
           }
         }
       }
@@ -165906,43 +165906,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "يستهلك بيانات أقل. وإلا تُرسل صورك بدقة عالية دون فقدان ملحوظ."
+            "value": "يوفّر البيانات بتصغير كل صورة. وإلا تُرسل الصور بدقة عالية مضغوطة دون فقدان ملحوظ."
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Spart Daten. Sonst werden deine Fotos in hoher Auflösung gesendet, ohne sichtbaren Verlust."
+            "value": "Spart Daten, indem jedes Foto verkleinert wird. Sonst werden Fotos in hoher Auflösung gesendet, ohne sichtbaren Verlust komprimiert."
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Uses less data. Otherwise, your photos are sent in high definition, with no visible loss."
+            "value": "Saves data by shrinking every photo. Otherwise, photos are sent in high definition, compressed with no visible loss."
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa menos datos. Si no, tus fotos se envían en alta definición, sin pérdida visible."
+            "value": "Ahorra datos reduciendo cada foto. Si no, se envían en alta definición, comprimidas sin pérdida visible."
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Moins de données. Sinon, vos photos partent en haute définition, sans perte visible."
+            "value": "Économise des données en réduisant chaque photo. Sinon, elles partent en haute définition, compressées sans perte visible."
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa meno dati. Altrimenti le tue foto partono in alta definizione, senza perdita visibile."
+            "value": "Risparmia dati riducendo ogni foto. Altrimenti partono in alta definizione, compresse senza perdita visibile."
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Usa menos dados. Caso contrário, suas fotos são enviadas em alta definição, sem perda visível."
+            "value": "Economiza dados reduzindo cada foto. Caso contrário, elas são enviadas em alta definição, comprimidas sem perda visível."
           }
         }
       }
