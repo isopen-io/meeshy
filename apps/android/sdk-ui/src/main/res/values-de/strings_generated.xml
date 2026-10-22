@@ -11,4 +11,26 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symbole</string>
     <string name="emoji_category_travel">Reisen</string>
+    <string name="sticker_sheet_instants_lieu">Orte</string>
+    <string name="sticker_sheet_instants_message">Nachrichten</string>
+    <string name="sticker_sheet_instants_meteo">Wetter</string>
+    <string name="sticker_sheet_instants_moment">Tageszeiten</string>
+    <string name="sticker_sheet_intent_amour_hint">Für ein liebes Wort, einen Kuss, eine Umarmung oder eine Liebeserklärung</string>
+    <string name="sticker_sheet_intent_amour_title">Ich liebe dich</string>
+    <string name="sticker_sheet_intent_bonjour_hint">Zum Grüßen, Danken, Zustimmen, Entschuldigen oder Gute-Nacht-Sagen</string>
+    <string name="sticker_sheet_intent_bonjour_title">Hallo, danke</string>
+    <string name="sticker_sheet_intent_coup_de_mou_hint">Für Traurigkeit, Kummer, Müdigkeit oder Lust auf Schlaf</string>
+    <string name="sticker_sheet_intent_coup_de_mou_title">Durchhänger</string>
+    <string name="sticker_sheet_intent_fete_hint">Für gute Nachrichten, einen Erfolg, einen Geburtstag oder einen Lachanfall</string>
+    <string name="sticker_sheet_intent_fete_title">Lachen und feiern</string>
+    <string name="sticker_sheet_intent_humour_noir_hint">Um über alles zu lachen, sogar das Schlimmste: totlachen, Gespenster und Grabsteine</string>
+    <string name="sticker_sheet_intent_humour_noir_title">Schwarzer Humor</string>
+    <string name="sticker_sheet_intent_quotidien_hint">Um zu sagen, was du gerade machst: Kaffee, Essen, Arbeit, unterwegs, verspätet</string>
+    <string name="sticker_sheet_intent_quotidien_title">Alltag</string>
+    <string name="sticker_sheet_intent_rale_hint">Für Ärger, Wut, Eifersucht oder um auf Abstand zu gehen</string>
+    <string name="sticker_sheet_intent_rale_title">Meckern und schmollen</string>
+    <string name="sticker_sheet_intent_soutien_hint">Zum Aufmuntern, Trösten oder um „Ich bin da“ zu sagen</string>
+    <string name="sticker_sheet_intent_soutien_title">Trösten und stärken</string>
+    <string name="sticker_sheet_intent_surprise_hint">Für Staunen, Angst, Verlegenheit oder ein „Hoppla“</string>
+    <string name="sticker_sheet_intent_surprise_title">Überraschung und Gänsehaut</string>
 </resources>

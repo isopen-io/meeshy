@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.bonjour.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.bonjour.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.amour.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.amour.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.fete.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.fete.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.soutien.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.soutien.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.rale.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.rale.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.coup-de-mou.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.coup-de-mou.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.surprise.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.surprise.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.quotidien.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.quotidien.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.humour-noir.title",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.intent.humour-noir.hint",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.instants.message",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.instants.moment",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.instants.lieu",
+          "status": "adopted"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "sticker.sheet.instants.meteo",
+          "status": "adopted"
+        }
+      ]
+    }
+  }
+}
