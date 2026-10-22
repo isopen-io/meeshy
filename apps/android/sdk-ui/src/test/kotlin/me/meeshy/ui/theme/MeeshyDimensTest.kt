@@ -6,24 +6,28 @@ import org.junit.Test
 class MeeshyDimensTest {
 
     @Test
-    fun `spacing scale follows the 4dp grid`() {
-        MeeshySpacing.scale.forEach { step ->
-            assertThat(step.value % 4f).isEqualTo(0f)
-        }
-    }
-
-    @Test
     fun `spacing scale is strictly ascending with no duplicates`() {
         val values = MeeshySpacing.scale.map { it.value }
         assertThat(values).isInStrictOrder()
     }
 
     @Test
-    fun `radius scale is ascending up to the pill`() {
-        val values = listOf(
-            MeeshyRadius.sm, MeeshyRadius.md, MeeshyRadius.lg, MeeshyRadius.xl, MeeshyRadius.xxl,
-        ).map { it.value }
+    fun `spacing scale carries the half steps iOS uses between the 4dp steps`() {
+        val values = MeeshySpacing.scale.map { it.value }
+        assertThat(values).containsAtLeast(2f, 6f, 10f, 14f)
+        assertThat(values).containsExactly(0f, 2f, 4f, 6f, 8f, 10f, 12f, 14f, 16f, 20f, 24f, 32f).inOrder()
+    }
+
+    @Test
+    fun `radius scale is strictly ascending up to the pill`() {
+        val values = MeeshyRadius.scale.map { it.value }
         assertThat(values).isInStrictOrder()
-        assertThat(MeeshyRadius.pill.value).isGreaterThan(MeeshyRadius.xxl.value)
+        assertThat(MeeshyRadius.pill.value).isGreaterThan(MeeshyRadius.scale.last().value)
+    }
+
+    @Test
+    fun `radius scale lists every iOS step from 4 to 24`() {
+        assertThat(MeeshyRadius.scale.map { it.value })
+            .containsExactly(4f, 8f, 10f, 12f, 14f, 16f, 18f, 20f, 22f, 24f).inOrder()
     }
 }

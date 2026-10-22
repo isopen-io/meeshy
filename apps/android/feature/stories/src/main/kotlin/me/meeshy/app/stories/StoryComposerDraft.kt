@@ -4,6 +4,7 @@ import me.meeshy.sdk.model.StoryBackgroundValue
 import me.meeshy.sdk.model.StoryDrawingStroke
 import me.meeshy.sdk.model.StoryEffects
 import me.meeshy.sdk.model.StoryFilter
+import me.meeshy.sdk.model.scene.CanvasMediaAdoption
 import me.meeshy.sdk.model.scene.StoryFilterMatrix
 import me.meeshy.sdk.model.scene.wireValue
 import me.meeshy.sdk.net.api.CreateStoryRequest
@@ -128,16 +129,24 @@ data class StoryComposerDraft(
      * publishable stickers into `storyEffects.stickerObjects`, the selected photo
      * [filter] (+ its strength) rides on `storyEffects.filter`, and `storyEffects`
      * stays null when there is nothing to carry.
+     *
+     * The post's `mediaIds` are the attached media **plus everything the canvas
+     * designates** ([CanvasMediaAdoption.publicationMediaIds]) — a canvas must only
+     * name rows the post owns, and a designated sound or sticker left out would be
+     * swept server-side a day later as an abandoned upload.
      */
-    fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest = CreateStoryRequest(
-        type = STORY_TYPE,
-        content = trimmedText.takeIf { it.isNotEmpty() },
-        storyEffects = storyEffects(originalLanguage),
-        visibility = visibility.wire,
-        originalLanguage = originalLanguage,
-        mediaIds = mediaIds.takeIf { it.isNotEmpty() },
-        repostOfId = repostOfId?.takeIf { it.isNotBlank() },
-    )
+    fun toCreateStoryRequest(originalLanguage: String): CreateStoryRequest {
+        val effects = storyEffects(originalLanguage)
+        return CreateStoryRequest(
+            type = STORY_TYPE,
+            content = trimmedText.takeIf { it.isNotEmpty() },
+            storyEffects = effects,
+            visibility = visibility.wire,
+            originalLanguage = originalLanguage,
+            mediaIds = CanvasMediaAdoption.publicationMediaIds(mediaIds, effects).takeIf { it.isNotEmpty() },
+            repostOfId = repostOfId?.takeIf { it.isNotBlank() },
+        )
+    }
 
     private fun storyEffects(originalLanguage: String): StoryEffects? {
         val textObjects = publishableTextElements.map { it.toTextObject(originalLanguage) }
