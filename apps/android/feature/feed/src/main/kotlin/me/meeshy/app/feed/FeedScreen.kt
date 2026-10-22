@@ -200,6 +200,7 @@ fun FeedScreen(
             }
         }
     }
+    }
     state.imageViewer?.let { gallery ->
         FeedImageViewerHost(gallery = gallery, onDismiss = viewModel::dismissImageViewer)
     }
