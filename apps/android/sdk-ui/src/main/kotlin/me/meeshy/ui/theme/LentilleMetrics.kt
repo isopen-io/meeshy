@@ -16,6 +16,7 @@ public object LentilleMetrics {
     /** iOS `Row` : rangée 84, padding 8/16, marge 8, rayon 16, origine de zoom 16 % / 50 %. */
     public object Row {
         public val height: Dp = 84.dp
+        public const val maxScale: Float = 2f
         public val paddingVertical: Dp = 8.dp
         public val paddingHorizontal: Dp = 16.dp
         public val marginHorizontal: Dp = 8.dp

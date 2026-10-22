@@ -45,6 +45,7 @@ class LentilleMetricsSourceParityTest {
     private val kotlin: Map<String, Double> = with(LentilleMetrics) {
         mapOf(
             "Row.height" to Row.height.value.d(),
+            "Row.maxScale" to Row.maxScale.d(),
             "Row.paddingVertical" to Row.paddingVertical.value.d(),
             "Row.paddingHorizontal" to Row.paddingHorizontal.value.d(),
             "Row.marginHorizontal" to Row.marginHorizontal.value.d(),
