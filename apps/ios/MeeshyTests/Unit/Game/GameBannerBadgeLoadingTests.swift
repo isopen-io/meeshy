@@ -26,10 +26,10 @@ final class GameBannerBadgeLoadingTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     /// La réponse que le serveur de recette sert à un compte neuf (`GET /users/:id/game`, mesurée le 2026-10-11).
