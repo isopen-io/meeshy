@@ -29,9 +29,7 @@
  * worker importe : cette façade, qui pilote le worker, n'y entre jamais.
  */
 
-import { currentDeviceTier } from '../device/capability-tier';
-
-import { canvasPhotoEnv, developPhoto as developOnEnv, PHOTO_LOOK, photoMaxEdgeFor, PHOTO_MIME, PHOTO_QUALITY, type DecodedPhoto, type DevelopOptions, type PhotoEnv, type PhotoSource } from './photo-develop-core';
+import { canvasPhotoEnv, developPhoto as developOnEnv, PHOTO_LOOK, PHOTO_MAX_EDGE, PHOTO_MIME, PHOTO_QUALITY, type DecodedPhoto, type DevelopOptions, type PhotoEnv, type PhotoSource } from './photo-develop-core';
 import { imageJobClient } from './image-job-client';
 
 export {
@@ -40,7 +38,6 @@ export {
   lookFilter,
   PHOTO_LOOK,
   PHOTO_MAX_EDGE,
-  photoMaxEdgeFor,
   PHOTO_MIME,
   PHOTO_QUALITY,
   type DecodedPhoto,
@@ -77,19 +74,16 @@ export type PhotoFileEnv = PhotoEnv & {
   readonly decode: (file: Blob) => Promise<DecodedPhoto>;
   /** Le fichier développé par un worker (décodage, réduction, look, JPEG) ; `undefined` (pas de worker) ou `null` (worker en panne, muet, ou image illisible) : le fil courant le fait. */
   readonly offMain?: (file: Blob) => Promise<Blob | null> | undefined;
-  /** Le grand côté du fichier développé (`photoMaxEdgeFor`, W10) ; `PHOTO_MAX_EDGE` sans consigne. */
-  readonly maxEdge?: number;
 };
 
 export const browserPhotoFileEnv: PhotoFileEnv = {
   ...browserPhotoEnv,
-  maxEdge: photoMaxEdgeFor(currentDeviceTier()),
   decode: async (file) => {
     const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
     return { image: bitmap, size: { width: bitmap.width, height: bitmap.height }, close: () => bitmap.close() };
   },
   offMain: (file) =>
-    imageJobClient.run({ input: { kind: 'file', blob: file }, maxEdge: photoMaxEdgeFor(currentDeviceTier()), look: PHOTO_LOOK, output: { kind: 'jpeg', quality: PHOTO_QUALITY } }),
+    imageJobClient.run({ input: { kind: 'file', blob: file }, maxEdge: PHOTO_MAX_EDGE, look: PHOTO_LOOK, output: { kind: 'jpeg', quality: PHOTO_QUALITY } }),
 };
 
 const jpegName = (name: string): string => `${name.replace(/\.[^./]+$/, '') || 'photo'}.jpg`;
@@ -98,7 +92,7 @@ const jpegName = (name: string): string => `${name.replace(/\.[^./]+$/, '') || '
 async function developOnMainThread(file: File, env: PhotoFileEnv): Promise<Blob | null> {
   const decoded = await env.decode(file);
   try {
-    return await developOnEnv({ image: decoded.image, size: decoded.size }, { surface: env.surface }, env.maxEdge === undefined ? {} : { maxEdge: env.maxEdge });
+    return await developOnEnv({ image: decoded.image, size: decoded.size }, { surface: env.surface });
   } finally {
     decoded.close();
   }

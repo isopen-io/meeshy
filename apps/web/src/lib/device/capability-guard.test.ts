@@ -42,3 +42,26 @@ describe('un seul lecteur des signaux de l\'appareil', () => {
     for (const path of Object.keys(READS_RAW_SIGNALS)) expect(statSync(join(SRC, path)).isFile()).toBe(true);
   });
 });
+
+/**
+ * **LA PHOTO ENVOYEE NE SUIT PAS LE TIER** (verdict du porteur, #11247 reformule
+ * le 2026-10-22) : un appareil de tier bas peut DEVELOPPER plus petit a l'ecran,
+ * jamais ENVOYER une photo rabotee. Le chemin qui fabrique le fichier envoye
+ * (developpement d'une prise de vue, preparation d'un televersement, le worker
+ * qui les execute) ne lit donc jamais le tier : sa taille est celle de la HD
+ * (`PHOTO_MAX_EDGE`), sur tout appareil.
+ */
+const SENT_PHOTO_PATH: readonly string[] = [
+  'lib/media/photo-develop.ts',
+  'lib/media/photo-develop-core.ts',
+  'lib/media/prepare-image-upload.ts',
+  'lib/media/image-job.ts',
+  'lib/media/image-job-worker.ts',
+];
+
+describe('la photo envoyee ne depend pas du tier de l\'appareil', () => {
+  test('aucune source du chemin d\'envoi d\'une photo ne lit le tier', () => {
+    const readers = SENT_PHOTO_PATH.filter((path) => /device\/capability-tier/.test(readFileSync(join(SRC, path), 'utf8')));
+    expect(readers).toEqual([]);
+  });
+});

@@ -1,5 +1,3 @@
-import type { DeviceTier } from '../device/capability-tier';
-
 /**
  * **LE NOYAU DU DÉVELOPPEMENT D'UNE PHOTO** (#8695, #11310) — la taille, le
  * look, l'encodage : tout ce qu'un WORKER sait faire, sans rien connaître du
@@ -17,9 +15,6 @@ export type PhotoLook = { readonly brightness: number; readonly contrast: number
 export const PHOTO_LOOK: PhotoLook = { brightness: 1.03, contrast: 1.05, saturation: 1.06, sharpness: 0.25 };
 
 export const PHOTO_MAX_EDGE = 2560;
-
-/** Le grand côté d'un look développé sur CET appareil (W10) : un appareil bas en tient moins (jumeau du plafond de décodage iOS, `DecodedBitmapStore.pixelCeiling`). Argumenté, non mesuré. */
-export const photoMaxEdgeFor = (tier: DeviceTier): number => (tier === 'low' ? 1920 : PHOTO_MAX_EDGE);
 
 export const PHOTO_MIME = 'image/jpeg';
 
