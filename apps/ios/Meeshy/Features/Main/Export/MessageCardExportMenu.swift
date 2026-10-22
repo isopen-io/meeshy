@@ -154,10 +154,12 @@ enum MessageCardExportMenu {
     static func request(post: FeedPost?, story: PostCommentCardStory? = nil, comment: FeedComment, thread: [FeedComment], showOriginal: Bool, accentColor: String,
                         viewer: MessageCardSubject.Viewer, handle: String?, audioPrism: [String] = []) -> MessageCardExportRequest? {
         let source = PostCommentCardSource.reading(post: post, target: comment, thread: thread, viewer: viewer, showOriginal: showOriginal, story: story)
-        let served = (thread + [comment]).reduce(into: [String: String]()) { languages, item in
+        let threadServed = (thread + [comment]).reduce(into: [String: String]()) { languages, item in
             guard !(item.id == comment.id && showOriginal) else { return }
             languages.merge(servedAudioLanguages(of: item, prism: audioPrism)) { own, _ in own }
         }
+        let supportServed = post.map { servedAudioLanguages(of: $0.media, originalLanguage: $0.originalLanguage, prism: audioPrism) } ?? [:]
+        let served = threadServed.merging(supportServed) { own, _ in own }
         let composition = MessageCardCommentComposition(source: source, audioLanguages: served)
         guard let mode = composition.modes.first,
               let subject = composition.subject(mode: mode, showsPost: mode.showsPostByDefault, chosen: composition.initialChoice)
@@ -176,11 +178,17 @@ enum MessageCardExportMenu {
 
     /// La piste servie de chaque son d'un commentaire — même loi que celle d'un message.
     static func servedAudioLanguages(of comment: FeedComment, prism: [String]) -> [String: String] {
-        let served = comment.media.compactMap { item -> (String, String)? in
+        servedAudioLanguages(of: comment.media, originalLanguage: comment.originalLanguage, prism: prism)
+    }
+
+    /// La piste servie de chaque son de ces médias — celui d'un commentaire, ou celui du post
+    /// mis en tête (#11783) : même loi que celle d'un message.
+    static func servedAudioLanguages(of media: [FeedMedia], originalLanguage: String?, prism: [String]) -> [String: String] {
+        let served = media.compactMap { item -> (String, String)? in
             let available = item.translatedAudios.filter { !$0.url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.map(\.targetLanguage)
             guard item.type == .audio, !available.isEmpty,
                   let language = AudioTrackLanguageResolver.resolve(
-                      originalLanguage: item.transcription?.language ?? comment.originalLanguage ?? "",
+                      originalLanguage: item.transcription?.language ?? originalLanguage ?? "",
                       preferredLanguages: prism,
                       availableLanguages: available
                   ) else { return nil }
@@ -202,6 +210,10 @@ struct MessageCardCommentComposition {
     let initialChoice: Set<String>
     /// « Post en tête » se bascule à part — pour une réponse ; au premier niveau, les deux modes SONT la bascule.
     let offersPostToggle: Bool
+    /// Les médias du support que la tête peut montrer (#11783) — photo, vidéo, son.
+    let headMedia: [MessageCardSubjectMedia]
+    /// Le support existe mais son audience (non publique) le retient : la feuille le DIT (#11783).
+    let withheldByAudience: Bool
 
     init(source: PostCommentCardSource, audioLanguages: [String: String]) {
         self.source = source
@@ -210,18 +222,52 @@ struct MessageCardCommentComposition {
         choosable = PostCommentCardComposition.choosable(of: source)
         initialChoice = PostCommentCardComposition.initialChoice(of: source)
         offersPostToggle = source.target.parentId != nil && PostCommentCardComposition.offersPost(source)
+        headMedia = PostCommentCardComposition.headMedia(of: source, audioLanguages: audioLanguages)
+        withheldByAudience = PostCommentCardComposition.withheldByAudience(source)
     }
 
     /// Une barre de composition n'a rien à offrir avec un seul mode et sans bascule.
     var offersChoice: Bool { modes.count > 1 || offersPostToggle }
 
-    func subject(mode: PostCommentCardMode, showsPost: Bool, chosen: Set<String>) -> MessageCardSubject? {
+    /// Choisir le média de tête n'a de sens qu'à partir de deux.
+    var offersHeadChoice: Bool { headMedia.count > 1 }
+
+    /// La barre se montre dès qu'elle a quelque chose à offrir ou à dire.
+    var showsBar: Bool { offersChoice || offersHeadChoice || withheldByAudience }
+
+    /// Le média de tête par défaut : le premier visuel, à défaut le premier.
+    var defaultHeadMediaID: String? {
+        (headMedia.first { $0.media.kind.isVisual } ?? headMedia.first)?.media.id
+    }
+
+    func subject(mode: PostCommentCardMode, showsPost: Bool, chosen: Set<String>, headMediaID: String? = nil) -> MessageCardSubject? {
         PostCommentCardComposition.subject(
             of: source, mode: mode, showsPost: showsPost, chosen: chosen,
             title: MessageCardExportText.text("export.compose.thread", "Fil de commentaires"),
             foldedLabel: { String(format: MessageCardExportText.text("export.compose.folded", "+%lld réponses"), $0) },
-            audioLanguages: audioLanguages
+            audioLanguages: audioLanguages,
+            headMediaID: headMediaID
         )
+    }
+
+    static var withheldNotice: String {
+        MessageCardExportText.text("export.compose.withheld",
+                                   "Cette publication n’est pas publique : son contenu ne figure pas sur l’image.")
+    }
+
+    static var headPickerTitle: String {
+        MessageCardExportText.text("export.compose.head", "Média en tête")
+    }
+
+    /// Le libellé lu d'un média de tête : « Photo 1 », « Vidéo 2 », « Son 3 ».
+    static func headLabel(of kind: MessageCardMediaKind, position: Int) -> String {
+        let format: String
+        switch kind {
+        case .image: format = MessageCardExportText.text("export.compose.head.image", "Photo %lld")
+        case .video: format = MessageCardExportText.text("export.compose.head.video", "Vidéo %lld")
+        case .audio: format = MessageCardExportText.text("export.compose.head.audio", "Son %lld")
+        }
+        return String(format: format, position)
     }
 
     static func label(of mode: PostCommentCardMode) -> String {

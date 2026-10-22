@@ -1,4 +1,5 @@
 import {
+  postCommentCardDefaultHeadMediaIndex,
   postCommentCardFallsBackToCommentAlone,
   postCommentCardInitialChoice,
   postCommentCardModes,
@@ -172,14 +173,17 @@ export type PostCommentPick = {
   readonly mode: PostCommentCardMode | null;
   readonly showsPost: boolean | null;
   readonly chosen: ReadonlySet<string> | null;
+  /** Le média du post en tête, par sa place (#11783) — `null` : le premier visuel. */
+  readonly headMediaIndex?: number | null;
 };
 
-export const NO_POST_COMMENT_PICK: PostCommentPick = { mode: null, showsPost: null, chosen: null };
+export const NO_POST_COMMENT_PICK: PostCommentPick = { mode: null, showsPost: null, chosen: null, headMediaIndex: null };
 
 export type PostCommentPickAction =
   | { readonly kind: 'mode'; readonly mode: PostCommentCardMode }
   | { readonly kind: 'togglePost' }
-  | { readonly kind: 'reply'; readonly id: string };
+  | { readonly kind: 'reply'; readonly id: string }
+  | { readonly kind: 'head'; readonly index: number };
 
 /** Le choix effectif — `null` quand rien ne s'image. */
 export function postCommentChoiceOf(source: PostCommentSource, pick: PostCommentPick): Required<PostCommentCardChoice> | null {
@@ -190,6 +194,7 @@ export function postCommentChoiceOf(source: PostCommentSource, pick: PostComment
     mode,
     showsPost: pick.showsPost !== null && pick.mode === mode ? pick.showsPost : postCommentCardShowsPostByDefault(mode),
     chosen: pick.chosen ?? postCommentCardInitialChoice(source),
+    headMediaIndex: pick.headMediaIndex ?? postCommentCardDefaultHeadMediaIndex(source) ?? 0,
   };
 }
 
@@ -201,9 +206,11 @@ export function postCommentPickAfter(source: PostCommentSource, pick: PostCommen
     case 'mode':
       return action.mode === choice.mode
         ? pick
-        : { mode: action.mode, showsPost: null, chosen: action.mode === 'chosenReplies' ? postCommentCardInitialChoice(source) : pick.chosen };
+        : { ...pick, mode: action.mode, showsPost: null, chosen: action.mode === 'chosenReplies' ? postCommentCardInitialChoice(source) : pick.chosen };
     case 'togglePost':
       return { ...pick, mode: choice.mode, showsPost: !choice.showsPost };
+    case 'head':
+      return { ...pick, headMediaIndex: action.index };
     case 'reply': {
       const chosen = choice.chosen.has(action.id) ? [...choice.chosen].filter((id) => id !== action.id) : [...choice.chosen, action.id];
       return { ...pick, mode: choice.mode, chosen: new Set(chosen) };

@@ -4,13 +4,16 @@ import {
   POST_COMMENT_CARD_LIMITS,
   postCommentCardBlocks,
   postCommentCardChoosable,
+  postCommentCardDefaultHeadMediaIndex,
   postCommentCardDefaultMode,
   postCommentCardExcerpt,
   postCommentCardFallsBackToCommentAlone,
+  postCommentCardHeadMedia,
   postCommentCardInitialChoice,
   postCommentCardModes,
   postCommentCardShowsPostByDefault,
   postCommentCardSubject,
+  postCommentCardWithheldByAudience,
   type PostCommentCardBlock,
   type PostCommentCardComment,
   type PostCommentCardMediaKind,
@@ -356,5 +359,72 @@ describe('l’audience du support', () => {
       expect(postCommentCardModes(source({ post: makePost({ visibility }), target: r2 }))).toEqual(['threadToHere', 'chosenReplies']);
       expect(subject(from, 'postAndComment')).toBeNull();
     }
+  });
+});
+
+describe('le média de tête, choisi (#11783)', () => {
+  const photo: Media = { id: 'pic', kind: 'image' };
+  const clip: Media = { id: 'vid', kind: 'video' };
+  const voice: Media = { id: 'aud', kind: 'audio' };
+  const head = (from: PostCommentCardSource<Media>, headMediaIndex?: number) =>
+    postCommentCardSubject(from, { mode: 'postAndComment', showsPost: true, foldedLabel: (count) => `+${count}`, ...(headMediaIndex === undefined ? {} : { headMediaIndex }) });
+
+  it('offre chaque média du post, dans son ordre — photo, vidéo et son', () => {
+    expect(postCommentCardHeadMedia(source({ post: makePost({ media: [photo, clip, voice] }), target: root })).map((item) => item.id)).toEqual(['pic', 'vid', 'aud']);
+  });
+
+  it('par défaut, le premier VISUEL est en tête, même après un son', () => {
+    const from = source({ post: makePost({ media: [voice, clip, photo] }), target: root });
+    expect(postCommentCardDefaultHeadMediaIndex(from)).toBe(1);
+    expect(head(from)?.media.filter((item) => item.hero).map((item) => item.media.id)).toEqual(['vid']);
+  });
+
+  it('la vidéo choisie devient le héros, seule du support', () => {
+    const card = head(source({ post: makePost({ media: [photo, clip, voice] }), target: root }), 1);
+    expect(card?.media.map((item) => [item.media.id, item.hero])).toEqual([['vid', true]]);
+  });
+
+  it('le son choisi est en tête comme un son, jamais un héros ; sans texte, la ligne du support dit 🎤', () => {
+    const card = head(source({ post: makePost({ content: ' ', media: [photo, voice] }), target: root }), 1);
+    expect(card?.media.map((item) => [item.media.id, item.hero])).toEqual([['aud', false]]);
+    expect(card?.quoted?.text).toBe('🎤');
+  });
+
+  it('un réel au seul son se met en tête avec son son', () => {
+    const from = source({ post: makePost({ type: 'REEL', media: [voice] }), target: root });
+    expect(postCommentCardDefaultHeadMediaIndex(from)).toBe(0);
+    expect(head(from)?.media.map((item) => item.media.id)).toEqual(['aud']);
+  });
+
+  it('un choix hors des médias retombe sur le défaut', () => {
+    expect(head(source({ post: makePost({ media: [photo, clip] }), target: root }), 9)?.media.find((item) => item.hero)?.media.id).toBe('pic');
+  });
+
+  it('une story n’offre que le visuel qui la représente', () => {
+    expect(postCommentCardHeadMedia(source({ post: makePost({ type: 'STORY', media: [photo, clip, voice] }), target: root })).map((item) => item.id)).toEqual(['pic']);
+  });
+
+  it('rien quand l’audience retient le support', () => {
+    expect(postCommentCardHeadMedia(source({ post: makePost({ media: [photo, clip], visibility: 'FRIENDS' }), target: root }))).toEqual([]);
+  });
+
+  it('un post ou un réel de SCÈNE ne disparaît pas : il se met en tête par ses médias', () => {
+    const scene = { ...makePost({ type: 'REEL', media: [photo, clip] }), hasStoryCanvas: true };
+    expect(postCommentCardModes(source({ post: scene, target: root }))).toEqual(['postAndComment', 'commentAlone']);
+    expect(postCommentCardModes(source({ post: { ...makePost({ type: 'POST' }), hasStoryCanvas: true }, target: root }))).toEqual(['commentAlone']);
+  });
+});
+
+describe('l’audience qui retient le support se DIT (#11783)', () => {
+  it('un support restreint est retenu par son audience', () => {
+    for (const visibility of ['FRIENDS', 'COMMUNITY', 'PRIVATE', 'EXCEPT', 'ONLY', '', null]) {
+      expect(postCommentCardWithheldByAudience(source({ post: makePost({ visibility, media: [{ id: 'pic', kind: 'image' }] }), target: root }))).toBe(true);
+    }
+  });
+
+  it('jamais pour un support public, ni sans support, ni pour une autre raison', () => {
+    expect(postCommentCardWithheldByAudience(source({ post: makePost({ media: [{ id: 'pic', kind: 'image' }] }), target: root }))).toBe(false);
+    expect(postCommentCardWithheldByAudience(source({ post: null, target: root }))).toBe(false);
+    expect(postCommentCardWithheldByAudience(source({ post: makePost({ type: 'STORY', visibility: 'FRIENDS' }), target: root }))).toBe(false);
   });
 });
