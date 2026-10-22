@@ -449,7 +449,7 @@ struct ThemedFeedOverlay: View {
             onDelete: isOwnPost ? { postId in
                 Task { await viewModel.deletePost(postId) }
             } : nil,
-            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) },
+            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
             onReport: !isOwnPost ? { postId in
                 Task { await viewModel.reportPost(postId) }
             } : nil,
@@ -509,7 +509,7 @@ struct ThemedFeedOverlay: View {
             onDelete: post.authorId == AuthManager.shared.currentUser?.id ? { postId in
                 Task { await viewModel.deletePost(postId) }
             } : nil,
-            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.deletePost($0, reason: $1) },
+            onRemove: ContentRemovalOffer.publication(for: post) { [viewModel] in await viewModel.withdrawPost($0, $1) },
             onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
                 Task { await viewModel.reportPost(postId) }
             } : nil,

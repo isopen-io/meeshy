@@ -565,7 +565,7 @@ struct PostDetailView: View {
             } else {
                 if let post = displayPost {
                     PublicationDestructiveMenuItems(postId: postId, onDelete: nil, onRemove: ContentRemovalOffer.publication(for: post) { [viewModel, router] in
-                        if await viewModel.deletePost($0, reason: $1) { router.pop() }
+                        if await viewModel.withdrawPost($0, $1) { router.pop() }
                     })
                 }
                 Divider()

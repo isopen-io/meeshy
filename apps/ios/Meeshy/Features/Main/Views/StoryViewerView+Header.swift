@@ -37,6 +37,8 @@ nonisolated enum StoryOptionsMenuEntry: Hashable {
     case compose
     case share
     case report
+    /// #11535 — la modération rend PRIVÉE la story d'un autre, avec un motif.
+    case makePrivate
     /// #11151 — la modération retire la story d'un autre, avec un motif.
     case remove
     case delete
@@ -85,7 +87,7 @@ nonisolated struct StoryOptionsMenuPlan: Equatable {
         let composing: [StoryOptionsMenuEntry] = canCompose ? [.compose] : []
         let exporting: [StoryShareMenuEntry] = isPublicStory ? [.exportVideo, .shareWithFriend] : [.exportVideo]
         let sharing: [StoryShareMenuEntry] = exporting + [.repostAsPost, .repostAsReel]
-        let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .remove] : [.report])
+        let acting: [StoryOptionsMenuEntry] = isOwnStory ? [.delete] : (canRemove ? [.report, .makePrivate, .remove] : [.report])
         return StoryOptionsMenuPlan(
             sections: [reading, composing, [.share], acting, [.close]].filter { !$0.isEmpty },
             shareEntries: sharing
@@ -168,6 +170,8 @@ struct StoryHeaderView: View {
     let makeStoryExternalShareURL: (String) -> URL?
     /// `nil` : l'auteur supprime ; un motif : la modération retire (#11151).
     let deleteCurrentStory: (_ reason: String?) -> Void
+    /// #11535 — la modération rend la story d'un autre privée, avec un motif.
+    let makeCurrentStoryPrivate: (_ reason: String) -> Void
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: @MainActor (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
@@ -500,7 +504,7 @@ struct StoryHeaderView: View {
                 Label(String(localized: "story.viewer.action.share", defaultValue: "Partager", bundle: .main),
                       systemImage: "square.and.arrow.up")
             }
-        case .report, .remove, .delete:
+        case .report, .makePrivate, .remove, .delete:
             actingMenuItem(entry)
         case .close:
             Button {
@@ -517,6 +521,13 @@ struct StoryHeaderView: View {
     @ViewBuilder
     private func actingMenuItem(_ entry: StoryOptionsMenuEntry) -> some View {
         switch entry {
+        case .makePrivate:
+            Button {
+                HapticFeedback.medium()
+                ContentRemovalPresenter.present(.story, gesture: .makePrivate) { makeCurrentStoryPrivate($0) }
+            } label: {
+                Label(ContentModerationGesture.makePrivate.actionLabel, systemImage: ContentModerationGesture.privateSymbol)
+            }
         case .remove:
             Button(role: .destructive) {
                 HapticFeedback.medium()

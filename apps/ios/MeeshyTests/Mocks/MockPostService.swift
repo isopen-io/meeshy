@@ -24,6 +24,11 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
     var getTrendingHashtagsResult: Result<[APIHashtag], Error> = .success([])
     var createResult: Result<APIPost, Error> = .success(stubPost)
     var deleteResult: Result<Void, Error> = .success(())
+    var makePrivateResult: Result<Void, Error> = .success(())
+    var makePrivateCallCount = 0
+    var lastMakePrivatePostId: String?
+    var lastMakePrivateAuthorId: String?
+    var lastMakePrivateReason: String?
     var likeResult: Result<Void, Error> = .success(())
     var unlikeResult: Result<Void, Error> = .success(())
     var bookmarkResult: Result<Void, Error> = .success(())
@@ -380,6 +385,14 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         lastDeletePostId = postId
         lastDeleteReason = reason
         try deleteResult.get()
+    }
+
+    func makePrivate(postId: String, authorId: String, reason: String?) async throws {
+        makePrivateCallCount += 1
+        lastMakePrivatePostId = postId
+        lastMakePrivateAuthorId = authorId
+        lastMakePrivateReason = reason
+        try makePrivateResult.get()
     }
 
     func like(postId: String) async throws {
@@ -755,6 +768,12 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         deleteCallCount = 0
         lastDeletePostId = nil
         lastDeleteReason = nil
+
+        makePrivateResult = .success(())
+        makePrivateCallCount = 0
+        lastMakePrivatePostId = nil
+        lastMakePrivateAuthorId = nil
+        lastMakePrivateReason = nil
 
         likeResult = .success(())
         likeCallCount = 0
