@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   auditHookDeclaration,
+  auditWebViewFloor,
   auditSyncedPlugins,
   capacitorPluginsImportedBy,
   judgeStartPathReplay,
@@ -149,5 +150,32 @@ describe('auditSyncedPlugins — un plugin importé doit être synchronisé par 
       });
     const packageJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
     expect(auditSyncedPlugins(packageJson, capacitorPluginsImportedBy(walk(join(root, 'src'))))).toEqual([]);
+  });
+});
+
+describe('auditWebViewFloor — la coque exige sa WebView minimale (#11325)', () => {
+  const floorSource = "export const MIN_ANDROID_WEBVIEW_MAJOR = 111;\nexport const WEBVIEW_UPDATE_PAGE = 'webview-update.html';";
+  const healthy = {
+    capConfig: { android: { minWebViewVersion: 111 }, server: { errorPath: 'webview-update.html' } },
+    floorSource,
+    publicFiles: ['config.js', 'webview-update.html'],
+    mainSource: 'if (__SHELL__) redirectBelowWebViewFloor({ userAgent, replace });',
+  };
+
+  test('config, page et contrôle au démarrage présents -> aucune violation', () => {
+    expect(auditWebViewFloor(healthy)).toEqual([]);
+  });
+
+  test('chaque pièce manquante est nommée', () => {
+    expect(auditWebViewFloor({ ...healthy, capConfig: { server: { errorPath: 'webview-update.html' } } })).toHaveLength(1);
+    expect(auditWebViewFloor({ ...healthy, capConfig: { android: { minWebViewVersion: 100 }, server: { errorPath: 'webview-update.html' } } })[0]).toContain('minWebViewVersion');
+    expect(auditWebViewFloor({ ...healthy, capConfig: { android: { minWebViewVersion: 111 } } })[0]).toContain('errorPath');
+    expect(auditWebViewFloor({ ...healthy, publicFiles: ['config.js'] })[0]).toContain('public/webview-update.html');
+    expect(auditWebViewFloor({ ...healthy, mainSource: '' })[0]).toContain('main.tsx');
+  });
+
+  test('un plancher sous le minimum de Capacitor (55) est refusé', () => {
+    const low = { ...healthy, floorSource: floorSource.replace('111', '50'), capConfig: { android: { minWebViewVersion: 50 }, server: { errorPath: 'webview-update.html' } } };
+    expect(auditWebViewFloor(low)[0]).toContain('≥ 55');
   });
 });

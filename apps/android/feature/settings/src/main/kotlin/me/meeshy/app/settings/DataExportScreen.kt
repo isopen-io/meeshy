@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -295,14 +296,14 @@ private fun ExportReadyCard(messagesCount: Int?, contactsCount: Int?, onShare: (
         }
         messagesCount?.let {
             Text(
-                text = stringResource(R.string.data_export_ready_messages, it),
+                text = pluralStringResource(R.plurals.data_export_ready_messages, it, it),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
             )
         }
         contactsCount?.let {
             Text(
-                text = stringResource(R.string.data_export_ready_contacts, it),
+                text = pluralStringResource(R.plurals.data_export_ready_contacts, it, it),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
             )

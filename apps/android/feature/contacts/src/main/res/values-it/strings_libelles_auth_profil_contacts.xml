@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_requests_empty">Nessuna richiesta in sospeso</string>
+    <string name="contacts_list_error">Impossibile caricare i contatti</string>
+    <string name="contacts_discover_prompt">Cerca persone con cui connetterti</string>
+    <string name="contacts_discover_suggestions_title">Suggerimenti</string>
+    <string name="contacts_discover_suggestions_empty">Nessun suggerimento al momento</string>
+    <string name="contacts_discover_error">Impossibile cercare gli utenti</string>
+    <string name="contacts_discover_connect">Connetti</string>
+    <string name="contacts_discover_contact">Contatto</string>
+    <string name="contacts_blocked_error">Impossibile caricare gli utenti bloccati</string>
+</resources>

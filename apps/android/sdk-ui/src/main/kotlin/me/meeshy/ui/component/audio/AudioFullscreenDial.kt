@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import me.meeshy.sdk.model.fullscreen.AudioDialGeometry
 import me.meeshy.ui.R
-import me.meeshy.ui.component.game.LocalReduceMotion
+import me.meeshy.ui.accessibility.LocalReduceMotion
 import me.meeshy.ui.haptics.rememberMeeshyHaptics
 import kotlin.math.PI
 import kotlin.math.cos

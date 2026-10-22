@@ -1,0 +1,41 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="contacts_back">Zurück</string>
+    <string name="contacts_blocked_empty">Keine blockierten Nutzer</string>
+    <string name="contacts_blocked_unblock">Entsperren</string>
+    <string name="contacts_blocked_unblock_a11y">%s entsperren</string>
+    <string name="contacts_blocked_unblock_cancel">Abbrechen</string>
+    <string name="contacts_blocked_unblock_confirm">Entsperren</string>
+    <string name="contacts_blocked_unblock_message">%s entsperren?</string>
+    <string name="contacts_blocked_unblock_title">Entsperren?</string>
+    <string name="contacts_discover_blocked">Blockiert</string>
+    <string name="contacts_discover_email_error">Einladung konnte nicht gesendet werden</string>
+    <string name="contacts_discover_email_placeholder">E-Mail-Adresse</string>
+    <string name="contacts_discover_email_send">Senden</string>
+    <string name="contacts_discover_email_send_a11y">Einladung per E-Mail senden</string>
+    <string name="contacts_discover_email_title">Per E-Mail einladen</string>
+    <string name="contacts_discover_no_results">Kein Benutzer gefunden</string>
+    <string name="contacts_discover_pending">Ausstehend</string>
+    <string name="contacts_discover_search_hint">Meeshy-Nutzer suchen</string>
+    <string name="contacts_discover_sms_placeholder">Telefonnummer</string>
+    <string name="contacts_discover_sms_send">Senden</string>
+    <string name="contacts_discover_sms_send_a11y">Einladung per SMS senden</string>
+    <string name="contacts_discover_sms_title">Per SMS einladen</string>
+    <string name="contacts_filter_all">Alle</string>
+    <string name="contacts_filter_offline">Offline</string>
+    <string name="contacts_filter_online">Online</string>
+    <string name="contacts_list_empty">Keine Kontakte</string>
+    <string name="contacts_list_filtered_empty">Keine Ergebnisse</string>
+    <string name="contacts_list_retry">Erneut versuchen</string>
+    <string name="contacts_request_accept">Annehmen</string>
+    <string name="contacts_request_cancel">Abbrechen</string>
+    <string name="contacts_request_decline">Ablehnen</string>
+    <string name="contacts_requests_received">Erhalten</string>
+    <string name="contacts_requests_sent">Gesendet</string>
+    <string name="contacts_search_hint">Kontakt suchen</string>
+    <string name="contacts_tab_blocked">Blockiert</string>
+    <string name="contacts_tab_contacts">Kontakte</string>
+    <string name="contacts_tab_discover">Entdecken</string>
+    <string name="contacts_tab_requests">Anfragen</string>
+    <string name="contacts_title">Kontakte</string>
+</resources>

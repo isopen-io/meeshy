@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="contacts_requests_empty">لا توجد طلبات معلّقة</string>
+    <string name="contacts_list_error">تعذّر تحميل جهات الاتصال</string>
+    <string name="contacts_discover_prompt">ابحث عن أشخاص للتواصل معهم</string>
+    <string name="contacts_discover_suggestions_title">اقتراحات</string>
+    <string name="contacts_discover_suggestions_empty">لا توجد اقتراحات حاليًا</string>
+    <string name="contacts_discover_error">تعذّر البحث عن المستخدمين</string>
+    <string name="contacts_discover_connect">اتصال</string>
+    <string name="contacts_discover_contact">جهة اتصال</string>
+    <string name="contacts_blocked_error">تعذّر تحميل المستخدمين المحظورين</string>
+</resources>

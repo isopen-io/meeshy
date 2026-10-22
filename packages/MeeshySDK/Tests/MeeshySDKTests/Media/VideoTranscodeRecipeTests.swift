@@ -127,6 +127,17 @@ final class VideoTranscodeRecipeTests: XCTestCase {
         XCTAssertEqual(recipe.readerPixelFormat, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
     }
 
+    // MARK: - Le plafond d'une copie gardée (galerie)
+
+    func test_archivalCeiling_growsWithTheDefinitionAndStaysAQualityGuard() {
+        let uhd = VideoTranscodeRecipe.archivalCeiling(width: 2160, height: 3840, frameRate: 30)
+        let hd = VideoTranscodeRecipe.archivalCeiling(width: 1080, height: 1920, frameRate: 30)
+        XCTAssertEqual(uhd, hd * 4, "quatre fois les pixels, quatre fois le plafond")
+        XCTAssertGreaterThanOrEqual(uhd, 30_000_000, "une 4K gardée n'est jamais affamée par son plafond")
+        XCTAssertEqual(VideoTranscodeRecipe.archivalCeiling(width: 1080, height: 1920, frameRate: 0), hd,
+                       "une cadence muette compte 30 i/s")
+    }
+
     // MARK: - Fabriques
 
     private static let hlg = [

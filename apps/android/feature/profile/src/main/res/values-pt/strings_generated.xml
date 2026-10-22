@@ -1,0 +1,42 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="profile_activity_title">Atividade</string>
+    <string name="profile_back">Voltar</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Cancelar</string>
+    <string name="profile_detail_country">País</string>
+    <string name="profile_detail_system_language">Idioma principal</string>
+    <string name="profile_display_name_label">Nome de exibição</string>
+    <string name="profile_e2ee">Criptografada de ponta a ponta</string>
+    <string name="profile_edit">Editar</string>
+    <string name="profile_first_name_label">Nome</string>
+    <string name="profile_image_error_update">Não foi possível atualizar a foto do perfil</string>
+    <string name="profile_language_unset">Não definido</string>
+    <string name="profile_last_name_label">Sobrenome</string>
+    <string name="profile_presence_away">Ausente</string>
+    <string name="profile_presence_online">Online</string>
+    <string name="profile_save">Salvar</string>
+    <string name="profile_share_copy">Copiar o link</string>
+    <string name="profile_share_send">Compartilhar</string>
+    <string name="profile_stat_conversations">Conversas</string>
+    <string name="profile_stat_friend_requests">Solicitações de amizade</string>
+    <string name="profile_stat_languages">Idiomas</string>
+    <string name="profile_stat_messages">Mensagens</string>
+    <string name="profile_stat_translations">Traduções</string>
+    <string name="profile_stats_title">Estatísticas</string>
+    <string name="profile_system_language_label">Idioma principal</string>
+    <string name="profile_title">Perfil</string>
+    <string name="profile_unknown">Desconhecido</string>
+    <string name="profile_view_posts">Publicações</string>
+    <string name="report_close">Fechar</string>
+    <string name="report_details_header">Detalhes (opcional)</string>
+    <string name="report_error">Erro ao enviar a denúncia</string>
+    <string name="report_reason_harassment">Assédio</string>
+    <string name="report_reason_header">Motivo da denúncia</string>
+    <string name="report_reason_impersonation">Falsidade ideológica</string>
+    <string name="report_reason_inappropriate">Conteúdo inadequado</string>
+    <string name="report_reason_other">Outro</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_submit">Enviar denúncia</string>
+    <string name="report_title_generic">Denunciar</string>
+</resources>

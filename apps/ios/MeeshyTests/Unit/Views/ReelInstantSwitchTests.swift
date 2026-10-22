@@ -469,6 +469,14 @@ final class ReelResumeTests: XCTestCase {
                       "la reprise du voisin se résout comme celle du moteur, par le résolveur partagé")
     }
 
+    /// La fin du fichier d'un voisin se SIGNALE par le registre (#9882) : plus
+    /// aucune relecture de l'état toutes les 120 ms.
+    func test_prewarm_awaitsTheFileByTheRegistryEnd_neverPolls() throws {
+        let source = AppSourceGuard.stripComments(try AppSourceGuard.unit("Meeshy/Features/Main/Views/ReelPrewarm.swift"))
+        XCTAssertTrue(source.contains("center.awaitEnd(of: key)"))
+        XCTAssertFalse(source.contains("Task.sleep"), "aucune interrogation à cadence fixe")
+    }
+
     /// Le tier média (#11281) entre dans le contexte vivant : la fenêtre des
     /// réels ne se règle pas sur la seule mémoire.
     func test_liveContext_carriesTheDeviceMediaTier() throws {

@@ -1,0 +1,42 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="profile_activity_title">Attività</string>
+    <string name="profile_back">Indietro</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Annulla</string>
+    <string name="profile_detail_country">Paese</string>
+    <string name="profile_detail_system_language">Lingua principale</string>
+    <string name="profile_display_name_label">Nome visualizzato</string>
+    <string name="profile_e2ee">Crittografata end-to-end</string>
+    <string name="profile_edit">Modifica</string>
+    <string name="profile_first_name_label">Nome</string>
+    <string name="profile_image_error_update">Impossibile aggiornare la foto del profilo</string>
+    <string name="profile_language_unset">Non impostato</string>
+    <string name="profile_last_name_label">Cognome</string>
+    <string name="profile_presence_away">Assente</string>
+    <string name="profile_presence_online">In linea</string>
+    <string name="profile_save">Salva</string>
+    <string name="profile_share_copy">Copia link</string>
+    <string name="profile_share_send">Condividi</string>
+    <string name="profile_stat_conversations">Conversazioni</string>
+    <string name="profile_stat_friend_requests">Richieste di amicizia</string>
+    <string name="profile_stat_languages">Lingue</string>
+    <string name="profile_stat_messages">Messaggi</string>
+    <string name="profile_stat_translations">Traduzioni</string>
+    <string name="profile_stats_title">Statistiche</string>
+    <string name="profile_system_language_label">Lingua principale</string>
+    <string name="profile_title">Profilo</string>
+    <string name="profile_unknown">Sconosciuto</string>
+    <string name="profile_view_posts">Post</string>
+    <string name="report_close">Chiudi</string>
+    <string name="report_details_header">Dettagli (facoltativo)</string>
+    <string name="report_error">Errore nell\'invio della segnalazione</string>
+    <string name="report_reason_harassment">Molestie</string>
+    <string name="report_reason_header">Motivo della segnalazione</string>
+    <string name="report_reason_impersonation">Furto d\'identità</string>
+    <string name="report_reason_inappropriate">Contenuto inappropriato</string>
+    <string name="report_reason_other">Altro</string>
+    <string name="report_reason_spam">Spam</string>
+    <string name="report_submit">Invia la segnalazione</string>
+    <string name="report_title_generic">Segnala</string>
+</resources>
