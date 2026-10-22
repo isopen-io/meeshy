@@ -29,7 +29,9 @@ internal class GuardedMigration(private val inner: Migration) : Migration(inner.
         try {
             inner.migrate(db)
         } catch (failure: Exception) {
-            db.execSQL("ROLLBACK TO SAVEPOINT meeshy_migration")
+            // Android's SQLiteSession treats any statement starting with ROLLBACK as ending the tracked
+            // transaction; the leading comment keeps this a plain SQLite savepoint rollback.
+            db.execSQL("/* savepoint */ ROLLBACK TO SAVEPOINT meeshy_migration")
             CacheReset.run(db)
         } finally {
             db.execSQL("RELEASE SAVEPOINT meeshy_migration")
