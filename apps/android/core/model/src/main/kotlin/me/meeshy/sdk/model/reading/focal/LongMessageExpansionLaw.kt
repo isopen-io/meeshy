@@ -14,7 +14,7 @@ object LongMessageExpansionLaw {
     const val HOLD_WINDOW_SECONDS: Double = 0.3 + 0.35
 
     /** Alpha des autres rangées tant qu'un message déplié est visible. */
-    const val NEIGHBOR_ALPHA: Float = FocalMetrics.Glass.NEIGHBOR_OPACITY
+    val NEIGHBOR_ALPHA: Float = FocalMetrics.Glass.NEIGHBOR_OPACITY.toFloat()
 
     /** Un seul message déplié à la fois : retoucher le déplié le replie, un autre le remplace. */
     fun nextExpanded(current: String?, toggled: String): String? =
@@ -43,7 +43,7 @@ object LongMessageExpansionLaw {
 
     fun glassFrame(bubble: Rect?, row: Rect): Rect {
         if (bubble == null || bubble.isEmpty) return row.inset(FOCUS_CARD_HORIZONTAL_INSET, 0f)
-        return bubble.inset(-FOCUS_CARD_HORIZONTAL_INSET, -FocalMetrics.Row.PADDING_VERTICAL)
+        return bubble.inset(-FOCUS_CARD_HORIZONTAL_INSET, -FocalMetrics.Row.PADDING_VERTICAL.toFloat())
     }
 
     data class HeightTiming(val durationSeconds: Double, val controlPoints: List<Double>)

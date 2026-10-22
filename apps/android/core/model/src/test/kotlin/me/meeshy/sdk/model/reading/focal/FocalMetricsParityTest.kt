@@ -49,7 +49,7 @@ class FocalMetricsParityTest {
 
     @Test
     fun `le relevé du bandeau de focus lève le contenu hors du premier du groupe`() {
-        assertThat(FocalMetrics.FocusStrip.contentLift(isFirstInGroup = true)).isEqualTo(0f)
-        assertThat(FocalMetrics.FocusStrip.contentLift(isFirstInGroup = false)).isEqualTo(37f)
+        assertThat(FocalMetrics.FocusStrip.contentLift(isFirstInGroup = true)).isEqualTo(0.0)
+        assertThat(FocalMetrics.FocusStrip.contentLift(isFirstInGroup = false)).isEqualTo(37.0)
     }
 }

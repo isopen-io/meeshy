@@ -28,11 +28,12 @@ object FocalMediaGridLayout {
     /** Largeur de la grille dans la colonne de contenu réelle (jamais au-delà de 300). */
     fun gridWidth(rowWidth: Float?): Float {
         if (rowWidth == null || rowWidth <= 0f) return GRID_MAX_WIDTH
-        val column = rowWidth -
-            2 * FocalMetrics.Row.PADDING_HORIZONTAL -
-            FocalMetrics.Row.CONTENT_INDENT -
-            FocalMetrics.MetaColumn.RESERVED_WIDTH -
-            FocalMetrics.MetaColumn.SPACING
+        val column = rowWidth - (
+            2 * FocalMetrics.Row.PADDING_HORIZONTAL +
+                FocalMetrics.Row.CONTENT_INDENT +
+                FocalMetrics.MetaColumn.RESERVED_WIDTH +
+                FocalMetrics.MetaColumn.SPACING
+            ).toFloat()
         return min(GRID_MAX_WIDTH, floor(max(0f, column)))
     }
 
