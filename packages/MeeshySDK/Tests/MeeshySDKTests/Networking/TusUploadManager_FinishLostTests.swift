@@ -12,14 +12,16 @@ private final class TusFinishLostStubURLProtocol: URLProtocol {
 
     nonisolated(unsafe) static var exchanges: [Exchange] = []
     nonisolated(unsafe) static var methods: [String] = []
+    nonisolated(unsafe) static var creationMetadata: [String] = []
 
-    static func reset() { exchanges = []; methods = [] }
+    static func reset() { exchanges = []; methods = []; creationMetadata = [] }
 
     override nonisolated class func canInit(with request: URLRequest) -> Bool { true }
     override nonisolated class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override nonisolated func startLoading() {
         Self.methods.append(request.httpMethod ?? "")
+        if let metadata = request.value(forHTTPHeaderField: "Upload-Metadata") { Self.creationMetadata.append(metadata) }
         let next = Self.exchanges.isEmpty
             ? Exchange(status: 500, headers: [:], body: Data())
             : Self.exchanges.removeFirst()
@@ -202,5 +204,34 @@ final class TusUploadManager_FinishLostTests: XCTestCase {
 
         XCTAssertEqual(result.id, "att-new")
         XCTAssertEqual(TusFinishLostStubURLProtocol.methods, ["POST", "PATCH"])
+    }
+
+    // MARK: - Le nom d'origine (#11531)
+
+    private func uploadedFileName() throws -> String? {
+        let metadata = try XCTUnwrap(TusFinishLostStubURLProtocol.creationMetadata.first)
+        let pair = metadata.split(separator: ",").first { $0.hasPrefix("filename ") }
+        return pair.flatMap { Data(base64Encoded: String($0.dropFirst("filename ".count))) }
+            .flatMap { String(data: $0, encoding: .utf8) }
+    }
+
+    /// Le fichier en file s'appelle `0.jpeg` (chemin disque) ; le serveur doit recevoir le nom que l'auteur a partagé.
+    func test_uploadFile_withAFileName_sendsItAsTheTusFilename() async throws {
+        let manager = try makeManager()
+        TusFinishLostStubURLProtocol.exchanges = freshSessionExchanges()
+
+        _ = try await manager.uploadFile(fileURL: file, mimeType: "image/jpeg", credential: .bearer("t"),
+                                         fileName: "IMG_0111.jpeg")
+
+        XCTAssertEqual(try uploadedFileName(), "IMG_0111.jpeg")
+    }
+
+    func test_uploadFile_withoutAFileName_keepsTheFileURLName() async throws {
+        let manager = try makeManager()
+        TusFinishLostStubURLProtocol.exchanges = freshSessionExchanges()
+
+        _ = try await manager.uploadFile(fileURL: file, mimeType: "application/octet-stream", credential: .bearer("t"))
+
+        XCTAssertEqual(try uploadedFileName(), file.lastPathComponent)
     }
 }

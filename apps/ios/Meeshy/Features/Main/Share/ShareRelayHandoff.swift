@@ -29,6 +29,16 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
         let relPath: String
         let mime: String
         let bytes: Int
+        /// Le nom d'origine, assaini par l'extension (#11531). Absent des
+        /// fiches écrites avant lui.
+        let originalName: String?
+
+        init(relPath: String, mime: String, bytes: Int, originalName: String? = nil) {
+            self.relPath = relPath
+            self.mime = mime
+            self.bytes = bytes
+            self.originalName = originalName
+        }
     }
 
     let version: Int
@@ -57,7 +67,11 @@ nonisolated struct ShareRelayHandoff: Codable, Equatable, Sendable {
 
     func incoming(mediaRoot: URL?) -> ShareIncoming {
         ShareIncoming(
-            media: media.map { ShareIncomingMedia(id: $0.relPath, mimeType: $0.mime, bytes: $0.bytes, fileURL: mediaRoot?.appendingPathComponent($0.relPath)) },
+            media: media.map {
+                ShareIncomingMedia(
+                    id: $0.relPath, mimeType: $0.mime, bytes: $0.bytes,
+                    fileURL: mediaRoot?.appendingPathComponent($0.relPath), originalName: $0.originalName)
+            },
             text: text,
             preselectedConversationIds: conversationIds
         )

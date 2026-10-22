@@ -63,6 +63,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// so on-disk rows written before this field existed keep decoding without
     /// migration (S7b — durable offline media, parity with `localAudioPaths`).
     public let localMediaPaths: [String]?
+    /// Le nom d'ORIGINE de chaque fichier de `localMediaPaths`, aligné par
+    /// index (#11531) : le chemin disque reste `<index>.<ext>` — le nom choisi
+    /// par une autre app n'entre jamais dans un chemin —, le nom voyage ici
+    /// jusqu'au `filename` TUS. `nil` pour un fichier sans nom connu ET pour
+    /// les lignes écrites avant ce champ (`decodeIfPresent`).
+    public let localMediaOriginalNames: [String?]?
     /// Lieu partagé attaché au message (Lot 2 — chaîne d'écriture du lieu).
     /// Rejoué tel quel par le dispatcher sous la clé `location` du corps REST.
     /// `nil` pour un message sans lieu ET pour les lignes écrites avant ce
@@ -138,6 +144,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// depuis ce que la ligne a persisté, TELLE QUELLE : la ligne a déjà
     /// traversé le composeur et la contagion, un flou et une vue unique qui y
     /// cohabitent viennent d'une citation floue (#8567).
+    /// Le nom d'origine du fichier `index` de `localMediaPaths`, s'il est connu.
+    public func originalMediaName(at index: Int) -> String? {
+        guard let names = localMediaOriginalNames, names.indices.contains(index) else { return nil }
+        return names[index]
+    }
+
     public var replayProtection: MessageProtectionIntent {
         let flags = MessageEffectFlags(rawValue: protectionFlags ?? 0)
         return MessageProtectionIntent(
@@ -164,6 +176,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPath: String? = nil,
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
+        localMediaOriginalNames: [String?]? = nil,
         location: SharedPlace? = nil,
         sticker: MessageSticker? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
@@ -188,6 +201,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = localAudioPath
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
+        self.localMediaOriginalNames = localMediaOriginalNames
         self.location = location
         self.sticker = sticker
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
@@ -214,6 +228,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         localAudioPath: String?,
         localAudioPaths: [String]? = nil,
         localMediaPaths: [String]? = nil,
+        localMediaOriginalNames: [String?]? = nil,
         location: SharedPlace? = nil,
         sticker: MessageSticker? = nil,
         copyAttachmentsFromClientMessageId: String? = nil,
@@ -240,6 +255,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = localAudioPath
         self.localAudioPaths = localAudioPaths
         self.localMediaPaths = localMediaPaths
+        self.localMediaOriginalNames = localMediaOriginalNames
         self.location = location
         self.sticker = sticker
         self.copyAttachmentsFromClientMessageId = copyAttachmentsFromClientMessageId
@@ -264,6 +280,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         case localAudioPath
         case localAudioPaths
         case localMediaPaths
+        case localMediaOriginalNames
         case location
         case sticker
         case copyAttachmentsFromClientMessageId
@@ -291,6 +308,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.localAudioPath = try c.decodeIfPresent(String.self, forKey: .localAudioPath) ?? nil
         self.localAudioPaths = try c.decodeIfPresent([String].self, forKey: .localAudioPaths) ?? nil
         self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
+        self.localMediaOriginalNames = try c.decodeIfPresent([String?].self, forKey: .localMediaOriginalNames)
         // Clé absente des lignes écrites avant ce champ → nil, jamais d'échec.
         self.location = try c.decodeIfPresent(SharedPlace.self, forKey: .location)
         // Même tolérance : un sticker sans rien à porter (clé présente mais vide)
@@ -321,6 +339,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(localAudioPath, forKey: .localAudioPath)
         try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
         try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
+        try c.encodeIfPresent(localMediaOriginalNames, forKey: .localMediaOriginalNames)
         try c.encodeIfPresent(location, forKey: .location)
         try c.encodeIfPresent(sticker, forKey: .sticker)
         try c.encodeIfPresent(copyAttachmentsFromClientMessageId, forKey: .copyAttachmentsFromClientMessageId)

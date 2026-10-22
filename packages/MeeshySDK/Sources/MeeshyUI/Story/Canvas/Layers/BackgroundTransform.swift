@@ -9,7 +9,7 @@ import QuartzCore
 /// Sorti de `StoryBackgroundLayer.swift` (#6636), qui passait le plafond de
 /// 1200 lignes : on extrait d'abord, on ajoute ensuite. La valeur n'a rien à
 /// voir avec le cycle de vie du calque — elle se lit seule.
-public struct BackgroundTransform: Sendable, Equatable {
+nonisolated public struct BackgroundTransform: Sendable, Equatable {
     public nonisolated var scale: Double
     public nonisolated var offsetX: Double
     public nonisolated var offsetY: Double
