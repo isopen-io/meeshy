@@ -232,6 +232,7 @@ private fun NotificationFilterCategory.labelRes(): Int = when (this) {
     NotificationFilterCategory.REACTIONS -> R.string.notifications_category_reactions
     NotificationFilterCategory.MENTIONS -> R.string.notifications_category_mentions
     NotificationFilterCategory.SOCIAL -> R.string.notifications_category_social
+    NotificationFilterCategory.ENGAGEMENT -> R.string.notifications_category_engagement
     NotificationFilterCategory.CONTACTS -> R.string.notifications_category_contacts
     NotificationFilterCategory.GROUPS -> R.string.notifications_category_groups
     NotificationFilterCategory.CALLS -> R.string.notifications_category_calls
