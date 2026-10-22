@@ -82,6 +82,11 @@ extension UniversalComposerBar {
         // La prise vocale appartient au parent, qui possède son `AVAudioRecorder` (#4560).
     }
 
+    private func recordQuickEmojiFieldWidth(_ width: CGFloat) {
+        guard actionSlot == .quickEmoji, quickEmojiDrag == 0 else { return }
+        quickEmojiFieldWidth = width
+    }
+
     /// Clavier fermé, au moins un bouton d'air sous la barre (#11565).
     private var bottomClearance: ComposerBottomClearanceModifier {
         ComposerBottomClearanceModifier(
@@ -185,12 +190,11 @@ extension UniversalComposerBar {
                         attachButton
                     }
 
-                    // Center: text field. While the carousel is up, an
-                    // overlay intercepts taps to bring the keyboard back
-                    // (the field isn't focused then). When the keyboard is
-                    // already up there is no overlay, so the TextField keeps
-                    // its native tap-to-place-cursor behaviour.
+                    // Center: text field. While the carousel is up, an overlay intercepts taps to bring
+                    // the keyboard back (the field isn't focused then). When the keyboard is already up
+                    // there is no overlay, so the TextField keeps its native tap-to-place-cursor behaviour.
                     textInputField
+                        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { recordQuickEmojiFieldWidth($0) }
                         .overlay {
                             if showAttachOptions {
                                 Color.clear
