@@ -13,14 +13,19 @@ import me.meeshy.sdk.cache.CachePolicy
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.MarkReadResponse
+import me.meeshy.sdk.model.NotificationCounts
+import me.meeshy.sdk.model.NotificationTypeSelection
 import me.meeshy.sdk.model.RegisterDeviceTokenRequest
 import me.meeshy.sdk.model.RegisterDeviceTokenResponse
 import me.meeshy.sdk.model.UnregisterDeviceTokenRequest
+import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.net.rawApiCall
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -35,6 +40,9 @@ class NotificationRepository @Inject constructor(
     private val _notificationsSyncedAt = MutableStateFlow<Long?>(null)
     private val _unreadCount = MutableStateFlow(0)
     private val _hasMore = MutableStateFlow(false)
+
+    /** Les consommations par conversation / post en vol : un second appel identique se confond avec le premier. */
+    private val consumptionsInFlight: MutableSet<String> = ConcurrentHashMap.newKeySet()
     
     /**
      * L'ANCRE que le serveur a servie avec la dernière page (#4901) — empruntée
@@ -175,15 +183,33 @@ class NotificationRepository @Inject constructor(
         _unreadCount.value = unread
     }
 
+    /**
+     * [types] ne garde que ces types bruts, [hideReadTypes] retire les lignes DÉJÀ LUES de ces
+     * types (le contenu consommé) — deux sélections que la passerelle applique en base, donc la
+     * pagination ne sert jamais de pages de lignes invisibles. Vides : aucun filtre. Le curseur
+     * gagne sur [offset] : quand il est donné, le rang part nul.
+     */
     suspend fun list(
         offset: Int = 0,
         limit: Int = 20,
         unreadOnly: Boolean = false,
         cursor: String? = null,
+        types: Collection<String> = emptyList(),
+        hideReadTypes: Collection<String> = emptyList(),
     ): NetworkResult<List<ApiNotification>> =
         apiCall {
-            notificationApi.list(if (cursor === null) offset else null, limit, if (unreadOnly) true else null, cursor)
+            notificationApi.list(
+                offset = if (cursor === null) offset else null,
+                limit = limit,
+                unreadOnly = if (unreadOnly) true else null,
+                cursor = cursor,
+                types = NotificationTypeSelection.csv(types),
+                hideReadTypes = NotificationTypeSelection.csv(hideReadTypes),
+            )
         }
+
+    /** Les totaux de toute la boîte par type brut, tels que le serveur les compte (même prédicat que la liste). */
+    suspend fun counts(): NetworkResult<NotificationCounts> = apiCall { notificationApi.counts() }
 
     /**
      * Fetches the page after the currently cached notifications, appending fresh rows
@@ -308,11 +334,136 @@ class NotificationRepository @Inject constructor(
         return result
     }
 
+    /**
+     * Enregistre le jeton FCM de cet appareil : `platform = android`, `type = fcm`, jamais `apns`.
+     * Le jeton seul suffit ; l'identité de l'appareil (nom, version, paquet) s'ajoute par la forme
+     * qui prend une [RegisterDeviceTokenRequest].
+     */
     suspend fun registerDeviceToken(token: String): NetworkResult<RegisterDeviceTokenResponse> =
-        apiCall { notificationApi.registerDeviceToken(RegisterDeviceTokenRequest(token = token, platform = "android")) }
+        registerDeviceToken(RegisterDeviceTokenRequest.fcm(token))
 
+    suspend fun registerDeviceToken(request: RegisterDeviceTokenRequest): NetworkResult<RegisterDeviceTokenResponse> =
+        apiCall { notificationApi.registerDeviceToken(request) }
+
+    /**
+     * Désenregistre CE jeton. La passerelle supprime la ligne dont le jeton est exactement celui-là.
+     * Un jeton vide ne part pas : un corps sans cible ferait supprimer TOUS les jetons du compte.
+     */
     suspend fun unregisterDeviceToken(token: String): NetworkResult<Unit> =
-        apiCall { notificationApi.unregisterDeviceToken(UnregisterDeviceTokenRequest(token = token)) }
+        if (token.isBlank()) {
+            blankArgument("token")
+        } else {
+            apiCall { notificationApi.unregisterDeviceToken(UnregisterDeviceTokenRequest.byToken(token)) }
+                .map { }
+        }
+
+    /** Désenregistre tous les jetons d'UN appareil (`deviceId`), pas ceux des autres appareils du compte. */
+    suspend fun unregisterDevice(deviceId: String): NetworkResult<Unit> =
+        if (deviceId.isBlank()) {
+            blankArgument("deviceId")
+        } else {
+            apiCall { notificationApi.unregisterDeviceToken(UnregisterDeviceTokenRequest.byDeviceId(deviceId)) }
+                .map { }
+        }
+
+    private fun blankArgument(name: String): NetworkResult<Nothing> =
+        NetworkResult.Failure(ApiError(message = "$name est requis", code = INVALID_ARGUMENT))
+
+    /**
+     * Le contenu d'une conversation est consommé (elle vient de s'ouvrir) : ses notifications
+     * passent à lues. À lancer SANS attendre — l'écran ne dépend pas du résultat, et un échec ne
+     * se montre pas : la prochaine révalidation ou `notification:counts` recale le compteur.
+     *
+     * Idempotent : l'appel serveur l'est, et deux appels simultanés pour la même conversation se
+     * confondent en un seul. Un identifiant vide ne part pas (la route deviendrait
+     * `notifications/conversation//read`, un 404 permanent).
+     */
+    suspend fun markConversationNotificationsAsRead(conversationId: String): NetworkResult<Int> =
+        consumeOnce(
+            key = "conversation:$conversationId",
+            blank = conversationId.isBlank(),
+            scope = NotificationReadBulkScope(
+                kind = "context",
+                contextKey = "conversationId",
+                contextValue = conversationId,
+            ),
+        ) { notificationApi.markConversationAsRead(conversationId) }
+
+    /** Idem pour un post, une story ou un statut qu'on vient d'ouvrir (borné par `context.postId`). */
+    suspend fun markPostNotificationsAsRead(postId: String): NetworkResult<Int> =
+        consumeOnce(
+            key = "post:$postId",
+            blank = postId.isBlank(),
+            scope = NotificationReadBulkScope(kind = "context", contextKey = "postId", contextValue = postId),
+        ) { notificationApi.markPostAsRead(postId) }
+
+    /**
+     * Un écran consomme une catégorie entière (les demandes d'ami, par exemple) : toutes les
+     * notifications de ces [types] passent à lues. Une sélection plus longue que la borne de la
+     * passerelle (30) part en tranches ; chaque tranche a son propre aller-retour optimiste, et la
+     * première qui échoue arrête la suite — celles déjà appliquées restent appliquées. Une sélection
+     * vide ne part pas.
+     */
+    suspend fun markTypesAsRead(types: Collection<String>): NetworkResult<Int> {
+        var marked = 0
+        for (batch in NotificationTypeSelection.readBatches(types)) {
+            val result = markScopeAsRead(NotificationReadBulkScope(kind = "types", types = batch.types)) {
+                notificationApi.markTypesAsRead(batch)
+            }
+            when (result) {
+                is NetworkResult.Success -> marked += result.data
+                is NetworkResult.Failure -> return result
+            }
+        }
+        return NetworkResult.Success(marked)
+    }
+
+    private suspend fun consumeOnce(
+        key: String,
+        blank: Boolean,
+        scope: NotificationReadBulkScope,
+        call: suspend () -> MarkReadResponse,
+    ): NetworkResult<Int> {
+        if (blank || !consumptionsInFlight.add(key)) return NetworkResult.Success(0)
+        return try {
+            markScopeAsRead(scope, call)
+        } finally {
+            consumptionsInFlight.remove(key)
+        }
+    }
+
+    /**
+     * Optimiste : les lignes du cache que [scope] désigne (la MÊME loi que `notification:read-bulk`,
+     * [notificationMatchesReadBulkScope]) passent à lues avant l'appel, et le retour arrière est CIBLÉ
+     * sur ces seules lignes (jamais une restauration de l'instantané, qui écraserait une arrivée du
+     * socket pendant le vol) — même forme que [markAllAsRead].
+     */
+    private suspend fun markScopeAsRead(
+        scope: NotificationReadBulkScope,
+        call: suspend () -> MarkReadResponse,
+    ): NetworkResult<Int> {
+        val flipped = _notificationsCache.value.orEmpty()
+            .filter { !it.state.isRead && notificationMatchesReadBulkScope(scope, it) }
+            .mapTo(HashSet()) { it.id }
+        if (flipped.isNotEmpty()) {
+            _notificationsCache.update { current ->
+                current?.map { if (it.id in flipped) it.copy(state = it.state.copy(isRead = true)) else it }
+            }
+            _unreadCount.update { (it - flipped.size).coerceAtLeast(0) }
+        }
+
+        val result = rawApiCall { call().count ?: 0 }
+        if (result is NetworkResult.Failure && flipped.isNotEmpty()) {
+            val reverted = _notificationsCache.value.orEmpty()
+                .filter { it.id in flipped && it.state.isRead }
+                .mapTo(HashSet()) { it.id }
+            _notificationsCache.update { current ->
+                current?.map { if (it.id in reverted) it.copy(state = it.state.copy(isRead = false)) else it }
+            }
+            _unreadCount.update { it + reverted.size }
+        }
+        return result
+    }
 
     private suspend fun revalidateNotifications(onError: (Throwable) -> Unit = {}) {
         when (val result = pagedApiCall { notificationApi.list(0, PAGE_SIZE, null) }) {
@@ -349,5 +500,6 @@ class NotificationRepository @Inject constructor(
 
     private companion object {
         const val PAGE_SIZE = 20
+        const val INVALID_ARGUMENT = "INVALID_ARGUMENT"
     }
 }
