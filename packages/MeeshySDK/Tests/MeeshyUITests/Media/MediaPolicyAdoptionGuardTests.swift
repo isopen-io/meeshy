@@ -14,9 +14,9 @@ final class MediaPolicyAdoptionGuardTests: XCTestCase {
         "apps/ios/Meeshy/Features/Main/Components/OverlayAudioPlayer.swift": "piste audio seule : ni décodeur vidéo ni images d'avance",
         "packages/MeeshySDK/Sources/MeeshyUI/Media/MeeshyAudioEditorView.swift": "piste audio seule",
         "packages/MeeshySDK/Sources/MeeshyUI/Media/PlaybackLoopQueue.swift": "le successeur recopie l'élément courant d'un lecteur DÉJÀ adopté, dont la file suit la politique",
-        "apps/ios/Meeshy/Features/Main/Composer/ComposerEditSources.swift": "édition locale du composer (chaîne création) — suivi #9880",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift": "composition locale de la timeline (chaîne création) — suivi #9880",
-        "packages/MeeshySDK/Sources/MeeshyUI/Story/TimelineExportFlow.swift": "aperçu d'un export local (chaîne création) — suivi #9880",
+        "apps/ios/Meeshy/Features/Main/Composer/ComposerEditSources.swift": "édition locale du composer (chaîne création) — suivi #11984",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/Timeline/Engine/StoryTimelineEngine.swift": "composition locale de la timeline (chaîne création) — suivi #11984",
+        "packages/MeeshySDK/Sources/MeeshyUI/Story/TimelineExportFlow.swift": "aperçu d'un export local (chaîne création) — suivi #11984",
     ]
 
     private static var repoRoot: URL {
