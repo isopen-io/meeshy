@@ -6,7 +6,7 @@ import org.junit.Test
 
 class IosInteropVectorsTest {
     private val vectors = Properties().apply {
-        checkNotNull(javaClass.classLoader.getResourceAsStream("ios-interop-vectors.properties")).use(::load)
+        checkNotNull(IosInteropVectorsTest::class.java.classLoader.getResourceAsStream("ios-interop-vectors.properties")).use(::load)
     }
 
     private fun vector(name: String) = checkNotNull(vectors.getProperty(name)).trim()

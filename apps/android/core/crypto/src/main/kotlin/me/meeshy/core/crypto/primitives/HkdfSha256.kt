@@ -11,7 +11,7 @@ public object HkdfSha256 {
 
     public fun derive(inputKeyMaterial: ByteArray, salt: ByteArray, info: ByteArray, length: Int): ByteArray {
         if (length !in 1..MAX_LENGTH) throw CryptoException("Longueur de dérivation invalide")
-        val pseudoRandomKey = hmac(salt.ifEmpty { ByteArray(HASH_LENGTH) }, inputKeyMaterial)
+        val pseudoRandomKey = hmac(if (salt.isEmpty()) ByteArray(HASH_LENGTH) else salt, inputKeyMaterial)
         val output = ByteArray(length)
         var previous = ByteArray(0)
         var offset = 0
