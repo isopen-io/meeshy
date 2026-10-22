@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:reels": {
+      "resDir": "feature/reels/src/main/res",
+      "entries": [
+        {
+          "androidName": "reels_bookmark",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_close",
+          "androidName": "reels_close",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.post.comments",
+          "androidName": "reels_comments",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.comments.other",
+          "androidName": "reels_comments_count",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.comments.beFirst",
+          "androidName": "reels_comments_empty_subtitle",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "story.viewer.comments.empty",
+          "androidName": "reels_comments_empty_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "reels_comments_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reels_comments_failed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reels_comments_input_hint",
+          "status": "android-only"
+        },
+        {
+          "androidName": "reels_comments_loading",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "reels_comments_send",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.post.comments",
+          "androidName": "reels_comments_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "reels_comments_view_post",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "reels.action.like",
+          "androidName": "reels_like",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.object.editor.mute",
+          "androidName": "reels_mute",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.post.repost",
+          "androidName": "reels_repost",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.share",
+          "androidName": "reels_share",
+          "status": "candidate"
+        },
+        {
+          "androidName": "reels_unbookmark",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.video.unmute",
+          "androidName": "reels_unmute",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

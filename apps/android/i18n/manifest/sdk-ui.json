@@ -1,0 +1,600 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":sdk-ui": {
+      "resDir": "sdk-ui/src/main/res",
+      "entries": [
+        {
+          "androidName": "avatar_fallback",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_a11y_audios",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_a11y_ephemeral",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.message.file",
+          "androidName": "bubble_a11y_file",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_a11y_images",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.location.shared",
+          "androidName": "bubble_a11y_location",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.message.pinned",
+          "androidName": "bubble_a11y_pinned",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.reactions",
+          "androidName": "bubble_a11y_reactions",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.comment.reply.hint",
+          "androidName": "bubble_a11y_reply_to",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_a11y_reply_to_excerpt",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_a11y_unknown_sender",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.file",
+          "androidName": "bubble_attachment_file_fallback",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_audio_play",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_blur_reveal_action",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_blur_tap_to_reveal",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.media.viewOnce",
+          "androidName": "bubble_blur_view_once",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_burned",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_burned_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.meta.edited",
+          "androidName": "bubble_edited",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_file_open",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_file_size_bytes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_file_size_kb",
+          "status": "android-only"
+        },
+        {
+          "androidName": "bubble_file_size_mb",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.meta.forwarded",
+          "androidName": "bubble_forwarded",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.meta.forwarded.fromGroup",
+          "androidName": "bubble_forwarded_from",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_hidden_images",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.output.image",
+          "androidName": "bubble_image_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "location.fullscreen.openInMaps",
+          "androidName": "bubble_location_open",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.location.shared",
+          "androidName": "bubble_location_shared",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.system.deleted",
+          "androidName": "bubble_message_deleted",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_reply_attachment",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "attachment.label.photo",
+          "androidName": "bubble_reply_photo",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.reply.story",
+          "androidName": "bubble_reply_story",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_starred",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.delivery.delivered",
+          "androidName": "bubble_status_delivered",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.failed.label",
+          "androidName": "bubble_status_failed",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "voice.profile.status.pending.label",
+          "androidName": "bubble_status_pending",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "share.sheet.status.queued",
+          "androidName": "bubble_status_queued",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.delivery.read",
+          "androidName": "bubble_status_read",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "bubble.delivery.sent",
+          "androidName": "bubble_status_sent",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.comments.other",
+          "androidName": "bubble_story_comments",
+          "status": "candidate"
+        },
+        {
+          "androidName": "bubble_story_reactions",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "viewer.engagement.shares.other",
+          "androidName": "bubble_story_shares",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.captions.translated",
+          "androidName": "bubble_translated",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emoji.category.animals",
+          "androidName": "emoji_category_animals",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "emoji.category.faces",
+          "androidName": "emoji_category_faces",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "emoji.category.gestures",
+          "androidName": "emoji_category_gestures",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "emoji.category.hearts",
+          "androidName": "emoji_category_hearts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emoji.category.objects",
+          "androidName": "emoji_category_objects",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "emoji.category.reactions",
+          "androidName": "emoji_category_reactions",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "status.composer.emoji.more",
+          "androidName": "emoji_picker_expand",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "emoji.picker.title",
+          "androidName": "emoji_picker_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "emoji_react_with",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_close",
+          "androidName": "image_viewer_close",
+          "status": "candidate"
+        },
+        {
+          "androidName": "image_viewer_save",
+          "status": "android-only"
+        },
+        {
+          "androidName": "language_strip_select",
+          "status": "android-only"
+        },
+        {
+          "androidName": "live_location_duration_15m",
+          "status": "android-only"
+        },
+        {
+          "androidName": "live_location_duration_1h",
+          "status": "android-only"
+        },
+        {
+          "androidName": "live_location_duration_2h",
+          "status": "android-only"
+        },
+        {
+          "androidName": "live_location_duration_30m",
+          "status": "android-only"
+        },
+        {
+          "androidName": "live_location_duration_8h",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "location.live.shareDuration",
+          "androidName": "live_location_duration_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "live_location_remaining",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "location.live.sharing",
+          "androidName": "live_location_sharing_by",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "location.live.stop",
+          "androidName": "live_location_stop",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_camera_denied_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "permission.camera.denied",
+          "androidName": "media_permission_camera_denied_message",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "camera.permission.denied.title",
+          "androidName": "media_permission_camera_denied_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_camera_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_camera_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "media.video.close",
+          "androidName": "media_permission_close",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_contacts_denied_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_contacts_denied_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_contacts_denied_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_contacts_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_contacts_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "onboarding.continue",
+          "androidName": "media_permission_continue",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_location_denied_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "permission.location.denied",
+          "androidName": "media_permission_location_denied_message",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_location_denied_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_location_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_location_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_microphone_denied_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "permission.microphone.denied",
+          "androidName": "media_permission_microphone_denied_message",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_microphone_denied_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_microphone_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_microphone_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.later",
+          "androidName": "media_permission_not_now",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_notifications_denied_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_notifications_denied_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_notifications_denied_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_notifications_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_notifications_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "camera.permission.openSettings",
+          "androidName": "media_permission_open_settings",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_photos_add_denied_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "permission.photoLibrary.add.denied",
+          "androidName": "media_permission_photos_add_denied_message",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_photos_add_denied_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_photos_add_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_photos_add_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_photos_denied_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "permission.photoLibrary.read.denied",
+          "androidName": "media_permission_photos_denied_message",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.recent.accessDenied",
+          "androidName": "media_permission_photos_denied_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_permission_photos_rationale_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_permission_photos_rationale_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.short.days",
+          "androidName": "time_relative_days",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.hours",
+          "androidName": "time_relative_hours",
+          "status": "candidate"
+        },
+        {
+          "androidName": "time_relative_long_days",
+          "status": "android-only"
+        },
+        {
+          "androidName": "time_relative_long_hours",
+          "status": "android-only"
+        },
+        {
+          "androidName": "time_relative_long_minutes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "time_relative_long_months",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "notification.date.now",
+          "androidName": "time_relative_long_now",
+          "status": "candidate"
+        },
+        {
+          "androidName": "time_relative_long_seconds",
+          "status": "android-only"
+        },
+        {
+          "androidName": "time_relative_long_weeks",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.long.yesterday",
+          "androidName": "time_relative_long_yesterday",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.short.minutes",
+          "androidName": "time_relative_minutes",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.short.months",
+          "androidName": "time_relative_months",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.short.now",
+          "androidName": "time_relative_now",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.short.seconds",
+          "androidName": "time_relative_seconds",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "time.short.weeks",
+          "androidName": "time_relative_weeks",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}
