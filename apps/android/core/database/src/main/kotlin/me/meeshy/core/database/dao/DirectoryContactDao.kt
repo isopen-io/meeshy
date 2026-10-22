@@ -9,22 +9,22 @@ import kotlinx.coroutines.flow.Flow
 import me.meeshy.core.database.entity.DirectoryContactEntity
 
 @Dao
-public interface DirectoryContactDao {
+public abstract class DirectoryContactDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    public suspend fun insertAll(rows: List<DirectoryContactEntity>)
+    public abstract suspend fun insertAll(rows: List<DirectoryContactEntity>)
 
     @Query("SELECT * FROM directory_contacts ORDER BY sortIndex")
-    public fun observeAll(): Flow<List<DirectoryContactEntity>>
+    public abstract fun observeAll(): Flow<List<DirectoryContactEntity>>
 
     @Query("SELECT * FROM directory_contacts ORDER BY sortIndex")
-    public suspend fun all(): List<DirectoryContactEntity>
+    public abstract suspend fun all(): List<DirectoryContactEntity>
 
     @Query("DELETE FROM directory_contacts")
-    public suspend fun clear()
+    public abstract suspend fun clear()
 
     @Transaction
-    public suspend fun replaceAll(rows: List<DirectoryContactEntity>) {
+    public open suspend fun replaceAll(rows: List<DirectoryContactEntity>) {
         clear()
         insertAll(rows)
     }
