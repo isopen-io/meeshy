@@ -54,6 +54,13 @@ final class ComposerCaptureChromeBandTests: XCTestCase {
         XCTAssertEqual(ComposerCaptureChromeLegibility.veilOpacity(framed: false, bandLuminance: 1), 0)
     }
 
+    func test_aMeasure_neverSetsTheVeilOfAnotherFrame() {
+        let photomaton = ComposerPhotoFrame.montage(.frame("photo.photomaton"))
+        let bandes = ComposerCaptureChromeBands(top: 0.02, bottom: 0.02, frame: ComposerLookSceneKey.token(photomaton))
+        XCTAssertEqual(bandes.measuring(photomaton), bandes)
+        XCTAssertNil(bandes.measuring(.montage(.frame("photo.crypte"))), "l'autre cadre attend sa mesure sous le voile plein")
+    }
+
     func test_bands_measureTheFramePaintedUnderTheChrome() throws {
         let taille = CGSize(width: 108, height: 192)
         let haut = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 96, width: 108, height: 96))
