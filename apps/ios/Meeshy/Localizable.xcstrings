@@ -307054,43 +307054,43 @@
         "ar": {
           "stringUnit": {
             "state": "translated",
-            "value": "أزال أحد المشرفين المحتوى الخاص بك"
+            "value": "أزال فريق الإشراف المحتوى الخاص بك"
           }
         },
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Inhalt wurde von einem Administrator entfernt"
+            "value": "Dein Inhalt wurde von der Moderation entfernt"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Your content was removed by an administrator"
+            "value": "Your content was removed by the moderation team"
           }
         },
         "es": {
           "stringUnit": {
             "state": "translated",
-            "value": "Un administrador retiró tu contenido"
+            "value": "Tu contenido fue eliminado por la moderación"
           }
         },
         "fr": {
           "stringUnit": {
             "state": "translated",
-            "value": "Votre contenu a été retiré par un administrateur"
+            "value": "Votre contenu a été retiré par la modération"
           }
         },
         "it": {
           "stringUnit": {
             "state": "translated",
-            "value": "Il tuo contenuto è stato rimosso da un amministratore"
+            "value": "Il tuo contenuto è stato rimosso dalla moderazione"
           }
         },
         "pt-BR": {
           "stringUnit": {
             "state": "translated",
-            "value": "Seu conteúdo foi removido por um administrador"
+            "value": "Seu conteúdo foi removido pela moderação"
           }
         }
       }
