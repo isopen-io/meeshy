@@ -69,6 +69,7 @@ class SessionTeardownTest {
         blockCache: BlockCache = BlockCache(),
         preferenceSnapshots: me.meeshy.sdk.preferences.PreferenceSnapshotStore =
             me.meeshy.sdk.preferences.InMemoryPreferenceSnapshotStore(),
+        perAccountCaches: Set<PerAccountCache> = emptySet(),
     ) = DefaultSessionTeardown(
         db,
         categoryStore,
@@ -79,7 +80,16 @@ class SessionTeardownTest {
         notificationRepository,
         blockCache,
         preferenceSnapshots,
+        perAccountCaches,
     )
+
+    private class RecordingCache(private val failure: Exception? = null) : PerAccountCache {
+        var clears = 0
+        override suspend fun clear() {
+            clears++
+            failure?.let { throw it }
+        }
+    }
 
     private fun composerDraft() = StoryComposerDraftSnapshot(
         slides = listOf(StoryDraftSlideSnapshot(id = "s1", text = "half-written story", mediaIds = listOf("cmid_1"))),
@@ -220,5 +230,36 @@ class SessionTeardownTest {
         assertThat(friendshipCache.pendingReceivedCount).isEqualTo(0)
         assertThat(notificationRepository.unreadCountStream.value).isEqualTo(0)
         assertThat(blockCache.blockedCount).isEqualTo(0)
+    }
+
+    @Test
+    fun wipe_clearsEveryBoundPerAccountCache() = runTest {
+        val first = RecordingCache()
+        val second = RecordingCache()
+
+        teardown(perAccountCaches = setOf(first, second)).wipe()
+
+        assertThat(first.clears).isEqualTo(1)
+        assertThat(second.clears).isEqualTo(1)
+    }
+
+    @Test
+    fun wipe_isIdempotentForPerAccountCaches() = runTest {
+        val cache = RecordingCache()
+        val teardown = teardown(perAccountCaches = setOf(cache))
+
+        teardown.wipe()
+        teardown.wipe()
+
+        assertThat(cache.clears).isEqualTo(2)
+    }
+
+    @Test
+    fun wipe_aFailingPerAccountCacheDoesNotStopTheOthers() = runTest {
+        val after = RecordingCache()
+
+        teardown(perAccountCaches = setOf(RecordingCache(IllegalStateException("boom")), after)).wipe()
+
+        assertThat(after.clears).isEqualTo(1)
     }
 }
