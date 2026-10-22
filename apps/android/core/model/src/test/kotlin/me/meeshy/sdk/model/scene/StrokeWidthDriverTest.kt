@@ -36,7 +36,8 @@ class StrokeWidthDriverTest {
 
     @Test fun `le doigt a vitesse max donne une pression nulle`() {
         val p = StrokeWidthDriver.fingerPressures(line(8, 4000.0), List(7) { 1.0 })
-        assertThat(p.drop(1)).containsExactlyElementsIn(List(7) { 0.0 })
+        assertThat(p[1]).isWithin(1e-9).of(0.25)
+        assertThat(p.drop(3)).containsExactlyElementsIn(List(5) { 0.0 })
     }
 
     @Test fun `dts incoherents donnent des pressions neutres`() {

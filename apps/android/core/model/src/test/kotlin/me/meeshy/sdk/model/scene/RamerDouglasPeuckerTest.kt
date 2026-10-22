@@ -31,7 +31,7 @@ class RamerDouglasPeuckerTest {
     }
 
     @Test fun `chaque point conserve garde sa largeur source`() {
-        val pts = listOf(StrokePoint(0.0, 0.0), StrokePoint(50.0, 30.0), StrokePoint(100.0, 0.0), StrokePoint(150.0, 0.0))
+        val pts = listOf(StrokePoint(0.0, 0.0), StrokePoint(50.0, 30.0), StrokePoint(100.0, 14.0), StrokePoint(150.0, 0.0))
         val out = RamerDouglasPeucker.straighten(pts, listOf(1.0, 2.0, 3.0, 4.0))
         assertThat(out.map { it.width }).containsExactly(1.0, 2.0, 4.0).inOrder()
     }
