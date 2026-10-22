@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="call_outgoing_ringing">A chamar…</string>
+    <string name="call_outgoing_waiting">A aguardar o contacto…</string>
+    <string name="call_outgoing_waiting_hint">O contacto ainda não atendeu.</string>
+    <string name="call_connecting_label">A ligar…</string>
+    <string name="call_unknown_peer">Desconhecido</string>
+    <string name="call_type_audio">Chamada de áudio</string>
+    <string name="call_type_video">Videochamada</string>
+    <string name="call_incoming_audio">Chamada recebida</string>
+    <string name="call_incoming_video">Videochamada recebida</string>
+    <string name="call_incoming_badge_audio">Áudio</string>
+    <string name="call_incoming_badge_video">Vídeo</string>
+    <string name="call_incoming_decline">Recusar</string>
+    <string name="call_incoming_accept">Atender</string>
+    <string name="call_incoming_accept_hint">Atende a chamada recebida</string>
+    <string name="call_incoming_decline_hint">Recusa a chamada recebida</string>
+    <string name="call_incoming_a11y">%1$s, %2$s</string>
+    <string name="call_ended_local">Chamada terminada</string>
+    <string name="call_ended_remote">O seu contacto desligou</string>
+    <string name="call_duration_a11y">Duração da chamada</string>
+    <string name="call_a11y_connecting">A ligar</string>
+    <string name="call_a11y_connected">Chamada ligada</string>
+    <string name="call_a11y_reconnecting">A religar</string>
+    <string name="call_a11y_ended">Chamada terminada</string>
+    <string name="call_avatar_you">Você</string>
+</resources>
