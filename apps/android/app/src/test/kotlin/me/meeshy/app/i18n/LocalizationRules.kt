@@ -39,17 +39,15 @@ internal data class Finding(
     }
 }
 
+internal data class ParsedFile(val fileName: String, val entries: List<ResourceEntry>)
+
 internal class ParsedModule private constructor(
     val module: String,
-    private val byFolder: Map<String, List<List<ResourceEntry>>>,
-    private val filesByFolder: Map<String, List<String>>,
+    private val byFolder: Map<String, List<ParsedFile>>,
 ) {
     val folders: Set<String> get() = byFolder.keys
 
-    fun fileNames(folder: String): List<String> = filesByFolder[folder].orEmpty()
-
-    fun entriesByFile(folder: String): List<Pair<String, List<ResourceEntry>>> =
-        fileNames(folder).zip(byFolder[folder].orEmpty())
+    fun files(folder: String): List<ParsedFile> = byFolder[folder].orEmpty()
 
     fun baseEntries(): Map<ResourceId, ResourceEntry> = entriesOf(LocaleFolders.BASE_FOLDER)
 
@@ -68,23 +66,20 @@ internal class ParsedModule private constructor(
     }
 
     private fun entriesOf(folder: String): Map<ResourceId, ResourceEntry> =
-        byFolder[folder].orEmpty().flatten().associateBy { it.id }
+        files(folder).flatMap { it.entries }.associateBy { it.id }
 
     companion object {
         fun of(resources: ModuleResources): ParsedModule {
             val parsed = resources.files.map { file ->
-                file to runCatching { ResourceParser.parse(file.text) }.getOrElse { cause ->
+                val entries = runCatching { ResourceParser.parse(file.text) }.getOrElse { cause ->
                     throw IllegalStateException(
                         "${resources.module} ${file.folder}/${file.fileName} : XML illisible — ${cause.message}",
                         cause,
                     )
                 }
+                file.folder to ParsedFile(file.fileName, entries)
             }
-            return ParsedModule(
-                module = resources.module,
-                byFolder = parsed.groupBy({ it.first.folder }, { it.second }),
-                filesByFolder = parsed.groupBy({ it.first.folder }, { it.first.fileName }),
-            )
+            return ParsedModule(resources.module, parsed.groupBy({ it.first }, { it.second }))
         }
     }
 }
@@ -211,7 +206,7 @@ internal object LocalizationRules {
     fun nonPositionalSpecifiers(module: ParsedModule): List<Finding> =
         module.folders
             .flatMap { folder ->
-                module.entriesByFile(folder).flatMap { it.second }
+                module.files(folder).flatMap { it.entries }
                     .flatMap { entry -> formattedTexts(entry).map { entry to it } }
                     .filter { (_, text) -> FormatSpecifiers.of(text).let { it.size >= 2 && it.any { s -> !s.positional } } }
                     .map { (entry, text) ->
@@ -256,8 +251,8 @@ internal object LocalizationRules {
     fun duplicateDefinitions(module: ParsedModule): List<Finding> =
         module.folders
             .flatMap { folder ->
-                module.entriesByFile(folder)
-                    .flatMap { (fileName, entries) -> entries.map { it.id to fileName } }
+                module.files(folder)
+                    .flatMap { file -> file.entries.map { it.id to file.fileName } }
                     .groupBy({ it.first }, { it.second })
                     .filterValues { it.size > 1 }
                     .map { (id, fileNames) ->
