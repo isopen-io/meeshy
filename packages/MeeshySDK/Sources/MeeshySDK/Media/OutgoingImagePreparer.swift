@@ -344,6 +344,45 @@ enum OutgoingImageGainMap {
     }
 }
 
+/// **Le lieu retiré d'un FICHIER image, sans en décoder les pixels** (#11847).
+///
+/// Pour un hôte qui ne peut pas tenir l'image en mémoire (l'extension de
+/// partage, plafonnée à ~120 Mo) : ImageIO lit le fichier et en réécrit une
+/// copie sans GPS par `CGImageDestinationCopyImageSource`, données compressées
+/// des pixels intactes, puis la copie remplace l'original.
+public enum OutgoingImageLocationRemoval {
+    public enum Outcome: Sendable, Equatable {
+        /// Pas une image, ou une image sans lieu : le fichier n'a pas bougé.
+        case untouched
+        case removed
+        /// Le lieu est là et n'a pas pu être retiré : l'image ne doit pas partir.
+        case failed
+    }
+
+    public static func removeLocation(fromFileAt url: URL) -> Outcome {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary),
+              CGImageSourceGetCount(source) > 0,
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              properties[kCGImagePropertyGPSDictionary] != nil else { return .untouched }
+        guard let type = CGImageSourceGetType(source) else { return .failed }
+        let copy = url.deletingLastPathComponent().appendingPathComponent(".\(UUID().uuidString).\(url.pathExtension)")
+        guard writeWithoutLocation(source, type: type, to: copy),
+              (try? FileManager.default.replaceItemAt(url, withItemAt: copy)) != nil else {
+            try? FileManager.default.removeItem(at: copy)
+            return .failed
+        }
+        return .removed
+    }
+
+    /// La destination est relâchée au retour : le fichier est complet avant de remplacer l'original.
+    private static func writeWithoutLocation(_ source: CGImageSource, type: CFString, to url: URL) -> Bool {
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type, CGImageSourceGetCount(source), nil) else {
+            return false
+        }
+        return CGImageDestinationCopyImageSource(destination, source, [kCGImageMetadataShouldExcludeGPS: true] as CFDictionary, nil)
+    }
+}
+
 /// Réglages › Médias « Conserver le lieu des photos envoyées » — désactivé par
 /// défaut (#11247, point 2). Préférence de l'appareil, lue par l'hôte.
 public enum OutgoingImageLocationSetting {
