@@ -4,6 +4,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.meeshy.core.database.MeeshyDatabase
 import me.meeshy.sdk.category.CategorySnapshotStore
+import me.meeshy.sdk.preferences.PreferenceSnapshotStore
 import me.meeshy.sdk.chat.ConversationDraftStore
 import me.meeshy.sdk.friend.BlockCache
 import me.meeshy.sdk.friend.FriendshipCache
@@ -46,6 +47,7 @@ public class DefaultSessionTeardown(
     private val friendshipCache: FriendshipCache,
     private val notificationRepository: NotificationRepository,
     private val blockCache: BlockCache,
+    private val preferenceSnapshotStore: PreferenceSnapshotStore? = null,
 ) : SessionTeardown {
 
     override suspend fun wipe() {
@@ -58,5 +60,6 @@ public class DefaultSessionTeardown(
         friendshipCache.clear()
         notificationRepository.clear()
         blockCache.clear()
+        preferenceSnapshotStore?.clearAll()
     }
 }
