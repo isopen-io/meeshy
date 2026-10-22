@@ -113,6 +113,27 @@ describe('VideoMetadataStrip — remux sans ré-encodage (#9746)', () => {
     expect(sideData).toContain('rotation=90');
   });
 
+  it('garde le HDR d’une vidéo HEVC (BT.2020, HLG) et son étiquette hvc1, que les lecteurs Apple exigent', async () => {
+    const hdr = path.join(workDir, 'hdr.mov');
+    execFileSync('ffmpeg', [
+      '-v', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=1:size=64x64:rate=10',
+      '-c:v', 'libx265', '-x265-params', 'log-level=none', '-tag:v', 'hvc1',
+      '-color_primaries', 'bt2020', '-color_trc', 'arib-std-b67', '-colorspace', 'bt2020nc',
+      '-metadata', `com.apple.quicktime.location.ISO6709=${LOCATION}`, '-movflags', 'use_metadata_tags',
+      '-f', 'mov', '-y', hdr,
+    ]);
+    const before = packetHashes(hdr);
+
+    await stripVideoMetadataFile({ filePath: hdr, mimeType: 'video/quicktime' });
+
+    const stream = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'stream=codec_tag_string,color_primaries,color_transfer', '-of', 'compact', hdr]).toString();
+    expect(stream).toContain('codec_tag_string=hvc1');
+    expect(stream).toContain('color_primaries=bt2020');
+    expect(stream).toContain('color_transfer=arib-std-b67');
+    expect(packetHashes(hdr)).toBe(before);
+    expect(JSON.stringify(formatTags(hdr))).not.toContain('48.8566');
+  });
+
   it('garde l’original quand ffmpeg échoue, et le dit en levant sa cause', async () => {
     const clip = path.join(workDir, 'broken.mp4');
     await fs.writeFile(clip, Buffer.from('not a video at all'));
