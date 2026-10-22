@@ -18,6 +18,7 @@ class MediaCacheKeyTest {
         assertThat(MediaCacheKey.of(url)).isEqualTo(MediaCacheKey.of(url))
         assertThat(MediaCacheKey.of(url)).endsWith(".JPG")
         assertThat(MediaCacheKey.of("https://x.me/a.b/noext")).doesNotContain(".")
+        assertThat(MediaCacheKey.of("https://x.me")).doesNotContain(".")
     }
 
     @Test

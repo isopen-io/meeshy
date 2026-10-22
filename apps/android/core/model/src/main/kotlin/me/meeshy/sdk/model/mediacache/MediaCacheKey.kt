@@ -19,7 +19,8 @@ public object MediaCacheKey {
     }
 
     private fun pathExtension(url: String): String {
-        val path = url.substringBefore('#').substringBefore('?')
+        val noQuery = url.substringBefore('#').substringBefore('?')
+        val path = if ("://" in noQuery) noQuery.substringAfter("://").substringAfter('/', "") else noQuery
         val lastSegment = path.substringAfterLast('/')
         if (!lastSegment.contains('.')) return ""
         return lastSegment.substringAfterLast('.')
