@@ -295,13 +295,8 @@ enum OutgoingImageWriter {
         guard let type = format.typeIdentifier else { return nil }
         let carriesGainMap = format.isLossy && OutgoingImageGainMap.isPresent(in: original.source)
         let redresses = !carriesGainMap || OutgoingImageGeometry.isUpright(original.properties)
-        let thumbnailOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: redresses,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: limit,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(original.source, 0, thumbnailOptions as CFDictionary) else {
+        guard let image = ImageDownsampler.thumbnail(source: original.source, maxPixelSize: limit, decodeImmediately: true,
+                                                     keepsStoredOrientation: !redresses) else {
             return nil
         }
         let written = CGSize(width: image.width, height: image.height)
