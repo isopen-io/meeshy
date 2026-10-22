@@ -2,6 +2,8 @@ package me.meeshy.app.stories
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.StoryToolMode
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -14,7 +16,7 @@ class StoryComposerDrawingReducerTest {
     @Test
     fun `entering drawing closes the band and clears every selection`() {
         val busy = StoryComposerTextReducer.added(StoryComposerUiState(), "t1")
-            .copy(band = ComposerBandState.Hidden.tapFab(BandCategory.entries.first()), elementMenuId = "t1")
+            .copy(band = ComposerBandState.Hidden.tapTool(StoryToolMode.TEXT), elementMenuId = "t1")
 
         val after = StoryComposerDrawingReducer.entered(busy)
 

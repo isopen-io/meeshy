@@ -26,6 +26,7 @@ public enum class OutboxKind {
     UNLIKE_POST,
     BOOKMARK_POST,
     UNBOOKMARK_POST,
+    RESPOND_FRIEND_REQUEST,
 }
 
 /** Lifecycle of an outbox row; a succeeded mutation is deleted, never flagged. */
@@ -113,7 +114,9 @@ public object OutboxLaneMap {
         OutboxKind.UNBLOCK_USER,
         -> OutboxLaneAssignment.Shared(OutboxLanes.BLOCK)
 
-        OutboxKind.SEND_FRIEND_REQUEST -> OutboxLaneAssignment.Shared(OutboxLanes.FRIEND)
+        OutboxKind.SEND_FRIEND_REQUEST,
+        OutboxKind.RESPOND_FRIEND_REQUEST,
+        -> OutboxLaneAssignment.Shared(OutboxLanes.FRIEND)
 
         OutboxKind.PIN_MESSAGE,
         OutboxKind.UNPIN_MESSAGE,
@@ -232,6 +235,15 @@ public data class PinPayload(val conversationId: String)
  */
 @kotlinx.serialization.Serializable
 public data class FriendRequestPayload(val message: String? = null)
+
+/**
+ * Payload of a `RESPOND_FRIEND_REQUEST` outbox row. The row's `targetId` is the request id
+ * (so two answers to the same request coalesce, the last one winning); [action] is the wire
+ * value (`accept` | `reject`) and [userId] the OTHER user, needed to roll the optimistic
+ * friendship state back without a lookup.
+ */
+@kotlinx.serialization.Serializable
+public data class FriendRespondPayload(val action: String, val userId: String)
 
 /**
  * Payload of an `UPDATE_CONVERSATION_PREFS` outbox row — the full desired

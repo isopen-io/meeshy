@@ -38,7 +38,7 @@ import {
 } from '../../services/attachments/ContentSignature';
 import { admittedUploadMimeType, audioOnlyContainerMimeType, mayBeAudioOnlyContainer } from '../../services/attachments/uploadMimeType';
 import { canonicalMediaMimeType } from '@meeshy/shared/utils/media-mime-type';
-import { isExifStrippable, stripExifFromImageBuffer } from '../../services/attachments/ExifStrip';
+import { stripStoredMediaMetadata } from '../../services/attachments/media-metadata-strip';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { originIsAllowed } from '../../config/cors-origins';
 import { TUS_COLLECTION_METHODS, TUS_UPLOAD_METHODS } from './tus-methods';
@@ -488,20 +488,12 @@ export async function registerTusRoutes(fastify: FastifyInstance, opts: TusRoute
         throw { status_code: 400, body: `${mimeVerdict.reason}\n` };
       }
 
-      let fileSize = upload.size || 0;
       const attachmentType = getAttachmentType(mimeType, filename);
-      // #3627 — EXIF/GPS retiré des photos AVANT toute persistance : c'est le
-      // fichier `destPath` qui est servi tel quel par `GET /attachments/:id`.
-      if (attachmentType === 'image' && isExifStrippable(mimeType)) {
-        try {
-          const original = await fs.readFile(destPath);
-          const stripped = await stripExifFromImageBuffer(original, mimeType);
-          await fs.writeFile(destPath, stripped);
-          fileSize = stripped.length;
-        } catch (err) {
-          logger.warn('[TUS] EXIF strip failed, keeping original bytes', { err });
-        }
-      }
+      // #3627, #11258 — GPS et métadonnées retirés des photos ET des vidéos
+      // AVANT toute persistance : `destPath` est servi tel quel par
+      // `GET /attachments/:id`. Décidé par le TYPE, pas par la catégorie : un
+      // HEIC n'est pas une `image` du catalogue et porte pourtant un EXIF.
+      const fileSize = (await stripStoredMediaMetadata({ filePath: destPath, mimeType })) ?? (upload.size || 0);
       const relPath = path.join(year, month, userId, storedName);
 
       let metadata: Record<string, any> = {};

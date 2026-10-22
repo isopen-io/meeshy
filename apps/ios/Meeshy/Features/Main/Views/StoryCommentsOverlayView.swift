@@ -20,7 +20,7 @@ struct StoryCommentsOverlayView: View {
     /// le bouton « Voir plus de réponses » de chaque `StoryCommentThread`.
     var storyCommentRepliesHasMore: [String: Bool] = [:]
     let isLoadingComments: Bool
-    let userLang: String
+    let readerLanguages: [String]
     /// Vrai quand la story consultée est expirée. Affiche une bannière au-dessus
     /// de la liste pour que les commentaires/réactions restent visibles tout en
     /// indiquant que la story n'est plus accessible (spec 2026-06-23).
@@ -57,7 +57,7 @@ struct StoryCommentsOverlayView: View {
     /// transaction — même courbe, même durée que le composeur.
     let zone: StoryCommentsZone.Frame
 
-    let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
+    let makeStoryCommentRow: (FeedComment, [String]) -> StoryCommentRowView
     let toggleStoryCommentThread: @MainActor (String) async -> Void
 
     private var topLevelComments: [FeedComment] {
@@ -188,7 +188,7 @@ struct StoryCommentsOverlayView: View {
                             replies: storyCommentRepliesMap[comment.id] ?? [],
                             isExpanded: storyCommentExpandedThreads.contains(comment.id),
                             isLoadingReplies: storyCommentLoadingReplies.contains(comment.id),
-                            userLang: userLang,
+                            readerLanguages: readerLanguages,
                             makeRow: makeStoryCommentRow,
                             onToggleThread: { Task { await toggleStoryCommentThread(comment.id) } },
                             hasMoreReplies: storyCommentExpandedThreads.contains(comment.id)

@@ -23,6 +23,8 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
@@ -1974,7 +1976,7 @@ class StoryComposerViewModelTest {
         assertThat(request.captured.content).isNull()
     }
 
-    // --- Bottom-band toolbar (Contenu / Effets) -----------------------------
+    // --- Bottom band (seven-tool row) ---------------------------------------
 
     @Test
     fun `the band starts hidden`() = runTest {
@@ -1983,59 +1985,73 @@ class StoryComposerViewModelTest {
     }
 
     @Test
-    fun `tapping a band FAB opens that category`() = runTest {
+    fun `tapping a tool opens its panel`() = runTest {
         val vm = viewModel()
 
-        vm.onBandFabTap(BandCategory.CONTENU)
+        vm.onBandToolTap(StoryToolMode.TEXT)
 
-        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.CONTENU))
+        assertThat(vm.state.value.band.activeTool).isEqualTo(StoryToolMode.TEXT)
     }
 
     @Test
-    fun `tapping the open category FAB again closes the band`() = runTest {
+    fun `tapping the open tool again closes the band and another tool switches`() = runTest {
         val vm = viewModel()
-        vm.onBandFabTap(BandCategory.EFFETS)
+        vm.onBandToolTap(StoryToolMode.TEXTURE)
 
-        vm.onBandFabTap(BandCategory.EFFETS)
+        vm.onBandToolTap(StoryToolMode.MEDIA)
+        assertThat(vm.state.value.band.activeTool).isEqualTo(StoryToolMode.MEDIA)
+
+        vm.onBandToolTap(StoryToolMode.MEDIA)
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `swiping up on a tool forces its panel open`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandToolSwipeUp(StoryToolMode.DRAWING)
+        vm.onBandToolSwipeUp(StoryToolMode.DRAWING)
+
+        assertThat(vm.state.value.band.activeTool).isEqualTo(StoryToolMode.DRAWING)
+    }
+
+    @Test
+    fun `swiping down hides the chrome and a ghost tap gives it back`() = runTest {
+        val vm = viewModel()
+
+        vm.onBandSwipeDown()
+        assertThat(vm.state.value.band.isChromeHidden).isTrue()
+
+        vm.onBandShowChrome()
+        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
+    }
+
+    @Test
+    fun `swiping down with a panel open closes it instead of hiding the chrome`() = runTest {
+        val vm = viewModel()
+        vm.onBandToolTap(StoryToolMode.TEXT)
+
+        vm.onBandSwipeDown()
 
         assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
     }
 
     @Test
-    fun `tapping the other FAB switches the open category`() = runTest {
+    fun `opening a tool clears a voluntary chrome hiding`() = runTest {
         val vm = viewModel()
-        vm.onBandFabTap(BandCategory.CONTENU)
+        vm.onBandSwipeDown()
 
-        vm.onBandFabTap(BandCategory.EFFETS)
+        vm.onBandToolTap(StoryToolMode.MEDIA)
 
-        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
+        assertThat(vm.state.value.band.isChromeHidden).isFalse()
     }
 
     @Test
-    fun `dismissing the band hides it`() = runTest {
+    fun `dismissing the band hides the panel`() = runTest {
         val vm = viewModel()
-        vm.onBandFabTap(BandCategory.CONTENU)
+        vm.onBandToolTap(StoryToolMode.TEXT)
 
         vm.onBandDismiss()
-
-        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
-    }
-
-    @Test
-    fun `swapping the band category flips contenu to effets`() = runTest {
-        val vm = viewModel()
-        vm.onBandFabTap(BandCategory.CONTENU)
-
-        vm.onBandSwapCategory()
-
-        assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Tiles(BandCategory.EFFETS))
-    }
-
-    @Test
-    fun `swapping the band category is inert while hidden`() = runTest {
-        val vm = viewModel()
-
-        vm.onBandSwapCategory()
 
         assertThat(vm.state.value.band).isEqualTo(ComposerBandState.Hidden)
     }
@@ -2278,7 +2294,7 @@ class StoryComposerViewModelTest {
     fun `onEnterDrawingMode activates drawing, closes the band and clears element selections`() = runTest {
         val vm = viewModel()
         vm.onAddTextElement()
-        vm.onBandFabTap(BandCategory.CONTENU)
+        vm.onBandToolTap(StoryToolMode.TEXT)
 
         vm.onEnterDrawingMode()
 

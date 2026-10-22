@@ -40,6 +40,7 @@ public final class StoryBackgroundLayer: CALayer {
     }
 
     private nonisolated let layerState = Locked(uncheckedState: StoryBackgroundLayerState())
+    nonisolated let driftSeekGate = DriftSeekGate()
     public private(set) nonisolated var kind: Kind { get { layerState[unchecked: \.kind] } set { layerState[unchecked: \.kind] = newValue } }
     public private(set) nonisolated var transform3D: BackgroundTransform { get { layerState[unchecked: \.transform3D] } set { layerState[unchecked: \.transform3D] = newValue } }
 

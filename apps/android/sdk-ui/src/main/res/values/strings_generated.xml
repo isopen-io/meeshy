@@ -1,5 +1,6 @@
 <!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
 <resources>
+    <string name="audio_fullscreen_dial">Position in the voice message</string>
     <string name="common_clearSearch">Clear search</string>
     <string name="common_close">Close</string>
     <string name="emoji_category_activities">Activities</string>
@@ -12,6 +13,9 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symbols</string>
     <string name="emoji_category_travel">Travel</string>
+    <string name="media_trim_loading">Loading preview</string>
+    <string name="media_trim_of_total">of %s</string>
+    <string name="media_trim_window">Kept portion</string>
     <string name="notification_date_ago">%s ago</string>
     <string name="notification_date_hours">%d h</string>
     <string name="notification_date_minutes">%d min</string>

@@ -142,7 +142,7 @@ describe('isExifStrippable', () => {
     ['image/png', true],
     ['image/webp', true],
     ['IMAGE/JPEG', true],
-    ['image/gif', false],
+    ['image/gif', true],
     ['image/svg+xml', false],
     ['video/mp4', false],
     ['audio/mp4', false],
@@ -290,10 +290,10 @@ describe('stripExifFromImageBuffer', () => {
     expect(after.height).toBe(100);
   });
 
-  it('rend le buffer INCHANGÉ pour un type non couvert (gif, svg, autre)', async () => {
-    const gifLike = Buffer.from('GIF89a-not-a-real-gif-but-thats-fine-here');
-    const result = await stripExifFromImageBuffer(gifLike, 'image/gif');
-    expect(result).toBe(gifLike);
+  it('rend le buffer INCHANGÉ pour un type non couvert (svg, autre) — le GIF est couvert depuis #11258', async () => {
+    const pdfLike = Buffer.from('%PDF-1.4 not-an-image');
+    const result = await stripExifFromImageBuffer(pdfLike, 'application/pdf');
+    expect(result).toBe(pdfLike);
 
     const svgLike = Buffer.from('<svg></svg>');
     const resultSvg = await stripExifFromImageBuffer(svgLike, 'image/svg+xml');

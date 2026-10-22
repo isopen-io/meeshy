@@ -46,6 +46,16 @@ internal object CacheTables {
         indexSql = listOf("CREATE INDEX IF NOT EXISTS `index_media_index_conversationId_kind_createdAt` ON `media_index` (`conversationId`, `kind`, `createdAt`)"),
     )
 
+    val cacheEntries = CacheTableDefinition(
+        name = "cache_entries",
+        createSql = "CREATE TABLE IF NOT EXISTS `cache_entries` (`namespace` TEXT NOT NULL, `key` TEXT NOT NULL, `itemId` TEXT NOT NULL, `position` INTEGER NOT NULL, `contentHash` TEXT NOT NULL, `lastFetchedAt` INTEGER NOT NULL, `payload` TEXT NOT NULL, PRIMARY KEY(`namespace`, `key`, `itemId`))",
+    )
+
+    val keyedJsonCache = CacheTableDefinition(
+        name = "keyed_json_cache",
+        createSql = "CREATE TABLE IF NOT EXISTS `keyed_json_cache` (`namespace` TEXT NOT NULL, `key` TEXT NOT NULL, `payload` TEXT NOT NULL, `fetchedAt` INTEGER NOT NULL, PRIMARY KEY(`namespace`, `key`))",
+    )
+
     val all: List<CacheTableDefinition> = listOf(
         payloadTable("conversations", "id", "`updatedAt` INTEGER NOT NULL, `cachedAt` INTEGER NOT NULL, `unreadCount` INTEGER NOT NULL,"),
         CacheTableDefinition(
@@ -68,6 +78,8 @@ internal object CacheTables {
         editRevisions,
         directoryContacts,
         mediaIndex,
+        cacheEntries,
+        keyedJsonCache,
     )
 
     val names: Set<String> = all.map { it.name }.toSet()

@@ -14,6 +14,9 @@ import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.ApiPostTranslationEntry
+import me.meeshy.sdk.model.DiscoverabilityPrecision
+import me.meeshy.sdk.model.PostEditDraft
+import me.meeshy.sdk.model.PostMentionInput
 import me.meeshy.sdk.model.PostType
 import me.meeshy.sdk.model.PostViewersResponse
 import me.meeshy.sdk.model.SharedPlace
@@ -33,6 +36,7 @@ import me.meeshy.sdk.net.api.RepostPostRequest
 import me.meeshy.sdk.net.api.TranslateRequest
 import me.meeshy.sdk.net.api.TranslationApi
 import me.meeshy.sdk.net.api.UpdatePostRequest
+import me.meeshy.sdk.net.api.toUpdateRequest
 import me.meeshy.sdk.model.PostTranslationMerge
 import me.meeshy.sdk.model.MediaCaptionTranslationMerge
 import me.meeshy.sdk.model.ApiMediaCaptionTranslationEntry
@@ -321,6 +325,12 @@ class PostRepository @Inject constructor(
         repostOfId: String? = null,
         location: SharedPlace? = null,
         mediaAlt: Map<String, String>? = null,
+        visibilityUserIds: List<String>? = null,
+        storyEffects: StoryEffects? = null,
+        allowSoundExtraction: Boolean? = null,
+        mentions: List<PostMentionInput>? = null,
+        mediaCaption: Map<String, String>? = null,
+        discoverabilityPrecision: DiscoverabilityPrecision? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.create(
@@ -337,6 +347,12 @@ class PostRepository @Inject constructor(
                     repostOfId = repostOfId,
                     location = location,
                     mediaAlt = mediaAlt,
+                    visibilityUserIds = visibilityUserIds,
+                    storyEffects = storyEffects,
+                    allowSoundExtraction = allowSoundExtraction,
+                    mentions = mentions,
+                    mediaCaption = mediaCaption,
+                    discoverabilityPrecision = discoverabilityPrecision,
                 ),
             )
         }
@@ -348,6 +364,10 @@ class PostRepository @Inject constructor(
         moodEmoji: String? = null,
     ): NetworkResult<ApiPost> =
         apiCall { postApi.update(postId, UpdatePostRequest(content, visibility, moodEmoji)) }
+
+    /** Édition à champs déclarés : seul ce que [PostEditPayload.build] a laissé part sur le fil. */
+    suspend fun update(postId: String, draft: PostEditDraft): NetworkResult<ApiPost> =
+        apiCall { postApi.update(postId, draft.toUpdateRequest()) }
 
     suspend fun delete(postId: String): NetworkResult<Unit> =
         apiCall { postApi.delete(postId) }
@@ -493,6 +513,12 @@ class PostRepository @Inject constructor(
         originalLanguage: String? = null,
         mediaIds: List<String>? = null,
         repostOfId: String? = null,
+        visibilityUserIds: List<String>? = null,
+        mentions: List<PostMentionInput>? = null,
+        allowSoundExtraction: Boolean? = null,
+        mediaAlt: Map<String, String>? = null,
+        mediaCaption: Map<String, String>? = null,
+        alsoAsReel: Boolean? = null,
     ): NetworkResult<ApiPost> =
         apiCall {
             postApi.createStory(
@@ -503,6 +529,12 @@ class PostRepository @Inject constructor(
                     originalLanguage = originalLanguage,
                     mediaIds = mediaIds,
                     repostOfId = repostOfId,
+                    visibilityUserIds = visibilityUserIds,
+                    mentions = mentions,
+                    allowSoundExtraction = allowSoundExtraction,
+                    mediaAlt = mediaAlt,
+                    mediaCaption = mediaCaption,
+                    alsoAsReel = alsoAsReel,
                 ),
             )
         }

@@ -51,7 +51,7 @@ final class NSEPendingPostConsumer {
         // fil (avec ET sans fractions de seconde — `WireDate`).
         let decoder = APIClient.makeAPIPayloadDecoder()
 
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        let langs = ReaderPrism.resolve(for: AuthManager.shared.currentUser)
 
         let fm = FileManager.default
         var merged = 0

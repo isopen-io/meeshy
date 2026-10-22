@@ -17,6 +17,7 @@ import me.meeshy.sdk.net.apiCall
 import me.meeshy.sdk.net.apiCallUnit
 import me.meeshy.sdk.net.pagedApiCall
 import me.meeshy.sdk.outbox.FriendRequestPayload
+import me.meeshy.sdk.outbox.FriendRespondPayload
 import me.meeshy.sdk.outbox.OutboxIds
 import me.meeshy.sdk.outbox.OutboxKind
 import me.meeshy.sdk.outbox.OutboxLanes
@@ -71,6 +72,34 @@ class FriendRepository @Inject constructor(
                 lane = OutboxLanes.FRIEND,
                 targetId = receiverId,
                 payload = MeeshyApi.json.encodeToString(FriendRequestPayload(message)),
+                cmid = cmid,
+            ),
+        )
+    }
+
+    /**
+     * Queues the answer to a RECEIVED request durably (accept or reject), so the gesture
+     * is accepted offline and delivered FIFO on the friend lane at reconnection. Only
+     * enqueues: the caller applies the optimistic [FriendshipCache] change. The row is keyed
+     * by the request id, so a second answer to the same request supersedes the first.
+     *
+     * @return the queued row's `cmid`, or `null` for a blank request or user id.
+     */
+    suspend fun enqueueRespondFriendRequest(
+        requestId: String,
+        userId: String,
+        accepted: Boolean,
+        cmid: String = OutboxIds.cmid(),
+    ): String? {
+        if (requestId.isBlank() || userId.isBlank()) return null
+        return outboxRepository.enqueue(
+            OutboxMutation(
+                kind = OutboxKind.RESPOND_FRIEND_REQUEST,
+                lane = OutboxLanes.FRIEND,
+                targetId = requestId,
+                payload = MeeshyApi.json.encodeToString(
+                    FriendRespondPayload(FriendRequestAction.responding(accepted).wire, userId),
+                ),
                 cmid = cmid,
             ),
         )

@@ -102,7 +102,7 @@ final class ConversationIncomingMessageReconciler {
             // below — `delegate.messages` (and therefore this
             // index) can change across the suspension point.
             let optimisticContent = delegate.messages[optimisticIdx].content
-            let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+            let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
             var msgArray = [decoded]
             await delegate.decryptMessagesIfNeeded(&msgArray)
             guard let serverMsg = msgArray.first else { return }
@@ -187,7 +187,7 @@ final class ConversationIncomingMessageReconciler {
                 if hasNewData, let persistence = persistenceProvider() {
                     // Write refreshed attachment data through persistence;
                     // store observation surfaces the update to the view.
-                    let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+                    let refreshed = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
                     let attachmentsJson = try? JSONEncoder().encode(refreshed.attachments)
                     do {
                         try await persistence.updateAttachmentsJson(
@@ -250,7 +250,7 @@ final class ConversationIncomingMessageReconciler {
         // for the transient UI signals (scroll-to-bottom preview) —
         // the persisted row stays ciphertext on disk and the
         // display pipeline decrypts it.
-        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [])
+        let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username, preferredLanguages: ReaderPrism.resolve(for: AuthManager.shared.currentUser))
         var msgArray = [decoded]
         await delegate.decryptMessagesIfNeeded(&msgArray)
         guard let msg = msgArray.first else { return }

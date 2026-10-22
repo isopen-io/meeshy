@@ -42,7 +42,7 @@ struct ConversationRowItem: View {
     let draftSummary: DraftSummary?
     /// B1 (Prisme Linguistique) — viewer preferred languages used to
     /// resolve the last-message preview translation. Passed once from
-    /// the list (`AuthManager.currentUser?.preferredContentLanguages`)
+    /// the list (`ReaderPrism.resolve(for:)`, the reader's strict prism)
     /// instead of read per-row to keep the row equatable.
     let preferredContentLanguages: [String]
     /// Empreinte de l'aperçu (ids + `updatedAt` + `deletedAt` + langue servie) :

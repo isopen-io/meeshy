@@ -46,6 +46,9 @@ protocol WebRTCClientProviding: AnyObject {
     /// with video for the available budget. Min bitrate is always preserved
     /// at the value set by `applyAudioCodecPreferences` (16 kbps floor).
     func applyAudioEncoding(maxBitrateBps: Int)
+    /// La caméra qui capture en ce moment (#11293) : `WebRTCService` la
+    /// rechoisit à l'identique quand le format de capture doit changer.
+    var liveCameraUniqueID: String? { get }
     /// Whether a local camera track currently exists (audio-only calls have
     /// none until upgraded). Drives the self-preview / camera-toggle UI.
     var hasLocalVideoTrack: Bool { get }
@@ -83,4 +86,8 @@ protocol WebRTCClientProviding: AnyObject {
     func disconnectAfterFlushingPendingSend()
 
     var videoFilterPipeline: VideoFilterPipeline { get }
+}
+
+extension WebRTCClientProviding {
+    var liveCameraUniqueID: String? { nil }
 }

@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.account.PhoneChangeFlow
 import me.meeshy.sdk.model.auth.MagicLinkCountdown
 import me.meeshy.sdk.model.auth.SignupFieldValidation
 import me.meeshy.sdk.net.ApiError
@@ -38,9 +39,6 @@ enum class AccountContactErrorKind {
 /** Seconds the gateway rate-limits `resend-email-change-verification` to (`contact-change.ts`). */
 private const val EMAIL_RESEND_COOLDOWN_SECONDS = 60
 
-/** Length of the SMS code `verify-phone-change` expects (`verifyPhoneChangeSchema`). */
-private const val PHONE_CODE_LENGTH = 6
-
 data class AccountContactUiState(
     val user: MeeshyUser? = null,
 
@@ -51,11 +49,8 @@ data class AccountContactUiState(
     val emailError: AccountContactErrorKind? = null,
     val resendCooldown: MagicLinkCountdown? = null,
 
-    val isEditingPhone: Boolean = false,
-    val newPhone: String = "",
+    val phone: PhoneChangeFlow = PhoneChangeFlow(),
     val phoneLoading: Boolean = false,
-    val phoneSent: Boolean = false,
-    val phoneCode: String = "",
     val phoneVerifying: Boolean = false,
     val phoneError: AccountContactErrorKind? = null,
 ) {
@@ -67,12 +62,17 @@ data class AccountContactUiState(
     val canResendEmail: Boolean
         get() = resendCooldown?.canResend(emailLoading) == true
 
-    val canSubmitPhone: Boolean
-        get() = SignupFieldValidation.isPhoneValidLocally(newPhone) && !phoneLoading
+    val isEditingPhone: Boolean get() = phone.isEditing
+    val newPhone: String get() = phone.number
+    val phoneSent: Boolean get() = phone.isCodeSent
+    val phoneCode: String get() = phone.code
 
-    /** [onPhoneCodeChange] already guarantees a digit-only, ≤6-char buffer. */
+    val canSubmitPhone: Boolean
+        get() = phone.canSendCode && !phoneLoading
+
+    /** [PhoneChangeFlow.onCodeChange] already guarantees a digit-only, ≤6-char buffer. */
     val canVerifyPhoneCode: Boolean
-        get() = phoneCode.length == PHONE_CODE_LENGTH && !phoneVerifying
+        get() = phone.canVerify && !phoneVerifying
 }
 
 /**
@@ -100,7 +100,10 @@ class AccountContactViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             sessionRepository.currentUser.collect { user ->
-                _state.update { it.copy(user = user) }
+                _state.update {
+                    val confirmed = it.emailSent && user?.emailVerifiedAt != null
+                    it.copy(user = user, emailSent = it.emailSent && !confirmed, resendCooldown = if (confirmed) null else it.resendCooldown)
+                }
             }
         }
     }
@@ -190,15 +193,15 @@ class AccountContactViewModel @Inject constructor(
     // ---- phone ----
 
     fun beginEditPhone() {
-        _state.update { it.copy(isEditingPhone = true, newPhone = it.user?.phoneNumber.orEmpty(), phoneError = null) }
+        _state.update { it.copy(phone = it.phone.beginEdit(it.user?.phoneNumber), phoneError = null) }
     }
 
     fun onNewPhoneChange(value: String) {
-        _state.update { it.copy(newPhone = value, phoneError = null) }
+        _state.update { it.copy(phone = it.phone.onNumberChange(value), phoneError = null) }
     }
 
     fun cancelEditPhone() {
-        _state.update { it.copy(isEditingPhone = false, newPhone = "", phoneError = null) }
+        _state.update { it.copy(phone = it.phone.cancel(), phoneError = null) }
     }
 
     /** Sends a 6-digit SMS code to [AccountContactUiState.newPhone]. Double-tap safe. */
@@ -209,7 +212,7 @@ class AccountContactViewModel @Inject constructor(
         viewModelScope.launch {
             when (userRepository.changePhone(snapshot.newPhone.trim())) {
                 is NetworkResult.Success -> _state.update {
-                    it.copy(phoneLoading = false, phoneSent = true, isEditingPhone = false)
+                    it.copy(phoneLoading = false, phone = it.phone.codeSent())
                 }
                 is NetworkResult.Failure -> _state.update {
                     it.copy(phoneLoading = false, phoneError = AccountContactErrorKind.PHONE_CHANGE)
@@ -225,21 +228,18 @@ class AccountContactViewModel @Inject constructor(
      */
     fun verifyCurrentPhone() {
         val phone = _state.value.user?.phoneNumber?.takeIf { it.isNotBlank() } ?: return
-        _state.update { it.copy(newPhone = phone) }
+        _state.update { it.copy(phone = it.phone.onNumberChange(phone)) }
         submitPhoneChange()
     }
 
     /** Digit-only, truncated-to-6 buffer — the field itself guarantees [AccountContactUiState.canVerifyPhoneCode]'s shape. */
     fun onPhoneCodeChange(value: String) {
-        val digitsOnly = value.filter(Char::isDigit).take(PHONE_CODE_LENGTH)
-        _state.update { it.copy(phoneCode = digitsOnly, phoneError = null) }
+        _state.update { it.copy(phone = it.phone.onCodeChange(value), phoneError = null) }
     }
 
     /** Backs out of the phone flow without a network call (mirrors [TwoFactorViewModel.cancel]). */
     fun cancelPhoneVerification() {
-        _state.update {
-            it.copy(phoneSent = false, isEditingPhone = false, phoneCode = "", newPhone = "", phoneError = null)
-        }
+        _state.update { it.copy(phone = it.phone.cancel(), phoneError = null) }
     }
 
     /**
@@ -258,10 +258,7 @@ class AccountContactViewModel @Inject constructor(
                     _state.update {
                         it.copy(
                             phoneVerifying = false,
-                            phoneSent = false,
-                            isEditingPhone = false,
-                            phoneCode = "",
-                            newPhone = "",
+                            phone = it.phone.verified(),
                         )
                     }
                 }
@@ -270,6 +267,16 @@ class AccountContactViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Foreground return: a verification link opened in the mail app confirms the address
+     * out-of-band, so while an email is pending the session is re-read and the badge flips
+     * to Verified without any action. Inert when nothing is pending (no useless request).
+     */
+    fun onResume() {
+        if (!_state.value.emailSent) return
+        viewModelScope.launch { sessionRepository.refresh() }
     }
 
     override fun onCleared() {

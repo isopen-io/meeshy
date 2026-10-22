@@ -1,0 +1,17 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="story_composer_fab_badge">%d عنصر نشط</string>
+    <string name="story_composer_fab_badge_none">لا توجد عناصر</string>
+    <string name="story_composer_fab_hint_close">انقر مرتين للإغلاق.</string>
+    <string name="story_composer_fab_hint_open">انقر مرتين للفتح.</string>
+    <string name="story_composer_fab_open">فتح أداة %s</string>
+    <string name="story_composer_grabber">مقبض شريط الأدوات</string>
+    <string name="story_composer_grabber_hint_dismiss">اسحب لأسفل للتصغير أو الإغلاق.</string>
+    <string name="story_composer_grabber_hint_resize">اسحب لأعلى للتكبير، ولأسفل للتصغير أو الإغلاق.</string>
+    <string name="story_tool_audio">صوت</string>
+    <string name="story_tool_drawing">رسم</string>
+    <string name="story_tool_media">وسائط</string>
+    <string name="story_tool_text">نص</string>
+    <string name="story_tool_texture">خلفية</string>
+    <string name="story_tool_timeline">الخط الزمني</string>
+</resources>

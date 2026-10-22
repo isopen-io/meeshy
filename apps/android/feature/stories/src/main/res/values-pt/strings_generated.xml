@@ -1,0 +1,17 @@
+<!-- GÉNÉRÉ — ne pas modifier. Produit par apps/android/scripts/i18n/xcstrings_to_android.py depuis les catalogues de traduction iOS ; régénérer avec ./apps/android/meeshy.sh i18n -->
+<resources>
+    <string name="story_composer_fab_badge">%d elemento(s) ativo(s)</string>
+    <string name="story_composer_fab_badge_none">Nenhum elemento</string>
+    <string name="story_composer_fab_hint_close">Toque duas vezes para fechar.</string>
+    <string name="story_composer_fab_hint_open">Toque duas vezes para abrir.</string>
+    <string name="story_composer_fab_open">Abrir a ferramenta %s</string>
+    <string name="story_composer_grabber">Alça da barra de ferramentas</string>
+    <string name="story_composer_grabber_hint_dismiss">Arraste para baixo para reduzir ou fechar.</string>
+    <string name="story_composer_grabber_hint_resize">Arraste para cima para ampliar, para baixo para reduzir ou fechar.</string>
+    <string name="story_tool_audio">Som</string>
+    <string name="story_tool_drawing">Desenho</string>
+    <string name="story_tool_media">Mídia</string>
+    <string name="story_tool_text">Texto</string>
+    <string name="story_tool_texture">Fundo</string>
+    <string name="story_tool_timeline">Linha do tempo</string>
+</resources>

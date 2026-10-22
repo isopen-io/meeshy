@@ -52,6 +52,7 @@ public object OutboxLocalTargets {
         OutboxKind.BLOCK_USER,
         OutboxKind.UNBLOCK_USER,
         OutboxKind.SEND_FRIEND_REQUEST,
+        OutboxKind.RESPOND_FRIEND_REQUEST,
     ).map { it.name }.toSet()
 
     /** Whether [kind] sends its row's `targetId` to the server as a resource key. */

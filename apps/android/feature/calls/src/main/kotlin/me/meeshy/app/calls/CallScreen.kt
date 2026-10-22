@@ -1,6 +1,5 @@
 package me.meeshy.app.calls
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -34,9 +33,10 @@ import me.meeshy.sdk.theme.DynamicColorGenerator
 import me.meeshy.ui.theme.MeeshyRadius
 import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
+import me.meeshy.sdk.model.call.CallStatusLabelLaw
+import me.meeshy.sdk.model.call.IncomingCallAnswer
+import org.webrtc.VideoTrack
 import me.meeshy.ui.theme.hexColor
-
-private const val CALL_ENDED_AUTO_DISMISS_MS = 1500L
 
 /**
  * The minimal 1:1 call screen — pure glue over [CallViewModel]. It starts the
@@ -71,7 +71,7 @@ fun CallScreen(
             // Gardé sur INCOMING : une ré-entrée (second tap de notification,
             // onNewIntent) sur un appel déjà décroché ne re-join jamais.
             if (autoAnswer && viewModel.state.value.status == CallStatus.INCOMING) {
-                permissionGate.withMediaPermissions { viewModel.accept() }
+                permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
             }
         }
     }
@@ -83,7 +83,7 @@ fun CallScreen(
     // « Réessayer » (parity web retry-on-failure) — auto-dismiss would yank it.
     LaunchedEffect(state.isEnded, state.canRetry) {
         if (state.isEnded && !state.canRetry) {
-            delay(CALL_ENDED_AUTO_DISMISS_MS)
+            delay(CallStatusLabelLaw.ENDED_AUTO_DISMISS_MILLIS)
             viewModel.dismiss()
             onClose()
         }
@@ -93,113 +93,200 @@ fun CallScreen(
     val extensions = viewModel.extensions
     val overlayContext = CallOverlayContext(state = state, accent = accent)
     val extraActions = remember(state) { extensions.actions.offered(state) }
+    val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+    val reduceMotion = rememberCallReduceMotion()
+    val avatarUrl = config.peerAvatarUrl
+    val backdropUrl = if (remoteVideo == null) config.peerBannerUrl?.takeIf { it.isNotBlank() } ?: avatarUrl else null
+    val close = {
+        viewModel.dismiss()
+        onClose()
+    }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MeeshyTheme.tokens.backgroundPrimary),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (state.isVideoCall) CallVideoLayers(viewModel)
+    CallImmersiveEffect()
+    CallStatusAnnouncer(state.status)
 
-        CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Background, overlayContext, Modifier.fillMaxSize())
-
-        Column(
+    // L'écran d'appel est blanc sur un fond sombre ÉPINGLÉ, en thème clair comme en thème sombre :
+    // on épingle aussi le thème pour que les jetons de texte et de surface des enfants restent clairs.
+    MeeshyTheme(darkTheme = true) {
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Cet ecran n'a pas de Scaffold : depuis que le Scaffold racine ne
-                // reserve plus les barres systeme (MeeshyApp.kt, contentWindowInsets
-                // a zero), il pose lui-meme son inset. Le fond reste PLEIN ECRAN,
-                // seul le CONTENU est retreci — c'est exactement la geometrie
-                // d'avant, le degrade en plus.
-                .systemBarsPadding()
-                .padding(MeeshySpacing.xl),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
+                .callSwipeToMinimize(
+                    enabled = CallPillPresenter.isMinimizable(state.status),
+                    onMinimize = onMinimize,
+                ),
+            contentAlignment = Alignment.Center,
         ) {
-            Spacer(Modifier.height(MeeshySpacing.xl))
+            CallBackdrop(imageUrl = backdropUrl)
 
-            CallPeerBlock(state = state, accent = accent)
+            if (state.isVideoCall) CallVideoLayers(viewModel, remoteVideo, connected = state.showsConnectedLayout)
 
-            state.captionText?.let { caption -> CallCaption(caption) }
-            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
-            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
+            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Background, overlayContext, Modifier.fillMaxSize())
 
-            CallControlsRow(
-                state = state,
-                accent = accent,
-                extraActions = extraActions,
-                onExtraAction = { extensions.actions.dispatch(it) },
-                onAccept = { permissionGate.withMediaPermissions { viewModel.accept() } },
-                onDecline = viewModel::decline,
-                onHangUp = viewModel::hangUp,
-                onToggleMute = viewModel::toggleMute,
-                onToggleCamera = viewModel::toggleCamera,
-                onToggleSpeaker = viewModel::toggleSpeaker,
-                onClose = {
-                    viewModel.dismiss()
-                    onClose()
-                },
-                onRetry = viewModel::retry,
-            )
-        }
-
-        CallOverlaySlotHost(
-            extensions.overlays, CallOverlaySlot.Center, overlayContext,
-            Modifier.align(Alignment.Center),
-        )
-        CallOverlaySlotHost(
-            extensions.overlays, CallOverlaySlot.Panel, overlayContext,
-            Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
-        )
-        CallOverlaySlotHost(
-            extensions.overlays, CallOverlaySlot.TopBanner, overlayContext,
-            Modifier.align(Alignment.TopCenter).systemBarsPadding(),
-        )
-
-        state.waitingBanner?.let { banner ->
-            CallWaitingBanner(
-                banner = banner,
-                accent = accent,
-                onReject = viewModel::rejectWaiting,
-                onAnswer = viewModel::acceptWaitingSwap,
-                modifier = Modifier.align(Alignment.TopCenter),
-            )
-        }
-
-        // Minimise affordance — parity with iOS's collapse-to-pill. Offered only
-        // for a live, non-incoming call (the same phases that surface the floating
-        // pill); [onMinimize] opens the conversation while the Activity-scoped
-        // CallViewModel keeps the call alive. On a video call the chevron rides the
-        // remote feed, so it stays white for contrast.
-        if (CallPillPresenter.isMinimizable(state.status)) {
-            IconButton(
-                onClick = onMinimize,
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(MeeshySpacing.sm),
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowDown,
-                    contentDescription = stringResource(R.string.call_action_minimize),
-                    tint = if (state.isVideoCall) Color.White else MeeshyTheme.tokens.textPrimary,
+            // Cet ecran n'a pas de Scaffold : il pose lui-meme l'inset des barres systeme. Le fond
+            // reste PLEIN ECRAN, seul le CONTENU est retreci.
+            val content = Modifier.fillMaxSize().systemBarsPadding()
+            when {
+                state.showsConnectedLayout || state.status == CallStatus.IDLE -> CallConnectedColumn(
+                    state = state,
+                    accent = accent,
+                    extraActions = extraActions,
+                    permissionGate = permissionGate,
+                    config = config,
+                    viewModel = viewModel,
+                    overlayContext = overlayContext,
+                    onClose = close,
+                    modifier = content,
+                )
+                state.status == CallStatus.INCOMING -> IncomingCallScreen(
+                    state = state,
+                    accent = accent,
+                    avatarUrl = avatarUrl,
+                    reduceMotion = reduceMotion,
+                    onAccept = {
+                        permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
+                    },
+                    onDecline = viewModel::decline,
+                    modifier = content,
+                )
+                state.status == CallStatus.OUTGOING_RINGING -> CallOutgoingRingingScreen(
+                    state = state,
+                    avatarUrl = avatarUrl,
+                    reduceMotion = reduceMotion,
+                    onHangUp = viewModel::hangUp,
+                )
+                state.isEnded -> CallEndedPanel(
+                    state = state,
+                    avatarUrl = avatarUrl,
+                    onRetry = viewModel::retry,
+                    onClose = close,
+                    modifier = content,
+                )
+                else -> CallConnectingScreen(
+                    state = state,
+                    avatarUrl = avatarUrl,
+                    reduceMotion = reduceMotion,
+                    onHangUp = viewModel::hangUp,
+                    modifier = content,
                 )
             }
+
+            CallOverlaySlotHost(
+                extensions.overlays, CallOverlaySlot.Center, overlayContext,
+                Modifier.align(Alignment.Center),
+            )
+            CallOverlaySlotHost(
+                extensions.overlays, CallOverlaySlot.Panel, overlayContext,
+                Modifier.align(Alignment.BottomCenter).systemBarsPadding(),
+            )
+            CallOverlaySlotHost(
+                extensions.overlays, CallOverlaySlot.TopBanner, overlayContext,
+                Modifier.align(Alignment.TopCenter).systemBarsPadding(),
+            )
+
+            state.waitingBanner?.let { banner ->
+                CallWaitingBanner(
+                    banner = banner,
+                    accent = accent,
+                    onReject = viewModel::rejectWaiting,
+                    onAnswer = viewModel::acceptWaitingSwap,
+                    modifier = Modifier.align(Alignment.TopCenter),
+                )
+            }
+
+            // Minimise affordance — parity with iOS's collapse-to-pill: offered only for a live,
+            // non-incoming call; the Activity-scoped CallViewModel keeps the call alive.
+            if (CallPillPresenter.isMinimizable(state.status)) {
+                IconButton(
+                    onClick = onMinimize,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .systemBarsPadding()
+                        .padding(MeeshySpacing.sm),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.call_action_minimize),
+                        tint = CallPalette.Ink,
+                    )
+                }
+            }
+
+            CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
+
+            CallToastHost(
+                toasts = extensions.toasts.toasts,
+                modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
+            )
         }
+    }
+}
 
-        CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Fullscreen, overlayContext, Modifier.fillMaxSize())
+/** Ce que « Accepter » devient une fois les permissions tranchées (micro refusé ⇒ raccrocher, caméra refusée ⇒ audio). */
+private fun answerIncoming(viewModel: CallViewModel, answer: IncomingCallAnswer) {
+    when (answer) {
+        IncomingCallAnswer.HangUp -> viewModel.decline()
+        IncomingCallAnswer.Answer -> viewModel.accept()
+        IncomingCallAnswer.AnswerAudioOnly -> {
+            viewModel.accept()
+            if (viewModel.state.value.isCameraOn) viewModel.toggleCamera()
+        }
+    }
+}
 
-        CallToastHost(
-            toasts = extensions.toasts.toasts,
-            modifier = Modifier.align(Alignment.TopCenter).systemBarsPadding(),
+/** La disposition connectée (aussi gardée pendant une reconnexion avec média établi). */
+@Composable
+private fun CallConnectedColumn(
+    state: CallUiState,
+    accent: Color,
+    extraActions: List<OfferedCallAction>,
+    permissionGate: CallPermissionGate,
+    config: CallConfig,
+    viewModel: CallViewModel,
+    overlayContext: CallOverlayContext,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val extensions = viewModel.extensions
+    Column(
+        modifier = modifier.padding(MeeshySpacing.xl),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Spacer(Modifier.height(MeeshySpacing.xl))
+
+        CallPeerBlock(state = state, accent = accent)
+
+        state.captionText?.let { caption -> CallCaption(caption) }
+        CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.Captions, overlayContext)
+        CallOverlaySlotHost(extensions.overlays, CallOverlaySlot.AboveControls, overlayContext)
+
+        CallControlsRow(
+            state = state,
+            accent = accent,
+            extraActions = extraActions,
+            onExtraAction = { extensions.actions.dispatch(it) },
+            onAccept = {
+                permissionGate.answerIncoming(config.isVideo) { answer -> answerIncoming(viewModel, answer) }
+            },
+            onDecline = viewModel::decline,
+            onHangUp = viewModel::hangUp,
+            onToggleMute = viewModel::toggleMute,
+            onToggleCamera = viewModel::toggleCamera,
+            onToggleSpeaker = viewModel::toggleSpeaker,
+            onClose = onClose,
+            onRetry = viewModel::retry,
         )
     }
 }
 
-/** The remote picture full-screen and the local preview as a mirrored picture-in-picture, top end. */
+/**
+ * Connecté : l'image distante plein écran et l'aperçu local en incrustation, en haut à la fin.
+ * Pas encore connecté : l'aperçu local (miroir) tient tout le fond, pour que l'appelant se voie
+ * avant que l'autre décroche.
+ */
 @Composable
-private fun BoxScope.CallVideoLayers(viewModel: CallViewModel) {
-    val remoteVideo by viewModel.remoteVideoTracks.collectAsStateWithLifecycle(initialValue = null)
+private fun BoxScope.CallVideoLayers(viewModel: CallViewModel, remoteVideo: VideoTrack?, connected: Boolean) {
     remoteVideo?.let { track ->
         VideoRenderer(
             track = track,
@@ -211,13 +298,18 @@ private fun BoxScope.CallVideoLayers(viewModel: CallViewModel) {
         VideoRenderer(
             track = local,
             eglContext = viewModel.eglBaseContext,
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(MeeshySpacing.lg)
-                .size(width = 108.dp, height = 148.dp)
-                .clip(RoundedCornerShape(MeeshyRadius.md)),
+            modifier = if (connected) {
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .systemBarsPadding()
+                    .padding(MeeshySpacing.lg)
+                    .size(width = 108.dp, height = 148.dp)
+                    .clip(RoundedCornerShape(MeeshyRadius.md))
+            } else {
+                Modifier.fillMaxSize()
+            },
             mirror = true,
-            overlay = true,
+            overlay = connected,
         )
     }
 }

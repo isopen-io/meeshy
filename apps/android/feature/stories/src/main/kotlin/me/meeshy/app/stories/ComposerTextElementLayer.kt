@@ -30,6 +30,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.vector.ImageVector
+import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,7 +130,7 @@ internal fun TextElementLayer(
         contentAlignment = Alignment.Center,
     ) {
         val typography = element.style.typography()
-        val textColor = parseHexColor(element.color)
+        val textColor = hexColor(element.color, Color.White)
         // The pure model carries the base size in wire "design units" (1080-referential,
         // iOS parity); the on-canvas preview shows it scaled to sp, and the element's own
         // graphicsLayer `scale` above multiplies on top — mirroring iOS `fontSize × scale`.
@@ -162,7 +163,7 @@ internal fun TextElementLayer(
                 // so the border hugs the letterforms rather than boxing the element.
                 Text(
                     text = displayText,
-                    color = parseHexColor(outline.color!!),
+                    color = hexColor(outline.color!!, Color.White),
                     fontSize = canvasFontSize,
                     fontWeight = FontWeight(typography.fontWeight),
                     fontStyle = if (typography.italic) FontStyle.Italic else FontStyle.Normal,

@@ -125,4 +125,26 @@ class MediaUrlResolverTest {
         assertThat(resolveMediaUrl("static:/", base)).isEqualTo("static:/")
     }
 
+
+    @Test
+    fun `une URL privee ou http distante est refusee donc sans requete`() {
+        val base = "https://gate.meeshy.me/api/v1"
+        assertThat(resolveSafeMediaUrl("http://10.0.0.5/a.png", base)).isNull()
+        assertThat(resolveSafeMediaUrl("https://192.168.1.2/a.png", base)).isNull()
+        assertThat(resolveSafeMediaUrl("http://example.com/a.png", base)).isNull()
+        assertThat(resolveSafeMediaUrl("ftp://example.com/a.png", base)).isNull()
+    }
+
+    @Test
+    fun `https, cle de stockage et file local passent`() {
+        val base = "https://gate.meeshy.me/api/v1"
+        assertThat(resolveSafeMediaUrl("https://cdn.meeshy.me/a.png", base)).isEqualTo("https://cdn.meeshy.me/a.png")
+        assertThat(resolveSafeMediaUrl("2025/10/x/p.png", base)).startsWith("https://gate.meeshy.me/api/v1/attachments/file/")
+        assertThat(resolveSafeMediaUrl("file:///data/x.png", base)).isEqualTo("file:///data/x.png")
+    }
+
+    @Test
+    fun `un environnement local accepte les plages privees`() {
+        assertThat(resolveSafeMediaUrl("http://192.168.1.2:3000/a.png", "http://192.168.1.2:3000/api/v1")).isNotNull()
+    }
 }

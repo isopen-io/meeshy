@@ -38,6 +38,9 @@ on:
       - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
+      - 'services/gateway/route-manifest.json'
+      - 'packages/shared/api/**'
+      - 'packages/shared/scripts/generate-android-endpoints.ts'
   pull_request:
     branches: [main, dev]
     paths:
@@ -49,6 +52,9 @@ on:
       - 'apps/ios/MeeshyWidgets/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationExtension/Localizable.xcstrings'
       - 'apps/ios/MeeshyNotificationContentExtension/Localizable.xcstrings'
+      - 'services/gateway/route-manifest.json'
+      - 'packages/shared/api/**'
+      - 'packages/shared/scripts/generate-android-endpoints.ts'
   workflow_dispatch:
 
 concurrency:
@@ -109,6 +115,26 @@ jobs:
         continue-on-error: ${{ steps.scope.outputs.android_touched != 'true' }}
         run: python3 apps/android/scripts/i18n/xcstrings_to_android.py --check
         working-directory: .
+
+  # Routes : les constantes Kotlin de core/network/.../net/routes sont GÉNÉRÉES depuis
+  # services/gateway/route-manifest.json (packages/shared/api/build-kotlin-endpoints.ts).
+  # Le contrôle échoue quand un fichier a divergé du manifeste ou qu'un orphelin subsiste.
+  routes:
+    name: Android routes (generation check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Generated Kotlin routes are up to date (generate-android-endpoints.ts --check)
+        working-directory: packages/shared
+        run: npx --yes tsx@4.20.6 scripts/generate-android-endpoints.ts --check
 
   android:
     name: Android (assemble + unit tests)

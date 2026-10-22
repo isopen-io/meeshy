@@ -1,3 +1,5 @@
+import type { DeviceTier } from '../device/capability-tier';
+
 import type { BlurStage } from './video-effects-frames';
 
 /**
@@ -7,7 +9,8 @@ import type { BlurStage } from './video-effects-frames';
  *
  * - le MODÈLE (selfie segmenter de MediaPipe, `video-effects-segmentation.ts`)
  *   ne se charge qu'au premier flou ;
- * - la personne est DÉCOUPÉE au plus quinze fois par seconde, sur une réduction
+ * - la personne est DÉCOUPÉE au plus quinze fois par seconde (huit ou douze sur
+ *   un appareil bas ou moyen, `segmentIntervalFor`), sur une réduction
  *   de l'image, jamais sur le chemin d'une image : la découpe part dans une
  *   tâche à elle (`schedule`), l'image courante sort avec le dernier masque ;
  * - le masque est LISSÉ d'une découpe à l'autre (moyenne mobile), puis remis
@@ -27,6 +30,14 @@ export type Compositor = {
 };
 
 export const SEGMENT_INTERVAL_MS = 1000 / 15;
+
+/**
+ * La cadence de découpe propre à l'appareil (W10) : quinze par seconde, huit
+ * sur un appareil bas, douze sur un moyen. Le masque est lissé d'une découpe à
+ * l'autre et le compositeur repeint chaque image : une découpe plus rare
+ * traîne un peu au bord de la personne, elle ne fige rien. Argumenté, non mesuré.
+ */
+export const segmentIntervalFor = (tier: DeviceTier): number => (tier === 'low' ? 1000 / 8 : tier === 'mid' ? 1000 / 12 : SEGMENT_INTERVAL_MS);
 
 const MASK_SMOOTHING = 0.5;
 
@@ -109,6 +120,8 @@ type BlurDeps = {
   readonly snapshot: (source: CanvasImageSource, width: number, height: number) => Promise<ImageBitmap>;
   readonly schedule: (task: () => void) => void;
   readonly now: () => number;
+  /** L'intervalle entre deux découpes ; `SEGMENT_INTERVAL_MS` sans consigne. */
+  readonly intervalMs?: number;
 };
 
 type SegmenterState = { readonly kind: 'idle' } | { readonly kind: 'loading' } | { readonly kind: 'ready'; readonly segmenter: SegmenterPort } | { readonly kind: 'failed' };
@@ -150,7 +163,7 @@ export function createSegmentedBlur(deps: BlurDeps): BlurStage {
 
   const maybeSegment = (source: CanvasImageSource, width: number, height: number): void => {
     if (state.kind === 'idle') load();
-    if (state.kind !== 'ready' || busy || deps.now() - last < SEGMENT_INTERVAL_MS) return;
+    if (state.kind !== 'ready' || busy || deps.now() - last < (deps.intervalMs ?? SEGMENT_INTERVAL_MS)) return;
     const { segmenter } = state;
     busy = true;
     last = deps.now();
