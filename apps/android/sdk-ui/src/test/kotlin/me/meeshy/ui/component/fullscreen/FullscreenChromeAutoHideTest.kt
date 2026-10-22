@@ -49,12 +49,9 @@ class FullscreenChromeAutoHideTest {
     }
 
     private fun elapse(millis: Long) {
-        var left = millis
-        while (left > 0) {
-            val step = minOf(left, 100L)
-            compose.mainClock.advanceTimeBy(step)
+        val until = compose.mainClock.currentTime + millis
+        while (compose.mainClock.currentTime < until) {
             compose.mainClock.advanceTimeByFrame()
-            left -= step
         }
     }
 
