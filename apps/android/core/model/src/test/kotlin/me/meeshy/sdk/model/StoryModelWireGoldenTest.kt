@@ -101,12 +101,12 @@ class StoryModelWireGoldenTest {
             { "id": "m1", "postMediaId": "64f0a1b2c3d4e5f6a7b8c9d2", "mediaURL": "https://cdn.meeshy.me/m1.mp4",
               "mediaType": "video", "placement": "background",
               "x": 0.4, "y": 0.6, "scale": 0.9, "rotation": 3, "volume": 0.5, "aspectRatio": 1.7777,
-              "anchor": { "x": 0.5, "y": 0.0 },
+              "anchor": { "x": 0.4, "y": 0.0 },
               "intrinsicDuration": 12.5, "isBackground": true, "loop": true,
               "crop": { "x": 0.1, "y": 0.2, "width": 0.5, "height": 0.6 },
               "zIndex": 2, "startTime": 0.5, "duration": 8, "sourceStart": 3, "sourceEnd": 8,
               "fadeIn": 0.5, "fadeOut": 1.5, "sourceLanguage": "en",
-              "keyframes": [ { "id": "k3", "time": 0, "scale": 1, "easing": "linear" },
+              "keyframes": [ { "id": "k3", "time": 0.5, "scale": 1, "easing": "linear" },
                              { "id": "k4", "time": 4, "scale": 1.3, "easing": "easeOut" } ] }
           ],
           "audioPlayerObjects": [
