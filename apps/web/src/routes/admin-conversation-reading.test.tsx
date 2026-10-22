@@ -279,6 +279,31 @@ describe('le motif écrit précède la requête, et il est FIGÉ', () => {
   });
 });
 
+describe('le motif est borné à la SAISIE, jumelle du schéma de la route des pièces (#11510)', () => {
+  test('le champ porte maxLength 500, et un motif plus long ne désarme pas « Lire » sans le rouvrir : il ne l’arme pas', async () => {
+    const { transport, calls } = transportSouverain();
+    const host = await mounter.mount(
+      <QueryClientProvider client={appQueryClient}>
+        <AdminConversationReading
+          conversationId={CONVERSATION}
+          language="fr"
+          prisme="membre"
+          readerLanguages={['de', 'es']}
+          viewer={VIEWER}
+          deps={{ source: 'gateway', transport }}
+        />
+      </QueryClientProvider>,
+    );
+    await mounter.settle();
+    const champ = host.querySelector<HTMLTextAreaElement>('[data-admin-reason]');
+    expect(champ?.getAttribute('maxlength')).toBe('500');
+    mounter.type(host, '[data-admin-reason]', 'x'.repeat(600));
+    await mounter.settle();
+    expect(host.querySelector<HTMLButtonElement>('[data-admin-reason-submit]')?.disabled).toBe(true);
+    expect(calls().length).toBe(0);
+  });
+});
+
 describe('un ADMIN ne se justifie pas : le motif proposé est déjà écrit (#11410)', () => {
   test('le champ s’ouvre rempli, « Lire » part d’un seul geste avec le motif proposé', async () => {
     appQueryClient.setQueryData(ADMIN_PERMISSIONS_QUERY_KEY, adminIdentityFixture({ role: 'ADMIN' }));

@@ -105,7 +105,7 @@ async function buildApp(prisma: PrismaClient, role: string | null): Promise<Fast
 function pieceFixture(overrides: AnyRecord = {}): AnyRecord {
   return {
     id: 'att-1',
-    messageId: 'm-1',
+    messageId: OID(1),
     originalName: 'reunion.m4a',
     mimeType: 'audio/mp4',
     fileSize: 90210,
@@ -141,9 +141,12 @@ function pieceFixture(overrides: AnyRecord = {}): AnyRecord {
 }
 
 /** Le message PORTEUR, tel que Prisma le rend — LIBRE par défaut, UNE pièce sous lui. */
+/** Un ObjectId de fixture : la loi du curseur refuse tout `id` de porteur qui n'en est pas un (#11510). */
+const OID = (n: number): string => n.toString(16).padStart(24, '0');
+
 function porteurFixture(overrides: AnyRecord = {}, pieces: AnyRecord[] = [pieceFixture()]): AnyRecord {
   return {
-    id: 'm-1',
+    id: OID(1),
     createdAt: new Date('2026-09-01T10:00:00.000Z'),
     senderId: 'participant-1',
     isViewOnce: false,
@@ -314,8 +317,8 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
 
   it('une page pleine rend un curseur OPAQUE en forme `keyset`, et le rejoue en clause de reprise ET-isée', async () => {
     const rows = Array.from({ length: 3 }, (_, i) =>
-      porteurFixture({ id: `m-${i}`, createdAt: new Date(`2026-09-0${3 - i}T10:00:00.000Z`) }, [
-        pieceFixture({ id: `att-${i}`, messageId: `m-${i}` }),
+      porteurFixture({ id: OID(i), createdAt: new Date(`2026-09-0${3 - i}T10:00:00.000Z`) }, [
+        pieceFixture({ id: `att-${i}`, messageId: OID(i) }),
       ]),
     );
     const premiere = await lire({ rows, query: { reason: MOTIF, limit: '2' } });
@@ -325,7 +328,7 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
     expect(page.pagination).toMatchObject({ limit: 2, hasMore: true, form: 'keyset' });
     const cursor = page.pagination.nextCursor as string;
     expect(typeof cursor).toBe('string');
-    expect(cursor).not.toContain('m-1');
+    expect(cursor).not.toContain(OID(1));
 
     const suivante = await lire({ rows: [rows[2]], query: { reason: MOTIF, limit: '2', cursor } });
     expect(suivante.res.statusCode).toBe(200);
@@ -368,11 +371,11 @@ describe('GET /admin/conversations/:id/attachments — la requête remise à Pri
 
   it('un porteur à plusieurs pièces les rend TOUTES dans sa page, dans l’ordre servi — un envoi groupé ne se coupe pas en deux', async () => {
     const rows = [
-      porteurFixture({ id: 'm-1' }, [
+      porteurFixture({ id: OID(1) }, [
         pieceFixture({ id: 'att-b', createdAt: new Date('2026-09-01T10:00:02.000Z') }),
         pieceFixture({ id: 'att-a', createdAt: new Date('2026-09-01T10:00:01.000Z') }),
       ]),
-      porteurFixture({ id: 'm-0', createdAt: new Date('2026-08-31T10:00:00.000Z') }, [pieceFixture({ id: 'att-0', messageId: 'm-0' })]),
+      porteurFixture({ id: OID(0), createdAt: new Date('2026-08-31T10:00:00.000Z') }, [pieceFixture({ id: 'att-0', messageId: OID(0) })]),
     ];
     const { res } = await lire({ rows, query: { reason: MOTIF, limit: '1' } });
     expect(res.statusCode).toBe(200);
@@ -399,7 +402,7 @@ describe('GET /admin/conversations/:id/attachments — la forme servie', () => {
     expect(piece.fileUrl).toBe('/api/v1/attachments/file/uploads%2Freunion.m4a');
     expect(piece.transcription).toEqual({ text: 'la reunion est deplacee a jeudi', segments: [] });
     const porteur = piece.message as AnyRecord;
-    expect(porteur.id).toBe('m-1');
+    expect(porteur.id).toBe(OID(1));
     expect(porteur.senderId).toBe('user-1');
     expect(porteur.senderParticipantId).toBe('participant-1');
     expect((porteur.sender as AnyRecord).displayName).toBe('Alice');

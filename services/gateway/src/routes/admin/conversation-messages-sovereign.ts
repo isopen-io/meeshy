@@ -73,8 +73,10 @@ import { withOrphanedSenderRepair } from '../../services/messaging/withOrphanedS
 import { conversationIdParams } from './admin-conversation-response-schemas';
 
 const REASON_MIN_LENGTH = 10;
-/** La borne HAUTE du motif — il est recopié dans `AdminAuditLog.metadata` à chaque page servie. */
-const REASON_MAX_LENGTH = 500;
+// Pas de borne HAUTE au schéma de CETTE route : elle est en production et le web
+// déjà déployé n'en borne pas la saisie — un 400 ici serait une bascule sèche
+// (#9223). La borne vit côté client (MOTIF_LONGUEUR_MAXIMALE) et au schéma de la
+// route des pièces, née après elle (#11510).
 
 export function registerConversationMessagesSovereignRoute(fastify: FastifyInstance): void {
   fastify.get<{
@@ -122,8 +124,7 @@ export function registerConversationMessagesSovereignRoute(fastify: FastifyInsta
           limit: { type: 'string', description: 'Pagination limit (max 100)' },
           reason: {
             type: 'string',
-            maxLength: REASON_MAX_LENGTH,
-            description: 'Motif écrit de la lecture (10 caractères minimum s\'il est fourni, 500 au plus ; facultatif pour le rang souverain), consigné dans AdminAuditLog'
+            description: 'Motif écrit de la lecture (10 caractères minimum s\'il est fourni ; facultatif pour le rang souverain), consigné dans AdminAuditLog'
           }
         }
       },

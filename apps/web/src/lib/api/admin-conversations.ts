@@ -82,6 +82,8 @@ import { ADMIN_SOUVERAIN_PREFIXE } from './souverain';
 
 /** Le motif écrit est refusé par le SCHÉMA de la route sous dix caractères. */
 export const MOTIF_LONGUEUR_MINIMALE = 10;
+/** … et par le schéma de la route des pièces (#11510) au-delà de cinq cents : la saisie s'arrête là, le 400 n'arrive jamais. */
+export const MOTIF_LONGUEUR_MAXIMALE = 500;
 
 export const ADMIN_CONVERSATIONS_PAGE_SIZE = 20;
 export const ADMIN_MESSAGES_PAGE_SIZE = 30;

@@ -299,11 +299,9 @@ describe('GET /admin/conversations/:id/messages — le rang', () => {
     expect(espion.findManyArgs).toBeNull();
   });
 
-  it('refuse AU SCHÉMA un motif de plus de 500 caractères — il est recopié dans l’audit à CHAQUE page', async () => {
-    const { res, espion } = await lire('ADMIN', [messageFixture()], 'x'.repeat(501));
-    expect(res.statusCode).toBe(400);
-    expect(espion.findManyArgs).toBeNull();
-    expect((await lire('ADMIN', [messageFixture()], 'x'.repeat(500))).res.statusCode).toBe(200);
+  it('accepte encore un motif de plus de 500 caractères — le web déjà déployé ne borne pas la saisie, et cette route est en production (#9223)', async () => {
+    const { res } = await lire('ADMIN', [messageFixture()], 'x'.repeat(600));
+    expect(res.statusCode).toBe(200);
   });
 
   it('un identifiant de conversation qui n’est pas un ObjectId est refusé en 400 AVANT Prisma — jamais un 500', async () => {

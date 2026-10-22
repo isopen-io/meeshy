@@ -9,6 +9,7 @@ import {
   adminConversationThreadQueryKey,
   loadAdminSovereignThread,
   mergeAdminThreadPages,
+  MOTIF_LONGUEUR_MAXIMALE,
   MOTIF_LONGUEUR_MINIMALE,
   nextAdminThreadOffset,
 } from '@/lib/api/admin-conversations';
@@ -385,7 +386,8 @@ export function AdminConversationReading({
     [ephemeralDurations, language],
   );
 
-  const motifSuffisant = saisie.trim().length >= MOTIF_LONGUEUR_MINIMALE;
+  const longueurDuMotif = saisie.trim().length;
+  const motifSuffisant = longueurDuMotif >= MOTIF_LONGUEUR_MINIMALE && longueurDuMotif <= MOTIF_LONGUEUR_MAXIMALE;
 
   if (!armee) {
     return (
@@ -398,6 +400,7 @@ export function AdminConversationReading({
             value={saisie}
             data-admin-reason
             rows={3}
+            maxLength={MOTIF_LONGUEUR_MAXIMALE}
             /* `onInput`, JAMAIS `onChange` — convention du dépôt, et mesurée :
                React fait normalement de `onChange` un synonyme de l'événement
                `input` sur un champ texte, mais l'équivalence repose sur son

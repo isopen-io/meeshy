@@ -97,7 +97,7 @@ const MAX_LIMIT = 100;
 /** L'ordre TOTAL des PORTEURS — la dernière clé est l'`id`, sinon deux messages nés dans la même milliseconde se sautent. */
 const ORDRE_DES_PORTEURS: CursorSort = [
   { field: 'createdAt', direction: 'desc', kind: 'date' },
-  { field: 'id', direction: 'desc', kind: 'string' },
+  { field: 'id', direction: 'desc', kind: 'objectId' },
 ];
 
 /** L'ordre des pièces SOUS un porteur — le même, sur la table des pièces. */
