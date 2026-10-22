@@ -9,6 +9,17 @@ final class StoryLayerStateConcurrencyTests: XCTestCase {
         func image(for urlString: String) async -> UIImage? { nil }
     }
 
+    /// `StoryBackgroundLayer`/`StoryMediaLayer` synchronisent déjà leur état via
+    /// un verrou interne (`Locked(uncheckedState:)`) — c'est exactement ce que ce
+    /// test vérifie. `nonisolated(unsafe)` sur le `let` local ne suffit pas pour le
+    /// vérificateur de paramètres `sending` de `addTask` : il juge l'appartenance
+    /// Sendable de la VALEUR capturée, pas l'annotation de la liaison locale. Même
+    /// boîte que `StoryMediaLayerWeakBox` (StoryMediaLayer.swift), sans son souci
+    /// de `deinit` synthétisé : ceci est un `struct`, pas une `class`.
+    private struct UncheckedSendableBox<Value>: @unchecked Sendable {
+        let value: Value
+    }
+
     func test_backgroundLayer_freshLayerKeepsItsDefaults() {
         let layer = StoryBackgroundLayer()
         guard case .solidColor(let color) = layer.kind else { return XCTFail("kind par défaut inattendu") }
@@ -29,13 +40,16 @@ final class StoryLayerStateConcurrencyTests: XCTestCase {
     }
 
     func test_backgroundLayer_concurrentAccessNeverReturnsATornValue() async {
-        nonisolated(unsafe) let layer = StoryBackgroundLayer()
+        let layer = StoryBackgroundLayer()
+        let layerBox = UncheckedSendableBox(value: layer)
         let candidates = (0..<8).map { (0...$0).map { "h\($0)" } }
         let layers = (0..<8).map { _ in CALayer() }
-        nonisolated(unsafe) let writtenLayers = layers
+        let writtenLayersBox = UncheckedSendableBox(value: layers)
         let torn = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
             for index in 0..<500 {
                 group.addTask {
+                    let layer = layerBox.value
+                    let writtenLayers = writtenLayersBox.value
                     let pick = index % 8
                     if index.isMultiple(of: 2) {
                         layer.letterboxFillHashes = candidates[pick]
@@ -57,16 +71,19 @@ final class StoryLayerStateConcurrencyTests: XCTestCase {
         }
         XCTAssertEqual(torn, 0)
         XCTAssertTrue(candidates.contains(layer.letterboxFillHashes))
-        XCTAssertTrue(writtenLayers.contains { $0 === layer.contentLayer })
+        XCTAssertTrue(layers.contains { $0 === layer.contentLayer })
     }
 
     func test_mediaLayer_concurrentAccessNeverReturnsATornValue() async {
-        nonisolated(unsafe) let layer = StoryMediaLayer()
+        let layer = StoryMediaLayer()
+        let layerBox = UncheckedSendableBox(value: layer)
         let objects = (0..<8).map { _ in NSObject() }
-        nonisolated(unsafe) let identities = objects
+        let identitiesBox = UncheckedSendableBox(value: objects)
         let torn = await withTaskGroup(of: Bool.self, returning: Int.self) { group in
             for index in 0..<500 {
                 group.addTask {
+                    let layer = layerBox.value
+                    let identities = identitiesBox.value
                     let pick = index % 8
                     if index.isMultiple(of: 2) {
                         layer.imageLoader = TaggedLoader(tag: pick)
