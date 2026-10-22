@@ -2868,6 +2868,7 @@
 		BE57E586DD7BBE0E5FE45C4B /* ConversationAudioCallSuspensionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 246419010E6710FB77A38740 /* ConversationAudioCallSuspensionTests.swift */; };
 		F7A9E0AF7D6A92C49E113E21 /* ConversationAudioRemoteCommandsDeferralTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 648CF28132ED77550AC60BEE /* ConversationAudioRemoteCommandsDeferralTests.swift */; };
 		E310BF7223DA15483BF00DE8 /* LaunchPrefetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C16B4125D5EC6399BE14DF04 /* LaunchPrefetchTests.swift */; };
+		FAE8F53FF9429BDB421FE249 /* KeychainMigrationPrefetchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85A6FB37FDF6397D0AA94962 /* KeychainMigrationPrefetchTests.swift */; };
 		BE5B8317F3AC84B127D22ED0 /* AudioTrimSectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4696777A0578030CCCED0FF9 /* AudioTrimSectionTests.swift */; };
 		BE6F4D54AB2E4AA6FC8FFF3D /* MyStoryCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 629AF3A8631CE0794D4AA254 /* MyStoryCard.swift */; };
 		BEAABBCC3597523FC380C183 /* CallConnectionRecoveryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 991BFE2E5DB89C89FE6140B2 /* CallConnectionRecoveryTests.swift */; };
@@ -4555,6 +4556,7 @@
 		246419010E6710FB77A38740 /* ConversationAudioCallSuspensionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioCallSuspensionTests.swift; sourceTree = "<group>"; };
 		648CF28132ED77550AC60BEE /* ConversationAudioRemoteCommandsDeferralTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioRemoteCommandsDeferralTests.swift; sourceTree = "<group>"; };
 		C16B4125D5EC6399BE14DF04 /* LaunchPrefetchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchPrefetchTests.swift; sourceTree = "<group>"; };
+		85A6FB37FDF6397D0AA94962 /* KeychainMigrationPrefetchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainMigrationPrefetchTests.swift; sourceTree = "<group>"; };
 		246CC37D502A7F2904DECE86 /* GameCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GameCopyTests.swift; sourceTree = "<group>"; };
 		247721876AEB0055E91E07AA /* ComposerFramePacingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerFramePacingTests.swift; sourceTree = "<group>"; };
 		247D8F916952D54C5BD279C7 /* APIServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIServiceTests.swift; sourceTree = "<group>"; };
@@ -9746,6 +9748,7 @@
 				246419010E6710FB77A38740 /* ConversationAudioCallSuspensionTests.swift */,
 				648CF28132ED77550AC60BEE /* ConversationAudioRemoteCommandsDeferralTests.swift */,
 				C16B4125D5EC6399BE14DF04 /* LaunchPrefetchTests.swift */,
+				85A6FB37FDF6397D0AA94962 /* KeychainMigrationPrefetchTests.swift */,
 				424E5C31EE1E800408098C2C /* ConversationAudioCoordinatorTests.swift */,
 				BDB025FB54F71557FF39B4D9 /* ConversationAudioInterruptionTests.swift */,
 				32AD2250512DA4B653757722 /* ConversationCreatorTests.swift */,
@@ -15842,6 +15845,7 @@
 				BE57E586DD7BBE0E5FE45C4B /* ConversationAudioCallSuspensionTests.swift in Sources */,
 				F7A9E0AF7D6A92C49E113E21 /* ConversationAudioRemoteCommandsDeferralTests.swift in Sources */,
 				E310BF7223DA15483BF00DE8 /* LaunchPrefetchTests.swift in Sources */,
+				FAE8F53FF9429BDB421FE249 /* KeychainMigrationPrefetchTests.swift in Sources */,
 				96DD406AAEAE26EFB8214093 /* ConversationAudioCoordinatorTests.swift in Sources */,
 				91CAB6638400AF46A11F4BE1 /* ConversationAudioInterruptionTests.swift in Sources */,
 				3CFEC1B14375EBC093A40C5D /* ConversationAvatarMenuTests.swift in Sources */,
