@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -79,7 +80,7 @@ fun StoryTray(
         }
         if (!tray.isEmpty) {
             LazyRow(
-                modifier = Modifier.height(StoryEntryMetrics.height),
+                modifier = Modifier.heightIn(min = StoryEntryMetrics.height),
                 horizontalArrangement = Arrangement.spacedBy(StoryEntryMetrics.itemSpacing),
                 contentPadding = PaddingValues(
                     horizontal = StoryEntryMetrics.paddingHorizontal,
