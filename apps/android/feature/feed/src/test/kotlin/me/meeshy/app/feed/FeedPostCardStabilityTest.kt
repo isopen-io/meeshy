@@ -2,7 +2,9 @@ package me.meeshy.app.feed
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.google.common.truth.Truth.assertThat
@@ -44,7 +46,7 @@ class FeedPostCardStabilityTest {
             MeeshyTheme {
                 Column {
                     posts.value.forEach { post ->
-                        androidx.compose.runtime.key(post.id) { CountedCard(post, compositions) }
+                        key(post.id) { CountedCard(post, compositions) }
                     }
                 }
             }
