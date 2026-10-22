@@ -44,6 +44,10 @@
           "catalog": "app",
           "iosKey": "onboarding.gauge.level1",
           "status": "adopted"
+        },
+        {
+          "androidName": "onboarding_overlay_title",
+          "status": "android-only"
         }
       ]
     }
