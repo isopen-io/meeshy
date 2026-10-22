@@ -181,19 +181,10 @@ final class StoryViewerReactionFlowTests: XCTestCase {
         var storyCurrentUserReactions: [String] = []
         var storyReactionCount = 0
 
-        let priorReactions = storyCurrentUserReactions
-        let priorCount = storyReactionCount
-
         let emoji = "🔥"
         if !storyCurrentUserReactions.contains(emoji) {
             storyCurrentUserReactions.append(emoji)
             storyReactionCount += 1
-        }
-
-        let networkCallDidThrow = false
-        if networkCallDidThrow {
-            storyCurrentUserReactions = priorReactions
-            storyReactionCount = priorCount
         }
 
         XCTAssertEqual(storyCurrentUserReactions, ["🔥"], "Successful reaction keeps the optimistic emoji")

@@ -1,0 +1,1808 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:settings": {
+      "resDir": "feature/settings/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "about.app_name",
+          "androidName": "about_app_name",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.copyright",
+          "androidName": "about_copyright",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.description.body",
+          "androidName": "about_description_body",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.feature.cloudSync",
+          "androidName": "about_feature_cloud_sync",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.feature.encryption",
+          "androidName": "about_feature_encryption",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.feature.themes",
+          "androidName": "about_feature_themes",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.feature.translation",
+          "androidName": "about_feature_translation",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.feature.voiceCloning",
+          "androidName": "about_feature_voice_cloning",
+          "status": "candidate"
+        },
+        {
+          "androidName": "about_info_application_id",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.info.platform",
+          "androidName": "about_info_platform",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.info.sdkVersion",
+          "androidName": "about_info_sdk_version",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.github",
+          "androidName": "about_link_github",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.twitter",
+          "androidName": "about_link_twitter",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.website",
+          "androidName": "about_link_website",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.section.description",
+          "androidName": "about_section_description",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.section.features",
+          "androidName": "about_section_features",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.section.informations",
+          "androidName": "about_section_informations",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.section.links",
+          "androidName": "about_section_links",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.title",
+          "androidName": "about_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "about_version_label",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "account_contact_cancel",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "action.edit",
+          "androidName": "account_contact_edit",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.email.current",
+          "androidName": "account_contact_email_current_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.email.new",
+          "androidName": "account_contact_email_new_label",
+          "status": "candidate"
+        },
+        {
+          "androidName": "account_contact_email_resend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_email_resend_cooldown",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.email",
+          "androidName": "account_contact_email_section",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.email.verification_sent",
+          "androidName": "account_contact_email_sent",
+          "status": "candidate"
+        },
+        {
+          "androidName": "account_contact_error_email_change",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_error_email_resend",
+          "status": "android-only"
+        },
+        {
+          "androidName": "account_contact_error_phone_change",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.magiclink.error.generic",
+          "androidName": "account_contact_error_phone_verify_generic",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_invalid",
+          "androidName": "account_contact_error_phone_verify_invalid",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.not_set",
+          "androidName": "account_contact_not_set",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.not_verified",
+          "androidName": "account_contact_not_verified",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_placeholder",
+          "androidName": "account_contact_phone_code_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_sent",
+          "androidName": "account_contact_phone_code_sent",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.current",
+          "androidName": "account_contact_phone_current_label",
+          "status": "candidate"
+        },
+        {
+          "androidName": "account_contact_phone_new_label",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.field.phone",
+          "androidName": "account_contact_phone_section",
+          "status": "candidate"
+        },
+        {
+          "androidName": "account_contact_phone_send_code",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.verify",
+          "androidName": "account_contact_phone_verify",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "account_contact_send",
+          "status": "candidate"
+        },
+        {
+          "androidName": "account_contact_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.verified",
+          "androidName": "account_contact_verified",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "common.verify",
+          "androidName": "account_contact_verify",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.forgotPassword.confirmPassword",
+          "androidName": "change_password_confirm_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.password.change.current.field",
+          "androidName": "change_password_current_label",
+          "status": "candidate"
+        },
+        {
+          "androidName": "change_password_error_current",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.magiclink.error.generic",
+          "androidName": "change_password_error_generic",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.error.network",
+          "androidName": "change_password_error_network",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "password.reveal.hide",
+          "androidName": "change_password_hide",
+          "status": "candidate"
+        },
+        {
+          "androidName": "change_password_hint_different",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.password.change.validation.length",
+          "androidName": "change_password_hint_length",
+          "status": "candidate"
+        },
+        {
+          "androidName": "change_password_hint_match",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.password.change.new.field",
+          "androidName": "change_password_new_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "password.reveal.show",
+          "androidName": "change_password_show",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.password.strength.veryWeak",
+          "androidName": "change_password_strength_0",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.password.strength.weak",
+          "androidName": "change_password_strength_1",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.quality.grade.medium",
+          "androidName": "change_password_strength_2",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.password.strength.good",
+          "androidName": "change_password_strength_3",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.password.strength.strong",
+          "androidName": "change_password_strength_4",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "auth.password.strength.excellent",
+          "androidName": "change_password_strength_5",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.password.change.submit",
+          "androidName": "change_password_submit",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.password.change.submit",
+          "androidName": "change_password_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "crash_kind_anr",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "crash.kind.cpu",
+          "androidName": "crash_kind_cpu",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "crash.kind.crash",
+          "androidName": "crash_kind_crash",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "crash.kind.disk",
+          "androidName": "crash_kind_disk",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "crash.kind.exception",
+          "androidName": "crash_kind_exception",
+          "status": "candidate"
+        },
+        {
+          "androidName": "crash_reports_clear_all",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.cancel",
+          "androidName": "crash_reports_confirm_cancel",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.action",
+          "androidName": "crash_reports_confirm_clear",
+          "status": "candidate"
+        },
+        {
+          "androidName": "crash_reports_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_error_clear",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_error_load",
+          "status": "android-only"
+        },
+        {
+          "androidName": "crash_reports_info_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "crash.reports.title",
+          "androidName": "crash_reports_info_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "crash.reports.share",
+          "androidName": "crash_reports_share",
+          "status": "candidate"
+        },
+        {
+          "androidName": "crash_reports_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.button.start",
+          "androidName": "data_export_button",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.content.contacts",
+          "androidName": "data_export_content_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.content.messages",
+          "androidName": "data_export_content_messages",
+          "status": "candidate"
+        },
+        {
+          "androidName": "data_export_content_profile",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.magiclink.error.generic",
+          "androidName": "data_export_error_generic",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.error.network",
+          "androidName": "data_export_error_network",
+          "status": "candidate"
+        },
+        {
+          "androidName": "data_export_format_csv",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_export_format_json",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_export_info_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.info.title",
+          "androidName": "data_export_info_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "data_export_ready_contacts",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_export_ready_messages",
+          "status": "android-only"
+        },
+        {
+          "androidName": "data_export_ready_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.timeline.plan.plane.content.a11y",
+          "androidName": "data_export_section_content",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.format",
+          "androidName": "data_export_section_format",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.share",
+          "androidName": "data_export_share",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.button.start",
+          "androidName": "data_export_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.button",
+          "androidName": "delete_account_button",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.confirmation.label",
+          "androidName": "delete_account_confirm_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.confirmation.prompt",
+          "androidName": "delete_account_confirm_prompt",
+          "status": "candidate"
+        },
+        {
+          "androidName": "delete_account_email_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.email.ok",
+          "androidName": "delete_account_email_ok",
+          "status": "candidate"
+        },
+        {
+          "androidName": "delete_account_email_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.magiclink.error.generic",
+          "androidName": "delete_account_error_generic",
+          "status": "candidate"
+        },
+        {
+          "androidName": "delete_account_error_invalid_password",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.error.network",
+          "androidName": "delete_account_error_network",
+          "status": "candidate"
+        },
+        {
+          "androidName": "delete_account_error_no_email",
+          "status": "android-only"
+        },
+        {
+          "androidName": "delete_account_error_pending",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.password.label",
+          "androidName": "delete_account_password_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.title",
+          "androidName": "delete_account_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.warning.contacts",
+          "androidName": "delete_account_warning_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.warning.conversations",
+          "androidName": "delete_account_warning_conversations",
+          "status": "candidate"
+        },
+        {
+          "androidName": "delete_account_warning_intro",
+          "status": "android-only"
+        },
+        {
+          "androidName": "delete_account_warning_media",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.warning.messages",
+          "androidName": "delete_account_warning_messages",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "account.delete.warning.preferences",
+          "androidName": "delete_account_warning_preferences",
+          "status": "candidate"
+        },
+        {
+          "androidName": "delete_account_warning_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_changes_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_changes_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_collection_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_collection_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_contact_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.contact",
+          "androidName": "legal_privacy_contact_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "legal.privacy.lastUpdated.en",
+          "androidName": "legal_privacy_last_updated",
+          "status": "candidate"
+        },
+        {
+          "androidName": "legal_privacy_retention_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_retention_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_rights_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_rights_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_security_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_security_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "legal.privacy.title",
+          "androidName": "legal_privacy_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "legal_privacy_use_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_privacy_use_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_terms_last_updated",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "legal.terms.title",
+          "androidName": "legal_terms_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "legal_tos_acceptance_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_acceptance_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_account_termination_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_account_termination_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_changes_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_changes_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_contact_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.contact",
+          "androidName": "legal_tos_contact_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "legal_tos_content_body",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "story.timeline.plan.plane.content.a11y",
+          "androidName": "legal_tos_content_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "legal_tos_disclaimer_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_disclaimer_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_liability_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_liability_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_license_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_license_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_user_conduct_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "legal_tos_user_conduct_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "licenses_intro",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.licenses",
+          "androidName": "licenses_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "licenses_type_apache",
+          "status": "android-only"
+        },
+        {
+          "androidName": "licenses_type_bsd",
+          "status": "android-only"
+        },
+        {
+          "androidName": "licenses_type_mit",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "report.message.type.other.label",
+          "androidName": "licenses_type_other",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.edit.media.kind.audio",
+          "androidName": "media_cache_category_audio",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.images",
+          "androidName": "media_cache_category_images",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_cache_category_thumbnails",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "feed.post.edit.media.kind.video",
+          "androidName": "media_cache_category_video",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_cache_clear_all",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.action",
+          "androidName": "media_cache_clear_category",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.link.confirm.cancel",
+          "androidName": "media_cache_confirm_cancel",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "calls.clearAll.confirm.action",
+          "androidName": "media_cache_confirm_clear",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_cache_confirm_message",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_cache_confirm_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_cache_error_clear",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_cache_error_scan",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_cache_info_body",
+          "status": "android-only"
+        },
+        {
+          "androidName": "media_cache_info_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.storage.cache.title",
+          "androidName": "media_cache_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "media_cache_total_label",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.audio",
+          "androidName": "media_download_audio",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.audio_translation",
+          "androidName": "media_download_audio_translation",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.images",
+          "androidName": "media_download_images",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.auto_subtitle",
+          "androidName": "media_download_info",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.title",
+          "androidName": "media_download_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.video",
+          "androidName": "media_download_video",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.policy.always.short",
+          "androidName": "media_policy_always",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.policy.never.short",
+          "androidName": "media_policy_never",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.policy.wifiGood.short",
+          "androidName": "media_policy_wifi_good_cellular",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "media.policy.wifi.short",
+          "androidName": "media_policy_wifi_only",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.analytics",
+          "androidName": "privacy_analytics",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.block_screenshots",
+          "androidName": "privacy_block_screenshots",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.calls_non_contacts",
+          "androidName": "privacy_calls_non_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.contact_requests",
+          "androidName": "privacy_contact_requests",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.encryption.coming_soon",
+          "androidName": "privacy_encryption_coming_soon",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversation.encryption.detail.translation.disabled",
+          "androidName": "privacy_encryption_disabled",
+          "status": "candidate"
+        },
+        {
+          "androidName": "privacy_group_invites",
+          "status": "android-only"
+        },
+        {
+          "androidName": "privacy_hide_from_search",
+          "status": "android-only"
+        },
+        {
+          "androidName": "privacy_last_seen",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.online_status",
+          "androidName": "privacy_online_status",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.read_receipts",
+          "androidName": "privacy_read_receipts",
+          "status": "candidate"
+        },
+        {
+          "androidName": "privacy_save_media",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.contacts_groups",
+          "androidName": "privacy_section_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.encryption",
+          "androidName": "privacy_section_encryption",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.media_data",
+          "androidName": "privacy_section_media",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.visibility",
+          "androidName": "privacy_section_visibility",
+          "status": "candidate"
+        },
+        {
+          "androidName": "privacy_share_data",
+          "status": "android-only"
+        },
+        {
+          "androidName": "privacy_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy.typing_indicator",
+          "androidName": "privacy_typing_indicator",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.section.current",
+          "androidName": "sessions_current",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "sessions_retry",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revoke.button",
+          "androidName": "sessions_revoke",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions.revokeAll.confirm.title",
+          "androidName": "sessions_revoke_others",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_account_contact",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "sessions_title",
+          "androidName": "settings_active_sessions",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "settings_back",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.blocked_users",
+          "androidName": "settings_blocked_users",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.change_password",
+          "androidName": "settings_change_password",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_clear_media_cache",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.delete_account",
+          "androidName": "settings_delete_account",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_diagnostics",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_display_language",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.dnd",
+          "androidName": "settings_dnd",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_dnd_active",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_day_fri",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_day_mon",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_day_sat",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "game.flame.form.soleil",
+          "androidName": "settings_dnd_day_sun",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_dnd_day_thu",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_day_tue",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_day_wed",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_days",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_end",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_every_day",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_inactive",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_start",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_dnd_time_picker_confirm",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "settings_dnd_time_picker_dismiss",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.email",
+          "androidName": "settings_email_notifications",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.button.start",
+          "androidName": "settings_export_data",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_help_support",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_close",
+          "androidName": "settings_language_dialog_close",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_language_system",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.logout.a11y",
+          "androidName": "settings_log_out",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.media.download.title",
+          "androidName": "settings_media_download",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.new_messages",
+          "androidName": "settings_new_message_notifications",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_notif_badge_enabled",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.tab.calls",
+          "androidName": "settings_notif_cat_calls",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_notif_cat_groups",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.data.export.content.messages",
+          "androidName": "settings_notif_cat_messages",
+          "status": "candidate"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "notifications.category.social",
+          "androidName": "settings_notif_cat_social",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.system",
+          "androidName": "settings_notif_cat_system",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.group_notifications",
+          "androidName": "settings_notif_group_notifications",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_notif_show_preview",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.sender_name",
+          "androidName": "settings_notif_show_sender_name",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.comment_likes",
+          "androidName": "settings_notif_type_comment_like",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.comment_replies",
+          "androidName": "settings_notif_type_comment_reply",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.contact_requests",
+          "androidName": "settings_notif_type_contact_request",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_notif_type_conversation",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notif_type_friend_content",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notif_type_group_invite",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.incoming_calls",
+          "androidName": "settings_notif_type_incoming_call",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.member_joined",
+          "androidName": "settings_notif_type_member_joined",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.member_left",
+          "androidName": "settings_notif_type_member_left",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.mentions",
+          "androidName": "settings_notif_type_mention",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.missed_calls",
+          "androidName": "settings_notif_type_missed_call",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.post_comments",
+          "androidName": "settings_notif_type_post_comment",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.post_likes",
+          "androidName": "settings_notif_type_post_like",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.reposts",
+          "androidName": "settings_notif_type_post_repost",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "progression.axis.tool.reaction",
+          "androidName": "settings_notif_type_reaction",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.replies",
+          "androidName": "settings_notif_type_reply",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.story_reactions",
+          "androidName": "settings_notif_type_story_reaction",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_notif_type_system",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notif_type_voicemail",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "composer.capture.tool.sound",
+          "androidName": "settings_notification_sound",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_notification_types_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notification_types_search",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notification_types_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_notification_vibration",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.licenses",
+          "androidName": "settings_open_source_licenses",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_privacy",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.privacy_policy",
+          "androidName": "settings_privacy_policy",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notif.push.a11y",
+          "androidName": "settings_push_notifications",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.language.regional",
+          "androidName": "settings_regional_language",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_regional_language_empty",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.not_set",
+          "androidName": "settings_regional_language_none",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_regional_language_search",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.tools.bookmarks",
+          "androidName": "settings_saved_posts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.about",
+          "androidName": "settings_section_about",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.appearance",
+          "androidName": "settings_section_appearance",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_section_chats",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.settings.section.danger",
+          "androidName": "settings_section_danger",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.data",
+          "androidName": "settings_section_data",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "export.card.tab.language",
+          "androidName": "settings_section_language",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.section.notifications",
+          "androidName": "settings_section_notifications",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_section_privacy",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "profile.title",
+          "androidName": "settings_section_profile",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "links.hub.share.title",
+          "androidName": "settings_share_links",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.tools.starred",
+          "androidName": "settings_starred_messages",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_storage_used",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.terms",
+          "androidName": "settings_terms_of_service",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.theme",
+          "androidName": "settings_theme",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.theme.dark",
+          "androidName": "settings_theme_dark",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.theme.light",
+          "androidName": "settings_theme_light",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.notifications.system",
+          "androidName": "settings_theme_system",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "route.title.settings",
+          "androidName": "settings_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "settings_two_factor",
+          "status": "android-only"
+        },
+        {
+          "androidName": "settings_version",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.info.build",
+          "androidName": "support_info_build",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.info.platform",
+          "androidName": "support_info_platform",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.info.version",
+          "androidName": "support_info_version",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.report.bug",
+          "androidName": "support_link_bug",
+          "status": "candidate"
+        },
+        {
+          "androidName": "support_link_email",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.help.faq",
+          "androidName": "support_link_faq",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.report.feature",
+          "androidName": "support_link_feature",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.help.center",
+          "androidName": "support_link_help_center",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.twitter",
+          "androidName": "support_link_twitter",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.contact.title",
+          "androidName": "support_section_contact",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.help.title",
+          "androidName": "support_section_help",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.info.title",
+          "androidName": "support_section_info",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "support.report.title",
+          "androidName": "support_section_report",
+          "status": "candidate"
+        },
+        {
+          "androidName": "support_title",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_backup_codes_done",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_backup_codes_remaining",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_backup_codes_title",
+          "androidName": "twofactor_backup_codes_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "twofactor_backup_codes_warning",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "twofactor_cancel",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_disable_title",
+          "androidName": "twofactor_disable_button",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "emailVerification.code.a11yLabel",
+          "androidName": "twofactor_disable_code_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_disable_button",
+          "androidName": "twofactor_disable_confirm",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "auth.signup.password.label",
+          "androidName": "twofactor_disable_password_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_disable_title",
+          "androidName": "twofactor_disable_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "twofactor_enable_button",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_error_backup_codes",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_error_disable",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "twofactor.error.invalidCode",
+          "androidName": "twofactor_error_invalid_code",
+          "status": "candidate"
+        },
+        {
+          "androidName": "twofactor_error_setup",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_error_status",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_regenerate_button",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_placeholder",
+          "androidName": "twofactor_regenerate_code_label",
+          "status": "candidate"
+        },
+        {
+          "androidName": "twofactor_regenerate_confirm",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_regenerate_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "settings.security.phone.code_placeholder",
+          "androidName": "twofactor_setup_code_label",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "shareLink.activate",
+          "androidName": "twofactor_setup_confirm",
+          "status": "candidate"
+        },
+        {
+          "androidName": "twofactor_setup_instructions",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_setup_secret_label",
+          "status": "android-only"
+        },
+        {
+          "androidName": "twofactor_setup_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_disabled",
+          "androidName": "twofactor_status_disabled",
+          "status": "candidate"
+        },
+        {
+          "androidName": "twofactor_status_enabled",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_section_title",
+          "androidName": "twofactor_title",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

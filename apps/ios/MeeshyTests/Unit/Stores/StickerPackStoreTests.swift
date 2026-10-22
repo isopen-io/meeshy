@@ -239,6 +239,13 @@ private final class MemoryFramePackCache: PackCaching {
     }
 }
 
+@MainActor
+private final class AccountBox {
+    nonisolated deinit {}
+    var value: String?
+    init(value: String?) { self.value = value }
+}
+
 private struct MemoryPackAssets: PackAssetReading {
     let files: [String: Data]
 
@@ -294,14 +301,14 @@ final class FramePackStoreTests: XCTestCase {
     func test_twoAccounts_haveTwoShelves() async {
         let service = MockFramePackService()
         let cache = MemoryFramePackCache()
-        var account = "u1"
-        let store = FramePackStore(service: service, cache: cache, account: { account })
+        let account = AccountBox(value: "u1")
+        let store = FramePackStore(service: service, cache: cache, account: { account.value })
 
         service.installedResult = .success([savane(installed: true)])
         await store.loadInstalled()
         XCTAssertEqual(store.installed?.map(\.slug), ["exemple-savane"])
 
-        account = "u2"
+        account.value = "u2"
         service.installedResult = .failure(URLError(.notConnectedToInternet))
         await store.loadInstalled()
 

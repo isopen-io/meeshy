@@ -279,3 +279,40 @@ describe('la carte peint le texte LU, jamais la syntaxe des liens (#9687, jumell
     expect(source.thread.find((entry) => entry.id === 'r0')?.text).toBe(plain);
   });
 });
+
+describe('le média de tête se CHOISIT parmi ceux du post (#11783)', () => {
+  const three = post({
+    media: [
+      { id: 'pm', fileUrl: '/p.jpg', mimeType: 'image/jpeg', width: 800, height: 600 },
+      { id: 'vm', fileUrl: '/v.mp4', mimeType: 'video/mp4', thumbnailUrl: '/v.jpg', width: 1080, height: 1920 },
+      { id: 'am', fileUrl: '/a.m4a', mimeType: 'audio/mp4', duration: 5000 },
+    ],
+  });
+  const source = postCommentCardSourceOf({ post: three, target: root, targetText: 'Regarde', thread: [], readerLanguages: ['fr'], viewer });
+
+  test('à l’ouverture : la photo, premier visuel, est le héros', () => {
+    const choice = postCommentChoiceOf(source, NO_POST_COMMENT_PICK)!;
+    expect(postCommentMessageCardSubjectOf(source, choice, labels)?.media.map((item) => [item.id, item.hero === true])).toEqual([['pm', true]]);
+  });
+
+  test('choisir la vidéo la met en héros ; choisir le son le met en tête comme un son', () => {
+    const video = postCommentChoiceOf(source, postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'head', index: 1 }))!;
+    expect(postCommentMessageCardSubjectOf(source, video, labels)?.media.map((item) => [item.id, item.hero === true])).toEqual([['vm', true]]);
+    const sound = postCommentChoiceOf(source, postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'head', index: 2 }))!;
+    expect(postCommentMessageCardSubjectOf(source, sound, labels)?.media.map((item) => [item.id, item.hero === true])).toEqual([['am', false]]);
+  });
+
+  test('le choix du média survit au changement de mode', () => {
+    const picked = postCommentPickAfter(source, NO_POST_COMMENT_PICK, { kind: 'head', index: 1 });
+    const alone = postCommentPickAfter(source, picked, { kind: 'mode', mode: 'commentAlone' });
+    const back = postCommentPickAfter(source, alone, { kind: 'mode', mode: 'postAndComment' });
+    expect(postCommentChoiceOf(source, back)?.headMediaIndex).toBe(1);
+  });
+
+  test('un réel de SCÈNE (storyEffects) ancien se met en tête par son média, sans échéance de story', () => {
+    const scene = post({ type: 'REEL', createdAt: '2026-01-01T10:00:00.000Z', storyEffects: { v: 3, scenes: [] }, media: [{ id: 'vm', fileUrl: '/v.mp4', mimeType: 'video/mp4', thumbnailUrl: '/v.jpg' }] });
+    expect(composingPostOf(scene)).toBe(scene);
+    const from = postCommentCardSourceOf({ post: scene, target: root, targetText: 'x', thread: [], readerLanguages: ['fr'], viewer });
+    expect(postCommentMessageCardSubjectOf(from, { mode: 'postAndComment', showsPost: true }, labels)?.media.map((item) => item.id)).toEqual(['vm']);
+  });
+});

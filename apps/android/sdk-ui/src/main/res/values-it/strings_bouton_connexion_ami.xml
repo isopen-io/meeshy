@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="connection_badge_blocked">Bloccato</string>
+    <string name="connection_badge_contact">Contatto</string>
+    <string name="connection_badge_pending_sent">In attesa</string>
+    <string name="connection_action_add">Aggiungi</string>
+    <string name="connection_action_accept">Accetta</string>
+    <string name="connection_action_decline">Rifiuta</string>
+    <string name="connection_action_cancel">Annulla la richiesta</string>
+    <string name="connection_toast_request_sent">Richiesta inviata</string>
+    <string name="connection_toast_request_send_failed">Impossibile inviare la richiesta</string>
+    <string name="connection_toast_connection_accepted">Connessione accettata</string>
+    <string name="connection_toast_accept_failed">Impossibile accettare</string>
+    <string name="connection_toast_request_declined">Richiesta rifiutata</string>
+    <string name="connection_toast_decline_failed">Impossibile rifiutare</string>
+    <string name="connection_toast_request_cancelled">Richiesta annullata</string>
+    <string name="connection_toast_cancel_failed">Impossibile annullare</string>
+    <string name="connection_a11y_with_user">%1$s — %2$s</string>
+</resources>

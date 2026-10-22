@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="content_failure_network_title">تعذّر تحميل هذا المحتوى</string>
+    <string name="content_failure_network_body">تحقق من اتصالك ثم حاول مرة أخرى.</string>
+    <string name="content_failure_server_title">لم يتمكن Meeshy من تحميل هذا المحتوى</string>
+    <string name="content_failure_server_body">المشكلة من جهتنا. حاول مرة أخرى بعد قليل.</string>
+    <string name="content_failure_unavailable_title">لم يعد هذا المحتوى متاحًا</string>
+    <string name="content_failure_unavailable_body">ربما انتهت صلاحيته أو أزاله صاحبه.</string>
+    <string name="content_failure_retry">إعادة المحاولة</string>
+</resources>
