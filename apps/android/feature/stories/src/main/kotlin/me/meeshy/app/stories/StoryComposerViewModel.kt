@@ -20,6 +20,8 @@ import me.meeshy.sdk.media.MediaUploadQueue
 import me.meeshy.sdk.model.StoryDrawingStrokePoint
 import me.meeshy.sdk.model.StoryFilter
 import me.meeshy.sdk.model.UploadedMedia
+import me.meeshy.sdk.model.composer.ComposerBandState
+import me.meeshy.sdk.model.composer.StoryToolMode
 import me.meeshy.sdk.model.media.TusUploadContext
 import me.meeshy.sdk.model.scene.StoryBackgroundFraming
 import me.meeshy.sdk.model.scene.StoryCanvasTransform
@@ -268,19 +270,29 @@ class StoryComposerViewModel @Inject constructor(
         _state.update { it.copy(draft = it.draft.withRepostOf(sourceId)) }
     }
 
-    /** Toggles the bottom-band drawer for [category] per the pure [ComposerBandState.tapFab]. */
-    fun onBandFabTap(category: BandCategory) {
-        _state.update { it.copy(band = it.band.tapFab(category)) }
+    /** Tap on a tool of the row: opens, switches to or closes its panel per [ComposerBandState.tapTool]. */
+    fun onBandToolTap(tool: StoryToolMode) {
+        _state.update { it.copy(band = it.band.tapTool(tool)) }
     }
 
-    /** Dismisses the band drawer (swipe-down gesture) — back to FAB-only. */
+    /** Swipe up on a tool: forces its panel open. */
+    fun onBandToolSwipeUp(tool: StoryToolMode) {
+        _state.update { it.copy(band = it.band.swipeUpOnTool(tool)) }
+    }
+
+    /** Swipe down on the row: closes an open panel, otherwise hides the chrome (bare canvas). */
+    fun onBandSwipeDown() {
+        _state.update { it.copy(band = if (it.band.isPanelOpen) it.band.closeAnyPanel() else it.band.hideChrome()) }
+    }
+
+    /** Gives the chrome back after a voluntary hiding (ghost handle tap). */
+    fun onBandShowChrome() {
+        _state.update { it.copy(band = it.band.showChrome()) }
+    }
+
+    /** Closes the open panel (handle pulled under its minimum) and gives the row back. */
     fun onBandDismiss() {
-        _state.update { it.copy(band = it.band.swipeDown()) }
-    }
-
-    /** Swaps the open band to the other category (horizontal swipe); inert while hidden. */
-    fun onBandSwapCategory() {
-        _state.update { it.copy(band = it.band.swipeHorizontal()) }
+        _state.update { it.copy(band = it.band.closeAnyPanel()) }
     }
 
     /** Appends a fresh empty slide and selects it (inert at the ≤10-slide cap). */

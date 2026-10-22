@@ -150,7 +150,7 @@ fun StoryComposerScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            SlideStrip(
+            if (!state.band.isChromeHidden) SlideStrip(
                 deck = state.deck,
                 onSelect = viewModel::onSelectSlide,
                 onAdd = viewModel::onAddSlide,
@@ -275,6 +275,12 @@ fun StoryComposerScreen(
             if (!state.isDrawingActive) {
                 ComposerControlsLayer(
                     band = state.band,
+                    badges = ComposerBandTools.badges(
+                        mediaCount = state.draft.mediaIds.size,
+                        textCount = state.selectedSlideTextElements.size,
+                        strokeCount = state.selectedSlideStrokes.size,
+                        hasBackground = state.selectedSlideBackground != null,
+                    ),
                     visibility = state.draft.visibility,
                     selectedFilter = state.selectedSlideFilter,
                     filterIntensity = state.selectedSlideFilterIntensity,
@@ -286,9 +292,11 @@ fun StoryComposerScreen(
                     isMediaFull = state.draft.isMediaFull,
                     mediaCount = state.draft.mediaIds.size,
                     hasMedia = state.draft.hasMedia,
-                    onFabTap = viewModel::onBandFabTap,
+                    onToolTap = viewModel::onBandToolTap,
+                    onToolSwipeUp = viewModel::onBandToolSwipeUp,
+                    onHideChrome = viewModel::onBandSwipeDown,
+                    onShowChrome = viewModel::onBandShowChrome,
                     onDismiss = viewModel::onBandDismiss,
-                    onSwapCategory = viewModel::onBandSwapCategory,
                     onAddText = viewModel::onAddTextElement,
                     onAddSticker = { showStickerPicker = true },
                     onPickMedia = {
