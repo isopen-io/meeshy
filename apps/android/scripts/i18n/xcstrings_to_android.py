@@ -188,10 +188,12 @@ def _check_collisions(module: ModuleManifest, folder: Path, resources: Sequence[
 
 
 def _generate_module(module: ModuleManifest, catalogs: _Catalogs, android_root: Path, generation: Generation) -> None:
-    per_locale: Dict[str, List[Resource]] = {locale.code: [] for locale in ANDROID_LOCALES}
     adopted = module.adopted()
-    if adopted and not (android_root / module_directory(module.module)).is_dir():
+    if not adopted:
+        return
+    if not (android_root / module_directory(module.module)).is_dir():
         raise GenerationError(f"module {module.module} : dossier {module_directory(module.module)}/ introuvable")
+    per_locale: Dict[str, List[Resource]] = {locale.code: [] for locale in ANDROID_LOCALES}
     for entry in adopted:
         try:
             resolved = _resolve_entry(entry, catalogs, generation.warnings)
@@ -201,8 +203,6 @@ def _generate_module(module: ModuleManifest, catalogs: _Catalogs, android_root: 
             ) from error
         for language, resource in (resolved or {}).items():
             per_locale[language].append(resource)
-    if not adopted:
-        return
     for locale in ANDROID_LOCALES:
         folder = android_root / module.res_dir / locale.folder
         _check_collisions(module, folder, per_locale[locale.code], android_root)
