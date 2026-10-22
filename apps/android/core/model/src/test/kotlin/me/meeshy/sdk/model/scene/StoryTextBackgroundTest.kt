@@ -1,4 +1,4 @@
-package me.meeshy.app.stories
+package me.meeshy.sdk.model.scene
 
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.StoryTextBackgroundStyle
