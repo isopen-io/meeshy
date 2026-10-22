@@ -13,6 +13,9 @@ import me.meeshy.app.push.DeclinedCallStore
 import me.meeshy.app.push.NotificationChannelInstaller
 import me.meeshy.app.settings.CrashDiagnosticsRecorder
 import me.meeshy.app.startup.AppInitializerRunner
+import me.meeshy.app.startup.AppLifecycleRunner
+import me.meeshy.sdk.lifecycle.AppLifecycleDispatcher
+import me.meeshy.sdk.model.lifecycle.TrimLevel
 import me.meeshy.sdk.socket.AppStatePresenceReporter
 import me.meeshy.sdk.socket.CallSignalManager
 import me.meeshy.sdk.socket.SocketManager
@@ -46,6 +49,12 @@ class MeeshyApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var appInitializerRunner: AppInitializerRunner
 
+    @Inject
+    lateinit var lifecycleDispatcher: AppLifecycleDispatcher
+
+    @Inject
+    lateinit var lifecycleRunner: AppLifecycleRunner
+
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(workerFactory)
@@ -64,6 +73,13 @@ class MeeshyApplication : Application(), Configuration.Provider {
         notificationChannelInstaller.install()
         installAppStatePresence()
         appInitializerRunner.runAll()
+        lifecycleDispatcher.onAppCreate()
+        lifecycleRunner.runStartup()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        TrimLevel.fromComponentCallbacks(level)?.let { lifecycleDispatcher.onTrimMemory(it) }
     }
 
     /**
@@ -79,8 +95,15 @@ class MeeshyApplication : Application(), Configuration.Provider {
         processOwner.lifecycle.addObserver(
             LifecycleEventObserver { _, event ->
                 when (event) {
-                    Lifecycle.Event.ON_START -> presenceReporter.onAppStateChanged(foreground = true)
-                    Lifecycle.Event.ON_STOP -> presenceReporter.onAppStateChanged(foreground = false)
+                    Lifecycle.Event.ON_START -> {
+                        presenceReporter.onAppStateChanged(foreground = true)
+                        lifecycleDispatcher.onForeground()
+                        lifecycleRunner.runForeground()
+                    }
+                    Lifecycle.Event.ON_STOP -> {
+                        presenceReporter.onAppStateChanged(foreground = false)
+                        lifecycleDispatcher.onBackground()
+                    }
                     else -> Unit
                 }
             },
