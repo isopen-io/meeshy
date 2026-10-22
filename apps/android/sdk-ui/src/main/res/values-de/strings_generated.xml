@@ -13,6 +13,9 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Symbole</string>
     <string name="emoji_category_travel">Reisen</string>
+    <string name="media_trim_loading">Vorschau wird geladen</string>
+    <string name="media_trim_of_total">von %s</string>
+    <string name="media_trim_window">Beibehaltener Ausschnitt</string>
     <string name="notification_date_ago">vor %s</string>
     <string name="notification_date_hours">%d Std.</string>
     <string name="notification_date_minutes">%d Min.</string>
