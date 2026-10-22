@@ -484,6 +484,7 @@ final class ConversationLockManager: ObservableObject, ConversationLockGating {
 
     func setLock(conversationId: String, pin: String) {
         store(pin, under: lockKey(conversationId))
+        openingPasses[conversationId] = nil
         lockedConversationIds.insert(conversationId)
         saveLockedIds()
     }
