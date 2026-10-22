@@ -6101,11 +6101,6 @@ final class CallCancellationPolicyTests: XCTestCase {
     // same, or a cancel for the WAITING call (not the primary ring) leaves
     // the banner offering "Answer/Reject" for an already-cancelled call.
     func test_endRingingFromCancellation_clearsPendingIncomingCallBanner() throws {
-        let base = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
         let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingFromCancellation(") else {
             XCTFail("CallManager.endRingingFromCancellation not found"); return
@@ -6170,11 +6165,6 @@ final class CallAnsweredElsewherePushTests: XCTestCase {
     // endRingingFromCancellation's equivalent test — the socket path
     // (call:already-answered) clears the waiting banner first.
     func test_endRingingAnsweredElsewhere_clearsPendingIncomingCallBanner() throws {
-        let base = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
         let manager = try AppSourceGuard.unit("Meeshy/Features/Main/Services/CallManager.swift")
         guard let fnRange = manager.range(of: "func endRingingAnsweredElsewhere(") else {
             XCTFail("CallManager.endRingingAnsweredElsewhere not found"); return

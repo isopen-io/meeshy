@@ -94,3 +94,12 @@ object SwipeToReply {
 /** The reply direction for a bubble, from whether it is the reader's own message. */
 internal fun replyDirection(isOutgoing: Boolean): ReplyDirection =
     if (isOutgoing) ReplyDirection.FromOwn else ReplyDirection.FromIncoming
+
+/** True when the current layout reads right-to-left (Arabic): swipe deltas are then mirrored. */
+@androidx.compose.runtime.Composable
+internal fun rememberIsRtl(): Boolean =
+    androidx.compose.ui.platform.LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl
+
+/** A raw on-screen horizontal [value] expressed in reading direction (identity in LTR); an involution. */
+internal fun swipeReadingDelta(value: Float, isRtl: Boolean): Float =
+    me.meeshy.sdk.model.accessibility.ReadingDirection.readingDelta(value, isRtl)

@@ -18,14 +18,14 @@ final class OverlayAudioPlayerCoordinationTests: XCTestCase {
 
     private let other = SpyPlayer()
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         PlaybackCoordinator.shared.registerExternal(other)
     }
 
-    override func tearDown() {
+    override func tearDown() async throws {
         PlaybackCoordinator.shared.unregisterExternal(other)
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makePlayer() -> OverlayAudioPlayer {

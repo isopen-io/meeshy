@@ -43,3 +43,44 @@ missing-quantity :feature:feed pt feed_repost_likes_count
 missing-quantity :feature:stories fr stories_publish_media_summary
 missing-quantity :feature:stories es stories_publish_media_summary
 missing-quantity :feature:stories pt stories_publish_media_summary
+
+# --- sdk-ui : atomes d'authentification absents en ar, de, it ---------------------------------
+# Le mot de passe révélable, la jauge de robustesse et la signature de marque n'ont pas encore
+# de traduction arabe, allemande ni italienne. Comblé par la génération des sept langues
+# depuis les catalogues iOS (./apps/android/meeshy.sh i18n).
+missing-key :sdk-ui ar password_reveal_show
+missing-key :sdk-ui ar password_reveal_hide
+missing-key :sdk-ui ar password_reveal_state_revealed
+missing-key :sdk-ui ar password_reveal_state_masked
+missing-key :sdk-ui ar auth_password_strength_veryWeak
+missing-key :sdk-ui ar auth_password_strength_weak
+missing-key :sdk-ui ar auth_password_strength_medium
+missing-key :sdk-ui ar auth_password_strength_good
+missing-key :sdk-ui ar auth_password_strength_strong
+missing-key :sdk-ui ar auth_password_strength_excellent
+missing-key :sdk-ui ar brand_signature_accessibilityLabel
+missing-key :sdk-ui ar brand_signature_credit_open
+missing-key :sdk-ui de password_reveal_show
+missing-key :sdk-ui de password_reveal_hide
+missing-key :sdk-ui de password_reveal_state_revealed
+missing-key :sdk-ui de password_reveal_state_masked
+missing-key :sdk-ui de auth_password_strength_veryWeak
+missing-key :sdk-ui de auth_password_strength_weak
+missing-key :sdk-ui de auth_password_strength_medium
+missing-key :sdk-ui de auth_password_strength_good
+missing-key :sdk-ui de auth_password_strength_strong
+missing-key :sdk-ui de auth_password_strength_excellent
+missing-key :sdk-ui de brand_signature_accessibilityLabel
+missing-key :sdk-ui de brand_signature_credit_open
+missing-key :sdk-ui it password_reveal_show
+missing-key :sdk-ui it password_reveal_hide
+missing-key :sdk-ui it password_reveal_state_revealed
+missing-key :sdk-ui it password_reveal_state_masked
+missing-key :sdk-ui it auth_password_strength_veryWeak
+missing-key :sdk-ui it auth_password_strength_weak
+missing-key :sdk-ui it auth_password_strength_medium
+missing-key :sdk-ui it auth_password_strength_good
+missing-key :sdk-ui it auth_password_strength_strong
+missing-key :sdk-ui it auth_password_strength_excellent
+missing-key :sdk-ui it brand_signature_accessibilityLabel
+missing-key :sdk-ui it brand_signature_credit_open
