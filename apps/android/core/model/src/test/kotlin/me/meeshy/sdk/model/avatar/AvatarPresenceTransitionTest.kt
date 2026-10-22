@@ -108,7 +108,7 @@ class AvatarPresenceTransitionTest {
 
     @Test
     fun `l'humeur est retiree dans un contexte qui l'interdit ou pour une entite`() {
-        assertThat(corner(context = AvatarContext.PostComment, mood = "😀", dot = online))
+        assertThat(corner(context = AvatarContext.PostComment, mood = "😀", dot = online, ring = false))
             .isEqualTo(AvatarCornerBadge.Dot(online, pulses = false))
         assertThat(corner(mood = "😀", dot = null, isUser = false)).isEqualTo(AvatarCornerBadge.None)
         assertThat(corner(mood = "", dot = null)).isEqualTo(AvatarCornerBadge.None)

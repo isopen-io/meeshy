@@ -152,7 +152,8 @@ public sealed class AvatarContext {
 
     public companion object {
         /** Les 20 contextes nommés, dans l'ordre de la table iOS ([Custom] exclu). */
-        public val named: List<AvatarContext> = listOf(
+        public val named: List<AvatarContext>
+            get() = listOf(
             StoryTray, StoryTrayCompact, StoryViewer, StoryViewerRow,
             FeedComposer, PostAuthor, PostComment, PostReaction,
             MessageBubble, TypingIndicator,
