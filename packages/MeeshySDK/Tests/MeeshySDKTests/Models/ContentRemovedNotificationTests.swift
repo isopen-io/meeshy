@@ -1,7 +1,7 @@
 import XCTest
 @testable import MeeshySDK
 
-/// « Votre message a été retiré par un administrateur — Motif : … » (#11151) :
+/// « Votre message a été retiré par la modération — Motif : … » (#11151) :
 /// la passerelle émet `content_removed` à l'AUTEUR seul. Absent du catalogue,
 /// il décodait en `.system` — titre « Notification systeme », motif perdu.
 final class ContentRemovedNotificationTests: XCTestCase {
@@ -11,7 +11,7 @@ final class ContentRemovedNotificationTests: XCTestCase {
     }
 
     private func removedJSON(
-        title: String? = "Votre message dans « Groupe » a été retiré par un administrateur",
+        title: String? = "Votre message dans « Groupe » a été retiré par la modération",
         content: String? = "Motif : Propos haineux",
         reason: String = "Propos haineux"
     ) -> String {
@@ -47,7 +47,7 @@ final class ContentRemovedNotificationTests: XCTestCase {
     func test_formattedTitle_withServerTitle_showsWhatTheGatewayServed() throws {
         XCTAssertEqual(
             try decode(removedJSON()).formattedTitle,
-            "Votre message dans « Groupe » a été retiré par un administrateur"
+            "Votre message dans « Groupe » a été retiré par la modération"
         )
     }
 

@@ -12,6 +12,9 @@ package me.meeshy.sdk.model
  */
 object EmojiUsageRanker {
 
+    /** The recent-emoji history keeps the twenty latest (iOS `RecentEmojiHistory.capacity`). */
+    const val HISTORY_CAPACITY: Int = 20
+
     /**
      * The [count] most-used emojis, padded with [defaults] to fill the strip.
      * Tracked emojis come first (usage desc, canonical-rank asc, emoji asc),
@@ -61,4 +64,18 @@ object EmojiUsageRanker {
     /** Records one use of [emoji], returning the updated usage table. */
     fun record(usage: Map<String, Int>, emoji: String): Map<String, Int> =
         usage + (emoji to ((usage[emoji] ?: 0) + 1))
+
+    /**
+     * Folds [emojis], given in the order they were used (the last is the most recent),
+     * into [history] (most recent first): a re-used emoji jumps to the front without a
+     * duplicate, and only the [HISTORY_CAPACITY] latest survive.
+     */
+    fun recordRecent(history: List<String>, emojis: List<String>): List<String> {
+        if (emojis.isEmpty()) return history
+        val fresh = emojis.asReversed().distinct()
+        return (fresh + history.filterNot { it in fresh }).take(HISTORY_CAPACITY)
+    }
+
+    fun recordRecent(history: List<String>, emoji: String): List<String> =
+        recordRecent(history, listOf(emoji))
 }
