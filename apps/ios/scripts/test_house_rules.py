@@ -225,6 +225,7 @@ class ObservedThemeSingleton(unittest.TestCase):
         "@Environment(\\.theme) var theme\n",
         "let m = ThemeManager.shared.mode\n",
         "@ObservedObject var theme: ThemeManager\n",
+        "@ResolvedThemePalette private var theme\n",
         "@ObservedObject private var vm = FooViewModel.shared\n",
     )
 
@@ -386,6 +387,32 @@ class WriteBaseline(unittest.TestCase):
         self.assertEqual(set(written["rules"]), {r.id for r in ENGINE.RULES})
 
 
+class EnvironmentRouter(unittest.TestCase):
+    HITS = (
+        "@EnvironmentObject private var router: Router\n",
+        "@EnvironmentObject var router: Router\n",
+        "@EnvironmentObject\n    private var router: Router\n",
+    )
+    MISSES = (
+        "@EnvironmentObject private var deepLinkRouter: DeepLinkRouter\n",
+        "@Environment(\\.routerCommands) private var router\n",
+        "@ObservedObject var router: Router\n",
+        "let router: Router\n",
+        "// @EnvironmentObject var router: Router\n",
+        "@EnvironmentObject private var r: RouterCommands\n",
+    )
+
+    def test_each_router_object_declaration_counts_once(self):
+        for src in self.HITS:
+            with self.subTest(src=src):
+                self.assertEqual(count("environment-router", src), 1)
+
+    def test_lookalikes_do_not_count(self):
+        for src in self.MISSES:
+            with self.subTest(src=src):
+                self.assertEqual(count("environment-router", src), 0)
+
+
 class CommittedBaseline(unittest.TestCase):
     def setUp(self):
         scanned = ENGINE.scan(ENGINE.collect(ENGINE.ROOT))
@@ -406,6 +433,26 @@ class CommittedBaseline(unittest.TestCase):
                     code, _, err = run_main(["--baseline", str(path)])
                 self.assertEqual(code, 1)
                 self.assertIn(rule_id, err)
+
+
+class NarrativeCommentRule(unittest.TestCase):
+    def test_compte_une_ligne_par_commentaire_date(self):
+        src = "// 2026-09-03 fix\nlet a = 1 /* 2026-10-01 */\n/* note\n 2025-01-02 */\n"
+        self.assertEqual(count("narrative-comment", src), 3)
+
+    def test_ignore_dates_hors_commentaire(self):
+        src = 'let s = "2026-09-03"\nlet r = #"2026-01-01"#\n// v1.2.3\nlet d = 20260903\n'
+        self.assertEqual(count("narrative-comment", src), 0)
+
+    def test_ligne_mixte_compte_une_fois(self):
+        self.assertEqual(count("narrative-comment", 'let s = "2026-01-01" // 2026-01-02 et 2026-01-03\n'), 1)
+
+    def test_portee_app_et_sources_sdk_seulement(self):
+        src = "// 2026-09-03 fix\n"
+        counted = ("apps/ios/Meeshy/X.swift", "packages/MeeshySDK/Sources/MeeshyUI/X.swift")
+        ignored = ("apps/ios/MeeshyWidgets/X.swift", "apps/ios/MeeshyNotificationExtension/X.swift")
+        self.assertEqual([count("narrative-comment", src, rel) for rel in counted], [1, 1])
+        self.assertEqual([count("narrative-comment", src, rel) for rel in ignored], [0, 0])
 
 
 if __name__ == "__main__":

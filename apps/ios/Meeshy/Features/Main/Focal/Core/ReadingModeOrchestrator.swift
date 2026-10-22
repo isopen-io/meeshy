@@ -1,4 +1,5 @@
 import Foundation
+import MeeshySDK
 
 /// Miroir Swift EXACT de `packages/shared/utils/reading-modes.ts` (contrat
 /// GELÉ S1, version POST-C-033) — Lois de lecture des conversations, La
@@ -12,15 +13,14 @@ import Foundation
 /// des lois de lecture vivent ici, pas sous `Lentille/Core/` (LWS-5, cotes de
 /// design uniquement).
 ///
-/// **Types locaux, volontairement non partagés avec `MeeshySDK.ConversationType`
-/// / `ConversationEncryptionMode`** : ces types SDK portent des jeux de cas
-/// plus larges (`community`, `channel`, `bot` côté conversation ; aucune valeur
-/// `null` côté chiffrement) que l'union TypeScript gelée
-/// (`ConversationType = 'direct' | 'group' | 'public' | 'global' | 'broadcast'`,
-/// `EncryptionMode = 'e2ee' | 'server' | 'hybrid' | null`). Réutiliser les
-/// types SDK romprait l'exhaustivité du miroir — un `switch` exhaustif sur le
-/// jeu de cas SDK ne pourrait pas rejouer fidèlement les vecteurs gelés. Ce
-/// fichier possède donc son propre jeu de types, scopé à `ReadingModeOrchestrator`.
+/// **`ConversationType` est le type du SDK** (`MeeshyConversation.ConversationType`,
+/// 8 cas) : un seul type porte le modèle, la palette et la loi. L'union
+/// TypeScript gelée (`'direct' | 'group' | 'public' | 'global' | 'broadcast'`)
+/// n'en couvre que 5 valeurs ; `community`, `channel` et `bot` sont des
+/// conversations multi-parties, repliées sur `.group` par les appelants
+/// (`ConversationViewRules.readingModeConversationType`,
+/// `LentilleReadingModeContext.orchestratorType`). `EncryptionMode` reste
+/// local : le SDK ne porte le mode de chiffrement que sous forme de chaîne.
 ///
 /// @see packages/shared/utils/reading-modes.ts (domicile de vérité)
 /// @see tasks/lentille-implementation-contract.md LWS-0
@@ -80,17 +80,10 @@ nonisolated public enum ReadingModeOrchestrator {
         case bulles
     }
 
-    /// Miroir de `ConversationType` (`packages/shared/types/conversation.ts`) —
-    /// jeu de cas GELÉ à ces 5 valeurs pour cette loi. Ne PAS élargir avec les
-    /// cas supplémentaires de `MeeshySDK.ConversationType` (`community`,
-    /// `channel`, `bot`) : ce fichier mirror un contrat plus étroit.
-    nonisolated public enum ConversationType: String, Codable, CaseIterable, Sendable, Equatable {
-        case direct
-        case group
-        case `public`
-        case global
-        case broadcast
-    }
+    /// Type de conversation du SDK. Les lois de ce fichier ne distinguent que
+    /// `direct`, `group`, `public`, `global` et `broadcast` ; les appelants
+    /// replient les autres cas sur `.group`.
+    public typealias ConversationType = MeeshyConversation.ConversationType
 
     /// Miroir de `EncryptionMode` (`packages/shared/types/encryption.ts`) —
     /// `'e2ee' | 'server' | 'hybrid' | null`. Le `null` TypeScript se

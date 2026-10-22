@@ -258,7 +258,7 @@ struct GroupCallStageView: View {
                 Image(systemName: "square.grid.2x2")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -269,7 +269,7 @@ struct GroupCallStageView: View {
                 Image(systemName: isFullScreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .font(MeeshyFont.relative(MeeshyIconSize.md, weight: .semibold))
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
@@ -380,7 +380,7 @@ struct GroupCallTileView: View {
                 .lineLimit(1)
         }
         .font(.caption.weight(.semibold))
-        .foregroundColor(.white)
+        .foregroundStyle(Color.white)
         .padding(.horizontal, MeeshySpacing.sm)
         .padding(.vertical, MeeshySpacing.xs)
         .background(.ultraThinMaterial, in: Capsule())

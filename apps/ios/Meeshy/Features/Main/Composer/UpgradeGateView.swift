@@ -63,7 +63,7 @@ struct UpgradeGateView: View {
                             bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.calloutSize, weight: .regular))
                     .multilineTextAlignment(.center)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(Color.secondary)
                     .padding(.horizontal, MeeshySpacing.lg)
 
                 if !requirement.minVersion.isEmpty {
@@ -72,7 +72,7 @@ struct UpgradeGateView: View {
                                                bundle: .main),
                                 requirement.minVersion))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .medium))
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(Color.secondary)
                 }
 
                 Spacer()
@@ -85,7 +85,7 @@ struct UpgradeGateView: View {
                                 defaultValue: "Mettre à jour",
                                 bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.headlineSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, MeeshySpacing.md)
                         .background(

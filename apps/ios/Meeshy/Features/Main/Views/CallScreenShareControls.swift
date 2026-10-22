@@ -117,14 +117,14 @@ struct CallScreenShareBanner: View, Equatable {
                 .accessibilityHidden(true)
             Text(text)
                 .font(.footnote.weight(.medium))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
             if showsStop {
                 Button(action: onStop) {
                     Text(CallScreenShareCopy.stopCaption)
                         .font(.footnote.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.md)
                         .frame(minWidth: MeeshyControlSize.tapTarget, minHeight: MeeshyControlSize.tapTarget)
                         .contentShape(Rectangle())

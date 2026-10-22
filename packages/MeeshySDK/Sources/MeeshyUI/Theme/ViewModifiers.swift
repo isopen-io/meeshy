@@ -6,7 +6,7 @@ import MeeshySDK
 
 public struct GlassCard: ViewModifier {
     public var cornerRadius: CGFloat = 20
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
 
     public func body(content: Content) -> some View {
         content

@@ -23,14 +23,14 @@ struct FeedComposerQuotedPostPreview: View {
                 Text(quoted.author)
                     .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.accentText(quoted.authorColor))
-                MetaSeparator().foregroundColor(theme.textMuted)
+                MetaSeparator().foregroundStyle(theme.textMuted)
                 Text(quoted.timestamp, style: .relative)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
             Text(quoted.displayContent)
                 .font(MeeshyFont.relative(MeeshyFont.labelSize))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .lineLimit(4)
         }
         .padding(MeeshySpacing.md)

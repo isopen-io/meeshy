@@ -179,11 +179,11 @@ struct CallNetworkJournalSection: View {
                 HStack(spacing: MeeshySpacing.md) {
                     Text(row.title)
                         .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Spacer(minLength: 8)
                     Text(row.value)
                         .font(.subheadline.weight(.medium).monospacedDigit())
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .multilineTextAlignment(.trailing)
                 }
                 .padding(.horizontal, MeeshySpacing.md)
@@ -207,7 +207,7 @@ struct CallNetworkJournalSection: View {
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.footnote.weight(.semibold))
-            .foregroundColor(theme.textMuted)
+            .foregroundStyle(theme.textMuted)
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.top, MeeshySpacing.md)
             .padding(.bottom, MeeshySpacing.xs)
@@ -218,7 +218,7 @@ struct CallNetworkJournalSection: View {
         HStack(alignment: .firstTextBaseline, spacing: MeeshySpacing.smPlus) {
             Text(moment.elapsed)
                 .font(.caption.monospacedDigit())
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .frame(minWidth: 44, alignment: .leading)
             Circle()
                 .fill(moment.isAlert ? MeeshyColors.warning : accentColor)
@@ -227,11 +227,11 @@ struct CallNetworkJournalSection: View {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(moment.text)
                     .font(.subheadline)
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 if let detail = moment.detail {
                     Text(detail)
                         .font(.caption)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
             Spacer(minLength: 0)

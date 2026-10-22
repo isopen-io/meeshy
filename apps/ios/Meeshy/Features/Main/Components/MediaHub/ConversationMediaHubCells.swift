@@ -96,11 +96,11 @@ struct MediaHubPlaceRow: View, Equatable {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(place.name ?? ConversationMediaHubCopy.placeFallback)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(MeeshyColors.textPrimary(isDark: isDark))
+                        .foregroundStyle(MeeshyColors.textPrimary(isDark: isDark))
                         .lineLimit(2)
                     Text(place.address ?? subtitle)
                         .font(.caption)
-                        .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                        .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
                         .lineLimit(2)
                 }
                 Spacer(minLength: 0)
@@ -162,7 +162,7 @@ struct MediaHubStateView: View {
             Text(message)
                 .font(.subheadline.weight(.medium))
                 .multilineTextAlignment(.center)
-                .foregroundColor(MeeshyColors.textMuted(isDark: isDark))
+                .foregroundStyle(MeeshyColors.textMuted(isDark: isDark))
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .font(.subheadline.weight(.semibold))

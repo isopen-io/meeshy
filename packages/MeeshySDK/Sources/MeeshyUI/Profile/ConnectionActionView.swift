@@ -122,7 +122,7 @@ public struct ConnectionActionView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(MeeshyColors.error)
+                    .foregroundStyle(MeeshyColors.error)
                     .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(MeeshyColors.error.opacity(MeeshyOpacity.light)))
             }
@@ -134,7 +134,7 @@ public struct ConnectionActionView: View {
             } label: {
                 Image(systemName: "checkmark")
                     .font(.system(size: MeeshyIconSize.xxs, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
                     .background(Circle().fill(MeeshyColors.success))
             }
@@ -155,7 +155,7 @@ public struct ConnectionActionView: View {
                 Text(pendingLabel)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
-            .foregroundColor(MeeshyColors.warning)
+            .foregroundStyle(MeeshyColors.warning)
             .padding(.horizontal, MeeshySpacing.smPlus)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(MeeshyColors.warning.opacity(MeeshyOpacity.light)))
@@ -176,7 +176,7 @@ public struct ConnectionActionView: View {
                 Text(addLabel)
                     .font(MeeshyFont.relative(MeeshyFont.smallSize, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(Color.white)
             .padding(.horizontal, MeeshySpacing.md)
             .padding(.vertical, MeeshySpacing.xs)
             .background(Capsule().fill(accentColor))

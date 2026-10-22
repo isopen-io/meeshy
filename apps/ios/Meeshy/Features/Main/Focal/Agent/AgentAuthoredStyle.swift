@@ -77,7 +77,7 @@ struct AgentSparkGlyph: View {
     var body: some View {
         Text("✦")
             .font(MeeshyFont.relative(11, weight: .heavy))
-            .foregroundColor(MeeshyColors.indigo500)
+            .foregroundStyle(MeeshyColors.indigo500)
             .accessibilityHidden(true) // décoration — le libellé "agent" porte l'information, pas ce glyphe seul
     }
 }

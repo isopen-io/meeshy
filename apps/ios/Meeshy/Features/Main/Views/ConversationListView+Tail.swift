@@ -18,7 +18,7 @@ struct ConversationListTail: View {
     @Binding var showCreateTrackingLink: Bool
     @EnvironmentObject private var storyViewModel: StoryViewModel
     @EnvironmentObject private var conversationViewModel: ConversationListViewModel
-    @EnvironmentObject private var router: Router
+    @Environment(\.routerCommands) private var router
 
     private var theme: ThemeManager { ThemeManager.shared }
 
@@ -41,7 +41,7 @@ struct ConversationListTail: View {
                 case .newMessage: onNewConversation?()
                 case .story: storyViewModel.showStoryComposer = true
                 case .mood: showStatusComposer = true
-                case .post: router.pendingOpenFeedComposer = true
+                case .post: router.requestFeedComposer()
                 case .invite: showCreateAffiliate = true
                 case .shortcutLink: showCreateTrackingLink = true
                 }

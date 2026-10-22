@@ -22,7 +22,7 @@ extension CallView {
                         // Doctrine 82i : glyphe de chrome dans un cadre glass fixe
                         // (diameter 40) → taille figée (ne doit pas déborder du cercle).
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .callControlGlass(diameter: 40, isActive: false, tint: .white)
                         // Visual glass circle stays 40pt (doctrine 82i), but the
                         // tappable area must meet the HIG 44×44 minimum.
@@ -46,7 +46,7 @@ extension CallView {
                             // Doctrine 82i : glyphe de chrome dans un cadre
                             // glass fixe (diameter 40) → taille figée.
                             .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .callControlGlass(diameter: 40, isActive: false, tint: .white)
                             // Cercle glass 40pt (doctrine 82i) mais cible
                             // tactile HIG 44×44.
@@ -90,7 +90,7 @@ extension CallView {
                 TransientCallSignalGlyph(strength: signalStrength)
                 Text(callManager.formattedDuration)
                     .font(.caption2.weight(.medium).monospacedDigit())
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                 if callManager.isRemoteQualityDegraded {
                     Image(systemName: "wifi.exclamationmark")
                         .font(.caption2.weight(.semibold))

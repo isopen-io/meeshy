@@ -311,7 +311,7 @@ internal struct _FullscreenRenderer: View {
             if let caption = player.caption, !caption.isEmpty {
                 Text(caption)
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, MeeshySpacing.xl)
                     .padding(.vertical, MeeshySpacing.smPlus)
@@ -346,7 +346,7 @@ internal struct _FullscreenRenderer: View {
                 }
                 Text(author.displayName)
                     .font(.system(size: MeeshyFont.smallSize, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             }
             .padding(.horizontal, MeeshySpacing.sm)
             .padding(.vertical, MeeshySpacing.xs)
@@ -452,7 +452,7 @@ internal struct _FullscreenRenderer: View {
 
                 Text(downloadOverlayMessage)
                     .font(.system(size: MeeshyFont.labelSize, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
+                    .foregroundStyle(Color.white.opacity(0.85))
                     .shadow(color: .black.opacity(0.6), radius: 4)
                     .multilineTextAlignment(.center)
 
@@ -462,7 +462,7 @@ internal struct _FullscreenRenderer: View {
                 } label: {
                     Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
                         .font(.system(size: MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundStyle(Color.white.opacity(0.7))
                         .padding(.horizontal, 18)
                         .padding(.vertical, MeeshySpacing.sm)
                         .background(Capsule().fill(Color.white.opacity(0.12)))
@@ -483,7 +483,7 @@ internal struct _FullscreenRenderer: View {
         if loadFailed {
             Image(systemName: "arrow.clockwise")
                 .font(.system(size: 30, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
         } else {
             switch player.availability {
             case .ready:
@@ -491,7 +491,7 @@ internal struct _FullscreenRenderer: View {
             case .needsDownload:
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: 30, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
             case .downloading(let progress):
                 if progress > 0 {
                     Circle()

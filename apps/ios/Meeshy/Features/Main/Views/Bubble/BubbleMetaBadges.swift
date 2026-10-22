@@ -81,7 +81,7 @@ struct BubblePinnedIndicator: View, Equatable {
             // d'écran (ci-dessous).
             Image(systemName: "pin.fill")
                 .font(.caption2.weight(.bold))
-                .foregroundColor(MeeshyColors.pinnedBlue)
+                .foregroundStyle(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, MeeshySpacing.xs)
         .padding(.bottom, MeeshySpacing.xxs)
@@ -109,12 +109,12 @@ struct BubbleForwardedIndicator: View, Equatable {
         return HStack(spacing: MeeshySpacing.xs) {
             Image(systemName: "arrowshape.turn.up.right.fill")
                 .font(.caption2.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             Text(Self.label(for: attribution))
                 .font(.caption2)
                 .italic()
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .lineLimit(1)
         }
         .padding(.horizontal, MeeshySpacing.xs)

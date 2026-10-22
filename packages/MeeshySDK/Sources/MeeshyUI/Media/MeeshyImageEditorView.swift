@@ -22,7 +22,7 @@ import UIKit
 public struct MeeshyImageEditorView: View {
 
     @StateObject private var viewModel: ImageEditorViewModel
-    @ObservedObject private var theme = ThemeManager.shared
+    @ResolvedThemePalette private var theme
     @Environment(\.dismiss) private var dismiss
     /// Les marges sûres de la fenêtre qui porte l'éditeur, mesurées par sa racine.
     @Environment(\.sceneSafeAreaInsets) var sceneSafeAreaInsets

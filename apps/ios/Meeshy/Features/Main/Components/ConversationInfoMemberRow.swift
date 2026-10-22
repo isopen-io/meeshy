@@ -38,14 +38,14 @@ struct ConversationInfoMemberRow: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(participant.name)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                         .lineLimit(1)
 
                     if let role = participant.conversationRole,
                        role.lowercased() != "member" {
                         Text(roleBadgeLabel(role))
                             .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .padding(.horizontal, MeeshySpacing.xs)
                             .padding(.vertical, 1)
                             .background(
@@ -57,7 +57,7 @@ struct ConversationInfoMemberRow: View {
                 if let username = participant.username {
                     Text("@\(username)")
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -68,10 +68,10 @@ struct ConversationInfoMemberRow: View {
                 VStack(alignment: .trailing, spacing: 1) {
                     Text(String(localized: "conversation.info.member.since", defaultValue: "Depuis", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                     Text(shortDate(joinedAt))
                         .font(MeeshyFont.relative(MeeshyFont.captionSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }

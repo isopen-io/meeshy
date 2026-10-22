@@ -130,7 +130,7 @@ struct ConversationMediaHubView: View {
     private var offlineNotice: some View {
         Label(ConversationMediaHubCopy.offline, systemImage: "wifi.slash")
             .font(.footnote.weight(.medium))
-            .foregroundColor(MeeshyColors.warning)
+            .foregroundStyle(MeeshyColors.warning)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.bottom, MeeshySpacing.sm)

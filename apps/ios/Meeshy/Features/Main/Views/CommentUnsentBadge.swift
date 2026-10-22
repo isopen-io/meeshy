@@ -87,10 +87,10 @@ struct CommentUnsentBadge: View {
             } else if isFailed {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .accessibilityHidden(true)
                     Text(reason ?? String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                         .lineLimit(2)
                     if isInherited {
                         Button(String(localized: "story.mine.failed.resume", defaultValue: "Reprendre", bundle: .main), action: resume)
@@ -100,7 +100,7 @@ struct CommentUnsentBadge: View {
                             .foregroundColor(Color(hex: accentColor))
                     }
                     Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), action: discard)
-                        .foregroundColor(MeeshyColors.error)
+                        .foregroundStyle(MeeshyColors.error)
                 }
                 .font(.caption.weight(.semibold))
                 .buttonStyle(.plain)

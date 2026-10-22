@@ -18,13 +18,13 @@ final class RegexLiteralsCompileGuardTests: XCTestCase {
         "packages/MeeshySDK/Sources"
     ]
 
-    private static let marker = "try! NSRegularExpression("
+    private static let marker = "LiteralRegex.compile("
 
     func test_leDetecteurSignaleUnMotifInvalideEtUnMotifNonLitteral() {
-        let invalid = ##"try! NSRegularExpression(pattern: #"("#)"##
-        let variable = "try! NSRegularExpression(pattern: someVar)"
-        let escaped = ##"try! NSRegularExpression(pattern: "a\\s\"b")"##
-        let concatenated = #"try! NSRegularExpression(pattern: "a" + suffix)"#
+        let invalid = ##"LiteralRegex.compile(pattern: #"("#)"##
+        let variable = "LiteralRegex.compile(pattern: someVar)"
+        let escaped = ##"LiteralRegex.compile(pattern: "a\\s\"b")"##
+        let concatenated = #"LiteralRegex.compile(pattern: "a" + suffix)"#
 
         XCTAssertEqual(Self.patterns(in: invalid), [.literal("(")])
         XCTAssertEqual(Self.failures(in: invalid).count, 1)
@@ -37,13 +37,31 @@ final class RegexLiteralsCompileGuardTests: XCTestCase {
 
     func test_leDetecteurLitLeMotifSurLaLigneSuivante() {
         let source = """
-        private static let r = try! NSRegularExpression(
+        private static let r = LiteralRegex.compile(
             pattern: #"^a{1,3}$"#,
             options: [.caseInsensitive]
         )
         """
         XCTAssertEqual(Self.patterns(in: source), [.literal("^a{1,3}$")])
         XCTAssertTrue(Self.failures(in: source).isEmpty)
+    }
+
+    func test_aucunTryBangRegexEnProduction() throws {
+        let root = repoRoot()
+        let offenders = try Self.productionTrees
+            .flatMap { swiftFiles(under: root.appendingPathComponent($0)) }
+            .filter { url in
+                try String(contentsOf: url, encoding: .utf8)
+                    .split(separator: "\n", omittingEmptySubsequences: false)
+                    .contains { line in
+                        !line.trimmingCharacters(in: .whitespaces).hasPrefix("//") && line.contains("try! NSRegularExpression(")
+                    }
+            }
+            .map { $0.path.replacingOccurrences(of: root.path + "/", with: "") }
+        XCTAssertTrue(
+            offenders.isEmpty,
+            "Un motif littéral se compile par `LiteralRegex.compile(pattern:)`, jamais par `try!` :\n\(offenders.joined(separator: "\n"))"
+        )
     }
 
     func test_chaqueMotifRegexDeProductionCompile() throws {
@@ -53,11 +71,11 @@ final class RegexLiteralsCompileGuardTests: XCTestCase {
             (url.path.replacingOccurrences(of: root.path + "/", with: ""), try String(contentsOf: url, encoding: .utf8))
         }
         let found = all.reduce(0) { $0 + Self.patterns(in: $1.1).count }
-        XCTAssertGreaterThanOrEqual(found, 20, "le balayage ne trouve presque plus de motif : la garde passerait à vide")
+        XCTAssertGreaterThanOrEqual(found, 25, "le balayage ne trouve presque plus de motif : la garde passerait à vide")
         let failures = all.flatMap { entry in Self.failures(in: entry.1).map { "\(entry.0) : \($0)" } }
         XCTAssertTrue(
             failures.isEmpty,
-            "Ces `try! NSRegularExpression` planteraient à l'exécution (ou ne sont pas un littéral vérifiable) :\n\(failures.joined(separator: "\n"))"
+            "Ces `LiteralRegex.compile` replieraient sur un motif muet à l'exécution (ou ne sont pas un littéral vérifiable) :\n\(failures.joined(separator: "\n"))"
         )
     }
 

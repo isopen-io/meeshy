@@ -40,6 +40,13 @@ import MeeshySDK
 @MainActor
 final class ConversationViewReadingModeInitTests: XCTestCase {
 
+    func test_orchestrateurEtSDKPartagentLeType() {
+        XCTAssertEqual(
+            ObjectIdentifier(ReadingModeOrchestrator.ConversationType.self),
+            ObjectIdentifier(MeeshyConversation.ConversationType.self)
+        )
+    }
+
     // MARK: - readingModeConversationType(for:) — mapping pur, NOUVEAU (F-086)
 
     func test_readingModeConversationType_directMapsDirect() {
@@ -62,8 +69,7 @@ final class ConversationViewReadingModeInitTests: XCTestCase {
         XCTAssertEqual(ConversationViewRules.readingModeConversationType(for: .broadcast), .broadcast)
     }
 
-    /// Les trois cas ABSENTS du miroir gelé (`community`/`channel`/`bot`) —
-    /// RE-PREUVE : `ReadingModeOrchestrator.ConversationType` n'a que 5 cas.
+    /// Les trois cas que la loi ne distingue pas (`community`/`channel`/`bot`).
     /// Repliés sur `.group` : jamais `.direct`, seule distinction qui compte
     /// pour `resolveCapabilities` (éligibilité Rivière : « jamais en direct »).
     func test_readingModeConversationType_communityFallsBackToGroup() {

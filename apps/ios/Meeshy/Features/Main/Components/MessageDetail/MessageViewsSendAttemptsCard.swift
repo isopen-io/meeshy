@@ -38,11 +38,11 @@ struct MessageViewsSendAttemptsCard: View {
                     .foregroundColor(accent.opacity(0.7))
                 Text(String(localized: "message-detail.send-history.title", defaultValue: "Historique d'envoi", bundle: .main))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Spacer()
                 Text(Self.sendAttemptCountLabel(attempts.count))
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
 
             if let first = attempts.first {
@@ -95,7 +95,7 @@ struct MessageViewsSendAttemptsCard: View {
                 HStack(spacing: MeeshySpacing.xsPlus) {
                     Text(String(localized: "message-detail.send-history.attempt-number", defaultValue: "Tentative \(attempt.attemptNumber)", bundle: .main))
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(sendAttemptTransportLabel(attempt.transport))
                         .font(.caption2.weight(.medium))
                         .foregroundColor(accent.opacity(0.8))
@@ -106,7 +106,7 @@ struct MessageViewsSendAttemptsCard: View {
                 if let errorMessage = attempt.errorMessage, !errorMessage.isEmpty {
                     Text(errorMessage)
                         .font(.caption2)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(2)
                 }
             }
@@ -115,7 +115,7 @@ struct MessageViewsSendAttemptsCard: View {
 
             Text(attempt.startedAt.formatted(.dateTime.hour().minute().second()))
                 .font(.system(.caption2, design: .monospaced))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
         }
         .padding(.horizontal, MeeshySpacing.smPlus)
         .padding(.vertical, MeeshySpacing.sm)

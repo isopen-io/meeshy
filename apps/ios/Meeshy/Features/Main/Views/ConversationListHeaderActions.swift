@@ -24,7 +24,7 @@ extension ConversationListHeaderOverlay {
                     } label: {
                         Image(systemName: "link.badge.plus")
                             .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
+                            .foregroundStyle(MeeshyColors.indigo500)
                             .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                             .adaptiveGlass(in: Circle(), interactive: true)
                     }
@@ -35,7 +35,7 @@ extension ConversationListHeaderOverlay {
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: MeeshyIconSize.lg, weight: .bold))
-                            .foregroundColor(MeeshyColors.indigo500)
+                            .foregroundStyle(MeeshyColors.indigo500)
                             .frame(width: MeeshyControlSize.large, height: MeeshyControlSize.large)
                             .adaptiveGlass(in: Circle(), interactive: true)
                     }
@@ -59,12 +59,12 @@ extension ConversationListHeaderOverlay {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell.fill")
                             .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
+                            .foregroundStyle(MeeshyColors.indigo500)
 
                         if iPadNotificationCount > 0 {
                             Text(NotificationBadge.displayed(iPadNotificationCount))
                                 .font(.system(size: 9, weight: NotificationBadge.fontWeight))
-                                .foregroundColor(.white)
+                                .foregroundStyle(Color.white)
                                 .lineLimit(1)
                                 // Capsule et non cercle figé : « 99+ » doit
                                 // s'afficher entier, pas être rogné.
@@ -86,7 +86,7 @@ extension ConversationListHeaderOverlay {
                 } label: {
                     Image(systemName: "gearshape.fill")
                         .font(.system(size: MeeshyIconSize.lg, weight: .semibold))
-                        .foregroundColor(MeeshyColors.indigo500)
+                        .foregroundStyle(MeeshyColors.indigo500)
                 }
                 .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Réglages", bundle: .main))
             }

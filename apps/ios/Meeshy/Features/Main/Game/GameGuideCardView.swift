@@ -43,7 +43,7 @@ struct GameGuideCardView: View {
                     if isShort {
                         Text(card.copy.short)
                             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .semibold))
-                            .foregroundColor(theme.textPrimary)
+                            .foregroundStyle(theme.textPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     } else {
                         full
@@ -82,7 +82,7 @@ struct GameGuideCardView: View {
             Text(speakerName)
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .bold))
                 .textCase(.uppercase)
-                .foregroundColor(MeeshyColors.brandPrimary)
+                .foregroundStyle(MeeshyColors.brandPrimary)
             if let step = card.step {
                 Text(String(
                     localized: "game.guide.step_of",
@@ -90,7 +90,7 @@ struct GameGuideCardView: View {
                     bundle: .main
                 ))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             }
             Spacer(minLength: 0)
             if card.presentation == .short && step == nil {
@@ -100,7 +100,7 @@ struct GameGuideCardView: View {
                 } label: {
                     Image(systemName: expanded ? "chevron.up.circle" : "questionmark.circle")
                         .font(MeeshyFont.relative(MeeshyIconSize.lg, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(minWidth: 44, minHeight: 44)
                 }
                 .accessibilityLabel(String(localized: "game.guide.more", defaultValue: "Voir l’explication complète", bundle: .main))
@@ -115,7 +115,7 @@ struct GameGuideCardView: View {
     private var full: some View {
         Text(card.copy.what)
             .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold))
-            .foregroundColor(theme.textPrimary)
+            .foregroundStyle(theme.textPrimary)
             .fixedSize(horizontal: false, vertical: true)
         labeled(String(localized: "game.guide.means_label", defaultValue: "Ça veut dire", bundle: .main), card.copy.means)
         labeled(String(localized: "game.guide.next_label", defaultValue: "Ensuite", bundle: .main), card.copy.next)
@@ -126,10 +126,10 @@ struct GameGuideCardView: View {
             Text(label)
                 .font(MeeshyFont.relative(MeeshyFont.microSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
             Text(text)
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .medium))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -145,7 +145,7 @@ struct GameGuideCardView: View {
                 } label: {
                     Text(card.copy.action)
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                         .padding(.horizontal, MeeshySpacing.lg)
                         .frame(minHeight: 44)
                         .background(Capsule().fill(MeeshyColors.brandPrimary))
@@ -160,7 +160,7 @@ struct GameGuideCardView: View {
                         ? String(localized: "game.guide.dismiss", defaultValue: "Plus tard", bundle: .main)
                         : String(localized: "game.guide.skip", defaultValue: "Passer", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.labelSize, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .padding(.horizontal, MeeshySpacing.sm)
                         .frame(minHeight: 44)
                 }
@@ -174,7 +174,7 @@ struct GameGuideCardView: View {
                 } label: {
                     Label(String(localized: "game.guide.photo", defaultValue: "Immortaliser ce moment", bundle: .main), systemImage: "camera.fill")
                         .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .foregroundStyle(MeeshyColors.brandPrimary)
                         .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)
@@ -186,7 +186,7 @@ struct GameGuideCardView: View {
                 } label: {
                     Text(String(localized: "game.guide.skip_all", defaultValue: "Passer l’intégration", bundle: .main))
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .frame(minHeight: 44)
                 }
                 .buttonStyle(.plain)

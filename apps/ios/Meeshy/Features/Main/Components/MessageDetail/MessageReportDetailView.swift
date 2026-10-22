@@ -24,7 +24,7 @@ struct MessageReportDetailView: View {
         VStack(spacing: MeeshySpacing.lg) {
             Text(String(localized: "message-detail.report.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
                 .font(.callout.weight(.semibold))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             ForEach(ReportType.allCases) { type in
@@ -35,7 +35,7 @@ struct MessageReportDetailView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xsPlus) {
                     Text(String(localized: "message-detail.report.details", defaultValue: "Détails (facultatif)", bundle: .main))
                         .font(.footnote.weight(.medium))
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
 
                     TextField(String(localized: "message-detail.report.placeholder", defaultValue: "Décrivez le problème…", bundle: .main), text: $reportReason, axis: .vertical)
                         .font(.subheadline)
@@ -66,7 +66,7 @@ struct MessageReportDetailView: View {
                             .font(.callout.weight(.semibold))
                     }
                 }
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .frame(maxWidth: .infinity, minHeight: 44)
                 .background(
                     RoundedRectangle(cornerRadius: MeeshyRadius.smPlus)
@@ -119,10 +119,10 @@ struct MessageReportDetailView: View {
                 VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                     Text(type.label)
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(theme.textPrimary)
+                        .foregroundStyle(theme.textPrimary)
                     Text(type.description)
                         .font(.caption)
-                        .foregroundColor(theme.textSecondary)
+                        .foregroundStyle(theme.textSecondary)
                         .lineLimit(1)
                 }
 

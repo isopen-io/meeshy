@@ -252,12 +252,12 @@ struct ContactsSearchField: View {
         HStack(spacing: MeeshySpacing.smPlus) {
             Image(systemName: "magnifyingglass")
                 .font(.subheadline.weight(.medium))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 .accessibilityHidden(true)
 
             TextField(placeholder, text: $query)
                 .font(.subheadline)
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
@@ -267,7 +267,7 @@ struct ContactsSearchField: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.subheadline)
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
                 .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
@@ -335,7 +335,7 @@ struct HubTabButton<Selection: Equatable>: View {
                     if badge > 0 {
                         Text("\(badge)")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(.white)
+                            .foregroundStyle(Color.white)
                             .frame(minWidth: 16, minHeight: 16)
                             .background(Circle().fill(MeeshyColors.indigo500))
                     }
@@ -428,13 +428,13 @@ struct DirectoryPersonRow: View, Equatable {
             VStack(alignment: .leading, spacing: MeeshySpacing.xxs) {
                 Text(name)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .lineLimit(1)
 
                 if let subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.caption.weight(.medium))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                         .lineLimit(1)
                 }
             }

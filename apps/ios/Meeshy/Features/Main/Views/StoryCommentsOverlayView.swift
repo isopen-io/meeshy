@@ -101,7 +101,7 @@ struct StoryCommentsOverlayView: View {
             Image(systemName: "clock.badge.xmark")
                 .font(MeeshyFont.relative(MeeshyIconSize.xxs, weight: .semibold))
         }
-        .foregroundColor(MeeshyColors.mediaChromeSecondary)
+        .foregroundStyle(MeeshyColors.mediaChromeSecondary)
         .padding(.horizontal, MeeshySpacing.md)
         .padding(.vertical, MeeshySpacing.xsPlus)
         .background(Capsule().fill(MeeshyColors.error.opacity(0.32)))
@@ -295,14 +295,14 @@ struct StoryCommentsOverlayView: View {
                 // figée + masqué de VoiceOver (les deux libellés ci-dessous portent
                 // le sens). Le texte, lui, scale avec le Dynamic Type.
                 .font(.system(size: MeeshyIconSize.xxxl))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
                 .accessibilityHidden(true)
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.subheadSize, weight: .semibold))
-                .foregroundColor(MeeshyColors.mediaChromeSecondary)
+                .foregroundStyle(MeeshyColors.mediaChromeSecondary)
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier à commenter !", bundle: .main))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize))
-                .foregroundColor(MeeshyColors.mediaChromeTertiary)
+                .foregroundStyle(MeeshyColors.mediaChromeTertiary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, MeeshySpacing.xxxl)

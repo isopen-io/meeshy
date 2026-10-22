@@ -122,7 +122,7 @@ struct GameHeroView: View {
                 Spacer(minLength: 0)
                 Text(line)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .multilineTextAlignment(.trailing)
                     .fixedSize(horizontal: false, vertical: true)
                 if let cornerFigure {
@@ -158,14 +158,14 @@ struct GameHeroView: View {
                 Text(GameCopy.tierName(level.tier))
                 .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .semibold))
                 .textCase(.uppercase)
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
                 Text(String(localized: "game.hero.level", defaultValue: "Niveau \(GameCopy.formatCount(shownLevel))", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                     .modifier(HeroNumericRoll())
                 Text(toNextText)
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
                 bar
                 // La prochaine étape des niveaux (#9706) : rien au-delà de 100, ni devant un serveur d'avant les étapes.
@@ -214,10 +214,10 @@ struct GameHeroView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(GameCopy.rankLabel(glory))
                     .font(MeeshyFont.relative(MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                    .foregroundColor(theme.textPrimary)
+                    .foregroundStyle(theme.textPrimary)
                 Text(String(localized: "game.rank.glory", defaultValue: "\(GameCopy.formatCount(glory.glory)) de gloire", bundle: .main))
                     .font(MeeshyFont.relative(MeeshyFont.footnoteSize, weight: .medium))
-                    .foregroundColor(theme.textMuted)
+                    .foregroundStyle(theme.textMuted)
             }
         }
         .id(GameAnchor.rank)

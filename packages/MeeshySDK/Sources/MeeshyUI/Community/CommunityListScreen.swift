@@ -95,12 +95,12 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
         HStack(spacing: MeeshySpacing.sm) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: MeeshyIconSize.sm))
-                .foregroundColor(theme.textMuted)
+                .foregroundStyle(theme.textMuted)
 
             TextField(String(localized: "community.list.search.placeholder", defaultValue: "Rechercher...", bundle: .module), text: $viewModel.searchText)
                 .textFieldStyle(.plain)
                 .font(MeeshyFont.relative(MeeshyFont.bodySize, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             if !viewModel.searchText.isEmpty {
                 Button {
@@ -108,7 +108,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: MeeshyIconSize.sm))
-                        .foregroundColor(theme.textMuted)
+                        .foregroundStyle(theme.textMuted)
                 }
             }
         }
@@ -135,11 +135,11 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
 
             Text(String(localized: "community.list.empty.title", defaultValue: "Aucune communauté", bundle: .module))
                 .font(.system(size: MeeshyFont.subtitleSize, weight: .bold, design: .rounded))
-                .foregroundColor(theme.textPrimary)
+                .foregroundStyle(theme.textPrimary)
 
             Text(String(localized: "community.list.empty.subtitle", defaultValue: "Rejoins ou crée une communauté pour collaborer", bundle: .module))
                 .font(.system(size: MeeshyFont.labelSize, design: .rounded))
-                .foregroundColor(theme.textSecondary)
+                .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
 
             Button { onCreateCommunity?() } label: {
@@ -148,7 +148,7 @@ public struct CommunityListScreen<ViewModel: CommunityListModeling>: View {
                     Text(String(localized: "community.list.empty.createButton", defaultValue: "Créer une communauté", bundle: .module))
                 }
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundStyle(Color.white)
                 .padding(.horizontal, MeeshySpacing.xxl)
                 .padding(.vertical, MeeshySpacing.md)
                 .background(
@@ -248,7 +248,7 @@ private struct VibrantCommunityCard: View, Equatable {
             Image(systemName: community.isPrivate ? "lock.fill" : "globe")
                 .font(.system(size: 8, weight: .semibold))
     }
-    .foregroundColor(.white.opacity(0.85))
+    .foregroundStyle(Color.white.opacity(0.85))
     .padding(.horizontal, MeeshySpacing.xsPlus)
     .padding(.vertical, MeeshySpacing.xxs)
     .background(Color.black.opacity(0.25))
@@ -294,14 +294,14 @@ private struct VibrantCommunityCard: View, Equatable {
             VStack(alignment: .leading, spacing: MeeshySpacing.xs) {
                 Text(community.name)
                     .font(MeeshyFont.relative(MeeshyFont.bodySize, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundStyle(Color.white)
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
 
                 if let desc = community.description, !desc.isEmpty {
                     Text(desc)
                         .font(MeeshyFont.relative(MeeshyFont.footnoteSize, design: .rounded))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundStyle(Color.white.opacity(0.8))
                         .lineLimit(2)
                 }
 
@@ -320,7 +320,7 @@ private struct VibrantCommunityCard: View, Equatable {
                             .font(.system(size: MeeshyFont.captionSize, weight: .semibold))
                     }
                 }
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundStyle(Color.white.opacity(0.9))
             }
             .padding(MeeshySpacing.md)
         }

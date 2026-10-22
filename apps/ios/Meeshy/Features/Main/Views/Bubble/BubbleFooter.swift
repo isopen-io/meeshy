@@ -66,7 +66,7 @@ struct BubbleFooter: View, Equatable {
                             deliveryView(tint: compactMetaColor, readTint: readColor)
                             Image(systemName: "arrow.clockwise")
                                 .font(.caption2.weight(.bold))
-                                .foregroundColor(MeeshyColors.stateFailed)
+                                .foregroundStyle(MeeshyColors.stateFailed)
                         }
                         .contentShape(Rectangle())
                     }
@@ -151,7 +151,7 @@ struct BubbleFooter: View, Equatable {
                 if let timestamp = model.timestamp {
                     Text(timestamp)
                         .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white)
+                        .foregroundStyle(Color.white)
                 }
                 deliveryView(tint: .white.opacity(MeeshyOpacity.intense), readTint: MeeshyColors.indigo400)
             }
@@ -182,7 +182,7 @@ struct BubbleFooter: View, Equatable {
             Button(action: { onTranslate(); HapticFeedback.light() }) {
                 Image(systemName: "translate")
                     .font(.caption2.weight(.medium))
-                    .foregroundColor(MeeshyColors.indigo400)
+                    .foregroundStyle(MeeshyColors.indigo400)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "bubble.footer.translation.request", defaultValue: "Demander la traduction", bundle: .main))
@@ -212,7 +212,7 @@ struct BubbleFooter: View, Equatable {
                         deliveryView(tint: metaColor, readTint: readColor)
                         Image(systemName: "arrow.clockwise")
                             .font(.caption2.weight(.bold))
-                            .foregroundColor(MeeshyColors.stateFailed)
+                            .foregroundStyle(MeeshyColors.stateFailed)
                     }
                     .contentShape(Rectangle())
                 }
