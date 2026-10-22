@@ -23,6 +23,7 @@ import { RECIPIENT_LANG_SELECT, recipientLanguage } from '../../utils/recipient-
 import { withoutExpiredConnectionTraces } from '../../services/retention/retention-bounds';
 import { exportGame } from './export-game';
 import { exportReadingActivity } from './export-reading';
+import { exportCallTelemetry } from '../../services/calls/callTelemetryPrivacy';
 
 const logger = enhancedLogger.child({ module: 'DataExport' });
 
@@ -42,11 +43,12 @@ type ExportType =
   | 'securityEvents'
   | 'game'
   | 'packs'
-  | 'readingActivity';
+  | 'readingActivity'
+  | 'calls';
 
 const VALID_TYPES: ExportType[] = [
   'profile', 'messages', 'contacts', 'posts', 'stories', 'comments', 'reactions', 'media', 'voiceProfile', 'sessions', 'securityEvents', 'game', 'packs',
-  'readingActivity',
+  'readingActivity', 'calls',
 ];
 
 type ExportFormat = 'json' | 'csv';
@@ -269,6 +271,19 @@ const packsExportSchema = {
   },
 } as const;
 
+/** La télémétrie et la note de chacun de MES appels (#11277) : objets libres, déclarés comme tels. */
+const callExportItemSchema = {
+  type: 'object',
+  properties: {
+    callId: { type: 'string' },
+    role: { type: 'string' },
+    joinedAt: { type: 'string' },
+    leftAt: { type: 'string', nullable: true },
+    analytics: { type: 'object', additionalProperties: true, nullable: true },
+    feedback: { type: 'object', additionalProperties: true, nullable: true },
+  },
+} as const;
+
 const postExportItemSchema = {
   type: 'object',
   properties: {
@@ -413,14 +428,14 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             types: {
               type: 'string',
               description:
-                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity. ' +
+                'Comma-separated: profile,messages,contacts,posts,stories,comments,reactions,media,voiceProfile,sessions,securityEvents,game,packs,readingActivity,calls. ' +
                 'Defaults to all eleven.',
             },
             limit: {
               type: 'string',
               description:
                 'Max rows per list-type section for THIS request (default 500, capped at 2000). ' +
-                'Applies uniformly to posts/stories/comments/reactions/media/sessions/securityEvents — profile and voiceProfile are single rows and ignore it.',
+                'Applies uniformly to posts/stories/comments/reactions/media/sessions/securityEvents/calls — profile and voiceProfile are single rows and ignore it.',
             },
             offset: {
               type: 'string',
@@ -529,6 +544,9 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
                   game: gameExportSchema,
                   packs: packsExportSchema,
                   readingActivity: readingActivityExportSchema,
+                  calls: { type: 'array', items: callExportItemSchema, nullable: true },
+                  callsCount: { type: 'integer', nullable: true },
+                  callsHasMore: { type: 'boolean', nullable: true },
                   csv: {
                     type: 'object',
                     additionalProperties: { type: 'string' },
@@ -768,6 +786,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
           exportData.game = await exportGame(fastify.prisma, userId, page);
         }
 
+        if (requestedTypes.includes('calls')) {
+          const section = await exportCallTelemetry(fastify.prisma, userId, page);
+          exportData.calls = section.items;
+          exportData.callsCount = section.total;
+          exportData.callsHasMore = section.hasMore;
+        }
+
         if (requestedTypes.includes('readingActivity')) {
           exportData.readingActivity = await exportReadingActivity(fastify.prisma, userId, page);
         }
@@ -857,6 +882,13 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
             const rows = (packs?.[childKey] ?? []) as Record<string, unknown>[];
             const flat = rows.map((row) => ('items' in row ? { ...row, items: JSON.stringify(row.items) } : row));
             if (flat.length > 0) csvSections[`packs.${childKey}`] = toCsv(Object.keys(flat[0]), flat);
+          }
+
+          // Les appels (#11277) : la télémétrie et la note voyagent en JSON dans leur cellule.
+          const calls = (exportData.calls ?? []) as Record<string, unknown>[];
+          if (calls.length > 0) {
+            const flat = calls.map((row) => ({ ...row, analytics: JSON.stringify(row.analytics ?? null), feedback: JSON.stringify(row.feedback ?? null) }));
+            csvSections.calls = toCsv(Object.keys(flat[0]), flat);
           }
 
           exportData.csv = csvSections;

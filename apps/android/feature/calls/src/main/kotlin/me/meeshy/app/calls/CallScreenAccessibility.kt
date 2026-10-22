@@ -8,7 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import me.meeshy.feature.calls.R
-import me.meeshy.ui.component.game.LocalReduceMotion
+import me.meeshy.ui.accessibility.LocalReduceMotion
 
 /** Ce que TalkBack annonce à chaque transition de l'appel (iOS `onChange(of: callState)`). */
 internal object CallAnnouncements {

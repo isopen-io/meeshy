@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="login_welcome_back">Willkommen zurück</string>
+    <string name="login_error_required">Benutzername und Passwort sind erforderlich</string>
+    <string name="login_custom_host_label">Eigener Host</string>
+    <string name="login_apply_custom_host">Eigenen Host anwenden</string>
+    <string name="guest_join_subtitle">Erstelle eine temporäre Identität, um beizutreten</string>
+    <string name="guest_join_language">Gesprochene Sprache</string>
+    <string name="guest_join_joining">Beitritt läuft…</string>
+    <string name="guest_join_preview_error">Dieser Link konnte nicht geöffnet werden</string>
+    <string name="guest_join_requires_account">Dieser Link erfordert ein Konto.</string>
+    <string name="share_link_entry_resolving">Link wird geöffnet…</string>
+    <string name="share_link_choose_title">Wie möchtest du beitreten?</string>
+    <string name="share_link_choose_subtitle">Tritt %1$s mit deinem Konto oder als Gast bei.</string>
+    <string name="share_link_choose_subtitle_generic">Tritt mit deinem Konto oder als Gast bei.</string>
+    <string name="share_link_continue_with_account">Mit meinem Konto fortfahren</string>
+    <string name="auth_back_to_login">Zurück zur Anmeldung</string>
+    <string name="auth_magic_sent">Öffne den Link, der an %1$s gesendet wurde</string>
+    <string name="auth_magic_countdown">Link gültig für %1$s</string>
+    <string name="auth_magic_validating">Du wirst angemeldet…</string>
+    <string name="signup_display_name_required">Gib mindestens einen Buchstaben ein.</string>
+    <string name="signup_display_name_too_long">Dieser Name ist zu lang.</string>
+    <string name="signup_display_name_taken">Dieser Name ist bereits vergeben. Versuche einen anderen.</string>
+    <string name="signup_email_invalid">Diese E-Mail-Adresse scheint unvollständig zu sein.</string>
+    <string name="signup_phone_invalid">Diese Nummer kann nicht gewählt werden.</string>
+    <string name="signup_phone_conflict">Diese Nummer ist bereits mit einem Konto verknüpft. Lass das Feld leer, um fortzufahren.</string>
+    <string name="signup_choose_country">Land wählen</string>
+    <string name="signup_country_picker_title">Wähle ein Land</string>
+    <string name="signup_password_too_short">Mindestens 6 Zeichen.</string>
+    <string name="signup_submit">Mein Konto erstellen</string>
+    <string name="signup_error_invalid_field">Dieser Wert wurde abgelehnt.</string>
+</resources>

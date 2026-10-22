@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
+import me.meeshy.sdk.model.composer.PendingAttachmentsState
 import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 import org.junit.Rule
@@ -56,7 +57,9 @@ class ChatHostsSmokeTest {
         cancelEdit = { },
         cancelReply = { },
         removeClipboardContent = { },
-        sendFileAttachment = { _, _, _ -> },
+        pickFile = { _, _, _ -> },
+        removePendingAttachment = { _ -> },
+        stagePendingUris = { _ -> },
         dismissImageViewer = { },
         openEmojiPicker = { _ -> },
         startEdit = { _ -> },
@@ -94,6 +97,7 @@ class ChatHostsSmokeTest {
 
     private fun host(state: ChatUiState = ChatUiState(conversationTitle = "Équipe")) = ChatHostContext(
         state = state,
+        pending = PendingAttachmentsState(),
         accentColor = MeeshyPalette.Indigo500,
         actions = noopActions(),
         navigation = ChatNavigationActions(

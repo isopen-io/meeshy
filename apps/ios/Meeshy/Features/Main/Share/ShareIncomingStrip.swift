@@ -133,15 +133,8 @@ struct ShareIncomingThumbnail: View {
     /// plafond mémoire de l'extension.
     nonisolated static func downsampled(_ url: URL, maxPixel: Int) async -> UIImage? {
         await Task.detached(priority: .userInitiated) {
-            guard let source = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
-            let options: [CFString: Any] = [
-                kCGImageSourceCreateThumbnailFromImageAlways: true,
-                kCGImageSourceCreateThumbnailWithTransform: true,
-                kCGImageSourceShouldCacheImmediately: true,
-                kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-            ]
-            guard let thumbnail = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-            return UIImage(cgImage: thumbnail)
+            ImageDownsampler.thumbnail(fileURL: url, maxPixelSize: CGFloat(maxPixel), decodeImmediately: true)
+                .map { UIImage(cgImage: $0) }
         }.value
     }
 

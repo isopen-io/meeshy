@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_tray_import_failed">تعذّر استيراد %1$s</string>
+    <string name="chat_tray_cap_reached">تم بلوغ حد 199 وسيطًا</string>
+    <string name="chat_tray_remove">إزالة %1$s</string>
+    <string name="chat_tray_preparing">جارٍ تحضير %1$s</string>
+</resources>

@@ -113,23 +113,8 @@ public final class StoryMediaLoader {
     /// - `kCGImageSourceThumbnailMaxPixelSize`: target dimension (longest side)
     /// This is 5-10x more memory efficient than UIImage(data:) + resize after.
     nonisolated private static func downsample(data: Data, maxDimension: CGFloat) -> UIImage? {
-        let sourceOptions: [CFString: Any] = [
-            kCGImageSourceShouldCache: false
-        ]
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions as CFDictionary) else {
-            return nil
-        }
-
-        let downsampleOptions: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxDimension
-        ]
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions as CFDictionary) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
+        ImageDownsampler.thumbnail(data: data, maxPixelSize: maxDimension, decodeImmediately: true)
+            .map { UIImage(cgImage: $0) }
     }
 
     // MARK: - Video Thumbnail (Async + Cached)
@@ -160,15 +145,25 @@ public final class StoryMediaLoader {
 
     // MARK: - Preload Video Player
 
-    /// **La source d'un lecteur préparé : le fichier local d'abord** (#9702).
+    /// **La source d'un lecteur préparé : le fichier sur le disque, et rien
+    /// d'autre** (#9702, #9882).
     ///
     /// Le pool est indexé par l'URL DISTANTE — la clé que les surfaces
-    /// demandent — mais un lecteur bâti sur elle jouait en streaming et
-    /// re-téléchargeait un fichier que le registre partagé venait de poser sur
-    /// le disque. La clé reste distante, la SOURCE devient locale dès qu'elle
-    /// existe : décodage depuis le disque, aucun octet réseau en double.
-    nonisolated static func prerollSource(remote: URL, localFile: URL?) -> URL {
-        localFile ?? remote
+    /// demandent — mais un lecteur bâti sur elle jouait en streaming, puis le
+    /// moteur le jetait dès que le fichier arrivait. Sans fichier local, aucun
+    /// producteur (conversation, fil, stories, réels) ne prépare de lecteur ;
+    /// un appareil au stade thermique critique n'en prépare plus du tout.
+    nonisolated static func prerollSource(
+        remote: URL, localFile: URL?, thermalState: ProcessInfo.ThermalState = .nominal
+    ) -> URL? {
+        guard MediaThermalPolicy.shouldPrefetchVideo(thermalState: thermalState) else { return nil }
+        return remote.isFileURL ? remote : localFile
+    }
+
+    /// `prerollSource` sur le fichier que le cache vidéo tient pour `url`.
+    nonisolated static func diskPrerollSource(for url: URL, thermalState: ProcessInfo.ThermalState) -> URL? {
+        let localFile = url.isFileURL ? nil : CacheCoordinator.videoLocalFileURL(for: url.absoluteString)
+        return prerollSource(remote: url, localFile: localFile, thermalState: thermalState)
     }
 
     /// Create an AVPlayer with preroll — ready for instant playback.
@@ -185,10 +180,10 @@ public final class StoryMediaLoader {
     /// pleins là, au lieu de jouer depuis zéro pendant le geste puis de sauter.
     public func preloadVideoPlayer(
         url: URL, resume: ((TimeInterval) -> TimeInterval?)? = nil
-    ) async -> AVPlayer {
+    ) async -> AVPlayer? {
         let thermalState = ProcessInfo.processInfo.thermalState
-        let localFile = url.isFileURL ? nil : CacheCoordinator.videoLocalFileURL(for: url.absoluteString)
-        let item = AVPlayerItem(url: Self.prerollSource(remote: url, localFile: localFile))
+        guard let source = Self.diskPrerollSource(for: url, thermalState: thermalState) else { return nil }
+        let item = AVPlayerItem(url: source)
         // SOTA buffer/bitrate, thermal-aware (WWDC19 #422). Offscreen preroll is
         // always bitrate-capped; the cap tightens — and the decoded-ahead window
         // shrinks — once the device heats up. Forward buffer was 2.0s (now ~1s).
@@ -314,8 +309,8 @@ public final class StoryMediaLoader {
         url: URL, resume: ((TimeInterval) -> TimeInterval?)? = nil
     ) async {
         let key = url.absoluteString
-        guard playerCache[key] == nil, !Task.isCancelled else { return }
-        let player = await preloadVideoPlayer(url: url, resume: resume)
+        guard playerCache[key] == nil, !Task.isCancelled, admitsPreparation(for: url),
+              let player = await preloadVideoPlayer(url: url, resume: resume) else { return }
         guard !Task.isCancelled,
               player.currentItem?.status != .failed,
               playerCache[key] == nil else {
@@ -388,6 +383,15 @@ public final class StoryMediaLoader {
 
     public func setRetentionDistances(_ distances: [String: Int]) {
         retentionDistances = distances
+    }
+
+    /// `false` quand le lecteur de `url` serait chassé à son insertion
+    /// (`PlayerPoolEviction.admits`) : le pool garde les voisins du réel
+    /// affiché, et un autre écran ne dépense pas de décodeur contre eux.
+    public func admitsPreparation(for url: URL) -> Bool {
+        PlayerPoolEviction.admits(
+            candidate: url.absoluteString, order: playerCacheOrder,
+            distances: retentionDistances, capacity: playerPoolCapacity)
     }
 
     private func insert(_ player: AVPlayer, for key: String) {

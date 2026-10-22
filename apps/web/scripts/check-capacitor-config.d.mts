@@ -35,3 +35,10 @@ export declare function auditSyncedPlugins(
   }>,
   importedPlugins: readonly string[],
 ): readonly string[];
+
+export declare function auditWebViewFloor(input: Readonly<{
+  readonly capConfig: Readonly<{ readonly android?: Readonly<{ readonly minWebViewVersion?: number }>; readonly server?: Readonly<{ readonly errorPath?: string }> }> | undefined;
+  readonly floorSource: string;
+  readonly publicFiles: readonly string[];
+  readonly mainSource: string;
+}>): readonly string[];
