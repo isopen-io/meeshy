@@ -70,6 +70,16 @@ class MeeshyApi private constructor(private val retrofit: Retrofit) {
         }
 
         /**
+         * L'ancienne signature `create(config, tokenStore) { … }` : un lambda final reste le
+         * rappel d'expiration, jamais une liste de contributeurs.
+         */
+        fun create(
+            config: MeeshyConfig,
+            tokenStore: TokenStore,
+            onSessionExpired: () -> Unit,
+        ): MeeshyApi = create(config, tokenStore, onSessionExpired, emptyList())
+
+        /**
          * @param onSessionExpired appele quand la passerelle refuse l'identite
          *   (401) hors des routes d'authentification. Un 403 (refus de permission) ne
          *   declenche plus ceci depuis #4862 : ce n'est pas une session expiree.

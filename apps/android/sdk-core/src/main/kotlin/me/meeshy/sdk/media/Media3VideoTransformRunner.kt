@@ -7,7 +7,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.effect.FrameDropEffect
 import androidx.media3.effect.Presentation
-import androidx.media3.transformer.AudioEncoderSettings
 import androidx.media3.transformer.Composition
 import androidx.media3.transformer.DefaultEncoderFactory
 import androidx.media3.transformer.EditedMediaItem
@@ -93,9 +92,6 @@ internal class Media3VideoTransformRunner(
                     DefaultEncoderFactory.Builder(context)
                         .setRequestedVideoEncoderSettings(
                             VideoEncoderSettings.Builder().setBitrate(plan.videoBitRate).build(),
-                        )
-                        .setRequestedAudioEncoderSettings(
-                            AudioEncoderSettings.Builder().setBitrate(plan.audioBitRate).build(),
                         )
                         .build(),
                 )

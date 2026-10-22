@@ -9,7 +9,10 @@ import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.sdk.net.ApiError
 import me.meeshy.sdk.net.NetworkResult
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+@RunWith(RobolectricTestRunner::class)
 class ConversationOpenerHostTest {
     private class Store(val result: NetworkResult<ApiConversation>) : ConversationOpenerStore {
         override suspend fun cached(id: String): ApiConversation? = null

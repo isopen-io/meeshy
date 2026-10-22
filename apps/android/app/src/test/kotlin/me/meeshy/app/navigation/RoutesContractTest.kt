@@ -61,7 +61,7 @@ class RoutesContractTest {
             "SHARE_LINK_PICKER", "conversations/share-link/picker",
             "MY_SHARE_LINKS", "share-links",
             "SHARE_LINK_DETAIL", "share-links/{linkId}",
-            "CHAT", "chat/{conversationId}",
+            "CHAT", "chat/{conversationId}?messageId={messageId}",
             "FEED", "feed",
             "SAVED_POSTS", "feed/saved",
             "NEARBY_DISCOVERY", "feed/nearby",
@@ -88,7 +88,7 @@ class RoutesContractTest {
         assertThat(Routes.GUEST_JOIN_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/join/{identifier}")
         assertThat(Routes.GUEST_JOIN_CHAT_WEB_DEEP_LINK).isEqualTo("https://meeshy.me/chat/{identifier}")
         assertThat(Routes.CONVERSATIONS_DEEP_LINK).isEqualTo("meeshy://conversations")
-        assertThat(Routes.CHAT_DEEP_LINK).isEqualTo("meeshy://chat/{conversationId}")
+        assertThat(Routes.CHAT_DEEP_LINK).isEqualTo("meeshy://chat/{conversationId}?messageId={messageId}")
         assertThat(Routes.CONVERSATION_DEEP_LINK).isEqualTo("meeshy://conversations/{conversationId}")
         assertThat(Routes.CONVERSATION_SINGULAR_DEEP_LINK).isEqualTo("meeshy://conversation/{conversationId}")
         assertThat(Routes.CONVERSATION_DRAFT_DEEP_LINK)

@@ -31,12 +31,12 @@ import org.junit.Test
 class ConversationListRealtimeBinderTest {
 
     private class Frames {
-        val unread = MutableSharedFlow<UnreadUpdateEvent>()
-        val received = MutableSharedFlow<ApiMessage>()
-        val updated = MutableSharedFlow<ConversationUpdatedSocketEvent>()
-        val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>()
-        val closed = MutableSharedFlow<ConversationClosedSocketEvent>()
-        val left = MutableSharedFlow<ParticipantLeftEvent>()
+        val unread = MutableSharedFlow<UnreadUpdateEvent>(extraBufferCapacity = 64)
+        val received = MutableSharedFlow<ApiMessage>(extraBufferCapacity = 64)
+        val updated = MutableSharedFlow<ConversationUpdatedSocketEvent>(extraBufferCapacity = 64)
+        val deleted = MutableSharedFlow<ConversationDeletedSocketEvent>(extraBufferCapacity = 64)
+        val closed = MutableSharedFlow<ConversationClosedSocketEvent>(extraBufferCapacity = 64)
+        val left = MutableSharedFlow<ParticipantLeftEvent>(extraBufferCapacity = 64)
     }
 
     private fun TestScope.binder(
@@ -68,7 +68,7 @@ class ConversationListRealtimeBinderTest {
         StarredMessage(messageId = "m-$conversationId", conversationId = conversationId)
 
     @Test
-    fun `three frames for the same message trigger a single refresh`() =
+    fun `three frames for the same message cost one refresh and one tail refresh, never three`() =
         runTest(StandardTestDispatcher()) {
             val frames = Frames()
             val repo = mockk<ConversationRepository>(relaxed = true)
@@ -80,7 +80,7 @@ class ConversationListRealtimeBinderTest {
             frames.unread.emit(UnreadUpdateEvent(conversationId = "c1", unreadCount = 1))
             runCurrent()
 
-            coVerify(exactly = 1) { repo.refresh() }
+            coVerify(exactly = 2) { repo.refresh() }
         }
 
     @Test

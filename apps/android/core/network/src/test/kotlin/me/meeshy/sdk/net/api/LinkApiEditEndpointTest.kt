@@ -30,6 +30,9 @@ class LinkApiEditEndpointTest {
         var body: String? = null
     }
 
+    private fun fakeBody(method: String): String =
+        if (method == "GET") """{"success":true,"data":[]}""" else """{"success":true,"data":{}}"""
+
     private fun api(capture: Capture): LinkApi {
         val client = OkHttpClient.Builder()
             .addInterceptor { chain ->
@@ -40,7 +43,7 @@ class LinkApiEditEndpointTest {
                     .protocol(Protocol.HTTP_1_1)
                     .code(200)
                     .message("OK")
-                    .body("""{"success":true,"data":[]}""".toResponseBody("application/json".toMediaType()))
+                    .body(fakeBody(chain.request().method).toResponseBody("application/json".toMediaType()))
                     .build()
             }
             .build()

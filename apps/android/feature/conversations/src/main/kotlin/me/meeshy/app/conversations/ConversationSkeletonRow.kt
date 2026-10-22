@@ -60,9 +60,9 @@ internal fun ConversationSkeletonRow(index: Int, modifier: Modifier = Modifier) 
         modifier = modifier
             .fillMaxWidth()
             .height(ConversationSkeletonMetrics.rowHeight)
+            .clearAndSetSemantics { testTag = ConversationSkeletonMetrics.TEST_TAG }
             .graphicsLayer { this.alpha = alpha.value }
-            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus)
-            .clearAndSetSemantics { testTag = ConversationSkeletonMetrics.TEST_TAG },
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.smPlus),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MeeshySkeletonBox(

@@ -93,6 +93,14 @@
           "catalog": "app",
           "iosKey": "recentMedia.resolveFailed.multiple",
           "status": "adopted"
+        },
+        {
+          "androidName": "recent_media_limited_access",
+          "status": "android-only"
+        },
+        {
+          "androidName": "recent_media_limited_access_hint",
+          "status": "android-only"
         }
       ]
     }
