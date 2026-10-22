@@ -17,6 +17,9 @@ struct DownloadBadgeView: View {
     /// ce badge, qui ne l'observe pas — sans ce signal, il restait « ↓ » pour
     /// toujours au-dessus d'une image nette (#10370).
     var displayedImageLanded: Bool = false
+    /// La forme du bouton « télécharger », que décide la case qui le pose
+    /// (`MediaTileDownloadPlacement`) : compacte sur la case « +N » (#11569).
+    var form: MediaTileDownloadPlacement.Form = .prominent
 
     @StateObject private var downloader = AttachmentDownloader()
     private var accent: Color { Color(hex: accentColor) }
@@ -87,7 +90,10 @@ struct DownloadBadgeView: View {
         Button {
             downloader.start(attachment: attachment, origin: .manual, onShare: onShareFile)
         } label: {
-            centredIdleBadge
+            switch form {
+            case .prominent: centredIdleBadge
+            case .compact: compactIdleBadge
+            }
         }
         .task {
             await downloader.checkCache(attachment)
@@ -120,6 +126,28 @@ struct DownloadBadgeView: View {
                     .background(Capsule().fill(MeeshyColors.mediaScrim))
             }
         }
+    }
+
+    /// La forme compacte : le même disque et la même flèche, sans la taille
+    /// (restée dans `accessibilityValue`), dans une cible de 44 pt — elle tient
+    /// dans le coin d'une case de grille sans toucher au « +N » du centre.
+    private var compactIdleBadge: some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: MeeshyControlSize.regular, height: MeeshyControlSize.regular)
+            Circle()
+                .fill(accent.opacity(MeeshyOpacity.intense))
+                .frame(width: MeeshyControlSize.small, height: MeeshyControlSize.small)
+            Image(systemName: "arrow.down.to.line")
+                .font(MeeshyFont.relative(MeeshyIconSize.sm, weight: .bold))
+                .foregroundStyle(Color.white)
+        }
+        .shadow(color: .black.opacity(MeeshyOpacity.medium), radius: 4, y: 2)
+        .frame(width: MediaTileDownloadPlacement.compactHitTarget,
+               height: MediaTileDownloadPlacement.compactHitTarget)
+        .contentShape(Rectangle())
+        .padding(MeeshySpacing.xxs)
     }
 
     private var downloadingBadge: some View {
@@ -158,6 +186,56 @@ struct DownloadBadgeView: View {
         .padding(MeeshySpacing.xs)
         .accessibilityLabel(String(localized: "a11y.media.download.cancel", defaultValue: "Annuler le téléchargement", bundle: .main))
         .accessibilityValue(downloader.progress.formatted(.percent))
+    }
+}
+
+// MARK: - MediaTileDownloadPlacement — où se pose le badge sur une case de grille
+
+/// **Le badge et le « +N » ne se disputent jamais le centre d'une case** (#11569).
+///
+/// La dernière case d'une grille de plus de quatre pièces porte « +N » au
+/// centre, et le badge de la bulle s'y posait aussi, à 56 pt sur une case de
+/// 119 pt de haut : on ne lisait ni l'un ni l'autre tant que la photo n'était
+/// pas sur l'appareil, et le Fil posait le même badge ailleurs. Sur cette case, la
+/// bulle et le Fil partagent UNE disposition : le « +N » garde le centre (c'est
+/// le sens de la case, dont le toucher ouvre le carrousel), le badge prend le
+/// coin haut-gauche sous sa forme compacte — le seul coin libre des deux
+/// modes : en bas à droite la bulle pose l'heure et l'état d'envoi sur cette
+/// dernière case, en bas à gauche vit la pastille des réactions, en haut à
+/// droite le compteur de vue unique. Les autres cases gardent chacune la leur.
+nonisolated struct MediaTileDownloadPlacement: Equatable {
+    enum Surface: Equatable { case bubbleGrid, focalGrid }
+    enum Form: Equatable { case prominent, compact }
+
+    let alignment: Alignment
+    let form: Form
+
+    static var overflowLabelAlignment: Alignment { .center }
+    static var compactHitTarget: CGFloat { MeeshyControlSize.tapTarget }
+
+    static func resolve(surface: Surface, overflowCount: Int) -> MediaTileDownloadPlacement {
+        guard overflowCount <= 0 else {
+            return MediaTileDownloadPlacement(alignment: .topLeading, form: .compact)
+        }
+        switch surface {
+        case .bubbleGrid: return MediaTileDownloadPlacement(alignment: .center, form: .prominent)
+        case .focalGrid: return MediaTileDownloadPlacement(alignment: .bottomTrailing, form: .prominent)
+        }
+    }
+}
+
+/// Le « +N » de la dernière case d'une grille, dessiné une seule fois pour la
+/// bulle et le Fil (#11569). Le texte reste un élément VoiceOver.
+struct MediaTileOverflowLabel: View {
+    let count: Int
+
+    var body: some View {
+        ZStack(alignment: MediaTileDownloadPlacement.overflowLabelAlignment) {
+            MeeshyColors.mediaScrim
+            Text("+\(count)")
+                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
+                .foregroundStyle(Color.white)
+        }
     }
 }
 

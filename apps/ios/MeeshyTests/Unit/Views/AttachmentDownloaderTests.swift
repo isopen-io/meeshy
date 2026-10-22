@@ -560,3 +560,55 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         subscription.cancel()
     }
 }
+
+/// #11569 — sur la dernière case d'une grille (« +N »), le badge de
+/// téléchargement se posait au CENTRE, par-dessus le libellé : on ne lisait ni
+/// l'un ni l'autre tant que la photo n'était pas téléchargée. Une seule loi de
+/// placement sert la bulle et le Fil.
+final class MediaTileDownloadPlacementTests: XCTestCase {
+
+    func test_resolve_overflowTile_sameCompactCornerInBubbleAndFocal() {
+        let bubble = MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: 3)
+        let focal = MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: 3)
+
+        XCTAssertEqual(bubble, focal, "la case « +N » a la même disposition dans les deux modes")
+        XCTAssertEqual(bubble.alignment, .topLeading)
+        XCTAssertEqual(bubble.form, .compact)
+    }
+
+    /// Sur la dernière case, la bulle pose l'heure et l'état d'envoi en bas à
+    /// droite ; les deux modes posent les réactions en bas à gauche et le
+    /// compteur de vue unique en haut à droite.
+    func test_resolve_overflowTile_takesTheOnlyCornerNoOtherBadgeHolds() {
+        let held: [Alignment] = [.bottomTrailing, .bottomLeading, .topTrailing]
+        for surface in [MediaTileDownloadPlacement.Surface.bubbleGrid, .focalGrid] {
+            let placement = MediaTileDownloadPlacement.resolve(surface: surface, overflowCount: 2)
+            XCTAssertFalse(held.contains(placement.alignment),
+                           "le badge de la case « +N » ne se pose sur aucune autre pastille (\(surface))")
+        }
+    }
+
+    func test_resolve_overflowTile_badgeNeverSharesTheOverflowLabelAnchor() {
+        for surface in [MediaTileDownloadPlacement.Surface.bubbleGrid, .focalGrid] {
+            let placement = MediaTileDownloadPlacement.resolve(surface: surface, overflowCount: 1)
+            XCTAssertNotEqual(placement.alignment, MediaTileDownloadPlacement.overflowLabelAlignment,
+                              "le badge ne se pose jamais sur le « +N » (\(surface))")
+        }
+    }
+
+    func test_resolve_plainBubbleTile_keepsTheCentredProminentBadge() {
+        let placement = MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: 0)
+
+        XCTAssertEqual(placement, MediaTileDownloadPlacement(alignment: .center, form: .prominent))
+    }
+
+    func test_resolve_plainFocalTile_keepsItsCornerProminentBadge() {
+        let placement = MediaTileDownloadPlacement.resolve(surface: .focalGrid, overflowCount: 0)
+
+        XCTAssertEqual(placement, MediaTileDownloadPlacement(alignment: .bottomTrailing, form: .prominent))
+    }
+
+    func test_compactForm_keepsTheMinimumTapTarget() {
+        XCTAssertGreaterThanOrEqual(MediaTileDownloadPlacement.compactHitTarget, MeeshyControlSize.tapTarget)
+    }
+}

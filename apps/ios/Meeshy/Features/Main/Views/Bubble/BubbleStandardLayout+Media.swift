@@ -375,7 +375,7 @@ fileprivate struct BubbleGridCell: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
         .onTapGesture(perform: handleTap)
-        .overlay { downloadBadgeOverlay }
+        .overlay(alignment: downloadPlacement.alignment) { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
         // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
         // de CETTE pièce, dont le menu porte la réaction. Le double tap
@@ -492,11 +492,14 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            MeeshyColors.mediaScrim
-            Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(.white)
+            MediaTileOverflowLabel(count: overflowCount)
         }
+    }
+
+    /// #11569 — la case « +N » pose son badge au coin, en forme compacte,
+    /// comme la case du Fil ; les autres cases le gardent au centre.
+    private var downloadPlacement: MediaTileDownloadPlacement {
+        MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: overflowCount)
     }
 
     @ViewBuilder
@@ -547,7 +550,8 @@ fileprivate struct BubbleGridCell: View {
                 displayedURL: BubbleGridImageView.displayedURL(for: attachment,
                                                                cellPointWidth: cellPointWidth,
                                                                displayScale: displayScale),
-                displayedImageLanded: displayedImageLanded
+                displayedImageLanded: displayedImageLanded,
+                form: downloadPlacement.form
             )
         }
     }
