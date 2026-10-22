@@ -181,15 +181,33 @@ public final class PushNotificationManager: NSObject, ObservableObject {
 
     /// Re-register the persisted device token with the backend after login.
     /// Call this when the user authenticates so the backend associates the token with their account.
+    ///
+    /// Appelé avant le premier rendu de la liste (#11558) : le jeton persisté se
+    /// lit au trousseau HORS du fil principal.
     public func reRegisterTokenIfNeeded() {
-        guard let token = deviceToken else {
-            logger.info("No persisted device token to re-register")
-            return
-        }
-        logger.info("Re-registering persisted device token with backend")
         Task {
+            guard let token = await deviceTokenReadOffMain() else {
+                logger.info("No persisted device token to re-register")
+                return
+            }
+            logger.info("Re-registering persisted device token with backend")
             await sendTokenToBackend(token: token)
         }
+    }
+
+    private func deviceTokenReadOffMain() async -> String? {
+        if case .some(let token) = knownDeviceToken { return token }
+        let token = await keychainLoadOffMain(Self.persistedTokenKey)
+        if case .some(let tokenSetMeanwhile) = knownDeviceToken { return tokenSetMeanwhile }
+        knownDeviceToken = .some(token)
+        return token
+    }
+
+    private func keychainLoadOffMain(_ key: String) async -> String? {
+        let store = keychainStore
+        return await Task.detached(priority: .userInitiated) {
+            store.load(forKey: key, account: nil)
+        }.value
     }
 
     /// Handle APNs registration failure.
@@ -287,7 +305,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
         let now = Date()
-        let lastToken = keychainStore.load(forKey: Self.lastRegisteredTokenKey, account: nil)
+        let lastToken = await keychainLoadOffMain(Self.lastRegisteredTokenKey)
         let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
         if lastToken == token,
            let lastAt,

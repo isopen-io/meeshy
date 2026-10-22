@@ -41,6 +41,70 @@ final class NotificationInterfaceLanguageTests: XCTestCase {
         XCTAssertNotNil(store.publishedCode)
     }
 
+    // MARK: - #11558 — le groupe d'app hors du fil principal
+
+    /// `MeeshyApp.init` et la reprise de session publient la langue avant le
+    /// premier rendu de la liste : le groupe d'app ne se touche que sur sa file.
+    func test_publishInterfaceLanguageInBackground_touchesTheStoreOnlyOnItsQueue() {
+        let io = AppGroupIO(label: "NotificationInterfaceLanguageTests.gated")
+        let gate = DispatchSemaphore(value: 0)
+        io.enqueue { gate.wait() }
+        let store = ThreadRecordingInterfaceLanguageStore()
+
+        UILanguageOverride.publishInterfaceLanguageInBackground(io: io, store: store)
+
+        XCTAssertEqual(store.accesses, 0, "rien ne se lit ni ne s'écrit avant le tour de la file")
+        gate.signal()
+        io.drain()
+        XCTAssertEqual(store.publishCallCount, 1)
+        XCTAssertEqual(store.mainThreadAccesses, 0)
+    }
+
+    func test_publishInterfaceLanguageInBackground_changedLanguage_handsTheBundleBackOnTheMainActor() async {
+        let io = AppGroupIO(label: "NotificationInterfaceLanguageTests.changed")
+        let changed = expectation(description: "catégories réenregistrées")
+
+        UILanguageOverride.publishInterfaceLanguageInBackground(
+            io: io, store: ThreadRecordingInterfaceLanguageStore(),
+            whenChanged: { _ in
+                MainActor.assertIsolated()
+                changed.fulfill()
+            }
+        )
+
+        await fulfillment(of: [changed], timeout: 2)
+    }
+
+    func test_publishInterfaceLanguageInBackground_unchangedLanguage_keepsTheCategories() async {
+        let io = AppGroupIO(label: "NotificationInterfaceLanguageTests.unchanged")
+        let store = ThreadRecordingInterfaceLanguageStore()
+        UILanguageOverride.publishInterfaceLanguage(to: store)
+        let changed = expectation(description: "aucun réenregistrement")
+        changed.isInverted = true
+
+        UILanguageOverride.publishInterfaceLanguageInBackground(io: io, store: store, whenChanged: { _ in changed.fulfill() })
+
+        await fulfillment(of: [changed], timeout: 0.5)
+    }
+
+    func test_scheduleNotificationCategoriesRegistration_readsTheGroupOnItsQueue() async {
+        let io = AppGroupIO(label: "NotificationInterfaceLanguageTests.categories")
+        let gate = DispatchSemaphore(value: 0)
+        io.enqueue { gate.wait() }
+        let store = ThreadRecordingInterfaceLanguageStore(publishedCode: "fr")
+        let registered = expectation(description: "catégories enregistrées")
+
+        AppDelegate.scheduleNotificationCategoriesRegistration(io: io, store: store, register: { _ in
+            MainActor.assertIsolated()
+            registered.fulfill()
+        })
+
+        XCTAssertEqual(store.accesses, 0)
+        gate.signal()
+        await fulfillment(of: [registered], timeout: 2)
+        XCTAssertEqual(store.mainThreadAccesses, 0)
+    }
+
     // MARK: - Catégories dans la langue publiée
 
     func test_categories_frenchPublishedEnglishDevice_titlesInFrench() throws {
@@ -85,5 +149,40 @@ private final class MockInterfaceLanguageStore: InterfaceLanguageProviding {
     func publish(_ code: String?) {
         publishCallCount += 1
         publishedCode = code
+    }
+}
+
+nonisolated private final class ThreadRecordingInterfaceLanguageStore: InterfaceLanguageProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var code: String?
+    private var publishes = 0
+    private var touches = 0
+    private var mainTouches = 0
+
+    init(publishedCode: String? = nil) { code = publishedCode }
+
+    var accesses: Int { lock.withLock { touches } }
+    var mainThreadAccesses: Int { lock.withLock { mainTouches } }
+    var publishCallCount: Int { lock.withLock { publishes } }
+
+    var publishedCode: String? {
+        note()
+        return lock.withLock { code }
+    }
+
+    func publish(_ code: String?) {
+        note()
+        lock.withLock {
+            publishes += 1
+            self.code = code
+        }
+    }
+
+    private func note() {
+        let isMain = Thread.isMainThread
+        lock.withLock {
+            touches += 1
+            if isMain { mainTouches += 1 }
+        }
     }
 }
