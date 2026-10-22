@@ -1,5 +1,6 @@
 import XCTest
 import QuartzCore
+import UIKit
 import AVFoundation
 import MeeshySDK
 @testable import MeeshyUI

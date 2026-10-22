@@ -1,5 +1,6 @@
 import Foundation
 import QuartzCore
+import UIKit
 import AVFoundation
 
 /// **La description jouée par Core Animation : une `CAKeyframeAnimation` par
