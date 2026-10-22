@@ -20,7 +20,7 @@ fi
 ADB="$ANDROID_HOME/platform-tools/adb"
 EMULATOR_BIN="$ANDROID_HOME/emulator/emulator"
 AVD="${MEESHY_AVD:-meeshy_pixel8}"
-APP_ID="me.meeshy.app.debug"
+APP_ID="me.meeshy.android.debug"
 LAUNCH_COMPONENT="$APP_ID/me.meeshy.app.MainActivity"
 
 device_ready() {
