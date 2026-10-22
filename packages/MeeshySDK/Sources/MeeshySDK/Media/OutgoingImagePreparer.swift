@@ -249,14 +249,17 @@ enum OutgoingImageGeometry {
         return CGSize(width: width, height: height)
     }
 
+    static func orientation(_ properties: [CFString: Any]) -> Int {
+        (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    }
+
     static func isUpright(_ properties: [CFString: Any]) -> Bool {
-        ((properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1) == 1
+        orientation(properties) == 1
     }
 
     /// Les orientations EXIF 5 à 8 couchent l'image : sa définition debout s'inverse.
     static func upright(_ size: CGSize, properties: [CFString: Any]) -> CGSize {
-        let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
-        return (5...8).contains(orientation) ? CGSize(width: size.height, height: size.width) : size
+        (5...8).contains(orientation(properties)) ? CGSize(width: size.height, height: size.width) : size
     }
 }
 
@@ -282,34 +285,41 @@ enum OutgoingImageWriter {
         return encode(original, as: format, maxPixelDimension: palier, policy: policy) ?? essai
     }
 
-    /// Décodage réduit et redressé par ImageIO ; le profil couleur suit l'image ;
-    /// les métadonnées de la prise suivent, sans le lieu sauf choix contraire ;
-    /// la carte de gain HDR suit quand l'image n'a pas eu à être redressée.
+    /// Décodage réduit par ImageIO ; le profil couleur suit l'image ; les
+    /// métadonnées de la prise suivent, sans le lieu sauf choix contraire.
+    /// Les pixels sont redressés, SAUF ceux d'une photo HDR : sa carte de gain
+    /// est relative aux pixels STOCKÉS (#11847). Ils restent alors couchés,
+    /// l'orientation voyage avec eux, et la carte de gain les suit.
     private static func encodeOnce(_ original: OriginalImage, as format: OutgoingImageFormat, limit: CGFloat,
                                    policy: OutgoingImagePolicy) -> OutgoingImage? {
         guard let type = format.typeIdentifier else { return nil }
+        let carriesGainMap = format.isLossy && OutgoingImageGainMap.isPresent(in: original.source)
+        let redresses = !carriesGainMap || OutgoingImageGeometry.isUpright(original.properties)
         let thumbnailOptions: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceCreateThumbnailWithTransform: redresses,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: limit,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(original.source, 0, thumbnailOptions as CFDictionary) else {
             return nil
         }
-        let carried = PhotoCaptureMetadata.carried(from: original.properties)
+        let written = CGSize(width: image.width, height: image.height)
+        let orientation = redresses ? 1 : OutgoingImageGeometry.orientation(original.properties)
+        let carried = PhotoCaptureMetadata.carried(from: original.properties, orientation: orientation)
             .filter { policy.keepsLocation || $0.key != kCGImagePropertyGPSDictionary }
         let quality: [CFString: Any] = format.isLossy ? [kCGImageDestinationLossyCompressionQuality: policy.quality] : [:]
         let options = carried.merging(quality) { _, requested in requested }
         let buffer = NSMutableData()
         guard let destination = CGImageDestinationCreateWithData(buffer as CFMutableData, type, 1, nil) else { return nil }
         CGImageDestinationAddImage(destination, image, options as CFDictionary)
-        if format.isLossy, OutgoingImageGeometry.isUpright(original.properties) {
+        if carriesGainMap {
             OutgoingImageGainMap.carry(from: original.source, to: destination)
         }
         guard CGImageDestinationFinalize(destination) else { return nil }
         return OutgoingImage(data: buffer as Data, format: format,
-                             pixelSize: CGSize(width: image.width, height: image.height), encodedGenerations: 1)
+                             pixelSize: redresses ? written : OutgoingImageGeometry.upright(written, properties: original.properties),
+                             encodedGenerations: 1)
     }
 }
 
@@ -317,6 +327,10 @@ enum OutgoingImageWriter {
 /// (Apple, et ISO 21496-1 depuis iOS 18) est une donnée auxiliaire, relative à
 /// l'image — elle suit une réduction, pas un redressement des pixels.
 enum OutgoingImageGainMap {
+    static func isPresent(in source: CGImageSource) -> Bool {
+        gainMapTypes.contains { CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, $0) != nil }
+    }
+
     static func carry(from source: CGImageSource, to destination: CGImageDestination) {
         gainMapTypes.forEach { type in
             guard let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(source, 0, type) else { return }
