@@ -11,21 +11,26 @@
  * - `retained.json` : une clé `glory-frame/<slug>@<n>` est une version QUITTÉE.
  *   Une version courante inférieure à n, ou égale pour d'autres fichiers, la
  *   réutilise (`reuses-retained`).
- * - la BASE (`--baseline origin/dev`, le registre tel que `dev` le sert) : une
- *   version plus basse redescend (`below-baseline`) ; une version égale pour
- *   une autre empreinte sert deux contenus sous un numéro (`reuses-baseline`).
+ * - la BASE (`--baseline origin/<branche cible>`, le registre tel que la
+ *   branche cible le sert — `dev` pour une PR vers `dev`, `main` pour une PR
+ *   vers `main`) : une version plus basse redescend (`below-baseline`) ; une
+ *   version égale pour une autre empreinte sert deux contenus sous un numéro
+ *   (`reuses-baseline`), et se répare par
+ *   `generate:glory-frames --baseline <la même réf>`.
  *
  * `--mutate lower-version` abaisse chaque version de 1 avant de vérifier : la
- * CI s'en sert pour prouver que le cliquet rougit. Sortie 1 sur violation,
- * 2 sur base illisible — jamais lue comme vide.
+ * CI s'en sert pour prouver que le cliquet rougit, et la preuve exige que
+ * CHAQUE pack tombe, nommé, à sa version abaissée (`lowerVersionProofHolds`) —
+ * une réutilisation nommée en plus (un pack monté a sa version quittée dans
+ * `retained.json`) ne la défait pas. Sortie 1 sur violation (ou preuve tenue
+ * sous mutation), 2 sur base illisible — jamais lue comme vide.
  */
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { REGISTRY_FILE, REPO_ROOT, readGloryFrameSources, servedFilesOf, type RegistryEntry } from './generate-glory-frames.js';
+import { REGISTRY_FILE, argumentAfter, gitShowRegistry, readBaselineRegistry, readGloryFrameSources, servedFilesOf, type RegistryEntry } from './generate-glory-frames.js';
 
-export const GLORY_FRAME_REGISTRY_PATH = 'packages/shared/design/glory-frames/packs.json';
+export { GLORY_FRAME_REGISTRY_PATH, readBaselineRegistry } from './generate-glory-frames.js';
 
 export type VersionViolation =
   | { readonly kind: 'reuses-retained'; readonly slug: string; readonly version: number; readonly retained: number }
@@ -36,7 +41,7 @@ export type VersionRatchetInput = {
   /** Le registre candidat (la branche). */
   readonly registry: readonly RegistryEntry[];
   readonly retained: Readonly<Record<string, readonly string[]>>;
-  /** Le registre de référence (`origin/dev`) ; `null` quand il n'est pas confronté. */
+  /** Le registre de référence (la branche cible) ; `null` quand il n'est pas confronté. */
   readonly baseline: readonly RegistryEntry[] | null;
   /** Les fichiers qu'une entrée sert, pour distinguer une restauration à l'identique d'une réutilisation. */
   readonly servedFilesOf: (entry: RegistryEntry) => readonly string[];
@@ -83,31 +88,22 @@ export const gloryFrameVersionViolations = (input: VersionRatchetInput): readonl
 /** La mutation de preuve : chaque version abaissée de 1. */
 export const lowerVersions = (registry: readonly RegistryEntry[]): readonly RegistryEntry[] => registry.map((entry) => ({ ...entry, version: versionOf(entry) - 1 }));
 
-/** Lit le registre d'une référence git ; une base illisible est une erreur, jamais un registre vide. */
-export function readBaselineRegistry(reference: string, show: (reference: string) => string): readonly RegistryEntry[] {
-  const parsed = ((): unknown => {
-    try {
-      return JSON.parse(show(reference)) as unknown;
-    } catch (error) {
-      throw new Error(`base ${reference} illisible : ${error instanceof Error ? error.message : String(error)}`);
-    }
-  })();
-  if (!Array.isArray(parsed)) throw new Error(`base ${reference} : ${GLORY_FRAME_REGISTRY_PATH} n'est pas un tableau`);
-  return parsed as readonly RegistryEntry[];
-}
+/**
+ * La preuve de ROUGE tient si CHAQUE pack du registre (non muté) tombe, nommé,
+ * sous `below-baseline` à sa version abaissée de 1 — quelles que soient les
+ * autres violations que la mutation produit (un pack monté a sa version
+ * quittée dans `retained.json`, et l'abaisser la réutilise aussi).
+ */
+export const lowerVersionProofHolds = ({ registry, violations }: { readonly registry: readonly RegistryEntry[]; readonly violations: readonly VersionViolation[] }): boolean =>
+  registry.every((entry) =>
+    violations.some((violation) => violation.kind === 'below-baseline' && violation.slug === entry.slug && violation.version === versionOf(entry) - 1 && violation.baseline === versionOf(entry)),
+  );
 
 export const describeViolation = (violation: VersionViolation): string => {
   if (violation.kind === 'reuses-retained') return `${violation.slug}@${violation.version} réutilise une version quittée (retained.json tient ${violation.slug}@${violation.retained})`;
   if (violation.kind === 'below-baseline') return `${violation.slug}@${violation.version} redescend sous la base (${violation.slug}@${violation.baseline})`;
-  return `${violation.slug}@${violation.version} porte une autre empreinte que la base sous le même numéro : régénérer sur la base (generate:glory-frames)`;
+  return `${violation.slug}@${violation.version} porte une autre empreinte que la base sous le même numéro : régénérer depuis la base (bun run generate:glory-frames -- --baseline <réf de la base>)`;
 };
-
-const argumentAfter = (flag: string): string | undefined => {
-  const index = process.argv.indexOf(flag);
-  return index === -1 ? undefined : process.argv[index + 1];
-};
-
-const gitShow = (reference: string): string => execFileSync('git', ['show', `${reference}:${GLORY_FRAME_REGISTRY_PATH}`], { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 
 function main(): void {
   const sources = readGloryFrameSources();
@@ -116,7 +112,7 @@ function main(): void {
   const baseline = ((): readonly RegistryEntry[] | null => {
     if (reference === undefined) return null;
     try {
-      return readBaselineRegistry(reference, gitShow);
+      return readBaselineRegistry(reference, gitShowRegistry);
     } catch (error) {
       process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
       process.exit(2);
@@ -128,7 +124,10 @@ function main(): void {
   const violations = gloryFrameVersionViolations({ registry, retained: sources.retained, baseline, servedFilesOf: (entry) => servedFilesOf(entry, sources.readStoredJson) });
   violations.forEach((violation) => process.stderr.write(`${describeViolation(violation)}\n`));
   process.stdout.write(`${registry.length} pack(s) vérifié(s) contre retained.json${reference === undefined ? '' : ` et ${reference}`}${mutation === undefined ? '' : ` (mutation ${mutation})`} : ${violations.length} violation(s)\n`);
-  process.exit(violations.length === 0 ? 0 : 1);
+  if (mutation === undefined) process.exit(violations.length === 0 ? 0 : 1);
+  const proven = lowerVersionProofHolds({ registry: versioned, violations });
+  if (!proven) process.stderr.write(`preuve incomplète : un pack au moins ne tombe pas, nommé, à sa version abaissée\n`);
+  process.exit(proven ? 1 : 0);
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main();

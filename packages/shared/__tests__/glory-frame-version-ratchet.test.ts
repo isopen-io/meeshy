@@ -11,18 +11,21 @@
  * Deux références, deux refus :
  * - `retained.json` (`glory-frame/<slug>@<n>` = une version QUITTÉE) : une
  *   version courante ≤ n pour d'autres fichiers est une réutilisation ;
- * - le registre de `origin/dev` (la base) : une version plus basse, ou égale
- *   pour une autre empreinte, est une redescente ou une réutilisation.
+ * - le registre de la BASE (la branche cible) : une version plus basse, ou
+ *   égale pour une autre empreinte, est une redescente ou une réutilisation.
  *
- * Le ROUGE est prouvé sous mutation (version abaissée de 1) contre une base qui
- * est le registre versionné lui-même — sans git. La CI rejoue la même preuve
- * contre `origin/dev` (`glory-frames:check-versions`).
+ * Ce fichier ne touche pas git : le ROUGE est prouvé sous mutation (version
+ * abaissée de 1) contre une base qui est le registre versionné lui-même, et la
+ * preuve est la MÊME fonction que la CLI applique (`lowerVersionProofHolds`).
+ * La confrontation à la vraie base est l'affaire de la CLI, au job `quality`
+ * de la CI (`glory-frames:check-versions --baseline origin/<branche cible>`) —
+ * le job `test` fait un checkout à profondeur 1, sans la base, et un témoin qui
+ * s'y sauterait en silence ne prouverait rien.
  */
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { REGISTRY_FILE, REPO_ROOT, buildGloryFramePacks, readGloryFrameSources, servedFilesOf, type GloryFrameSources, type RegistryEntry } from '../scripts/generate-glory-frames';
-import { GLORY_FRAME_REGISTRY_PATH, gloryFrameVersionViolations, lowerVersions, readBaselineRegistry } from '../scripts/glory-frame-version-ratchet';
+import { REGISTRY_FILE, buildGloryFramePacks, readGloryFrameSources, servedFilesOf, type GloryFrameSources, type RegistryEntry } from '../scripts/generate-glory-frames';
+import { gloryFrameVersionViolations, lowerVersionProofHolds, lowerVersions, readBaselineRegistry } from '../scripts/glory-frame-version-ratchet';
 
 const sources = readGloryFrameSources();
 const versioned = JSON.parse(readFileSync(REGISTRY_FILE, 'utf8')) as readonly RegistryEntry[];
@@ -38,14 +41,6 @@ const entry = (slug: string, version: number, fingerprint: string, files: readon
   strings: Object.fromEntries(files.slice(1).map((file) => [`l${file}`, ref(file)])),
 });
 const fixtureFiles = (candidate: RegistryEntry): readonly string[] => [candidate.contract, ...Object.values(candidate.strings ?? {})].flatMap((asset) => (asset === undefined ? [] : [asset.src])).sort();
-
-const baselineRef = ((): readonly RegistryEntry[] | null => {
-  try {
-    return readBaselineRegistry('origin/dev', (reference) => execFileSync('git', ['show', `${reference}:${GLORY_FRAME_REGISTRY_PATH}`], { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }));
-  } catch {
-    return null;
-  }
-})();
 
 describe('contre retained.json — une version quittée ne se réutilise pas', () => {
   const quitted = { [`glory-frame/neon@2`]: ['b'.repeat(16) + '.json'] };
@@ -71,7 +66,7 @@ describe('contre retained.json — une version quittée ne se réutilise pas', (
   });
 });
 
-describe('contre la base (origin/dev) — la version ne redescend pas et ne sert pas deux contenus', () => {
+describe('contre la base (la branche cible) — la version ne redescend pas et ne sert pas deux contenus', () => {
   const baseline = [entry('afrique', 2, 'base')];
 
   it('version plus basse que la base ⇒ redescente', () => {
@@ -89,36 +84,52 @@ describe('contre la base (origin/dev) — la version ne redescend pas et ne sert
   });
 
   it('une base illisible est refusée, jamais lue comme vide', () => {
-    expect(() => readBaselineRegistry('origin/dev', () => 'pas du json')).toThrow(/origin\/dev/);
-    expect(() => readBaselineRegistry('origin/dev', () => '{"pas":"un tableau"}')).toThrow(/origin\/dev/);
+    expect(() => readBaselineRegistry('origin/main', () => 'pas du json')).toThrow(/origin\/main/);
+    expect(() => readBaselineRegistry('origin/main', () => '{"pas":"un tableau"}')).toThrow(/origin\/main/);
   });
 });
 
-describe('le dépôt, tel qu’il est', () => {
+describe('la preuve de ROUGE : chaque version abaissée de 1 tombe, nommée, contre la base', () => {
+  const proof = (registry: readonly RegistryEntry[], retained: GloryFrameSources['retained']) => {
+    const violations = gloryFrameVersionViolations({ registry: lowerVersions(registry), retained, baseline: registry, servedFilesOf: filesOf });
+    return { violations, holds: lowerVersionProofHolds({ registry, violations }) };
+  };
+
+  it('le dépôt, tel qu’il est : la preuve tient', () => {
+    expect(lowerVersions(versioned).map((candidate) => candidate.version)).toEqual(versioned.map((candidate) => (candidate.version ?? 1) - 1));
+    expect(proof(versioned, sources.retained).holds).toBe(true);
+  });
+
+  it('après un bump réel (un pack monté, sa version quittée dans retained.json), la preuve tient encore : la réutilisation nommée en plus ne la défait pas', () => {
+    const neon = versioned.find((candidate) => candidate.slug === 'neon') as RegistryEntry;
+    const bumped = versioned.map((candidate) => (candidate.slug === 'neon' ? { ...candidate, version: (neon.version ?? 1) + 1 } : candidate));
+    const retained = { ...sources.retained, [`glory-frame/neon@${neon.version ?? 1}`]: ['0123456789abcdef.json'] };
+    const { violations, holds } = proof(bumped, retained);
+    expect(violations).toContainEqual({ kind: 'reuses-retained', slug: 'neon', version: neon.version ?? 1, retained: neon.version ?? 1 });
+    expect(holds).toBe(true);
+  });
+
+  it('un pack que la mutation ne fait pas tomber, nommé à sa version, défait la preuve', () => {
+    const registry = [entry('afrique', 2, 'a'), entry('neon', 2, 'n')];
+    const violations = [{ kind: 'below-baseline', slug: 'afrique', version: 1, baseline: 2 }] as const;
+    expect(lowerVersionProofHolds({ registry, violations })).toBe(false);
+    expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'below-baseline', slug: 'neon', version: 1, baseline: 2 }] })).toBe(true);
+    expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'reuses-baseline', slug: 'neon', version: 1 }] })).toBe(false);
+  });
+
   it('le registre versionné ne réutilise aucune version quittée', () => {
     expect(gloryFrameVersionViolations({ registry: versioned, retained: sources.retained, baseline: null, servedFilesOf: filesOf })).toEqual([]);
-  });
-
-  it.skipIf(baselineRef === null)('le registre versionné ne redescend pas sous origin/dev', () => {
-    expect(gloryFrameVersionViolations({ registry: versioned, retained: sources.retained, baseline: baselineRef, servedFilesOf: filesOf })).toEqual([]);
-  });
-
-  it('ROUGE prouvé : chaque version abaissée de 1 tombe, nommée, contre la base', () => {
-    const lowered = lowerVersions(versioned);
-    expect(lowered.map((candidate) => candidate.version)).toEqual(versioned.map((candidate) => (candidate.version ?? 1) - 1));
-    const violations = gloryFrameVersionViolations({ registry: lowered, retained: sources.retained, baseline: versioned, servedFilesOf: filesOf });
-    expect(violations.map((violation) => `${violation.kind}:${violation.slug}`)).toEqual(versioned.map((candidate) => `below-baseline:${candidate.slug}`));
   });
 });
 
 describe('le générateur ne réémet jamais une version quittée', () => {
   const tweaked = (over: Partial<GloryFrameSources>): GloryFrameSources => ({ ...sources, ...over });
   const neon = versioned.find((candidate) => candidate.slug === 'neon') as RegistryEntry;
+  const neonOf = (generated: ReturnType<typeof buildGloryFramePacks>) => generated.registry.find((candidate) => candidate.slug === 'neon');
 
   it('empreinte inchangée mais version déjà retenue (fusion de deux branches) ⇒ la version saute au-dessus', () => {
     const retained = { ...sources.retained, [`glory-frame/neon@${neon.version}`]: ['0123456789abcdef.json'] };
-    const after = buildGloryFramePacks(tweaked({ registry: versioned, retained })).registry.find((candidate) => candidate.slug === 'neon');
-    expect(after?.version).toBe((neon.version ?? 1) + 1);
+    expect(neonOf(buildGloryFramePacks(tweaked({ registry: versioned, retained })))?.version).toBe((neon.version ?? 1) + 1);
   });
 
   it('une version quittée déjà retenue garde ses fichiers ET reçoit ceux de l’autre contenu', () => {
@@ -127,6 +138,36 @@ describe('le générateur ne réémet jamais une version quittée', () => {
     const registry = versioned.map((candidate) => (candidate.slug === 'neon' ? { ...candidate, fingerprint: 'autre' } : candidate));
     const next = buildGloryFramePacks(tweaked({ registry, retained }));
     expect(next.retained[key]).toEqual([...new Set(['0123456789abcdef.json', ...filesOf(neon)])].sort());
-    expect(next.registry.find((candidate) => candidate.slug === 'neon')?.version).toBe((neon.version ?? 1) + 1);
+    expect(neonOf(next)?.version).toBe((neon.version ?? 1) + 1);
+  });
+
+  describe('contre la base : deux branches ont chacune monté neon en v2, chacune a quitté v1 — aucune n’a retenu @2 (la branche porte le contenu courant, la base un autre)', () => {
+    const onBranch: RegistryEntry = { ...neon, version: (neon.version ?? 1) + 1 };
+    const onBase: RegistryEntry = { ...onBranch, fingerprint: 'empreinte-de-la-base', contract: ref('d') };
+    const branchRegistry = versioned.map((candidate) => (candidate.slug === 'neon' ? onBranch : candidate));
+    const baseRegistry = versioned.map((candidate) => (candidate.slug === 'neon' ? onBase : candidate));
+    const retained = { ...sources.retained, [`glory-frame/neon@${neon.version}`]: filesOf(neon) };
+
+    it('sans base, la régénération garde v2 : seule la confrontation à la base (reuses-baseline) le voit', () => {
+      expect(neonOf(buildGloryFramePacks(tweaked({ registry: branchRegistry, retained })))?.version).toBe((neon.version ?? 1) + 1);
+    });
+
+    it('avec la base, la régénération part de l’entrée de la base : v3, et les fichiers du v2 de la base entrent dans retained.json', () => {
+      const next = buildGloryFramePacks(tweaked({ registry: branchRegistry, retained, baseline: baseRegistry }));
+      expect(neonOf(next)?.version).toBe((neon.version ?? 1) + 2);
+      expect(next.retained[`glory-frame/neon@${(neon.version ?? 1) + 1}`]).toEqual(filesOf(onBase));
+      expect(next.retained[`glory-frame/neon@${neon.version}`]).toEqual(filesOf(neon));
+    });
+
+    it('avec la base, le cas nominal ne change pas : une branche montée au-dessus d’une base restée en place garde son numéro', () => {
+      const next = buildGloryFramePacks(tweaked({ registry: versioned, retained: sources.retained, baseline: versioned }));
+      expect(next.registry.map((candidate) => [candidate.slug, candidate.version])).toEqual(versioned.map((candidate) => [candidate.slug, candidate.version]));
+      expect(next.retained).toEqual(sources.retained);
+    });
+
+    it('un pack que la base ne connaît pas se régénère depuis sa propre entrée', () => {
+      const next = buildGloryFramePacks(tweaked({ registry: branchRegistry, retained, baseline: baseRegistry.filter((candidate) => candidate.slug !== 'neon') }));
+      expect(neonOf(next)?.version).toBe((neon.version ?? 1) + 1);
+    });
   });
 });

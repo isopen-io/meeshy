@@ -232,15 +232,21 @@ jobs:
       # à la main, ni deux branches qui montent chacune v1 en v2 avec deux
       # contenus (la fusion garde un v2, l'autre a été publié en staging sous le
       # même numéro). Le cliquet confronte le registre à `retained.json` ET au
-      # registre de `origin/dev` ; la seconde commande prouve qu'il rougit
-      # (chaque version abaissée de 1 ⇒ sortie 1). La base se lit par `git show`,
-      # d'où le fetch : le checkout de ce job est à profondeur 1.
+      # registre de la BRANCHE CIBLE — `github.base_ref` sur une PR, la branche
+      # poussée sinon : `dev` figé ferait tomber une PR de correctif vers `main`
+      # dès que `dev` a monté une version que `main` n'a pas encore reçue. La
+      # seconde commande prouve que le cliquet rougit (chaque pack tombe, nommé,
+      # à sa version abaissée de 1 ⇒ sortie 1). La base se lit par `git show`,
+      # d'où le fetch : le checkout de ce job est à profondeur 1. Le témoin
+      # `__tests__/ci/glory-frame-ratchet-baseline.test.ts` garde cette forme.
       - name: Versions des packs de cadres de gloire (cliquet #10278)
+        env:
+          BASE_BRANCH: ${{ github.base_ref || github.ref_name }}
         run: |
-          git fetch --no-tags --depth=1 origin dev
+          git fetch --no-tags --depth=1 origin "$BASE_BRANCH"
           cd packages/shared
-          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline origin/dev
-          if ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline origin/dev --mutate lower-version; then
+          ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH"
+          if ${{ env.PACKAGE_MANAGER == 'bun' && 'bun run' || 'pnpm run' }} glory-frames:check-versions -- --baseline "origin/$BASE_BRANCH" --mutate lower-version; then
             echo "::error::le cliquet des versions ne rougit pas sous mutation (version abaissée de 1)"
             exit 1
           fi

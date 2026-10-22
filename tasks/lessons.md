@@ -832,3 +832,4 @@
 - [Leçon 653 — ce qu'une séquence asynchrone a COMMIS s'écrit à chaque commit, jamais à son issue : l'écran peut être parti entre-temps, et un rendu tardif peut réécrire ce que l'issue a purgé](lessons/lecon-653-ce-qu-une-sequence-asynchrone-a-commis-s-ecrit-a-chaque-commit-jamais.md)
 - [Leçon 654 — un gate qui compte des BALISES plutôt que des DÉCLARATIONS EFFECTIVES reste vert sur trois façons de retirer ce qu'il croit garder, et sa propre garde d'entrée peut le rendre MUET](lessons/lecon-654-un-gate-qui-compte-des-balises-plutot-que-des-declarations-effectives.md)
 - [Une garde qui lit la source lit aussi sa FORME (2026-10-01, #9054)](lessons/2026-10-01-une-garde-qui-lit-la-source-lit-aussi-sa-forme.md)
+- [Un cliquet se prouve sur le PREMIER MOUVEMENT RÉEL, jamais sur l'état où rien n'a encore bougé (2026-10-22, #10278)](lessons/2026-10-22-un-cliquet-se-prouve-sur-le-premier-mouvement-reel-jamais-sur-l-etat-ou-rien-n-a-encore-bouge.md)
