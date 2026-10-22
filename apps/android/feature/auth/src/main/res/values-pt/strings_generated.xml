@@ -21,8 +21,14 @@
     <string name="guest_join_back">Voltar</string>
     <string name="guest_join_birthday">Aniversário</string>
     <string name="guest_join_email">E-mail</string>
+    <string name="guest_join_email_optional">E-mail (opcional)</string>
+    <string name="guest_join_error_join_failed">Erro ao entrar na conversa</string>
+    <string name="guest_join_error_link_not_found">Este link de conversa não foi encontrado</string>
+    <string name="guest_join_error_too_many_users">Muitos usuários conectados</string>
     <string name="guest_join_first_name">Nome</string>
     <string name="guest_join_last_name">Sobrenome</string>
+    <string name="guest_join_optional_section">Opcional</string>
+    <string name="guest_join_required_section">Informações obrigatórias</string>
     <string name="guest_join_retry">Tentar novamente</string>
     <string name="guest_join_sign_in">Entrar</string>
     <string name="guest_join_submit">Entrar</string>

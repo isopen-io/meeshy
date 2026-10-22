@@ -21,8 +21,14 @@
     <string name="guest_join_back">Indietro</string>
     <string name="guest_join_birthday">Compleanno</string>
     <string name="guest_join_email">E-mail</string>
+    <string name="guest_join_email_optional">Email (facoltativa)</string>
+    <string name="guest_join_error_join_failed">Errore durante la connessione</string>
+    <string name="guest_join_error_link_not_found">Questo link di conversazione non esiste</string>
+    <string name="guest_join_error_too_many_users">Troppi utenti connessi</string>
     <string name="guest_join_first_name">Nome</string>
     <string name="guest_join_last_name">Cognome</string>
+    <string name="guest_join_optional_section">Facoltativo</string>
+    <string name="guest_join_required_section">Informazioni richieste</string>
     <string name="guest_join_retry">Riprova</string>
     <string name="guest_join_sign_in">Accedi</string>
     <string name="guest_join_submit">Unisciti</string>
