@@ -36,6 +36,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.vector.ImageVector
+import me.meeshy.ui.theme.hexColor
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -239,7 +240,7 @@ internal fun BackgroundSwatch(
     val ring = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant
     val fill = when (background) {
         StoryTextBackground.None -> Color.Transparent
-        is StoryTextBackground.Solid -> parseBackingColor(background.hex)
+        is StoryTextBackground.Solid -> hexColor(background.hex, Color.Transparent)
         is StoryTextBackground.Glass -> Color.White.copy(alpha = 0.18f)
     }
     val label = when (background) {
@@ -311,31 +312,12 @@ internal fun ColorSwatch(hex: String, selected: Boolean, onClick: () -> Unit) {
         modifier = Modifier
             .size(28.dp)
             .clip(RoundedCornerShape(50))
-            .background(parseHexColor(hex))
+            .background(hexColor(hex, Color.White))
             .border(BorderStroke(if (selected) 2.dp else 1.dp, ring), RoundedCornerShape(50))
             .pointerInput(hex) { detectTapGestures { onClick() } }
             .semantics { contentDescription = "#$hex" },
     )
 }
-
-/** Parses a `RRGGBB` (or `#RRGGBB`) hex colour, falling back to white on anything unexpected. */
-internal fun parseHexColor(hex: String): Color =
-    runCatching { Color(("ff" + hex.removePrefix("#")).toLong(16)) }.getOrDefault(Color.White)
-
-/**
- * Parses a `RRGGBB` **or** `RRGGBBAA` (optionally `#`-prefixed) hex into a Compose [Color],
- * reordering the trailing alpha of the 8-digit form into Compose's `AARRGGBB`. Falls back to
- * transparent on anything unexpected so a malformed preset never crashes the canvas.
- */
-internal fun parseBackingColor(hex: String): Color = runCatching {
-    val h = hex.removePrefix("#")
-    val argb = when (h.length) {
-        8 -> h.substring(6, 8) + h.substring(0, 6)
-        6 -> "ff$h"
-        else -> return Color.Transparent
-    }
-    Color(argb.toLong(16))
-}.getOrDefault(Color.Transparent)
 
 /**
  * Paints the element's text backing behind the glyphs (glue): a rounded solid fill for
@@ -346,7 +328,7 @@ internal fun parseBackingColor(hex: String): Color = runCatching {
 internal fun Modifier.composerTextBacking(background: StoryTextBackground): Modifier = when (background) {
     StoryTextBackground.None -> this
     is StoryTextBackground.Solid ->
-        this.background(parseBackingColor(background.hex), RoundedCornerShape(10.dp))
+        this.background(hexColor(background.hex, Color.Transparent), RoundedCornerShape(10.dp))
     is StoryTextBackground.Glass ->
         this.background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp))
 }

@@ -38,7 +38,21 @@ object DynamicColorGenerator {
         val secondary: String,
         val accent: String,
         val saturationBoost: Double = 0.0,
-    )
+    ) {
+        companion object {
+            /** Palette dérivée d'une couleur primaire : secondaire +30°, accent −30° (iOS `ConversationColorPalette`). */
+            fun derived(primary: String, saturationBoost: Double = 0.0): ColorPalette =
+                DynamicColorGenerator.derivedPalette(primary, saturationBoost)
+        }
+    }
+
+    internal fun derivedPalette(primary: String, saturationBoost: Double = 0.0): ColorPalette =
+        ColorPalette(
+            primary = primary,
+            secondary = shiftHue(primary, 30.0),
+            accent = shiftHue(primary, -30.0),
+            saturationBoost = saturationBoost,
+        )
 
     private val languageColors = mapOf(
         ConversationLanguage.FRENCH to "3498DB",
@@ -175,12 +189,7 @@ object DynamicColorGenerator {
         val saturationBoost = min(1.0, memberCount / 100.0) * 0.2
         val primary = blendColors(langColor, 0.3, typeColor, 0.3, themeColor, 0.4)
 
-        return ColorPalette(
-            primary = primary,
-            secondary = shiftHue(primary, 30.0),
-            accent = shiftHue(primary, -30.0),
-            saturationBoost = saturationBoost,
-        )
+        return derivedPalette(primary, saturationBoost)
     }
 
     /** `null` → default FRENCH; ISO or full key → enum color; unknown key → 4ECDC4. */

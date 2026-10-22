@@ -24,6 +24,16 @@ object MeeshyGradients {
         start = topLeading, end = bottomTrailing,
     )
 
+    /** Dégradé de fond de ThemePalette (iOS `backgroundGradient`), distinct de [mainBackground]. */
+    public fun backgroundGradient(dark: Boolean): Brush = Brush.linearGradient(
+        colors = if (dark) {
+            listOf(Color(0xFF09090B), Color(0xFF0F0D19), Color(0xFF13111C))
+        } else {
+            listOf(Color(0xFFFFFFFF), Color(0xFFFAFAFF), Color(0xFFF8F7FF))
+        },
+        start = topLeading, end = bottomTrailing,
+    )
+
     /** Bordure des surfaces glass. Dark: indigo400@30%→indigo700@10%. */
     fun glassBorder(dark: Boolean): Brush = Brush.linearGradient(
         colors = if (dark) {
