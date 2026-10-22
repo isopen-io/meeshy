@@ -39,6 +39,12 @@ import me.meeshy.sdk.session.SessionRepository
 import me.meeshy.sdk.socket.SocialSocketManager
 import me.meeshy.sdk.report.ReportRepository
 import me.meeshy.sdk.model.report.ReportReason
+import me.meeshy.sdk.model.scene.ResolvedKeyframeTransform
+import me.meeshy.sdk.model.scene.StoryBackgroundObjectTransform
+import me.meeshy.sdk.model.scene.StoryClipTransitionResolver
+import me.meeshy.sdk.model.scene.StoryElementVisibility
+import me.meeshy.sdk.model.scene.StoryKeyframeResolver
+import me.meeshy.sdk.model.scene.StoryMediaFadeResolver
 import me.meeshy.sdk.story.StoryRepository
 import me.meeshy.sdk.story.toStoryGroups
 import me.meeshy.sdk.story.toStoryItem

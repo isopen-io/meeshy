@@ -147,6 +147,13 @@ data class CallUiState(
      * the "camera off" placeholder. Never raised on an audio-only call.
      */
     val isPeerCameraOff: Boolean = false,
+    /**
+     * `true` while the app itself froze the outgoing video to keep a poor link
+     * alive ([CallVideoHealth]) — the user did NOT turn the camera off, so the
+     * screen says « video paused » rather than showing a lie. Only on the media
+     * phases of a VIDEO call.
+     */
+    val isVideoAutoPaused: Boolean = false,
 ) {
     /** Accept / decline are only offered for an incoming, still-ringing call. */
     val showAnswerControls: Boolean
@@ -209,6 +216,7 @@ object CallPresenter {
         caption: String? = null,
         peerAudioEnabled: Boolean = true,
         peerVideoEnabled: Boolean = true,
+        videoAutoPaused: Boolean = false,
     ): CallUiState {
         val status = statusOf(state)
         val onMediaPhase = status == CallStatus.CONNECTED || status == CallStatus.RECONNECTING
@@ -233,6 +241,7 @@ object CallPresenter {
             // Only a VIDEO call renders a camera indicator — an audio call's
             // peer "camera off" is its permanent, unremarkable state.
             isPeerCameraOff = onMediaPhase && config.isVideo && !peerVideoEnabled,
+            isVideoAutoPaused = onMediaPhase && config.isVideo && videoAutoPaused,
         )
     }
 

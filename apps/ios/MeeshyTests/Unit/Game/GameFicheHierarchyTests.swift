@@ -18,10 +18,10 @@ final class GameFicheHierarchyTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func n(_ value: Int) -> String { GameCopy.formatCount(value) }

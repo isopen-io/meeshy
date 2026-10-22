@@ -126,6 +126,8 @@ services/translator/models/*
 */**/cache
 !packages/MeeshySDK/Sources/MeeshySDK/Cache/
 !packages/MeeshySDK/Tests/MeeshySDKTests/Cache/
+# Android : les paquets Kotlin `cache` (sdk-core, core:model) sont du code source, pas un cache d'outil
+!apps/android/**/cache/
 # Logs
 *.log
 logs/

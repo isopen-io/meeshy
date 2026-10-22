@@ -1,26 +1,15 @@
 package me.meeshy.app.calls
 
 import android.content.Context
-import android.media.AudioManager
-import android.os.Build
-import androidx.annotation.RequiresApi
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.plus
 import me.meeshy.sdk.call.WebRtcEngine
-import me.meeshy.sdk.model.call.CallSignalEnvelope
 import me.meeshy.sdk.model.call.SocketIceServer
 import me.meeshy.sdk.socket.CallSignalManager
-import org.webrtc.IceCandidate
-import org.webrtc.PeerConnection
-import org.webrtc.SessionDescription
 import javax.inject.Inject
 
 /**
@@ -30,37 +19,23 @@ import javax.inject.Inject
  * link that left Android calls stuck on "Connecting…".
  *
  * The engine and the signaling are SDK building blocks (opaque, agnostic); the
- * *policy* — who offers, on which event, glare handling — lives here, per the SDK
- * purity rule. One instance per [CallViewModel]; the engine it uses is shared.
+ * *policy* lives here, per the SDK purity rule, split by concern: the SDP / ICE
+ * conversation is the [CallNegotiator]'s, the reconciliation of ICE state with
+ * the FSM and the server is the [CallIceStateMonitor]'s, the platform audio route
+ * is the [CallAudioSession]'s. This class keeps the call's lifetime and the
+ * public surface the [CallViewModel] drives. One instance per [CallViewModel];
+ * the engine it uses is shared.
  */
 class WebRtcCallCoordinator @Inject constructor(
     private val engine: WebRtcEngine,
-    private val signals: CallSignalManager,
-    @ApplicationContext private val appContext: Context,
+    signals: CallSignalManager,
+    @ApplicationContext appContext: Context,
 ) {
-    private val audioManager: AudioManager by lazy {
-        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    }
+    private val negotiator = CallNegotiator(engine, signals)
+    private val iceMonitor = CallIceStateMonitor(engine, signals)
+    private val audio = CallAudioSession(appContext)
 
     private var callScope: CoroutineScope? = null
-    private var callId: String = ""
-    private var peerId: String = ""
-    private var selfId: String = ""
-    private var negotiationId: Int = 0
-    private var connected: Boolean = false
-    private var onMediaConnected: (() -> Unit)? = null
-
-    /** Whether WE placed this call — the initial caller re-offers on an ICE restart (anti-glare). */
-    private var isCaller: Boolean = false
-
-    /** `true` between a mid-call ICE stall and its recovery; gates the reconnect signalling. */
-    private var stalled: Boolean = false
-    private var audioRouted: Boolean = false
-
-    /** 1-based count of stall cycles this call, carried on `call:reconnecting`. */
-    private var reconnectAttempt: Int = 0
-
-    private var onMediaStalled: (() -> Unit)? = null
 
     /** The EGL context every [org.webrtc.SurfaceViewRenderer] must init with. */
     val eglBaseContext get() = engine.eglBase.eglBaseContext
@@ -87,7 +62,7 @@ class WebRtcCallCoordinator @Inject constructor(
         onMediaConnected, onMediaStalled, speakerOn,
     )
 
-    /** Callee: opens the connection now; the remote offer arrives via [incomingSignals]. */
+    /** Callee: opens the connection now; the remote offer arrives via the incoming signals. */
     fun startIncoming(
         scope: CoroutineScope,
         callId: String,
@@ -116,16 +91,8 @@ class WebRtcCallCoordinator @Inject constructor(
         speakerOn: Boolean,
     ) {
         end()
-        this.callId = callId
-        this.peerId = peerId
-        this.selfId = selfId
-        this.connected = false
-        this.negotiationId = 0
-        this.isCaller = isCaller
-        this.stalled = false
-        this.reconnectAttempt = 0
-        this.onMediaConnected = onMediaConnected
-        this.onMediaStalled = onMediaStalled
+        negotiator.begin(callId, peerId, selfId, isCaller)
+        iceMonitor.begin(callId, selfId, onMediaConnected, onMediaStalled)
         val cs = scope + SupervisorJob(scope.coroutineContext[Job])
         callScope = cs
         // Parity iOS `CallManager` (`isSpeaker = isVideo`): a video call defaults to
@@ -133,23 +100,16 @@ class WebRtcCallCoordinator @Inject constructor(
         // the earpiece — but the CALLER'S current intent wins over that default when
         // it is already known (e.g. the user toggled the speaker button while
         // `accept()` was still awaiting the join ACK, before this ran).
-        routeAudioToCall(speakerOn = speakerOn)
+        audio.route(speakerOn = speakerOn)
         engine.createConnection(iceServers, enableVideo = isVideo)
-        observe(cs)
+        negotiator.observe(cs)
+        iceMonitor.observe(cs, restartIce = ::restartIceAndRenegotiate)
     }
 
     /** Caller only: the peer joined the room → create and send the SDP offer. */
     fun onParticipantJoined(joinerId: String? = null) {
         val cs = callScope ?: return
-        // An outgoing call carries no peerId through the route; the joiner IS the
-        // callee we must address, so adopt their id before offering — otherwise the
-        // offer's `to` is blank and the gateway rejects it ("to field is required").
-        joinerId?.takeIf { it.isNotBlank() }?.let { peerId = it }
-        cs.launch {
-            val offer = engine.createOffer()
-            engine.setLocalDescription(offer)
-            signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
-        }
+        negotiator.onParticipantJoined(cs, joinerId)
     }
 
     fun setMuted(muted: Boolean) = engine.setAudioEnabled(!muted)
@@ -157,95 +117,14 @@ class WebRtcCallCoordinator @Inject constructor(
     fun setCameraEnabled(enabled: Boolean) = engine.setVideoEnabled(enabled)
 
     /** Speaker/earpiece toggle — local audio routing only, never signalled to the peer. */
-    fun setSpeakerEnabled(enabled: Boolean) = applySpeakerRoute(enabled)
+    fun setSpeakerEnabled(enabled: Boolean) = audio.setSpeaker(enabled)
 
     fun end() {
         callScope?.cancel()
         callScope = null
         engine.close()
-        onMediaConnected = null
-        onMediaStalled = null
-        connected = false
-        stalled = false
-        reconnectAttempt = 0
-        restoreAudio()
-    }
-
-    private fun observe(scope: CoroutineScope) {
-        signals.incomingSignals
-            .filter { it.callId == callId }
-            .onEach { onRemoteSignal(it) }
-            .launchIn(scope)
-
-        engine.localIceCandidates
-            .onEach { candidate ->
-                signals.emitIceCandidate(
-                    callId = callId,
-                    candidate = candidate.sdp,
-                    sdpMLineIndex = candidate.sdpMLineIndex,
-                    sdpMid = candidate.sdpMid,
-                    to = peerId,
-                    from = selfId,
-                    negotiationId = negotiationId,
-                )
-            }
-            .launchIn(scope)
-
-        engine.iceConnectionState
-            .onEach(::onIceState)
-            .launchIn(scope)
-    }
-
-    /**
-     * Réconciliation ICE ↔ FSM/serveur — le maillon résilience qui manquait :
-     * avant lui, un handoff réseau (WiFi→LTE) figeait le média Android pour
-     * toujours, l'appel restant « actif » côté serveur (les heartbeats de la
-     * socket survivent au média mort). Parité iOS `CallManager` :
-     *  - `DISCONNECTED` mid-call = stall transitoire (souvent auto-guéri) —
-     *    FSM Reconnecting + `call:reconnecting` (le serveur suspend son cleanup),
-     *    sans restart : s'il dégénère, `FAILED` suit et restart alors.
-     *  - `FAILED` mid-call = restart ICE immédiat + renégociation par
-     *    l'APPELANT INITIAL seul (anti-glare), negotiationId incrémenté.
-     *  - retour `CONNECTED`/`COMPLETED` après un stall = `call:reconnected`
-     *    + MediaConnected (FSM Reconnecting → Connected).
-     * L'ICE pré-connexion (checking initial) reste hors sujet : c'est la phase
-     * Connecting de la FSM, pas un stall.
-     */
-    private fun onIceState(state: PeerConnection.IceConnectionState) {
-        when (state) {
-            PeerConnection.IceConnectionState.CONNECTED,
-            PeerConnection.IceConnectionState.COMPLETED,
-            -> onIceUp()
-            PeerConnection.IceConnectionState.DISCONNECTED -> onIceStalled(restart = false)
-            PeerConnection.IceConnectionState.FAILED -> onIceStalled(restart = true)
-            else -> Unit
-        }
-    }
-
-    private fun onIceUp() {
-        if (!connected) {
-            connected = true
-            onMediaConnected?.invoke()
-            return
-        }
-        if (!stalled) return
-        stalled = false
-        signals.emitReconnected(callId, selfId)
-        onMediaConnected?.invoke()
-    }
-
-    private fun onIceStalled(restart: Boolean) {
-        if (!connected) return
-        if (!stalled) {
-            stalled = true
-            // Clampé à la borne du schéma gateway (attempt ≤ 10, Zod) : au-delà
-            // la validation rejetterait le signal en silence (fire-and-forget)
-            // et le serveur ne saurait plus que l'appel se reconnecte encore.
-            reconnectAttempt = minOf(reconnectAttempt + 1, MAX_WIRE_ATTEMPT)
-            signals.emitReconnecting(callId, selfId, attempt = reconnectAttempt)
-            onMediaStalled?.invoke()
-        }
-        if (restart) restartIceAndRenegotiate()
+        iceMonitor.end()
+        audio.restore()
     }
 
     /**
@@ -255,139 +134,9 @@ class WebRtcCallCoordinator @Inject constructor(
      * restart perdue en route. Inerte hors stall.
      */
     fun retryIceRestart() {
-        if (!stalled) return
+        if (!iceMonitor.stalled) return
         restartIceAndRenegotiate()
     }
 
-    private fun restartIceAndRenegotiate() {
-        engine.restartIce()
-        if (!isCaller) return
-        val cs = callScope ?: return
-        cs.launch {
-            negotiationId += 1
-            val offer = engine.createOffer()
-            engine.setLocalDescription(offer)
-            signals.emitOffer(callId, offer.description, to = peerId, from = selfId, negotiationId = negotiationId)
-        }
-    }
-
-    private suspend fun onRemoteSignal(envelope: CallSignalEnvelope) {
-        val signal = envelope.signal
-        // §3.5 (mirrors iOS `CallManager.acceptIncomingNegotiation`) — drop a signal
-        // from an older negotiation epoch before touching the engine. Checked first,
-        // exactly like iOS's ordering, so a stale offer/answer/candidate cannot even
-        // adopt its sender's `peerId` on its way to being ignored.
-        if (!acceptIncomingNegotiation(signal.negotiationId)) return
-        when (signal.type) {
-            "offer" -> {
-                val sdp = signal.sdp ?: return
-                // The offer's sender is our reply target. An incoming call carries no
-                // peerId through the ring/route (CallConfig.peerId is blank), so the
-                // answer + ICE candidates would otherwise be sent with a blank `to`
-                // and the gateway rejects the whole signal ("to field is required").
-                signal.from?.takeIf { it.isNotBlank() }?.let { peerId = it }
-                engine.setRemoteDescription(SessionDescription(SessionDescription.Type.OFFER, sdp))
-                val answer = engine.createAnswer()
-                engine.setLocalDescription(answer)
-                signals.emitAnswer(callId, answer.description, to = peerId, from = selfId, negotiationId = negotiationId)
-            }
-            "answer" -> {
-                val sdp = signal.sdp ?: return
-                engine.setRemoteDescription(SessionDescription(SessionDescription.Type.ANSWER, sdp))
-            }
-            "ice-candidate" -> {
-                val candidate = signal.candidate ?: return
-                engine.addIceCandidate(IceCandidate(signal.sdpMid, signal.sdpMLineIndex ?: 0, candidate))
-            }
-        }
-    }
-
-    /**
-     * §3.5 — accept an incoming signal's generation unless it is STALE (older than
-     * the highest generation this coordinator has sent or seen). Advances the
-     * high-water mark on accept, exactly mirroring iOS's
-     * `CallManager.acceptIncomingNegotiation`/`isStaleNegotiation`. A missing
-     * generation (`null` — a legacy or malformed signal) is treated as `0`, same as
-     * iOS's `event.signal.negotiationId ?? 0` at the decode boundary: never stale,
-     * always accepted.
-     *
-     * Without this guard, `onRemoteSignal` adopted every incoming `negotiationId`
-     * (offer branch) or applied a remote answer/candidate unconditionally (answer/
-     * ice-candidate branches) regardless of arrival order — the gateway's §4.6
-     * buffered-offer replay and an overlapping ICE-restart racing a peer's in-flight
-     * answer could both deliver a signal from an OLDER negotiation after a newer one
-     * was already sent, corrupting the SDP state with no error surfaced.
-     */
-    private fun acceptIncomingNegotiation(generation: Int?): Boolean {
-        val incoming = generation ?: 0
-        if (incoming < negotiationId) return false
-        negotiationId = maxOf(negotiationId, incoming)
-        return true
-    }
-
-    private fun routeAudioToCall(speakerOn: Boolean) {
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        applySpeakerRoute(speakerOn)
-        audioRouted = true
-    }
-
-    /**
-     * Undoes [routeAudioToCall] symmetrically: the speaker route must be cleared
-     * BEFORE the mode drops back to NORMAL — a mode change alone does not release
-     * a selected communication device (API 31+) or the legacy speakerphone flag
-     * (below it), so without this the call's speaker route silently survived the
-     * call and leaked onto the next audio played (e.g. a voice message at ear
-     * volume coming out of the loudspeaker).
-     */
-    private fun restoreAudio() {
-        if (!audioRouted) return
-        audioRouted = false
-        applySpeakerRoute(speakerOn = false)
-        audioManager.mode = AudioManager.MODE_NORMAL
-    }
-
-    /**
-     * Executes the pure [CallAudioRoute.actionFor] decision — `setCommunicationDevice`
-     * on API 31+ (the non-deprecated routing API, absent below it), `setSpeakerphoneOn`
-     * as the minSdk-26 repli. A missing built-in-speaker device (no such hardware, or
-     * the platform not yet reporting it) leaves the current route untouched rather
-     * than crash — the toggle stays inert instead of throwing mid-call.
-     */
-    private fun applySpeakerRoute(speakerOn: Boolean) {
-        when (val action = CallAudioRoute.actionFor(Build.VERSION.SDK_INT, speakerOn)) {
-            is CallAudioAction.SelectCommunicationDevice -> applyCommunicationDevice(action)
-            CallAudioAction.ClearCommunicationDevice -> clearCommunicationDevice()
-            is CallAudioAction.SetSpeakerphoneOn -> {
-                @Suppress("DEPRECATION")
-                audioManager.isSpeakerphoneOn = action.on
-            }
-        }
-    }
-
-    /**
-     * The API 31+ branches of [applySpeakerRoute], extracted so the `@RequiresApi`
-     * guard is LOCAL and syntactic — lint's NewApi detector cannot follow a
-     * decision made in [CallAudioRoute.actionFor] (a plain function returning a
-     * sealed interface, not a boolean/threshold check it recognizes), so calling
-     * `availableCommunicationDevices`/`setCommunicationDevice`/
-     * `clearCommunicationDevice` straight from the `when` above trips
-     * `lintVitalRelease` even though [CallAudioRoute.actionFor] only ever produces
-     * these actions on API 31+.
-     */
-    @RequiresApi(Build.VERSION_CODES.S)
-    private fun applyCommunicationDevice(action: CallAudioAction.SelectCommunicationDevice) {
-        audioManager.availableCommunicationDevices
-            .firstOrNull { it.type == action.deviceType }
-            ?.let(audioManager::setCommunicationDevice)
-    }
-
-    @RequiresApi(Build.VERSION_CODES.S)
-    private fun clearCommunicationDevice() {
-        audioManager.clearCommunicationDevice()
-    }
-
-    private companion object {
-        /** Borne du schéma gateway `socketReconnectingSchema` (`attempt ≤ 10`). */
-        const val MAX_WIRE_ATTEMPT = 10
-    }
+    private fun restartIceAndRenegotiate() = negotiator.restartIce(callScope)
 }
