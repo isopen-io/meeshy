@@ -168908,6 +168908,147 @@
         }
       }
     },
+    "settings.privacy.calls": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "المكالمات"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anrufe"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Calls"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Llamadas"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appels"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chiamate"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chamadas"
+          }
+        }
+      }
+    },
+    "settings.privacy.calls.hide_ip": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "إخفاء عنوان IP الخاص بي"
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meine IP-Adresse verbergen"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide my IP address"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar mi dirección IP"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Masquer mon adresse IP"
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nascondi il mio indirizzo IP"
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ocultar meu endereço IP"
+          }
+        }
+      }
+    },
+    "settings.privacy.calls.hide_ip.info": {
+      "extractionState": "manual",
+      "localizations": {
+        "ar": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "تمرّ مكالماتك عبر خادم ترحيل من Meeshy: لا يرى محاورك عنوان IP الخاص بك. قد يكون الاتصال أبطأ قليلاً. ينطبق هذا الإعداد على هذا الجهاز."
+          }
+        },
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Anrufe laufen über ein Meeshy-Relais: Dein Gegenüber sieht deine IP-Adresse nicht. Die Verbindung kann etwas langsamer sein. Diese Einstellung gilt für dieses Gerät."
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your calls go through a Meeshy relay: the other person does not see your IP address. The connection may be a little slower. This setting applies to this device."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus llamadas pasan por un relé de Meeshy: tu interlocutor no ve tu dirección IP. La conexión puede ser un poco más lenta. Este ajuste se aplica a este dispositivo."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos appels passent par un relais Meeshy : votre correspondant ne voit pas votre adresse IP. La connexion peut être un peu plus lente. Ce réglage vaut pour cet appareil."
+          }
+        },
+        "it": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le tue chiamate passano da un relay Meeshy: il tuo interlocutore non vede il tuo indirizzo IP. La connessione può essere un po' più lenta. Questa impostazione vale per questo dispositivo."
+          }
+        },
+        "pt-BR": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suas chamadas passam por um relé da Meeshy: seu interlocutor não vê seu endereço IP. A conexão pode ser um pouco mais lenta. Esta configuração vale para este aparelho."
+          }
+        }
+      }
+    },
     "settings.privacy.calls_non_contacts": {
       "extractionState": "manual",
       "localizations": {

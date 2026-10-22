@@ -388,7 +388,7 @@
   "types": {
     "Meeshy::BubbleStandardLayout": 1664,
     "Meeshy::CallFrameRenderer": 2583,
-    "Meeshy::CallManager": 6558,
+    "Meeshy::CallManager": 6555,
     "Meeshy::CallView": 3377,
     "Meeshy::ComposerCaptureSession": 1651,
     "Meeshy::ConversationListView": 1944,
