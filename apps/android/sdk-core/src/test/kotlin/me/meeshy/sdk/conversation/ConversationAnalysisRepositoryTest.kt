@@ -52,6 +52,8 @@ private abstract class StubAnalysisApi : ConversationApi {
     override suspend fun analysis(id: String) = ApiResponse<ConversationAnalysis>(success = false)
     override suspend fun create(body: CreateConversationRequest) = ApiResponse<ApiConversation>(success = false)
     override suspend fun markRead(id: String) = ApiResponse<Unit>(success = false)
+    override suspend fun markReceived(id: String) =
+        ApiResponse<me.meeshy.sdk.model.MarkedCountResult>(success = false)
     override suspend fun markUnread(id: String) = ApiResponse<Unit>(success = false)
     override suspend fun updatePreferences(id: String, body: ConversationPreferencesUpdate) =
         ApiResponse<Unit>(success = false)

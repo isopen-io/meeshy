@@ -22,19 +22,20 @@ import androidx.compose.ui.graphics.Color
 
 private val Transparent = Color(0x00000000)
 
-// Dark elevation ramp — near-black → indigo950, never grey.
-private val DarkContainerLowest = Color(0xFF09090B)
+// Dark elevation ramp — near-black → indigo950, never grey. The ends and the middle are the
+// named iOS planes; the two intermediate steps exist only here.
+private val DarkContainerLowest = MeeshyPalette.SurfaceDarkBase
 private val DarkContainerLow = Color(0xFF0E0C18)
-private val DarkContainer = Color(0xFF13111C)
+private val DarkContainer = MeeshyPalette.SurfaceDarkRaised
 private val DarkContainerHigh = Color(0xFF191630)
-private val DarkContainerHighest = Color(0xFF1E1B4B)
+private val DarkContainerHighest = MeeshyPalette.Indigo950
 
 // Light elevation ramp — white → indigo50, never grey.
-private val LightContainerLowest = Color(0xFFFFFFFF)
+private val LightContainerLowest = MeeshyPalette.White
 private val LightContainerLow = Color(0xFFFAF9FF)
-private val LightContainer = Color(0xFFF8F7FF)
+private val LightContainer = MeeshyPalette.SurfaceLightRaised
 private val LightContainerHigh = Color(0xFFF2F1FF)
-private val LightContainerHighest = Color(0xFFEEF2FF)
+private val LightContainerHighest = MeeshyPalette.Indigo50
 
 val MeeshyDarkColorScheme: ColorScheme = darkColorScheme(
     primary = MeeshyPalette.Indigo500,

@@ -163,7 +163,15 @@ enum class DndDay {
     @SerialName("sun") SUN,
 }
 
-/** Privacy preferences — port of PrivacyPreferences (PreferenceModels.swift). */
+/**
+ * Privacy preferences — port of PrivacyPreferences (PreferenceModels.swift).
+ *
+ * [acceptCallsFromNonContacts] is the CANONICAL gateway key (`PrivacyPreferenceSchema`, #8073) and
+ * is OPT-OUT: every caller can ring unless the user turns the switch off, in which case only
+ * accepted friends ring. The former Android alias `allowCallsFromNonContacts` is retired — the
+ * gateway no longer reads it, and the tolerant decoder ([privacyPreferencesFromJson]) recognises
+ * it only to leave it out. [notifyContactsOnReturn] (#8285) is opt-OUT too.
+ */
 @Serializable
 data class PrivacyPreferences(
     val showOnlineStatus: Boolean = true,
@@ -172,13 +180,14 @@ data class PrivacyPreferences(
     val showTypingIndicator: Boolean = true,
     val allowContactRequests: Boolean = true,
     val allowGroupInvites: Boolean = true,
-    val allowCallsFromNonContacts: Boolean = false,
+    val acceptCallsFromNonContacts: Boolean = true,
     val saveMediaToGallery: Boolean = false,
     // #4578 — gardée par un consentement : jamais vraie par défaut.
     val allowAnalytics: Boolean = false,
     val shareUsageData: Boolean = false,
     val blockScreenshots: Boolean = false,
     val hideProfileFromSearch: Boolean = false,
+    val notifyContactsOnReturn: Boolean = true,
     val encryptionPreference: EncryptionPreference = EncryptionPreference.OPTIONAL,
     val autoEncryptNewConversations: Boolean = false,
     val showEncryptionStatus: Boolean = true,
@@ -255,10 +264,17 @@ data class UserNotificationPreferences(
     val commentReplyEnabled: Boolean = true,
     val commentLikeEnabled: Boolean = false,
     val friendContentEnabled: Boolean = true,
+    // #8285 — « Quand un contact revient sur Meeshy » (`contact_recently_active`).
+    val contactActivityEnabled: Boolean = true,
+    // #9490 — « Jeu » (`game_duo_invited`, `game_duo_accepted`, `game_league_result`, `game_season_step`).
+    val gameEnabled: Boolean = true,
     val dndEnabled: Boolean = false,
     val dndStartTime: String = "22:00",
     val dndEndTime: String = "08:00",
     val dndDays: List<DndDay> = emptyList(),
+    // GW7 — minutes à AJOUTER à l'UTC pour obtenir l'heure locale (Tokyo = 540, New York été = -240) :
+    // la passerelle évalue la fenêtre DND dans l'heure LOCALE. 0 = UTC (comportement historique).
+    val dndUtcOffsetMinutes: Int = 0,
     val showPreview: Boolean = true,
     val showSenderName: Boolean = true,
     val groupNotifications: Boolean = true,
@@ -311,7 +327,15 @@ data class DocumentPreferences(
     val extras: Map<String, JsonElement> = emptyMap(),
 )
 
-/** Application/appearance preferences — port of ApplicationPreferences (PreferenceModels.swift). */
+/**
+ * Application/appearance preferences — port of ApplicationPreferences (PreferenceModels.swift).
+ *
+ * The five `…ConsentAt` / `voiceCloningEnabledAt` stamps are READ-ONLY (#6624): the gateway declares
+ * them `z.never` in `ApplicationPreferenceSchema` since #4180, so a single one in a PATCH body
+ * refuses the WHOLE category with a 400. Only the `User` column is authoritative — written by
+ * `PUT /me/consents/{purpose}` — and the stamps here are what a read brought back. A block leaves the
+ * device through [toSyncJson], which drops them.
+ */
 @Serializable
 data class ApplicationPreferences(
     val theme: AppThemeMode = AppThemeMode.AUTO,
@@ -332,6 +356,11 @@ data class ApplicationPreferences(
     val betaFeaturesEnabled: Boolean = false,
     // #4578 — gardée par un consentement : jamais vraie par défaut.
     val telemetryEnabled: Boolean = false,
+    val dataProcessingConsentAt: String? = null,
+    val voiceDataConsentAt: String? = null,
+    val voiceProfileConsentAt: String? = null,
+    val voiceCloningConsentAt: String? = null,
+    val voiceCloningEnabledAt: String? = null,
     val extras: Map<String, JsonElement> = emptyMap(),
 )
 

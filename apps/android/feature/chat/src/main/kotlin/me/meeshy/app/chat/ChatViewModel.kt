@@ -1841,7 +1841,7 @@ class ChatViewModel @Inject constructor(
         activeLanguageOverride.value[messageId]?.let { return it.normalizedCode() }
         val original = message.originalLanguage.normalizedCode()
         if (messageId in showingOriginal.value) return original
-        return LanguageResolver.preferredTranslation(message.translations, prefs)
+        return LanguageResolver.preferredTranslation(message.translations, prefs, message.originalLanguage)
             ?.targetLanguage?.normalizedCode()
             ?: original
     }

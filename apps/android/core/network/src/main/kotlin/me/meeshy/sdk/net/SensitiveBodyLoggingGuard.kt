@@ -41,9 +41,12 @@ class SensitiveBodyLoggingGuard(
 
     override fun intercept(chain: Interceptor.Chain): Response {
         val path = chain.request().url.encodedPath
-        val logger = if (SENSITIVE_PATHS.any { path.endsWith(it) }) sensitive else full
+        val logger = if (isSensitive(path)) sensitive else full
         return logger.intercept(chain)
     }
+
+    private fun isSensitive(path: String): Boolean =
+        SENSITIVE_PATHS.any { path.endsWith(it) } || SENSITIVE_SEGMENTS.any { it in path }
 
     companion object {
         /**
@@ -68,7 +71,22 @@ class SensitiveBodyLoggingGuard(
             "/auth/2fa/disable",
             "/users/me/password",
             "/me/account/deletion",
+            // api-path: inspection — le jeton FCM est un identifiant d'appareil que
+            // la passerelle route vers lui, il ne part dans aucun journal.
+            "/users/register-device-token",
+            // api-path: inspection — le texte d'une transcription d'appel est une
+            // donnee sensible (la passerelle non plus ne le journalise jamais).
+            "/transcript",
         )
+
+        /**
+         * Familles de routes dont NI la requete NI la reponse ne se journalisent :
+         * le protocole Signal publie et lit des paquets de cles et etablit des
+         * sessions chiffrees. Une famille se reconnait a un SEGMENT, pas a un
+         * suffixe, parce que `/signal/keys/{userId}` porte un identifiant.
+         */
+        // api-path: inspection, pas emission — comme les chemins ci-dessus.
+        internal val SENSITIVE_SEGMENTS = setOf("/signal/")
 
         /**
          * Le garde arme avec ses deux niveaux fixes — le seul montage correct.
