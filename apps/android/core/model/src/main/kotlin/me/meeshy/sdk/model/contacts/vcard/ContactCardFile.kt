@@ -29,7 +29,7 @@ object ContactCardFile {
         return "$base.$FILE_EXTENSION"
     }
 
-    /** Un alias vCard, ou un type générique (`octet-stream`, `text/*`, vide) sur un nom `.vcf` / `.vcard`. */
+    /** Un alias vCard, ou un type générique (`octet-stream`, texte, vide) sur un nom `.vcf` / `.vcard`. */
     fun isContactCard(mimeType: String, fileName: String): Boolean {
         val bare = mimeType.substringBefore(';').trim().lowercase(Locale.ROOT)
         if (bare in aliases) return true

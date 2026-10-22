@@ -40,7 +40,7 @@ object VCardWriter {
         .replace("\r\n", "\n")
         .replace("\n", "\\n")
         .replace(",", "\\,")
-        .replace(";", "\;")
+        .replace(";", "\\;")
 
     /** Plie à 75 octets : chaque suite commence par un espace. */
     internal fun fold(line: String): String {

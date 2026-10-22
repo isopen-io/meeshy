@@ -177,7 +177,7 @@ object VCardParser {
 
     /** `_$!<Mobile>!$_` (libellé système d'Apple) donne `mobile` ; un libellé libre reste tel quel. */
     private fun appleLabel(raw: String): String? {
-        if (!raw.startsWith("_$!<") || !raw.endsWith(">!$_")) return nonEmpty(raw)
+        if (!raw.startsWith("_\$!<") || !raw.endsWith(">!\$_")) return nonEmpty(raw)
         val system = raw.drop(4).dropLast(4)
         return VCardEntry.knownLabelForAppleSystemLabel(system) ?: nonEmpty(system)
     }

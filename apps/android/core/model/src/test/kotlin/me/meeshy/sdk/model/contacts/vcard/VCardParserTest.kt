@@ -61,7 +61,7 @@ class VCardParserTest {
 
     @Test
     fun `resout les caracteres echappes`() {
-        val parsed = VCardParser.parse(card("FN:A\\, B\; C", "NOTE:l1\\nl2\\\\fin"))!!
+        val parsed = VCardParser.parse(card("FN:A\\, B\\; C", "NOTE:l1\\nl2\\\\fin"))!!
         assertThat(parsed.formattedName).isEqualTo("A, B; C")
         assertThat(parsed.note).isEqualTo("l1\nl2\\fin")
     }
