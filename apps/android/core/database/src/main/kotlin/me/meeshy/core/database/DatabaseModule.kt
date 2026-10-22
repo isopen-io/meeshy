@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.BlockedUserDao
+import me.meeshy.core.database.dao.CacheEntryDao
 import me.meeshy.core.database.dao.CallHistoryDao
 import me.meeshy.core.database.dao.ConversationDao
 import me.meeshy.core.database.dao.DirectoryContactDao
@@ -15,6 +16,7 @@ import me.meeshy.core.database.dao.EditRevisionDao
 import me.meeshy.core.database.dao.EphemeralReceiptDao
 import me.meeshy.core.database.dao.FriendDao
 import me.meeshy.core.database.dao.FriendRequestDao
+import me.meeshy.core.database.dao.KeyedJsonCacheDao
 import me.meeshy.core.database.dao.MediaBlobDao
 import me.meeshy.core.database.dao.MediaIndexDao
 import me.meeshy.core.database.dao.MessageDao
@@ -111,6 +113,14 @@ internal object DatabaseModule {
     @Provides
     fun providesMediaIndexDao(database: MeeshyDatabase): MediaIndexDao =
         database.mediaIndexDao()
+
+    @Provides
+    fun providesCacheEntryDao(database: MeeshyDatabase): CacheEntryDao =
+        database.cacheEntryDao()
+
+    @Provides
+    fun providesKeyedJsonCacheDao(database: MeeshyDatabase): KeyedJsonCacheDao =
+        database.keyedJsonCacheDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 
