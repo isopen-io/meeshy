@@ -1,5 +1,7 @@
 package me.meeshy.sdk.user
 
+import me.meeshy.sdk.model.AccountDeletionStatus
+import me.meeshy.sdk.model.Achievement
 import me.meeshy.sdk.model.ChangeEmailRequest
 import me.meeshy.sdk.model.ChangeEmailResponse
 import me.meeshy.sdk.model.ChangePasswordRequest
@@ -7,6 +9,8 @@ import me.meeshy.sdk.model.ChangePasswordResponse
 import me.meeshy.sdk.model.ChangePhoneRequest
 import me.meeshy.sdk.model.ChangePhoneResponse
 import me.meeshy.sdk.model.MeeshyUser
+import me.meeshy.sdk.model.ProfileExpansion
+import me.meeshy.sdk.model.PublicProfile
 import me.meeshy.sdk.model.TimelinePoint
 import me.meeshy.sdk.model.UpdateProfileRequest
 import me.meeshy.sdk.model.UserStats
@@ -116,7 +120,27 @@ class UserRepository @Inject constructor(
      * identifiant de navigation arrivent tous deux ici sans etre distingues.
      */
     suspend fun getProfile(idOrUsername: String): NetworkResult<MeeshyUser> =
-        apiCall { userApi.getPerson(idOrUsername) }
+        getPublicProfile(idOrUsername).map { it.user }
+
+    /**
+     * LA lecture d'un profil public en UN aller-retour : profil, statistiques et presence
+     * (et la relation seulement si [expand] la demande). [getProfile] n'en est que la
+     * projection. L'ordre de `expand` est stable pour que deux appels equivalents produisent
+     * la meme requete.
+     */
+    suspend fun getPublicProfile(
+        handle: String,
+        expand: Set<ProfileExpansion> = ProfileExpansion.DEFAULT,
+    ): NetworkResult<PublicProfile> =
+        apiCall { userApi.getPublicProfile(handle, ProfileExpansion.query(expand)) }
+
+    suspend fun getMyStats(): NetworkResult<UserStats> = apiCall { userApi.getMyStats() }
+
+    suspend fun getMyAchievements(): NetworkResult<List<Achievement>> =
+        apiCall { userApi.getMyAchievements() }
+
+    suspend fun getAccountDeletionStatus(): NetworkResult<AccountDeletionStatus> =
+        apiCall { userApi.getAccountDeletionStatus() }
 
     suspend fun getProfileByEmail(email: String): NetworkResult<MeeshyUser> =
         apiCall { userApi.getProfileByEmail(email) }
@@ -153,8 +177,13 @@ class UserRepository @Inject constructor(
     suspend fun verifyPhoneChange(code: String): NetworkResult<VerifyPhoneChangeResponse> =
         apiCall { userApi.verifyPhoneChange(VerifyPhoneChangeRequest(code)) }
 
+    /**
+     * Les statistiques de [userId]. Les siennes passent par `users/me/stats` — jamais
+     * `users/{monId}/stats` ; un profil tiers lit les siennes dans [getPublicProfile]
+     * (`expand=stats`), cette route n'etant gardee que pour les appelants non migres.
+     */
     suspend fun getUserStats(userId: String): NetworkResult<UserStats> =
-        apiCall { userApi.getUserStats(userId) }
+        if (userId == sessionRepository.currentUserId) getMyStats() else apiCall { userApi.getUserStats(userId) }
 
     /**
      * The signed-in user's daily message-activity timeline. This is a `me`-only
