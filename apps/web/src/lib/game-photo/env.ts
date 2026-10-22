@@ -11,7 +11,12 @@ import { loadArt } from './art';
 import { openFrontCamera, type CameraResult } from './camera';
 import type { PhotoArt, PhotoPalette, PhotoSource } from './compose';
 import { rasterizeSvg } from './compose';
+import type { GloryFrameBirdLayout } from '@meeshy/shared/types/glory-frame-format';
+import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
+import type { FrameRef } from '@meeshy/shared/utils/game/glory-frames';
+
 import { rootVarReader } from './css-vars';
+import type { GloryOffer } from './glory-choice';
 import type { GloryScene, GloryStep, GloryTexts } from './glory/glory-scene';
 import type { PhotoMoment } from './moments';
 import { accountBackend, createNotebook, developNotebookSource, notebookDbName, openIndexedDbBackend, type LegacyState, type Notebook, type NotebookBackend } from './notebook';
@@ -58,11 +63,29 @@ export type PhotoEnv = {
   }) => Promise<PhotoFiles | null>;
   /**
    * LA SCÈNE DU CADRE DÉCORÉ (#10159, L7) : le cadre que la loi retient pour
-   * l'étape, PRÊT (toutes ses couches au magasin), à l'échelle demandée (0,5 pour
-   * l'aperçu, 1 pour l'image finale). `null` : carte simple, sans attente — ce
-   * qui manque a été demandé. Absent : l'environnement ne peint pas de décor.
+   * l'étape — ou, quand `frame` est donné, CE cadre de la bande (#10164), dans
+   * la `pose` demandée —, PRÊT (toutes ses couches au magasin), à l'échelle
+   * demandée (0,5 pour l'aperçu, 1 pour l'image finale). `null` : carte simple,
+   * sans attente — ce qui manque a été demandé. Absent : l'environnement ne
+   * peint pas de décor.
    */
-  readonly glory?: (input: { readonly step: GloryStep; readonly texts: GloryTexts; readonly scale: number }) => Promise<GloryScene | null>;
+  readonly glory?: (input: {
+    readonly step: GloryStep;
+    readonly texts: GloryTexts;
+    readonly scale: number;
+    readonly frame?: FrameRef;
+    readonly pose?: GloryFrameBirdLayout | null;
+  }) => Promise<GloryScene | null>;
+  /**
+   * LA BANDE DES CADRES (#10164, L11) : les cadres que la loi propose pour
+   * l'étape, en tuiles (nom, usage, poses, présence). `null` : rien à proposer,
+   * la bande ne s'affiche pas. Absent : le déroulé garde le cadre présélectionné.
+   */
+  readonly gloryOffer?: (step: GloryStep) => Promise<GloryOffer | null>;
+  /** Charge aussitôt les couches d'un cadre touché (priorité manuelle) ; `true` quand elles y sont toutes. */
+  readonly gloryWarm?: (frame: FrameRef) => Promise<boolean>;
+  /** La vignette d'une tuile ; `null` : la tuile reste nommée, sans image. */
+  readonly gloryThumb?: (thumb: PackAssetRef) => Promise<Blob | null>;
   /** Ce que l'aperçu sur canvas demande en plus de la scène : les dessins du cadre affiché, la palette, la surface de travail. */
   readonly gloryKit?: (frame: HTMLElement) => Promise<GloryPreviewKit | null>;
   /**
@@ -249,11 +272,32 @@ export function browserPhotoEnv(): PhotoEnv {
       if (art === null) return null;
       return renderPhotoFiles({ moment, photo, art, palette: paletteFrom(read), fontFamily: fontFamilyFrom(read), now: now(), createCanvas, referral: referral ?? null, glory: glory ?? null });
     },
-    glory: async ({ step, texts, scale }) => {
+    glory: async ({ step, texts, scale, frame, pose = null }) => {
       try {
-        const { gloryFrameFor, openGloryScene } = await gloryModule();
-        const pick = await gloryFrameFor(step);
-        return pick === null ? null : openGloryScene({ pick, texts, pose: null, scale });
+        const { gloryFrameAt, gloryFrameFor, openGloryScene } = await gloryModule();
+        const pick = frame === undefined ? await gloryFrameFor(step) : await gloryFrameAt(frame);
+        return pick === null ? null : openGloryScene({ pick, texts, pose, scale });
+      } catch {
+        return null;
+      }
+    },
+    gloryOffer: async (step) => {
+      try {
+        return await (await gloryModule()).gloryOfferFor(step);
+      } catch {
+        return null;
+      }
+    },
+    gloryWarm: async (frame) => {
+      try {
+        return await (await gloryModule()).warmGloryFrame(frame);
+      } catch {
+        return false;
+      }
+    },
+    gloryThumb: async (thumb) => {
+      try {
+        return await (await gloryModule()).gloryThumbBlob(thumb);
       } catch {
         return null;
       }

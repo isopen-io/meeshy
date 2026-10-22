@@ -4,7 +4,7 @@ import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
 import { SW_PACK_ASSETS_CACHE, isAppOwnedCache } from '@/lib/sw-caches';
 
-import { PACK_ASSETS_CACHE, packAssetUrl, readPackAssetBlob, readPackAssetJson, sha256Hex } from './pack-asset-store';
+import { PACK_ASSETS_CACHE, hasPackAsset, packAssetUrl, readPackAssetBlob, readPackAssetJson, sha256Hex } from './pack-asset-store';
 
 const ORIGIN = 'https://gate.test';
 
@@ -128,5 +128,21 @@ describe('le magasin sans réseau et la demande (#10159)', () => {
     const deps = { origin: ORIGIN, fetcher: net.fetcher, cacheStorage: storage };
     await warmPackAssets([ref], deps);
     expect(await read(ref, bucketOnly(deps))).toBeNull();
+  });
+});
+
+describe('la présence d’un fichier (#10164)', () => {
+  test('`hasPackAsset` dit si le seau le tient, sans réseau et sans relire ses octets', async () => {
+    const bytes = new TextEncoder().encode('{"schema":1}');
+    const ref = await refOf(bytes, 'json');
+    const url = packAssetUrl(ref.src, ORIGIN);
+    const { fetcher, calls } = fetcherServing(new Map([[url, bytes]]));
+    const { storage } = memoryCaches();
+    const deps = { origin: ORIGIN, fetcher, cacheStorage: storage };
+    expect(await hasPackAsset(ref, deps)).toBe(false);
+    await readPackAssetJson(ref, deps);
+    expect(await hasPackAsset(ref, deps)).toBe(true);
+    expect(calls.length).toBe(1);
+    expect(await hasPackAsset(ref, { ...deps, cacheStorage: null })).toBe(false);
   });
 });

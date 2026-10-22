@@ -112,6 +112,19 @@ const NOT_IN_BUCKET: typeof fetch = async () => new Response(null, { status: 404
 
 export const bucketOnly = (deps: PackAssetStoreDeps): PackAssetStoreDeps => ({ ...deps, fetcher: NOT_IN_BUCKET });
 
+/**
+ * Le seau TIENT-il ce fichier ? Sans réseau et sans relire ses octets : c'est la
+ * présence qu'une tuile de cadre affiche (#10164) — la relecture vérifiée reste
+ * l'affaire de `readPackAssetBytes`, qui jette ce qui ne se vérifie plus.
+ */
+export async function hasPackAsset(ref: PackAssetRef, deps: PackAssetStoreDeps): Promise<boolean> {
+  const url = urlOf(ref.src, deps.origin);
+  if (url === null) return false;
+  const bucket = await openBucket(deps.cacheStorage === undefined ? defaultCacheStorage() : deps.cacheStorage);
+  const cached = await bucket?.match(url).catch(() => undefined);
+  return cached !== undefined;
+}
+
 const warming = new Set<string>();
 
 /**

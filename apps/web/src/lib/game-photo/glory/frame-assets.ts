@@ -31,6 +31,8 @@ export type GloryAssetDeps = {
   readonly read: (ref: PackAssetRef) => Promise<Blob | null>;
   /** Demande au magasin de ranger ce qui manque, sans attendre. */
   readonly request: (refs: readonly PackAssetRef[]) => void;
+  /** Le seau tient-il ce fichier ? Sans en lire les octets ; absent : `read` en tient lieu. */
+  readonly has?: (ref: PackAssetRef) => Promise<boolean>;
   /** Décode un fichier image ; `scale` < 1 pour un aperçu à résolution réduite. */
   readonly decode: (blob: Blob, box: { readonly width: number; readonly height: number }, scale: number) => Promise<ClosableImage>;
   /** Rastérise le SVG d'un sticker Mee en image décodée ; `null` si le navigateur ne sait pas. */
@@ -63,6 +65,24 @@ export const stickersOf = (birds: GloryFrameBirdTable, pose: GloryFrameBirdLayou
 };
 
 type Decoded = { readonly ref: PackAssetRef; readonly image: ClosableImage | null };
+
+const present = async (ref: PackAssetRef, deps: GloryAssetDeps): Promise<boolean> => {
+  try {
+    return deps.has === undefined ? (await deps.read(ref)) !== null : await deps.has(ref);
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Les couches d'un format qui MANQUENT au magasin (#10164) : vide, le cadre est
+ * prêt ; sinon leur somme d'octets est le poids que la tuile annonce.
+ */
+export async function missingGloryFrameAssets(format: GloryFrameFormat, deps: GloryAssetDeps): Promise<readonly PackAssetRef[]> {
+  const refs = layerRefs(format);
+  const presence = await Promise.all(refs.map((ref) => present(ref, deps)));
+  return refs.filter((_, index) => !presence[index]);
+}
 
 const refOf = ({ src, bytes, sha256 }: GloryFrameLayer): PackAssetRef => ({ src, bytes, sha256 });
 

@@ -6,7 +6,7 @@ import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 
 import type { FramePackDetail, FramePackSummary } from '@/lib/api/packs-glory-frame';
 
-import { EMPTY_CATALOG, loadGloryCatalog, pickGloryFrame, type GloryCatalogPorts } from './frame-catalog';
+import { EMPTY_CATALOG, findGloryFrame, loadGloryCatalog, offerGloryFrames, pickGloryFrame, type GloryCatalogPorts } from './frame-catalog';
 
 /**
  * LE CATALOGUE DES CADRES INSTALLÉS (#10159) — lu par le port des packs et le
@@ -43,15 +43,19 @@ const summary = (slug: string): FramePackSummary => ({
 
 const detail = (slug: string): FramePackDetail => ({ ...summary(slug), contractSchema: 1, contract: ref(`contract-${slug}`), strings: {} });
 
-function ports(packs: Readonly<Record<string, readonly string[]>>, options: { readonly installedStatus?: number; readonly brokenContract?: string } = {}): GloryCatalogPorts & { readonly reads: string[] } {
+function ports(packs: Readonly<Record<string, readonly string[]>>, options: { readonly installedStatus?: number; readonly brokenContract?: string; readonly language?: 'fr' | 'en'; readonly strings?: Readonly<Record<string, Readonly<Record<string, string>>>> } = {}): GloryCatalogPorts & { readonly reads: string[] } {
   const reads: string[] = [];
+  const stringsOf = (slug: string) => Object.fromEntries(Object.keys(options.strings ?? {}).filter((key) => key.startsWith(`${slug}:`)).map((key) => [key.slice(slug.length + 1), ref(key)]));
   const contracts = new Map(Object.entries(packs).map(([slug, collections]) => [ref(`contract-${slug}`).src, { schema: 1, frames: collections.flatMap((collection) => manifest(collection).frames) }]));
   return {
     reads,
     installed: async () => (options.installedStatus === undefined ? { ok: true, data: Object.keys(packs).map(summary) } : { ok: false, status: options.installedStatus, error: 'Not found', code: 'PACK_NOT_FOUND' }),
-    detail: async (slug) => (slug in packs ? { ok: true, data: detail(slug) } : { ok: false, status: 404, error: 'Not found', code: 'PACK_NOT_FOUND' }),
+    ...(options.language === undefined ? {} : { language: options.language }),
+    detail: async (slug) => (slug in packs ? { ok: true, data: { ...detail(slug), strings: stringsOf(slug) } } : { ok: false, status: 404, error: 'Not found', code: 'PACK_NOT_FOUND' }),
     readJson: async (asset) => {
       reads.push(asset.src);
+      const strings = Object.entries(options.strings ?? {}).find(([key]) => ref(key).src === asset.src);
+      if (strings !== undefined) return strings[1];
       if (options.brokenContract !== undefined && asset.src === ref(`contract-${options.brokenContract}`).src) return { schema: 99, frames: [] };
       return contracts.get(asset.src) ?? null;
     },
@@ -120,5 +124,36 @@ describe('le cadre d’une étape, par la loi partagée', () => {
 
   test('un catalogue vide ⇒ null', () => {
     expect(pickGloryFrame(EMPTY_CATALOG, { stepId: 'rank:ambassadeur:1', atmosphere: null, lastChosen: null })).toBeNull();
+  });
+});
+
+describe('l’offre d’une étape, par la loi partagée (#10164)', () => {
+  test('toutes les tuiles que la loi propose, la présélection en tête : la division d’abord, collection par collection ; aucun cadre d’un autre rang', async () => {
+    const catalog = await loadGloryCatalog(ports({ afrique: ['savane', 'royaumes'] }));
+    const offer = offerGloryFrames(catalog, { stepId: 'rank:ambassadeur:2', atmosphere: null, lastChosen: null });
+    const ids = offer.suggested.map((pick) => pick.frame.id);
+    expect(ids.slice(0, 2)).toEqual(['savane.ambassadeur-2', 'royaumes.ambassadeur-2']);
+    expect(ids.every((id) => id.includes('ambassadeur'))).toBe(true);
+    expect(ids.length).toBeGreaterThan(2);
+    expect(offer.preselected?.frame.id).toBe('savane.ambassadeur-2');
+    expect(offer.suggested.every((pick) => pick.pack.slug === 'afrique')).toBe(true);
+  });
+
+  test('une étape sans cadre ⇒ aucune tuile ; un cadre se retrouve par sa référence, ou pas du tout', async () => {
+    const catalog = await loadGloryCatalog(ports({ afrique: ['savane'] }));
+    expect(offerGloryFrames(catalog, { stepId: 'start', atmosphere: null, lastChosen: null })).toEqual({ suggested: [], preselected: null });
+    expect(findGloryFrame(catalog, { pack: 'afrique', frameId: 'savane.ambassadeur-1' })?.frame.id).toBe('savane.ambassadeur-1');
+    expect(findGloryFrame(catalog, { pack: 'afrique', frameId: 'savane.nulle-part' })).toBeNull();
+    expect(findGloryFrame(catalog, { pack: 'olympe', frameId: 'savane.ambassadeur-1' })).toBeNull();
+  });
+
+  test('les chaînes du pack se lisent dans la langue demandée, le français à défaut, rien quand le pack n’en sert pas', async () => {
+    const strings = { 'afrique:fr': { 'savane.ambassadeur-1.name': 'Acacia' }, 'afrique:en': { 'savane.ambassadeur-1.name': 'Acacia tree' } };
+    const english = await loadGloryCatalog(ports({ afrique: ['savane'] }, { language: 'en', strings }));
+    expect(english.packs[0]?.strings['savane.ambassadeur-1.name']).toBe('Acacia tree');
+    const fallback = await loadGloryCatalog(ports({ afrique: ['savane'] }, { language: 'en', strings: { 'afrique:fr': strings['afrique:fr'] } }));
+    expect(fallback.packs[0]?.strings['savane.ambassadeur-1.name']).toBe('Acacia');
+    const none = await loadGloryCatalog(ports({ afrique: ['savane'] }, { language: 'en' }));
+    expect(none.packs[0]?.strings).toEqual({});
   });
 });

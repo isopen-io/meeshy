@@ -6,7 +6,7 @@ import type { PackAssetRef } from '@meeshy/shared/types/content-pack';
 import { gloryFrameFormatAssets } from '@meeshy/shared/types/glory-frame-format';
 
 import { readGloryFrame, type GloryFrame } from './frame-spec';
-import { fontRequestsOf, loadGloryFrameImages, stickersOf, type ClosableImage, type GloryAssetDeps } from './frame-assets';
+import { fontRequestsOf, loadGloryFrameImages, missingGloryFrameAssets, stickersOf, type ClosableImage, type GloryAssetDeps } from './frame-assets';
 
 /**
  * LES IMAGES D'UN CADRE (#10159) — lues au magasin SANS réseau : une couche
@@ -103,5 +103,24 @@ describe('ce que le format demande', () => {
     const requests = fontRequestsOf(format);
     expect(requests.length).toBe(Object.keys(format.text).length);
     expect(requests.every((request) => typeof request.family === 'string' && request.weight >= 100)).toBe(true);
+  });
+});
+
+describe('la présence d’un cadre (#10164)', () => {
+  test('rien ne manque : la liste vide ; une couche absente : SA référence, et ce qui manque pèse ses octets', async () => {
+    const assets = gloryFrameFormatAssets(format);
+    const gone = assets[1]!;
+    expect(await missingGloryFrameAssets(format, deps().value)).toEqual([]);
+    const missing = await missingGloryFrameAssets(format, deps({ missing: [gone.src] }).value);
+    expect(missing).toEqual([gone]);
+  });
+
+  test('`has` répond sans lire les octets quand le magasin le sait', async () => {
+    const asked: string[] = [];
+    const base = deps().value;
+    const value: GloryAssetDeps = { ...base, read: async () => { throw new Error('lu'); }, has: async (ref) => (asked.push(ref.src), ref.src !== gloryFrameFormatAssets(format)[0]!.src) };
+    const missing = await missingGloryFrameAssets(format, value);
+    expect(missing.map((ref) => ref.src)).toEqual([gloryFrameFormatAssets(format)[0]!.src]);
+    expect(asked.length).toBe(gloryFrameFormatAssets(format).length);
   });
 });

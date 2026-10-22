@@ -8,6 +8,7 @@ import type { CameraFailure, CameraSession } from '@/lib/game-photo/camera';
 import type { PhotoSource } from '@/lib/game-photo/compose';
 import type { PhotoEnv } from '@/lib/game-photo/env';
 import { flowReducer, type FlowState } from '@/lib/game-photo/flow';
+import { frameIdOf } from '@/lib/game-photo/glory-choice';
 import type { PhotoFormat } from '@/lib/game-photo/layout';
 import type { PhotoMoment } from '@/lib/game-photo/moments';
 import { referralOf, referralPlaceholder, referralShareText, type PhotoReferral } from '@/lib/game-photo/referral';
@@ -15,11 +16,12 @@ import { photoBannerOf, type GloryRenderSource, type PhotoFiles } from '@/lib/ga
 import { gloryCatalogEpoch, subscribeGloryCatalogEpoch } from '@/lib/game-photo/glory-catalog-epoch';
 import type { AtmosphereGate } from '@/lib/game/atmosphere';
 import type { GloryPreviewKit } from '@/lib/game-photo/env';
-import type { GloryRecipe, GloryScene } from '@/lib/game-photo/glory/glory-scene';
+import type { GloryRecipe } from '@/lib/game-photo/glory/glory-scene';
 import { interfaceDirection } from '@/lib/inline-interface-language-bootstrap.js';
 import { currentInterfaceLanguage } from '@/lib/interface-language';
 import type { ShareOutcome } from '@/lib/game-photo/share';
 import { dateLabelOf } from '@/lib/game-photo/render';
+import { useGloryChoice } from '@/lib/game-photo/use-glory-choice';
 import { useObjectUrl } from '@/lib/game-photo/use-object-url';
 import { usePhotoAuthor } from '@/lib/game-photo/use-photo-author';
 import { nextFocusIndex } from '@/lib/view/focus-trap';
@@ -29,6 +31,7 @@ import { useBackDismiss } from '@/lib/view/use-back-dismiss';
 import { GameAtmosphereChoice } from './game-atmosphere-choice';
 import { GameAuthorCard } from './game-author-card';
 import { GamePhotoFrame, type GloryFrameOverlay } from './game-photo-frame';
+import { GamePhotoFramePicker } from './game-photo-frame-picker';
 import { GamePhotoGloryCanvas } from './game-photo-glory-canvas';
 import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-surface';
 
@@ -55,8 +58,13 @@ import { GAME_BRAND, GAME_ERROR, GAME_GOOD, GAME_INK, GAME_INK_2 } from './game-
  * photo, l'enregistre dans la galerie puis ouvre le résultat ; la scène (toucher
  * deux fois, tenir, Entrée au clavier) la prend sans l'écrire hors de l'app.
  * « Enregistrer » ne se montre que si la prise n'est pas déjà enregistrée avec
- * ce cadre (loi partagée `capture-save`, portée par le réducteur). Le cadre
- * choisi est celui du moment tant que la bande de cadres (#10164) n'existe pas.
+ * ce cadre (loi partagée `capture-save`, portée par le réducteur).
+ *
+ * LE CADRE ET LA POSE SE CHOISISSENT AVANT, ET SE CHANGENT APRÈS (#10164, L11) : sous l'aperçu, la bande
+ * des cadres que la loi partagée propose pour l'étape (`gloryFramesFor`, donc `canUseFrame`), la
+ * présélection cochée, la carte simple toujours possible, la pose parmi celles du cadre ; chemin
+ * nominal = « Immortaliser » puis déclencher. Sur le résultat, changer de cadre ou de pose recompose
+ * l'image depuis la même photo, sans reprendre, et « Enregistrer » revient (c'est une autre version).
  *
  * L'ATMOSPHÈRE (#10163, L10b) : à la première photo de rang dès Ambassadeur, quand le compte n'a pas encore
  * choisi, l'écran de choix (E1) précède le déroulé ; « Choisir plus tard » laisse partir la photo dans
@@ -150,8 +158,6 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const formatAtCompose = useRef<PhotoFormat>(format);
   formatAtCompose.current = format;
   const [notice, setNotice] = useState<{ readonly tone: 'good' | 'error'; readonly text: string; readonly action?: 'save'; readonly transient?: boolean } | null>(null);
-  /* Le cadre posé sur la prise : celui du moment, seul proposé tant que la bande n'existe pas (#10164). */
-  const frameId = moment.id;
   /* Une prise par la case du cadre attend sa composition pour partir dans la galerie. */
   const galleryOnCompose = useRef(false);
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -197,47 +203,40 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
   const referralRef = useRef(referral);
   referralRef.current = referral;
 
-  /* LE CADRE DÉCORÉ (#10159, L7) : la scène de l'étape, demandée dès l'ouverture (couches à
-     demi-résolution pour l'aperçu) ; `null` — pack pas prêt, ancien serveur, étape sans cadre —
-     laisse la carte simple, sans attendre. La scène se rend en sortant. */
-  const [glory, setGlory] = useState<GloryScene | null>(null);
+  /* LE CADRE DÉCORÉ (#10159, L7) et SON CHOIX (#10164, L11) : l'offre de l'étape, le cadre et la pose choisis,
+     la scène d'aperçu (couches à demi-résolution) du cadre choisi ; `null` — pack pas prêt, ancien serveur, étape
+     sans cadre, carte simple choisie — laisse la carte simple, sans attendre. L'époque du catalogue relit
+     l'offre et rouvre la scène : le pack installé par le choix d'atmosphère se lit sur le catalogue relu. */
   const [gloryKit, setGloryKit] = useState<GloryPreviewKit | null>(null);
   const catalogEpoch = useSyncExternalStore(subscribeGloryCatalogEpoch, gloryCatalogEpoch, gloryCatalogEpoch);
   const accountAtmosphere = atmosphere?.current ?? null;
   const gloryStep = useMemo(() => ({ stepId: moment.id, atmosphere: accountAtmosphere, lastChosen: null }), [moment.id, accountAtmosphere]);
   const gloryTexts = useMemo(() => ({ kicker: moment.kicker, title: moment.title, date: dateLabel, message: null }), [moment.kicker, moment.title, dateLabel]);
-  useEffect(() => {
-    if (env.glory === undefined) return;
-    let live = true;
-    let opened: GloryScene | null = null;
-    void env
-      .glory({ step: gloryStep, texts: gloryTexts, scale: 0.5 })
-      .then((scene) => {
-        if (!live) {
-          scene?.close();
-          return;
-        }
-        opened = scene;
-        setGlory(scene);
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-      opened?.close();
-      setGlory(null);
-    };
-    /* L'époque du catalogue rouvre la scène : le pack installé par le choix d'atmosphère se lit sur le catalogue relu. */
-  }, [env, gloryStep, gloryTexts, catalogEpoch]);
-  const gloryRecipe = useMemo((): GloryRecipe => ({ pose: null, message: null, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [withFlame, withLink]);
+  const gloryChoice = useGloryChoice({ env, step: gloryStep, texts: gloryTexts, epoch: catalogEpoch });
+  const glory = gloryChoice.scene;
+  /* Le cadre posé sur la prise, pour la loi d'enregistrement : le cadre choisi, sinon la carte simple du moment. */
+  const frameId = frameIdOf(gloryChoice.choice, moment.id);
+  /* Lu au moment de composer : changer de cadre pendant la frappe ne la rejoue pas. */
+  const frameIdRef = useRef(frameId);
+  frameIdRef.current = frameId;
+  /* La version composée : le cadre dont la scène est ouverte (ou la carte simple) et la pose — ce qui, en
+     changeant sur le résultat, recompose l'image (#10164). La scène compte, pas le seul choix : un cadre
+     choisi mais pas encore prêt se compose en carte simple, puis se recompose quand il arrive. */
+  const recipeKey = `${glory === null ? 'simple' : glory.frame.id}|${gloryChoice.choice.pose ?? ''}`;
+  const recipeKeyRef = useRef(recipeKey);
+  recipeKeyRef.current = recipeKey;
+  const composedRecipe = useRef(recipeKey);
+  const chosenPose = gloryChoice.choice.pose;
+  const gloryRecipe = useMemo((): GloryRecipe => ({ pose: chosenPose, message: null, crop: { dx: 0, dy: 0, zoom: 1 }, showFlame: withFlame, showLink: withLink }), [chosenPose, withFlame, withLink]);
   const rtl = interfaceDirection(currentInterfaceLanguage()) === 'rtl';
   const gloryBanner = useMemo(() => (glory === null || referral === null ? null : photoBannerOf(referral, glory.bannerLayout(rtl))), [glory, referral, rtl]);
   const gloryOverlay = useMemo((): GloryFrameOverlay | null => (glory === null ? null : { crest: glory.crest, qr: glory.bannerLayout(rtl)?.qr ?? null }), [glory, rtl]);
   /* L'image finale ouvre SA scène (pleine résolution) le temps de composer, puis la rend. */
+  const openFinal = gloryChoice.openFinal;
   const gloryFinal = useCallback(async (): Promise<{ readonly source: GloryRenderSource; readonly close: () => void } | null> => {
-    if (glory === null || env.glory === undefined) return null;
-    const scene = await env.glory({ step: gloryStep, texts: gloryTexts, scale: 1 }).catch(() => null);
+    const scene = await openFinal();
     return scene === null ? null : { source: { scene, recipe: gloryRecipe, language: currentInterfaceLanguage() }, close: scene.close };
-  }, [env, glory, gloryRecipe, gloryStep, gloryTexts]);
+  }, [openFinal, gloryRecipe]);
   const composeWith = useCallback(
     async (input: { readonly photo: PhotoSource | null; readonly frame: HTMLElement | null; readonly referral: PhotoReferral | null }): Promise<PhotoFiles | null> => {
       const final = await gloryFinal();
@@ -369,8 +368,9 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
         }
         setFiles(rendered);
         setComposedReferral(banner);
+        composedRecipe.current = recipeKeyRef.current;
         galleryOnCompose.current = strikingZone === 'frame';
-        dispatch({ type: 'composed', frame: frameId, format: formatAtCompose.current });
+        dispatch({ type: 'composed', frame: frameIdRef.current, format: formatAtCompose.current });
       })
       .catch(() => {
         if (live) dispatch({ type: 'compose-failed' });
@@ -378,7 +378,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     return () => {
       live = false;
     };
-  }, [strikingMode, strikingZone, frameId, play, stage]);
+  }, [strikingMode, strikingZone, play, stage]);
 
   /* La sortie : « plus tard » laisse le moment en attente, tout le reste le laisse tel quel. */
   useEffect(() => {
@@ -539,6 +539,23 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     dispatch({ type: 'format', format: next });
   }, []);
 
+  /* TOUT SE CHANGE APRÈS (#10164) : sur le résultat, un autre cadre ou une autre pose recompose l'image depuis
+     la même photo, sans reprendre ; c'est une autre version pour la loi d'enregistrement, « Enregistrer » revient. */
+  const atResult = state.step === 'result';
+  useEffect(() => {
+    if (!atResult || composedRecipe.current === recipeKey) return;
+    composedRecipe.current = recipeKey;
+    dispatch({ type: 'frame', frame: frameIdRef.current });
+    let live = true;
+    void recompose(composedReferral).then((rendered) => {
+      if (live && rendered !== null) setFiles(rendered);
+    });
+    return () => {
+      live = false;
+    };
+    /* Le bandeau composé et `recompose` suivent la clé : ils ne relancent rien d'eux-mêmes. */
+  }, [atResult, recipeKey]);
+
   /* Une prise par la case du cadre part dans la galerie dès qu'elle est composée, puis le résultat
      s'affiche sans « Enregistrer » (l'état l'y a déjà rangée avec ce cadre). */
   useEffect(() => {
@@ -566,7 +583,12 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
       story,
       mode: state.mode,
       source,
-      recipe: { ...(taken === null ? {} : { mirror: taken.mirror }), showLink: composedReferral !== null },
+      recipe: {
+        ...(taken === null ? {} : { mirror: taken.mirror }),
+        ...(gloryChoice.choice.frame === null ? {} : { frameId: gloryChoice.choice.frame.frameId }),
+        ...(chosenPose === null ? {} : { pose: chosenPose }),
+        showLink: composedReferral !== null,
+      },
     });
     dispatch({ type: 'kept', ok: outcome === 'kept' });
     setNotice(
@@ -576,7 +598,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
           ? { tone: 'error', text: gameText('game.photo.notice.no_space'), action: 'save' }
           : { tone: 'error', text: gameText('game.photo.notice.keep_failed') },
     );
-  }, [composedReferral, env, moment, outgoingFiles, state]);
+  }, [chosenPose, composedReferral, env, gloryChoice.choice.frame, moment, outgoingFiles, state]);
 
   /* Le piège de focus : Tab ne sort jamais du dialogue. */
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -611,6 +633,19 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
     if (stageMode === 'gallery' || striking) return { kind: 'photo', photo: photo.current } as const;
     return { kind: 'video', element: liveVideo } as const;
   }, [stageMode, striking, liveVideo]);
+
+  const framePicker =
+    gloryChoice.offer === null ? null : (
+      <GamePhotoFramePicker
+        offer={gloryChoice.offer}
+        choice={gloryChoice.choice}
+        presence={gloryChoice.presence}
+        thumb={env.gloryThumb}
+        onChooseFrame={gloryChoice.chooseFrame}
+        onChoosePose={gloryChoice.choosePose}
+        onRetry={gloryChoice.retry}
+      />
+    );
 
   if (choosingAtmosphere && atmosphere !== undefined) {
     return (
@@ -741,6 +776,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
             </span>
           </button>
         ) : null}
+        {cameraLive ? framePicker : null}
 
         {state.step === 'camera' ? (
           <div className="flex flex-col gap-2">
@@ -811,6 +847,7 @@ export function GamePhotoFlow({ moment, env, onClose, flameDays = null, author: 
                 style={{ aspectRatio: format === 'story' ? '9 / 16' : '1 / 1', maxHeight: '52dvh' }}
               />
             )}
+            {framePicker}
             <Button attr={{ 'data-photo-share': '' }} primary onClick={() => void share()}>
               {gameText('game.photo.share')}
             </Button>
