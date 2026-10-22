@@ -14,4 +14,6 @@
     <string name="story_tool_text">Texte</string>
     <string name="story_tool_texture">Fond</string>
     <string name="story_tool_timeline">Timeline</string>
+    <string name="story_tray_menu_profile">Voir le profil</string>
+    <string name="story_tray_menu_viewStories">Voir les stories</string>
 </resources>
