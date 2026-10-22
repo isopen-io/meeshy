@@ -14,20 +14,20 @@
     <string name="media_voice_message">رسالة صوتية</string>
     <string name="media_voice_recording">رسالة صوتية (%1$s)</string>
     <plurals name="media_duration_minutes">
-        <item quantity="zero">%d دقيقة</item>
+        <item quantity="zero">%1$d دقيقة</item>
         <item quantity="one">دقيقة واحدة</item>
         <item quantity="two">دقيقتان</item>
-        <item quantity="few">%d دقائق</item>
-        <item quantity="many">%d دقيقة</item>
-        <item quantity="other">%d دقيقة</item>
+        <item quantity="few">%1$d دقائق</item>
+        <item quantity="many">%1$d دقيقة</item>
+        <item quantity="other">%1$d دقيقة</item>
     </plurals>
     <plurals name="media_duration_seconds">
-        <item quantity="zero">%d ثانية</item>
+        <item quantity="zero">%1$d ثانية</item>
         <item quantity="one">ثانية واحدة</item>
         <item quantity="two">ثانيتان</item>
-        <item quantity="few">%d ثوانٍ</item>
-        <item quantity="many">%d ثانية</item>
-        <item quantity="other">%d ثانية</item>
+        <item quantity="few">%1$d ثوانٍ</item>
+        <item quantity="many">%1$d ثانية</item>
+        <item quantity="other">%1$d ثانية</item>
     </plurals>
     <string name="media_composer_placeholder_message">رسالة...</string>
     <string name="media_composer_placeholder_post">ما الجديد؟</string>
