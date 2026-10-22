@@ -3,6 +3,7 @@ package me.meeshy.ui.component.fullscreen
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.test.junit4.createComposeRule
 import com.google.common.truth.Truth.assertThat
 import me.meeshy.sdk.model.fullscreen.FullscreenChromeState
@@ -48,8 +49,13 @@ class FullscreenChromeAutoHideTest {
     }
 
     private fun elapse(millis: Long) {
-        compose.mainClock.advanceTimeBy(millis)
-        compose.mainClock.advanceTimeByFrame()
+        var left = millis
+        while (left > 0) {
+            val step = minOf(left, 100L)
+            compose.mainClock.advanceTimeBy(step)
+            compose.mainClock.advanceTimeByFrame()
+            left -= step
+        }
     }
 
     @Test
@@ -95,6 +101,8 @@ class FullscreenChromeAutoHideTest {
         elapse(2_000)
 
         stage.isPlaying.value = false
+        Snapshot.sendApplyNotifications()
+        compose.mainClock.advanceTimeByFrame()
         compose.mainClock.advanceTimeByFrame()
         elapse(10_000)
 
