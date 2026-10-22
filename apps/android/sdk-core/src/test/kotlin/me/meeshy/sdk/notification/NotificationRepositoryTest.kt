@@ -5,6 +5,7 @@ import com.google.common.truth.Truth.assertThat
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import me.meeshy.sdk.cache.CacheResult
@@ -14,7 +15,12 @@ import me.meeshy.sdk.model.MarkReadResponse
 import me.meeshy.sdk.model.NotificationContext
 import me.meeshy.sdk.model.NotificationState
 import me.meeshy.sdk.model.Pagination
+import me.meeshy.sdk.model.RegisterDeviceTokenRequest
+import me.meeshy.sdk.model.RegisterDeviceTokenResponse
 import me.meeshy.sdk.model.UnreadCountResponse
+import me.meeshy.sdk.model.UnregisterDeviceTokenRequest
+import me.meeshy.sdk.model.UnregisterDeviceTokenResponse
+import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.NotificationApi
 import org.junit.Test
 import java.io.IOException
@@ -578,4 +584,126 @@ class NotificationRepositoryTest {
         }
     }
 
+    // ── Le jeton push passe par les routes qui existent sur la passerelle ────
+
+    private val fcmToken = "fcm-token-0123456789-abcdef"
+
+    @Test
+    fun registerDeviceToken_sendsAnAndroidFcmRequest_andPropagatesTheServedResult() = runTest {
+        val sent = slot<RegisterDeviceTokenRequest>()
+        val served = RegisterDeviceTokenResponse(id = "t1", type = "fcm", platform = "android", isNew = true)
+        coEvery { api.registerDeviceToken(capture(sent)) } returns ApiResponse(success = true, data = served)
+
+        val result = NotificationRepository(api).registerDeviceToken(fcmToken)
+
+        assertThat(sent.captured).isEqualTo(RegisterDeviceTokenRequest.fcm(fcmToken))
+        assertThat(sent.captured.type).isEqualTo("fcm")
+        assertThat(sent.captured.platform).isEqualTo("android")
+        assertThat(result).isEqualTo(NetworkResult.Success(served))
+    }
+
+    @Test
+    fun registerDeviceToken_withAFullRequest_keepsTheDeviceFields() = runTest {
+        val sent = slot<RegisterDeviceTokenRequest>()
+        coEvery { api.registerDeviceToken(capture(sent)) } returns
+            ApiResponse(success = true, data = RegisterDeviceTokenResponse(id = "t1"))
+        val request = RegisterDeviceTokenRequest.fcm(fcmToken, deviceId = "device-1", deviceName = "Pixel 8")
+
+        NotificationRepository(api).registerDeviceToken(request)
+
+        assertThat(sent.captured.deviceId).isEqualTo("device-1")
+        assertThat(sent.captured.deviceName).isEqualTo("Pixel 8")
+    }
+
+    @Test
+    fun registerDeviceToken_propagatesAFailureInsteadOfThrowing() = runTest {
+        coEvery { api.registerDeviceToken(any()) } throws IOException("offline")
+
+        val result = NotificationRepository(api).registerDeviceToken(fcmToken)
+
+        assertThat((result as NetworkResult.Failure).error.code).isEqualTo("NETWORK")
+    }
+
+    @Test
+    fun unregisterDeviceToken_deletesByTheToken() = runTest {
+        val sent = slot<UnregisterDeviceTokenRequest>()
+        coEvery { api.unregisterDeviceToken(capture(sent)) } returns
+            ApiResponse(success = true, data = UnregisterDeviceTokenResponse(deletedCount = 1))
+
+        val result = NotificationRepository(api).unregisterDeviceToken(fcmToken)
+
+        assertThat(sent.captured).isEqualTo(UnregisterDeviceTokenRequest.byToken(fcmToken))
+        assertThat(result).isEqualTo(NetworkResult.Success(Unit))
+    }
+
+    @Test
+    fun unregisterDevice_deletesEveryTokenOfThatDeviceOnly() = runTest {
+        val sent = slot<UnregisterDeviceTokenRequest>()
+        coEvery { api.unregisterDeviceToken(capture(sent)) } returns
+            ApiResponse(success = true, data = UnregisterDeviceTokenResponse(deletedCount = 2))
+
+        val result = NotificationRepository(api).unregisterDevice("device-1")
+
+        assertThat(sent.captured).isEqualTo(UnregisterDeviceTokenRequest.byDeviceId("device-1"))
+        assertThat(sent.captured.token).isNull()
+        assertThat(result).isEqualTo(NetworkResult.Success(Unit))
+    }
+
+    /** Un corps sans cible ferait supprimer TOUS les jetons du compte : un identifiant vide ne part pas. */
+    @Test
+    fun unregisterWithABlankTarget_neverReachesTheGateway() = runTest {
+        val repo = NotificationRepository(api)
+
+        val byToken = repo.unregisterDeviceToken(" ")
+        val byDevice = repo.unregisterDevice("")
+
+        assertThat(byToken).isInstanceOf(NetworkResult.Failure::class.java)
+        assertThat(byDevice).isInstanceOf(NetworkResult.Failure::class.java)
+        coVerify(exactly = 0) { api.unregisterDeviceToken(any()) }
+    }
+
+    @Test
+    fun unregisterDeviceToken_propagatesAFailure() = runTest {
+        coEvery { api.unregisterDeviceToken(any()) } throws IOException("offline")
+
+        val result = NotificationRepository(api).unregisterDeviceToken(fcmToken)
+
+        assertThat(result).isInstanceOf(NetworkResult.Failure::class.java)
+    }
+
+    // ── Les filtres de la cloche partent en CSV, le curseur gagne toujours ───
+
+    @Test
+    fun list_sendsTheCategoryFiltersAsCsv_andNoRankWhenACursorIsGiven() = runTest {
+        coEvery { api.list(any(), any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = true, data = emptyList())
+
+        NotificationRepository(api).list(
+            cursor = "ancre",
+            types = listOf("user_mentioned", "mention"),
+            hideReadTypes = listOf("new_message", " ", "new_message"),
+        )
+
+        coVerify(exactly = 1) { api.list(null, 20, null, "ancre", "user_mentioned,mention", "new_message") }
+    }
+
+    @Test
+    fun list_withoutFilters_sendsNoFilterParameter() = runTest {
+        coEvery { api.list(any(), any(), any(), any(), any(), any()) } returns
+            ApiResponse(success = true, data = emptyList())
+
+        NotificationRepository(api).list(offset = 0, limit = 20)
+
+        coVerify(exactly = 1) { api.list(0, 20, null, null, null, null) }
+    }
+
+    @Test
+    fun counts_passesTheServerTotalsThrough() = runTest {
+        val totals = me.meeshy.sdk.model.NotificationCounts(total = 5, unread = 2, byType = mapOf("new_message" to 5))
+        coEvery { api.counts() } returns ApiResponse(success = true, data = totals)
+
+        val result = NotificationRepository(api).counts()
+
+        assertThat(result).isEqualTo(NetworkResult.Success(totals))
+    }
 }

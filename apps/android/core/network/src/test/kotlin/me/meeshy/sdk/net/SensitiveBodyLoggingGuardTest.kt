@@ -192,4 +192,33 @@ class SensitiveBodyLoggingGuardTest {
             fuites.size,
         )
     }
+
+    /**
+     * Le jeton FCM, une transcription d'appel et le protocole Signal portent un
+     * secret ou une donnee sensible dans leur corps ou leur reponse. Ce temoin
+     * cible les ROUTES telles qu'elles partent, avec leurs identifiants, sans
+     * iterer le set : une route omise du set ne ferait tomber aucun temoin qui
+     * ne lit que ce que le set contient deja.
+     */
+    @Test
+    fun `le jeton push, la transcription et Signal ne journalisent pas leur corps`() {
+        val routes = listOf(
+            "/users/register-device-token",
+            "/calls/68b0000000000000000000aa/transcript",
+            "/signal/keys",
+            "/signal/keys/68b0000000000000000000bb",
+            "/signal/session/establish",
+        )
+
+        for (route in routes) {
+            val lignes = mutableListOf<String>()
+            gardeQuiEcritDans(lignes).intercept(chain(route))
+
+            assertTrue("$route n'a rien journalise — le garde ne s'est pas execute", lignes.isNotEmpty())
+            assertTrue(
+                "$route a journalise son corps : ${lignes.joinToString(" | ")}",
+                lignes.none { it.contains(motDePasse) },
+            )
+        }
+    }
 }
