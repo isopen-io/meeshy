@@ -51,12 +51,18 @@ internal fun capabilities(
     cellular: Boolean = false,
     ethernet: Boolean = false,
 ): NetworkCapabilities {
-    val builder = NetworkCapabilities.Builder()
-    if (internet) builder.addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-    if (validated) builder.addCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-    if (notMetered) builder.addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
-    if (wifi) builder.addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-    if (cellular) builder.addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-    if (ethernet) builder.addTransportType(NetworkCapabilities.TRANSPORT_ETHERNET)
-    return builder.build()
+    val granted = buildSet {
+        if (internet) add(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        if (validated) add(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        if (notMetered) add(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+    }
+    val transports = buildSet {
+        if (wifi) add(NetworkCapabilities.TRANSPORT_WIFI)
+        if (cellular) add(NetworkCapabilities.TRANSPORT_CELLULAR)
+        if (ethernet) add(NetworkCapabilities.TRANSPORT_ETHERNET)
+    }
+    return mockk {
+        every { hasCapability(any()) } answers { firstArg<Int>() in granted }
+        every { hasTransport(any()) } answers { firstArg<Int>() in transports }
+    }
 }
