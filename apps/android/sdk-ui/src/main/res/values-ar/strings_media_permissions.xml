@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Porte unique des accès caméra, micro, photos, lieu, notifications et contacts (lot media-permissions-au-bon-moment). -->
+    <string name="media_permission_continue">متابعة</string>
+    <string name="media_permission_not_now">ليس الآن</string>
+    <string name="media_permission_open_settings">فتح الإعدادات</string>
+    <string name="media_permission_close">إغلاق</string>
+    <string name="media_permission_microphone_rationale_title">هل تسمح بالوصول إلى الميكروفون؟</string>
+    <string name="media_permission_microphone_rationale_body">يحتاج Meeshy إلى الوصول إلى الميكروفون للرسائل الصوتية ومكالمات الفيديو وتسجيل الصوت.</string>
+    <string name="media_permission_microphone_denied_title">تم رفض الوصول إلى الميكروفون</string>
+    <string name="media_permission_microphone_denied_body">لتسجيل الرسائل الصوتية والمشاركة في المكالمات، فعّل «الميكروفون» لتطبيق Meeshy من الإعدادات &gt; الأذونات.</string>
+    <string name="media_permission_microphone_denied_message">تم رفض الميكروفون — اضغط لفتح الإعدادات</string>
+    <string name="media_permission_camera_rationale_title">هل تسمح بالوصول إلى الكاميرا؟</string>
+    <string name="media_permission_camera_rationale_body">يحتاج Meeshy إلى الوصول إلى الكاميرا لالتقاط الصور وتصوير الفيديو للرسائل ومكالمات الفيديو وتجارب الواقع المعزّز.</string>
+    <string name="media_permission_camera_denied_title">تم رفض الوصول إلى الكاميرا</string>
+    <string name="media_permission_camera_denied_body">لالتقاط الصور وتصوير الفيديو وبدء مكالمات الفيديو، فعّل «الكاميرا» لتطبيق Meeshy من الإعدادات &gt; الأذونات.</string>
+    <string name="media_permission_camera_denied_message">تم رفض الكاميرا — اضغط لفتح الإعدادات</string>
+    <string name="media_permission_photos_rationale_title">هل تسمح بالوصول إلى صورك؟</string>
+    <string name="media_permission_photos_rationale_body">يحتاج Meeshy إلى الوصول إلى مكتبة صورك لمشاركة الصور ومقاطع الفيديو مع جهات اتصالك.</string>
+    <string name="media_permission_photos_denied_title">تم رفض الوصول إلى الصور</string>
+    <string name="media_permission_photos_denied_body">لاختيار الصور ومقاطع الفيديو من مكتبتك، فعّل «الصور والفيديو» لتطبيق Meeshy من الإعدادات &gt; الأذونات.</string>
+    <string name="media_permission_photos_denied_message">تم رفض الوصول إلى الصور — اضغط لفتح الإعدادات</string>
+    <string name="media_permission_photos_add_rationale_title">هل تسمح بالحفظ في صورك؟</string>
+    <string name="media_permission_photos_add_rationale_body">يحتاج Meeshy إلى إذن لحفظ الصور ومقاطع الفيديو في مكتبتك.</string>
+    <string name="media_permission_photos_add_denied_title">تم رفض الحفظ في الصور</string>
+    <string name="media_permission_photos_add_denied_body">لحفظ الصور ومقاطع الفيديو في مكتبتك، فعّل «التخزين» لتطبيق Meeshy من الإعدادات &gt; الأذونات.</string>
+    <string name="media_permission_photos_add_denied_message">تم رفض الحفظ في الصور — اضغط لفتح الإعدادات</string>
+    <string name="media_permission_location_rationale_title">هل تسمح بالوصول إلى موقعك؟</string>
+    <string name="media_permission_location_rationale_body">يستخدم Meeshy موقعك لمشاركته مع جهات اتصالك والعثور على أصدقاء قريبين منك.</string>
+    <string name="media_permission_location_denied_title">تم رفض الوصول إلى الموقع</string>
+    <string name="media_permission_location_denied_body">لمشاركة موقعك والعثور على أصدقاء قريبين، فعّل «الموقع» لتطبيق Meeshy من الإعدادات &gt; الأذونات.</string>
+    <string name="media_permission_location_denied_message">تم رفض الموقع — اسمح به من الإعدادات</string>
+    <string name="media_permission_notifications_rationale_title">هل تسمح بالإشعارات؟</string>
+    <string name="media_permission_notifications_rationale_body">يُعلمك Meeshy بالرسائل والردود والمكالمات الجديدة حتى عندما يكون التطبيق مغلقًا.</string>
+    <string name="media_permission_notifications_denied_title">الإشعارات متوقفة</string>
+    <string name="media_permission_notifications_denied_body">لتلقي إشعارات الرسائل والمكالمات، فعّل «الإشعارات» لتطبيق Meeshy من الإعدادات.</string>
+    <string name="media_permission_notifications_denied_message">الإشعارات متوقفة — فعّلها من الإعدادات</string>
+    <string name="media_permission_contacts_rationale_title">هل تسمح بالوصول إلى جهات اتصالك؟</string>
+    <string name="media_permission_contacts_rationale_body">يستخدم Meeshy جهات اتصالك للعثور على أصدقائك الموجودين على Meeshy وإخطارك عند انضمام أحدهم. لن يتواصل أحد مع أي شخص نيابةً عنك.</string>
+    <string name="media_permission_contacts_denied_title">تم رفض الوصول إلى جهات الاتصال</string>
+    <string name="media_permission_contacts_denied_body">للعثور على أصدقائك الموجودين على Meeshy، فعّل «جهات الاتصال» لتطبيق Meeshy من الإعدادات &gt; الأذونات.</string>
+    <string name="media_permission_contacts_denied_message">تم رفض جهات الاتصال — اسمح بها من الإعدادات</string>
+</resources>

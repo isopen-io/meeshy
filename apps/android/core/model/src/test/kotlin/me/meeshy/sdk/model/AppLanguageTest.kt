@@ -116,7 +116,7 @@ class AppLanguageTest {
     fun info_returnsMetadataForSupportedCode() {
         val fr = AppLanguage.info("fr")
         assertThat(fr).isNotNull()
-        assertThat(fr!!.nativeName).isEqualTo("Francais")
+        assertThat(fr!!.nativeName).isEqualTo("Français")
     }
 
     @Test

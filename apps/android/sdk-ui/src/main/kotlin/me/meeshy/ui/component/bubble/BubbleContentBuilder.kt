@@ -10,14 +10,28 @@ import me.meeshy.sdk.model.BlurRevealLifecycle
 import me.meeshy.sdk.model.DeliveryStatusResolver
 import me.meeshy.sdk.model.ForwardBadgePolicy
 import me.meeshy.sdk.model.ForwardReference
+import me.meeshy.sdk.model.ImageVariantPicker
 import me.meeshy.sdk.model.MessageEffectFlags
 import me.meeshy.sdk.model.MessageEffectRenderPlanner
 import me.meeshy.sdk.model.MessageEffects
 import me.meeshy.sdk.model.DeliveryTier
 import me.meeshy.sdk.model.SendLifecycle
 import me.meeshy.sdk.model.SendLifecycleResolver
+import me.meeshy.sdk.model.isProtected
 
 public object BubbleContentBuilder {
+
+    /**
+     * Densité d'écran de référence (xxhdpi) tant que l'appelant ne passe pas la vraie :
+     * elle ne sert qu'à choisir la variante d'image d'aperçu, jamais à dessiner.
+     */
+    public const val DEFAULT_DISPLAY_DENSITY: Float = 3f
+
+    /** Largeur (dp) de la case d'une image SEULE dans la bulle — celle de `MessageBubble`. */
+    private const val SOLO_IMAGE_WIDTH_DP = 252
+
+    /** Largeur (dp) d'une case de la grille de 2 à 4 images — celle de `MessageBubble`. */
+    private const val GRID_IMAGE_CELL_WIDTH_DP = 124
 
     public fun build(
         message: ApiMessage,
@@ -33,6 +47,7 @@ public object BubbleContentBuilder {
         recipientCount: Int = 0,
         showReadReceipts: Boolean = true,
         isOffline: Boolean = false,
+        displayDensity: Float = DEFAULT_DISPLAY_DENSITY,
     ): BubbleContent {
         val isDeleted = message.deletedAt != null
         val isOutgoing = currentUserId != null && message.senderId == currentUserId
@@ -104,13 +119,25 @@ public object BubbleContentBuilder {
             else -> buildStoryReply(message.postReplyTo, message.storyReplyToId, mediaBaseUrl)
         }
         val visibleAttachments = if (isDeleted) emptyList() else message.attachments
-        val images = visibleAttachments
-            .filter { it.isImage && it.fileUrl != null }
+        val imageAttachments = visibleAttachments.filter { it.isImage && it.fileUrl != null }
+        // La vignette d'une bulle est la plus petite variante qui COUVRE la case, jamais
+        // l'original multi-Mo. Un message flouté ou à vue unique garde ses URL d'avant :
+        // aucune URL de plus ne part pour un contenu protégé.
+        val previewWidthPx = ImageVariantPicker.displayWidthPx(
+            widthDp = if (imageAttachments.size == 1) SOLO_IMAGE_WIDTH_DP else GRID_IMAGE_CELL_WIDTH_DP,
+            density = displayDensity,
+        )
+        val lighterPreviewsAllowed = imageAttachments.isNotEmpty() &&
+            !message.effects.has(MessageEffectFlags.BLURRED) &&
+            !message.effects.has(MessageEffectFlags.VIEW_ONCE)
+        val images = imageAttachments
             .map { attachment ->
+                val lighterPreview = if (lighterPreviewsAllowed) attachment.lighterPreviewUrl(previewWidthPx) else null
                 BubbleImage(
                     attachmentId = attachment.id,
                     url = resolveMediaUrl(attachment.fileUrl!!, mediaBaseUrl),
-                    thumbnailUrl = attachment.thumbnailUrl?.let { resolveMediaUrl(it, mediaBaseUrl) },
+                    thumbnailUrl = (lighterPreview ?: attachment.thumbnailUrl)
+                        ?.let { resolveMediaUrl(it, mediaBaseUrl) },
                     width = attachment.width,
                     height = attachment.height,
                     alt = attachment.alt?.trim()?.ifBlank { null },
@@ -393,6 +420,16 @@ public object BubbleContentBuilder {
             }
         }
         return originalText?.let { ResolvedTranscription(it, originalLanguage, isTranslated = false) }
+    }
+
+    /**
+     * L'URL de la variante WebP d'aperçu quand elle est plus légère que l'original, `null`
+     * sinon. Une image chiffrée n'a pas de variante ; une pièce qui n'a pas PROUVÉ qu'elle
+     * est ordinaire (vue unique, floutée, ou muette sur sa protection) garde ses URL d'avant.
+     */
+    private fun ApiMessageAttachment.lighterPreviewUrl(targetWidthPx: Int): String? {
+        if (isEncrypted == true || isProtected) return null
+        return ImageVariantPicker.lighterPreviewUrl(imageVariants, fileUrl.orEmpty(), width, targetWidthPx)
     }
 
     private fun String?.normalizedCode(): String? =

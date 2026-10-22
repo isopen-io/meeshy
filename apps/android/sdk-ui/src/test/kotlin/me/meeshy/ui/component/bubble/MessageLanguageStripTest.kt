@@ -85,7 +85,7 @@ class MessageLanguageStripTest {
 
         val fr = chips.single { it.code == "fr" }
         assertThat(fr.info?.flag).isEqualTo("🇫🇷")
-        assertThat(fr.info?.nativeName).isEqualTo("Francais")
+        assertThat(fr.info?.nativeName).isEqualTo("Français")
     }
 
     @Test
