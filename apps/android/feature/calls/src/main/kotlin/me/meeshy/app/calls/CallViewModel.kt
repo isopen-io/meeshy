@@ -284,6 +284,9 @@ class CallViewModel @Inject constructor(
 
     /** Video tracks + EGL context for [CallScreen]'s renderers (video calls only). */
     val eglBaseContext get() = coordinator.eglBaseContext
+
+    /** Le serveur-id de l'appel en cours (vide avant que l'ACK ne le donne) : la clé par appel des surfaces. */
+    val activeCallId: String get() = callId
     val localVideoTrack get() = coordinator.localVideoTrack
     val remoteVideoTracks get() = coordinator.remoteVideoTracks
 

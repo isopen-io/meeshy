@@ -32,7 +32,7 @@ class CallSelfTileLawTest {
 
     @Test
     fun `a long pinch lands on the nearest scale`() {
-        assertThat(CallSelfTileScale.fromPinch(2f, CallSelfTileScale.X1)).isEqualTo(CallSelfTileScale.X2)
+        assertThat(CallSelfTileScale.fromPinch(1.4f, CallSelfTileScale.X1)).isEqualTo(CallSelfTileScale.X2)
         assertThat(CallSelfTileScale.fromPinch(3f, CallSelfTileScale.X1)).isEqualTo(CallSelfTileScale.X3)
         assertThat(CallSelfTileScale.fromPinch(0.4f, CallSelfTileScale.X3)).isEqualTo(CallSelfTileScale.X1)
     }
