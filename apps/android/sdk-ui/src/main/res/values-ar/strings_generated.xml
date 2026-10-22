@@ -13,6 +13,9 @@
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
     <string name="emoji_category_travel">السفر</string>
+    <string name="media_trim_loading">جارٍ تحميل المعاينة</string>
+    <string name="media_trim_of_total">من %s</string>
+    <string name="media_trim_window">الجزء المحتفظ به</string>
     <string name="notification_date_ago">قبل %s</string>
     <string name="notification_date_hours">%d س</string>
     <string name="notification_date_minutes">%d د</string>
