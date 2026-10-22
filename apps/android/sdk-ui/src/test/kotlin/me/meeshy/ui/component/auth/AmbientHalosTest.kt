@@ -21,6 +21,10 @@ import org.robolectric.annotation.Config
  * L'horloge de test est mise en pause (`autoAdvance = false`) : c'est ce qui laisse tourner
  * une animation infinie, que le moteur de test annule sinon. Un halo qui pulserait malgré le
  * réglage avancerait donc, et le témoin tomberait.
+ *
+ * Le facteur se pose par `putFloat` : la table des réglages de Robolectric est TYPÉE, et la
+ * lecture de production (`Settings.Global.getFloat`) ne voit qu'une valeur `Float` — une
+ * chaîne posée par `putString` lui serait invisible et le défaut (1) l'emporterait.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
@@ -33,10 +37,10 @@ class AmbientHalosTest {
         compose.mainClock.autoAdvance = false
         lateinit var phase: State<Float>
         compose.setContent {
-            Settings.Global.putString(
+            Settings.Global.putFloat(
                 LocalContext.current.contentResolver,
                 Settings.Global.ANIMATOR_DURATION_SCALE,
-                animatorDurationScale.toString(),
+                animatorDurationScale,
             )
             phase = rememberHaloPhase()
         }
