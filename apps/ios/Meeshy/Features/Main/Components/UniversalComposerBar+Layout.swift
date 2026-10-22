@@ -22,7 +22,10 @@ extension UniversalComposerBar {
     var body: some View {
         Group {
             if isMinimized {
-                minimizedFloatingButton
+                ComposerMinimizedButton(
+                    showsVoice: resolvedShowVoice, isDark: style == .dark, mutedColor: theme.textMuted,
+                    accent: servedAccent, secondary: servedSecondary,
+                    onVoice: { expandAndStartRecording() }, onWrite: { expandComposer() })
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             } else {
                 expandedComposer
@@ -67,6 +70,7 @@ extension UniversalComposerBar {
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isMinimized)
+        .modifier(bottomClearance)
         // Cible de dépôt sur le conteneur externe : couvre toute la bande
         // (champ, barre d'outils, bandeaux édition/réponse, tiroir
         // d'attachements). Voir UniversalComposerBar+Drop.swift.
@@ -75,83 +79,14 @@ extension UniversalComposerBar {
             isMinimized = startMinimized
             ownKeyboard.adopt(host: hostKeyboard)
         }
-        // **Le ménage disparaît avec ce qu'il nettoyait** (#4560) : le `Timer`
-        // qui vivait ici n'enregistrait rien — il comptait des secondes pour un
-        // vocal qui n'existait pas. La prise appartient au parent, qui possède
-        // son `AVAudioRecorder` et son propre cycle de vie.
+        // La prise vocale appartient au parent, qui possède son `AVAudioRecorder` (#4560).
     }
 
-    // MARK: - Minimized Floating Button
-
-    private var minimizedFloatingButton: some View {
-        HStack(spacing: MeeshySpacing.md) {
-            // Mic button
-            if resolvedShowVoice {
-                Button {
-                    HapticFeedback.medium()
-                    expandAndStartRecording()
-                } label: {
-                    VStack(spacing: MeeshySpacing.xxs) {
-                        ZStack {
-                            Circle()
-                                .fill(.ultraThinMaterial)
-                                .frame(width: 44, height: 44)
-                                .overlay(
-                                    Circle().stroke(
-                                        LinearGradient(
-                                            colors: [MeeshyColors.error.opacity(0.5), MeeshyColors.errorDark.opacity(0.3)],
-                                            startPoint: .topLeading, endPoint: .bottomTrailing
-                                        ), lineWidth: 1
-                                    )
-                                )
-                                .shadow(color: MeeshyColors.error.opacity(0.2), radius: 6, y: 2)
-
-                            Image(systemName: "mic.fill")
-                                .font(.body.weight(.medium))
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [MeeshyColors.error, MeeshyColors.errorDark],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing
-                                    )
-                                )
-                        }
-                        Text(String(localized: "composer.minimized.voice", defaultValue: "Vocal", bundle: .main))
-                            .font(.caption2).fontWeight(.semibold)
-                            .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
-                    }
-                }
-            }
-
-            // Write button
-            Button {
-                HapticFeedback.medium()
-                expandComposer()
-            } label: {
-                VStack(spacing: MeeshySpacing.xxs) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [servedAccent, servedSecondary],
-                                    startPoint: .topLeading, endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 50, height: 50)
-                            .shadow(color: servedAccent.opacity(0.4), radius: 8, y: 3)
-
-                        Image(systemName: "square.and.pencil")
-                            .font(.title3.weight(.semibold))
-                            .foregroundColor(.white)
-                    }
-                    Text(String(localized: "composer.minimized.write", defaultValue: "Écrire", bundle: .main))
-                        .font(.caption2).fontWeight(.semibold)
-                        .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
-                }
-            }
-        }
-        .padding(.trailing, MeeshySpacing.lg)
-        .padding(.bottom, MeeshySpacing.md)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+    /// Clavier fermé, au moins un bouton d'air sous la barre (#11565).
+    private var bottomClearance: ComposerBottomClearanceModifier {
+        ComposerBottomClearanceModifier(
+            ownBottomPadding: isMinimized ? MeeshySpacing.md : MeeshySpacing.xs, safeAreaBottom: hostInsets.bottom,
+            windowHeight: hostWindowHeight, inputSurfaceShown: !isMinimized && (isFocused || showAttachOptions))
     }
 
     // MARK: - Expanded Composer

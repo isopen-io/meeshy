@@ -420,10 +420,10 @@ struct UniversalComposerBar: View {
     /// never shorter than the panel's own content, and never so tall that the
     /// composer leaves the screen (`ComposerPanelHeightLaw`, #8869).
     /// La hauteur de la fenêtre qui porte la barre (Stage Manager, Split View, fenêtre détachée) — la fenêtre clé en repli.
-    private var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
+    var hostWindowHeight: CGFloat { SceneWindowSize.resolve(sceneWindowSize, fallback: DeviceLayout.windowSize).height }
 
     /// Les marges de la fenêtre qui porte la barre, la fenêtre clé en repli.
-    private var hostInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
+    var hostInsets: WindowInsets { WindowInsets(published: sceneSafeAreaInsets) }
 
     var attachmentPanelHeight: CGFloat {
         let keyboard = max(ownKeyboard.lastKnownHeight(host: hostKeyboard), 260)
