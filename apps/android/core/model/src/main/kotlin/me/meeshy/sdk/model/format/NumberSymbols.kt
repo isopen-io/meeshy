@@ -22,14 +22,14 @@ public data class NumberSymbols(
         private const val NBSP = ' '
         private const val NNBSP = ' '
 
-        private val english = NumberSymbols('.', ',', false, "%s%%")
+        private val english = NumberSymbols('.', ',', false, "%s%")
         private val bySymbols: Map<String, NumberSymbols> = mapOf(
             "en" to english,
-            "fr" to NumberSymbols(',', NNBSP, false, "%s${NBSP}%%"),
-            "es" to NumberSymbols(',', '.', false, "%s${NBSP}%%"),
-            "pt" to NumberSymbols(',', '.', false, "%s%%"),
-            "de" to NumberSymbols(',', '.', false, "%s${NBSP}%%"),
-            "it" to NumberSymbols(',', '.', false, "%s%%"),
+            "fr" to NumberSymbols(',', NNBSP, false, "%s${NBSP}%"),
+            "es" to NumberSymbols(',', '.', false, "%s${NBSP}%"),
+            "pt" to NumberSymbols(',', '.', false, "%s%"),
+            "de" to NumberSymbols(',', '.', false, "%s${NBSP}%"),
+            "it" to NumberSymbols(',', '.', false, "%s%"),
             "ar" to NumberSymbols('٫', '٬', true, "%s٪؜"),
         )
 

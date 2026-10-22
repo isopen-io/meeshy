@@ -11,4 +11,14 @@
     <string name="emoji_category_smileys">الوجوه</string>
     <string name="emoji_category_symbols">الرموز</string>
     <string name="emoji_category_travel">السفر</string>
+    <string name="notification_date_ago">قبل %s</string>
+    <string name="notification_date_hours">%d س</string>
+    <string name="notification_date_minutes">%d د</string>
+    <string name="notification_date_now">الآن</string>
+    <string name="notification_date_yesterdayAt">أمس %s</string>
+    <string name="time_lastSeen_beforeYesterdayAt">شوهد أول أمس في %s</string>
+    <string name="time_lastSeen_dateAt">شوهد في %1$s الساعة %2$s</string>
+    <string name="time_lastSeen_online">متصل</string>
+    <string name="time_lastSeen_seen">شوهد %s</string>
+    <string name="time_lastSeen_yesterdayAt">شوهد أمس في %s</string>
 </resources>

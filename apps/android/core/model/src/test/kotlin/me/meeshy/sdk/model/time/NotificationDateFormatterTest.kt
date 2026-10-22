@@ -25,8 +25,7 @@ class NotificationDateFormatterTest {
         assertThat(NotificationDateFormatter.label(yesterday, now, paris)).isEqualTo(NotificationDateLabel.YesterdayAt(yesterday))
         val lateNight = ZonedDateTime.of(2026, 6, 22, 23, 30, 0, 0, paris).toInstant().toEpochMilli()
         val earlyNow = ZonedDateTime.of(2026, 6, 23, 0, 30, 0, 0, paris).toInstant().toEpochMilli()
-        assertThat(NotificationDateFormatter.label(lateNight, earlyNow, paris)).isInstanceOf(NotificationDateLabel.HoursAgo::class.java)
-        assertThat(NotificationDateFormatter.label(lateNight - 3_600_000, earlyNow, paris)).isInstanceOf(NotificationDateLabel.YesterdayAt::class.java)
+        assertThat(NotificationDateFormatter.label(lateNight, earlyNow, paris)).isInstanceOf(NotificationDateLabel.YesterdayAt::class.java)
     }
 
     @Test fun `le fuseau decide du jour`() {

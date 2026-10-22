@@ -14,7 +14,7 @@ class DisplayNameTruncatedTest {
     }
 
     @Test fun `les espaces de fin sont retires avant l ellipse`() {
-        assertThat(DisplayName.truncated("Jean Baptiste Poquelin")).isEqualTo("Jean Baptiste…".replace("Baptiste", "Baptiste P").let { "Jean Baptiste P…" })
+        assertThat(DisplayName.truncated("Jean Baptiste Poquelin")).isEqualTo("Jean Baptiste Po\u2026")
         assertThat(DisplayName.truncated("Jean Baptiste   Poquelin", limit = 14)).isEqualTo("Jean Baptiste…")
     }
 

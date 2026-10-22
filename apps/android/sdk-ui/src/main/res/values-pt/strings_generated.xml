@@ -11,4 +11,14 @@
     <string name="emoji_category_smileys">Smileys</string>
     <string name="emoji_category_symbols">Símbolos</string>
     <string name="emoji_category_travel">Viagens</string>
+    <string name="notification_date_ago">há %s</string>
+    <string name="notification_date_hours">%d h</string>
+    <string name="notification_date_minutes">%d min</string>
+    <string name="notification_date_now">agora mesmo</string>
+    <string name="notification_date_yesterdayAt">ontem %s</string>
+    <string name="time_lastSeen_beforeYesterdayAt">Visto anteontem às %s</string>
+    <string name="time_lastSeen_dateAt">Visto em %1$s às %2$s</string>
+    <string name="time_lastSeen_online">Online</string>
+    <string name="time_lastSeen_seen">Visto %s</string>
+    <string name="time_lastSeen_yesterdayAt">Visto ontem às %s</string>
 </resources>
