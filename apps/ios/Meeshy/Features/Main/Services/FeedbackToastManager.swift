@@ -94,17 +94,17 @@ final class FeedbackToastManager: ObservableObject {
         ))
     }
 
-    /// Auto-dismiss delay (nanoseconds). Tappable toasts linger longer; with
+    /// Auto-dismiss delay. Tappable toasts linger longer; with
     /// VoiceOver on, every toast stays at least 6s so the user can hear the
     /// announcement and read the message before it disappears.
-    static func dismissDelay(isTappable: Bool, voiceOverRunning: Bool) -> UInt64 {
-        let base: UInt64 = isTappable ? 6_000_000_000 : 3_000_000_000
-        return voiceOverRunning ? max(base, 6_000_000_000) : base
+    static func dismissDelay(isTappable: Bool, voiceOverRunning: Bool) -> Duration {
+        let base: Duration = isTappable ? .seconds(6) : .seconds(3)
+        return voiceOverRunning ? max(base, .seconds(6)) : base
     }
 
-    private func scheduleDismiss(duration: UInt64 = 3_000_000_000) {
+    private func scheduleDismiss(duration: Duration = .seconds(3)) {
         dismissTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: duration)
+            try? await Task.sleep(for: duration)
             guard !Task.isCancelled else { return }
             currentToast = nil
             onTapAction = nil
@@ -167,12 +167,7 @@ enum DailyGestureLimitNotice {
 
     /// L'heure de remise à zéro, courte, dans le fuseau et la langue de l'appareil.
     static func resetTime(_ date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = locale
-        formatter.timeZone = timeZone
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
+        date.formatted(.dateTime.hour().minute().locale(locale))
     }
 
     /// Le message d'une mutation que la file a abandonnée sur une limite du jour.

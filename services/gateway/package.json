@@ -1,6 +1,6 @@
 {
   "name": "@meeshy/gateway",
-  "version": "1.85.0",
+  "version": "1.88.0",
   "description": "Fastify Gateway service for Meeshy real-time messaging",
   "private": true,
   "engines": {

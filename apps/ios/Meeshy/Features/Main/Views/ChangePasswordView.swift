@@ -359,7 +359,7 @@ struct ChangePasswordView: View {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     showSuccess = true
                 }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                try? await Task.sleep(for: .milliseconds(1500))
                 dismiss()
             } catch let error as MeeshyError {
                 HapticFeedback.error()
