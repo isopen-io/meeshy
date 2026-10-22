@@ -80,7 +80,8 @@ describe('ce que le résumé dit', () => {
 describe('les ancres corrigées du générateur', () => {
   test('la boîte d’un oiseau ancré se déplace de dx, dy × échelle et se réduit de son facteur, depuis son coin', () => {
     expect(anchoredBox([52, 1248, 264, 264], { bird: 0, dx: 0, dy: 72, scale: 1 }, 2)).toEqual([52, 1392, 264, 264]);
-    expect(anchoredBox([52, 1248, 264, 264], { bird: 0, dx: -25, dy: 50, scale: 0.5 }, 2)).toEqual([2, 1348, 132, 132]);
+    // Réduction autour du CENTRE (184, 1380), déplacé de (-50, +100) : la boîte de 132 se centre en (134, 1480).
+    expect(anchoredBox([52, 1248, 264, 264], { bird: 0, dx: -25, dy: 50, scale: 0.5 }, 2)).toEqual([68, 1414, 132, 132]);
     expect(anchoredBox([52, 1248, 264, 264], undefined, 2)).toEqual([52, 1248, 264, 264]);
   });
 

@@ -67,9 +67,20 @@ export function gloryVerdict(input: GloryVerdictInput): GloryVerdict {
 /** Une ancre corrigée du générateur (`lib/anchors.json`) : l'oiseau `bird` (0 = Mee, 1 = Meo), déplacé en repère 540 × 960 et réduit. */
 export type AnchorFix = { readonly bird: number; readonly dx: number; readonly dy: number; readonly scale: number };
 
-/** La boîte d'un oiseau telle que la cible la porte : `translate(dx dy) scale(s)` depuis son coin, l'ancre étant ×`scale` en pixels de l'image. */
-export const anchoredBox = (box: Box, fix: AnchorFix | undefined, scale: number): Box =>
-  fix === undefined ? box : [box[0] + fix.dx * scale, box[1] + fix.dy * scale, box[2] * fix.scale, box[3] * fix.scale];
+/**
+ * La boîte d'un oiseau telle que la cible la porte. Le générateur pose l'image CENTRÉE sur son point d'ancrage
+ * (`<image x=-size/2 y=-size/2>` sous `translate(x y)`, `lib/base.py` › `bird()`), puis `anchored()` y ajoute
+ * `translate(dx dy) scale(s)` : la réduction se fait donc autour du CENTRE, jamais depuis le coin haut-gauche.
+ * L'ancre est ×`scale` en pixels de l'image.
+ */
+export const anchoredBox = (box: Box, fix: AnchorFix | undefined, scale: number): Box => {
+  if (fix === undefined) return box;
+  const centreX = box[0] + box[2] / 2 + fix.dx * scale;
+  const centreY = box[1] + box[3] / 2 + fix.dy * scale;
+  const width = box[2] * fix.scale;
+  const height = box[3] * fix.scale;
+  return [centreX - width / 2, centreY - height / 2, width, height];
+};
 
 const BIRD_NAMES = ['Mee', 'Meo'] as const;
 const signed = (value: number): string => `${value >= 0 ? '+' : '-'}${Math.abs(value)}`;
