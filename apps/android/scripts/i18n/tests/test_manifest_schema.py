@@ -71,6 +71,16 @@ class AndroidNameTests(unittest.TestCase):
         parsed = parse(manifest(entry()))
         self.assertEqual(parsed.modules[0].entries[0].android_name, "chat_send")
 
+    def test_explicit_name_cannot_be_a_java_or_kotlin_keyword(self):
+        for name in ("continue", "class", "default", "when", "new", "object", "true"):
+            with self.subTest(name=name):
+                with self.assertRaises(ManifestError):
+                    parse(manifest(entry(iosKey="Annuler", androidName=name)))
+
+    def test_explicit_name_that_only_contains_a_keyword_is_accepted(self):
+        parsed = parse(manifest(entry(iosKey="Annuler", androidName="continue_label")))
+        self.assertEqual(parsed.modules[0].entries[0].android_name, "continue_label")
+
     def test_explicit_name_must_be_a_resource_identifier(self):
         for name in ("1abc", "a b", "a.b", "a-b", ""):
             with self.subTest(name=name):

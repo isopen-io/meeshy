@@ -7,7 +7,7 @@ Android sait afficher) :
   %d %i %u %ld %lld %lu ...     -> %d
   %f %lf %.2f %e %g %a          -> conservés, sans modificateur de longueur
   %x %X %o %c                   -> conservés
-  %%                            -> %%
+  %%                            -> %%  (chaîne AVEC argument) · % (chaîne sans argument, voir plus bas)
   %1$@ %2$lld                   -> %1$s %2$d (déjà positionnels : numéros conservés)
 
 Dès qu'une chaîne compte deux spécificateurs ou plus, tous sont écrits en forme
@@ -17,6 +17,12 @@ réordonner ses arguments, et aapt2 refuse deux substitutions non positionnelles
 Un `%` suivi d'un espace (« 30 % de plus ») est de la prose, pas un format : le
 drapeau « espace » du printf n'est volontairement pas reconnu, parce que les
 catalogues l'emploient quarante fois comme du texte et jamais comme un format.
+
+Une chaîne SANS argument se lit par `getString(id)`, que rien ne formate : le `%%` y
+deviendrait un double pourcentage à l'écran, alors qu'iOS rend `%` (la valeur du
+catalogue y passe par String(format:)). Elle est donc écrite avec `%` seul et, comme
+tout `%` isolé, marquée `formatted="false"`. Une chaîne AVEC argument, ou un élément
+de pluriel (toujours formaté), garde `%%` et double les `%` de prose.
 """
 from __future__ import annotations
 
@@ -124,20 +130,21 @@ def convert_specifiers(text: str, *, always_formatted: bool = False) -> Converte
                 for (specifier, match), (_, position) in zip(specifiers, numbered)}
     has_arguments = bool(arguments) or always_formatted
     pieces: List[str] = []
-    has_prose_percent = False
     cursor = 0
     for match in matches:
         prose = text[cursor:match.start()]
-        has_prose_percent = has_prose_percent or "%" in prose
         pieces.append(prose.replace("%", "%%") if has_arguments else prose)
-        pieces.append("%%" if match.group(0) == "%%" else rendered[match.start()])
+        if match.group(0) != "%%":
+            pieces.append(rendered[match.start()])
+        else:
+            pieces.append("%%" if has_arguments else "%")
         cursor = match.end()
     tail = text[cursor:]
-    has_prose_percent = has_prose_percent or "%" in tail
     pieces.append(tail.replace("%", "%%") if has_arguments else tail)
 
+    converted = "".join(pieces)
     return ConvertedText(
-        text="".join(pieces),
+        text=converted,
         arguments=arguments,
-        formatted=has_arguments or not has_prose_percent,
+        formatted=has_arguments or "%" not in converted,
     )

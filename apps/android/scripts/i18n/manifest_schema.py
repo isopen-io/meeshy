@@ -59,6 +59,12 @@ _DOCUMENT_FIELDS = {"schemaVersion", "modules"}
 _RESOURCE_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _GRADLE_PATH = re.compile(r"^(:[A-Za-z0-9_-]+)+$")
 _IDENTIFIER_KEY = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]*$")
+_RESERVED_NAMES = frozenset(
+    "abstract assert boolean break byte case catch char class const continue default do double else enum "
+    "extends false final finally float for fun goto if implements import in instanceof int interface is long "
+    "native new null object package private protected public return short static strictfp super switch "
+    "synchronized this throw throws transient true try typealias typeof val var void volatile when while".split()
+)
 
 
 class ManifestError(ValueError):
@@ -139,6 +145,11 @@ def _parse_entry(raw: Any, where: str) -> ManifestEntry:
     name = fields["androidName"] if "androidName" in fields else derive_android_name(ios_key)
     if not isinstance(name, str) or not _RESOURCE_NAME.match(name):
         raise ManifestError(f"{where} : androidName {name!r} n'est pas un identifiant de ressource Android")
+    if name in _RESERVED_NAMES:
+        raise ManifestError(
+            f"{where} : androidName « {name} » est un mot réservé de Java et de Kotlin : "
+            f"R.string.{name} ne compilerait pas"
+        )
     fill = fields.get("fillMissingQuantities", False)
     if not isinstance(fill, bool) or (fill and kind != "plurals"):
         raise ManifestError(f"{where} : fillMissingQuantities est un booléen réservé à kind « plurals »")

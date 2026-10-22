@@ -64,16 +64,17 @@ class SingleSpecifierTests(unittest.TestCase):
 
 
 class PercentTests(unittest.TestCase):
-    def test_escaped_percent_is_preserved(self):
+    def test_escaped_percent_without_argument_becomes_a_single_percent(self):
         result = converted("100%%")
-        self.assertEqual(result.text, "100%%")
+        self.assertEqual(result.text, "100%")
         self.assertEqual(result.arguments, ())
-        self.assertTrue(result.formatted)
+        self.assertFalse(result.formatted)
 
     def test_escaped_percent_alone_is_not_an_argument(self):
         result = converted("%%")
-        self.assertEqual(result.text, "%%")
+        self.assertEqual(result.text, "%")
         self.assertEqual(result.arguments, ())
+        self.assertFalse(result.formatted)
 
     def test_escaped_percent_next_to_a_specifier(self):
         result = converted("%@%%")
@@ -82,8 +83,9 @@ class PercentTests(unittest.TestCase):
 
     def test_percent_followed_by_conversion_letter_after_escape_is_text(self):
         result = converted("%%d")
-        self.assertEqual(result.text, "%%d")
+        self.assertEqual(result.text, "%d")
         self.assertEqual(result.arguments, ())
+        self.assertFalse(result.formatted)
 
     def test_prose_percent_with_space_is_not_a_specifier(self):
         result = converted("Crédit de 30 % sur chaque dix")
@@ -109,7 +111,9 @@ class AlwaysFormattedTests(unittest.TestCase):
         self.assertTrue(result.formatted)
 
     def test_plural_item_keeps_existing_escaped_percent(self):
-        self.assertEqual(convert_specifiers("100%%", always_formatted=True).text, "100%%")
+        result = convert_specifiers("100%%", always_formatted=True)
+        self.assertEqual(result.text, "100%%")
+        self.assertTrue(result.formatted)
 
 
 class MultipleSpecifiersTests(unittest.TestCase):
