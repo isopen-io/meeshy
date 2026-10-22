@@ -1,5 +1,6 @@
 import AVFoundation
 import CoreMedia
+import CoreVideo
 import UIKit
 import MeeshySDK
 
@@ -49,6 +50,9 @@ public final class StoryCompositionInstruction: NSObject,
     public let images: [String: UIImage]
     /// Octets ANIMÉS des stickers (`StoryExportInputs.animations`, #8610).
     public let animations: [String: Data]
+    /// Les pistes des vidéos superposées, par id de média (#9877) : leurs
+    /// images se lisent dans la composition, en séquence.
+    public let overlayTracks: [String: StoryOverlayTrack]
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     /// Pistes que ce segment consomme RÉELLEMENT.
@@ -75,7 +79,9 @@ public final class StoryCompositionInstruction: NSObject,
                             requiredSourceTrackIDs: [NSValue]? = nil,
                             stickerImageURLs: [String: URL] = [:],
                             images: [String: UIImage] = [:],
-                            animations: [String: Data] = [:]) {
+                            animations: [String: Data] = [:],
+                            overlayTracks: [String: StoryOverlayTrack] = [:]) {
+        self.overlayTracks = overlayTracks
         self.requiredSourceTrackIDs = requiredSourceTrackIDs
         self.animations = animations
         self.stickerImageURLs = stickerImageURLs
@@ -92,6 +98,11 @@ public final class StoryCompositionInstruction: NSObject,
         self.introFade = introFade
         self.outroFade = outroFade
         super.init()
+    }
+
+    /// Les trames que la composition a décodées pour les vidéos superposées.
+    nonisolated func overlayFrames(in request: AVAsynchronousVideoCompositionRequest) -> [String: CVPixelBuffer] {
+        overlayTracks.compactMapValues { request.sourceFrame(byTrackID: $0.trackID) }
     }
 
     /// Opacité de la couche STORY au temps de composition `t` : elle se lève

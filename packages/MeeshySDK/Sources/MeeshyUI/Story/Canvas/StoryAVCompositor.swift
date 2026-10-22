@@ -170,13 +170,12 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // bridged main-actor block keeps `buffer` from crossing isolation
         // boundaries (CVPixelBuffer is not Sendable in Swift 6).
         let cache = layerCache
-        // Decode foreground overlay frames HERE, on the compositor's worker
-        // queue — NEVER inside the bridged `main.sync` below, where a synchronous
-        // `AVAssetImageGenerator` decode deadlocks against AVFoundation (the
-        // export would hang indefinitely). The provider then just looks up the
-        // pre-decoded frame by media id.
+        // Decode foreground overlay frames HERE, on the worker queue — NEVER inside the bridged `main.sync`
+        // below, where a synchronous `AVAssetImageGenerator` decode deadlocks against AVFoundation. Une vidéo
+        // qui a sa piste (#9877) est lue dans la composition, en séquence ; le générateur n'est qu'un repli.
         let overlayFrames = foregroundVideoFrameSource.decodeOverlayFrames(
-            slide: instruction.slide, at: storyTime)
+            slide: instruction.slide, at: storyTime, trackFrames: instruction.overlayFrames(in: request),
+            tracks: instruction.overlayTracks)
         DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 do {
