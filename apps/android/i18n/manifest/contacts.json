@@ -1,0 +1,264 @@
+{
+  "schemaVersion": 1,
+  "modules": {
+    ":feature:contacts": {
+      "resDir": "feature/contacts/src/main/res",
+      "entries": [
+        {
+          "catalog": "app",
+          "iosKey": "a11y.back",
+          "androidName": "contacts_back",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.empty",
+          "androidName": "contacts_blocked_empty",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_blocked_error",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.unblock",
+          "androidName": "contacts_blocked_unblock",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.unblock-a11y",
+          "androidName": "contacts_blocked_unblock_a11y",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "contacts_blocked_unblock_cancel",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.unblock",
+          "androidName": "contacts_blocked_unblock_confirm",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.unblock-message",
+          "androidName": "contacts_blocked_unblock_message",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.blocked.unblock-title",
+          "androidName": "contacts_blocked_unblock_title",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "discovery.tab.blocked",
+          "androidName": "contacts_discover_blocked",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contact-card.action.connect",
+          "androidName": "contacts_discover_connect",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "about.link.contact",
+          "androidName": "contacts_discover_contact",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_discover_email_error",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.discover.email.placeholder",
+          "androidName": "contacts_discover_email_placeholder",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "contacts_discover_email_send",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_discover_email_send_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.discover.email.title",
+          "androidName": "contacts_discover_email_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_discover_error",
+          "status": "android-only"
+        },
+        {
+          "catalog": "ui",
+          "iosKey": "community.invite.empty.title",
+          "androidName": "contacts_discover_no_results",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.requests.pending",
+          "androidName": "contacts_discover_pending",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_discover_prompt",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_discover_search_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.discover.sms.placeholder",
+          "androidName": "contacts_discover_sms_placeholder",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.feedback.send",
+          "androidName": "contacts_discover_sms_send",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_discover_sms_send_a11y",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.discover.sms.title",
+          "androidName": "contacts_discover_sms_title",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_discover_suggestions_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_discover_suggestions_title",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.list.filter.all",
+          "androidName": "contacts_filter_all",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.list.filter.offline",
+          "androidName": "contacts_filter_offline",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.list.filter.online",
+          "androidName": "contacts_filter_online",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_list_empty",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_error",
+          "status": "android-only"
+        },
+        {
+          "androidName": "contacts_list_filtered_empty",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "conversations.error.retry",
+          "androidName": "contacts_list_retry",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.accept",
+          "androidName": "contacts_request_accept",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "2fa_cancel",
+          "androidName": "contacts_request_cancel",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "call.incoming.decline",
+          "androidName": "contacts_request_decline",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_requests_empty",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.requests.filter.received",
+          "androidName": "contacts_requests_received",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.requests.filter.sent",
+          "androidName": "contacts_requests_sent",
+          "status": "candidate"
+        },
+        {
+          "androidName": "contacts_search_hint",
+          "status": "android-only"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "discovery.tab.blocked",
+          "androidName": "contacts_tab_blocked",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "contacts.tab.contacts",
+          "androidName": "contacts_tab_contacts",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "discovery.tab.discover",
+          "androidName": "contacts_tab_discover",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "discovery.tab.requests",
+          "androidName": "contacts_tab_requests",
+          "status": "candidate"
+        },
+        {
+          "catalog": "app",
+          "iosKey": "commands.contacts",
+          "androidName": "contacts_title",
+          "status": "candidate"
+        }
+      ]
+    }
+  }
+}

@@ -35,6 +35,7 @@ import XCTest
 /// - plein écran réel (`ReelsPlayerView`) : bouton CONSERVÉ, gate additionnée
 ///   (`borrowedSoundTrack != nil` — le seul cas où un lecteur LOCAL existe
 ///   réellement), le tap pilote RÉELLEMENT `audioPlayer.togglePlayPause()`.
+@MainActor
 final class MuteButtonExistenceGuardTests: XCTestCase {
 
     private func source(_ relativePath: String) throws -> String {

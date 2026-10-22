@@ -22,10 +22,10 @@ final class GameArchiveTests: XCTestCase {
 
     private var ecran: RenderedScreen?
 
-    override func tearDown() {
+    override func tearDown() async throws {
         ecran?.dismount()
         ecran = nil
-        super.tearDown()
+        try await super.tearDown()
     }
 
     private func makeSUT(network: FakeNetworkMonitor = FakeNetworkMonitor()) -> (sut: GameArchiveModel, service: MockGameArchiveService, cache: MemoryCache) {

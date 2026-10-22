@@ -42,9 +42,13 @@ import me.meeshy.sdk.model.friend.ContactFilterCounts
 import me.meeshy.sdk.model.friend.presenceState
 import me.meeshy.sdk.model.friend.resolvedName
 import me.meeshy.sdk.theme.DynamicColorGenerator
+import me.meeshy.sdk.model.friend.ConnectionActionRender
+import me.meeshy.ui.component.ConnectionActionChip
+import me.meeshy.ui.component.ConnectionFeedbackHost
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.meeshyPresenceDotColor
 import me.meeshy.ui.theme.hexColor
+import me.meeshy.ui.theme.MeeshyPalette
 import me.meeshy.ui.theme.MeeshyTheme
 
 /**
@@ -55,9 +59,11 @@ import me.meeshy.ui.theme.MeeshyTheme
 @Composable
 fun ContactsListTab(
     viewModel: ContactsListViewModel = hiltViewModel(),
+    connectionViewModel: ConnectionActionViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize()) {
         OutlinedTextField(
             value = state.query,
@@ -78,6 +84,8 @@ fun ContactsListTab(
             state.isFilteredEmpty -> EmptyMessage(stringResource(R.string.contacts_list_filtered_empty))
             else -> FriendList(state.visibleFriends, moodEmojiFor = state::moodEmojiFor)
         }
+    }
+    ConnectionFeedbackHost(feedback = connectionViewModel.feedback)
     }
 }
 
@@ -148,6 +156,16 @@ private fun FriendRow(friend: FriendRequestUser, moodEmoji: String?) {
                 )
             }
         }
+        ConnectionActionChip(
+            render = ConnectionActionRender.ContactBadge,
+            userName = name,
+            accent = MeeshyPalette.Indigo500,
+            onAdd = {},
+            onAccept = {},
+            onDecline = {},
+            onCancel = {},
+        )
+        Spacer(Modifier.width(8.dp))
         meeshyPresenceDotColor(friend.presenceState(System.currentTimeMillis()))?.let { dot ->
             Surface(
                 color = dot,

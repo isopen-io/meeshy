@@ -56,4 +56,10 @@ data class StoryMediaObject(
     val fadeOut: Double? = null,
     val sourceLanguage: String? = null,
     val keyframes: List<StoryKeyframe>? = null,
+    /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
+    val name: String? = null,
+    /** Coupe l'atténuation automatique de ce clip vidéo (`null` : ducking actif). */
+    val isDuckingDisabled: Boolean? = null,
+    /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
+    val mutedVolumeMemento: Float? = null,
 )
