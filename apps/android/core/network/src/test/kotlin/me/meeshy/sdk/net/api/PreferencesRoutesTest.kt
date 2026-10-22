@@ -69,14 +69,13 @@ class PreferencesRoutesTest {
 
     @Test
     fun `a conversation row and the tag page are read from user-preferences`() = runTest {
-        val http = RecordingHttp()
-        val api = http.serve(ConversationPreferencesApi::class.java)
+        val row = RecordingHttp()
+        row.serve(ConversationPreferencesApi::class.java).getPreferences("c1")
+        val page = RecordingHttp(responseBody = """{"success":true,"data":[]}""")
+        page.serve(ConversationPreferencesApi::class.java).listPreferences(offset = 0, limit = 200)
 
-        api.getPreferences("c1")
-        api.listPreferences(offset = 0, limit = 200)
-
-        assertThat(http.requests[0].path).isEqualTo("/api/v1/user-preferences/conversations/c1")
-        assertThat(http.requests[1].path).isEqualTo("/api/v1/user-preferences/conversations")
-        assertThat(http.requests[1].query).isEqualTo("offset=0&limit=200")
+        assertThat(row.only.path).isEqualTo("/api/v1/user-preferences/conversations/c1")
+        assertThat(page.only.path).isEqualTo("/api/v1/user-preferences/conversations")
+        assertThat(page.only.query).isEqualTo("offset=0&limit=200")
     }
 }
