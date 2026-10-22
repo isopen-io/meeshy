@@ -152,6 +152,35 @@ final class ComposerLiveLookTests: XCTestCase {
         XCTAssertTrue(export.contains("presetName: AVAssetExportPresetPassthrough"), "la découpe seule copie les échantillons")
     }
 
+    // MARK: - Une retouche ne passe qu'une fois par un encodeur (#11849)
+
+    func test_rendu_uneRetouche_sEncodeUneFois_auBudgetDesPublications() throws {
+        let export = try Self.code("Meeshy/Features/Main/Composer/ComposerLookVideoExporter.swift")
+        XCTAssertTrue(export.contains("VideoEncodePass.render("), "le rendu écrit lui-même, au débit cible")
+        XCTAssertFalse(export.contains("AVAssetExportPresetHighestQuality"),
+                       "plus de rendu intermédiaire que compressVideo ré-encoderait")
+        XCTAssertEqual(ComposerLookVideoExporter.renderBudget.maxVideoResolution, MediaContext.story.maxVideoResolution)
+        XCTAssertEqual(ComposerLookVideoExporter.renderBudget.videoBitRate, MediaContext.feedPost.videoBitRate,
+                       "une story comme un post remuxent le rendu sans le ré-encoder")
+    }
+
+    func test_rendu_laToileEstRameneeAuBudget_sansChangerSesProportions() {
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 2160, height: 3840), within: CGSize(width: 1080, height: 1920)),
+                       CGSize(width: 1080, height: 1920), "une prise 4K tient dans le budget, compressVideo la remuxe")
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 720, height: 1280), within: CGSize(width: 1080, height: 1920)),
+                       CGSize(width: 720, height: 1280), "une toile déjà dans le budget n'est pas agrandie")
+        XCTAssertEqual(VideoEncodePass.fitSize(CGSize(width: 1441, height: 1081), within: CGSize(width: 1080, height: 1920)),
+                       CGSize(width: 1080, height: 810), "dimensions paires, proportions gardées")
+    }
+
+    func test_rendu_leMixageEtLaPlageVontAuLecteur() throws {
+        let passe = try Self.code("Meeshy/Features/Main/Services/MediaCompressor.swift")
+        XCTAssertTrue(passe.contains("output.audioMix = audioMix"), "le gain réglé part dans le fichier")
+        XCTAssertTrue(passe.contains("reader.timeRange = timeRange"), "la découpe borne la lecture")
+        XCTAssertTrue(passe.contains("start: timeRange?.start ?? .zero"), "la session s'ouvre au début de la coupe")
+        XCTAssertTrue(passe.contains("guard reader.status != .failed"), "un rendu interrompu ne passe pas pour complet")
+    }
+
     // MARK: - Ce que la relecture a resserré
 
     func test_seulsLesCadresQueLAppelComposeEnDirect_sOffrent() {
