@@ -579,6 +579,68 @@ final class AttachmentDownloadCenterTests: XCTestCase {
         XCTAssertEqual(haptics, [], "un échec d'auto-téléchargement ne vibre pas")
         subscription.cancel()
     }
+
+    // MARK: - #9882 — la fin d'un fichier se SIGNALE, elle ne s'interroge plus
+
+    private func waitUntilAwaited(_ key: String, on center: AttachmentDownloadCenter) async {
+        while center.endWaiterCount(for: key) == 0 { await Task.yield() }
+    }
+
+    func test_awaitEnd_withNothingInFlight_returnsAtOnce() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+
+        let end = await center.awaitEnd(of: "https://cdn.example.invalid/idle.mp4")
+
+        XCTAssertNil(end, "aucun téléchargement en cours : rien à attendre")
+    }
+
+    func test_awaitEnd_wakesOnTheFinish_withoutPolling() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+        await waitUntilAwaited(key, on: center)
+
+        center.publish(.progress(.init(downloadedBytes: 50, totalBytes: 100)), for: key)
+        center.publish(.finished(totalBytes: 100), for: key)
+
+        let end = await waiter.value
+        XCTAssertEqual(end, .finished(totalBytes: 100), "une progression ne réveille pas ; la fin, si")
+        XCTAssertEqual(center.endWaiterCount(for: key), 0)
+    }
+
+    /// Retiré de la fenêtre (ou échoué sur l'hôte injoignable du témoin, si le
+    /// réseau répond le premier) : l'attente se lève sur la fin, quelle qu'elle soit.
+    func test_awaitEnd_wakesWhenThePrefetchEnds() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let url = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+        let key = AttachmentDownloadCenter.key(for: url)
+        center.prefetch(urlString: url, expectedSize: 100, cacheStore: .video)
+        let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+        await waitUntilAwaited(key, on: center)
+
+        center.cancelPrefetch(urlString: url)
+
+        let end = await waiter.value
+        XCTAssertTrue(end == .cancelled || end == .failed, "attendu une fin, reçu \(String(describing: end))")
+    }
+
+    /// Le balayage suivant annule la passe qui attendait : elle se libère
+    /// aussitôt, et le registre ne garde aucune attente orpheline.
+    func test_awaitEnd_whenTheWaiterIsCancelled_returnsNil_andForgetsIt() async {
+        let center = AttachmentDownloadCenter(haptics: { _ in })
+        let key = "https://cdn.example.invalid/v-\(UUID().uuidString).mp4"
+        center.publish(.progress(.init(downloadedBytes: 0, totalBytes: 100)), for: key)
+        let waiter = Task { @MainActor in await center.awaitEnd(of: key) }
+        await waitUntilAwaited(key, on: center)
+
+        waiter.cancel()
+
+        let end = await waiter.value
+        XCTAssertNil(end)
+        XCTAssertEqual(center.endWaiterCount(for: key), 0)
+        center.publish(.finished(totalBytes: 100), for: key)
+    }
 }
 
 /// #11569 — sur la dernière case d'une grille (« +N »), le badge de
