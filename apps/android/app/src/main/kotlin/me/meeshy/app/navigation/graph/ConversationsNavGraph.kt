@@ -21,7 +21,6 @@ import me.meeshy.app.conversations.MyShareLinksScreen
 import me.meeshy.app.conversations.NewConversationScreen
 import me.meeshy.app.conversations.ShareLinkDetailScreen
 import me.meeshy.app.conversations.ShareLinkDetailViewModel
-import me.meeshy.app.conversations.ShareLinkPickerScreen
 import me.meeshy.app.navigation.CallRoute
 import me.meeshy.app.navigation.ChatRouteArgs
 import me.meeshy.app.navigation.Routes
@@ -62,14 +61,10 @@ internal fun NavGraphBuilder.conversationsNavGraph(
         )
     }
     composable(Routes.SHARE_LINK_PICKER) {
-        ShareLinkPickerScreen(
+        CreateShareLinkScreen(
             onBack = { navController.popBackStack() },
+            onCreated = { navController.popBackStack() },
             onNewConversation = { navController.navigate(Routes.NEW_CONVERSATION) },
-            onSelectConversation = { conversationId ->
-                navController.navigate(Routes.createShareLink(conversationId)) {
-                    popUpTo(Routes.SHARE_LINK_PICKER) { inclusive = true }
-                }
-            },
         )
     }
     composable(Routes.GLOBAL_SEARCH) {
