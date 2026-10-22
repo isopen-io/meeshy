@@ -97,7 +97,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// Le compte actif, lu UNE fois au trousseau puis tenu en mémoire (#11558).
     var activeUser = PersistedActiveUser()
     private let userDefaults: UserDefaults
-    private let groupDefaults: UserDefaults?
+    private let groupSuite: String?
 
     /// Backed by the protocol type so tests can inject a stub conforming
     /// to `AuthServiceProviding` without subclassing the production
@@ -149,11 +149,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private init(
         keychain: any KeychainStoring = KeychainManager.shared,
         userDefaults: UserDefaults = .standard,
-        groupDefaults: UserDefaults? = UserDefaults(suiteName: "group.me.meeshy.apps")
+        groupSuite: String? = "group.me.meeshy.apps"
     ) {
         self.keychain = keychain
         self.userDefaults = userDefaults
-        self.groupDefaults = groupDefaults
+        self.groupSuite = groupSuite
     }
 
     // MARK: - Namespaced keys
@@ -188,7 +188,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     var activeUserId: String? {
         get { activeUser.read(from: keychain) }
-        set { activeUser.write(newValue, to: keychain, groupDefaults: groupDefaults) }
+        set { activeUser.write(newValue, to: keychain, groupSuite: groupSuite) }
     }
 
     // MARK: - Token Access

@@ -335,15 +335,21 @@ fileprivate struct BubbleGridCell: View {
     /// Une vidéo lisible a son corps à elle : un lecteur inline à trois
     /// contrôles (#8231). La tuile de débordement (« +N », dont le toucher
     /// ouvre le carrousel) et la pièce protégée gardent le corps commun, où la
-    /// vidéo n'est qu'un poster.
+    /// vidéo n'est qu'un poster — sans bouton lecture sur le « +N » (#11586).
     var body: some View {
         Group {
-            if attachment.type == .video, overflowCount == 0, !attachmentIsProtected || isRevealed {
+            if attachment.type == .video, videoPresentation.hostsPlayer {
                 videoBody
             } else {
                 standardBody
             }
         }
+    }
+
+    /// #11586 — la MÊME loi que la case du Fil.
+    private var videoPresentation: MediaTileVideoPresentation {
+        MediaTileVideoPresentation.resolve(overflowCount: overflowCount,
+                                           isHiddenByProtection: attachmentIsProtected && !isRevealed)
     }
 
     /// Image, poster vidéo (débordement, pièce protégée) : toucher = plein
@@ -375,7 +381,7 @@ fileprivate struct BubbleGridCell: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { showReactionPicker = true }
         })
         .onTapGesture(perform: handleTap)
-        .overlay { downloadBadgeOverlay }
+        .overlay(alignment: downloadPlacement.alignment) { downloadBadgeOverlay }
         .overlay(alignment: .bottomLeading) { reactionsBadge }
         // #9907 — l'appui long n'ouvre plus le sélecteur : il ouvre l'aperçu
         // de CETTE pièce, dont le menu porte la réaction. Le double tap
@@ -483,7 +489,8 @@ fileprivate struct BubbleGridCell: View {
         case .video:
             ConversationVideoPoster(attachment: attachment,
                                     accentHex: contactColor,
-                                    playButtonDiameter: solo ? 64 : 44)
+                                    playButtonDiameter: solo ? 64 : 44,
+                                    showsPlaybackCue: videoPresentation.showsPlaybackCue)
         default:
             EmptyView()
         }
@@ -492,11 +499,14 @@ fileprivate struct BubbleGridCell: View {
     @ViewBuilder
     private var overflowOverlay: some View {
         if overflowCount > 0 {
-            MeeshyColors.mediaScrim
-            Text("+\(overflowCount)")
-                .font(MeeshyFont.relative(MeeshyFont.titleSize, weight: .bold))
-                .foregroundColor(.white)
+            MediaTileOverflowLabel(count: overflowCount)
         }
+    }
+
+    /// #11569 — la case « +N » pose son badge au coin, en forme compacte,
+    /// comme la case du Fil ; les autres cases le gardent au centre.
+    private var downloadPlacement: MediaTileDownloadPlacement {
+        MediaTileDownloadPlacement.resolve(surface: .bubbleGrid, overflowCount: overflowCount)
     }
 
     @ViewBuilder
@@ -547,7 +557,9 @@ fileprivate struct BubbleGridCell: View {
                 displayedURL: BubbleGridImageView.displayedURL(for: attachment,
                                                                cellPointWidth: cellPointWidth,
                                                                displayScale: displayScale),
-                displayedImageLanded: displayedImageLanded
+                displayedImageLanded: displayedImageLanded,
+                form: downloadPlacement.form,
+                tileHostsVideoPlayer: videoPresentation.hostsPlayer
             )
         }
     }
