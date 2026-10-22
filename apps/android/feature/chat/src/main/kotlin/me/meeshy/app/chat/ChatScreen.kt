@@ -1162,6 +1162,7 @@ private fun SwipeToReplyContainer(
 ) {
     val direction = replyDirection(isOutgoing)
     val haptic = LocalHapticFeedback.current
+    val isRtl = rememberIsRtl()
     var swipe by remember { mutableStateOf(SwipeReplyState()) }
     var rawTranslation by remember { mutableStateOf(0f) }
     val animatedOffset by animateFloatAsState(
@@ -1184,8 +1185,8 @@ private fun SwipeToReplyContainer(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .offset { IntOffset(animatedOffset.roundToInt(), 0) }
-                .pointerInput(direction) {
+                .offset { IntOffset(swipeReadingDelta(animatedOffset, isRtl).roundToInt(), 0) }
+                .pointerInput(direction, isRtl) {
                     detectHorizontalDragGestures(
                         onDragStart = { rawTranslation = 0f },
                         onDragCancel = {
@@ -1201,7 +1202,7 @@ private fun SwipeToReplyContainer(
                             swipe = SwipeReplyState()
                         },
                         onHorizontalDrag = { change, dragAmount ->
-                            rawTranslation += dragAmount
+                            rawTranslation += swipeReadingDelta(dragAmount, isRtl)
                             val drag = SwipeToReply.onDrag(swipe, rawTranslation, direction)
                             if (drag.armedHaptic) {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)

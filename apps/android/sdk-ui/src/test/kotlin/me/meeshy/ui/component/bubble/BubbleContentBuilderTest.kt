@@ -1235,7 +1235,26 @@ class BubbleContentBuilderTest {
     }
 
     @Test
-    fun `a forward from a group names the source conversation`() {
+    fun `a forward from a public conversation names the source conversation`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Team Meeshy",
+                    type = "public",
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+    }
+
+    @Test
+    fun `a forward from a private group never names the source conversation`() {
         val content = BubbleContentBuilder.build(
             message(
                 forwardedFromId = "orig-msg",
@@ -1250,7 +1269,28 @@ class BubbleContentBuilderTest {
             preferences = french,
         )
 
-        assertThat(content.forwardedFromName).isEqualTo("Team Meeshy")
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardedFromName).isNull()
+    }
+
+    @Test
+    fun `a forward whose source conversation type is unknown never names it`() {
+        val content = BubbleContentBuilder.build(
+            message(
+                forwardedFromId = "orig-msg",
+                forwardedFromConversationId = "orig-conv",
+                forwardedFromConversation = ApiForwardedConversation(
+                    id = "orig-conv",
+                    title = "Legacy",
+                    type = null,
+                ),
+            ),
+            currentUserId = "me",
+            preferences = french,
+        )
+
+        assertThat(content.isForwarded).isTrue()
+        assertThat(content.forwardedFromName).isNull()
     }
 
     @Test
@@ -1311,7 +1351,7 @@ class BubbleContentBuilderTest {
             message(
                 deletedAt = "2026-07-08T09:00:00Z",
                 forwardedFromId = "orig-msg",
-                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "group"),
+                forwardedFromConversation = ApiForwardedConversation(title = "Team Meeshy", type = "public"),
             ),
             currentUserId = "me",
             preferences = french,
