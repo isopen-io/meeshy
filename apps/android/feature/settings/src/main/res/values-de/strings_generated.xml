@@ -7,4 +7,9 @@
     <string name="location_precision_neighborhood">Viertel (~1 km)</string>
     <string name="location_precision_section">Freigabegenauigkeit</string>
     <string name="location_settings_title">Standortfreigabe</string>
+    <string name="settings_media_capture_header">Bei der Aufnahme</string>
+    <string name="settings_media_capture_original_subtitle">Das unbearbeitete Foto oder Video, ohne Effekt oder Rahmen, wird bei jeder Aufnahme in Fotos gesichert.</string>
+    <string name="settings_media_capture_original_title">Original sichern</string>
+    <string name="settings_media_capture_rendered_subtitle">Automatisch beim Bestätigen der Bearbeitung. Sonst sichert sie der Pfeil der Bearbeitung auf Wunsch.</string>
+    <string name="settings_media_capture_rendered_title">Version mit Effekten und Rahmen sichern</string>
 </resources>

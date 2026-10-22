@@ -7,4 +7,9 @@
     <string name="location_precision_neighborhood">Neighborhood (~1 km)</string>
     <string name="location_precision_section">Sharing precision</string>
     <string name="location_settings_title">Location sharing</string>
+    <string name="settings_media_capture_header">When capturing</string>
+    <string name="settings_media_capture_original_subtitle">The raw photo or video, with no effect or frame, is saved to Photos with every shot.</string>
+    <string name="settings_media_capture_original_title">Save the original</string>
+    <string name="settings_media_capture_rendered_subtitle">Automatically when you confirm the edit. Otherwise, the arrow in the edit view saves it on demand.</string>
+    <string name="settings_media_capture_rendered_title">Save the version with effects and frame</string>
 </resources>

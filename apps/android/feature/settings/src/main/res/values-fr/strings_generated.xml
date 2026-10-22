@@ -7,4 +7,9 @@
     <string name="location_precision_neighborhood">Quartier (~1 km)</string>
     <string name="location_precision_section">Précision du partage</string>
     <string name="location_settings_title">Partage de position</string>
+    <string name="settings_media_capture_header">À la prise de vue</string>
+    <string name="settings_media_capture_original_subtitle">La photo ou la vidéo brute, sans effet ni cadre, rejoint Photos à chaque prise.</string>
+    <string name="settings_media_capture_original_title">Enregistrer l\'original</string>
+    <string name="settings_media_capture_rendered_subtitle">Automatiquement en validant la retouche. Sinon, la flèche de la retouche l\'enregistre à la demande.</string>
+    <string name="settings_media_capture_rendered_title">Enregistrer la version avec effets et cadre</string>
 </resources>

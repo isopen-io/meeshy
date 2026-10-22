@@ -7,4 +7,9 @@
     <string name="location_precision_neighborhood">Bairro (~1 km)</string>
     <string name="location_precision_section">Precisão do compartilhamento</string>
     <string name="location_settings_title">Compartilhamento de localização</string>
+    <string name="settings_media_capture_header">Ao capturar</string>
+    <string name="settings_media_capture_original_subtitle">A foto ou o vídeo bruto, sem efeito nem moldura, é salvo no Fotos a cada captura.</string>
+    <string name="settings_media_capture_original_title">Salvar o original</string>
+    <string name="settings_media_capture_rendered_subtitle">Automaticamente ao confirmar a edição. Caso contrário, a seta da edição a salva quando você quiser.</string>
+    <string name="settings_media_capture_rendered_title">Salvar a versão com efeitos e moldura</string>
 </resources>

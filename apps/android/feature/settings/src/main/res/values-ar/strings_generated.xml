@@ -7,4 +7,9 @@
     <string name="location_precision_neighborhood">الحي (~1 كم)</string>
     <string name="location_precision_section">دقة المشاركة</string>
     <string name="location_settings_title">مشاركة الموقع</string>
+    <string name="settings_media_capture_header">عند التصوير</string>
+    <string name="settings_media_capture_original_subtitle">تُحفظ الصورة أو الفيديو الخام، دون تأثيرات أو إطار، في الصور مع كل لقطة.</string>
+    <string name="settings_media_capture_original_title">حفظ الأصل</string>
+    <string name="settings_media_capture_rendered_subtitle">تلقائيًا عند تأكيد التعديل. وإلا فإن سهم التعديل يحفظها عند الطلب.</string>
+    <string name="settings_media_capture_rendered_title">حفظ النسخة مع التأثيرات والإطار</string>
 </resources>
