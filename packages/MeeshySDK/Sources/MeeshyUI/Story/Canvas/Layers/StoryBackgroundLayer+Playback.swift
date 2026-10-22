@@ -8,15 +8,15 @@ extension StoryBackgroundLayer {
 
     /// Attache un AVPlayer pour une URL vidéo. Factorisé pour les trois chemins :
     /// `file://` (composer / cache disque déjà téléchargé), cache disque chaud,
-    /// et URL distante HTTPS streamée en direct. `AVPlayerItem(url:)` gère les
-    /// trois — pour une URL distante, `AVPlayer` fait du progressive/range
-    /// loading (premier frame en ~centaines de ms) et le cache disque se peuple
-    /// en arrière-plan via le caller. NE PAS bloquer sur un download intégral
-    /// avant d'appeler ceci (régression 2026-05-20 → grosses stories injouables
-    /// sur réseau device).
+    /// et URL distante. Pour une URL distante, l'asset lit le transfert du
+    /// cache pendant sa course (#9881) : premier frame dès la tête, une seule
+    /// requête, et le MÊME asset sert à lire la taille naturelle. NE PAS
+    /// bloquer sur un download intégral avant d'appeler ceci (régression
+    /// 2026-05-20 → grosses stories injouables sur réseau device).
     @MainActor
     func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
-        let item = AVPlayerItem(url: url)
+        let asset = CacheCoordinator.videoPlaybackAsset(for: url, startsTransfer: true)
+        let item = AVPlayerItem(asset: asset)
         MediaPolicyMonitor.shared.adopt(item, role: .watched)
         if looping {
             let queuePlayer = AVQueuePlayer()
@@ -69,7 +69,6 @@ extension StoryBackgroundLayer {
         // re-attached (slide change / configure() with different kind) between
         // the Task launch and the asset load completion.
         let canvasSize = self.bounds.size
-        let asset = AVURLAsset(url: url)
         attachedVideoAsset = asset
         Task { @MainActor [weak self, weak pl] in
             guard self != nil else { return }
