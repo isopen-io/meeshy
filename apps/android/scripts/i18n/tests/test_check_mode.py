@@ -1,75 +1,15 @@
-import contextlib
-import copy
-import io
-import json
 import shutil
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPT_DIR))
 
-import xcstrings_to_android
-from support import FIXTURES, parse_resources
+from support import RES_DIR, Project
 
 LOCALE_FOLDERS = ("values", "values-fr", "values-es", "values-de", "values-it", "values-pt", "values-ar")
-RES_DIR = "feature/demo/src/main/res"
-
-
-class Project:
-    """Un dépôt minimal : un catalogue iOS, un manifeste, un dossier de ressources Android."""
-
-    def __init__(self, manifest=None):
-        self.root = Path(tempfile.mkdtemp())
-        self.android = self.root / "apps" / "android"
-        self.catalog_path = self.root / "apps/ios/Meeshy/Localizable.xcstrings"
-        self.manifest_path = self.android / "i18n/manifest/mini.json"
-        self.catalog_path.parent.mkdir(parents=True)
-        self.manifest_path.parent.mkdir(parents=True)
-        shutil.copy(FIXTURES / "mini.xcstrings", self.catalog_path)
-        document = manifest or json.loads((FIXTURES / "mini-manifest.json").read_text(encoding="utf-8"))
-        self.write_manifest(document)
-
-    def write_manifest(self, document):
-        self.manifest_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def manifest(self):
-        return json.loads(self.manifest_path.read_text(encoding="utf-8"))
-
-    def edit_manifest(self, edit):
-        document = self.manifest()
-        edit(document["modules"][":feature:demo"]["entries"])
-        self.write_manifest(document)
-
-    def edit_catalog(self, edit):
-        document = json.loads(self.catalog_path.read_text(encoding="utf-8"))
-        edit(document["strings"])
-        self.catalog_path.write_text(json.dumps(document, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    def res(self, folder="values", name="strings_generated.xml"):
-        return self.android / RES_DIR / folder / name
-
-    def generated(self, folder="values"):
-        return parse_resources(self.res(folder).read_text(encoding="utf-8"))
-
-    def hand_written(self, folder, name, body, file="strings.xml"):
-        path = self.res(folder, file)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f'<resources>\n{body}\n</resources>\n', encoding="utf-8")
-        return path
-
-    def run(self, *flags):
-        out, err = io.StringIO(), io.StringIO()
-        arguments = ["--repo-root", str(self.root), "--android-root", str(self.android), *flags]
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = xcstrings_to_android.main(arguments)
-        return code, out.getvalue(), err.getvalue()
-
-    def snapshot(self):
-        return {str(p.relative_to(self.root)): p.read_bytes() for p in sorted(self.root.rglob("*")) if p.is_file()}
 
 
 class GenerationTests(unittest.TestCase):
@@ -262,7 +202,7 @@ def entry_for_status(entries, key, status, **extra):
 class HandWrittenCollisionTests(unittest.TestCase):
     def test_name_defined_in_strings_xml_is_refused_naming_module_name_and_folder(self):
         project = Project()
-        project.hand_written("values-fr", "greeting_hello", '    <string name="greeting_hello">Salut</string>')
+        project.hand_written("values-fr", '    <string name="greeting_hello">Salut</string>')
         before = project.snapshot()
         code, _, err = project.run()
         self.assertEqual(code, 2)
@@ -273,36 +213,36 @@ class HandWrittenCollisionTests(unittest.TestCase):
 
     def test_collision_is_detected_in_the_default_folder_too(self):
         project = Project()
-        project.hand_written("values", "common_close", '    <string name="common_close">Close</string>')
+        project.hand_written("values", '    <string name="common_close">Close</string>')
         code, _, err = project.run()
         self.assertEqual(code, 2)
         self.assertIn("common_close", err)
 
     def test_collision_with_a_lot_specific_file_is_detected_as_well(self):
         project = Project()
-        project.hand_written("values", "bold_code", '    <string name="bold_code">x</string>', file="strings_chat.xml")
+        project.hand_written("values", '    <string name="bold_code">x</string>', file="strings_chat.xml")
         code, _, err = project.run()
         self.assertEqual(code, 2)
         self.assertIn("strings_chat.xml", err)
 
     def test_plural_collision_is_detected(self):
         project = Project()
-        project.hand_written("values", "unread_complete", '    <plurals name="unread_complete"><item quantity="other">x</item></plurals>')
+        project.hand_written("values", '    <plurals name="unread_complete"><item quantity="other">x</item></plurals>')
         self.assertEqual(project.run()[0], 2)
 
     def test_a_string_and_a_plurals_of_the_same_name_do_not_collide(self):
         project = Project()
-        project.hand_written("values", "unread_complete", '    <string name="unread_complete">x</string>')
+        project.hand_written("values", '    <string name="unread_complete">x</string>')
         self.assertEqual(project.run()[0], 0)
 
     def test_names_that_are_not_adopted_never_collide(self):
         project = Project()
-        project.hand_written("values", "unread_partial", '    <string name="unread_partial">x</string>')
+        project.hand_written("values", '    <string name="unread_partial">x</string>')
         self.assertEqual(project.run()[0], 0)
 
     def test_generation_leaves_hand_written_files_byte_identical(self):
         project = Project()
-        path = project.hand_written("values", "mine", '    <string name="mine">Mine</string>')
+        path = project.hand_written("values", '    <string name="mine">Mine</string>')
         original = path.read_bytes()
         self.assertEqual(project.run()[0], 0)
         self.assertEqual(path.read_bytes(), original)
@@ -367,7 +307,7 @@ class CheckModeTests(unittest.TestCase):
     def test_collision_with_a_hand_written_file_is_an_error_in_check_mode(self):
         project = Project()
         project.run()
-        project.hand_written("values-es", "greeting_hello", '    <string name="greeting_hello">Hola</string>')
+        project.hand_written("values-es", '    <string name="greeting_hello">Hola</string>')
         code, _, err = project.run("--check")
         self.assertEqual(code, 2)
         self.assertIn("greeting_hello", err)

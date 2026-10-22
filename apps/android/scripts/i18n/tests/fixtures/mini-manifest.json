@@ -18,6 +18,7 @@
         {"catalog": "app", "iosKey": "pt.only", "status": "adopted"},
         {"catalog": "app", "iosKey": "stale.removed", "status": "adopted"},
         {"catalog": "app", "iosKey": "unread.complete", "kind": "plurals", "status": "adopted"},
+        {"catalog": "app", "iosKey": "unread.nofr", "kind": "plurals", "status": "adopted"},
         {"catalog": "app", "iosKey": "unread.partial", "kind": "plurals", "status": "candidate"},
         {"androidName": "demo_android_only", "status": "android-only"},
         {"catalog": "app", "iosKey": "greeting.hello", "androidName": "demo_hello_disabled", "status": "disabled"}

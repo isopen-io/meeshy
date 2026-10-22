@@ -1,11 +1,10 @@
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from support import FIXTURES, catalog_document, plural_variations, string_unit, write_json
+from support import FIXTURES, catalog_document, make_temp_dir, plural_variations, string_unit, write_json
 from xcstrings_reader import ANDROID_LOCALES, CatalogError, read_catalog
 
 
@@ -14,7 +13,7 @@ def locale(code):
 
 
 def catalog_with(strings, source_language="fr"):
-    directory = tempfile.mkdtemp()
+    directory = make_temp_dir()
     path = write_json(directory, "Localizable.xcstrings", catalog_document(strings, source_language))
     return read_catalog(path)
 
@@ -72,7 +71,7 @@ class ReadingTests(unittest.TestCase):
             read_catalog(FIXTURES / "does-not-exist.xcstrings")
 
     def test_invalid_json_is_reported_with_the_path(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         path = Path(directory) / "broken.xcstrings"
         path.write_text("{ not json", encoding="utf-8")
         with self.assertRaises(CatalogError) as raised:
@@ -90,6 +89,12 @@ class SourceLanguageFallbackTests(unittest.TestCase):
         catalog = read_catalog(FIXTURES / "mini.xcstrings")
         entry = catalog.entry("greeting.hello")
         self.assertEqual(catalog.localization(entry, locale("fr")).text, "Bonjour")
+
+    def test_key_fallback_can_be_declined_for_plural_entries(self):
+        catalog = read_catalog(FIXTURES / "mini.xcstrings")
+        entry = catalog.entry("unread.nofr")
+        self.assertIsNone(catalog.localization(entry, locale("fr"), key_fallback=False))
+        self.assertIsNone(catalog.source_localization(entry, key_fallback=False))
 
     def test_other_languages_do_not_fall_back_to_the_key(self):
         catalog = read_catalog(FIXTURES / "mini.xcstrings")

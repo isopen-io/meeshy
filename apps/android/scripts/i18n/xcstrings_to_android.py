@@ -78,7 +78,10 @@ def _convert(language: str, text: str, *, always_formatted: bool = False) -> Con
 
 def _check_signatures(entry: ManifestEntry, converted: Dict[Tuple[str, Optional[str]], ConvertedText]) -> None:
     reference_id = (DEFAULT_LOCALE.code, "other" if entry.kind == "plurals" else None)
-    reference = {argument.position: argument.conversion for argument in converted[reference_id].arguments}
+    reference_text = converted.get(reference_id)
+    if reference_text is None:
+        return
+    reference = {argument.position: argument.conversion for argument in reference_text.arguments}
     for (language, quantity), text in converted.items():
         for argument in text.arguments:
             expected = reference.get(argument.position)
@@ -93,10 +96,11 @@ def _check_signatures(entry: ManifestEntry, converted: Dict[Tuple[str, Optional[
 
 def _localizations(entry: ManifestEntry, catalog: Catalog, catalog_entry: CatalogEntry) -> Dict[str, Localization]:
     found: Dict[str, Localization] = {}
+    key_fallback = entry.kind == "string"
     for locale in ANDROID_LOCALES:
-        localization = catalog.localization(catalog_entry, locale)
+        localization = catalog.localization(catalog_entry, locale, key_fallback=key_fallback)
         if localization is None and locale is DEFAULT_LOCALE:
-            localization = catalog.source_localization(catalog_entry)
+            localization = catalog.source_localization(catalog_entry, key_fallback=key_fallback)
         if localization is None:
             continue
         is_plural = localization.plural is not None
@@ -106,6 +110,8 @@ def _localizations(entry: ManifestEntry, catalog: Catalog, catalog_entry: Catalo
                 f"{'une variation plurielle' if is_plural else 'un texte simple'}"
             )
         found[locale.code] = localization
+    if DEFAULT_LOCALE.code not in found:
+        raise CatalogError("aucune forme pour la langue par défaut (en) ni pour la langue source")
     return found
 
 
@@ -228,7 +234,12 @@ def _parse_arguments(argv: Optional[Sequence[str]]) -> argparse.Namespace:
     android_default = Path(__file__).resolve().parents[2]
     parser = argparse.ArgumentParser(description="Génère les chaînes Android depuis les catalogues .xcstrings iOS.")
     parser.add_argument("--check", action="store_true", help="ne modifie rien ; sort 1 si des fichiers sont périmés")
-    parser.add_argument("--manifest", type=Path, help="fichier ou dossier de manifeste (défaut : i18n/manifest)")
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        help="fichier ou dossier de manifeste, ENSEMBLE des modules (défaut : i18n/manifest) : "
+        "les strings_generated.xml des modules qui n'y figurent plus sont supprimés",
+    )
     parser.add_argument("--android-root", type=Path, default=android_default)
     parser.add_argument("--repo-root", type=Path)
     arguments = parser.parse_args(argv)

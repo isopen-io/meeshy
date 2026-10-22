@@ -5,6 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from plural_emitter import PluralError, required_quantities, resolve_quantities
+from support import Project, plural_variations
 from xcstrings_reader import ANDROID_LOCALES
 
 ARABIC = {
@@ -95,6 +96,57 @@ class ResolveQuantitiesTests(unittest.TestCase):
     def test_fill_missing_still_needs_other(self):
         with self.assertRaises(PluralError):
             resolve("fr", {"one": "un"}, fill_missing=True)
+
+
+class GeneratedPluralsTests(unittest.TestCase):
+    def generate(self, **catalog_changes):
+        project = Project()
+        if catalog_changes:
+            project.edit_catalog(lambda strings: strings.update(catalog_changes))
+        return project, project.run()
+
+    def test_plural_block_is_written_in_every_language_with_the_catalog_quantities(self):
+        project, (code, _, err) = self.generate()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(
+            sorted(project.generated("values-ar")["unread_complete"]),
+            sorted(["zero", "one", "two", "few", "many", "other"]),
+        )
+        self.assertEqual(list(project.generated("values-de")["unread_complete"]), ["one", "other"])
+
+    def test_plural_stale_key_is_ignored_with_a_warning(self):
+        stale = {"extractionState": "stale", "localizations": {"en": plural_variations(one="%lld a", other="%lld b")}}
+        project, (code, _, err) = self.generate(**{"unread.complete": stale})
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("unread_complete", project.generated("values"))
+        self.assertIn("unread.complete", err)
+
+    def test_plural_without_a_localization_in_the_source_language_skips_it_instead_of_using_the_key(self):
+        project, (code, _, err) = self.generate()
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("unread_nofr", project.generated("values-fr"))
+        self.assertIn("unread_nofr", project.generated("values"))
+
+    def test_plural_with_neither_english_nor_source_forms_is_refused(self):
+        project = Project()
+        project.edit_catalog(lambda strings: strings["unread.nofr"]["localizations"].pop("en"))
+        document = project.manifest()
+        entries = document["modules"][":feature:demo"]["entries"]
+        entries[:] = [item for item in entries if item.get("iosKey") == "unread.nofr"]
+        project.write_manifest(document)
+        code, _, err = project.run()
+        self.assertEqual(code, 2)
+        self.assertIn("unread.nofr", err)
+
+    def test_plural_missing_in_english_falls_back_to_the_source_language_forms(self):
+        project = Project()
+        document = project.manifest()
+        entries = document["modules"][":feature:demo"]["entries"]
+        entries[:] = [{"catalog": "app", "iosKey": "unread.noen", "kind": "plurals", "status": "adopted"}]
+        project.write_manifest(document)
+        code, _, err = project.run()
+        self.assertEqual(code, 0, err)
+        self.assertEqual(project.generated("values")["unread_noen"]["one"], "%d élément")
 
 
 if __name__ == "__main__":

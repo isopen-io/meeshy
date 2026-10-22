@@ -1,6 +1,4 @@
-import copy
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -15,7 +13,7 @@ from manifest_schema import (
     load_manifest,
     parse_manifest,
 )
-from support import FIXTURES, write_json
+from support import FIXTURES, make_temp_dir, write_json
 
 
 def entry(**fields):
@@ -180,14 +178,14 @@ class LoadingTests(unittest.TestCase):
     def test_the_mini_fixture_is_a_valid_manifest(self):
         parsed = load_manifest(FIXTURES / "mini-manifest.json")
         self.assertEqual([module.module for module in parsed.modules], [":feature:demo"])
-        self.assertEqual(len(parsed.modules[0].adopted()), 14)
+        self.assertEqual(len(parsed.modules[0].adopted()), 15)
 
     def test_missing_file_is_refused(self):
         with self.assertRaises(ManifestError):
             load_manifest(FIXTURES / "nothing.json")
 
     def test_invalid_json_is_refused_with_the_path(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         path = Path(directory) / "broken.json"
         path.write_text("{", encoding="utf-8")
         with self.assertRaises(ManifestError) as raised:
@@ -195,7 +193,7 @@ class LoadingTests(unittest.TestCase):
         self.assertIn("broken.json", str(raised.exception))
 
     def test_directory_fragments_are_merged_per_module(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         write_json(directory, "feature-chat.d/lot-a.json", manifest(entry(iosKey="chat.one")))
         write_json(directory, "feature-chat.d/lot-b.json", manifest(entry(iosKey="chat.two")))
         merged = load_manifest(Path(directory))
@@ -203,14 +201,14 @@ class LoadingTests(unittest.TestCase):
         self.assertEqual([item.android_name for item in merged.modules[0].entries], ["chat_one", "chat_two"])
 
     def test_fragments_must_agree_on_the_res_dir(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         write_json(directory, "a.json", manifest(entry(iosKey="chat.one")))
         write_json(directory, "b.json", manifest(entry(iosKey="chat.two"), res_dir="elsewhere/res"))
         with self.assertRaises(ManifestError):
             load_manifest(Path(directory))
 
     def test_android_name_collision_across_fragments_names_both_files(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         write_json(directory, "a.json", manifest(entry()))
         write_json(directory, "b.json", manifest(entry()))
         with self.assertRaises(ManifestError) as raised:
@@ -220,11 +218,11 @@ class LoadingTests(unittest.TestCase):
         self.assertIn("b.json", message)
 
     def test_missing_default_directory_is_an_empty_manifest(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         self.assertEqual(load_manifest(Path(directory) / "manifest", must_exist=False).modules, ())
 
     def test_modules_come_out_sorted_whatever_the_file_order(self):
-        directory = tempfile.mkdtemp()
+        directory = make_temp_dir()
         write_json(directory, "1.json", manifest(entry(), module=":feature:feed", res_dir="feature/feed/src/main/res"))
         write_json(directory, "2.json", manifest(entry(), module=":feature:chat"))
         names = [module.module for module in load_manifest(Path(directory)).modules]

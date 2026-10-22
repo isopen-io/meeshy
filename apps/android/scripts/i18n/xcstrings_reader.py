@@ -107,12 +107,17 @@ class Catalog:
         }
         return CatalogEntry(key=key, stale=raw.get("extractionState") == "stale", localizations=localizations)
 
-    def source_localization(self, entry: CatalogEntry) -> Localization:
-        return entry.localizations.get(self.source_language) or Localization(text=entry.key)
+    def source_localization(self, entry: CatalogEntry, *, key_fallback: bool = True) -> Optional[Localization]:
+        present = entry.localizations.get(self.source_language)
+        if present is not None or not key_fallback:
+            return present
+        return Localization(text=entry.key)
 
-    def localization(self, entry: CatalogEntry, locale: AndroidLocale) -> Optional[Localization]:
+    def localization(
+        self, entry: CatalogEntry, locale: AndroidLocale, *, key_fallback: bool = True
+    ) -> Optional[Localization]:
         present = next((entry.localizations[code] for code in locale.catalog_codes if code in entry.localizations), None)
-        if present is not None:
+        if present is not None or not key_fallback:
             return present
         if self.source_language in locale.catalog_codes:
             return Localization(text=entry.key)
