@@ -147,6 +147,8 @@ data class StoryTextObject(
     val fadeOut: Double? = null,
     val isLocked: Boolean? = null,
     val keyframes: List<StoryKeyframe>? = null,
+    /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
+    val name: String? = null,
 )
 
 /** Type of a story media object — port of StoryMediaKind (StoryModels.swift). */
@@ -202,6 +204,12 @@ data class StoryMediaObject(
     val fadeOut: Double? = null,
     val sourceLanguage: String? = null,
     val keyframes: List<StoryKeyframe>? = null,
+    /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
+    val name: String? = null,
+    /** Coupe l'atténuation automatique de ce clip vidéo (`null` : ducking actif). */
+    val isDuckingDisabled: Boolean? = null,
+    /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
+    val mutedVolumeMemento: Float? = null,
 )
 
 /** A TTS audio variant by language — port of StoryAudioVariant (StoryModels.swift). */
@@ -234,6 +242,12 @@ data class StoryAudioPlayerObject(
     val fadeIn: Float? = null,
     val fadeOut: Float? = null,
     val sourceLanguage: String? = null,
+    /** Keyframes de l'automation (canal volume). */
+    val keyframes: List<StoryKeyframe>? = null,
+    /** Nom d'auteur de la piste dans la timeline (`null` : aucun). */
+    val name: String? = null,
+    /** Niveau d'avant le mute d'auteur ; invariant `mutedVolumeMemento != null => volume == 0`. */
+    val mutedVolumeMemento: Float? = null,
 )
 
 /**
