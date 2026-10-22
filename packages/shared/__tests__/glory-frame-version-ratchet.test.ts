@@ -92,7 +92,7 @@ describe('contre la base (la branche cible) — la version ne redescend pas et n
 describe('la preuve de ROUGE : chaque version abaissée de 1 tombe, nommée, contre la base', () => {
   const proof = (registry: readonly RegistryEntry[], retained: GloryFrameSources['retained']) => {
     const violations = gloryFrameVersionViolations({ registry: lowerVersions(registry), retained, baseline: registry, servedFilesOf: filesOf });
-    return { violations, holds: lowerVersionProofHolds({ registry, violations }) };
+    return { violations, holds: lowerVersionProofHolds({ registry, violations, baseline: registry }) };
   };
 
   it('le dépôt, tel qu’il est : la preuve tient', () => {
@@ -111,10 +111,25 @@ describe('la preuve de ROUGE : chaque version abaissée de 1 tombe, nommée, con
 
   it('un pack que la mutation ne fait pas tomber, nommé à sa version, défait la preuve', () => {
     const registry = [entry('afrique', 2, 'a'), entry('neon', 2, 'n')];
+    const baseline = registry;
     const violations = [{ kind: 'below-baseline', slug: 'afrique', version: 1, baseline: 2 }] as const;
-    expect(lowerVersionProofHolds({ registry, violations })).toBe(false);
-    expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'below-baseline', slug: 'neon', version: 1, baseline: 2 }] })).toBe(true);
-    expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'reuses-baseline', slug: 'neon', version: 1 }] })).toBe(false);
+    expect(lowerVersionProofHolds({ registry, violations, baseline })).toBe(false);
+    expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'below-baseline', slug: 'neon', version: 1, baseline: 2 }], baseline })).toBe(true);
+    expect(lowerVersionProofHolds({ registry, violations: [...violations, { kind: 'reuses-baseline', slug: 'neon', version: 1 }], baseline })).toBe(false);
+  });
+
+  it('un pack NÉ sur la branche, absent de la base, ne défait pas la preuve : il n’a rien sous quoi redescendre', () => {
+    const registry = [entry('afrique', 2, 'a'), entry('succes', 1, 's')];
+    const baseline = [entry('afrique', 2, 'a')];
+    const violations = gloryFrameVersionViolations({ registry: lowerVersions(registry), retained: {}, baseline, servedFilesOf: filesOf });
+    expect(violations).toEqual([{ kind: 'below-baseline', slug: 'afrique', version: 1, baseline: 2 }]);
+    expect(lowerVersionProofHolds({ registry, violations, baseline })).toBe(true);
+  });
+
+  it('sans base, ou sans aucun pack commun avec elle, rien n’est prouvé', () => {
+    const registry = [entry('succes', 1, 's')];
+    expect(lowerVersionProofHolds({ registry, violations: [], baseline: null })).toBe(false);
+    expect(lowerVersionProofHolds({ registry, violations: [], baseline: [entry('afrique', 2, 'a')] })).toBe(false);
   });
 
   it('le registre versionné ne réutilise aucune version quittée', () => {

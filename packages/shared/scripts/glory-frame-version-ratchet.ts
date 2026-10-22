@@ -89,15 +89,32 @@ export const gloryFrameVersionViolations = (input: VersionRatchetInput): readonl
 export const lowerVersions = (registry: readonly RegistryEntry[]): readonly RegistryEntry[] => registry.map((entry) => ({ ...entry, version: versionOf(entry) - 1 }));
 
 /**
- * La preuve de ROUGE tient si CHAQUE pack du registre (non muté) tombe, nommé,
- * sous `below-baseline` à sa version abaissée de 1 — quelles que soient les
- * autres violations que la mutation produit (un pack monté a sa version
- * quittée dans `retained.json`, et l'abaisser la réutilise aussi).
+ * La preuve de ROUGE tient si CHAQUE pack du registre (non muté) QUI A UNE BASE
+ * tombe, nommé, sous `below-baseline` à sa version abaissée de 1 — quelles que
+ * soient les autres violations que la mutation produit (un pack monté a sa
+ * version quittée dans `retained.json`, et l'abaisser la réutilise aussi).
+ * Un pack NÉ sur la branche n'a pas de base sous laquelle redescendre : la
+ * mutation ne peut rien prouver sur lui, et il ne défait pas la preuve. Sans
+ * base, ou sans aucun pack commun avec elle, rien n'est prouvé.
  */
-export const lowerVersionProofHolds = ({ registry, violations }: { readonly registry: readonly RegistryEntry[]; readonly violations: readonly VersionViolation[] }): boolean =>
-  registry.every((entry) =>
-    violations.some((violation) => violation.kind === 'below-baseline' && violation.slug === entry.slug && violation.version === versionOf(entry) - 1 && violation.baseline === versionOf(entry)),
+export const lowerVersionProofHolds = ({
+  registry,
+  violations,
+  baseline,
+}: {
+  readonly registry: readonly RegistryEntry[];
+  readonly violations: readonly VersionViolation[];
+  readonly baseline: readonly RegistryEntry[] | null;
+}): boolean => {
+  if (baseline === null) return false;
+  const based = registry.filter((entry) => baseline.some((candidate) => candidate.slug === entry.slug));
+  return (
+    based.length > 0 &&
+    based.every((entry) =>
+      violations.some((violation) => violation.kind === 'below-baseline' && violation.slug === entry.slug && violation.version === versionOf(entry) - 1 && violation.baseline === versionOf(entry)),
+    )
   );
+};
 
 export const describeViolation = (violation: VersionViolation): string => {
   if (violation.kind === 'reuses-retained') return `${violation.slug}@${violation.version} réutilise une version quittée (retained.json tient ${violation.slug}@${violation.retained})`;
@@ -125,7 +142,7 @@ function main(): void {
   violations.forEach((violation) => process.stderr.write(`${describeViolation(violation)}\n`));
   process.stdout.write(`${registry.length} pack(s) vérifié(s) contre retained.json${reference === undefined ? '' : ` et ${reference}`}${mutation === undefined ? '' : ` (mutation ${mutation})`} : ${violations.length} violation(s)\n`);
   if (mutation === undefined) process.exit(violations.length === 0 ? 0 : 1);
-  const proven = lowerVersionProofHolds({ registry: versioned, violations });
+  const proven = lowerVersionProofHolds({ registry: versioned, violations, baseline });
   if (!proven) process.stderr.write(`preuve incomplète : un pack au moins ne tombe pas, nommé, à sa version abaissée\n`);
   process.exit(proven ? 1 : 0);
 }
