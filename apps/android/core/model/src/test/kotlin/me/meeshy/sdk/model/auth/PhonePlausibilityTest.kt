@@ -59,8 +59,8 @@ class PhonePlausibilityTest {
 
 class PhonePlausibilityBoundsTest {
     @Test
-    fun `424242424 et 123123123 sont des repetitions integrales`() {
-        assertThat(PhonePlausibility.refusal("424242424")).isEqualTo(Refusal.REPEATED_PATTERN)
+    fun `4242424242 et 123123123 sont des repetitions integrales`() {
+        assertThat(PhonePlausibility.refusal("4242424242")).isEqualTo(Refusal.REPEATED_PATTERN)
         assertThat(PhonePlausibility.refusal("123123123")).isEqualTo(Refusal.REPEATED_PATTERN)
     }
 
